@@ -10,7 +10,7 @@
  * is formed from the first N characters of the normalized name + category.
  */
 
-import { queryRows } from '../database/rowContracts.ts';
+import { checkedRows, db } from '../database/db.ts';
 import { clusterRecipientRowSchema } from '../database/rows/catalog.ts';
 import type { z } from 'zod';
 import { suggestPatternFromNames } from './recipientPatternService.ts';
@@ -42,15 +42,15 @@ export interface RecipientCluster {
 export async function findRecipientClusters({
   minCount = 2,
 }: { minCount?: number } = {}): Promise<RecipientCluster[]> {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     clusterRecipientRowSchema,
-    `SELECT id, name, default_category_id
-       FROM recipients
-      WHERE is_active = true
-        AND primary_recipient_id IS NULL
-      ORDER BY name, id
-      LIMIT $1`,
-    [MAX_RECIPIENT_SCAN],
+    db
+      .selectFrom('recipients')
+      .select(['id', 'name', 'default_category_id'])
+      .where('is_active', '=', true)
+      .where('primary_recipient_id', 'is', null)
+      .orderBy(['name', 'id'])
+      .limit(MAX_RECIPIENT_SCAN),
   );
 
   const buckets = new Map<string, ClusterRecipientRow[]>();

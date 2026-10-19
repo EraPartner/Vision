@@ -2,7 +2,9 @@
  * Shared FROM + JOIN block for transaction list/export queries. `transactionExport`
  * and `bulkSelection` run against the exact same join shape.
  */
-export const EXPORT_JOINS_SQL = `
+import { sql } from "kysely";
+
+export const EXPORT_JOINS_SQL = sql`
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id

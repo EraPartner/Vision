@@ -7,8 +7,9 @@
  * transfers so closing a balance does not appear as income or spending.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   accountActiveRowSchema,
   balancePartsRowSchema,
@@ -20,6 +21,8 @@ import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
+import type { PortfolioTxnType } from "../database/schema.generated.ts";
+import type { AccountId } from "@vision/types/brands";
 
 export type BalanceHandling = "preserve" | "adjustment";
 
@@ -36,30 +39,32 @@ const VALID_BALANCE_HANDLING: ReadonlySet<string> = new Set([
 ]);
 const CLOSE_ADJUSTMENT_MEMO = "ACCOUNT CLOSE ADJUSTMENT";
 export const MAX_CLOSE_PORTFOLIO_RETAG_ROWS = 500;
-const PORTFOLIO_LOT_TYPES = ["buy", "gift", "sell"];
+const PORTFOLIO_LOT_TYPES: PortfolioTxnType[] = ["buy", "gift", "sell"];
 
 /**
  * Return the complete account-wide lot event selection when it fits the
  * audited bulk re-tag boundary. Loading this on the server avoids the
  * investment and per-investment pagination caps in the frontend read model.
  */
-export async function previewAccountPortfolioLots(accountId: number) {
-  const accountResult = await query("SELECT id FROM accounts WHERE id = $1", [
-    accountId,
-  ]);
-  if (!accountResult.rows[0]) {
+export async function previewAccountPortfolioLots(accountId: AccountId) {
+  const account = await db
+    .selectFrom("accounts")
+    .select("id")
+    .where("id", "=", accountId)
+    .executeTakeFirst();
+  if (!account) {
     throw new NotFoundError(`Account ${accountId} not found`);
   }
 
-  const rows = await queryRows(
+  const rows = await checkedRows(
     portfolioLotRowSchema,
-    `SELECT id, COUNT(*) OVER() AS eligible_count
-       FROM portfolio_transactions
-      WHERE account_id = $1
-        AND type::text = ANY($2::text[])
-      ORDER BY id ASC
-      LIMIT $3`,
-    [accountId, PORTFOLIO_LOT_TYPES, MAX_CLOSE_PORTFOLIO_RETAG_ROWS + 1],
+    db
+      .selectFrom("portfolio_transactions")
+      .select(["id", sql<string>`COUNT(*) OVER()`.as("eligible_count")])
+      .where("account_id", "=", accountId)
+      .where("type", "in", PORTFOLIO_LOT_TYPES)
+      .orderBy("id", "asc")
+      .limit(MAX_CLOSE_PORTFOLIO_RETAG_ROWS + 1),
   );
   const eligibleCount = Number(rows[0]?.eligible_count ?? 0);
   return {
@@ -90,17 +95,20 @@ function normalizeCloseAccount(
 }
 
 export async function closeAccount(
-  accountId: number,
+  accountId: AccountId,
   body: { balance_handling?: unknown } | null | undefined,
 ) {
   const balanceHandling = normalizeCloseAccount(body);
   const today = todayAppDateString();
 
   return withTransaction(async () => {
-    const account = await queryOne(
+    const account = await checkedRow(
       accountActiveRowSchema,
-      `SELECT id, is_active FROM accounts WHERE id = $1 FOR UPDATE`,
-      [accountId],
+      db
+        .selectFrom("accounts")
+        .select(["id", "is_active"])
+        .where("id", "=", accountId)
+        .forUpdate(),
     );
     if (!account) throw new NotFoundError(`Account ${accountId} not found`);
 
@@ -116,13 +124,12 @@ export async function closeAccount(
 
     let adjustments: CloseAdjustment[] = [];
     if (balanceHandling === "adjustment") {
-      const balanceRow = await queryOne(
+      const balanceRow = await checkedRow(
         balancePartsRowSchema,
-        `SELECT bp.balance_parts
+        sql`SELECT bp.balance_parts
            FROM accounts a
-           ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
-          WHERE a.id = $1`,
-        [accountId, today],
+           ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}::date` })}
+          WHERE a.id = ${accountId}`,
       );
       adjustments = (balanceRow?.balance_parts ?? [])
         .map((part) => ({
@@ -137,21 +144,16 @@ export async function closeAccount(
       if (adjustments.length > 0) {
         const systemRecipientId =
           await recipientRepository.getOrCreateSystemId();
-        const inserted = await queryRows(
+        const amounts = adjustments.map((part) => part.amount);
+        const currencies = adjustments.map((part) => part.currency);
+        const inserted = await checkedRows(
           closeAdjustmentRowSchema,
-          `INSERT INTO transactions
+          sql`INSERT INTO transactions
              (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
-           SELECT $1, amounts.amount, amounts.currency, $2, $3, $4, true, 'adjustment', true
-             FROM unnest($5::numeric[], $6::varchar(3)[]) AS amounts(amount, currency)
+           SELECT ${today}, amounts.amount, amounts.currency, ${CLOSE_ADJUSTMENT_MEMO},
+                  ${accountId}, ${systemRecipientId}, true, 'adjustment', true
+             FROM unnest(${amounts}::numeric[], ${currencies}::varchar(3)[]) AS amounts(amount, currency)
            RETURNING id, amount, currency, transfer_source`,
-          [
-            today,
-            CLOSE_ADJUSTMENT_MEMO,
-            accountId,
-            systemRecipientId,
-            adjustments.map((part) => part.amount),
-            adjustments.map((part) => part.currency),
-          ],
         );
         adjustments = inserted.map((row) => ({
           id: row.id,
@@ -162,15 +164,16 @@ export async function closeAccount(
       }
     }
 
-    await query(
-      `UPDATE accounts
-          SET is_active = false,
-              in_net_worth = false,
-              closed_at = COALESCE(closed_at, NOW()),
-              updated_at = NOW()
-        WHERE id = $1`,
-      [accountId],
-    );
+    await db
+      .updateTable("accounts")
+      .set({
+        is_active: false,
+        in_net_worth: false,
+        closed_at: sql<Date>`COALESCE(closed_at, NOW())`,
+        updated_at: sql<Date>`NOW()`,
+      })
+      .where("id", "=", accountId)
+      .execute();
 
     return {
       account_id: accountId,

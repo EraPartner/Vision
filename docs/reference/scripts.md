@@ -127,12 +127,12 @@ All database scripts use the Kysely migrator in `apps/node-backend/src/database/
 
 | Script            | Purpose                                                                                              |
 | ----------------- | ---------------------------------------------------------------------------------------------------- |
-| `db:migrate`      | Apply every pending migration in `db/migrations/` (adopts an Alembic `0128` database onto the baseline) |
+| `db:migrate`      | Apply every pending migration in `db/migrations/`; refuses a database still on Alembic                  |
 | `db:migrate:down` | Revert the latest migration; refuses when it has no `.down.sql`                                      |
 | `db:status`       | List migrations and when each was applied                                                            |
 | `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |
 | `db:lint`         | Squawk lint of migration SQL with `config/squawk.toml`                                               |
-| `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` with `kysely-codegen`               |
+| `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` from `.kysely-codegenrc.json`       |
 | `db:index-stats`  | Inspect index statistics                                                                             |
 
 See [[docs/guides/migrations|Database Migration Guide]] for the workflow.

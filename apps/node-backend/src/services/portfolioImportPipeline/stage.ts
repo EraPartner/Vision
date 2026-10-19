@@ -7,8 +7,11 @@
  * instrument matching, or dedup happens here.
  */
 
-import { query, withTransaction } from "../../database/connection.ts";
-import { queryOne } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRow, db } from "../../database/db.ts";
+import type { Json } from "../../database/schema.generated.ts";
 import { bigintIdRowSchema } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
@@ -61,22 +64,17 @@ export async function createBatch({
   isBrokerage?: boolean | undefined;
   accountId?: number | string | null | undefined;
 }): Promise<number> {
-  const inserted = await queryOne(
+  // A template, not the builder: the asset class and type defaults arrive as
+  // unchecked strings and the column CHECK constraints validate them.
+  const inserted = await checkedRow(
     bigintIdRowSchema,
-    `INSERT INTO portfolio_import_batches
+    sql`INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
+     VALUES (${adapterName}, ${filename || null}, ${sizeBytes ?? null},
+       ${customConfig ? JSON.stringify(customConfig) : null}, ${defaultAssetClass || null},
+       ${defaultType || null}, ${!!isBrokerage}, ${accountId != null ? Number(accountId) : null},
+       'pending', NOW())
      RETURNING id`,
-    [
-      adapterName,
-      filename || null,
-      sizeBytes ?? null,
-      customConfig ? JSON.stringify(customConfig) : null,
-      defaultAssetClass || null,
-      defaultType || null,
-      !!isBrokerage,
-      accountId != null ? Number(accountId) : null,
-    ],
   );
   // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
   return normalizeCreatedBatchId(inserted!.id);
@@ -102,10 +100,11 @@ export async function stageBatch({
   return runImportStageLifecycle({
     batchId,
     markStaging: () =>
-      query(
-        `UPDATE portfolio_import_batches SET status = 'staging' WHERE id = $1`,
-        [batchId],
-      ),
+      db
+        .updateTable("portfolio_import_batches")
+        .set({ status: "staging" })
+        .where("id", "=", String(batchId))
+        .execute(),
     parseRows: async () => {
       const parsed = await parseWithConfig(filePath, customConfig);
       if (customConfig.format === "ibkr_funding_history") {
@@ -114,16 +113,18 @@ export async function stageBatch({
             "IBKR funding history cannot be filtered by investment symbol",
           );
         const context = parsed.ibkrFundingSourceContext;
-        await query(
-          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('ibkr_funding_source_context',$2::jsonb) WHERE id=$1",
-          [batchId, JSON.stringify(context)],
+        await mergeBatchConfig(
+          batchId,
+          "ibkr_funding_source_context",
+          sql`${JSON.stringify(context)}::jsonb`,
         );
       }
       if (customConfig.format === "kinesis_transaction_history") {
         const context = await captureKinesisSourceContext(filePath, parsed);
-        await query(
-          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('kinesis_source_context',$2::jsonb) WHERE id=$1",
-          [batchId, JSON.stringify(context)],
+        await mergeBatchConfig(
+          batchId,
+          "kinesis_source_context",
+          sql`${JSON.stringify(context)}::jsonb`,
         );
       }
       const rows = applyPortfolioAssetScope(
@@ -131,28 +132,32 @@ export async function stageBatch({
         customConfig.included_symbols,
       );
       if (customConfig.included_symbols)
-        await query(
-          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('scope_excluded_rows',$2::int) WHERE id=$1",
-          [batchId, parsed.length - rows.length],
+        await mergeBatchConfig(
+          batchId,
+          "scope_excluded_rows",
+          sql`${parsed.length - rows.length}::int`,
         );
       if (rows.sourceColumns)
-        await query(
-          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('source_columns',$2::text[]) WHERE id=$1",
-          [batchId, rows.sourceColumns],
+        await mergeBatchConfig(
+          batchId,
+          "source_columns",
+          sql`${rows.sourceColumns}::text[]`,
         );
       const ibkrSourceContext = rows.ibkrSourceContext;
       if (ibkrSourceContext)
-        await query(
-          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('ibkr_source_context',$2::jsonb) WHERE id=$1",
-          [batchId, JSON.stringify(ibkrSourceContext)],
+        await mergeBatchConfig(
+          batchId,
+          "ibkr_source_context",
+          sql`${JSON.stringify(ibkrSourceContext)}::jsonb`,
         );
       return rows;
     },
     persistTotal: (total) =>
-      query(
-        `UPDATE portfolio_import_batches SET rows_total = $1 WHERE id = $2`,
-        [total, batchId],
-      ),
+      db
+        .updateTable("portfolio_import_batches")
+        .set({ rows_total: total })
+        .where("id", "=", String(batchId))
+        .execute(),
     insertChunk: (rows, start) => insertStagingChunk(batchId, rows, start),
     onParsed: ({ total, skipped }) =>
       logger.info("[portfolio-pipeline:stage] parsed rows", {
@@ -162,6 +167,21 @@ export async function stageBatch({
       }),
     onProgress,
   });
+}
+
+/** Add one key to the batch's stored config, keeping the keys already there. */
+async function mergeBatchConfig(
+  batchId: PortfolioImportBatchId,
+  key: string,
+  value: RawBuilder<unknown>,
+): Promise<void> {
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({
+      custom_config: sql<Json>`COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object(${key}::text,${value})`,
+    })
+    .where("id", "=", String(batchId))
+    .execute();
 }
 
 /** Select complete parsed asset rows without changing literal source records or parse errors. */
@@ -205,46 +225,36 @@ async function insertStagingChunk(
   startIndex: number,
 ): Promise<void> {
   if (rows.length === 0) return;
-  await withTransaction(async (client) => {
-    const values: unknown[] = [];
-    const placeholders: string[] = [];
-    rows.forEach((r, i) => {
-      const idx = startIndex + i;
-      const dateStr = parsedDateToYmd(r.date) ?? null;
-
-      const base = values.length;
-      const ph = Array.from({ length: 19 }, (_, k) => `$${base + k + 1}`);
-      // status defaults to 'pending' via the column default.
-      placeholders.push(`(${ph.join(",")})`);
-      values.push(
-        batchId,
-        idx,
-        dateStr,
-        r.typeRaw || null,
-        r.symbolRaw || null,
-        r.nameRaw || null,
-        r.units ?? null,
-        r.pricePerUnit ?? null,
-        r.amount ?? null,
-        r.fees ?? null,
-        r.taxes ?? null,
-        r.currency || null,
-        r.fxRateToEur ?? null,
-        r.note || null,
-        r.rawData || null,
-        r.sourceId || null,
-        r.sourceAccountIdentity || null,
-        r.assetTransfer ? JSON.stringify(r.assetTransfer) : null,
-        r.assetAdjustment ? JSON.stringify(r.assetAdjustment) : null,
-      );
-    });
-
-    const sql = `INSERT INTO portfolio_import_staging_rows
-      (batch_id, row_index, tx_date, type_raw, symbol_raw, name_raw,
-       units, price_per_unit, amount, fees, taxes, currency, fx_rate_to_eur, note, raw_data,
-       source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details)
-      VALUES ${placeholders.join(",")}`;
-    await client.query(sql, values);
+  const json = (value: unknown) =>
+    value ? sql<Json>`${JSON.stringify(value)}::json` : null;
+  await withTransaction(async () => {
+    // status defaults to 'pending' via the column default.
+    await db
+      .insertInto("portfolio_import_staging_rows")
+      .values(
+        rows.map((r, i) => ({
+          batch_id: batchId,
+          row_index: startIndex + i,
+          tx_date: parsedDateToYmd(r.date) ?? null,
+          type_raw: r.typeRaw || null,
+          symbol_raw: r.symbolRaw || null,
+          name_raw: r.nameRaw || null,
+          units: r.units ?? null,
+          price_per_unit: r.pricePerUnit ?? null,
+          amount: r.amount ?? null,
+          fees: r.fees ?? null,
+          taxes: r.taxes ?? null,
+          currency: r.currency || null,
+          fx_rate_to_eur: r.fxRateToEur ?? null,
+          note: r.note || null,
+          raw_data: r.rawData || null,
+          source_transaction_id: r.sourceId || null,
+          source_account_identity: r.sourceAccountIdentity || null,
+          asset_transfer_details: json(r.assetTransfer),
+          asset_adjustment_details: json(r.assetAdjustment),
+        })),
+      )
+      .execute();
   });
 }
 

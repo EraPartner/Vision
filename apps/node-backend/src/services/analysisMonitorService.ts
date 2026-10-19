@@ -4,8 +4,10 @@ import { createHash, randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import type { AnalysisDefinition } from "@vision/types/analysis";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   analysisMonitorRowSchema,
   analysisMonitorWithObservationRowSchema,
@@ -216,23 +218,71 @@ function mapNotification(row: NotificationRow) {
   };
 }
 
-const MONITOR_SELECT = `SELECT m.*, row_to_json(o.*) AS last_observation
-  FROM analysis_monitors m
-  LEFT JOIN LATERAL (
-    SELECT id, monitor_id, status, previous_value, current_value,
-      previous_evidence_version, current_evidence_version, analysis_definition_version, analysis_run_id,
-      historical_analysis_run_id, analysis_run_status, analysis_window_json,
-      coverage_json, reason_code, reason, checked_at
-    FROM analysis_monitor_observations
-    WHERE monitor_id=m.id ORDER BY checked_at DESC, id DESC LIMIT 1
-  ) o ON true`;
+function selectMonitors() {
+  return db
+    .selectFrom("analysis_monitors as m")
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom("analysis_monitor_observations")
+          .select([
+            "id",
+            "monitor_id",
+            "status",
+            "previous_value",
+            "current_value",
+            "previous_evidence_version",
+            "current_evidence_version",
+            "analysis_definition_version",
+            "analysis_run_id",
+            "historical_analysis_run_id",
+            "analysis_run_status",
+            "analysis_window_json",
+            "coverage_json",
+            "reason_code",
+            "reason",
+            "checked_at",
+          ])
+          .whereRef("monitor_id", "=", "m.id")
+          .orderBy("checked_at", "desc")
+          .orderBy("id", "desc")
+          .limit(1)
+          .as("o"),
+      (join) => join.onTrue(),
+    )
+    .selectAll("m")
+    .select(sql<MonitorObservationJson | null>`row_to_json(o.*)`.as("last_observation"));
+}
+
+function lockMonitor(id: string) {
+  return db
+    .selectFrom("analysis_monitors")
+    .selectAll()
+    .where("id", "=", id)
+    .forUpdate();
+}
+
+function savedDefinition(savedAnalysisId: string | null) {
+  return db
+    .selectFrom("saved_analyses as a")
+    .innerJoin("saved_analysis_definition_versions as v", (join) =>
+      join
+        .onRef("v.saved_analysis_id", "=", "a.id")
+        .onRef("v.version", "=", "a.current_version"),
+    )
+    .select("v.definition_json")
+    .where("a.id", "=", savedAnalysisId);
+}
+
+function addMinutes(minutes: number) {
+  return sql<Date>`now()+(${String(minutes)} || ' minutes')::interval`;
+}
 
 async function getMonitor(id: string) {
   monitorId(id);
-  const row = await queryOne(
+  const row = await checkedRow(
     analysisMonitorWithObservationRowSchema,
-    `${MONITOR_SELECT} WHERE m.id=$1`,
-    [id],
+    selectMonitors().where("m.id", "=", id),
   );
   if (!row) fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
   const monitor = mapMonitor(row);
@@ -243,16 +293,21 @@ async function getMonitor(id: string) {
 
 export async function listAnalysisMonitors(input?: PageInput) {
   const { limit, offset } = page(input);
-  const rows = await queryRows(
+  const rows = await checkedRows(
     analysisMonitorWithObservationRowSchema,
-    `${MONITOR_SELECT} ORDER BY m.created_at DESC, m.id DESC LIMIT $1 OFFSET $2`,
-    [limit, offset],
+    selectMonitors()
+      .orderBy("m.created_at", "desc")
+      .orderBy("m.id", "desc")
+      .limit(limit)
+      .offset(offset),
   );
   const total = Number(
     (
-      await queryOne(
+      await checkedRow(
         countNRowSchema,
-        "SELECT count(*) AS n FROM analysis_monitors",
+        db
+          .selectFrom("analysis_monitors")
+          .select(sql<string>`count(*)`.as("n")),
       )
     )?.n,
   );
@@ -273,15 +328,19 @@ export async function createAnalysisMonitor(input: unknown) {
   const value = parsed(createSchema, input);
   const target: MonitorTargetRow | undefined =
     value.kind === "analysis-threshold"
-      ? await queryOne(
+      ? await checkedRow(
           monitorSavedAnalysisTargetRowSchema,
-          "SELECT id,name,refresh_mode FROM saved_analyses WHERE id=$1",
-          [value.savedAnalysisId],
+          db
+            .selectFrom("saved_analyses")
+            .select(["id", "name", "refresh_mode"])
+            .where("id", "=", value.savedAnalysisId),
         )
-      : await queryOne(
+      : await checkedRow(
           monitorDossierTargetRowSchema,
-          "SELECT id,title FROM research_dossiers WHERE id=$1",
-          [value.dossierId],
+          db
+            .selectFrom("research_dossiers")
+            .select(["id", "title"])
+            .where("id", "=", value.dossierId),
         );
   if (!target)
     fail("Monitor target not found", 404, "MONITOR_TARGET_NOT_FOUND");
@@ -289,12 +348,7 @@ export async function createAnalysisMonitor(input: unknown) {
     fail("Frozen saved analyses cannot be monitored");
   if (value.kind === "analysis-threshold") {
     const definition = (
-      await queryOne(
-        savedAnalysisDefinitionRowSchema,
-        `SELECT v.definition_json FROM saved_analyses a JOIN saved_analysis_definition_versions v
-      ON v.saved_analysis_id=a.id AND v.version=a.current_version WHERE a.id=$1`,
-        [target.id],
-      )
+      await checkedRow(savedAnalysisDefinitionRowSchema, savedDefinition(target.id))
     )?.definition_json;
     if (
       !definition?.expectedResult?.columns?.some(
@@ -306,38 +360,33 @@ export async function createAnalysisMonitor(input: unknown) {
       fail("Field must be a declared numeric result column");
   }
   const id = randomUUID();
-  await query(
-    `INSERT INTO analysis_monitors
-    (id,kind,title,saved_analysis_id,dossier_id,historical_target_id,target_label,field_id,operator,threshold,interval_minutes,cooldown_minutes)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::numeric,$11,$12)`,
-    [
+  await db
+    .insertInto("analysis_monitors")
+    .values({
       id,
-      value.kind,
-      value.title,
-      value.kind === "analysis-threshold" ? target.id : null,
-      value.kind === "dossier-evidence" ? target.id : null,
-      String(target.id),
-      target.name ?? target.title,
-      value.kind === "analysis-threshold" ? value.fieldId : null,
-      value.kind === "analysis-threshold" ? value.operator : null,
-      value.kind === "analysis-threshold" ? value.threshold : null,
-      value.intervalMinutes,
-      value.cooldownMinutes,
-    ],
-  );
+      kind: value.kind,
+      title: value.title,
+      saved_analysis_id: value.kind === "analysis-threshold" ? target.id : null,
+      dossier_id: value.kind === "dossier-evidence" ? target.id : null,
+      historical_target_id: String(target.id),
+      target_label: sql<string>`${target.name ?? target.title}`,
+      field_id: value.kind === "analysis-threshold" ? value.fieldId : null,
+      operator: value.kind === "analysis-threshold" ? value.operator : null,
+      threshold: sql<string | null>`${
+        value.kind === "analysis-threshold" ? value.threshold : null
+      }::numeric`,
+      interval_minutes: value.intervalMinutes,
+      cooldown_minutes: value.cooldownMinutes,
+    })
+    .execute();
   return getMonitor(id);
 }
 
 export async function patchAnalysisMonitor(id: string, input: unknown) {
   monitorId(id);
   const value = parsed(patchSchema, input);
-  await withTransaction(async (client) => {
-    const current = await queryOne(
-      analysisMonitorRowSchema,
-      "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
-      [id],
-      client,
-    );
+  await withTransaction(async () => {
+    const current = await checkedRow(analysisMonitorRowSchema, lockMonitor(id));
     if (!current) fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
     if (
       current.lease_expires_at &&
@@ -357,12 +406,9 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
       fail("Evidence monitors have no numeric condition");
     if (value.fieldId !== undefined && current.kind === "analysis-threshold") {
       const definition: AnalysisDefinition | undefined = (
-        await queryOne(
+        await checkedRow(
           savedAnalysisDefinitionRowSchema,
-          `SELECT v.definition_json FROM saved_analyses a JOIN saved_analysis_definition_versions v
-        ON v.saved_analysis_id=a.id AND v.version=a.current_version WHERE a.id=$1`,
-          [current.saved_analysis_id],
-          client,
+          savedDefinition(current.saved_analysis_id),
         )
       )?.definition_json;
       if (
@@ -378,29 +424,27 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
       value.fieldId !== undefined ||
       value.operator !== undefined ||
       value.threshold !== undefined;
-    await client.query(
-      `UPDATE analysis_monitors SET
-      title=$2,enabled=$3,field_id=$4,operator=$5,threshold=$6::numeric,
-      interval_minutes=$7,cooldown_minutes=$8,
-      next_due_at=CASE WHEN $9 OR ($10 AND NOT enabled) THEN now() ELSE next_due_at END,
-      active_episode_key=CASE WHEN $9 THEN NULL ELSE active_episode_key END,
-      pending_signature=CASE WHEN $9 THEN NULL ELSE pending_signature END,
-      pending_since=CASE WHEN $9 THEN NULL ELSE pending_since END,
-      condition_revision=condition_revision+CASE WHEN $9 THEN 1 ELSE 0 END,
-      updated_at=now() WHERE id=$1`,
-      [
-        id,
-        value.title ?? current.title,
-        value.enabled ?? current.enabled,
-        value.fieldId ?? current.field_id,
-        value.operator ?? current.operator,
-        value.threshold ?? current.threshold,
-        value.intervalMinutes ?? current.interval_minutes,
-        value.cooldownMinutes ?? current.cooldown_minutes,
-        conditionChanged,
-        value.enabled === true,
-      ],
-    );
+    const changed = sql<boolean>`${conditionChanged}::boolean`;
+    const enabling = sql<boolean>`${value.enabled === true}::boolean`;
+    await db
+      .updateTable("analysis_monitors")
+      .set({
+        title: value.title ?? current.title,
+        enabled: value.enabled ?? current.enabled,
+        field_id: value.fieldId ?? current.field_id,
+        operator: value.operator ?? current.operator,
+        threshold: sql<string | null>`${value.threshold ?? current.threshold}::numeric`,
+        interval_minutes: value.intervalMinutes ?? current.interval_minutes,
+        cooldown_minutes: value.cooldownMinutes ?? current.cooldown_minutes,
+        next_due_at: sql<Date>`CASE WHEN ${changed} OR (${enabling} AND NOT enabled) THEN now() ELSE next_due_at END`,
+        active_episode_key: sql<string | null>`CASE WHEN ${changed} THEN NULL ELSE active_episode_key END`,
+        pending_signature: sql<string | null>`CASE WHEN ${changed} THEN NULL ELSE pending_signature END`,
+        pending_since: sql<Date | null>`CASE WHEN ${changed} THEN NULL ELSE pending_since END`,
+        condition_revision: sql<number>`condition_revision+CASE WHEN ${changed} THEN 1 ELSE 0 END`,
+        updated_at: sql<Date>`now()`,
+      })
+      .where("id", "=", id)
+      .execute();
   });
   return getMonitor(id);
 }
@@ -408,7 +452,12 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
 export async function deleteAnalysisMonitor(id: string) {
   monitorId(id);
   if (
-    ((await query("DELETE FROM analysis_monitors WHERE id=$1", [id])).rowCount ?? 0) === 0
+    (
+      await db
+        .deleteFrom("analysis_monitors")
+        .where("id", "=", id)
+        .executeTakeFirst()
+    ).numDeletedRows === 0n
   )
     fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
 }
@@ -417,18 +466,25 @@ export async function listMonitorObservations(id: string, input?: PageInput) {
   monitorId(id);
   await getMonitor(id);
   const { limit, offset } = page(input);
-  const rows = await queryRows(
+  const rows = await checkedRows(
     monitorObservationRowSchema,
-    `SELECT * FROM analysis_monitor_observations WHERE monitor_id=$1
-    ORDER BY checked_at DESC,id DESC LIMIT $2 OFFSET $3`,
-    [id, limit, offset],
+    db
+      .selectFrom("analysis_monitor_observations")
+      .selectAll()
+      .where("monitor_id", "=", id)
+      .orderBy("checked_at", "desc")
+      .orderBy("id", "desc")
+      .limit(limit)
+      .offset(offset),
   );
   const total = Number(
     (
-      await queryOne(
+      await checkedRow(
         countNRowSchema,
-        "SELECT count(*) AS n FROM analysis_monitor_observations WHERE monitor_id=$1",
-        [id],
+        db
+          .selectFrom("analysis_monitor_observations")
+          .select(sql<string>`count(*)`.as("n"))
+          .where("monitor_id", "=", id),
       )
     )?.n,
   );
@@ -437,16 +493,24 @@ export async function listMonitorObservations(id: string, input?: PageInput) {
 
 export async function listMonitorNotifications(input?: PageInput) {
   const { limit, offset } = page(input);
-  const rows = await queryRows(
+  const rows = await checkedRows(
     monitorNotificationRowSchema,
-    `SELECT * FROM analysis_monitor_notifications
-    ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2`,
-    [limit, offset],
+    db
+      .selectFrom("analysis_monitor_notifications")
+      .selectAll()
+      .orderBy("created_at", "desc")
+      .orderBy("id", "desc")
+      .limit(limit)
+      .offset(offset),
   );
-  const counts = await queryOne(
+  const counts = await checkedRow(
     monitorNotificationCountsRowSchema,
-    `SELECT count(*) AS total, count(*) FILTER (WHERE read_at IS NULL) AS unread
-    FROM analysis_monitor_notifications`,
+    db
+      .selectFrom("analysis_monitor_notifications")
+      .select([
+        sql<string>`count(*)`.as("total"),
+        sql<string>`count(*) FILTER (WHERE read_at IS NULL)`.as("unread"),
+      ]),
   );
   return {
     items: rows.map(mapNotification),
@@ -459,11 +523,13 @@ export async function listMonitorNotifications(input?: PageInput) {
 
 export async function readMonitorNotification(id: string) {
   monitorId(id);
-  const row = await queryOne(
+  const row = await checkedRow(
     monitorNotificationRowSchema,
-    `UPDATE analysis_monitor_notifications SET read_at=coalesce(read_at,now())
-    WHERE id=$1 RETURNING *`,
-    [id],
+    db
+      .updateTable("analysis_monitor_notifications")
+      .set({ read_at: sql<Date>`coalesce(read_at,now())` })
+      .where("id", "=", id)
+      .returningAll(),
   );
   if (!row)
     fail("Notification not found", 404, "MONITOR_NOTIFICATION_NOT_FOUND");
@@ -528,19 +594,28 @@ function finiteResultValue(value: unknown) {
 async function claimMonitor(id: string, dueOnly: boolean) {
   monitorId(id);
   const token = randomUUID();
-  const row = await queryOne(
-    analysisMonitorRowSchema,
-    `UPDATE analysis_monitors SET lease_token=$2,
-      lease_expires_at=now()+($3 || ' minutes')::interval
-    WHERE id=$1 AND enabled AND (lease_token IS NULL OR lease_expires_at < now())
-      AND ($4::boolean=false OR next_due_at <= now())
-    RETURNING *`,
-    [id, token, String(LEASE_MINUTES), dueOnly],
-  );
+  let claim = db
+    .updateTable("analysis_monitors")
+    .set({ lease_token: token, lease_expires_at: addMinutes(LEASE_MINUTES) })
+    .where("id", "=", id)
+    .where("enabled", "=", true)
+    .where((eb) =>
+      eb.or([
+        eb("lease_token", "is", null),
+        eb("lease_expires_at", "<", sql<Date>`now()`),
+      ]),
+    );
+  if (dueOnly) claim = claim.where("next_due_at", "<=", sql<Date>`now()`);
+  const row = await checkedRow(analysisMonitorRowSchema, claim.returningAll());
   if (!row && !dueOnly) {
     const exists =
-      (await query("SELECT 1 FROM analysis_monitors WHERE id=$1", [id])).rows
-        .length > 0;
+      (
+        await db
+          .selectFrom("analysis_monitors")
+          .select("id")
+          .where("id", "=", id)
+          .execute()
+      ).length > 0;
     fail(
       exists ? "Monitor is disabled or already running" : "Monitor not found",
       exists ? 409 : 404,
@@ -557,10 +632,12 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
       reasonCode: "analysis-deleted",
       reason: "The saved analysis was deleted.",
     };
-  const saved = await queryOne(
+  const saved = await checkedRow(
     refreshModeRowSchema,
-    "SELECT refresh_mode FROM saved_analyses WHERE id=$1",
-    [row.saved_analysis_id],
+    db
+      .selectFrom("saved_analyses")
+      .select("refresh_mode")
+      .where("id", "=", row.saved_analysis_id),
   );
   if (!saved)
     return {
@@ -584,10 +661,12 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
     const error = caught as Error & { monitorRunId?: string };
     const failedRun = error.monitorRunId
-      ? await queryOne(
+      ? await checkedRow(
           runStatusRowSchema,
-          "SELECT status FROM saved_analysis_runs WHERE id=$1",
-          [error.monitorRunId],
+          db
+            .selectFrom("saved_analysis_runs")
+            .select("status")
+            .where("id", "=", error.monitorRunId),
         )
       : null;
     return {
@@ -598,16 +677,25 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
       runStatus: failedRun?.status ?? null,
     };
   }
-  const run = await queryOne(
+  const run = await checkedRow(
     monitorRunRowSchema,
-    `SELECT r.id,r.status,r.result_json,r.definition_version,
-         a.current_version,v.definition_json
-       FROM saved_analysis_runs r
-       JOIN saved_analyses a ON a.id=r.saved_analysis_id
-       JOIN saved_analysis_definition_versions v
-         ON v.saved_analysis_id=a.id AND v.version=a.current_version
-       WHERE r.id=$1`,
-    [runId],
+    db
+      .selectFrom("saved_analysis_runs as r")
+      .innerJoin("saved_analyses as a", "a.id", "r.saved_analysis_id")
+      .innerJoin("saved_analysis_definition_versions as v", (join) =>
+        join
+          .onRef("v.saved_analysis_id", "=", "a.id")
+          .onRef("v.version", "=", "a.current_version"),
+      )
+      .select([
+        "r.id",
+        "r.status",
+        "r.result_json",
+        "r.definition_version",
+        "a.current_version",
+        "v.definition_json",
+      ])
+      .where("r.id", "=", runId),
   );
   if (!run)
     return {
@@ -700,10 +788,12 @@ async function inspectDossier(row: MonitorRow): Promise<MonitorFinding> {
       reasonCode: "dossier-deleted",
       reason: "The research dossier was deleted.",
     };
-  const dossier = await queryOne(
+  const dossier = await checkedRow(
     monitorDossierRowSchema,
-    "SELECT version,content_json FROM research_dossiers WHERE id=$1",
-    [row.dossier_id],
+    db
+      .selectFrom("research_dossiers")
+      .select(["version", "content_json"])
+      .where("id", "=", row.dossier_id),
   );
   if (!dossier)
     return {
@@ -730,31 +820,41 @@ async function finalizeObservation(
   finding: MonitorFinding,
 ) {
   const { row, token } = claim;
-  return withTransaction(async (client) => {
-    const locked = await queryOne(
+  return withTransaction(async () => {
+    const locked = await checkedRow(
       analysisMonitorRowSchema,
-      "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
-      [row.id],
-      client,
+      lockMonitor(row.id),
     );
     if (!locked || locked.lease_token !== token) return null;
     if (locked.condition_revision !== row.condition_revision) {
-      await client.query(
-        `UPDATE analysis_monitors SET lease_token=NULL,lease_expires_at=NULL,
-        next_due_at=now() WHERE id=$1`,
-        [row.id],
-      );
+      await db
+        .updateTable("analysis_monitors")
+        .set({
+          lease_token: null,
+          lease_expires_at: null,
+          next_due_at: sql<Date>`now()`,
+        })
+        .where("id", "=", row.id)
+        .execute();
       return null;
     }
     const prior =
-      (await queryOne(
+      (await checkedRow(
         monitorObservationRowSchema,
-        `SELECT * FROM analysis_monitor_observations
-      WHERE monitor_id=$1 AND condition_revision=$2
-        AND status IN ('baseline','unchanged','triggered','cooldown-pending')
-      ORDER BY checked_at DESC,id DESC LIMIT 1`,
-        [row.id, locked.condition_revision],
-        client,
+        db
+          .selectFrom("analysis_monitor_observations")
+          .selectAll()
+          .where("monitor_id", "=", row.id)
+          .where("condition_revision", "=", locked.condition_revision)
+          .where("status", "in", [
+            "baseline",
+            "unchanged",
+            "triggered",
+            "cooldown-pending",
+          ])
+          .orderBy("checked_at", "desc")
+          .orderBy("id", "desc")
+          .limit(1),
       )) ?? null;
     const now = new Date();
     let status = finding.status;
@@ -846,71 +946,69 @@ async function finalizeObservation(
       }
     }
     const id = randomUUID();
-    const observation = await queryOne(
+    const observation = await checkedRow(
       monitorObservationRowSchema,
-      `INSERT INTO analysis_monitor_observations
-      (id,monitor_id,status,previous_value,current_value,previous_evidence_version,current_evidence_version,
-        evidence_hash,condition_revision,analysis_definition_version,analysis_run_id,historical_analysis_run_id,
-        analysis_run_status,analysis_window_json,coverage_json,reason_code,reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$17) RETURNING *`,
-      [
-        id,
-        row.id,
-        status,
-        previousValue,
-        currentValue,
-        previousEvidenceVersion,
-        currentEvidenceVersion,
-        hash,
-        locked.condition_revision,
-        finding.definitionVersion ?? null,
-        finding.runId ?? null,
-        finding.runId ?? null,
-        finding.runStatus ?? null,
-        finding.runWindow ? JSON.stringify(finding.runWindow) : null,
-        JSON.stringify(COVERAGE),
-        reasonCode,
-        // Every valid branch above sets a reason; other findings carry one.
-        reason!.slice(0, 1000),
-      ],
-      client,
+      db
+        .insertInto("analysis_monitor_observations")
+        .values({
+          id,
+          monitor_id: row.id,
+          status,
+          previous_value: previousValue,
+          current_value: currentValue,
+          previous_evidence_version: previousEvidenceVersion,
+          current_evidence_version: currentEvidenceVersion,
+          evidence_hash: hash,
+          condition_revision: locked.condition_revision,
+          analysis_definition_version: finding.definitionVersion ?? null,
+          analysis_run_id: finding.runId ?? null,
+          historical_analysis_run_id: finding.runId ?? null,
+          analysis_run_status: finding.runStatus ?? null,
+          analysis_window_json: finding.runWindow
+            ? sql<Json>`${JSON.stringify(finding.runWindow)}::jsonb`
+            : null,
+          coverage_json: sql<Json>`${JSON.stringify(COVERAGE)}::jsonb`,
+          reason_code: reasonCode,
+          // Every valid branch above sets a reason; other findings carry one.
+          reason: reason!.slice(0, 1000),
+        })
+        .returningAll(),
     );
     if (!observation)
       throw new Error("analysis_monitor_observations insert returned no row");
     if (notify) {
-      await client.query(
-        `INSERT INTO analysis_monitor_notifications
-        (monitor_id,observation_id,kind,title,reason_code,reason,previous_value,current_value,episode_key)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (monitor_id,episode_key) DO NOTHING`,
-        [
-          row.id,
-          id,
-          row.kind,
-          row.title,
-          reasonCode,
-          reason,
-          previousValue,
-          currentValue,
-          episodeKey,
-        ],
-      );
+      await db
+        .insertInto("analysis_monitor_notifications")
+        .values({
+          monitor_id: row.id,
+          observation_id: id,
+          kind: row.kind,
+          title: row.title,
+          reason_code: reasonCode,
+          reason: sql<string>`${reason}`,
+          previous_value: previousValue,
+          current_value: currentValue,
+          episode_key: sql<string>`${episodeKey}`,
+        })
+        .onConflict((oc) => oc.columns(["monitor_id", "episode_key"]).doNothing())
+        .execute();
     }
-    await client.query(
-      `UPDATE analysis_monitors SET last_checked_at=now(),last_status=$2,
-      next_due_at=now()+($3 || ' minutes')::interval,
-      active_episode_key=$4,pending_signature=$5,pending_since=$6,last_notified_at=$7,
-      lease_token=NULL,lease_expires_at=NULL,updated_at=now()
-      WHERE id=$1`,
-      [
-        row.id,
-        status,
-        String(row.interval_minutes),
-        episodeKey,
-        pendingSignature,
-        pendingSince,
-        lastNotifiedAt,
-      ],
-    );
+    await db
+      .updateTable("analysis_monitors")
+      .set({
+        last_checked_at: sql<Date>`now()`,
+        last_status: status,
+        next_due_at: addMinutes(row.interval_minutes),
+        active_episode_key: episodeKey,
+        pending_signature: pendingSignature,
+        pending_since: pendingSince,
+        last_notified_at: lastNotifiedAt,
+        lease_token: null,
+        lease_expires_at: null,
+        updated_at: sql<Date>`now()`,
+      })
+      .where("id", "=", row.id)
+      .execute();
     return mapObservation(observation);
   });
 }
@@ -946,11 +1044,22 @@ export async function checkAnalysisMonitor(
 /** Each tick claims at most four overdue local rules, sequentially. */
 export async function checkDueAnalysisMonitors() {
   const ids = (
-    await queryRows(
+    await checkedRows(
       textIdRowSchema,
-      `SELECT id FROM analysis_monitors WHERE enabled AND next_due_at <= now()
-    AND (lease_token IS NULL OR lease_expires_at < now()) ORDER BY next_due_at,id LIMIT $1`,
-      [MAX_DUE_PER_TICK],
+      db
+        .selectFrom("analysis_monitors")
+        .select("id")
+        .where("enabled", "=", true)
+        .where("next_due_at", "<=", sql<Date>`now()`)
+        .where((eb) =>
+          eb.or([
+            eb("lease_token", "is", null),
+            eb("lease_expires_at", "<", sql<Date>`now()`),
+          ]),
+        )
+        .orderBy("next_due_at")
+        .orderBy("id")
+        .limit(MAX_DUE_PER_TICK),
     )
   ).map((row) => row.id);
   for (const id of ids) await checkAnalysisMonitor(id, { dueOnly: true });

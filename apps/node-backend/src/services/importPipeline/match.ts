@@ -16,14 +16,14 @@
  * row was resolved.
  */
 
-import { query } from '../../database/connection.ts';
+import { sql } from 'kysely';
+import { checkedRows, db } from '../../database/db.ts';
 import { logger } from '../../config/logger.ts';
 import {
   findBestRecipientMatches,
   normalizeForMatching,
 } from '../calculations/normalization.ts';
 import { loadActivePatterns, applyPatterns } from '../recipientPatternService.ts';
-import { queryRows } from '../../database/rowContracts.ts';
 import {
   matchStagingRowSchema,
   recipientIdentityRowSchema,
@@ -57,15 +57,20 @@ export async function matchBatch({
   unresolved: number;
   matchSourceCounts: Record<string, number>;
 }> {
-  await query(`UPDATE import_batches SET status = 'matching' WHERE id = $1`, [batchId]);
+  await db
+    .updateTable('import_batches')
+    .set({ status: 'matching' })
+    .where('id', '=', String(batchId))
+    .execute();
 
-  const staged = await queryRows(
+  const staged = await checkedRows(
     matchStagingRowSchema,
-    `SELECT id, recipient_raw
-       FROM import_staging_rows
-      WHERE batch_id = $1 AND status = 'validated'
-      ORDER BY row_index ASC`,
-    [batchId]
+    db
+      .selectFrom('import_staging_rows')
+      .select(['id', 'recipient_raw'])
+      .where('batch_id', '=', String(batchId))
+      .where('status', '=', 'validated')
+      .orderBy('row_index', 'asc'),
   );
 
   const total = staged.length;
@@ -119,13 +124,12 @@ export async function matchBatch({
     const normalizedNames = toUpsert.map((r) => r.normalized);
 
     // Batch insert — ON CONFLICT DO NOTHING returns only newly created rows.
-    const inserted = await queryRows(
+    const inserted = await checkedRows(
       recipientIdentityRowSchema,
-      `INSERT INTO recipients (name, normalized_name, is_active)
-       SELECT UNNEST($1::text[]), UNNEST($2::text[]), true
+      sql`INSERT INTO recipients (name, normalized_name, is_active)
+       SELECT UNNEST(${upperNames}::text[]), UNNEST(${normalizedNames}::text[]), true
        ON CONFLICT (normalized_name) DO NOTHING
        RETURNING id, normalized_name`,
-      [upperNames, normalizedNames],
     );
     const insertedByNorm = new Map(
       inserted.map((r) => [r.normalized_name, r.id]),
@@ -134,10 +138,12 @@ export async function matchBatch({
     // Fetch ids for names that already existed (conflict — not returned above).
     const conflicted = normalizedNames.filter((n) => !insertedByNorm.has(n));
     if (conflicted.length > 0) {
-      const existing = await queryRows(
+      const existing = await checkedRows(
         recipientIdentityRowSchema,
-        `SELECT id, normalized_name FROM recipients WHERE normalized_name = ANY($1::text[])`,
-        [conflicted],
+        db
+          .selectFrom('recipients')
+          .select(['id', 'normalized_name'])
+          .where('normalized_name', '=', sql<string>`ANY(${conflicted}::text[])`),
       );
       for (const r of existing) {
         insertedByNorm.set(r.normalized_name, r.id);
@@ -189,18 +195,16 @@ export async function matchBatch({
         patternIds.push(null);
       }
     }
-    await query(
-      `UPDATE import_staging_rows s
+    await sql`UPDATE import_staging_rows s
           SET status                = 'matched',
               resolved_recipient_id = v.recipient_id,
               match_source          = v.match_source,
               match_similarity      = v.match_similarity,
               matched_pattern_id    = v.matched_pattern_id
-         FROM unnest($1::bigint[], $2::int[], $3::text[], $4::real[], $5::int[])
+         FROM unnest(${ids}::bigint[], ${recipientIds}::int[], ${matchSources}::text[],
+                     ${similarities}::real[], ${patternIds}::int[])
               AS v(id, recipient_id, match_source, match_similarity, matched_pattern_id)
-        WHERE s.id = v.id`,
-      [ids, recipientIds, matchSources, similarities, patternIds]
-    );
+        WHERE s.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: 'matching', current: seen, total });
   }

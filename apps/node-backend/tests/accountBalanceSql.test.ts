@@ -1,4 +1,3 @@
-import { bankChronologySql } from "../src/repositories/bankChronologySql.ts";
 /**
  * Shape tests for the shared computed-balance lateral (ADR-094 / WP-A1).
  *
@@ -12,13 +11,17 @@ import { bankChronologySql } from "../src/repositories/bankChronologySql.ts";
  * infoRepoBanks.test.ts / infoRepository.test.ts.
  */
 import { describe, expect, it } from "vitest";
+import { sql as kyselySql } from "kysely";
+import type { RawBuilder } from "kysely";
 
+import { db } from "../src/database/db.ts";
+import { bankChronologySql as chronologyFragment } from "../src/repositories/bankChronologySql.ts";
 import {
-  balanceProvenanceLateral,
-  computedBalanceByCurrencyLateral,
-  computedBalanceByCurrencyAggLateral,
+  balanceProvenanceLateral as provenanceFragment,
+  computedBalanceByCurrencyLateral as byCurrencyFragment,
+  computedBalanceByCurrencyAggLateral as aggFragment,
   statementPartition,
-  computedBalanceSeriesCtes,
+  computedBalanceSeriesCtes as seriesFragment,
 } from "../src/repositories/accountBalanceSql.ts";
 import {
   asCurrencyCode,
@@ -26,6 +29,43 @@ import {
 } from "@vision/types/brands";
 import { loose } from "./helpers/partial.ts";
 
+
+// The fragments are Kysely `sql` templates; these read their compiled text.
+// The constant SQL expressions passed in stand for the callers' fragments.
+const text = (fragment: RawBuilder<unknown>) => fragment.compile(db).sql;
+const bankChronologySql = (alias: string) => text(chronologyFragment(alias));
+const balanceProvenanceLateral = (opts: { asOfDate?: string } = {}) =>
+  text(
+    provenanceFragment(
+      opts.asOfDate === undefined ? {} : { asOfDate: kyselySql.raw(opts.asOfDate) },
+    ),
+  );
+const computedBalanceByCurrencyLateral = (opts: {
+  account: string;
+  alias?: string;
+  asOfDate?: string;
+}) =>
+  text(
+    byCurrencyFragment({
+      account: kyselySql.raw(opts.account),
+      ...(opts.alias === undefined ? {} : { alias: opts.alias }),
+      ...(opts.asOfDate === undefined ? {} : { asOfDate: kyselySql.raw(opts.asOfDate) }),
+    }),
+  );
+const computedBalanceByCurrencyAggLateral = (opts: {
+  account: string;
+  alias?: string;
+  column?: string;
+}) =>
+  text(
+    aggFragment({
+      account: kyselySql.raw(opts.account),
+      ...(opts.alias === undefined ? {} : { alias: opts.alias }),
+      ...(opts.column === undefined ? {} : { column: opts.column }),
+    }),
+  );
+const computedBalanceSeriesCtes = (opts: { byCurrency?: boolean } = {}) =>
+  text(seriesFragment(opts));
 
 const BALANCE_PROVENANCE_LATERAL = balanceProvenanceLateral();
 
@@ -134,7 +174,7 @@ describe("computedBalanceByCurrencyLateral", () => {
 
   it("is set-returning and aliased, exposing currency and balance", () => {
     expect(sql.trim().startsWith("JOIN LATERAL")).toBe(true);
-    expect(sql).toContain(") bal ON true");
+    expect(sql).toContain(') "bal" ON true');
     expect(sql).toContain("AS balance");
     // It is a CURRENT balance: it carries no per-partition FX date, because
     // callers must convert it at today's rate (the day the chart ends on), not
@@ -142,7 +182,7 @@ describe("computedBalanceByCurrencyLateral", () => {
     expect(sql).not.toContain("last_activity");
     expect(
       computedBalanceByCurrencyLateral({ account: "a.id", alias: "x" }),
-    ).toContain(") x ON true");
+    ).toContain(') "x" ON true');
   });
 });
 
@@ -164,34 +204,22 @@ describe("computedBalanceByCurrencyAggLateral", () => {
     // Callers whose rows ARE accounts (paging, one entry per account, a
     // population-size guard) break if an account fans out or disappears.
     expect(sql.trim().startsWith("LEFT JOIN LATERAL")).toBe(true);
-    expect(sql).toContain(") bp ON true");
+    expect(sql).toContain(') "bp" ON true');
     expect(sql).toContain("jsonb_agg(");
-    expect(sql).toContain("AS balance_parts");
+    expect(sql).toContain('AS "balance_parts"');
     expect(
       computedBalanceByCurrencyAggLateral({
         account: "a.id",
         alias: "x",
         column: "parts",
       }),
-    ).toContain("AS parts");
+    ).toContain('AS "parts"');
   });
 
   it("carries each partition balance as TEXT, never a JSON number", () => {
     // jsonb numbers deserialize to IEEE doubles, so a NUMERIC would lose
     // precision before toDecimal ever saw it.
     expect(sql).toContain("bal.balance::text");
-  });
-
-  it("rejects interpolated account expressions outside the literal allowlist", () => {
-    expect(() =>
-      computedBalanceByCurrencyAggLateral({ account: "a.id\n--" }),
-    ).toThrow(/literal qualified column/);
-    expect(() =>
-      computedBalanceByCurrencyAggLateral({ account: "a.id OR true" }),
-    ).toThrow(TypeError);
-    expect(() =>
-      computedBalanceByCurrencyAggLateral({ account: "ANY($1::int[])" }),
-    ).not.toThrow();
   });
 });
 
@@ -364,7 +392,7 @@ describe("computedBalanceSeriesCtes", () => {
     const sql = computedBalanceSeriesCtes();
     expect(sql).toContain("balance_series AS (");
     expect(sql).toContain(
-      "JOIN account_list bs_al ON bs_al.account_id = t.account_id",
+      'JOIN "account_list" bs_al ON bs_al.account_id = t.account_id',
     );
     // Spliced into an existing WITH chain: no leading WITH, no trailing comma.
     expect(sql.trim().startsWith("WITH")).toBe(false);

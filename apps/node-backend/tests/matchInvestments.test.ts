@@ -78,14 +78,14 @@ function makeDispatch(
   capture: Partial<Capture> = {},
 ) {
   return function dispatch(sql: string, params?: readonly unknown[]) {
-    if (/SET status = 'matching'/.test(sql)) return { rows: [] };
-    if (/route = 'cash'/.test(sql)) return { rows: [] };
+    if (/update "portfolio_import_batches"/.test(sql)) return { rows: [] };
+    if (/"route" in \(/.test(sql)) return { rows: [] };
     // Staging ids are BIGINT, which pg returns as text.
-    if (/status = 'validated'/.test(sql))
+    if (/select "id", "symbol_raw", "name_raw"/.test(sql))
       return {
         rows: stagingRows.map((row) => ({ ...row, id: String(row.id) })),
       };
-    if (/price_provider = 'yahoo'/.test(sql)) {
+    if (/"price_provider" = /.test(sql)) {
       capture.aliasLookups = (capture.aliasLookups ?? 0) + 1;
       return {
         rows: investments

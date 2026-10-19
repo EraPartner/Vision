@@ -142,7 +142,7 @@ describe("POST /bulk-delete — id-mode success", () => {
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
 
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
-      sql.includes("DELETE FROM transactions"),
+      /delete from "?transactions"?/i.test(sql),
     );
     expect(deleteCall).toBeDefined();
     expect(deleteCall![1]).toEqual([[1, 2, 3]]);
@@ -204,7 +204,7 @@ describe("POST /bulk-delete — filter-mode", () => {
     expect(bodyAt(res, "data", "requested")).toBe(3);
     expect(bodyAt(res, "data", "matched")).toBe(2);
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
-      sql.includes("DELETE"),
+      /delete from "?transactions"?/i.test(sql),
     );
     expect(deleteCall![1]).toEqual([[11, 22]]);
   });

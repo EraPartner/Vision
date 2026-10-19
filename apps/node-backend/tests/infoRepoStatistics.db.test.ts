@@ -29,7 +29,9 @@ import {
 } from "./setup/db.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
-import { buildExclusionClauses } from "../src/lib/filterBuilder.ts";
+import { sql } from "kysely";
+import { db } from "../src/database/db.ts";
+import { exclusionClauses } from "../src/lib/filterBuilder.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
@@ -385,16 +387,13 @@ describe.skipIf(!hasTestDatabase())(
           total: -30,
         });
 
-        const exclusion = buildExclusionClauses({
+        const exclusion = exclusionClauses({
           excludedCategoryIds: [rootId],
         });
-        const remaining = await pool.query(
-          `SELECT COUNT(*)::int AS count FROM transactions t
-           ${exclusion.joinSql}
-           WHERE t.is_active=true AND ${exclusion.whereSql}`,
-          exclusion.params,
-        );
-        expect(remaining.rows[0].count).toBe(1); // Bills, no Food descendant
+        const remaining = await sql<{ count: number }>`SELECT COUNT(*)::int AS count FROM transactions t
+           ${exclusion.joins}
+           WHERE t.is_active=true ${exclusion.where}`.execute(db);
+        expect(remaining.rows[0]?.count).toBe(1); // Bills, no Food descendant
       });
     });
 

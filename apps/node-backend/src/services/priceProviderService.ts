@@ -723,13 +723,12 @@ export async function fetchHistoricalPrices(
 // ─── Kinesis DB sanitization ──────────────────────────────────────────────────
 
 export async function sanitizePersistedKinesisHistory() {
-  const investmentsResult = await (
-    await import("../database/connection.ts")
-  ).query<{
-    id: number;
-  }>(`SELECT id FROM investments WHERE price_provider = 'kinesis'`, []);
-
-  const investments = investmentsResult.rows ?? [];
+  const { db } = await import("../database/db.ts");
+  const investments = await db
+    .selectFrom("investments")
+    .select("id")
+    .where("price_provider", "=", "kinesis")
+    .execute();
   if (investments.length === 0) {
     logger.info("Kinesis history sanitization skipped: no kinesis investments");
     return { processed: 0, updated: 0, correctedPoints: 0, failed: 0 };

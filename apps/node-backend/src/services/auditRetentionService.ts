@@ -1,5 +1,6 @@
+import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   auditDomainMaxRowSchema,
   auditEntryHashRowSchema,
@@ -34,11 +35,12 @@ export async function planAuditRetention(
       return { eligible: false, reason: "history_not_fully_anchored" };
     }
     const floor = trustedCheckpoint.retention?.through ?? 0;
-    const candidate = await queryOne(
+    const candidate = await checkedRow(
       auditFirstRecentRowSchema,
-      `SELECT min(sequence) AS first_recent
-         FROM audit_chain_entries
-        WHERE created_at >= now() - interval '1 year'`,
+      db
+        .selectFrom("audit_chain_entries")
+        .select((eb) => eb.fn.min("sequence").as("first_recent"))
+        .where("created_at", ">=", sql<Date>`now() - interval '1 year'`),
     );
     // An aggregate without GROUP BY always returns exactly one row.
     if (!candidate)
@@ -49,19 +51,21 @@ export async function planAuditRetention(
         : safeSequence(candidate.first_recent);
     const through = Math.min(firstRecent - 1, trustedCheckpoint.sequence - 1);
     if (through <= floor) return { eligible: false, reason: "nothing_due" };
-    const boundary = await queryRows(
+    const boundary = await checkedRows(
       auditEntryHashRowSchema,
-      `SELECT entry_hash FROM audit_chain_entries WHERE sequence = $1`,
-      [through],
+      db
+        .selectFrom("audit_chain_entries")
+        .select("entry_hash")
+        .where("sequence", "=", String(through)),
     );
     const [boundaryEntry] = boundary;
     if (!boundaryEntry || boundary.length !== 1) {
       return { eligible: false, reason: "boundary_missing" };
     }
     const head = await readAuditHead();
-    const max = await queryOne(
+    const max = await checkedRow(
       auditDomainMaxRowSchema,
-      `SELECT
+      sql`SELECT
          max((payload->>'auditRowId')::bigint) FILTER
            (WHERE payload->>'stream' = 'db_editor') AS db_editor_max,
          max((payload->>'auditRowId')::bigint) FILTER
@@ -69,8 +73,7 @@ export async function planAuditRetention(
          max((payload->>'receipt_id')::bigint) FILTER
            (WHERE payload->>'stream' = 'portfolio_retag') AS retag_max
        FROM audit_chain_entries
-       WHERE sequence > $1 AND sequence <= $2`,
-      [floor, through],
+       WHERE sequence > ${floor} AND sequence <= ${through}`,
     );
     if (!max) throw new Error("Audit retention aggregate returned no row");
     const previous = trustedCheckpoint.retention?.domainMax ?? {
@@ -78,14 +81,13 @@ export async function planAuditRetention(
       split: head.legacyCutover.splitMaxId,
       retag: head.legacyCutover.retagMaxId,
     };
-    const migration = await queryOne(
+    const migration = await checkedRow(
       auditMigrationHeadsRowSchema,
-      `SELECT payload->'heads' AS heads
+      sql`SELECT payload->'heads' AS heads
          FROM audit_chain_entries
-        WHERE sequence > $1 AND sequence <= $2
+        WHERE sequence > ${floor} AND sequence <= ${through}
           AND payload->>'stream' = 'schema_migration'
         ORDER BY sequence DESC LIMIT 1`,
-      [floor, through],
     );
     const migrationHeads =
       migration?.heads ?? trustedCheckpoint.retention?.migrationHeads ?? [];
@@ -116,10 +118,9 @@ export async function pruneAuditRetention(
   if (!["verified", "partially_verified"].includes(verified.status)) {
     throw new Error("Audit history is not fully verified for retention");
   }
-  const result = await queryOne(
+  const result = await checkedRow(
     auditPruneRowSchema,
-    "SELECT audit_chain_prune_prefix($1::bigint, $2::char(64)) AS removed",
-    [retention.through, retention.hash],
+    sql`SELECT audit_chain_prune_prefix(${retention.through}::bigint, ${retention.hash}::char(64)) AS removed`,
   );
   if (!result) throw new Error("Audit retention prune returned no row");
   return { removed: safeSequence(result.removed) };

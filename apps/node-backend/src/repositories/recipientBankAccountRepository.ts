@@ -5,25 +5,40 @@
  * Provides CRUD operations for managing bank accounts linked to recipients.
  */
 
-import { query, withTransaction } from '../database/connection.ts';
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import type { RawBuilder } from 'kysely';
+import { withTransaction } from '../database/connection.ts';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
 import {
   recipientBankAccountRowSchema,
   requireRow,
 } from '../database/rows/catalog.ts';
-import { buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { RecipientBankAccountRow } from '../types/rows.ts';
 import type { RecipientId } from '@vision/types/brands';
 
 export type { RecipientBankAccountRow };
 
+/** `= ANY($n::int[])`: one array parameter however many ids there are. */
+function anyRecipientId(ids: RecipientId[]): RawBuilder<RecipientId> {
+  return sql<RecipientId>`ANY(${ids}::int[])`;
+}
+
+/** Clear the recipient's current primary account. */
+async function clearPrimary(recipientId: RecipientId | null): Promise<void> {
+  await db
+    .updateTable('recipient_bank_accounts')
+    .set({ is_primary: false, updated_at: sql<Date>`NOW()` })
+    .where('recipient_id', '=', recipientId)
+    .where('is_primary', '=', true)
+    .execute();
+}
+
 export const recipientBankAccountRepository = {
   async getById(id: number): Promise<RecipientBankAccountRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       recipientBankAccountRowSchema,
-      `SELECT * FROM recipient_bank_accounts WHERE id = $1`,
-      [id]
+      db.selectFrom('recipient_bank_accounts').selectAll().where('id', '=', id),
     );
     return row ?? null;
   },
@@ -32,10 +47,12 @@ export const recipientBankAccountRepository = {
     accountNumber: string | null | undefined,
   ): Promise<RecipientBankAccountRow | null> {
     if (!accountNumber) return null;
-    const row = await queryOne(
+    const row = await checkedRow(
       recipientBankAccountRowSchema,
-      `SELECT * FROM recipient_bank_accounts WHERE account_number = $1`,
-      [accountNumber.trim().toUpperCase()]
+      db
+        .selectFrom('recipient_bank_accounts')
+        .selectAll()
+        .where('account_number', '=', accountNumber.trim().toUpperCase()),
     );
     return row ?? null;
   },
@@ -44,25 +61,30 @@ export const recipientBankAccountRepository = {
     recipientId: RecipientId,
     activeOnly = true,
   ): Promise<RecipientBankAccountRow[]> {
-    let sql = `
-      SELECT * FROM recipient_bank_accounts
-      WHERE recipient_id = $1
-    `;
-    if (activeOnly) sql += ` AND is_active = true`;
-    sql += ` ORDER BY is_primary DESC, created_at ASC`;
+    let builder = db
+      .selectFrom('recipient_bank_accounts')
+      .selectAll()
+      .where('recipient_id', '=', recipientId);
+    if (activeOnly) builder = builder.where('is_active', '=', true);
 
-    return queryRows(recipientBankAccountRowSchema, sql, [recipientId]);
+    return checkedRows(
+      recipientBankAccountRowSchema,
+      builder.orderBy('is_primary', 'desc').orderBy('created_at', 'asc'),
+    );
   },
 
   async getPrimaryAccount(
     recipientId: RecipientId,
   ): Promise<RecipientBankAccountRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       recipientBankAccountRowSchema,
-      `SELECT * FROM recipient_bank_accounts
-       WHERE recipient_id = $1 AND is_primary = true AND is_active = true
-       LIMIT 1`,
-      [recipientId]
+      db
+        .selectFrom('recipient_bank_accounts')
+        .selectAll()
+        .where('recipient_id', '=', recipientId)
+        .where('is_primary', '=', true)
+        .where('is_active', '=', true)
+        .limit(1),
     );
     return row ?? null;
   },
@@ -92,21 +114,19 @@ export const recipientBankAccountRepository = {
 
     const existing = await this.getByAccountNumber(accountNumber);
     if (existing) {
-      // Enrich with missing metadata. Shared clause builder (lib/sqlClauses.ts)
-      // skips undefined, so the enrichment conditions map to the field bag.
-      const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
-        bank_name: bankName && !existing.bank_name ? bankName : undefined,
-        address: address && existing.address !== address ? address : undefined,
-        account_label: accountLabel && !existing.account_label ? accountLabel : undefined,
-      });
+      // Enrich with missing metadata.
+      const updates = {
+        ...(bankName && !existing.bank_name && { bank_name: bankName }),
+        ...(address && existing.address !== address && { address }),
+        ...(accountLabel && !existing.account_label && { account_label: accountLabel }),
+      };
 
-      if (updates.length > 0) {
-        updates.push(`updated_at = NOW()`);
-        params.push(existing.id);
-        await query(
-          `UPDATE recipient_bank_accounts SET ${updates.join(', ')} WHERE id = $${paramIdx}`,
-          params
-        );
+      if (Object.keys(updates).length > 0) {
+        await db
+          .updateTable('recipient_bank_accounts')
+          .set({ ...updates, updated_at: sql<Date>`NOW()` })
+          .where('id', '=', existing.id)
+          .execute();
       }
 
       if (setAsPrimary && !existing.is_primary) {
@@ -127,20 +147,22 @@ export const recipientBankAccountRepository = {
     // Unset the current primary and insert the new one in a single
     // transaction — doing the insert-as-primary then a separate setPrimary()
     // left a brief window where the recipient had two primary accounts.
-    const created = await withTransaction<RecipientBankAccountRow>(async (client) => {
-      if (willBePrimary) {
-        await client.query(
-          `UPDATE recipient_bank_accounts SET is_primary = false, updated_at = NOW()
-           WHERE recipient_id = $1 AND is_primary = true`,
-          [recipientId]
-        );
-      }
-      const row = await queryOne(
+    const created = await withTransaction<RecipientBankAccountRow>(async () => {
+      if (willBePrimary) await clearPrimary(recipientId);
+      const row = await checkedRow(
         recipientBankAccountRowSchema,
-        `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, address, account_label, is_primary, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *`,
-        [recipientId, accountNumber.trim().toUpperCase(), bankName, address, accountLabel, willBePrimary],
-        client
+        db
+          .insertInto('recipient_bank_accounts')
+          .values({
+            recipient_id: recipientId,
+            account_number: accountNumber.trim().toUpperCase(),
+            bank_name: bankName,
+            address,
+            account_label: accountLabel,
+            is_primary: willBePrimary,
+            is_active: true,
+          })
+          .returningAll(),
       );
       return requireRow(row, 'recipient bank account insert');
     });
@@ -160,27 +182,35 @@ export const recipientBankAccountRepository = {
       accountLabel?: string | null | undefined;
     },
   ): Promise<RecipientBankAccountRow | null> {
-    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
-    const { clauses: updates, params, nextIdx: paramIdx } = buildSetClauses({
-      bank_name: bankName, address, account_label: accountLabel,
-    });
+    // undefined fields are skipped.
+    const updates = {
+      ...(bankName !== undefined && { bank_name: bankName }),
+      ...(address !== undefined && { address }),
+      ...(accountLabel !== undefined && { account_label: accountLabel }),
+    };
 
-    if (updates.length === 0) return this.getById(id);
+    if (Object.keys(updates).length === 0) return this.getById(id);
 
-    updates.push(`updated_at = NOW()`);
-    params.push(id);
-    const sql = `UPDATE recipient_bank_accounts SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
-    const row = await queryOne(recipientBankAccountRowSchema, sql, params);
+    const row = await checkedRow(
+      recipientBankAccountRowSchema,
+      db
+        .updateTable('recipient_bank_accounts')
+        .set({ ...updates, updated_at: sql<Date>`NOW()` })
+        .where('id', '=', id)
+        .returningAll(),
+    );
     return row ?? null;
   },
 
   /** @returns true if a row was deactivated */
   async softDelete(id: number): Promise<boolean> {
-    const result = await query(
-      `UPDATE recipient_bank_accounts SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING id`,
-      [id]
-    );
-    return (result.rowCount ?? 0) > 0;
+    const row = await db
+      .updateTable('recipient_bank_accounts')
+      .set({ is_active: false, updated_at: sql<Date>`NOW()` })
+      .where('id', '=', id)
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
   },
 
   /**
@@ -194,15 +224,14 @@ export const recipientBankAccountRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<number> {
-    const result = await query(
-      `DELETE FROM recipient_bank_accounts rba
-        USING recipient_bank_accounts keep
-        WHERE rba.recipient_id = ANY($2::int[])
-          AND keep.recipient_id = $1
-          AND keep.account_number = rba.account_number`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .deleteFrom('recipient_bank_accounts as rba')
+      .using('recipient_bank_accounts as keep')
+      .where('rba.recipient_id', '=', anyRecipientId(aliasIds))
+      .where('keep.recipient_id', '=', primaryId)
+      .whereRef('keep.account_number', '=', 'rba.account_number')
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
   },
 
   /**
@@ -210,13 +239,12 @@ export const recipientBankAccountRepository = {
    * @returns rows repointed
    */
   async repointRecipient(primaryId: RecipientId, aliasIds: RecipientId[]): Promise<number> {
-    const result = await query(
-      `UPDATE recipient_bank_accounts
-          SET recipient_id = $1
-        WHERE recipient_id = ANY($2::int[])`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable('recipient_bank_accounts')
+      .set({ recipient_id: primaryId })
+      .where('recipient_id', '=', anyRecipientId(aliasIds))
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /** @returns true if the account was made primary */
@@ -224,18 +252,16 @@ export const recipientBankAccountRepository = {
     bankAccountId: number,
     recipientId: RecipientId | null,
   ): Promise<boolean> {
-    return withTransaction(async (client) => {
-      await client.query(
-        `UPDATE recipient_bank_accounts SET is_primary = false, updated_at = NOW()
-         WHERE recipient_id = $1 AND is_primary = true`,
-        [recipientId]
-      );
-      const result = await client.query(
-        `UPDATE recipient_bank_accounts SET is_primary = true, updated_at = NOW()
-         WHERE id = $1 AND recipient_id = $2 RETURNING *`,
-        [bankAccountId, recipientId]
-      );
-      return (result.rowCount ?? 0) > 0;
+    return withTransaction(async () => {
+      await clearPrimary(recipientId);
+      const row = await db
+        .updateTable('recipient_bank_accounts')
+        .set({ is_primary: true, updated_at: sql<Date>`NOW()` })
+        .where('id', '=', bankAccountId)
+        .where('recipient_id', '=', recipientId)
+        .returning('id')
+        .executeTakeFirst();
+      return row !== undefined;
     });
   },
 };

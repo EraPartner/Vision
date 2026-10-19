@@ -170,7 +170,7 @@ router.post("/", async (req, res) => {
 
 router.patch("/:id", validateIdParam, async (req, res) => {
   const id = assertIdParam(req);
-  // Only fields present in the body reach the repository — buildSetClauses
+  // Only fields present in the body reach the repository — the update
   // skips absent/undefined fields, so partial updates stay partial.
   const data = parseInput(updateChartSchema, req.body);
   const updated = await savedChartsService.update(id, data);

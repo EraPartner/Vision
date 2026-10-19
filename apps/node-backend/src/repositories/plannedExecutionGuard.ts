@@ -1,4 +1,5 @@
-import { query } from "../database/connection.ts";
+import { sql } from "kysely";
+import { db } from "../database/db.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 import type { TransactionId } from "@vision/types/brands";
 
@@ -7,15 +8,21 @@ export async function protectPlannedExecutions(
   transactionIds: readonly TransactionId[],
 ) {
   if (transactionIds.length === 0) return;
-  await query(
-    "SELECT id FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE",
-    [transactionIds],
-  );
-  const linked = await query(
-    "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = ANY($1::int[]) LIMIT 1",
-    [transactionIds],
-  );
-  if ((linked.rowCount ?? 0) > 0)
+  const anyId = sql<TransactionId>`ANY(${transactionIds}::int[])`;
+  await db
+    .selectFrom("transactions")
+    .select("id")
+    .where("id", "=", anyId)
+    .orderBy("id")
+    .forUpdate()
+    .execute();
+  const linked = await db
+    .selectFrom("planned_transaction_executions")
+    .select(sql<number>`1`.as("linked"))
+    .where("executed_transaction_id", "=", anyId)
+    .limit(1)
+    .executeTakeFirst();
+  if (linked)
     throw new ConflictError(
       "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction",
     );

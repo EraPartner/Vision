@@ -54,7 +54,7 @@ describe("disclosure grant reservation", () => {
       });
       expect(mocked.client.query).toHaveBeenCalledTimes(2);
       expect(
-        mocked.client.query.mock.calls.some(([sql]) => sql.includes("INSERT")),
+        mocked.client.query.mock.calls.some(([sql]) => /\binsert\b/i.test(sql)),
       ).toBe(false);
     },
   );
@@ -76,7 +76,7 @@ describe("disclosure grant reservation", () => {
       insertedRecord,
     );
     expect(
-      mocked.client.query.mock.calls.filter(([sql]) => sql.includes("INSERT")),
+      mocked.client.query.mock.calls.filter(([sql]) => /\binsert\b/i.test(sql)),
     ).toHaveLength(1);
   });
 

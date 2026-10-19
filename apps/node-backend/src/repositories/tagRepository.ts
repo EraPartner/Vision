@@ -5,14 +5,14 @@
  * while preserving junction row history.
  */
 
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
 import { countRowSchema } from '../database/rowSchemas.ts';
 import {
   requireRow,
   tagRowSchema,
   tagUpsertRowSchema,
 } from '../database/rows/catalog.ts';
-import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { TagRow } from '../types/rows.ts';
 import type { TagId } from '@vision/types/brands';
@@ -25,7 +25,7 @@ const tagRepository = {
    *
    * `limit` is optional and defaults to unbounded — the tag pickers/filters
    * render every tag and have no paging, so only an explicit limit/offset
-   * narrows the list (buildLimitOffset).
+   * narrows the list.
    */
   async getAll({
     active = null,
@@ -36,18 +36,10 @@ const tagRepository = {
     limit?: number | null;
     offset?: number;
   } = {}): Promise<TagRow[]> {
-    let sql = 'SELECT * FROM tags WHERE 1=1';
-
-    if (active === true) {
-      sql += ` AND is_active = true`;
-    } else if (active === false) {
-      sql += ` AND is_active = false`;
-    }
-
-    sql += ` ORDER BY slug`;
-    const params: unknown[] = [];
-    sql += buildLimitOffset(params, { limit, offset });
-    return queryRows(tagRowSchema, sql, params);
+    let builder = db.selectFrom('tags').selectAll().orderBy('slug');
+    if (active !== null) builder = builder.where('is_active', '=', active);
+    if (limit !== null) builder = builder.limit(limit).offset(offset);
+    return checkedRows(tagRowSchema, builder);
   },
 
   /**
@@ -57,26 +49,25 @@ const tagRepository = {
   async getCount({
     active = null,
   }: { active?: boolean | null } = {}): Promise<number> {
-    let sql = 'SELECT COUNT(*) FROM tags WHERE 1=1';
-    const params: unknown[] = [];
-
-    if (active === true) {
-      sql += ` AND is_active = true`;
-    } else if (active === false) {
-      sql += ` AND is_active = false`;
-    }
-
-    const row = await queryOne(countRowSchema, sql, params);
+    let builder = db.selectFrom('tags').select(sql<string>`COUNT(*)`.as('count'));
+    if (active !== null) builder = builder.where('is_active', '=', active);
+    const row = await checkedRow(countRowSchema, builder);
     return parseInt(requireRow(row, 'tag count').count, 10);
   },
 
   async getById(id: TagId): Promise<TagRow | null> {
-    const row = await queryOne(tagRowSchema, 'SELECT * FROM tags WHERE id = $1', [id]);
+    const row = await checkedRow(
+      tagRowSchema,
+      db.selectFrom('tags').selectAll().where('id', '=', id),
+    );
     return row ?? null;
   },
 
   async getBySlug(slug: string): Promise<TagRow | null> {
-    const row = await queryOne(tagRowSchema, 'SELECT * FROM tags WHERE slug = $1', [slug]);
+    const row = await checkedRow(
+      tagRowSchema,
+      db.selectFrom('tags').selectAll().where('slug', '=', slug),
+    );
     return row ?? null;
   },
 
@@ -85,10 +76,9 @@ const tagRepository = {
    */
   async getManyBySlugs(slugs: string[]): Promise<TagRow[]> {
     if (slugs.length === 0) return [];
-    return queryRows(
+    return checkedRows(
       tagRowSchema,
-      'SELECT * FROM tags WHERE slug = ANY($1::text[])',
-      [slugs]
+      db.selectFrom('tags').selectAll().where('slug', 'in', slugs),
     );
   },
 
@@ -103,16 +93,20 @@ const tagRepository = {
     slug: string,
     color: string | null = null,
   ): Promise<{ tag: TagRow; reactivated: boolean }> {
-    const result = await queryOne(
+    const result = await checkedRow(
       tagUpsertRowSchema,
-      `INSERT INTO tags (slug, color)
-       VALUES ($1, $2)
-       ON CONFLICT (slug) DO UPDATE
-         SET is_active = true,
-             color     = COALESCE(tags.color, EXCLUDED.color),
-             updated_at = NOW()
-       RETURNING *, (xmax <> 0) AS was_conflict`,
-      [slug, color]
+      db
+        .insertInto('tags')
+        .values({ slug, color })
+        .onConflict((oc) =>
+          oc.column('slug').doUpdateSet({
+            is_active: true,
+            color: sql<string | null>`COALESCE(tags.color, EXCLUDED.color)`,
+            updated_at: sql<Date>`NOW()`,
+          }),
+        )
+        .returningAll()
+        .returning(sql<boolean>`(xmax <> 0)`.as('was_conflict')),
     );
     const row = requireRow(result, 'tag upsert');
     const reactivated = row.was_conflict && row.is_active;
@@ -134,21 +128,20 @@ const tagRepository = {
       is_active?: boolean | null | undefined;
     },
   ): Promise<TagRow | null> {
-    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped;
-    // null is_active means "leave unchanged" (pre-mapped to undefined).
-    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses({
-      color,
-      is_active: is_active ?? undefined,
-    });
+    // undefined fields are skipped; null is_active means "leave unchanged".
+    const changes = {
+      ...(color !== undefined && { color }),
+      ...(is_active != null && { is_active }),
+    };
+    if (Object.keys(changes).length === 0) return this.getById(id);
 
-    if (setClauses.length === 0) return this.getById(id);
-
-    setClauses.push('updated_at = NOW()');
-    params.push(id);
-    const row = await queryOne(
+    const row = await checkedRow(
       tagRowSchema,
-      `UPDATE tags SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
-      params
+      db
+        .updateTable('tags')
+        .set({ ...changes, updated_at: sql<Date>`NOW()` })
+        .where('id', '=', id)
+        .returningAll(),
     );
     return row ?? null;
   },
@@ -157,10 +150,13 @@ const tagRepository = {
    * Soft delete: set is_active = false.
    */
   async softDelete(id: TagId): Promise<TagRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       tagRowSchema,
-      `UPDATE tags SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id]
+      db
+        .updateTable('tags')
+        .set({ is_active: false, updated_at: sql<Date>`NOW()` })
+        .where('id', '=', id)
+        .returningAll(),
     );
     return row ?? null;
   },
@@ -169,10 +165,12 @@ const tagRepository = {
    * Count how many transactions reference a given tag (for reactivation toast).
    */
   async countTransactionReferences(tagId: TagId): Promise<number> {
-    const row = await queryOne(
+    const row = await checkedRow(
       countRowSchema,
-      'SELECT COUNT(*) FROM transaction_tags WHERE tag_id = $1',
-      [tagId]
+      db
+        .selectFrom('transaction_tags')
+        .select(sql<string>`COUNT(*)`.as('count'))
+        .where('tag_id', '=', tagId),
     );
     return parseInt(requireRow(row, 'tag reference count').count, 10);
   },

@@ -10,8 +10,9 @@
  * semantics are activated in ADR-089.
  */
 
+import { sql } from "kysely";
 import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   accountBalanceQueryRowSchema,
   accountKeyRowSchema,
@@ -27,15 +28,12 @@ import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
 } from "./accountBalanceSql.ts";
-import {
-  buildInsert,
-  buildSetClauses,
-  buildLimitOffset,
-} from "../lib/sqlClauses.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 
+import type { Insertable, Updateable } from "kysely";
 import type { z } from "zod";
+import type { Accounts } from "../database/schema.generated.ts";
 import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import type {
   AccountBalanceQueryRow,
@@ -48,16 +46,34 @@ export type { AccountRow, AccountBalanceQueryRow };
 /** A row of `account_statement_balances` as `upsertStatementBalance` returns it. */
 export type StatementBalanceRow = z.output<typeof statementBalanceRowSchema>;
 
-const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
-  spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
-  funding_account_id, is_active, closed_at,
-  created_at, updated_at`;
+const COLUMN_LIST = [
+  "id",
+  "name",
+  "display_name",
+  "institution",
+  "currency",
+  "type",
+  "liquidity_class",
+  "spendable",
+  "in_net_worth",
+  "tax_wrapper",
+  "owner",
+  "multi_currency_cash",
+  "has_cash_sleeve",
+  "funding_account_id",
+  "is_active",
+  "closed_at",
+  "created_at",
+  "updated_at",
+] as const;
+
+const COLUMNS = sql.join(COLUMN_LIST.map((column) => sql.id(column)));
 
 // Columns a caller may set on create/update. `name` is handled explicitly on
 // create; everything else is optional and falls back to the DB default.
 // `closed_at` is server-stamped by the service's lifecycle logic (D5) — it is
 // writable here but never accepted from a request body.
-const WRITABLE = new Set([
+const WRITABLE: ReadonlySet<string> = new Set([
   "name",
   "display_name",
   "institution",
@@ -74,6 +90,18 @@ const WRITABLE = new Set([
   "is_active",
   "closed_at",
 ]);
+
+/**
+ * The defined, whitelisted fields of a create/update payload. accountService
+ * validates the values with zod before they reach the repository.
+ */
+function writableFields(fields: Record<string, unknown>): Updateable<Accounts> {
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([key, value]) => value !== undefined && WRITABLE.has(key),
+    ),
+  );
+}
 
 /**
  * SQL `btrim(x)` — strips ASCII space (U+0020) ONLY, exactly like the sync
@@ -96,12 +124,16 @@ export const accountRepository = {
     id: unknown,
     { client }: { client?: QueryRunner | undefined } = {},
   ): Promise<AccountId | undefined> {
-    const row = await queryOne(
+    const select = db
+      .selectFrom("accounts")
+      .select("id")
+      .where("id", "=", sql<AccountId>`${id}`)
+      .where("is_active", "=", true);
+    const row = await checkedRow(
       accountKeyRowSchema,
       // Writers passing their transaction must retain the active-state check
       // until commit. Account closing takes FOR UPDATE before reading balances.
-      `SELECT id FROM accounts WHERE id = $1 AND is_active = true${client ? " FOR SHARE" : ""}`,
-      [id],
+      client ? select.forShare() : select,
       client,
     );
     return row?.id;
@@ -147,7 +179,7 @@ export const accountRepository = {
    *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
-   * limit/offset narrows it (buildLimitOffset). The per-currency lateral is the
+   * limit/offset narrows it. The per-currency lateral is the
    * aggregated (one row per account) form precisely so LIMIT keeps counting
    * accounts rather than currency partitions.
    */
@@ -160,8 +192,18 @@ export const accountRepository = {
     limit?: number | null;
     offset?: number;
   } = {}): Promise<AccountBalanceQueryRow[]> {
-    const asOfDate = todayAppDateString();
-    let sql = `
+    const asOfDate = sql`${todayAppDateString()}::date`;
+    const activeFilter =
+      active === true
+        ? sql` AND a.is_active = true`
+        : active === false
+          ? sql` AND a.is_active = false`
+          : sql``;
+    const page =
+      limit == null ? sql`` : sql` LIMIT ${limit} OFFSET ${offset ?? 0}`;
+    return checkedRows(
+      accountBalanceQueryRowSchema,
+      sql`
       SELECT ${COLUMNS},
              lb.anchor_date,
              lb.post_anchor_count,
@@ -176,8 +218,8 @@ export const accountRepository = {
       -- fields only: "as of {date} statement + {n} entries since" describes the
       -- account's stamping history, not a currency's. The balance and drift
       -- below come from the per-currency partitions.
-      ${balanceProvenanceLateral({ asOfDate: "$1::date" })}
-      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+      ${balanceProvenanceLateral({ asOfDate })}
+      ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate })}
       LEFT JOIN LATERAL (
         SELECT json_agg(
                  json_build_object(
@@ -189,13 +231,8 @@ export const accountRepository = {
           FROM account_statement_balances s
          WHERE s.account_id = a.id
       ) sb ON TRUE
-      WHERE 1=1`;
-    if (active === true) sql += ` AND a.is_active = true`;
-    else if (active === false) sql += ` AND a.is_active = false`;
-    sql += ` ORDER BY a.name`;
-    const params: unknown[] = [asOfDate];
-    sql += buildLimitOffset(params, { limit, offset });
-    return queryRows(accountBalanceQueryRowSchema, sql, params);
+      WHERE 1=1${activeFilter} ORDER BY a.name${page}`,
+    );
   },
 
   /**
@@ -205,36 +242,41 @@ export const accountRepository = {
   async getCount({
     active = null,
   }: { active?: boolean | null } = {}): Promise<number> {
-    let sql = `SELECT COUNT(*) FROM accounts a WHERE 1=1`;
-    if (active === true) sql += ` AND a.is_active = true`;
-    else if (active === false) sql += ` AND a.is_active = false`;
-    const [row] = await queryRows(countRowSchema, sql, []);
+    let builder = db
+      .selectFrom("accounts as a")
+      .select(sql<string>`COUNT(*)`.as("count"));
+    if (active !== null) builder = builder.where("a.is_active", "=", active);
+    const row = await checkedRow(countRowSchema, builder);
     // COUNT(*) without GROUP BY always returns exactly one row.
     if (!row) throw new Error("account count returned no row");
     return parseInt(row.count, 10);
   },
 
   async getById(id: AccountId): Promise<AccountRow | undefined> {
-    return queryOne(
+    return checkedRow(
       accountRowSchema,
-      `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
-      [id],
+      db.selectFrom("accounts").select(COLUMN_LIST).where("id", "=", id),
     );
   },
 
   /** Every account's id and owner (me | partner | joint), closed accounts included. */
   async listOwners(): Promise<Array<{ id: AccountId; owner: string }>> {
-    return queryRows(accountOwnerRowSchema, "SELECT id, owner FROM accounts");
+    return checkedRows(
+      accountOwnerRowSchema,
+      db.selectFrom("accounts").select(["id", "owner"]),
+    );
   },
 
   /** @param name Matched case/whitespace-insensitively (D1). */
   async getByName(name: string): Promise<AccountRow | undefined> {
     // Identity is case/whitespace-insensitive (D1) — match how the sync
     // trigger and resolveOrCreateByName resolve labels.
-    return queryOne(
+    return checkedRow(
       accountRowSchema,
-      `SELECT ${COLUMNS} FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
-      [name],
+      db
+        .selectFrom("accounts")
+        .select(COLUMN_LIST)
+        .where(sql<string>`lower(btrim(name))`, "=", sql<string>`lower(btrim(${name}))`),
     );
   },
 
@@ -254,17 +296,13 @@ export const accountRepository = {
    * else falls back to the column default (e.g. type='checking', owner='me').
    */
   async create(fields: Record<string, unknown>): Promise<AccountRow> {
-    const {
-      columns: cols,
-      placeholders,
-      params,
-    } = buildInsert(fields, { allowed: WRITABLE, quote: true });
-    const [row] = await queryRows(
+    const row = await checkedRow(
       accountRowSchema,
-      `INSERT INTO accounts (${cols.join(", ")})
-       VALUES (${placeholders.join(", ")})
-       RETURNING ${COLUMNS}`,
-      params,
+      db
+        .insertInto("accounts")
+        // accountService's create schema requires `name`.
+        .values(writableFields(fields) as Insertable<Accounts>)
+        .returning(COLUMN_LIST),
     );
     // A plain INSERT ... RETURNING yields exactly one row or throws.
     if (!row) throw new Error("account INSERT returned no row");
@@ -278,19 +316,16 @@ export const accountRepository = {
     id: AccountId,
     fields: Record<string, unknown>,
   ): Promise<AccountRow | undefined> {
-    const {
-      clauses: setClauses,
-      params,
-      nextIdx: i,
-    } = buildSetClauses(fields, { allowed: WRITABLE, quote: true });
-    if (setClauses.length === 0) return this.getById(id);
-    setClauses.push(`updated_at = NOW()`);
-    params.push(id);
+    const changes = writableFields(fields);
+    if (Object.keys(changes).length === 0) return this.getById(id);
 
-    return queryOne(
+    return checkedRow(
       accountRowSchema,
-      `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
-      params,
+      db
+        .updateTable("accounts")
+        .set({ ...changes, updated_at: sql<Date>`NOW()` })
+        .where("id", "=", id)
+        .returning(COLUMN_LIST),
     );
   },
 
@@ -300,10 +335,9 @@ export const accountRepository = {
    * caller turns that into a 409 (archive instead). Returns the id, or undefined.
    */
   async remove(id: AccountId): Promise<AccountId | undefined> {
-    const row = await queryOne(
+    const row = await checkedRow(
       accountKeyRowSchema,
-      "DELETE FROM accounts WHERE id = $1 RETURNING id",
-      [id],
+      db.deleteFrom("accounts").where("id", "=", id).returning("id"),
     );
     return row?.id ?? undefined;
   },
@@ -315,10 +349,13 @@ export const accountRepository = {
   async lockByIdForMerge(
     id: AccountId,
   ): Promise<{ id: AccountId; name: string } | undefined> {
-    return queryOne(
+    return checkedRow(
       accountNameRowSchema,
-      "SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE",
-      [id],
+      db
+        .selectFrom("accounts")
+        .select(["id", "name"])
+        .where("id", "=", id)
+        .forUpdate(),
     );
   },
 
@@ -326,10 +363,13 @@ export const accountRepository = {
    * Lock the merge sources; returns the ids that exist (caller diffs for 404s).
    */
   async lockByIdsForMerge(ids: AccountId[]): Promise<{ id: AccountId }[]> {
-    return queryRows(
+    return checkedRows(
       accountKeyRowSchema,
-      "SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE",
-      [ids],
+      db
+        .selectFrom("accounts")
+        .select("id")
+        .where("id", "=", sql<AccountId>`ANY(${ids}::int[])`)
+        .forUpdate(),
     );
   },
 
@@ -342,11 +382,12 @@ export const accountRepository = {
     targetId: AccountId,
     sourceIds: AccountId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE accounts SET funding_account_id = $1 WHERE funding_account_id = ANY($2::int[])`,
-      [targetId, sourceIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("accounts")
+      .set({ funding_account_id: targetId })
+      .where("funding_account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -356,11 +397,11 @@ export const accountRepository = {
    * @returns rows affected
    */
   async clearStatementAnchor(id: AccountId): Promise<number> {
-    const result = await query(
-      "DELETE FROM account_statement_balances WHERE account_id = $1",
-      [id],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .deleteFrom("account_statement_balances")
+      .where("account_id", "=", id)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
   },
 
   /** Store one authoritative statement reading. */
@@ -370,16 +411,28 @@ export const accountRepository = {
     balance: number | string,
     balanceDate: string,
   ): Promise<StatementBalanceRow> {
-    const [row] = await queryRows(
+    const row = await checkedRow(
       statementBalanceRowSchema,
-      `INSERT INTO account_statement_balances
-         (account_id, currency, balance, balance_date)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (account_id, currency) DO UPDATE
-         SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
-       RETURNING account_id, currency, balance,
-                 to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
-      [accountId, currency, balance, balanceDate],
+      db
+        .insertInto("account_statement_balances")
+        .values({
+          account_id: accountId,
+          currency,
+          balance,
+          balance_date: balanceDate,
+        })
+        .onConflict((oc) =>
+          oc.columns(["account_id", "currency"]).doUpdateSet((eb) => ({
+            balance: eb.ref("excluded.balance"),
+            balance_date: eb.ref("excluded.balance_date"),
+          })),
+        )
+        .returning([
+          "account_id",
+          "currency",
+          "balance",
+          sql<string>`to_char(balance_date, 'YYYY-MM-DD')`.as("balance_date"),
+        ]),
     );
     // An upsert ... RETURNING yields exactly one row or throws.
     if (!row) throw new Error("statement balance upsert returned no row");
@@ -390,13 +443,12 @@ export const accountRepository = {
     accountId: AccountId,
     currency: CurrencyCode,
   ): Promise<number> {
-    const result = await query(
-      `DELETE FROM account_statement_balances
-        WHERE account_id = $1 AND currency = $2
-      RETURNING account_id`,
-      [accountId, currency],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .deleteFrom("account_statement_balances")
+      .where("account_id", "=", accountId)
+      .where("currency", "=", currency)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
   },
 
   /**
@@ -409,11 +461,12 @@ export const accountRepository = {
     sourceIds: AccountId[],
     targetId: AccountId,
   ): Promise<number> {
-    const result = await query(
-      "DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2",
-      [sourceIds, targetId],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .deleteFrom("accounts")
+      .where("id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .where("id", "<>", targetId)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
   },
 
   /**
@@ -438,13 +491,21 @@ export const accountRepository = {
     if (name == null) return undefined;
     const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
-    const row = await queryOne(
+    const row = await checkedRow(
       accountKeyRowSchema,
-      `INSERT INTO accounts (name, display_name, multi_currency_cash) VALUES ($1, $1, $2)
-       ON CONFLICT (lower(btrim(name))) DO UPDATE
-         SET multi_currency_cash = accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash
-       RETURNING id`,
-      [trimmed, multiCurrencyCash],
+      db
+        .insertInto("accounts")
+        .values({
+          name: trimmed,
+          display_name: trimmed,
+          multi_currency_cash: multiCurrencyCash,
+        })
+        .onConflict((oc) =>
+          oc.expression(sql`lower(btrim(name))`).doUpdateSet({
+            multi_currency_cash: sql<boolean>`accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash`,
+          }),
+        )
+        .returning("id"),
       client,
     );
     return row?.id;

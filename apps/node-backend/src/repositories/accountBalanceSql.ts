@@ -1,7 +1,11 @@
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { bankChronologySql } from "./bankChronologySql.ts";
 import { roundToCents } from "../lib/money.ts";
 import { storedCurrencyCode } from "../lib/currencyCode.ts";
 import type { CurrencyCode } from "@vision/types/brands";
+
+const CURRENT_DATE = sql`CURRENT_DATE`;
 
 /**
  * Shared SQL for an account's computed balance (ADR-094).
@@ -51,9 +55,9 @@ import type { CurrencyCode } from "@vision/types/brands";
  * stripped rather than left dangling, so no future consumer can pick it up.
  */
 export function balanceProvenanceLateral({
-  asOfDate = "CURRENT_DATE",
-}: { asOfDate?: string } = {}): string {
-  return `
+  asOfDate = CURRENT_DATE,
+}: { asOfDate?: RawBuilder<unknown> } = {}): RawBuilder<unknown> {
+  return sql`
   LEFT JOIN LATERAL (
     WITH anchor AS (
       SELECT t.date, t.id, ${bankChronologySql("t")} AS chronology
@@ -115,20 +119,21 @@ export function balanceProvenanceLateral({
  *                  not at the partition's last-activity date.
  *
  * @param opts
- *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
- *   site (`a.id`), never user input. `asOfDate` is likewise a literal SQL date
- *   expression; it defaults to `CURRENT_DATE` for current-balance callers.
+ *   `account` is the SQL expression the account id is compared with (`a.id`,
+ *   or `ANY(${ids}::int[])`); `asOfDate` is a SQL date expression and defaults
+ *   to `CURRENT_DATE` for current-balance callers. Values inside either are
+ *   bound parameters. `alias` is emitted as a quoted identifier.
  */
 export function computedBalanceByCurrencyLateral({
   account,
   alias = "bal",
-  asOfDate = "CURRENT_DATE",
+  asOfDate = CURRENT_DATE,
 }: {
-  account: string;
+  account: RawBuilder<unknown>;
   alias?: string;
-  asOfDate?: string;
-}): string {
-  return `
+  asOfDate?: RawBuilder<unknown>;
+}): RawBuilder<unknown> {
+  return sql`
   JOIN LATERAL (
     SELECT ccy.currency,
            COALESCE(anch.balance, 0) + dlt.amount AS balance
@@ -157,7 +162,7 @@ export function computedBalanceByCurrencyLateral({
         AND COALESCE(t2.currency, 'EUR') = ccy.currency
         AND (anch.date IS NULL OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (anch.date, anch.chronology, anch.id))
     ) dlt ON true
-  ) ${alias} ON true
+  ) ${sql.id(alias)} ON true
 `;
 }
 
@@ -189,42 +194,32 @@ export function computedBalanceByCurrencyLateral({
  * {@link computedBalanceByCurrencyLateral} for why summing first is wrong.
  *
  * @param opts
- *   `account` is interpolated raw: pass a LITERAL SQL expression from the call
- *   site (`a.id`), never user input.
+ *   As for {@link computedBalanceByCurrencyLateral}; `alias` and `column` are
+ *   emitted as quoted identifiers.
  */
 export function computedBalanceByCurrencyAggLateral({
   account,
   alias = "bp",
   column = "balance_parts",
-  asOfDate = "CURRENT_DATE",
+  asOfDate = CURRENT_DATE,
 }: {
-  account: string;
+  account: RawBuilder<unknown>;
   alias?: string;
   column?: string;
-  asOfDate?: string;
-}): string {
-  if (
-    /[\r\n]/.test(account) ||
-    !/^(?:[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|ANY\(\$\d+::int\[\]\))$/i.test(
-      account,
-    )
-  ) {
-    throw new TypeError(
-      "account must be a literal qualified column or ANY($n::int[]) expression",
-    );
-  }
-  return `
+  asOfDate?: RawBuilder<unknown>;
+}): RawBuilder<unknown> {
+  // A one-row driver lets the shared per-currency lateral (written as a JOIN
+  // onto a preceding FROM item) be spliced in unchanged; the correlation to
+  // `account` reaches through both nesting levels.
+  return sql`
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(
              jsonb_build_object('currency', bal.currency, 'balance', bal.balance::text)
              ORDER BY bal.currency
-           ) AS ${column}
-    -- A one-row driver so the shared per-currency lateral (which is written as
-    -- a JOIN onto a preceding FROM item) can be spliced in unchanged; the
-    -- correlation to ${account} reaches through both nesting levels.
-    FROM (SELECT 1) ${alias}_drv
+           ) AS ${sql.id(column)}
+    FROM (SELECT 1) ${sql.id(`${alias}_drv`)}
     ${computedBalanceByCurrencyLateral({ account, alias: "bal", asOfDate })}
-  ) ${alias} ON true
+  ) ${sql.id(alias)} ON true
 `;
 }
 
@@ -347,25 +342,27 @@ export function statementPartition(
  *   {@link computedBalanceByCurrencyLateral} for why that is the only
  *   consistent reading). With it false the sum is cross-currency, matching
  *   {@link BALANCE_PROVENANCE_LATERAL}, and `currency` is a constant the caller
- *   should ignore. Names are interpolated raw: pass LITERAL CTE names.
+ *   should ignore. Names are emitted as quoted identifiers.
  */
 export function computedBalanceSeriesCtes({
   byCurrency = false,
   accountList = "account_list",
   days = "days",
-}: { byCurrency?: boolean; accountList?: string; days?: string } = {}): string {
-  const currencyExpr = byCurrency ? `COALESCE(t.currency, 'EUR')` : `''::text`;
+}: { byCurrency?: boolean; accountList?: string; days?: string } = {}): RawBuilder<unknown> {
+  const currencyExpr = byCurrency ? sql`COALESCE(t.currency, 'EUR')` : sql`''::text`;
   // Only the per-currency form confines a partition to one currency; the
   // cross-currency form has a single partition per account.
   const samePartition = byCurrency
-    ? `AND COALESCE(t.currency, 'EUR') = p.currency`
-    : "";
+    ? sql`AND COALESCE(t.currency, 'EUR') = p.currency`
+    : sql``;
   // The window partition drops the currency column entirely in cross-currency
   // mode: carrying a constant in the PARTITION BY only lengthens every sort key.
-  const partitionBy = byCurrency ? "account_id, currency" : "account_id";
-  return `
+  const partitionBy = byCurrency ? sql`account_id, currency` : sql`account_id`;
+  const accountListTable = sql.id(accountList);
+  const daysTable = sql.id(days);
+  return sql`
   bs_span AS (
-    SELECT MIN(day) AS first_day, MAX(day) AS last_day FROM ${days}
+    SELECT MIN(day) AS first_day, MAX(day) AS last_day FROM ${daysTable}
   ),
   bs_opening AS (
     -- Everything that happened BEFORE the grid, collapsed into one synthetic row
@@ -379,7 +376,7 @@ export function computedBalanceSeriesCtes({
     -- the net-worth case.
     SELECT p.account_id,
            p.currency,
-           ${byCurrency ? "p.currency" : "rc.row_currency"} AS row_currency,
+           ${byCurrency ? sql`p.currency` : sql`rc.row_currency`} AS row_currency,
            (SELECT first_day FROM bs_span) - 1 AS date,
            -1 AS id,
            -1::numeric AS chronology,
@@ -388,7 +385,7 @@ export function computedBalanceSeriesCtes({
     FROM (
       SELECT DISTINCT t.account_id, ${currencyExpr} AS currency
       FROM transactions t
-      JOIN ${accountList} bs_al ON bs_al.account_id = t.account_id
+      JOIN ${accountListTable} bs_al ON bs_al.account_id = t.account_id
       WHERE t.is_active = true AND t.date < (SELECT first_day FROM bs_span)
     ) p
     LEFT JOIN LATERAL (
@@ -411,8 +408,8 @@ export function computedBalanceSeriesCtes({
     ) dlt ON true
     ${
       byCurrency
-        ? ""
-        : `LEFT JOIN LATERAL (
+        ? sql``
+        : sql`LEFT JOIN LATERAL (
       SELECT COALESCE(t.currency, 'EUR') AS row_currency
       FROM transactions t
       WHERE t.account_id = p.account_id AND t.is_active = true
@@ -431,7 +428,7 @@ export function computedBalanceSeriesCtes({
            COALESCE(t.currency, 'EUR'),
            t.date, t.id, ${bankChronologySql("t")}, t.balance, t.amount
     FROM transactions t
-    JOIN ${accountList} bs_al ON bs_al.account_id = t.account_id
+    JOIN ${accountListTable} bs_al ON bs_al.account_id = t.account_id
     WHERE t.is_active = true
       AND t.date >= (SELECT first_day FROM bs_span)
       AND t.date <= (SELECT last_day FROM bs_span)

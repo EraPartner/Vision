@@ -3,6 +3,8 @@
  * Please do not edit it manually.
  */
 
+import type { MoneyColumn } from "./columnTypes.ts";
+import type { AccountId, CategoryId, CurrencyCode, InvestmentId, PlannedTransactionId, PortfolioTransactionId, RecipientId, SplitId, TagId, TransactionId } from "@vision/types/brands";
 import type { ColumnType } from "kysely";
 
 export type AccountLiquidityClass = "illiquid" | "liquid" | "semi_liquid";
@@ -44,11 +46,11 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 export interface Accounts {
   closed_at: Timestamp | null;
   created_at: Generated<Timestamp>;
-  currency: Generated<string>;
+  currency: Generated<CurrencyCode>;
   display_name: string | null;
-  funding_account_id: number | null;
+  funding_account_id: AccountId | null;
   has_cash_sleeve: Generated<boolean>;
-  id: Generated<number>;
+  id: Generated<AccountId>;
   import_identity: Generated<string>;
   in_net_worth: Generated<boolean>;
   institution: string | null;
@@ -64,10 +66,10 @@ export interface Accounts {
 }
 
 export interface AccountStatementBalances {
-  account_id: number;
-  balance: Numeric;
+  account_id: AccountId;
+  balance: MoneyColumn;
   balance_date: Timestamp;
-  currency: string;
+  currency: CurrencyCode;
 }
 
 export interface AccountsV1 {
@@ -97,11 +99,11 @@ export interface Adr109LegacyCleanupMarker {
 }
 
 export interface AggSplitOutstanding {
-  original_amount: Numeric;
-  outstanding_amount: Numeric;
-  paid_amount: Generated<Numeric>;
-  recipient_id: number;
-  split_id: number;
+  original_amount: MoneyColumn;
+  outstanding_amount: MoneyColumn;
+  paid_amount: Generated<MoneyColumn>;
+  recipient_id: RecipientId;
+  split_id: SplitId;
   updated_at: Generated<Timestamp>;
 }
 
@@ -318,7 +320,7 @@ export interface AssetPriceHistory {
   close_price: Numeric;
   fetched_at: Generated<Timestamp>;
   id: Generated<number>;
-  investment_id: number;
+  investment_id: InvestmentId;
   price_date: Timestamp;
   source: Generated<string>;
   updated_at: Generated<Timestamp>;
@@ -331,7 +333,7 @@ export interface Attachments {
   mime_type: string;
   size_bytes: Int8;
   stored_path: string;
-  transaction_id: number;
+  transaction_id: TransactionId;
 }
 
 export interface AuditChainCheckpoints {
@@ -457,11 +459,11 @@ export interface Categories {
   detail: string;
   general: string;
   hierarchy_only: Generated<boolean>;
-  id: Generated<number>;
+  id: Generated<CategoryId>;
   is_active: Generated<boolean>;
   legacy_compatible: Generated<boolean>;
   name: string;
-  parent_id: number | null;
+  parent_id: CategoryId | null;
   path_name: Generated<string>;
   updated_at: Generated<Timestamp>;
 }
@@ -476,7 +478,7 @@ export interface CategoryMergeAliases {
   created_at: Generated<Timestamp>;
   detail: string;
   general: string;
-  target_category_id: number;
+  target_category_id: CategoryId;
 }
 
 export interface CategoryPaths {
@@ -491,7 +493,7 @@ export interface CategoryPaths {
 export interface CategoryRootAliases {
   created_at: Generated<Timestamp>;
   general: string;
-  target_category_id: number;
+  target_category_id: CategoryId;
 }
 
 export interface CustomParserConfigs {
@@ -583,13 +585,13 @@ export interface ImportStagingRows {
   match_source: string | null;
   matched_pattern_id: number | null;
   memo: string | null;
-  override_category_id: number | null;
+  override_category_id: CategoryId | null;
   raw_data: string | null;
   recipient_account: string | null;
   recipient_address: string | null;
   recipient_bank_name: string | null;
   recipient_raw: string | null;
-  resolved_recipient_id: number | null;
+  resolved_recipient_id: RecipientId | null;
   row_index: number;
   source_account_identity: string | null;
   source_record_hash: string | null;
@@ -597,13 +599,13 @@ export interface ImportStagingRows {
   status: Generated<string>;
   tx_date: Timestamp | null;
   updated_at: Generated<Timestamp>;
-  user_override_recipient_id: number | null;
+  user_override_recipient_id: RecipientId | null;
 }
 
 export interface InsightCashProjections {
-  currency: string;
+  currency: CurrencyCode;
   method_id: string;
-  month_end_net_cashflow: Numeric;
+  month_end_net_cashflow: MoneyColumn;
   month_start: Timestamp;
   observed_at: Generated<Timestamp>;
 }
@@ -618,13 +620,13 @@ export interface InsightDigestState {
 }
 
 export interface InsightDismissals {
-  category_id: number | null;
+  category_id: CategoryId | null;
   deviation_at_dismiss: number | null;
   dismissed_at: Generated<Timestamp>;
   id: Generated<Int8>;
   kind: string;
   month_start: Timestamp | null;
-  recipient_id: number | null;
+  recipient_id: RecipientId | null;
 }
 
 export interface InstrumentProviderMap {
@@ -646,9 +648,9 @@ export interface Investments {
   asset_class: AssetClass;
   cadastral_income: Numeric | null;
   created_at: Generated<Timestamp>;
-  currency: Generated<string>;
+  currency: Generated<CurrencyCode>;
   current_price: Numeric | null;
-  id: Generated<number>;
+  id: Generated<InvestmentId>;
   interest_rate: Numeric | null;
   is_active: Generated<boolean>;
   location: string | null;
@@ -680,7 +682,7 @@ export interface InvestmentTickerPrefs {
 export interface ManualTransactionDedupClaims {
   created_at: Generated<Timestamp>;
   deduplication_hash: string;
-  transaction_id: number | null;
+  transaction_id: TransactionId | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -746,10 +748,10 @@ export interface PgStatStatementsInfo {
 
 export interface PlannedTransactionExecutions {
   created_at: Generated<Timestamp | null>;
-  executed_transaction_id: number;
+  executed_transaction_id: TransactionId;
   execution_date: Timestamp;
   id: Generated<number>;
-  planned_transaction_id: number;
+  planned_transaction_id: PlannedTransactionId;
 }
 
 export interface PlannedTransactionLoanSchedule {
@@ -757,22 +759,22 @@ export interface PlannedTransactionLoanSchedule {
   due_date: Timestamp;
   id: Generated<number>;
   installment_number: number;
-  interest_amount: Numeric;
-  payment_amount: Numeric;
-  planned_transaction_id: number;
-  principal_amount: Numeric;
-  remaining_principal: Numeric;
+  interest_amount: MoneyColumn;
+  payment_amount: MoneyColumn;
+  planned_transaction_id: PlannedTransactionId;
+  principal_amount: MoneyColumn;
+  remaining_principal: MoneyColumn;
   updated_at: Generated<Timestamp>;
 }
 
 export interface PlannedTransactions {
-  account_id: number | null;
-  amount: Numeric;
-  category_id: number | null;
+  account_id: AccountId | null;
+  amount: MoneyColumn;
+  category_id: CategoryId | null;
   comment: string | null;
   created_at: Generated<Timestamp | null>;
-  currency: Generated<string>;
-  id: Generated<number>;
+  currency: Generated<CurrencyCode>;
+  id: Generated<PlannedTransactionId>;
   is_active: Generated<boolean>;
   is_executed: Generated<boolean>;
   is_loan: Generated<boolean>;
@@ -781,15 +783,15 @@ export interface PlannedTransactions {
   loan_annual_interest_rate: Numeric | null;
   loan_first_payment_date: Timestamp | null;
   loan_payment_day: number | null;
-  loan_principal: Numeric | null;
-  loan_regular_payment_amount: Numeric | null;
+  loan_principal: MoneyColumn | null;
+  loan_regular_payment_amount: MoneyColumn | null;
   loan_start_date: Timestamp | null;
   loan_term_months: number | null;
   loan_type: string | null;
   max_occurrences: number | null;
   memo: string | null;
   planned_date: Timestamp;
-  recipient_id: number | null;
+  recipient_id: RecipientId | null;
   recurrence_end_date: Timestamp | null;
   recurrence_pattern: string | null;
   /**
@@ -802,12 +804,12 @@ export interface PlannedTransactions {
 
 export interface PlannedTransactionTags {
   created_at: Generated<Timestamp>;
-  planned_transaction_id: number;
-  tag_id: number;
+  planned_transaction_id: PlannedTransactionId;
+  tag_id: TagId;
 }
 
 export interface PortfolioAssetAdjustments {
-  account_id: number;
+  account_id: AccountId;
   adjustment_kind: string;
   basis_allocations: Generated<Json>;
   basis_policy: string;
@@ -818,7 +820,7 @@ export interface PortfolioAssetAdjustments {
   eligible_source_record_hashes: Generated<string[]>;
   id: Generated<Int8>;
   import_batch_id: Int8;
-  investment_id: number;
+  investment_id: InvestmentId;
   source_record_hash: string;
   staging_row_id: Int8;
   units: Numeric;
@@ -835,13 +837,13 @@ export interface PortfolioAssetTransfers {
   date: Timestamp;
   dedup_fingerprint: string;
   dedup_fingerprint_version: number;
-  destination_account_id: number;
+  destination_account_id: AccountId;
   fee_basis_allocations: Generated<Json>;
   fee_units: Generated<Numeric>;
   id: Generated<Int8>;
   import_batch_id: Int8;
-  investment_id: number;
-  source_account_id: number;
+  investment_id: InvestmentId;
+  source_account_id: AccountId;
   source_record_hash: string;
   staging_row_id: Int8;
   units: Numeric;
@@ -852,11 +854,11 @@ export interface PortfolioBrokerSnapshots {
   account_key: string;
   account_name: string;
   computed_at: Generated<Timestamp>;
-  currency: string;
-  gain_loss: Numeric;
-  invested: Numeric;
+  currency: CurrencyCode;
+  gain_loss: MoneyColumn;
+  invested: MoneyColumn;
   snapshot_date: Timestamp;
-  value: Numeric;
+  value: MoneyColumn;
 }
 
 export interface PortfolioExposureClassifications {
@@ -865,7 +867,7 @@ export interface PortfolioExposureClassifications {
   identifier_exchange: string | null;
   identifier_type: string | null;
   identifier_value: string | null;
-  investment_id: number | null;
+  investment_id: InvestmentId | null;
   issuer_country_code: string | null;
   issuer_id: string;
   issuer_name: string;
@@ -878,7 +880,7 @@ export interface PortfolioFundHoldingsDocuments {
   created_at: Generated<Timestamp>;
   document_json: Json;
   id: Generated<string>;
-  investment_id: number;
+  investment_id: InvestmentId;
   share_class_identifier_json: Json;
   source_as_of_date: Timestamp;
   source_sha256: string;
@@ -886,7 +888,7 @@ export interface PortfolioFundHoldingsDocuments {
 }
 
 export interface PortfolioImportBatches {
-  account_id: number | null;
+  account_id: AccountId | null;
   adapter_name: string;
   completed_at: Timestamp | null;
   custom_config: Json | null;
@@ -969,7 +971,7 @@ export interface PortfolioImportStagingRows {
   note: string | null;
   price_per_unit: Numeric | null;
   raw_data: string | null;
-  resolved_investment_id: number | null;
+  resolved_investment_id: InvestmentId | null;
   route: string | null;
   row_index: number;
   source_account_identity: string | null;
@@ -983,29 +985,29 @@ export interface PortfolioImportStagingRows {
   type_raw: string | null;
   units: Numeric | null;
   updated_at: Generated<Timestamp>;
-  user_override_investment_id: number | null;
+  user_override_investment_id: InvestmentId | null;
 }
 
 export interface PortfolioPerformanceSnapshots {
-  cash_value: Generated<Numeric>;
+  cash_value: Generated<MoneyColumn>;
   computed_at: Generated<Timestamp>;
-  crypto_invested: Generated<Numeric>;
-  crypto_value: Generated<Numeric>;
+  crypto_invested: Generated<MoneyColumn>;
+  crypto_value: Generated<MoneyColumn>;
   cumulative_inflation: Generated<Numeric>;
-  currency: Generated<string>;
-  gain_loss: Generated<Numeric>;
+  currency: Generated<CurrencyCode>;
+  gain_loss: Generated<MoneyColumn>;
   id: Generated<number>;
-  inflation_adjusted_value: Generated<Numeric>;
-  invested: Generated<Numeric>;
-  metals_invested: Generated<Numeric>;
-  metals_value: Generated<Numeric>;
+  inflation_adjusted_value: Generated<MoneyColumn>;
+  invested: Generated<MoneyColumn>;
+  metals_invested: Generated<MoneyColumn>;
+  metals_value: Generated<MoneyColumn>;
   real_return_pct: Generated<Numeric>;
   return_pct: Generated<Numeric>;
   snapshot_date: Timestamp;
-  stocks_etfs_invested: Generated<Numeric>;
-  stocks_etfs_value: Generated<Numeric>;
-  value: Generated<Numeric>;
-  value_fx_neutral: Numeric | null;
+  stocks_etfs_invested: Generated<MoneyColumn>;
+  stocks_etfs_value: Generated<MoneyColumn>;
+  value: Generated<MoneyColumn>;
+  value_fx_neutral: MoneyColumn | null;
 }
 
 export interface PortfolioRetagAudit {
@@ -1024,33 +1026,33 @@ export interface PortfolioRetagAudit {
 export interface PortfolioSnapshotAccounts {
   account_key: string;
   computed_at: Generated<Timestamp>;
-  currency: string;
+  currency: CurrencyCode;
   snapshot_date: Timestamp;
-  value: Numeric;
+  value: MoneyColumn;
 }
 
 export interface PortfolioTransactions {
-  account_id: number | null;
-  amount: Numeric;
+  account_id: AccountId | null;
+  amount: MoneyColumn;
   created_at: Generated<Timestamp>;
-  currency: Generated<string>;
+  currency: Generated<CurrencyCode>;
   date: Timestamp;
   dedup_fingerprint: string | null;
   dedup_fingerprint_version: number | null;
   dividend_amount_convention: Generated<string>;
-  fees: Generated<Numeric | null>;
+  fees: Generated<MoneyColumn | null>;
   fx_rate_to_eur: Numeric | null;
-  id: Generated<number>;
+  id: Generated<PortfolioTransactionId>;
   import_batch_id: Int8 | null;
   income_recognition_role: Generated<string>;
-  investment_id: number;
+  investment_id: InvestmentId;
   is_recurring: Generated<boolean>;
   note: string | null;
   price_per_unit: Numeric | null;
   recurrence_end_date: Timestamp | null;
   recurrence_interval: string | null;
   source_record_hash: string | null;
-  taxes: Generated<Numeric | null>;
+  taxes: Generated<MoneyColumn | null>;
   type: PortfolioTxnType;
   units: Numeric | null;
   updated_at: Generated<Timestamp>;
@@ -1088,7 +1090,7 @@ export interface RecipientBankAccounts {
   id: Generated<number>;
   is_active: Generated<boolean>;
   is_primary: Generated<boolean>;
-  recipient_id: number | null;
+  recipient_id: RecipientId | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -1101,28 +1103,28 @@ export interface RecipientMatchPatterns {
   pattern: string;
   pattern_kind: Generated<string>;
   priority: Generated<number>;
-  recipient_id: number;
+  recipient_id: RecipientId;
   source: Generated<string>;
   updated_at: Generated<Timestamp>;
 }
 
 export interface Recipients {
   created_at: Generated<Timestamp | null>;
-  default_category_id: number | null;
-  id: Generated<number>;
+  default_category_id: CategoryId | null;
+  id: Generated<RecipientId>;
   is_active: Generated<boolean>;
   name: string;
   normalized_name: string;
   notes: string | null;
-  primary_recipient_id: number | null;
+  primary_recipient_id: RecipientId | null;
   updated_at: Generated<Timestamp>;
 }
 
 export interface ResearchDossierLinks {
-  category_id: number | null;
+  category_id: CategoryId | null;
   dossier_id: string;
   historical_id: string;
-  investment_id: number | null;
+  investment_id: InvestmentId | null;
   label_snapshot: string;
   link_type: string;
   ordinal: number;
@@ -1185,12 +1187,12 @@ export interface SavedAnalysisRuns {
 }
 
 export interface SavedChartCategories {
-  category_id: number;
+  category_id: CategoryId;
   saved_chart_id: number;
 }
 
 export interface SavedChartRecipients {
-  recipient_id: number;
+  recipient_id: RecipientId;
   saved_chart_id: number;
 }
 
@@ -1211,7 +1213,7 @@ export interface SavedCharts {
 
 export interface SavedChartTags {
   saved_chart_id: number;
-  tag_id: number;
+  tag_id: TagId;
 }
 
 export interface SplitAudit {
@@ -1224,45 +1226,45 @@ export interface SplitAudit {
 }
 
 export interface SplitPayments {
-  amount: Numeric;
+  amount: MoneyColumn;
   created_at: Generated<Timestamp>;
   id: Generated<number>;
   note: string | null;
   paid_at: Generated<Timestamp>;
-  split_id: number;
+  split_id: SplitId;
 }
 
 export interface Tags {
   color: string | null;
   created_at: Generated<Timestamp>;
-  id: Generated<number>;
+  id: Generated<TagId>;
   is_active: Generated<boolean>;
   slug: string;
   updated_at: Generated<Timestamp>;
 }
 
 export interface Transactions {
-  account_id: number | null;
-  amount: Numeric;
-  balance: Numeric | null;
+  account_id: AccountId | null;
+  amount: MoneyColumn;
+  balance: MoneyColumn | null;
   bank_sequence: Numeric | null;
-  category_id: number | null;
+  category_id: CategoryId | null;
   comment: string | null;
   created_at: Generated<Timestamp | null>;
-  currency: Generated<string>;
+  currency: Generated<CurrencyCode>;
   date: Timestamp;
   dedup_fingerprint: string | null;
   dedup_fingerprint_version: number | null;
-  id: Generated<number>;
+  id: Generated<TransactionId>;
   import_batch_id: Int8 | null;
   is_active: Generated<boolean>;
   is_transfer: Generated<boolean>;
   matched_pattern_id: number | null;
   memo: string | null;
   recipient_bank_account_id: number | null;
-  recipient_id: number;
+  recipient_id: RecipientId;
   source_record_hash: string | null;
-  transfer_peer_id: number | null;
+  transfer_peer_id: TransactionId | null;
   transfer_source: string | null;
   updated_at: Generated<Timestamp>;
 }
@@ -1273,7 +1275,7 @@ export interface TransactionSourceLinks {
   legacy_transaction_id: number | null;
   link_status: string;
   source_record_id: Int8;
-  transaction_id: number | null;
+  transaction_id: TransactionId | null;
 }
 
 export interface TransactionSourceRecords {
@@ -1289,13 +1291,13 @@ export interface TransactionSourceRecords {
 }
 
 export interface TransactionSplits {
-  amount: Numeric;
+  amount: MoneyColumn;
   created_at: Generated<Timestamp>;
-  id: Generated<number>;
+  id: Generated<SplitId>;
   is_settled: Generated<boolean>;
   note: string | null;
-  recipient_id: number;
-  transaction_id: number;
+  recipient_id: RecipientId;
+  transaction_id: TransactionId;
   updated_at: Generated<Timestamp>;
 }
 
@@ -1352,14 +1354,14 @@ export interface TransactionsV2 {
 
 export interface TransactionTags {
   created_at: Generated<Timestamp>;
-  tag_id: number;
-  transaction_id: number;
+  tag_id: TagId;
+  transaction_id: TransactionId;
 }
 
 export interface TransferDismissals {
   dismissed_at: Generated<Timestamp>;
-  txn_a_id: number;
-  txn_b_id: number;
+  txn_a_id: TransactionId;
+  txn_b_id: TransactionId;
 }
 
 export interface UserSettings {
@@ -1373,7 +1375,7 @@ export interface Watchlist {
   added_price: Numeric | null;
   asset_class: AssetClass;
   created_at: Generated<Timestamp>;
-  currency: Generated<string>;
+  currency: Generated<CurrencyCode>;
   id: Generated<number>;
   name: string;
   notes: string | null;

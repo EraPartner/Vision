@@ -42,6 +42,23 @@ const query = vi.mocked(rawQuery) as unknown as Mock<
   (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
 >;
 
+/**
+ * Assert the nth `query` call ran `statement` with `params`. The SQL is
+ * compared lower-cased without identifier quotes, so it pins which columns a
+ * statement writes, not how the query builder spells them.
+ */
+function expectNthStatement(
+  n: number,
+  statement: string | RegExp,
+  params: readonly unknown[],
+) {
+  const call = n === -1 ? query.mock.calls.at(-1) : query.mock.calls[n - 1];
+  const text = String(call?.[0]).toLowerCase().replace(/"/g, "");
+  if (typeof statement === "string") expect(text).toBe(statement.toLowerCase());
+  else expect(text).toMatch(statement);
+  expect(call?.[1]).toEqual(params);
+}
+
 /** A unit-event row dated before the candidates below, with a unique id. */
 let nextUnitEventId = 100;
 const unitEvent = (
@@ -87,9 +104,9 @@ describe("portfolioTransactionService.create", () => {
       currency: asCurrencyCode("EUR"),
     });
 
-    expect(query).toHaveBeenNthCalledWith(
+    expectNthStatement(
       2,
-      expect.stringContaining("INSERT INTO portfolio_transactions"),
+      /^insert into portfolio_transactions /,
       [
         1,
         "buy",
@@ -154,9 +171,9 @@ describe("portfolioTransactionService.create", () => {
       currency: asCurrencyCode("EUR"),
     });
 
-    expect(query).toHaveBeenNthCalledWith(
+    expectNthStatement(
       2,
-      expect.stringContaining("INSERT INTO portfolio_transactions"),
+      /^insert into portfolio_transactions /,
       [
         1,
         "gift",
@@ -281,7 +298,7 @@ describe("portfolioTransactionService.remove", () => {
         "change would create or worsen an oversold partition at Broker A",
     });
     expect(
-      query.mock.calls.some(([sql]) => String(sql).startsWith("DELETE")),
+      query.mock.calls.some(([sql]) => /^delete/i.test(String(sql))),
     ).toBe(false);
   });
 
@@ -320,7 +337,8 @@ describe("portfolioTransactionService.remove", () => {
       .mockResolvedValueOnce({ rowCount: 1 });
 
     await expect(portfolioTransactionRepository.remove(asPortfolioTransactionId(46))).resolves.toBe(true);
-    expect(query).toHaveBeenLastCalledWith(
+    expectNthStatement(
+      -1,
       "DELETE FROM portfolio_transactions WHERE id = $1",
       [46],
     );
@@ -371,7 +389,7 @@ describe("portfolioTransactionService.remove", () => {
     });
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).startsWith("DELETE FROM portfolio_transactions"),
+        /^delete from "?portfolio_transactions/i.test(String(sql)),
       ),
     ).toBe(false);
   });
@@ -408,7 +426,7 @@ describe("portfolioTransactionService.remove", () => {
 
     expect(
       query.mock.calls.some(([sql]) =>
-        String(sql).startsWith("DELETE FROM portfolio_transactions"),
+        /^delete from "?portfolio_transactions/i.test(String(sql)),
       ),
     ).toBe(false);
   });
@@ -459,7 +477,7 @@ describe("portfolioTransactionRepository.update", () => {
       price_per_unit: 200,
     });
 
-    expect(query).toHaveBeenNthCalledWith(
+    expectNthStatement(
       4,
       "UPDATE portfolio_transactions SET units = $1, price_per_unit = $2, amount = $3, fees = $4, taxes = $5 WHERE id = $6 RETURNING *",
       [6, 200, 1200, 0, 0, 8],
@@ -519,7 +537,7 @@ describe("portfolioTransactionRepository.update", () => {
       amount: 1200,
     });
 
-    expect(query).toHaveBeenNthCalledWith(
+    expectNthStatement(
       3,
       "UPDATE portfolio_transactions SET amount = $1 WHERE id = $2 RETURNING *",
       [1200, 9],
@@ -563,7 +581,7 @@ describe("portfolioTransactionRepository.update", () => {
       fx_rate_to_eur: null,
     });
 
-    expect(query).toHaveBeenNthCalledWith(
+    expectNthStatement(
       3,
       "UPDATE portfolio_transactions SET fx_rate_to_eur = $1 WHERE id = $2 RETURNING *",
       [null, 11],
@@ -742,7 +760,7 @@ describe("portfolioTransactionRepository.getSummary", () => {
     const rows = await portfolioTransactionRepository.getSummary(asInvestmentId(77));
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("FROM portfolio_transactions"),
+      expect.stringMatching(/from "?portfolio_transactions/i),
       [77],
     );
     expect(rows).toEqual([

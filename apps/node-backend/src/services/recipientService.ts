@@ -3,7 +3,7 @@
  * Routes delegate here instead of importing the repository directly
  * (eslint vision-local/no-repo-direct-from-route).
  */
-import { queryOne } from '../database/rowContracts.ts';
+import { checkedRow, db } from '../database/db.ts';
 import { recipientKeyRowSchema } from '../database/rowSchemas.ts';
 import type { RecipientId } from '@vision/types/brands';
 import { ValidationError } from '../middleware/errorHandler.ts';
@@ -25,10 +25,13 @@ export { default } from '../repositories/recipientRepository.ts';
  */
 export async function resolveRecipientIdByName(name: string): Promise<RecipientId> {
   const normalized = normalizeForMatching(name);
-  const row = await queryOne(
+  const row = await checkedRow(
     recipientKeyRowSchema,
-    `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
-    [normalized],
+    db
+      .selectFrom('recipients')
+      .select('id')
+      .where('normalized_name', '=', normalized)
+      .limit(1),
   );
   if (!row) {
     throw new ValidationError(`Recipient with name '${name}' does not exist`);

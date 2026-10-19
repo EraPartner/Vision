@@ -6,7 +6,8 @@
  */
 
 import { withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   accountDisplayNameRowSchema,
   brokerSnapshotRowSchema,
@@ -27,7 +28,7 @@ import {
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
 import { nanToZero } from "../lib/math.ts";
-import type { CurrencyCode } from "@vision/types/brands";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 /** One `getSnapshots` row, as served to the performance chart. */
 export type PortfolioPerformanceSnapshot = {
@@ -64,9 +65,9 @@ export { getPortfolioSummary, getBreakdownSummary };
 const BROKER_HISTORY_PARITY_TOLERANCE = 0.011;
 
 async function hasBrokerSnapshotTable() {
-  const row = await queryOne(
+  const row = await checkedRow(
     regclassRowSchema,
-    "SELECT to_regclass('public.portfolio_broker_snapshots') AS relation",
+    sql`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
   );
   return Boolean(row?.relation);
 }
@@ -88,15 +89,20 @@ export async function __storeCurrentBrokerSnapshot(
       summary.byAccount.map((row) => row.account_id).filter((id) => id != null),
     ),
   ];
-  return withTransaction(async (client) => {
+  return withTransaction(async () => {
     const nameRows =
       accountIds.length > 0
-        ? await queryRows(
+        ? await checkedRows(
             accountDisplayNameRowSchema,
-            `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
-           FROM accounts WHERE id = ANY($1::int[])`,
-            [accountIds],
-            client,
+            db
+              .selectFrom("accounts")
+              .select([
+                "id",
+                sql<string>`COALESCE(NULLIF(display_name, ''), name)`.as(
+                  "display_name",
+                ),
+              ])
+              .where("id", "=", sql<AccountId>`ANY(${accountIds}::int[])`),
           )
         : [];
     const names = new Map<number, string>(
@@ -148,34 +154,20 @@ export async function __storeCurrentBrokerSnapshot(
     }
 
     const snapshotDate: string | undefined = (
-      await queryOne(
+      await checkedRow(
         currentDateRowSchema,
-        "SELECT CURRENT_DATE::text AS today",
-        [],
-        client,
+        sql`SELECT CURRENT_DATE::text AS today`,
       )
     )?.today;
-    await client.query(
-      "DELETE FROM portfolio_broker_snapshots WHERE snapshot_date = $1 AND currency = $2",
-      [snapshotDate, currency],
-    );
+    await sql`DELETE FROM portfolio_broker_snapshots
+      WHERE snapshot_date = ${snapshotDate} AND currency = ${currency}`.execute(db);
     for (const row of rows) {
-      await client.query(
-        `INSERT INTO portfolio_broker_snapshots
+      await sql`INSERT INTO portfolio_broker_snapshots
           (snapshot_date, currency, account_key, account_id, account_name,
            value, invested, gain_loss, computed_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
-        [
-          snapshotDate,
-          currency,
-          row.accountKey,
-          row.accountId,
-          row.accountName,
-          row.value.toString(),
-          row.invested.toString(),
-          row.gainLoss.toString(),
-        ],
-      );
+        VALUES (${snapshotDate}, ${currency}, ${row.accountKey}, ${row.accountId},
+                ${row.accountName}, ${row.value.toString()}, ${row.invested.toString()},
+                ${row.gainLoss.toString()}, now())`.execute(db);
     }
     return { stored: true, rows: rows.length, snapshotDate };
   });
@@ -194,6 +186,13 @@ export async function computeAndStoreSnapshots(targetCurrency = "EUR") {
   return snapshots;
 }
 
+function selectSnapshots(currency: string) {
+  return db
+    .selectFrom("portfolio_performance_snapshots")
+    .selectAll()
+    .where(sql<string>`currency`, "=", currency);
+}
+
 /**
  * @param startDate 'YYYY-MM-DD'
  * @param endDate 'YYYY-MM-DD'
@@ -205,16 +204,12 @@ export async function getSnapshots(
 ): Promise<PortfolioPerformanceSnapshot[]> {
   // SELECT * + shape in JS: value_fx_neutral only exists once migration 0039
   // is applied, and enumerating it in SQL would break un-migrated databases.
-  const rows = await queryRows(
+  const rows = await checkedRows(
     portfolioPerformanceSnapshotRowSchema,
-    `
-    SELECT * FROM portfolio_performance_snapshots
-    WHERE currency = $1
-      AND snapshot_date >= $2
-      AND snapshot_date <= $3
-    ORDER BY snapshot_date ASC
-  `,
-    [currency, startDate, endDate],
+    selectSnapshots(currency)
+      .where("snapshot_date", ">=", sql<Date>`${startDate}`)
+      .where("snapshot_date", "<=", sql<Date>`${endDate}`)
+      .orderBy("snapshot_date", "asc"),
   );
 
   return rows.map((row) => ({
@@ -244,14 +239,26 @@ export async function getBrokerSnapshots(
   currency = "EUR",
 ) {
   if (!(await hasBrokerSnapshotTable())) return [];
-  const rows = await queryRows(
+  const rows = await checkedRows(
     brokerSnapshotRowSchema,
-    `SELECT snapshot_date, currency, account_key, account_id, account_name,
-            value, invested, gain_loss, computed_at
-       FROM portfolio_broker_snapshots
-      WHERE currency = $1 AND snapshot_date >= $2 AND snapshot_date <= $3
-      ORDER BY snapshot_date ASC, account_key ASC`,
-    [currency, startDate, endDate],
+    db
+      .selectFrom("portfolio_broker_snapshots")
+      .select([
+        "snapshot_date",
+        "currency",
+        "account_key",
+        "account_id",
+        "account_name",
+        "value",
+        "invested",
+        "gain_loss",
+        "computed_at",
+      ])
+      .where(sql<string>`currency`, "=", currency)
+      .where("snapshot_date", ">=", sql<Date>`${startDate}`)
+      .where("snapshot_date", "<=", sql<Date>`${endDate}`)
+      .orderBy("snapshot_date", "asc")
+      .orderBy("account_key", "asc"),
   );
   return rows.map((row) => ({
     // A pg DATE is a local-midnight Date: format its local calendar day, not
@@ -270,15 +277,9 @@ export async function getBrokerSnapshots(
 }
 
 async function getLatestSnapshot(currency = "EUR") {
-  const row = await queryOne(
+  const row = await checkedRow(
     portfolioPerformanceSnapshotRowSchema,
-    `
-    SELECT * FROM portfolio_performance_snapshots
-    WHERE currency = $1
-    ORDER BY snapshot_date DESC
-    LIMIT 1
-  `,
-    [currency],
+    selectSnapshots(currency).orderBy("snapshot_date", "desc").limit(1),
   );
 
   return row ?? null;

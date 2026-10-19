@@ -3,7 +3,9 @@
  * Not intended for direct use outside this folder.
  */
 
-import { query } from "../database/connection.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { db } from "../database/db.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
 import type {
@@ -35,12 +37,13 @@ export async function getIncludeTransfers(): Promise<boolean> {
 const mvCache = new Map<string, { value: boolean; expires: number }>();
 const MV_CACHE_TTL_MS = 60_000;
 
-// Allowlist of materialized-view names that may be passed to mvAvailable.
-// The function builds raw SQL with the name interpolated, which is safe
-// today because every caller passes a literal — but pinning the set here
-// keeps it that way and makes a future caller adding a user-controlled
-// name fail loudly instead of opening an injection vector.
-const ALLOWED_MV_NAMES = new Set(["mv_category_totals", "mv_monthly_summary"]);
+// Allowlist of materialized views that may be passed to mvAvailable, each with
+// its constant identifier fragment. Pinning the set keeps a future caller
+// with a user-controlled name failing loudly instead of reaching SQL.
+const ALLOWED_MVS = new Map<string, RawBuilder<unknown>>([
+  ["mv_category_totals", sql`mv_category_totals`],
+  ["mv_monthly_summary", sql`mv_monthly_summary`],
+]);
 
 /**
  * Check if a materialized view exists and has rows.
@@ -50,7 +53,8 @@ const ALLOWED_MV_NAMES = new Set(["mv_category_totals", "mv_monthly_summary"]);
  * @throws {Error} if {@code viewName} is not in the allowlist.
  */
 export async function mvAvailable(viewName: string): Promise<boolean> {
-  if (!ALLOWED_MV_NAMES.has(viewName)) {
+  const view = ALLOWED_MVS.get(viewName);
+  if (view === undefined) {
     throw new Error(`mvAvailable: unknown materialized view "${viewName}"`);
   }
   const cached = mvCache.get(viewName);
@@ -61,7 +65,7 @@ export async function mvAvailable(viewName: string): Promise<boolean> {
     mvCache.delete(viewName);
   }
   try {
-    const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
+    const r = await sql`SELECT 1 FROM ${view} LIMIT 1`.execute(db);
     const available = r.rows.length > 0;
     mvCache.set(viewName, {
       value: available,

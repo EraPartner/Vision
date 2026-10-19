@@ -5,8 +5,10 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
-import { query, withTransaction } from "../../database/connection.ts";
-import { checkRows, queryOne } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRow, db } from "../../database/db.ts";
+import { checkRows } from "../../database/rowContracts.ts";
 import {
   fxRateRowSchema,
   rateToEurRowSchema,
@@ -340,11 +342,11 @@ export function rateOnOrBeforeFromMap(
 export async function loadFromDatabase(): Promise<RateTable | null> {
   let rawRows: unknown[];
   try {
-    rawRows = (
-      await query(
-        `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
-      )
-    ).rows;
+    rawRows = await db
+      .selectFrom("exchange_rates")
+      .select(["currency_code", "rate_to_eur"])
+      .where("is_latest", "=", true)
+      .execute();
   } catch (err) {
     logger.error("Failed to load exchange rates from database", {
       error: errorMessage(err),
@@ -376,26 +378,36 @@ export async function saveToDatabase(rates: RateTable): Promise<void> {
     const entries = Object.entries(rates).filter(([c]) => c !== "EUR");
     if (entries.length === 0) return;
 
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE exchange_rates
-         SET is_latest = false, updated_at = NOW()
-         WHERE currency_code = ANY($1::text[]) AND is_latest = true`,
-        [entries.map(([currency]) => currency)],
-      );
+    await withTransaction(async () => {
+      await db
+        .updateTable("exchange_rates")
+        .set({ is_latest: false, updated_at: sql<Date>`NOW()` })
+        .where(
+          "currency_code",
+          "=",
+          sql<string>`ANY(${entries.map(([currency]) => currency)}::text[])`,
+        )
+        .where("is_latest", "=", true)
+        .execute();
 
       for (const [currency, rate] of entries) {
-        await client.query(
-          `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-           VALUES ($1, $2, $3, true)
-           ON CONFLICT (currency_code, rate_date)
-           DO UPDATE SET
-             rate_to_eur = EXCLUDED.rate_to_eur,
-             is_latest = true,
-             fetched_at = NOW(),
-             updated_at = NOW()`,
-          [currency, rate, today],
-        );
+        await db
+          .insertInto("exchange_rates")
+          .values({
+            currency_code: currency,
+            rate_to_eur: rate,
+            rate_date: today,
+            is_latest: true,
+          })
+          .onConflict((oc) =>
+            oc.columns(["currency_code", "rate_date"]).doUpdateSet((eb) => ({
+              rate_to_eur: eb.ref("excluded.rate_to_eur"),
+              is_latest: true,
+              fetched_at: sql<Date>`NOW()`,
+              updated_at: sql<Date>`NOW()`,
+            })),
+          )
+          .execute();
       }
     });
     logger.debug(
@@ -418,15 +430,21 @@ export async function saveHistoricalRate(
   dateStr: string,
   rateToEur: number,
 ): Promise<void> {
-  await query(
-    `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-     VALUES ($1, $2, $3, false)
-     ON CONFLICT (currency_code, rate_date)
-     DO UPDATE SET
-       rate_to_eur = EXCLUDED.rate_to_eur,
-       updated_at = NOW()`,
-    [currencyCode, rateToEur, dateStr],
-  );
+  await db
+    .insertInto("exchange_rates")
+    .values({
+      currency_code: currencyCode,
+      rate_to_eur: rateToEur,
+      rate_date: dateStr,
+      is_latest: false,
+    })
+    .onConflict((oc) =>
+      oc.columns(["currency_code", "rate_date"]).doUpdateSet((eb) => ({
+        rate_to_eur: eb.ref("excluded.rate_to_eur"),
+        updated_at: sql<Date>`NOW()`,
+      })),
+    )
+    .execute();
 }
 
 /**
@@ -486,17 +504,15 @@ export async function getUnindexedRatesToEurForDates(
       dates.push(key.slice(separator + 1));
       rates.push(rate);
     }
-    await query(
-      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
-       SELECT currency_code, rate_to_eur, rate_date::date, false
-       FROM UNNEST($1::text[], $2::numeric[], $3::text[])
-         AS fetched(currency_code, rate_to_eur, rate_date)
-       ON CONFLICT (currency_code, rate_date)
-       DO UPDATE SET
-         rate_to_eur = EXCLUDED.rate_to_eur,
-         updated_at = NOW()`,
-      [currencies, rates, dates],
-    );
+    await sql`
+      INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+      SELECT currency_code, rate_to_eur, rate_date::date, false
+      FROM UNNEST(${currencies}::text[], ${rates}::numeric[], ${dates}::text[])
+        AS fetched(currency_code, rate_to_eur, rate_date)
+      ON CONFLICT (currency_code, rate_date)
+      DO UPDATE SET
+        rate_to_eur = EXCLUDED.rate_to_eur,
+        updated_at = NOW()`.execute(db);
   }
 
   return resolved;
@@ -509,18 +525,23 @@ export async function getUnindexedRatesToEurForDates(
  * @param dateStr 'YYYY-MM-DD'
  * @returns undefined when nothing is stored for the currency
  */
+function selectRateToEur(currencyCode: string) {
+  return db
+    .selectFrom("exchange_rates")
+    .select("rate_to_eur")
+    .where("currency_code", "=", currencyCode);
+}
+
 async function getPriorRateFromDatabase(
   currencyCode: string,
   dateStr: string,
 ): Promise<number | undefined> {
-  const row = await queryOne(
+  const row = await checkedRow(
     rateToEurRowSchema,
-    `SELECT rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = $1 AND rate_date <= $2::date
-     ORDER BY rate_date DESC
-     LIMIT 1`,
-    [currencyCode, dateStr],
+    selectRateToEur(currencyCode)
+      .where("rate_date", "<=", sql<Date>`${dateStr}::date`)
+      .orderBy("rate_date", "desc")
+      .limit(1),
   );
   if (!row) return undefined;
   return toNumber(toDecimal(row.rate_to_eur));
@@ -543,16 +564,17 @@ export async function getStoredRateToEurOnOrBefore(
   if (code === "EUR") return 1.0;
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
-  const row = await queryOne(
+  const row = await checkedRow(
     rateToEurRowSchema,
-    `SELECT rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = $1
-       AND rate_date <= $2::date
-       AND rate_date >= $2::date - make_interval(days => $3)
-     ORDER BY rate_date DESC
-     LIMIT 1`,
-    [code, dateStr, maxLookbackDays],
+    selectRateToEur(code)
+      .where("rate_date", "<=", sql<Date>`${dateStr}::date`)
+      .where(
+        "rate_date",
+        ">=",
+        sql<Date>`${dateStr}::date - make_interval(days => ${maxLookbackDays})`,
+      )
+      .orderBy("rate_date", "desc")
+      .limit(1),
   );
   if (!row) return undefined;
   return toNumber(toDecimal(row.rate_to_eur));
@@ -669,13 +691,11 @@ export async function getRateToEurForDate(
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
 
-  const exact = await queryOne(
+  const exact = await checkedRow(
     rateToEurRowSchema,
-    `SELECT rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = $1 AND rate_date = $2::date
-     LIMIT 1`,
-    [currencyCode, dateStr],
+    selectRateToEur(currencyCode)
+      .where("rate_date", "=", sql<Date>`${dateStr}::date`)
+      .limit(1),
   );
   if (exact) {
     return toNumber(toDecimal(exact.rate_to_eur));

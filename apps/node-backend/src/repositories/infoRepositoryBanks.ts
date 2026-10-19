@@ -5,7 +5,8 @@
 import type { Decimal } from "decimal.js";
 import type { CurrencyCode } from "@vision/types/brands";
 import { currencyOrEur, EUR, storedCurrencyCode } from "../lib/currencyCode.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import {
   bankBalanceRowSchema,
   bankHistoryRowSchema,
@@ -33,7 +34,7 @@ import {
 
 // Wallets and crypto exchanges expose holdings only (ADR-108), even when their
 // imported movement history contains ledger rows.
-const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
+const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = sql`'crypto_exchange', 'wallet'`;
 
 /** One stored statement reading; `balance` is a JSON number (see the schema). */
 type StatementBalanceReading = BankBalanceRow["statement_balances"][number];
@@ -106,13 +107,14 @@ export const banksRepository = {
   async getBankBalances(targetCurrency = "EUR") {
     const accounts: BankAccountBalance[] = [];
     const todayYmd = todayAppDateString();
+    const asOf = sql`${todayYmd}::date`;
 
     // Both queries are independent — run in parallel, then batch-convert
     // with one historical-rate lookup instead of two.
     const [latestBalanceRows, historyRows] = await Promise.all([
-      queryRows(
+      checkedRows(
         bankBalanceRowSchema,
-        `
+        sql`
         SELECT a.id AS account_id,
                a.name AS bank_account,
                COALESCE(a.display_name, a.name) AS display_name,
@@ -130,12 +132,12 @@ export const banksRepository = {
                -- last statement while the chart moved with the daily rate: a
                -- USD account last imported 30 days ago showed 500 over a chart
                -- ending at 900. Native-currency figures (drift) are unaffected.
-               to_char($1::date, 'YYYY-MM-DD') AS date,
+               to_char(${asOf}, 'YYYY-MM-DD') AS date,
                tx.transaction_count,
                tx.first_transaction,
                tx.last_transaction
         FROM accounts a
-        ${balanceProvenanceLateral({ asOfDate: "$1::date" })}
+        ${balanceProvenanceLateral({ asOfDate: asOf })}
         -- One row per currency the account holds, each with its own anchored
         -- running balance, converted independently below (the per-account total
         -- is summed after conversion). lb above stays the account-level
@@ -143,7 +145,7 @@ export const banksRepository = {
         -- statement + {n} entries since" describes the account's stamping
         -- history, not one currency's — matching the accounts hub, which reads
         -- the same lateral for the same two fields.
-        ${computedBalanceByCurrencyLateral({ account: "a.id", asOfDate: "$1::date" })}
+        ${computedBalanceByCurrencyLateral({ account: sql`a.id`, asOfDate: asOf })}
         LEFT JOIN LATERAL (
           SELECT json_agg(
                    json_build_object(
@@ -172,15 +174,14 @@ export const banksRepository = {
           AND tx.transaction_count > 0
         ORDER BY a.name, bal.currency
       `,
-        [todayYmd],
       ),
-      queryRows(
+      checkedRows(
         bankHistoryRowSchema,
-        `
+        sql`
         WITH days AS (
           SELECT generate_series(
-            $1::date - interval '12 months',
-            $1::date,
+            ${asOf} - interval '12 months',
+            ${asOf},
             interval '1 day'
           )::date AS day
         ),
@@ -226,7 +227,6 @@ export const banksRepository = {
         JOIN account_list a ON a.account_id = s.account_id
         ORDER BY s.account_id, s.day, s.currency
       `,
-        [todayYmd],
       ),
     ]);
 

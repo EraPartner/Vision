@@ -1,5 +1,8 @@
 /** Keep unit-history validation and mutation under one writer transaction. */
-import { query, withTransaction } from "../../database/connection.ts";
+import { sql } from "kysely";
+import type { AccountId } from "@vision/types/brands";
+import { withTransaction } from "../../database/connection.ts";
+import { db } from "../../database/db.ts";
 
 export async function withPortfolioHistoryWrite<T>(
   accountIds: readonly unknown[],
@@ -12,12 +15,15 @@ export async function withPortfolioHistoryWrite<T>(
       ),
     ].sort((a, b) => a - b);
     if (accounts.length > 0)
-      await query(
-        "SELECT id FROM accounts WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
-        [accounts],
-      );
-    await query(
-      "LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE",
+      await db
+        .selectFrom("accounts")
+        .select("id")
+        .where("id", "=", sql<AccountId>`ANY(${accounts}::int[])`)
+        .orderBy("id")
+        .forUpdate()
+        .execute();
+    await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
+      db,
     );
     return work();
   });

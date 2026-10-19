@@ -6,8 +6,8 @@
  * (ADR-079). All mutations use parameterised queries.
  */
 
-import { query } from "../database/connection.ts";
-import { queryOne } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, db } from "../database/db.ts";
 import { providerQuotaCountRowSchema } from "../database/rows/portfolio.ts";
 
 /**
@@ -18,10 +18,13 @@ export async function getDayCount(
   provider: string,
   windowDate: string,
 ): Promise<number> {
-  const row = await queryOne(
+  const row = await checkedRow(
     providerQuotaCountRowSchema,
-    `SELECT count FROM provider_quota WHERE provider = $1 AND window_date = $2`,
-    [provider, windowDate],
+    db
+      .selectFrom("provider_quota")
+      .select("count")
+      .where("provider", "=", provider)
+      .where("window_date", "=", sql<Date>`${windowDate}::date`),
   );
   return row?.count ?? 0;
 }
@@ -35,13 +38,20 @@ export async function addDayCount(
   windowDate: string,
   delta: number,
 ): Promise<void> {
-  await query(
-    `INSERT INTO provider_quota (provider, window_date, count, updated_at)
-          VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (provider, window_date) DO UPDATE
-        SET count = provider_quota.count + EXCLUDED.count`,
-    [provider, windowDate, delta],
-  );
+  await db
+    .insertInto("provider_quota")
+    .values({
+      provider,
+      window_date: windowDate,
+      count: delta,
+      updated_at: sql<Date>`NOW()`,
+    })
+    .onConflict((oc) =>
+      oc.columns(["provider", "window_date"]).doUpdateSet((eb) => ({
+        count: eb("provider_quota.count", "+", eb.ref("excluded.count")),
+      })),
+    )
+    .execute();
 }
 
 /** Atomically reserve quota without crossing a hard daily ceiling. */
@@ -52,15 +62,30 @@ export async function tryReserveDay(
   delta = 1,
 ): Promise<number | null> {
   if (delta < 1 || delta > limit) return null;
-  const row = await queryOne(
+  const row = await checkedRow(
     providerQuotaCountRowSchema,
-    `INSERT INTO provider_quota (provider, window_date, count, updated_at)
-          VALUES ($1,$2,$3,NOW())
-     ON CONFLICT (provider, window_date) DO UPDATE
-        SET count = provider_quota.count + EXCLUDED.count, updated_at=NOW()
-      WHERE provider_quota.count + EXCLUDED.count <= $4
-      RETURNING count`,
-    [provider, windowDate, delta, limit],
+    db
+      .insertInto("provider_quota")
+      .values({
+        provider,
+        window_date: windowDate,
+        count: delta,
+        updated_at: sql<Date>`NOW()`,
+      })
+      .onConflict((oc) =>
+        oc
+          .columns(["provider", "window_date"])
+          .doUpdateSet((eb) => ({
+            count: eb("provider_quota.count", "+", eb.ref("excluded.count")),
+            updated_at: sql<Date>`NOW()`,
+          }))
+          .where(
+            (eb) => eb("provider_quota.count", "+", eb.ref("excluded.count")),
+            "<=",
+            limit,
+          ),
+      )
+      .returning("count"),
   );
   return row?.count ?? null;
 }

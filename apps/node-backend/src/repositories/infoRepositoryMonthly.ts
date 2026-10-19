@@ -12,15 +12,17 @@
  * SQL window set and the JS zero-fill key set disagreed by a whole month.
  */
 
-import { query } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { checkedRows, db } from "../database/db.ts";
 import {
   liveMonthlyRowSchema,
   mvMonthlyRowSchema,
 } from "../database/rows/info.ts";
 import {
-  buildExclusionClauses,
   validateInt4Ids,
+  andClauses,
+  exclusionClauses,
 } from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
@@ -104,9 +106,8 @@ export async function getMonthlyFinancialSummary(
     validAccountIds.length === 0 &&
     (await mvAvailable("mv_monthly_summary"));
   if (mvUsable) {
-    const hetero = await query(
-      `SELECT 1 FROM mv_monthly_summary WHERE UPPER(currency) <> $1 LIMIT 1`,
-      [mvTarget],
+    const hetero = await sql`SELECT 1 FROM mv_monthly_summary WHERE UPPER(currency) <> ${mvTarget} LIMIT 1`.execute(
+      db,
     );
     mvCurrencyHomogeneous = hetero.rows.length === 0;
   }
@@ -115,12 +116,12 @@ export async function getMonthlyFinancialSummary(
     // Upper bound matches the live path (whose generate_series ends at the
     // current month) — without it a post-dated transaction adds a future month
     // on the MV path only, so the dashboard month set changed with the code path.
-    // Anchored on the bound app date ($1), the same clock as the zero-fill.
-    const dateFilterClause = `WHERE month_start >= date_trunc('month', $1::date - interval '5 months')
-        AND month_start <= date_trunc('month', $1::date)`;
-    const mvRows = await queryRows(
+    // Anchored on the bound app date, the same clock as the zero-fill.
+    const dateFilterClause = sql`WHERE month_start >= date_trunc('month', ${todayYmd}::date - interval '5 months')
+        AND month_start <= date_trunc('month', ${todayYmd}::date)`;
+    const mvRows = await checkedRows(
       mvMonthlyRowSchema,
-      `
+      sql`
       SELECT month_start, month, year, currency,
              SUM(transaction_count) AS transaction_count,
              SUM(total_income) AS total_income,
@@ -131,7 +132,6 @@ export async function getMonthlyFinancialSummary(
       GROUP BY month_start, month, year, currency
       ORDER BY month_start
     `,
-      [todayYmd],
     );
 
     const mergedRows = [];
@@ -255,45 +255,33 @@ export async function getMonthlyFinancialSummary(
     };
   }
 
-  // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses):
-  // 3-level category COALESCE and alias-aware recipient exclusion.
-  const excl = buildExclusionClauses({
+  // Canonical exclusion clauses: 3-level category COALESCE and alias-aware
+  // recipient exclusion.
+  const excl = exclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const params = excl.params;
-  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
 
-  // Both explicit bounds replace the default month window, so the app-date
-  // anchor must not be bound in that case: PostgreSQL cannot type an unused
+  // The app-date anchor appears only where a default bound uses it, so both
+  // explicit bounds leave it unbound: PostgreSQL cannot type an unused
   // prepared-statement parameter (the Statistics range hit this as $1).
-  const needsTodayAnchor = allTime || !startDate || !endDate;
-  const todayParam = `$${params.length + 1}`;
-  if (needsTodayAnchor) params.push(todayYmd);
-
+  const today = sql`${todayYmd}::date`;
   let rangeStart = allTime
-    ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${todayParam}::date))`
-    : `date_trunc('month', ${todayParam}::date - interval '5 months')`;
-  let rangeEnd = `date_trunc('month', ${todayParam}::date)`;
-  const transactionFilters: string[] = [];
+    ? sql`COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${today}))`
+    : sql`date_trunc('month', ${today} - interval '5 months')`;
+  let rangeEnd = sql`date_trunc('month', ${today})`;
+  const transactionFilters: RawBuilder<unknown>[] = [];
   if (!allTime && startDate) {
-    params.push(startDate);
-    rangeStart = `date_trunc('month', $${params.length}::date)`;
-    transactionFilters.push(`t.date >= $${params.length}::date`);
+    rangeStart = sql`date_trunc('month', ${startDate}::date)`;
+    transactionFilters.push(sql`t.date >= ${startDate}::date`);
   }
   if (!allTime && endDate) {
-    params.push(endDate);
-    rangeEnd = `date_trunc('month', $${params.length}::date)`;
-    transactionFilters.push(`t.date <= $${params.length}::date`);
+    rangeEnd = sql`date_trunc('month', ${endDate}::date)`;
+    transactionFilters.push(sql`t.date <= ${endDate}::date`);
   }
   if (validAccountIds.length > 0) {
-    params.push(validAccountIds);
-    transactionFilters.push(`t.account_id = ANY($${params.length}::int[])`);
+    transactionFilters.push(sql`t.account_id = ANY(${validAccountIds}::int[])`);
   }
-  const transactionWhere =
-    transactionFilters.length > 0
-      ? `AND ${transactionFilters.join(" AND ")}`
-      : "";
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
   // into JS. This path converts at each transaction's historical date rate
@@ -305,7 +293,7 @@ export async function getMonthlyFinancialSummary(
   // making this numerically identical to the old per-transaction loop while
   // pushing the heavy SUM/COUNT into Postgres. (A month-level GROUP BY would NOT
   // be valid here because intra-month FX varies.)
-  const sql = `
+  const monthlyQuery = sql`
     WITH months AS (
       SELECT generate_series(
         ${rangeStart},
@@ -321,16 +309,16 @@ export async function getMonthlyFinancialSummary(
         -- Canonical 3-level effective category (own → recipient default →
         -- PRIMARY recipient's default), matching transactionRepository and the
         -- mv_monthly_summary definition. The exclusion clauses above already
-        -- resolve 3 levels via buildExclusionClauses, so this column keeps the
+        -- resolve 3 levels via exclusionClauses, so this column keeps the
         -- CTE's own resolution consistent with them.
         COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id
       FROM transactions t
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       WHERE t.is_active = true
-      ${includeTransfers ? "" : "AND t.is_transfer = false"}
-      ${exclusionWhere}
-      ${transactionWhere}
+      ${includeTransfers ? sql`` : sql`AND t.is_transfer = false`}
+      ${excl.where}
+      ${andClauses(transactionFilters)}
     ),
     daily AS (
       SELECT
@@ -354,11 +342,11 @@ export async function getMonthlyFinancialSummary(
     ORDER BY m.month_start, d.date
   `;
   logger.debug("Monthly summary SQL executing", {
-    exclusionWhere: exclusionWhere || "(none)",
-    paramCount: params.length,
+    exclusions: excl.active,
+    transactionFilterCount: transactionFilters.length,
   });
 
-  const liveRows = await queryRows(liveMonthlyRowSchema, sql, params);
+  const liveRows = await checkedRows(liveMonthlyRowSchema, monthlyQuery);
   logger.debug("Monthly summary query returned", {
     rowCount: liveRows.length,
   });

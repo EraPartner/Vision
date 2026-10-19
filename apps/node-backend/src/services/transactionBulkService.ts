@@ -11,8 +11,10 @@ import { lockAccountsForLedgerMutation } from "../repositories/accountLifecycleL
  * atomic writes, and the post-write reconcile scheduling.
  */
 
-import { query as dbQuery, withTransaction } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRows, compileQuery, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
 import {
   tagSlugRowSchema,
   transactionIdRowSchema,
@@ -23,9 +25,20 @@ import { resolveBulkSelection } from "./bulkSelection.ts";
 import type { BulkFilterInput } from "./bulkSelection.ts";
 import { scheduleReconcile } from "./transferReconciliationService.ts";
 import { attachmentRepository } from "./attachmentRecordService.ts";
-import { asTransactionId } from "@vision/types/brands";
+import {
+  asCategoryId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 import type { TagId } from "@vision/types/brands";
+import type { QueryRunner } from "../types/rows.ts";
 import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.ts";
+
+/** Run a built query on the caller's transaction client. */
+async function runOn(client: QueryRunner, builder: BuiltQuery) {
+  const compiled = compileQuery(builder);
+  return client.query(compiled.sql, [...compiled.parameters]);
+}
 
 /**
  * Add and/or remove tags (by slug) on a set of transactions.
@@ -60,10 +73,13 @@ export async function bulkTagTransactions({
   const allUnknown: string[] = [];
 
   if (addSlugs.length > 0) {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       tagSlugRowSchema,
-      "SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
-      [addSlugs],
+      db
+        .selectFrom("tags")
+        .select(["id", "slug"])
+        .where(sql<boolean>`slug = ANY(${addSlugs}::text[])`)
+        .where("is_active", "=", true),
     );
     const found = new Map(rows.map((row) => [row.slug, row.id]));
     for (const s of addSlugs) {
@@ -74,10 +90,12 @@ export async function bulkTagTransactions({
   }
 
   if (removeSlugs.length > 0) {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       tagSlugRowSchema,
-      "SELECT id, slug FROM tags WHERE slug = ANY($1::text[])",
-      [removeSlugs],
+      db
+        .selectFrom("tags")
+        .select(["id", "slug"])
+        .where(sql<boolean>`slug = ANY(${removeSlugs}::text[])`),
     );
     const found = new Map(rows.map((row) => [row.slug, row.id]));
     for (const s of removeSlugs) {
@@ -99,15 +117,18 @@ export async function bulkTagTransactions({
     const affectedTxIds = new Set<number>();
 
     if (addTagIds.length > 0) {
-      const rows = await queryRows(
+      const rows = await checkedRows(
         transactionIdRowSchema,
-        `INSERT INTO transaction_tags (transaction_id, tag_id)
-         SELECT t_id, g_id
-         FROM unnest($1::int[]) AS t(t_id)
-         CROSS JOIN unnest($2::int[]) AS g(g_id)
-         ON CONFLICT DO NOTHING
-         RETURNING transaction_id`,
-        [txIds, addTagIds],
+        db
+          .insertInto("transaction_tags")
+          .columns(["transaction_id", "tag_id"])
+          .expression(
+            sql`SELECT t_id, g_id
+                FROM unnest(${txIds}::int[]) AS t(t_id)
+                CROSS JOIN unnest(${addTagIds}::int[]) AS g(g_id)`,
+          )
+          .onConflict((oc) => oc.doNothing())
+          .returning("transaction_id"),
         client,
       );
       added = rows.length;
@@ -115,12 +136,13 @@ export async function bulkTagTransactions({
     }
 
     if (removeTagIds.length > 0) {
-      const rows = await queryRows(
+      const rows = await checkedRows(
         transactionIdRowSchema,
-        `DELETE FROM transaction_tags
-         WHERE transaction_id = ANY($1::int[]) AND tag_id = ANY($2::int[])
-         RETURNING transaction_id`,
-        [txIds, removeTagIds],
+        db
+          .deleteFrom("transaction_tags")
+          .where(sql<boolean>`transaction_id = ANY(${txIds}::int[])`)
+          .where(sql<boolean>`tag_id = ANY(${removeTagIds}::int[])`)
+          .returning("transaction_id"),
         client,
       );
       removed = rows.length;
@@ -161,22 +183,26 @@ export async function bulkUpdateTransactions({
   };
 }): Promise<{ updated: number; requested: number; matched: number }> {
   if (fields.category_id != null) {
-    const r = await dbQuery(
-      "SELECT id FROM categories WHERE id = $1 AND is_active = true",
-      [fields.category_id],
-    );
-    if (r.rows.length === 0) {
+    const category = await db
+      .selectFrom("categories")
+      .select("id")
+      .where("id", "=", asCategoryId(fields.category_id))
+      .where("is_active", "=", true)
+      .executeTakeFirst();
+    if (!category) {
       throw new ValidationError(
         `Category ${fields.category_id} does not exist or is inactive`,
       );
     }
   }
   if (fields.recipient_id != null) {
-    const r = await dbQuery(
-      "SELECT id FROM recipients WHERE id = $1 AND is_active = true",
-      [fields.recipient_id],
-    );
-    if (r.rows.length === 0) {
+    const recipient = await db
+      .selectFrom("recipients")
+      .select("id")
+      .where("id", "=", asRecipientId(fields.recipient_id))
+      .where("is_active", "=", true)
+      .executeTakeFirst();
+    if (!recipient) {
       throw new ValidationError(
         `Recipient ${fields.recipient_id} does not exist or is inactive`,
       );
@@ -188,29 +214,26 @@ export async function bulkUpdateTransactions({
     { allowEmpty: expectedCount !== undefined },
   );
 
-  const setClauses: string[] = [];
-  const params: Array<number[] | number | boolean | null | undefined> = [txIds];
-  let p = 2;
-  if ("category_id" in fields) {
-    setClauses.push(`category_id = $${p++}`);
-    params.push(fields.category_id);
-  }
-  if ("recipient_id" in fields) {
-    setClauses.push(`recipient_id = $${p++}`);
-    params.push(fields.recipient_id);
-  }
-  if ("is_active" in fields) {
-    setClauses.push(`is_active = $${p}`);
-    params.push(fields.is_active);
-  }
-  setClauses.push("updated_at = NOW()");
+  // Presence drives the SET list (the route sends only valid values).
+  const { category_id, recipient_id, is_active } = fields;
+  const update = db
+    .updateTable("transactions")
+    .set({
+      ...("category_id" in fields && {
+        category_id: category_id == null ? null : asCategoryId(category_id),
+      }),
+      ...(recipient_id !== undefined && {
+        recipient_id: asRecipientId(recipient_id),
+      }),
+      ...(is_active !== undefined && { is_active }),
+      updated_at: sql<Date>`NOW()`,
+    })
+    .where(sql<boolean>`id = ANY(${txIds}::int[])`)
+    .returning("id");
 
   const updated = await withTransaction(async (client) => {
     if ("is_active" in fields) await lockAccountsForLedgerMutation(client, txIds);
-    const r = await client.query(
-      `UPDATE transactions SET ${setClauses.join(", ")} WHERE id = ANY($1::int[]) RETURNING id`,
-      params,
-    );
+    const r = await runOn(client, update);
     return r.rows.length;
   });
 
@@ -251,9 +274,12 @@ export async function bulkDeleteTransactions({
   const deleted = await withTransaction(async (client) => {
     await lockAccountsForLedgerMutation(client, txIds);
     await protectPlannedExecutions(txIds);
-    const r = await client.query(
-      `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
-      [txIds],
+    const r = await runOn(
+      client,
+      db
+        .deleteFrom("transactions")
+        .where(sql<boolean>`id = ANY(${txIds}::int[])`)
+        .returning("id"),
     );
     return r.rows.length;
   });

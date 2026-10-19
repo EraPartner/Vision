@@ -24,8 +24,9 @@
  */
 
 import { z } from "zod";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, db } from "../database/db.ts";
 import { transactionRowSchema } from "../database/rowSchemas.ts";
 import { earliestDateRowSchema } from "../database/rows/ledger.ts";
 import accountRepository from "../repositories/accountRepository.ts";
@@ -142,21 +143,24 @@ export async function setOpeningBalance(
   // takes the UPDATE branch. The partial unique index (migration
   // 0077_opening_anchor_unique_index) is the defense-in-depth backstop.
   return withTransaction(async () => {
-    await query(`SELECT id FROM accounts WHERE id = $1 FOR UPDATE`, [
-      accountId,
-    ]);
+    await db
+      .selectFrom("accounts")
+      .select("id")
+      .where("id", "=", accountId)
+      .forUpdate()
+      .execute();
 
     // Warn when the anchor does not precede the account's real activity: a later
     // import-stamped balance wins, leaving a mid-history anchor inert.
-    const earliestRow = await queryOne(
+    const earliestRow = await checkedRow(
       earliestDateRowSchema,
-      `SELECT MIN(date) AS earliest
-         FROM transactions
-        WHERE account_id = $1
-          AND is_active = true
-          AND currency = $2
-          AND (transfer_source IS DISTINCT FROM 'opening')`,
-      [accountId, currency],
+      db
+        .selectFrom("transactions")
+        .select((eb) => eb.fn.min("date").as("earliest"))
+        .where("account_id", "=", accountId)
+        .where("is_active", "=", true)
+        .where("currency", "=", currency)
+        .where("transfer_source", "is distinct from", "opening"),
     );
     // pg reads MIN(date) as a JS Date (no setTypeParser override); String(Date)
     // yields "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD" — the
@@ -176,16 +180,18 @@ export async function setOpeningBalance(
     // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
     // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
     // exception to the ADR-094 import-pipeline-only write protection.
-    const upserted = await queryOne(
+    const upserted = await checkedRow(
       transactionRowSchema,
-      `WITH existing AS (
+      sql`WITH existing AS (
           SELECT id FROM transactions
-           WHERE account_id = $1 AND transfer_source = 'opening' AND currency = $3
+           WHERE account_id = ${accountId} AND transfer_source = 'opening'
+             AND currency = ${currency}
            LIMIT 1
        ),
        updated AS (
           UPDATE transactions t
-             SET balance = $2, date = $4, memo = $5, amount = 0, is_active = true
+             SET balance = ${balance}, date = ${date}, memo = ${OPENING_MEMO},
+                 amount = 0, is_active = true
             FROM existing
            WHERE t.id = existing.id
           RETURNING t.*
@@ -194,14 +200,14 @@ export async function setOpeningBalance(
           INSERT INTO transactions
             (date, amount, balance, currency, memo, account_id, recipient_id,
              is_transfer, transfer_source, is_active)
-          SELECT $4, 0, $2, $3, $5, $1, $6, true, 'opening', true
+          SELECT ${date}, 0, ${balance}, ${currency}, ${OPENING_MEMO},
+                 ${accountId}, ${systemRecipientId}, true, 'opening', true
            WHERE NOT EXISTS (SELECT 1 FROM existing)
           RETURNING *
        )
        SELECT * FROM updated
        UNION ALL
        SELECT * FROM inserted`,
-      [accountId, balance, currency, date, OPENING_MEMO, systemRecipientId],
     );
 
     return { transaction: upserted ?? null, warning };

@@ -30,7 +30,7 @@ const STORED_RATES: Record<string, string> = {
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({
     query: vi.fn(async (sql: string) =>
-      String(sql).includes("is_latest = true")
+      /"?is_latest"? =/.test(String(sql))
         ? {
             rows: Object.entries(STORED_RATES).map(
               ([currency_code, rate_to_eur]) => ({

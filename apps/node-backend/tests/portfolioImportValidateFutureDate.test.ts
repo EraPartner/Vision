@@ -59,8 +59,8 @@ function pendingWireRow(fixture: Record<string, unknown>) {
 /** Wire query() to respond by SQL shape, returning the given pending rows. */
 function wireQuery(pending: Record<string, unknown>[]) {
   query.mockImplementation(async (sql) => {
-    if (sql.includes("SET status = 'validating'")) return { rows: [] };
-    if (sql.includes("FROM portfolio_import_batches")) {
+    if (/^update "portfolio_import_batches"/.test(sql)) return { rows: [] };
+    if (sql.includes('from "portfolio_import_batches"')) {
       return {
         rows: [
           {
@@ -74,7 +74,7 @@ function wireQuery(pending: Record<string, unknown>[]) {
         ],
       };
     }
-    if (sql.includes("FROM portfolio_import_staging_rows"))
+    if (sql.includes('from "portfolio_import_staging_rows"'))
       return { rows: pending.map(pendingWireRow) };
     return { rows: [] }; // UNNEST update + counter updates
   });

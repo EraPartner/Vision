@@ -222,7 +222,7 @@ describe("Data Import Service", () => {
         detail: "GROCERIES",
       });
       expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("default_category_id IS NULL"),
+        expect.stringMatching(/"?default_category_id"? is null/i),
         [9, 42],
       );
     });

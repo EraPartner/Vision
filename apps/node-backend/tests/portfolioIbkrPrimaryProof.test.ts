@@ -308,8 +308,9 @@ describe("literal IBKR primary context and transcription proof", () => {
         .mocked(query)
         .mock.calls.some(
           ([sql, params]) =>
-            sql.includes("ibkr_source_context") &&
-            JSON.parse(params![1] as string).source_file_hash ===
+            /set "?custom_config"?/i.test(sql) &&
+            params?.[0] === "ibkr_source_context" &&
+            JSON.parse(params[1] as string).source_file_hash ===
               context.source_file_hash,
         ),
     ).toBe(true);

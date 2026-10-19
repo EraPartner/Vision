@@ -80,21 +80,24 @@ function mockSnapshotQueries({
   fxHistory = [],
   fxNeutralColumn = true,
 }: SnapshotQueryFixtures = {}) {
-  query.mockImplementation(async (sql) => {
+  query.mockImplementation(async (rawSql) => {
+    // Lower-cased without identifier quotes: matches hand-written and
+    // query-builder SQL alike.
+    const sql = String(rawSql).toLowerCase().replace(/"/g, "");
     if (sql.includes("information_schema.columns")) {
       return { rows: fxNeutralColumn ? [{ "?column?": 1 }] : [] };
     }
-    if (sql.includes("SELECT MIN(first_date)::date AS first_data_date")) {
+    if (sql.includes("select min(first_date)::date as first_data_date")) {
       return { rows: [pgFirstDate(firstDate)] };
     }
-    if (sql.includes("FROM investments i") && sql.includes("asset_class IN")) {
+    if (sql.includes("from investments") && sql.includes("asset_class in")) {
       return {
         rows: investments.map((row) => pgNumeric(row, ["current_price"])),
       };
     }
     if (
-      sql.includes("FROM investments") &&
-      sql.includes("asset_class::text = ANY")
+      sql.includes("from investments") &&
+      sql.includes("asset_class::text = any")
     ) {
       return {
         rows: nonUnitInvestments.map((row) =>
@@ -103,20 +106,20 @@ function mockSnapshotQueries({
       };
     }
     if (
-      sql.includes("FROM portfolio_transactions pt") &&
-      sql.includes("ORDER BY events.date")
+      sql.includes("from portfolio_transactions pt") &&
+      sql.includes("order by events.date")
     ) {
       return { rows: transactions.map(toPgMathTxRow) };
     }
-    if (sql.includes("FROM asset_price_history")) {
+    if (sql.includes("from asset_price_history")) {
       return { rows: prices.map((row) => pgNumeric(row, ["close_price"])) };
     }
-    if (sql.includes("FROM belgian_inflation_rates")) {
+    if (sql.includes("from belgian_inflation_rates")) {
       return {
         rows: inflation.map((row) => pgNumeric(row, ["monthly_rate"])),
       };
     }
-    if (sql.includes("FROM exchange_rates")) {
+    if (sql.includes("from exchange_rates")) {
       if (sql.includes("rate_date >=")) {
         return {
           rows: fxHistory.map((row) => pgNumeric(row, ["rate_to_eur"])),
@@ -127,17 +130,17 @@ function mockSnapshotQueries({
         rows: fxRates.map((row) => pgNumeric(row, ["rate_to_eur"])),
       };
     }
-    if (sql.includes("DELETE FROM portfolio_performance_snapshots")) {
+    if (sql.includes("delete from portfolio_performance_snapshots")) {
       return { rows: [] };
     }
-    if (sql.includes("INSERT INTO portfolio_performance_snapshots")) {
+    if (sql.includes("insert into portfolio_performance_snapshots")) {
       return { rows: [] };
     }
-    if (sql.includes("SELECT * FROM portfolio_performance_snapshots")) {
+    if (sql.includes("select * from portfolio_performance_snapshots")) {
       return { rows: [] };
     }
     if (
-      sql.includes("FROM portfolio_performance_snapshots") &&
+      sql.includes("from portfolio_performance_snapshots") &&
       sql.includes("snapshot_date >=")
     ) {
       return {
@@ -192,7 +195,7 @@ describe("portfolioPerformanceSnapshotService", () => {
   const expectNoSnapshotWrites = () => {
     expect(
       query.mock.calls.some(([sql]) =>
-        /(?:DELETE FROM|INSERT INTO) portfolio_performance_snapshots/.test(
+        /(?:DELETE FROM|INSERT INTO) "?portfolio_performance_snapshots/i.test(
           String(sql),
         ),
       ),
@@ -440,7 +443,7 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     expect(latest).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![1]).toEqual(["EUR"]);
+    expect(query.mock.calls[0]![1]?.[0]).toBe("EUR"); // the currency filter
   });
 
   it("stores snapshots with sell transactions and fx-rate based conversion", async () => {

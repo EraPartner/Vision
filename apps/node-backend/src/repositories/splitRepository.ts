@@ -6,8 +6,10 @@
  * written via writeAudit; route/service layer owns when to emit them.
  */
 
+import { sql } from "kysely";
 import { query } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
 import {
   countRowSchema,
   owedExportRawRowSchema,
@@ -24,7 +26,6 @@ import {
   splitPaymentLockRowSchema,
 } from "../database/rows/ledger.ts";
 import type { SplitAuditRow } from "../database/rows/ledger.ts";
-import { buildLimitOffset } from "../lib/sqlClauses.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import type { SplitOutstandingRow } from "../lib/calculations/splits.ts";
@@ -65,11 +66,11 @@ export interface OwedExportRow {
   comment: string | null;
 }
 
-/** Raw SPLIT_TOTALS_SQL row: both aggregates are pg NUMERIC strings. */
+/** Raw splitTotalsQuery row: both aggregates are pg NUMERIC strings. */
 type SplitTotalsRow = z.output<typeof splitTotalsRowSchema>;
 
 /**
- * CTE that resolves $1 to every recipient id in the same merge/alias group:
+ * CTE that resolves a recipient to every recipient id in the same merge/alias group:
  *   - the recipient itself
  *   - any aliases pointing at it (when $1 is the primary)
  *   - the recipient's own primary (when $1 is an alias)
@@ -84,31 +85,57 @@ interface PageOptions {
   offset?: number;
 }
 
-const RECIPIENT_GROUP_CTE = `
-  WITH recipient_group AS (
-    SELECT id FROM recipients
-    WHERE id = $1
-       OR primary_recipient_id = $1
-       OR id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
-       OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL)
-  )
-`;
+function recipientGroupCte(recipientId: RecipientId) {
+  return sql`
+    WITH recipient_group AS (
+      SELECT id FROM recipients
+      WHERE id = ${recipientId}
+         OR primary_recipient_id = ${recipientId}
+         OR id = (SELECT primary_recipient_id FROM recipients WHERE id = ${recipientId} AND primary_recipient_id IS NOT NULL)
+         OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = ${recipientId} AND primary_recipient_id IS NOT NULL)
+    )
+  `;
+}
 
 /**
  * Split-allocation totals for a transaction: the transaction's absolute amount
  * and the sum of its existing splits.
  */
-const SPLIT_TOTALS_SQL = `
-  SELECT ABS(t.amount) AS transaction_total,
-         COALESCE(SUM(ts.amount), 0) AS current_split_total
-    FROM transactions t
-    LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-   WHERE t.id = $1
-   GROUP BY t.id, t.amount
-`;
+function splitTotalsQuery(transactionId: TransactionId) {
+  return db
+    .selectFrom("transactions as t")
+    .leftJoin("transaction_splits as ts", "ts.transaction_id", "t.id")
+    .select([
+      sql<string>`ABS(t.amount)`.as("transaction_total"),
+      sql<string>`COALESCE(SUM(ts.amount), 0)`.as("current_split_total"),
+    ])
+    .where("t.id", "=", transactionId)
+    .groupBy(["t.id", "t.amount"]);
+}
+
+/** Run a built query on the caller's client, or on the ambient connection. */
+async function runOn(client: QueryRunner | null, builder: BuiltQuery) {
+  const compiled = compileQuery(builder);
+  return (client ?? { query }).query(compiled.sql, [...compiled.parameters]);
+}
+
+/** A split's summed payments: one `paid` NUMERIC row. */
+function paidQuery(splitId: SplitId) {
+  return db
+    .selectFrom("split_payments")
+    .select(sql<string>`COALESCE(SUM(amount), 0)`.as("paid"))
+    .where("split_id", "=", splitId);
+}
+
+/** The split's summed payments, as a LATERAL subquery aliased `sp_agg`. */
+function paidLateral(splitIdRef: "ts.id" | "settled.id") {
+  return sql`LATERAL (
+    SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ${sql.ref(splitIdRef)}
+  )`;
+}
 
 /**
- * Coerce a SPLIT_TOTALS_SQL row to the numeric totals shape (both aggregates
+ * Coerce a splitTotalsQuery row to the numeric totals shape (both aggregates
  * arrive as pg NUMERIC strings).
  */
 function mapSplitTotals(row: SplitTotalsRow): SplitTotals {
@@ -127,15 +154,18 @@ export async function lockAndGetTotals(
   client: QueryRunner,
   transactionId: TransactionId,
 ): Promise<SplitTotals | null> {
-  const lockResult = await client.query(
-    `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-    [transactionId],
+  const lockResult = await runOn(
+    client,
+    db
+      .selectFrom("transactions")
+      .select("id")
+      .where("id", "=", transactionId)
+      .forUpdate(),
   );
   if (lockResult.rows.length === 0) return null;
-  const [totals] = await queryRows(
+  const [totals] = await checkedRows(
     splitTotalsRowSchema,
-    SPLIT_TOTALS_SQL,
-    [transactionId],
+    splitTotalsQuery(transactionId),
     client,
   );
   // GROUP BY t.id over the row just locked: exactly one row.
@@ -153,9 +183,13 @@ export async function recipientExistsInTransaction(
   client: QueryRunner,
   recipientId: RecipientId,
 ): Promise<boolean> {
-  const result = await client.query("SELECT 1 FROM recipients WHERE id = $1", [
-    recipientId,
-  ]);
+  const result = await runOn(
+    client,
+    db
+      .selectFrom("recipients")
+      .select(sql<number>`1`.as("exists"))
+      .where("id", "=", recipientId),
+  );
   return result.rows.length > 0;
 }
 
@@ -175,16 +209,19 @@ export async function insertSplitInTransaction(
 ): Promise<FormattedSplit> {
   // `0::numeric`: a fresh split has no payments, and NUMERIC keeps
   // `amount_paid` the same pg string type as on every read path.
-  const [created] = await queryRows(
+  const created = await checkedRow(
     transactionSplitRowSchema,
-    `WITH created AS (
-       INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-       VALUES ($1, $2, $3, $4) RETURNING *
-     )
-     SELECT created.*, r.name AS recipient_name, 0::numeric AS amount_paid
-     FROM created
-     LEFT JOIN recipients r ON r.id = created.recipient_id`,
-    [transaction_id, recipient_id, amount, note || null],
+    db
+      .with("created", (qb) =>
+        qb
+          .insertInto("transaction_splits")
+          .values({ transaction_id, recipient_id, amount, note: note || null })
+          .returningAll(),
+      )
+      .selectFrom("created")
+      .leftJoin("recipients as r", "r.id", "created.recipient_id")
+      .selectAll("created")
+      .select(["r.name as recipient_name", sql<string>`0::numeric`.as("amount_paid")]),
     client,
   );
   // A plain INSERT ... RETURNING yields exactly one row or throws.
@@ -204,19 +241,25 @@ export async function insertSplitsBatchInTransaction(
   const recipientIds = splits.map((split) => split.recipient_id);
   const amounts = splits.map((split) => split.amount);
   const notes = splits.map((split) => split.note || null);
-  const rows = await queryRows(
+  const rows = await checkedRows(
     transactionSplitRowSchema,
-    `WITH created AS (
-       INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
-       SELECT $1, s.recipient_id, s.amount, s.note
-       FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
-       RETURNING *
-     )
-     SELECT created.*, r.name AS recipient_name, 0::numeric AS amount_paid
-     FROM created
-     LEFT JOIN recipients r ON r.id = created.recipient_id
-     ORDER BY created.id`,
-    [transactionId, recipientIds, amounts, notes],
+    db
+      .with("created", (qb) =>
+        qb
+          .insertInto("transaction_splits")
+          .columns(["transaction_id", "recipient_id", "amount", "note"])
+          .expression(
+            sql`SELECT ${transactionId}, s.recipient_id, s.amount, s.note
+                FROM UNNEST(${recipientIds}::int[], ${amounts}::numeric[], ${notes}::text[])
+                  AS s(recipient_id, amount, note)`,
+          )
+          .returningAll(),
+      )
+      .selectFrom("created")
+      .leftJoin("recipients as r", "r.id", "created.recipient_id")
+      .selectAll("created")
+      .select(["r.name as recipient_name", sql<string>`0::numeric`.as("amount_paid")])
+      .orderBy("created.id"),
     client,
   );
   return rows.map(formatSplit);
@@ -226,10 +269,13 @@ export async function lockSplitForPayment(
   client: QueryRunner,
   splitId: SplitId,
 ): Promise<{ id: SplitId; amount: string; is_settled: boolean } | null> {
-  const [row] = await queryRows(
+  const row = await checkedRow(
     splitPaymentLockRowSchema,
-    "SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE",
-    [splitId],
+    db
+      .selectFrom("transaction_splits")
+      .select(["id", "amount", "is_settled"])
+      .where("id", "=", splitId)
+      .forUpdate(),
     client,
   );
   return row ?? null;
@@ -240,12 +286,7 @@ export async function getPaidAmountInTransaction(
   client: QueryRunner,
   splitId: SplitId,
 ): Promise<string> {
-  const [row] = await queryRows(
-    splitPaidRowSchema,
-    "SELECT COALESCE(SUM(amount), 0) AS paid FROM split_payments WHERE split_id = $1",
-    [splitId],
-    client,
-  );
+  const row = await checkedRow(splitPaidRowSchema, paidQuery(splitId), client);
   // An aggregate without GROUP BY always returns exactly one row.
   if (!row) throw new Error("split paid sum returned no row");
   return row.paid;
@@ -265,12 +306,12 @@ export async function insertPaymentInTransaction(
     paid_at: string;
   },
 ): Promise<FormattedSplitPayment> {
-  const [payment] = await queryRows(
+  const payment = await checkedRow(
     splitPaymentRowSchema,
-    `INSERT INTO split_payments (split_id, amount, note, paid_at)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [split_id, amount, note || null, paid_at],
+    db
+      .insertInto("split_payments")
+      .values({ split_id, amount, note: note || null, paid_at })
+      .returningAll(),
     client,
   );
   // A plain INSERT ... RETURNING yields exactly one row or throws.
@@ -282,18 +323,21 @@ export async function markSettledIfCovered(
   client: QueryRunner,
   splitId: SplitId,
 ): Promise<boolean> {
-  const result = await client.query(
-    `UPDATE transaction_splits ts
-     SET is_settled = true
-     WHERE ts.id = $1
-       AND ts.is_settled = false
-       AND (
-         SELECT COALESCE(SUM(sp.amount), 0)
-         FROM split_payments sp
-         WHERE sp.split_id = ts.id
-       ) >= ts.amount
-     RETURNING id`,
-    [splitId],
+  const result = await runOn(
+    client,
+    db
+      .updateTable("transaction_splits as ts")
+      .set({ is_settled: true })
+      .where("ts.id", "=", splitId)
+      .where("ts.is_settled", "=", false)
+      .where(
+        sql<boolean>`(
+          SELECT COALESCE(SUM(sp.amount), 0)
+          FROM split_payments sp
+          WHERE sp.split_id = ts.id
+        ) >= ts.amount`,
+      )
+      .returning("id"),
   );
   return (result.rowCount ?? 0) > 0;
 }
@@ -307,10 +351,10 @@ export const splitRepository = {
   async getTransactionSplitTotals(
     transactionId: TransactionId,
   ): Promise<SplitTotals | null> {
-    const rows = await queryRows(splitTotalsRowSchema, SPLIT_TOTALS_SQL, [
-      transactionId,
-    ]);
-    const [row] = rows;
+    const row = await checkedRow(
+      splitTotalsRowSchema,
+      splitTotalsQuery(transactionId),
+    );
     if (!row) return null;
     return mapSplitTotals(row);
   },
@@ -324,19 +368,20 @@ export const splitRepository = {
     transactionId: TransactionId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<FormattedSplit[]> {
-    const params: unknown[] = [transactionId];
-    const sql =
-      `
-      SELECT ts.*, r.name AS recipient_name,
-             COALESCE(SUM(sp.amount), 0) AS amount_paid
-      FROM transaction_splits ts
-      LEFT JOIN recipients r ON ts.recipient_id = r.id
-      LEFT JOIN split_payments sp ON sp.split_id = ts.id
-      WHERE ts.transaction_id = $1
-      GROUP BY ts.id, r.name
-      ORDER BY ts.created_at
-    ` + buildLimitOffset(params, { limit, offset });
-    const rows = await queryRows(transactionSplitRowSchema, sql, params);
+    let builder = db
+      .selectFrom("transaction_splits as ts")
+      .leftJoin("recipients as r", "ts.recipient_id", "r.id")
+      .leftJoin("split_payments as sp", "sp.split_id", "ts.id")
+      .selectAll("ts")
+      .select([
+        "r.name as recipient_name",
+        sql<string>`COALESCE(SUM(sp.amount), 0)`.as("amount_paid"),
+      ])
+      .where("ts.transaction_id", "=", transactionId)
+      .groupBy(["ts.id", "r.name"])
+      .orderBy("ts.created_at");
+    if (limit !== null) builder = builder.limit(limit).offset(offset);
+    const rows = await checkedRows(transactionSplitRowSchema, builder);
     return rows.map(formatSplit);
   },
 
@@ -344,10 +389,12 @@ export const splitRepository = {
    * Split count for a transaction — the `total` for a paginated list.
    */
   async countSplitsByTransaction(transactionId: TransactionId): Promise<number> {
-    const [row] = await queryRows(
+    const row = await checkedRow(
       countRowSchema,
-      "SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1",
-      [transactionId],
+      db
+        .selectFrom("transaction_splits")
+        .select(sql<string>`COUNT(*)`.as("count"))
+        .where("transaction_id", "=", transactionId),
     );
     if (!row) throw new Error("split count returned no row");
     return parseInt(row.count, 10);
@@ -383,23 +430,27 @@ export const splitRepository = {
     // as a single row. recipient_id returned is the primary's id (or self
     // when not aliased) — the detail endpoint expands this back to the full
     // group via getOwedByRecipient.
-    const sql = `
-      SELECT COALESCE(r.primary_recipient_id, r.id) AS recipient_id,
-             COALESCE(pr.name, r.name) AS recipient_name,
-             t.currency,
-             SUM(a.original_amount) AS total_owed,
-             SUM(a.paid_amount) AS total_paid,
-             COUNT(a.split_id) AS split_count
-      FROM agg_split_outstanding a
-      JOIN recipients r ON r.id = a.recipient_id
-      LEFT JOIN recipients pr ON pr.id = r.primary_recipient_id
-      JOIN transaction_splits ts ON ts.id = a.split_id
-      JOIN transactions t ON t.id = ts.transaction_id
-      WHERE ts.is_settled = false
-      GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name),
-               t.currency
-    `;
-    return queryRows(splitOutstandingCurrencyRowSchema, sql, []);
+    const groupId = sql<number>`COALESCE(r.primary_recipient_id, r.id)`;
+    const groupName = sql<string>`COALESCE(pr.name, r.name)`;
+    return checkedRows(
+      splitOutstandingCurrencyRowSchema,
+      db
+        .selectFrom("agg_split_outstanding as a")
+        .innerJoin("recipients as r", "r.id", "a.recipient_id")
+        .leftJoin("recipients as pr", "pr.id", "r.primary_recipient_id")
+        .innerJoin("transaction_splits as ts", "ts.id", "a.split_id")
+        .innerJoin("transactions as t", "t.id", "ts.transaction_id")
+        .select([
+          groupId.as("recipient_id"),
+          groupName.as("recipient_name"),
+          "t.currency",
+          sql<string>`SUM(a.original_amount)`.as("total_owed"),
+          sql<string>`SUM(a.paid_amount)`.as("total_paid"),
+          sql<string>`COUNT(a.split_id)`.as("split_count"),
+        ])
+        .where("ts.is_settled", "=", false)
+        .groupBy([groupId, groupName, "t.currency"]),
+    );
   },
 
   /**
@@ -408,20 +459,20 @@ export const splitRepository = {
    * the server-converted detail total.
    */
   async getOwedRemainingByCurrency(recipientId: RecipientId) {
-    const sql = `
-      ${RECIPIENT_GROUP_CTE}
-      SELECT t.currency,
-             SUM(GREATEST(ts.amount - COALESCE(sp_agg.paid, 0), 0)) AS remaining,
-             COUNT(ts.id) AS split_count
-      FROM transaction_splits ts
-      JOIN transactions t ON ts.transaction_id = t.id
-      LEFT JOIN LATERAL (
-        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
-      ) sp_agg ON true
-      WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
-      GROUP BY t.currency
-    `;
-    return queryRows(owedRemainingCurrencyRowSchema, sql, [recipientId]);
+    return checkedRows(
+      owedRemainingCurrencyRowSchema,
+      sql`
+        ${recipientGroupCte(recipientId)}
+        SELECT t.currency,
+               SUM(GREATEST(ts.amount - COALESCE(sp_agg.paid, 0), 0)) AS remaining,
+               COUNT(ts.id) AS split_count
+        FROM transaction_splits ts
+        JOIN transactions t ON ts.transaction_id = t.id
+        LEFT JOIN ${paidLateral("ts.id")} sp_agg ON true
+        WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
+        GROUP BY t.currency
+      `,
+    );
   },
 
   /**
@@ -434,10 +485,10 @@ export const splitRepository = {
     recipientId: RecipientId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<OwedSplitRawRow[]> {
-    const params: unknown[] = [recipientId];
-    const sql =
-      `
-      ${RECIPIENT_GROUP_CTE}
+    return checkedRows(
+      owedSplitRawRowSchema,
+      sql`
+      ${recipientGroupCte(recipientId)}
       SELECT ts.*,
              t.date AS transaction_date,
              t.memo AS transaction_memo,
@@ -451,13 +502,12 @@ export const splitRepository = {
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN accounts acct ON t.account_id = acct.id
-      LEFT JOIN LATERAL (
-        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
-      ) sp_agg ON true
+      LEFT JOIN ${paidLateral("ts.id")} sp_agg ON true
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
       ORDER BY t.date DESC
-    ` + buildLimitOffset(params, { limit, offset });
-    return queryRows(owedSplitRawRowSchema, sql, params);
+      ${limit === null ? sql`` : sql`LIMIT ${limit} OFFSET ${offset}`}
+    `,
+    );
   },
 
   /**
@@ -465,13 +515,15 @@ export const splitRepository = {
    * getOwedByRecipient) — the `total` for a paginated list.
    */
   async countOwedByRecipient(recipientId: RecipientId): Promise<number> {
-    const sql = `
-      ${RECIPIENT_GROUP_CTE}
-      SELECT COUNT(*)
-      FROM transaction_splits ts
-      WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
-    `;
-    const [row] = await queryRows(countRowSchema, sql, [recipientId]);
+    const row = await checkedRow(
+      countRowSchema,
+      sql`
+        ${recipientGroupCte(recipientId)}
+        SELECT COUNT(*)
+        FROM transaction_splits ts
+        WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
+      `,
+    );
     if (!row) throw new Error("owed split count returned no row");
     return parseInt(row.count, 10);
   },
@@ -486,8 +538,10 @@ export const splitRepository = {
   async getOwedExportRowsByRecipient(
     recipientId: RecipientId,
   ): Promise<OwedExportRow[]> {
-    const sql = `
-      ${RECIPIENT_GROUP_CTE}
+    const rows = await checkedRows(
+      owedExportRawRowSchema,
+      sql`
+      ${recipientGroupCte(recipientId)}
       SELECT
         t.date,
         acct.name AS bank_account,
@@ -518,18 +572,13 @@ export const splitRepository = {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN categories rc ON tr.default_category_id = rc.id
       LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      LEFT JOIN LATERAL (
-        SELECT SUM(amount) AS paid
-        FROM split_payments
-        WHERE split_id = ts.id
-      ) sp_agg ON true
+      LEFT JOIN ${paidLateral("ts.id")} sp_agg ON true
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group)
         AND ts.is_settled = false
         AND (ts.amount - COALESCE(sp_agg.paid, 0)) > 0
       ORDER BY t.date ASC
-    `;
-
-    const rows = await queryRows(owedExportRawRowSchema, sql, [recipientId]);
+    `,
+    );
     return rows.map((row) => ({
       ...row,
       amount: toNumber(toDecimal(row.amount)),
@@ -545,11 +594,13 @@ export const splitRepository = {
     splitId: SplitId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<FormattedSplitPayment[]> {
-    const params: unknown[] = [splitId];
-    const sql =
-      `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC` +
-      buildLimitOffset(params, { limit, offset });
-    const rows = await queryRows(splitPaymentRowSchema, sql, params);
+    let builder = db
+      .selectFrom("split_payments")
+      .selectAll()
+      .where("split_id", "=", splitId)
+      .orderBy("paid_at", "desc");
+    if (limit !== null) builder = builder.limit(limit).offset(offset);
+    const rows = await checkedRows(splitPaymentRowSchema, builder);
     return rows.map(formatPayment);
   },
 
@@ -557,10 +608,12 @@ export const splitRepository = {
    * Payment count for a split — the `total` for a paginated list.
    */
   async countPayments(splitId: SplitId): Promise<number> {
-    const [row] = await queryRows(
+    const row = await checkedRow(
       countRowSchema,
-      "SELECT COUNT(*) FROM split_payments WHERE split_id = $1",
-      [splitId],
+      db
+        .selectFrom("split_payments")
+        .select(sql<string>`COUNT(*)`.as("count"))
+        .where("split_id", "=", splitId),
     );
     if (!row) throw new Error("split payment count returned no row");
     return parseInt(row.count, 10);
@@ -580,22 +633,18 @@ export const splitRepository = {
     splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<FormattedSplit | null> {
-    const sql = `
-      WITH settled AS (
-        UPDATE transaction_splits SET is_settled = true WHERE id = $1 RETURNING *
-      )
-      SELECT settled.*, r.name AS recipient_name,
-             COALESCE(sp_agg.paid, 0) AS amount_paid
-      FROM settled
-      LEFT JOIN recipients r ON r.id = settled.recipient_id
-      LEFT JOIN LATERAL (
-        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = settled.id
-      ) sp_agg ON true
-    `;
-    const [row] = await queryRows(
+    const row = await checkedRow(
       transactionSplitRowSchema,
-      sql,
-      [splitId],
+      sql`
+        WITH settled AS (
+          UPDATE transaction_splits SET is_settled = true WHERE id = ${splitId} RETURNING *
+        )
+        SELECT settled.*, r.name AS recipient_name,
+               COALESCE(sp_agg.paid, 0) AS amount_paid
+        FROM settled
+        LEFT JOIN recipients r ON r.id = settled.recipient_id
+        LEFT JOIN ${paidLateral("settled.id")} sp_agg ON true
+      `,
       client ?? undefined,
     );
     return row ? formatSplit(row) : null;
@@ -605,14 +654,15 @@ export const splitRepository = {
     recipientId: RecipientId,
     client: QueryRunner | null = null,
   ): Promise<{ settled_count: number }> {
-    const sql = `
-      ${RECIPIENT_GROUP_CTE}
-      UPDATE transaction_splits
-      SET is_settled = true
-      WHERE recipient_id IN (SELECT id FROM recipient_group) AND is_settled = false
-    `;
-    const runner: QueryRunner = client ?? { query };
-    const result = await runner.query(sql, [recipientId]);
+    const result = await runOn(
+      client,
+      sql`
+        ${recipientGroupCte(recipientId)}
+        UPDATE transaction_splits
+        SET is_settled = true
+        WHERE recipient_id IN (SELECT id FROM recipient_group) AND is_settled = false
+      `,
+    );
     return { settled_count: result.rowCount ?? 0 };
   },
 
@@ -623,10 +673,9 @@ export const splitRepository = {
     splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<boolean> {
-    const runner: QueryRunner = client ?? { query };
-    const result = await runner.query(
-      "DELETE FROM transaction_splits WHERE id = $1",
-      [splitId],
+    const result = await runOn(
+      client,
+      db.deleteFrom("transaction_splits").where("id", "=", splitId),
     );
     return (result.rowCount ?? 0) > 0;
   },
@@ -642,20 +691,16 @@ export const splitRepository = {
     splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<FormattedSplit | null> {
-    const sql = `
-      SELECT ts.*, r.name AS recipient_name,
-             COALESCE(sp_agg.paid, 0) AS amount_paid
-      FROM transaction_splits ts
-      LEFT JOIN recipients r ON ts.recipient_id = r.id
-      LEFT JOIN LATERAL (
-        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
-      ) sp_agg ON true
-      WHERE ts.id = $1
-    `;
-    const [row] = await queryRows(
+    const row = await checkedRow(
       transactionSplitRowSchema,
-      sql,
-      [splitId],
+      sql`
+        SELECT ts.*, r.name AS recipient_name,
+               COALESCE(sp_agg.paid, 0) AS amount_paid
+        FROM transaction_splits ts
+        LEFT JOIN recipients r ON ts.recipient_id = r.id
+        LEFT JOIN ${paidLateral("ts.id")} sp_agg ON true
+        WHERE ts.id = ${splitId}
+      `,
       client ?? undefined,
     );
     return row ? formatSplit(row) : null;
@@ -668,12 +713,7 @@ export const splitRepository = {
    * the same canonical enforcement path.
    */
   async getAlreadyPaid(splitId: SplitId): Promise<number> {
-    const sql = `
-      SELECT COALESCE(SUM(amount), 0) AS paid
-      FROM split_payments
-      WHERE split_id = $1
-    `;
-    const [row] = await queryRows(splitPaidRowSchema, sql, [splitId]);
+    const row = await checkedRow(splitPaidRowSchema, paidQuery(splitId));
     // An aggregate without GROUP BY always returns exactly one row.
     if (!row) throw new Error("split paid sum returned no row");
     return toNumber(toDecimal(row.paid));
@@ -698,22 +738,23 @@ export const splitRepository = {
     payload?: object | null;
     client?: QueryRunner | null;
   }): Promise<SplitAuditRow> {
-    const sql = `
-      INSERT INTO split_audit (split_id, action, actor, payload)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, payload::text AS payload_text,
-                to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
-    `;
-    const params = [
-      split_id,
-      action,
-      actor,
-      payload ? JSON.stringify(payload) : null,
-    ];
-    const [row] = await queryRows(
+    const row = await checkedRow(
       splitAuditRowSchema,
-      sql,
-      params,
+      db
+        .insertInto("split_audit")
+        .values({
+          split_id,
+          action,
+          actor,
+          payload: payload ? JSON.stringify(payload) : null,
+        })
+        .returning([
+          "id",
+          sql<string>`payload::text`.as("payload_text"),
+          sql<string>`to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
+            "occurred_at",
+          ),
+        ]),
       client ?? undefined,
     );
     // A plain INSERT ... RETURNING yields exactly one row or throws.
@@ -730,13 +771,12 @@ export const splitRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE transaction_splits
-          SET recipient_id = $1
-        WHERE recipient_id = ANY($2::int[])`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transaction_splits")
+      .set({ recipient_id: primaryId })
+      .where(sql<boolean>`recipient_id = ANY(${aliasIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 };
 

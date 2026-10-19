@@ -11,8 +11,9 @@
  * corrupt cost basis).
  */
 
-import { query } from "../../database/connection.ts";
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { checkedRows, db } from "../../database/db.ts";
 import {
   aliasInvestmentRowSchema,
   investmentMatchKeyRowSchema,
@@ -87,27 +88,36 @@ export async function matchBatch({
   unresolved: number;
   total: number;
 }> {
-  await query(
-    `UPDATE portfolio_import_batches SET status = 'matching' WHERE id = $1`,
-    [batchId],
-  );
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({ status: "matching" })
+    .where("id", "=", String(batchId))
+    .execute();
 
   // Cash rows (brokerage deposits/withdrawals) carry no instrument — advance them
   // straight to 'matched' without resolution.
-  await query(
-    `UPDATE portfolio_import_staging_rows
-        SET status = 'matched'
-      WHERE batch_id = $1 AND status = 'validated' AND route IN ('cash','account_internal')`,
-    [batchId],
-  );
+  await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({ status: "matched" })
+    .where("batch_id", "=", String(batchId))
+    .where("status", "=", "validated")
+    .where("route", "in", ["cash", "account_internal"])
+    .execute();
 
-  const rows = await queryRows(
+  const rows = await checkedRows(
     matchableStagingRowSchema,
-    `SELECT id, symbol_raw, name_raw
-       FROM portfolio_import_staging_rows
-      WHERE batch_id = $1 AND status = 'validated' AND (route IS NULL OR route NOT IN ('cash','account_internal'))
-      ORDER BY row_index ASC`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_staging_rows")
+      .select(["id", "symbol_raw", "name_raw"])
+      .where("batch_id", "=", String(batchId))
+      .where("status", "=", "validated")
+      .where((eb) =>
+        eb.or([
+          eb("route", "is", null),
+          eb("route", "not in", ["cash", "account_internal"]),
+        ]),
+      )
+      .orderBy("row_index", "asc"),
   );
 
   const total = rows.length;
@@ -197,20 +207,31 @@ export async function matchBatch({
   }
 
   if (ids.length > 0) {
-    await query(
-      `UPDATE portfolio_import_staging_rows s
+    await sql`UPDATE portfolio_import_staging_rows s
           SET status = 'matched',
               resolved_investment_id = v.investment_id,
               match_source = v.match_source
-         FROM unnest($1::bigint[], $2::int[], $3::text[])
+         FROM unnest(${ids}::bigint[], ${investmentIds}::int[], ${matchSources}::text[])
               AS v(id, investment_id, match_source)
-        WHERE s.id = v.id`,
-      [ids, investmentIds, matchSources],
-    );
+        WHERE s.id = v.id`.execute(db);
   }
 
   logger.info("[portfolio-pipeline:match] done", { batchId, total, counts });
   return { matchSourceCounts: counts, unresolved: counts.unresolved, total };
+}
+
+/** Active investments grouped by a normalized match key, limited to `keys`. */
+function activeInvestmentsByKey(key: RawBuilder<string>, keys: string[]) {
+  return db
+    .selectFrom("investments")
+    .select([
+      key.as("match_key"),
+      sql<number>`MIN(id)`.as("id"),
+      sql<number>`COUNT(*)::int`.as("count"),
+    ])
+    .where(sql<boolean>`${key} = ANY(${keys}::text[])`)
+    .where("is_active", "=", true)
+    .groupBy(key);
 }
 
 /**
@@ -235,13 +256,9 @@ async function resolveBySymbolBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (symbols.size === 0) return map;
-  const keyRows = await queryRows(
+  const keyRows = await checkedRows(
     investmentMatchKeyRowSchema,
-    `SELECT LOWER(symbol) AS match_key, MIN(id) AS id, COUNT(*)::int AS count
-       FROM investments
-      WHERE LOWER(symbol) = ANY($1::text[]) AND is_active = true
-      GROUP BY LOWER(symbol)`,
-    [[...symbols]],
+    activeInvestmentsByKey(sql<string>`LOWER(symbol)`, [...symbols]),
   );
   for (const { match_key, id, count } of keyRows) {
     map.set(String(match_key), { id, count: Number(count) });
@@ -312,12 +329,28 @@ async function resolveByProviderAliasBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (symbols.size === 0) return map;
-  const investments = await queryRows(
+  const investments = await checkedRows(
     aliasInvestmentRowSchema,
-    `SELECT id, symbol, name, asset_class, price_provider, price_provider_id
-       FROM investments
-      WHERE is_active = true
-        AND ((price_provider = 'yahoo' AND asset_class = 'crypto') OR price_provider = 'kinesis')`,
+    db
+      .selectFrom("investments")
+      .select([
+        "id",
+        "symbol",
+        "name",
+        "asset_class",
+        "price_provider",
+        "price_provider_id",
+      ])
+      .where("is_active", "=", true)
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb("price_provider", "=", "yahoo"),
+            eb("asset_class", "=", "crypto"),
+          ]),
+          eb("price_provider", "=", "kinesis"),
+        ]),
+      ),
   );
   const candidateIds = new Map<string, Set<number>>();
   for (const investment of investments) {
@@ -366,13 +399,9 @@ async function resolveByNameBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (names.size === 0) return map;
-  const keyRows = await queryRows(
+  const keyRows = await checkedRows(
     investmentMatchKeyRowSchema,
-    `SELECT LOWER(TRIM(name)) AS match_key, MIN(id) AS id, COUNT(*)::int AS count
-       FROM investments
-      WHERE LOWER(TRIM(name)) = ANY($1::text[]) AND is_active = true
-      GROUP BY LOWER(TRIM(name))`,
-    [[...names]],
+    activeInvestmentsByKey(sql<string>`LOWER(TRIM(name))`, [...names]),
   );
   for (const { match_key, id, count } of keyRows) {
     map.set(String(match_key), { id, count: Number(count) });

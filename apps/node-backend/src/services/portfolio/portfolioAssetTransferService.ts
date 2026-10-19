@@ -12,8 +12,9 @@ import {
   ConflictError,
   ValidationError,
 } from "../../middleware/errorHandler.ts";
-import { query, withTransaction } from "../../database/connection.ts";
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRows, db } from "../../database/db.ts";
 import { custodyAccountLockRowSchema } from "../../database/rows/portfolio.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
@@ -220,6 +221,13 @@ export function previewPortfolioAssetTransfer(
   };
 }
 
+/** Serialize custody writes against every unit-history table. */
+export async function lockCustodyTables(): Promise<void> {
+  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
+    db,
+  );
+}
+
 /** Validate chronology and custody independently from cost-basis selection. */
 export function validatePortfolioAssetTransferHistory(
   rows: readonly CustodyHistoryRow[],
@@ -266,10 +274,14 @@ export async function commitPortfolioAssetTransfer({
     );
   const event = prepared.event;
   return withTransaction(async (client) => {
-    const accounts = await queryRows(
+    const accounts = await checkedRows(
       custodyAccountLockRowSchema,
-      "SELECT id,is_active,type FROM accounts WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
-      [[event.source_account_id, event.destination_account_id]],
+      db
+        .selectFrom("accounts")
+        .select(["id", "is_active", "type"])
+        .where("id", "in", [event.source_account_id, event.destination_account_id])
+        .orderBy("id")
+        .forUpdate(),
     );
     if (
       accounts.length !== 2 ||
@@ -280,9 +292,7 @@ export async function commitPortfolioAssetTransfer({
       )
     )
       throw new ConflictError("Asset transfer accounts must be active");
-    await query(
-      "LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE",
-    );
+    await lockCustodyTables();
     const existing = await findAssetTransferFingerprint(
       event.dedup_fingerprint,
       event.dedup_fingerprint_version,
@@ -359,9 +369,7 @@ export async function rollbackPortfolioAssetTransfersForBatch(
   } = {},
 ): Promise<number | null> {
   return withTransaction(async () => {
-    await query(
-      "LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE",
-    );
+    await lockCustodyTables();
     const removed = await getAssetTransfersForBatch(batchId);
     const transferIds = new Set(removed.map((event) => String(event.id)));
     const omitted = new Set(omitTransactionIds.map(Number));

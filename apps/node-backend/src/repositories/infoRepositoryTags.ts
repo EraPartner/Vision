@@ -13,9 +13,14 @@
  * transaction-list tag filter), so per-tag lines can legitimately overlap.
  */
 
-import { queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import type { RawBuilder } from 'kysely';
+import { checkedRows } from '../database/db.ts';
 import { tagPivotRowSchema } from '../database/rows/info.ts';
-import { validateInt4Ids } from '../lib/filterBuilder.ts';
+import {
+  validateInt4Ids,
+  andClauses,
+} from '../lib/filterBuilder.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
 import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
 import { periodPivotConversion } from './infoRepositoryRecipients.ts';
@@ -55,26 +60,20 @@ export const tagInsightsRepository = {
     if (!allTags && validTagIds.length === 0)
       return { tagPivot: {}, conversion: periodPivotConversion([]) };
 
-    const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
+    const periodExpr = bucket === 'yearly' ? sql`TO_CHAR(t.date, 'YYYY')` : sql`TO_CHAR(t.date, 'YYYY-MM')`;
 
-    const params: unknown[] = [];
-    const dateFilters: string[] = [];
-    if (startDate) { params.push(startDate); dateFilters.push(`t.date >= $${params.length}`); }
-    if (endDate) { params.push(endDate); dateFilters.push(`t.date <= $${params.length}`); }
-
+    const filters: RawBuilder<unknown>[] = [];
     // "all tags" drops the inclusion filter entirely so every tag with spend in
     // range is returned; the client caps to top-N + Other.
-    let tagInclude = '';
-    if (!allTags) {
-      params.push(validTagIds);
-      tagInclude = `AND tt.tag_id = ANY($${params.length}::int[])`;
-    }
+    if (!allTags) filters.push(sql`tt.tag_id = ANY(${validTagIds}::int[])`);
+    if (startDate) filters.push(sql`t.date >= ${startDate}`);
+    if (endDate) filters.push(sql`t.date <= ${endDate}`);
 
     // Aggregate per (tag, period, date, currency) in SQL. amount < 0 is pinned
     // so ABS distributes over the same-sign SUM; per-date conversion matches the
     // recipient/category pivots. The (transaction_id, tag_id) PK guarantees one
     // junction row per tag, so COUNT(*) is the transaction count for that tag.
-    const sql = `
+    const rows = await checkedRows(tagPivotRowSchema, sql`
       SELECT
         tt.tag_id      AS tag_id,
         tg.slug        AS tag_slug,
@@ -88,12 +87,9 @@ export const tagInsightsRepository = {
       WHERE t.is_active = true
         AND t.amount < 0
         AND t.is_transfer = false
-        ${tagInclude}
-        ${dateFilters.length > 0 ? `AND ${dateFilters.join(' AND ')}` : ''}
+        ${andClauses(filters)}
       GROUP BY tt.tag_id, tg.slug, ${periodExpr}, t.date, t.currency
-    `;
-
-    const rows = await queryRows(tagPivotRowSchema, sql, params);
+    `);
 
     const all = await convertRowsToEur(
       mapRowsForAmountConversion(rows, 'abs_amount', false),

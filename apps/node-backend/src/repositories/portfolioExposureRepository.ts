@@ -1,6 +1,9 @@
 import type { FundHoldingsDocument } from "@vision/types/fund-holdings";
+import type { InvestmentId } from "@vision/types/brands";
+import { sql } from "kysely";
+import { asInvestmentId } from "@vision/types/brands";
 import { withTransaction } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { checkedRows, db } from "../database/db.ts";
 import {
   exposureClassificationRowSchema,
   exposureTargetRowSchema,
@@ -40,27 +43,48 @@ export type ExposureClassificationRow = ExposureClassificationDbRow;
 /** Derived from the checked row schema; `id` is a UUID string. */
 export type FundHoldingsDocumentRow = FundHoldingsDocumentDbRow;
 
-const classificationColumns = `id,investment_id AS "investmentId",identifier_type AS "identifierType",
-  identifier_value AS "identifierValue",identifier_exchange AS "identifierExchange",
-  issuer_id AS "issuerId",issuer_name AS "issuerName",sector,
-  issuer_country_code AS "issuerCountryCode",source_label AS "sourceLabel",
-  created_at AS "createdAt",updated_at AS "updatedAt"`;
+const classificationColumns = [
+  "id",
+  "investment_id as investmentId",
+  "identifier_type as identifierType",
+  "identifier_value as identifierValue",
+  "identifier_exchange as identifierExchange",
+  "issuer_id as issuerId",
+  "issuer_name as issuerName",
+  "sector",
+  "issuer_country_code as issuerCountryCode",
+  "source_label as sourceLabel",
+  "created_at as createdAt",
+  "updated_at as updatedAt",
+] as const;
 
 export async function listExposureSources(): Promise<{
   classifications: ExposureClassificationRow[];
   documents: FundHoldingsDocumentRow[];
 }> {
   const [classifications, documents] = await Promise.all([
-    queryRows(
+    checkedRows(
       exposureClassificationRowSchema,
-      `SELECT ${classificationColumns} FROM portfolio_exposure_classifications ORDER BY issuer_name,id`,
+      db
+        .selectFrom("portfolio_exposure_classifications")
+        .select(classificationColumns)
+        .orderBy(["issuer_name", "id"]),
     ),
-    queryRows(
+    checkedRows(
       fundHoldingsDocumentRowSchema,
-      `SELECT id,investment_id AS "investmentId",share_class_identifier_json AS "shareClassIdentifier",
-      document_json AS document,source_as_of_date AS "sourceAsOfDate",source_sha256 AS "sourceSha256",
-      created_at AS "createdAt",updated_at AS "updatedAt"
-      FROM portfolio_fund_holdings_documents ORDER BY investment_id`,
+      db
+        .selectFrom("portfolio_fund_holdings_documents")
+        .select([
+          "id",
+          "investment_id as investmentId",
+          "share_class_identifier_json as shareClassIdentifier",
+          "document_json as document",
+          "source_as_of_date as sourceAsOfDate",
+          "source_sha256 as sourceSha256",
+          "created_at as createdAt",
+          "updated_at as updatedAt",
+        ])
+        .orderBy("investment_id"),
     ),
   ]);
   return { classifications, documents };
@@ -70,12 +94,12 @@ export async function listExposureTargets(
   investmentIds: readonly number[],
 ): Promise<{ id: number; assetClass: string }[]> {
   if (investmentIds.length === 0) return [];
-  return queryRows(
+  return checkedRows(
     exposureTargetRowSchema,
-    `SELECT id,asset_class AS "assetClass"
-       FROM investments
-      WHERE id = ANY($1::int[])`,
-    [investmentIds],
+    db
+      .selectFrom("investments")
+      .select(["id", "asset_class as assetClass"])
+      .where("id", "=", sql<InvestmentId>`ANY(${investmentIds}::int[])`),
   );
 }
 
@@ -86,54 +110,65 @@ export async function upsertExposureBundle({
   classifications: readonly ExposureClassificationInput[];
   fundDocuments: readonly FundDocumentInput[];
 }): ReturnType<typeof listExposureSources> {
-  await withTransaction(async (client) => {
+  await withTransaction(async () => {
     for (const item of classifications) {
-      const investmentTarget = item.investmentId !== undefined;
-      await client.query(
-        `INSERT INTO portfolio_exposure_classifications
-          (investment_id,identifier_type,identifier_value,identifier_exchange,
-           issuer_id,issuer_name,sector,issuer_country_code,source_label)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         ON CONFLICT ${
-           investmentTarget
-             ? "(investment_id) WHERE investment_id IS NOT NULL"
-             : "(identifier_type,identifier_value,COALESCE(identifier_exchange,'')) WHERE investment_id IS NULL"
-         }
-         DO UPDATE SET issuer_id=EXCLUDED.issuer_id,issuer_name=EXCLUDED.issuer_name,
-           sector=EXCLUDED.sector,issuer_country_code=EXCLUDED.issuer_country_code,
-           source_label=EXCLUDED.source_label,updated_at=now()`,
-        [
-          item.investmentId ?? null,
-          item.identifier?.type ?? null,
-          item.identifier?.value ?? null,
-          item.identifier?.exchange ?? null,
-          item.issuerId,
-          item.issuerName,
-          item.sector ?? null,
-          item.issuerCountryCode ?? null,
-          item.sourceLabel,
-        ],
-      );
+      await db
+        .insertInto("portfolio_exposure_classifications")
+        .values({
+          investment_id:
+            item.investmentId === undefined
+              ? null
+              : asInvestmentId(item.investmentId),
+          identifier_type: item.identifier?.type ?? null,
+          identifier_value: item.identifier?.value ?? null,
+          identifier_exchange: item.identifier?.exchange ?? null,
+          issuer_id: item.issuerId,
+          issuer_name: item.issuerName,
+          sector: item.sector ?? null,
+          issuer_country_code: item.issuerCountryCode ?? null,
+          source_label: item.sourceLabel,
+        })
+        .onConflict((oc) =>
+          (item.investmentId !== undefined
+            ? oc.column("investment_id").where("investment_id", "is not", null)
+            : oc
+                .expression(
+                  sql`identifier_type,identifier_value,COALESCE(identifier_exchange,'')`,
+                )
+                .where("investment_id", "is", null)
+          ).doUpdateSet((eb) => ({
+            issuer_id: eb.ref("excluded.issuer_id"),
+            issuer_name: eb.ref("excluded.issuer_name"),
+            sector: eb.ref("excluded.sector"),
+            issuer_country_code: eb.ref("excluded.issuer_country_code"),
+            source_label: eb.ref("excluded.source_label"),
+            updated_at: sql<Date>`now()`,
+          })),
+        )
+        .execute();
     }
     for (const item of fundDocuments) {
-      await client.query(
-        `INSERT INTO portfolio_fund_holdings_documents
-          (investment_id,share_class_identifier_json,document_json,source_as_of_date,source_sha256)
-         VALUES ($1,$2::jsonb,$3::jsonb,$4,$5)
-         ON CONFLICT (investment_id) DO UPDATE SET
-           share_class_identifier_json=EXCLUDED.share_class_identifier_json,
-           document_json=EXCLUDED.document_json,
-           source_as_of_date=EXCLUDED.source_as_of_date,
-           source_sha256=EXCLUDED.source_sha256,
-           updated_at=now()`,
-        [
-          item.investmentId,
-          JSON.stringify(item.shareClassIdentifier),
-          JSON.stringify(item.document),
-          item.document.source.asOfDate,
-          item.sourceSha256,
-        ],
-      );
+      await db
+        .insertInto("portfolio_fund_holdings_documents")
+        .values({
+          investment_id: asInvestmentId(item.investmentId),
+          share_class_identifier_json: sql`${JSON.stringify(item.shareClassIdentifier)}::jsonb`,
+          document_json: sql`${JSON.stringify(item.document)}::jsonb`,
+          source_as_of_date: item.document.source.asOfDate,
+          source_sha256: item.sourceSha256,
+        })
+        .onConflict((oc) =>
+          oc.column("investment_id").doUpdateSet((eb) => ({
+            share_class_identifier_json: eb.ref(
+              "excluded.share_class_identifier_json",
+            ),
+            document_json: eb.ref("excluded.document_json"),
+            source_as_of_date: eb.ref("excluded.source_as_of_date"),
+            source_sha256: eb.ref("excluded.source_sha256"),
+            updated_at: sql<Date>`now()`,
+          })),
+        )
+        .execute();
     }
   });
   return listExposureSources();

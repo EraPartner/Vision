@@ -115,9 +115,9 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
         expect(
           calls.findIndex(
             ({ sql, params }) =>
-              sql.includes("UPDATE portfolio_import_staging_rows") &&
-              Number(params?.[0]) === id &&
-              params?.[1] === "error",
+              /UPDATE "?portfolio_import_staging_rows"?/i.test(sql) &&
+              (params ?? []).some((value) => Number(value) === id) &&
+              (params ?? []).includes("error"),
           ),
         ).toBeGreaterThan(rollback + 1);
       }

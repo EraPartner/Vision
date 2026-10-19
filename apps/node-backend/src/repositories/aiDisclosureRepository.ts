@@ -1,6 +1,8 @@
 import type { AiDisclosureGrant } from "@vision/types/aiResearch";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   aiDisclosureGrantRowSchema,
   aiDisclosureRecordRowSchema,
@@ -33,66 +35,80 @@ export type DisclosureRecordPatch = {
   errorCode?: string | null;
 };
 
+function jsonb(value: unknown) {
+  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+}
+
 export async function createGrant(
   grant: AiDisclosureGrant,
 ): Promise<AiDisclosureGrantRow> {
-  const row = await queryOne(
+  const row = await checkedRow(
     aiDisclosureGrantRowSchema,
-    `INSERT INTO ai_disclosure_grants
-      (route,mode,purpose,preview_payload_sha256,allowed_fields_json,max_requests,max_input_characters,
-       max_output_tokens,max_cost_micros,max_disclosure_units,expires_at,retain_exact_payload)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,false)
-     RETURNING *`,
-    [
-      grant.route,
-      grant.mode,
-      grant.purpose,
-      grant.previewHash,
-      JSON.stringify(grant.allowedFields),
-      grant.maxRequests,
-      grant.maxInputCharacters,
-      grant.maxOutputTokens,
-      grant.maxCostMicros,
-      grant.maxDisclosureUnits,
-      grant.expiresAt,
-    ],
+    db
+      .insertInto("ai_disclosure_grants")
+      .values({
+        route: grant.route,
+        mode: grant.mode,
+        purpose: grant.purpose,
+        preview_payload_sha256: grant.previewHash,
+        allowed_fields_json: jsonb(grant.allowedFields),
+        max_requests: grant.maxRequests,
+        max_input_characters: grant.maxInputCharacters,
+        max_output_tokens: grant.maxOutputTokens,
+        max_cost_micros: grant.maxCostMicros,
+        max_disclosure_units: grant.maxDisclosureUnits,
+        expires_at: grant.expiresAt,
+        retain_exact_payload: false,
+      })
+      .returningAll(),
   );
   if (!row) throw new Error("ai_disclosure_grants insert returned no row");
   return row;
 }
 
 export async function listGrants(): Promise<AiDisclosureGrantRow[]> {
-  return queryRows(
+  return checkedRows(
     aiDisclosureGrantRowSchema,
-    `SELECT * FROM ai_disclosure_grants ORDER BY created_at DESC LIMIT 200`,
+    db
+      .selectFrom("ai_disclosure_grants")
+      .selectAll()
+      .orderBy("created_at", "desc")
+      .limit(200),
   );
 }
 export async function listRecords(): Promise<AiDisclosureRecordRow[]> {
-  return queryRows(
+  return checkedRows(
     aiDisclosureRecordRowSchema,
-    `SELECT * FROM ai_disclosure_records ORDER BY created_at DESC LIMIT 500`,
+    db
+      .selectFrom("ai_disclosure_records")
+      .selectAll()
+      .orderBy("created_at", "desc")
+      .limit(500),
   );
 }
 export async function revokeGrant(id: string): Promise<boolean> {
-  return (
-    (
-      await query(
-        `UPDATE ai_disclosure_grants SET revoked_at=NOW(),updated_at=NOW() WHERE id=$1 RETURNING id`,
-        [id],
-      )
-    ).rows.length > 0
-  );
+  const rows = await db
+    .updateTable("ai_disclosure_grants")
+    .set({ revoked_at: sql<Date>`NOW()`, updated_at: sql<Date>`NOW()` })
+    .where("id", "=", id)
+    .returning("id")
+    .execute();
+  return rows.length > 0;
 }
 export async function deleteHistory(): Promise<{
   records: number;
   grants: number;
 }> {
-  return withTransaction(async (client) => {
-    const records = await client.query(`DELETE FROM ai_disclosure_records`);
-    const grants = await client.query(`DELETE FROM ai_disclosure_grants`);
+  return withTransaction(async () => {
+    const records = await db
+      .deleteFrom("ai_disclosure_records")
+      .executeTakeFirst();
+    const grants = await db
+      .deleteFrom("ai_disclosure_grants")
+      .executeTakeFirst();
     return {
-      records: records.rowCount ?? 0,
-      grants: grants.rowCount ?? 0,
+      records: Number(records.numDeletedRows),
+      grants: Number(grants.numDeletedRows),
     };
   });
 }
@@ -114,13 +130,15 @@ export async function reserveDisclosure({
   costMicros: number;
   monthlyBudgetMicros: number;
 }): Promise<AiDisclosureRecordRow> {
-  return withTransaction(async (client) => {
-    await client.query(`SELECT pg_advisory_xact_lock(884209113)`);
-    const grant = await queryOne(
+  return withTransaction(async () => {
+    await sql`SELECT pg_advisory_xact_lock(884209113)`.execute(db);
+    const grant = await checkedRow(
       aiDisclosureGrantRowSchema,
-      `SELECT * FROM ai_disclosure_grants WHERE id=$1 FOR UPDATE`,
-      [grantId],
-      client,
+      db
+        .selectFrom("ai_disclosure_grants")
+        .selectAll()
+        .where("id", "=", grantId)
+        .forUpdate(),
     );
     if (!grant)
       throw Object.assign(new Error("Disclosure grant not found"), {
@@ -148,21 +166,27 @@ export async function reserveDisclosure({
         code: "FIELD_NOT_ALLOWED",
       });
     const priorUnits = (
-      await queryRows(
+      await checkedRows(
         disclosureUnitsRowSchema,
-        `SELECT disclosure_units_json FROM ai_disclosure_records WHERE grant_id=$1 AND status <> 'blocked'`,
-        [grantId],
-        client,
+        db
+          .selectFrom("ai_disclosure_records")
+          .select("disclosure_units_json")
+          .where("grant_id", "=", grantId)
+          .where("status", "<>", "blocked"),
       )
     ).flatMap((row) => row.disclosure_units_json ?? []);
     const distinctUnits = new Set([...priorUnits, ...preview.disclosureUnits]);
     const monthlyReserved = Number(
       (
-        await queryOne(
+        await checkedRow(
           disclosureMonthlyTotalRowSchema,
-          `SELECT COALESCE(SUM(reserved_cost_micros),0) AS total FROM ai_disclosure_records WHERE created_at >= date_trunc('month',NOW()) AND status <> 'blocked'`,
-          undefined,
-          client,
+          db
+            .selectFrom("ai_disclosure_records")
+            .select(
+              sql<string>`COALESCE(SUM(reserved_cost_micros),0)`.as("total"),
+            )
+            .where("created_at", ">=", sql<Date>`date_trunc('month',NOW())`)
+            .where("status", "<>", "blocked"),
         )
       )?.total ?? 0,
     );
@@ -190,36 +214,44 @@ export async function reserveDisclosure({
         code: "GRANT_BUDGET_EXHAUSTED",
       });
     }
-    const record = await queryOne(
+    const record = await checkedRow(
       aiDisclosureRecordRowSchema,
-      `INSERT INTO ai_disclosure_records
-       (grant_id,job_id,route,mode,purpose,field_manifest_json,disclosure_units_json,payload_sha256,payload_bytes,reserved_output_tokens,reserved_cost_micros,status,policy_snapshot_json)
-       VALUES ($1,$2,'openai-api',$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9,$10,'authorized',$11::jsonb) RETURNING *`,
-      [
-        grantId,
-        jobId,
-        grant.mode,
-        grant.purpose,
-        JSON.stringify(preview.fieldManifest),
-        JSON.stringify(preview.disclosureUnits),
-        preview.payloadSha256,
-        preview.payloadBytes,
-        outputTokens,
-        costMicros,
-        JSON.stringify({
-          version: grant.policy_version,
-          allowedFields: [...allowed],
-          retainExactPayload: false,
-        }),
-      ],
-      client,
+      db
+        .insertInto("ai_disclosure_records")
+        .values({
+          grant_id: grantId,
+          job_id: jobId,
+          route: "openai-api",
+          mode: grant.mode,
+          purpose: grant.purpose,
+          field_manifest_json: jsonb(preview.fieldManifest),
+          disclosure_units_json: jsonb(preview.disclosureUnits),
+          payload_sha256: preview.payloadSha256,
+          payload_bytes: preview.payloadBytes,
+          reserved_output_tokens: outputTokens,
+          reserved_cost_micros: costMicros,
+          status: "authorized",
+          policy_snapshot_json: jsonb({
+            version: grant.policy_version,
+            allowedFields: [...allowed],
+            retainExactPayload: false,
+          }),
+        })
+        .returningAll(),
     );
     if (!record)
       throw new Error("ai_disclosure_records insert returned no row");
-    await client.query(
-      `UPDATE ai_disclosure_grants SET used_requests=used_requests+1,used_input_characters=used_input_characters+$2,used_output_tokens=used_output_tokens+$3,used_cost_micros=used_cost_micros+$4,updated_at=NOW() WHERE id=$1`,
-      [grantId, preview.inputCharacters, outputTokens, costMicros],
-    );
+    await db
+      .updateTable("ai_disclosure_grants")
+      .set((eb) => ({
+        used_requests: eb("used_requests", "+", 1),
+        used_input_characters: sql<string>`used_input_characters + ${preview.inputCharacters}`,
+        used_output_tokens: sql<string>`used_output_tokens + ${outputTokens}`,
+        used_cost_micros: sql<string>`used_cost_micros + ${costMicros}`,
+        updated_at: sql<Date>`NOW()`,
+      }))
+      .where("id", "=", grantId)
+      .execute();
     return record;
   });
 }
@@ -228,20 +260,21 @@ export async function updateDisclosureRecord(
   id: string,
   patch: DisclosureRecordPatch,
 ): Promise<AiDisclosureRecordRow | undefined> {
-  return queryOne(
+  return checkedRow(
     aiDisclosureRecordRowSchema,
-    `UPDATE ai_disclosure_records SET status=$2,actual_input_tokens=$3,actual_output_tokens=$4,actual_cost_micros=$5,provider_request_id=$6,error_code=$7,
-       completed_at=CASE WHEN $2 IN ('completed','failed','cancelled','blocked') THEN NOW() ELSE NULL END
-       WHERE id=$1 RETURNING *`,
-    [
-      id,
-      patch.status,
-      patch.inputTokens ?? null,
-      patch.outputTokens ?? null,
-      patch.costMicros ?? null,
-      patch.providerRequestId ?? null,
-      patch.errorCode ?? null,
-    ],
+    db
+      .updateTable("ai_disclosure_records")
+      .set({
+        status: patch.status,
+        actual_input_tokens: patch.inputTokens ?? null,
+        actual_output_tokens: patch.outputTokens ?? null,
+        actual_cost_micros: patch.costMicros ?? null,
+        provider_request_id: patch.providerRequestId ?? null,
+        error_code: patch.errorCode ?? null,
+        completed_at: sql<Date | null>`CASE WHEN ${patch.status}::text IN ('completed','failed','cancelled','blocked') THEN NOW() ELSE NULL END`,
+      })
+      .where("id", "=", id)
+      .returningAll(),
   );
 }
 
@@ -249,10 +282,15 @@ export async function findUncertainDisclosure(
   jobId: string,
 ): Promise<{ id: string } | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       uuidIdRowSchema,
-      `SELECT id FROM ai_disclosure_records WHERE job_id=$1 AND status='sent' ORDER BY created_at DESC LIMIT 1`,
-      [jobId],
+      db
+        .selectFrom("ai_disclosure_records")
+        .select("id")
+        .where("job_id", "=", jobId)
+        .where("status", "=", "sent")
+        .orderBy("created_at", "desc")
+        .limit(1),
     )) ?? null
   );
 }

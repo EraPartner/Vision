@@ -97,6 +97,29 @@ describe.skipIf(!hasTestDatabase())(
       );
     });
 
+    it("enforces case-insensitive symbol uniqueness and updates whitelisted fields", async () => {
+      const symbol = `UNQ${process.pid}`;
+      const id = await create({ symbol: symbol.toLowerCase() });
+      expect((await investmentRepository.getById(asInvestmentId(id)))?.symbol).toBe(symbol);
+
+      await expect(create({ symbol: ` ${symbol.toLowerCase()} ` })).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+        message: "symbol must be unique",
+      });
+
+      const updated = await investmentRepository.update(asInvestmentId(id), {
+        symbol,
+        notes: "kept",
+        not_a_column: "ignored",
+      });
+      expect(updated).toMatchObject({ id, symbol, notes: "kept" });
+
+      const other = await create();
+      await expect(
+        investmentRepository.update(asInvestmentId(other), { symbol }),
+      ).rejects.toMatchObject({ message: "symbol must be unique" });
+    });
+
     it("updates one price, bulk prices, and deletes", async () => {
       const first = await create();
       const second = await create();

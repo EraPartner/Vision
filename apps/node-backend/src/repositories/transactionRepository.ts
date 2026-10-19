@@ -15,12 +15,12 @@ import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
  * mind that `amount`/`balance` are pg NUMERIC (strings) and `date` is a `Date`.
  */
 
-import {
-  query,
-  queryPrepared,
-  withTransaction,
-} from "../database/connection.ts";
-import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { queryPrepared, withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
+import { checkRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
   enrichedTransactionDbRowSchema,
@@ -48,7 +48,6 @@ import type {
 } from "../database/rows/ledger.ts";
 import { sanitizeUpdateFields } from "../lib/validation.ts";
 import { buildTransactionWhere } from "../lib/filterBuilder.ts";
-import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { accountRepository } from "./accountRepository.ts";
 import { lockAccountsForLedgerMutation } from "./accountLifecycleLock.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
@@ -174,7 +173,7 @@ export interface TransactionFilters {
 // `acct` carries the canonical account label (ADR-088): read paths derive
 // `bank_account` from accounts.name over the FK — see ACCOUNT_LABEL_SQL —
 // so nothing here depends on the retired string column, which no longer exists.
-const TRANSACTION_JOINS = `
+const TRANSACTION_JOINS = sql`
   LEFT JOIN recipients r ON t.recipient_id = r.id
   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
   LEFT JOIN categories c ON t.category_id = c.id
@@ -188,7 +187,7 @@ const TRANSACTION_JOINS = `
 // keeps the LAST duplicate field), which both survives the out-of-band column
 // drop and stays byte-identical pre-drop under the dual-write parity
 // invariant (sync trigger + rename propagation keep string == accounts.name).
-const ACCOUNT_LABEL_SQL = "acct.name AS bank_account";
+const ACCOUNT_LABEL_SQL = sql`acct.name AS bank_account`;
 
 // Reduced join set for count-only queries over a buildTransactionWhere clause.
 // `r` is the sole join alias that builder's predicates reference (recipientName's
@@ -198,7 +197,7 @@ const ACCOUNT_LABEL_SQL = "acct.name AS bank_account";
 // categories.id, accounts.id), so each matches at most one row and none can drop
 // or duplicate a transaction. Keeping `r` means a filter that DOES reference an
 // unjoined alias fails loudly at the database rather than silently miscounting.
-const COUNT_JOINS = `
+const COUNT_JOINS = sql`
   LEFT JOIN recipients r ON t.recipient_id = r.id
 `;
 
@@ -227,11 +226,11 @@ export function clearTransactionCountCache(): void {
 }
 
 function getCachedTransactionCount(
-  sql: string,
-  params: unknown[],
+  countQuery: RawBuilder<unknown>,
 ): Promise<number> {
   const now = Date.now();
-  const key = JSON.stringify([sql, params]);
+  const compiled = compileQuery(countQuery);
+  const key = JSON.stringify([compiled.sql, compiled.parameters]);
   const cached = transactionCountCache.get(key);
   // A pending full count remains the single-flight authority regardless of
   // how long PostgreSQL needs. The short TTL starts only after it resolves.
@@ -252,10 +251,9 @@ function getCachedTransactionCount(
     if (resolvedKey) transactionCountCache.delete(resolvedKey);
   }
 
-  const promise: Promise<number> = queryRows(
+  const promise: Promise<number> = checkedRows(
     transactionTotalRowSchema,
-    sql,
-    params,
+    countQuery,
   )
     .then((rows) => {
       const entry = transactionCountCache.get(key);
@@ -283,8 +281,7 @@ function getCachedTransactionCount(
 // (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
 // getById/create paths resolve categories identically to the list paths — an
 // alias recipient must not show categorized in lists but uncategorized on GET.
-const EFFECTIVE_CATEGORY_ID_SQL =
-  "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)";
+const EFFECTIVE_CATEGORY_ID_SQL = sql`COALESCE(t.category_id, r.default_category_id, pr.default_category_id)`;
 // Displayed name for exactly the category EFFECTIVE_CATEGORY_ID_SQL resolves,
 // so the two can never denote different categories. The branch order therefore
 // mirrors that COALESCE: own (c) → recipient default (rc) → primary-recipient
@@ -294,20 +291,23 @@ const EFFECTIVE_CATEGORY_ID_SQL =
 // surfaces, which follow the id, then disagreed with this list's label.
 // (The same CASE is inlined at the sort-column map and in getAll /
 // getAllWithCount below; all four copies share this order.)
-const CATEGORY_NAME_SQL = `CASE
+const CATEGORY_NAME_SQL = sql`CASE
                WHEN c.id IS NOT NULL THEN c.path_name
                WHEN rc.id IS NOT NULL THEN rc.path_name
                WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END`;
-const RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
+const RECIPIENT_NAME_SQL = sql`COALESCE(pr.name, r.name)`;
 
 /** Carry stamped balances over the same filtered rows used by the list. */
-function runningBalanceCtes(where: string, joins: string): string {
+function runningBalanceCtes(
+  where: RawBuilder<unknown>,
+  joins: RawBuilder<unknown>,
+): RawBuilder<unknown> {
   // Same identity as accountBalanceSql's daily series: cumulative amount plus
   // the latest stamp's (balance - cumulative amount). A zero-amount opening
   // row resets the balance, and later unstamped rows advance it normally.
-  return `
+  return sql`
     ledger_amounts AS (
       SELECT t.id, t.date, t.account_id, ${bankChronologySql("t")} AS chronology,
              COALESCE(t.currency, 'EUR') AS currency, t.balance,
@@ -329,52 +329,101 @@ function runningBalanceCtes(where: string, joins: string): string {
     )`;
 }
 
-// Stamped-balance date range per account, keyed on the ORIGINAL account_id —
-// the account-merge guard (§1 F2) must read this before the repoint.
-const STAMP_RANGES_SQL = `
-  SELECT account_id,
-         to_char(MIN(date), 'YYYY-MM-DD') AS min_date,
-         to_char(MAX(date), 'YYYY-MM-DD') AS max_date
-  FROM transactions
-  WHERE account_id = ANY($1::int[]) AND is_active = true AND balance IS NOT NULL
-  GROUP BY account_id`;
+/** Run a built query on the caller's transaction client. */
+async function runOn(client: QueryRunner, builder: BuiltQuery) {
+  const compiled = compileQuery(builder);
+  return client.query(compiled.sql, [...compiled.parameters]);
+}
 
-// Opening-balance anchors per account, keyed on the ORIGINAL account_id — the
-// account-merge collision guard must read this before the repoint. Not filtered
-// on is_active: `uq_transactions_opening_anchor` is
-// (account_id, currency) WHERE transfer_source = 'opening' with no is_active
-// predicate, so a deactivated anchor still collides.
-const OPENING_ANCHORS_SQL = `
-  SELECT account_id, currency
-  FROM transactions
-  WHERE account_id = ANY($1::int[]) AND transfer_source = 'opening'`;
+/**
+ * The enriched single-row projection (shared fragments) over `source`, a
+ * `transactions`-shaped relation aliased `t`.
+ */
+function enrichedSelect(source: RawBuilder<unknown>) {
+  return sql`
+    SELECT t.*,
+           ${ACCOUNT_LABEL_SQL},
+           ${RECIPIENT_NAME_SQL} AS recipient_name,
+           ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+           ${CATEGORY_NAME_SQL} AS category_name
+    FROM ${source} t
+    ${TRANSACTION_JOINS}
+  `;
+}
 
-// Mark one leg of a transfer pair (SIMP-50). The `auto` variant guards against
-// clobbering a concurrent manual mark or already-paired row; the `manual`
-// variant is unconditional (the caller has already released prior peers).
-const MARK_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
-            WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`;
-const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1 AND (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'))`;
-// Undo a leg WE just auto-marked (guarded on the peer we set + source='auto') so
-// a half-applied pair is never committed when the sibling leg's guarded UPDATE misses.
-const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-            WHERE id = $1 AND transfer_peer_id = $2 AND transfer_source = 'auto'`;
+function enrichedById(id: TransactionId) {
+  return sql`${enrichedSelect(sql.id("transactions"))} WHERE t.id = ${id}`;
+}
 
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
-const TRANSACTION_SORT_COLUMNS: Record<string, string> = {
-  date: "t.date",
-  amount: "t.amount",
-  memo: "t.memo",
-  recipient: "COALESCE(pr.name, r.name)",
-  category: `CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END`,
-  bank: "acct.name",
-  currency: "t.currency",
+const TRANSACTION_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
+  date: sql`t.date`,
+  amount: sql`t.amount`,
+  memo: sql`t.memo`,
+  recipient: RECIPIENT_NAME_SQL,
+  category: CATEGORY_NAME_SQL,
+  bank: sql`acct.name`,
+  currency: sql`t.currency`,
 };
+
+/**
+ * ORDER BY list for a list page. Falls back to date DESC when no valid sort is
+ * supplied. The secondary date DESC keeps rows stable when the primary column
+ * ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages cannot
+ * duplicate or skip same-date rows across separate query executions.
+ */
+function transactionOrderBy(
+  sortBy: string | null | undefined,
+  sortDir: string | null | undefined,
+): RawBuilder<unknown> {
+  const sortCol =
+    sortBy && Object.hasOwn(TRANSACTION_SORT_COLUMNS, sortBy)
+      ? TRANSACTION_SORT_COLUMNS[sortBy]
+      : undefined;
+  if (!sortCol) return sql`t.date DESC, t.id DESC`;
+  const direction = sortDir === "asc" ? sql`ASC` : sql`DESC`;
+  return sql`${sortCol} ${direction}, t.date DESC, t.id DESC`;
+}
+
+/**
+ * One page of enriched list rows over a buildTransactionWhere predicate.
+ *
+ * The running balance is partitioned by account and currency: adding unlike
+ * currencies is never a meaningful ledger balance. The window is evaluated
+ * over the full filtered set, before LIMIT/OFFSET, so each currency balance
+ * stays correct across pages. Legacy NULL currency rows are treated as EUR
+ * consistently with the rest of the transaction API.
+ */
+function enrichedPage(
+  where: RawBuilder<unknown>,
+  {
+    includeBalance,
+    sortBy,
+    sortDir,
+    limit,
+    offset,
+  }: {
+    includeBalance: boolean;
+    sortBy: string | null | undefined;
+    sortDir: string | null | undefined;
+    limit: number;
+    offset: number;
+  },
+): RawBuilder<unknown> {
+  return sql`
+      ${includeBalance ? sql`WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : sql``}
+      SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name${includeBalance ? sql`, lb.running_balance` : sql``}
+      FROM transactions t
+      ${TRANSACTION_JOINS}
+      ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
+      WHERE ${where}
+      ORDER BY ${transactionOrderBy(sortBy, sortDir)} LIMIT ${limit} OFFSET ${offset}
+    `;
+}
 
 /**
  * Attach the `tags` sub-collection to transaction rows in one extra round-trip,
@@ -385,13 +434,13 @@ async function attachTagsToRows(
 ): Promise<EnrichedTransactionRow[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const tagRows = await queryRows(
+  const tagRows = await checkedRows(
     transactionTagRowSchema,
-    `SELECT tt.transaction_id, tg.id, tg.slug, tg.color, tg.is_active
-     FROM transaction_tags tt
-     JOIN tags tg ON tg.id = tt.tag_id
-     WHERE tt.transaction_id = ANY($1::int[])`,
-    [ids],
+    db
+      .selectFrom("transaction_tags as tt")
+      .innerJoin("tags as tg", "tg.id", "tt.tag_id")
+      .select(["tt.transaction_id", "tg.id", "tg.slug", "tg.color", "tg.is_active"])
+      .where(sql<boolean>`tt.transaction_id = ANY(${ids}::int[])`),
   );
   const tagMap = new Map<TransactionId, TransactionTagRef[]>();
   for (const row of tagRows) {
@@ -423,23 +472,29 @@ async function setTransactionTags(
   transactionId: TransactionId,
   slugs: string[] | null | undefined,
 ): Promise<void> {
-  await client.query("DELETE FROM transaction_tags WHERE transaction_id = $1", [
-    transactionId,
-  ]);
+  await runOn(
+    client,
+    db.deleteFrom("transaction_tags").where("transaction_id", "=", transactionId),
+  );
   if (!slugs || slugs.length === 0) return;
-  const resolved = await queryRows(
+  const resolved = await checkedRows(
     tagKeyRowSchema,
-    "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
-    [slugs],
+    db
+      .selectFrom("tags")
+      .select("id")
+      .where(sql<boolean>`slug = ANY(${slugs}::text[])`)
+      .where("is_active", "=", true),
     client,
   );
   if (resolved.length === 0) return;
   const tagIds = resolved.map((r) => r.id);
-  await client.query(
-    `INSERT INTO transaction_tags (transaction_id, tag_id)
-     SELECT $1, unnest($2::int[])
-     ON CONFLICT DO NOTHING`,
-    [transactionId, tagIds],
+  await runOn(
+    client,
+    db
+      .insertInto("transaction_tags")
+      .columns(["transaction_id", "tag_id"])
+      .expression(sql`SELECT ${transactionId}, unnest(${tagIds}::int[])`)
+      .onConflict((oc) => oc.doNothing()),
   );
 }
 
@@ -466,11 +521,7 @@ export const transactionRepository = {
     includeBalance = false,
     tagSlugs = null,
   }: TransactionFilters = {}): Promise<EnrichedTransactionRow[]> {
-    const {
-      sql: where,
-      params,
-      nextParamIdx: p,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -484,47 +535,10 @@ export const transactionRepository = {
       active,
       tagSlugs,
     });
-
-    // Build ORDER BY — fall back to default date DESC when no valid sort supplied
-    // (String(): the old untyped lookup coerced a null sortBy the same way).
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    // Secondary sort by date DESC keeps rows stable when primary column has
-    // ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages can't
-    // duplicate or skip same-date rows across separate query executions.
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : `t.date DESC, t.id DESC`;
-
-    // Partition by account and currency: adding unlike currencies is never a
-    // meaningful ledger balance. The window is evaluated over the full filtered
-    // set, before LIMIT/OFFSET, so each currency balance stays correct across
-    // pages. Legacy NULL currency rows are treated as EUR consistently with the
-    // rest of the transaction API.
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
-
-    const sql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             COALESCE(pr.name, r.name) AS recipient_name,
-             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END AS category_name${runningBalanceCol}
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
-      WHERE ${where}
-      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
-    `;
-    params.push(limit, offset);
-
-    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    const rows = await checkedRows(
+      enrichedTransactionDbRowSchema,
+      enrichedPage(where, { includeBalance, sortBy, sortDir, limit, offset }),
+    );
     return attachTagsToRows(rows);
   },
 
@@ -552,7 +566,7 @@ export const transactionRepository = {
     amountSigned = false,
     tagSlugs = null,
   }: TransactionFilters = {}): Promise<number> {
-    const { sql: where, params } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -572,13 +586,14 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const sql = `
-      SELECT count(*) FROM transactions t
-      ${COUNT_JOINS}
-      WHERE ${where}
-    `;
-
-    const [row] = await queryRows(countRowSchema, sql, params);
+    const [row] = await checkedRows(
+      countRowSchema,
+      sql`
+        SELECT count(*) FROM transactions t
+        ${COUNT_JOINS}
+        WHERE ${where}
+      `,
+    );
     // COUNT(*) without GROUP BY always returns exactly one row.
     if (!row) throw new Error("transaction count returned no row");
     return parseInt(row.count, 10);
@@ -609,11 +624,7 @@ export const transactionRepository = {
     // category, the recipient default, AND the primary-recipient default. Joining
     // pr (and using EFFECTIVE_CATEGORY_ID_SQL) stops alias-recipient rows whose
     // primary carries a category from wrongly appearing in the queue.
-    const {
-      sql: where,
-      params,
-      nextParamIdx: paramIdx,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -630,19 +641,19 @@ export const transactionRepository = {
       amountSigned,
       tagSlugs,
     });
-    const sql = `
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             r.name AS recipient_name,
-             NULL AS category_name
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      WHERE ${where}
-        AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
-      ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-    params.push(limit, offset);
-
-    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    const rows = await checkedRows(
+      enrichedTransactionDbRowSchema,
+      sql`
+        SELECT t.*,
+               ${ACCOUNT_LABEL_SQL},
+               r.name AS recipient_name,
+               NULL AS category_name
+        FROM transactions t
+        ${TRANSACTION_JOINS}
+        WHERE ${where}
+          AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
+        ORDER BY t.date DESC, t.id DESC LIMIT ${limit} OFFSET ${offset}`,
+    );
     return attachTagsToRows(rows);
   },
 
@@ -682,11 +693,7 @@ export const transactionRepository = {
   }> {
     // Build the predicate once for both the page and its count. The queue is an
     // active-rows worklist, exactly as getUncategorised.
-    const {
-      sql: rowsWhere,
-      params: rowsParams,
-      nextParamIdx: rowsNextParam,
-    } = buildTransactionWhere({
+    const rowsWhere = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -704,31 +711,22 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const params = [...rowsParams];
-
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : "t.date DESC, t.id DESC";
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
+    const orderBy = transactionOrderBy(sortBy, sortDir);
+    const runningBalanceCol = includeBalance
+      ? sql`, lb.running_balance`
+      : sql``;
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join in both CTEs below.
-    const uncategorisedWhere = `${rowsWhere}
+    const uncategorisedWhere = sql`${rowsWhere}
       AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL`;
-    const uncategorisedJoins = `
+    const uncategorisedJoins = sql`
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
-    const limitParam = rowsNextParam;
-    const offsetParam = rowsNextParam + 1;
-    params.push(limit, offset);
-
-    const sql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},` : "WITH"} total_cte AS (
+    const pageQuery = sql`
+      ${includeBalance ? sql`WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},` : sql`WITH`} total_cte AS (
         SELECT count(*)::int AS total
         FROM transactions t
         ${COUNT_JOINS}
@@ -743,10 +741,10 @@ export const transactionRepository = {
                ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
         FROM transactions t
         ${uncategorisedJoins}
-        ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
+        ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
         WHERE ${uncategorisedWhere}
         ORDER BY ${orderBy}
-        LIMIT $${limitParam} OFFSET $${offsetParam}
+        LIMIT ${limit} OFFSET ${offset}
       )
       SELECT u.*,
              tc.total AS total_count
@@ -758,16 +756,16 @@ export const transactionRepository = {
     // The LEFT JOIN onto total_cte yields one all-NULL row when the page is
     // empty, so only `total_count` is guaranteed on every row; the page rows
     // are checked once that sentinel is filtered out.
-    const result = await query(sql, params);
+    const { rows: pageRows } = await pageQuery.execute(db);
     const [totalRow] = checkRows(
       uncategorisedTotalRowSchema,
-      result.rows.slice(0, 1),
+      pageRows.slice(0, 1),
     );
     // String(): total_count is COUNT(*)::int; parseInt coerced it the same way.
     const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
     const rows = checkRows(
       uncategorisedPageRowSchema,
-      result.rows.filter((row) => (row as { id: unknown }).id != null),
+      pageRows.filter((row) => (row as { id: unknown }).id != null),
     ).map(({ total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
@@ -777,17 +775,8 @@ export const transactionRepository = {
    * Get a single transaction by ID.
    */
   async getById(id: TransactionId): Promise<EnrichedTransactionRow | null> {
-    const sql = `
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             ${RECIPIENT_NAME_SQL} AS recipient_name,
-             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
-             ${CATEGORY_NAME_SQL} AS category_name
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      WHERE t.id = $1
-    `;
-    const result = await queryPrepared("tx_get_by_id", sql, [id]);
+    const compiled = compileQuery(enrichedById(id));
+    const result = await queryPrepared("tx_get_by_id", compiled.sql, compiled.parameters);
     const [row] = checkRows(enrichedTransactionDbRowSchema, result.rows);
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
@@ -814,20 +803,6 @@ export const transactionRepository = {
     // `balance` is intentionally absent: manual transactions leave it NULL so the
     // account balance (ADR-094) only ever anchors on imported, bank-stamped rows.
     // The CSV import pipeline writes `balance` via its own INSERT (commit.js).
-    const sql = `
-      WITH inserted AS (
-        INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
-        RETURNING *
-      )
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             ${RECIPIENT_NAME_SQL} AS recipient_name,
-             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
-             ${CATEGORY_NAME_SQL} AS category_name
-      FROM inserted t
-      ${TRANSACTION_JOINS}
-    `;
     const row = await withTransaction<EnrichedTransactionDbRow | null>(
       async (client) => {
         // Resolve inside this transaction so a failed create cannot leave an
@@ -840,21 +815,21 @@ export const transactionRepository = {
             );
           }
         }
-        const [inserted] = await queryRows(
+        // Default currency to EUR rather than NULL: it is NOT NULL at the DB
+        // level (migration 0046) and the read layer already coalesces missing → EUR.
+        const inserted = await checkedRow(
           enrichedTransactionDbRowSchema,
-          sql,
-          [
-            transaction_date,
-            accountId,
-            recipient_id,
-            amount,
-            memo ? memo.toUpperCase() : null,
-            // Default to EUR rather than NULL: currency is NOT NULL at the DB level
-            // (migration 0046) and the read layer already coalesces missing → EUR.
-            currency ? currency.toUpperCase() : "EUR",
-            category_id,
-            comment,
-          ],
+          sql`
+            WITH inserted AS (
+              INSERT INTO transactions (date, account_id, recipient_id, amount, memo, currency, category_id, comment, is_active)
+              VALUES (${transaction_date}, ${accountId}, ${recipient_id}, ${amount},
+                      ${memo ? memo.toUpperCase() : null},
+                      ${currency ? currency.toUpperCase() : "EUR"},
+                      ${category_id}, ${comment}, true)
+              RETURNING *
+            )
+            ${enrichedSelect(sql.id("inserted"))}
+          `,
           client,
         );
         if (!inserted) return null;
@@ -905,11 +880,7 @@ export const transactionRepository = {
     rows: EnrichedTransactionRow[];
     total: number;
   }> {
-    const {
-      sql: where,
-      params,
-      nextParamIdx: p,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -929,18 +900,6 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    // t.id DESC is the unique final tiebreaker — without it LIMIT/OFFSET pages
-    // can duplicate or skip same-date rows across separate query executions.
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : `t.date DESC, t.id DESC`;
-
-    // Partition by account and currency — see getAll for the rationale.
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
-
     // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window
     // function forced the planner to fully materialize + sort the whole filtered
     // 6-way join before LIMIT on every page (paid even on the unfiltered page-1
@@ -950,30 +909,14 @@ export const transactionRepository = {
     // byte-identical: it uses the same WHERE and retains its sole referenced
     // join (`r`); the omitted LEFT JOINs target primary keys and therefore
     // cannot drop or multiply transaction rows.
-    const dataSql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             COALESCE(pr.name, r.name) AS recipient_name,
-             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END AS category_name${runningBalanceCol}
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
-      WHERE ${where}
-      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
-    `;
-    const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`;
-
-    const dataParams = [...params, limit, offset];
     const [rows, total] = await Promise.all([
-      queryRows(enrichedTransactionDbRowSchema, dataSql, dataParams),
-      getCachedTransactionCount(countSql, params),
+      checkedRows(
+        enrichedTransactionDbRowSchema,
+        enrichedPage(where, { includeBalance, sortBy, sortDir, limit, offset }),
+      ),
+      getCachedTransactionCount(
+        sql`SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`,
+      ),
     ]);
     return { rows: await attachTagsToRows(rows), total };
   },
@@ -1005,20 +948,6 @@ export const transactionRepository = {
       sanitized.account_id = targetAccountId;
     }
 
-    // Same 3-level enrichment as getById/getAll/create (shared fragments): the
-    // update response must not disagree with an immediately-following GET on
-    // alias-recipient rows categorised via their primary's default.
-    const fetchSql = `
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             ${RECIPIENT_NAME_SQL} AS recipient_name,
-             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
-             ${CATEGORY_NAME_SQL} AS category_name
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      WHERE t.id = $1
-    `;
-
     const row = await withTransaction<EnrichedTransactionDbRow | null>(
       async (client) => {
         // Resolve the compatibility label on this connection. A missing target
@@ -1027,30 +956,29 @@ export const transactionRepository = {
           await lockAccountsForLedgerMutation(client, [id], targetAccountId);
         }
         await stampAccountIdForUpdate(sanitized, client);
-        const {
-          clauses: setClauses,
-          params: updateParams,
-          nextIdx: paramIdx,
-        } = buildSetClauses(sanitized, {
-          quote: true,
-          mapColumn: (key) => (key === "transaction_date" ? "date" : key),
-        });
+        // Columns are whitelisted by sanitizeUpdateFields; undefined is skipped.
+        const setClauses = Object.entries(sanitized)
+          .filter(([, value]) => value !== undefined)
+          .map(
+            ([key, value]) =>
+              sql`${sql.id(key === "transaction_date" ? "date" : key)} = ${value}`,
+          );
 
         if (setClauses.length > 0) {
-          setClauses.push(`updated_at = NOW()`);
-          updateParams.push(id);
-          const updateSql = `
-          UPDATE transactions SET ${setClauses.join(", ")}
-          WHERE id = $${paramIdx} RETURNING id
-        `;
-          const res = await client.query(updateSql, updateParams);
+          const res = await runOn(
+            client,
+            sql`
+              UPDATE transactions SET ${sql.join(setClauses)}, updated_at = NOW()
+              WHERE id = ${id} RETURNING id
+            `,
+          );
           if (!res.rows[0]) return null;
         } else {
           // Tags-only or empty PATCH: probe existence first. Otherwise the tag
           // junction INSERT would expose a raw FK error instead of the usual 404.
-          const exists = await client.query(
-            "SELECT 1 FROM transactions WHERE id = $1",
-            [id],
+          const exists = await runOn(
+            client,
+            db.selectFrom("transactions").select("id").where("id", "=", id),
           );
           if (!exists.rows[0]) return null;
         }
@@ -1058,10 +986,12 @@ export const transactionRepository = {
         if (tags !== undefined) {
           await setTransactionTags(client, id, tags ?? []);
         }
-        const [fetched] = await queryRows(
+        // Same 3-level enrichment as getById/getAll/create (shared fragments):
+        // the update response must not disagree with an immediately-following
+        // GET on alias-recipient rows categorised via their primary's default.
+        const fetched = await checkedRow(
           enrichedTransactionDbRowSchema,
-          fetchSql,
-          [id],
+          enrichedById(id),
           client,
         );
         return fetched ?? null;
@@ -1082,7 +1012,10 @@ export const transactionRepository = {
     const deleted = await withTransaction(async (client) => {
       await lockAccountsForLedgerMutation(client, [id]);
       await protectPlannedExecutions([id]);
-      const result = await client.query("DELETE FROM transactions WHERE id = $1", [id]);
+      const result = await runOn(
+        client,
+        db.deleteFrom("transactions").where("id", "=", id),
+      );
       return (result.rowCount ?? 0) > 0;
     });
     if (deleted) clearTransactionCountCache();
@@ -1099,27 +1032,37 @@ export const transactionRepository = {
   }: {
     sinceDate: string;
   }): Promise<UnlinkedTransactionRow[]> {
-    return queryRows(
+    return checkedRows(
       unlinkedTransactionRowSchema,
-      `SELECT t.id,
-              t.recipient_id,
-              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id,
-              t.amount,
-              t.date AS transaction_date,
-              t.currency,
-              t.memo,
-              r.name AS recipient_name
-         FROM transactions t
-         LEFT JOIN recipients r ON t.recipient_id = r.id
-        WHERE t.is_active = true
-          AND t.recipient_id IS NOT NULL
-          AND t.date >= $1
-          AND NOT EXISTS (
-            SELECT 1 FROM planned_transaction_executions pte
-             WHERE pte.executed_transaction_id = t.id
-          )
-        ORDER BY t.date DESC, t.id DESC`,
-      [sinceDate],
+      db
+        .selectFrom("transactions as t")
+        .leftJoin("recipients as r", "t.recipient_id", "r.id")
+        .select([
+          "t.id",
+          "t.recipient_id",
+          sql<number>`COALESCE(r.primary_recipient_id, t.recipient_id)`.as(
+            "recipient_cluster_id",
+          ),
+          "t.amount",
+          "t.date as transaction_date",
+          "t.currency",
+          "t.memo",
+          "r.name as recipient_name",
+        ])
+        .where("t.is_active", "=", true)
+        .where("t.recipient_id", "is not", null)
+        .where(sql<boolean>`t.date >= ${sinceDate}`)
+        .where(({ not, exists, selectFrom }) =>
+          not(
+            exists(
+              selectFrom("planned_transaction_executions as pte")
+                .select(sql<number>`1`.as("one"))
+                .whereRef("pte.executed_transaction_id", "=", "t.id"),
+            ),
+          ),
+        )
+        .orderBy("t.date", "desc")
+        .orderBy("t.id", "desc"),
     );
   },
 
@@ -1140,7 +1083,20 @@ export const transactionRepository = {
   async getStampedDateRangesByAccount(
     accountIds: AccountId[],
   ): Promise<StampedDateRangeRow[]> {
-    return queryRows(stampedDateRangeRowSchema, STAMP_RANGES_SQL, [accountIds]);
+    return checkedRows(
+      stampedDateRangeRowSchema,
+      db
+        .selectFrom("transactions")
+        .select([
+          "account_id",
+          sql<string>`to_char(MIN(date), 'YYYY-MM-DD')`.as("min_date"),
+          sql<string>`to_char(MAX(date), 'YYYY-MM-DD')`.as("max_date"),
+        ])
+        .where(sql<boolean>`account_id = ANY(${accountIds}::int[])`)
+        .where("is_active", "=", true)
+        .where("balance", "is not", null)
+        .groupBy("account_id"),
+    );
   },
 
   /**
@@ -1153,7 +1109,17 @@ export const transactionRepository = {
   async getOpeningAnchorsByAccount(
     accountIds: AccountId[],
   ): Promise<OpeningAnchorRow[]> {
-    return queryRows(openingAnchorRowSchema, OPENING_ANCHORS_SQL, [accountIds]);
+    // Not filtered on is_active: `uq_transactions_opening_anchor` is
+    // (account_id, currency) WHERE transfer_source = 'opening' with no
+    // is_active predicate, so a deactivated anchor still collides.
+    return checkedRows(
+      openingAnchorRowSchema,
+      db
+        .selectFrom("transactions")
+        .select(["account_id", "currency"])
+        .where(sql<boolean>`account_id = ANY(${accountIds}::int[])`)
+        .where("transfer_source", "=", "opening"),
+    );
   },
 
   /**
@@ -1165,11 +1131,12 @@ export const transactionRepository = {
     targetId: AccountId,
     sourceIds: AccountId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
-      [targetId, sourceIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ account_id: targetId })
+      .where(sql<boolean>`account_id = ANY(${sourceIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -1181,13 +1148,12 @@ export const transactionRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE transactions
-          SET recipient_id = $1
-        WHERE recipient_id = ANY($2::int[])`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ recipient_id: primaryId })
+      .where(sql<boolean>`recipient_id = ANY(${aliasIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   // ---------------------------------------------------------------------------
@@ -1196,28 +1162,28 @@ export const transactionRepository = {
 
   /** Return only mutually unique pairs; directional probes stop at two matches. */
   async listUniqueTransferPairs(windowDays: number): Promise<TransferCandidatePairRow[]> {
-    return queryRows(transferCandidatePairRowSchema, `
+    return checkedRows(transferCandidatePairRowSchema, sql`
       SELECT a.id AS "outId", first_match.id AS "inId"
       FROM transactions a
       CROSS JOIN LATERAL (
         SELECT min(candidate.id) AS id, count(*) AS n
-        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b")} LIMIT 2) candidate
+        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b", windowDays)} LIMIT 2) candidate
       ) first_match
       JOIN transactions b ON b.id = first_match.id
       WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out")} = 1`, [windowDays]);
+        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out", windowDays)} = 1`);
   },
 
   /** Candidate edges are paged independently of the full-corpus uniqueness probes. */
   async listTransferSuggestionPairs(windowDays: number, after: [number, number], limit: number): Promise<TransferCandidatePairRow[]> {
-    return queryRows(transferCandidatePairRowSchema, `
+    return checkedRows(transferCandidatePairRowSchema, sql`
       SELECT a.id AS "outId", b.id AS "inId"
-      FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b")}
+      FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b", windowDays)}
       WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND (a.id, b.id) > ($2::int, $3::int)
-        AND (${candidateCount("a", "other_in")} = 2
-          OR ${candidateCount("b", "other_out")} = 2)
-      ORDER BY a.id, b.id LIMIT $4::int`, [windowDays, ...after, limit]);
+        AND (a.id, b.id) > (${after[0]}::int, ${after[1]}::int)
+        AND (${candidateCount("a", "other_in", windowDays)} = 2
+          OR ${candidateCount("b", "other_out", windowDays)} = 2)
+      ORDER BY a.id, b.id LIMIT ${limit}::int`);
   },
 
   /**
@@ -1227,12 +1193,13 @@ export const transactionRepository = {
    * NULL peer but are NOT reconciler pairs.
    */
   async releaseOrphanedTransfers(): Promise<void> {
-    await query(
-      `UPDATE transactions
-        SET is_transfer = false, transfer_source = NULL
-      WHERE is_transfer = true AND transfer_peer_id IS NULL
-        AND transfer_source IN ('auto', 'manual')`,
-    );
+    await db
+      .updateTable("transactions")
+      .set({ is_transfer: false, transfer_source: null })
+      .where("is_transfer", "=", true)
+      .where("transfer_peer_id", "is", null)
+      .where("transfer_source", "in", ["auto", "manual"])
+      .execute();
   },
 
   /**
@@ -1242,7 +1209,7 @@ export const transactionRepository = {
    */
   async releaseInvalidAutoTransferPairs(windowDays: number): Promise<void> {
     await withTransaction(async () => {
-      const invalid = `t.transfer_source IN ('auto', 'manual') AND t.transfer_peer_id IS NOT NULL
+      const invalid = sql<boolean>`t.transfer_source IN ('auto', 'manual') AND t.transfer_peer_id IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM transactions p
            WHERE p.id = t.transfer_peer_id
@@ -1256,7 +1223,7 @@ export const transactionRepository = {
              AND (t.transfer_source = 'manual' OR (
                p.amount = -t.amount
                AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
-               AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
+               AND p.date BETWEEN t.date - ${windowDays}::int AND t.date + ${windowDays}::int
              ))
              AND p.account_id IS DISTINCT FROM t.account_id
              AND p.account_id IS NOT NULL AND t.account_id IS NOT NULL
@@ -1264,28 +1231,38 @@ export const transactionRepository = {
         )`;
       // Discovery is unlocked. Never evaluate peer validity in the same statement
       // that waits on a writer: READ COMMITTED would retain a stale peer snapshot.
-      const discovered = await queryRows(
+      const discovered = await checkedRows(
         transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
-        `SELECT t.id, t.transfer_peer_id, t.transfer_source FROM transactions t
-         WHERE ${invalid} ORDER BY t.id LIMIT 250`,
-        [windowDays],
+        db
+          .selectFrom("transactions as t")
+          .select(["t.id", "t.transfer_peer_id", "t.transfer_source"])
+          .where(invalid)
+          .orderBy("t.id")
+          .limit(250),
       );
       if (discovered.length === 0) return;
       const ids = [...new Set(discovered.flatMap((row) =>
         row.transfer_peer_id === null ? [row.id] : [row.id, row.transfer_peer_id],
       ))].sort((a, b) => a - b);
-      const locked = await queryRows(transactionKeyRowSchema,
-        `SELECT id FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
-        [ids]);
+      const locked = await checkedRows(
+        transactionKeyRowSchema,
+        db
+          .selectFrom("transactions")
+          .select("id")
+          .where(sql<boolean>`id = ANY(${ids}::int[])`)
+          .orderBy("id")
+          .forUpdate(),
+      );
       // A separate statement gets a fresh snapshot after all waits. Repaired
       // pairs now pass validity; changed peers outside the locked set are deferred.
-      await query(
-        `UPDATE transactions t
-         SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-         WHERE t.id = ANY($2::int[]) AND t.transfer_peer_id = ANY($2::int[])
-           AND ${invalid}`,
-        [windowDays, locked.map((row) => row.id)],
-      );
+      const lockedIds = locked.map((row) => row.id);
+      await db
+        .updateTable("transactions as t")
+        .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
+        .where(sql<boolean>`t.id = ANY(${lockedIds}::int[])`)
+        .where(sql<boolean>`t.transfer_peer_id = ANY(${lockedIds}::int[])`)
+        .where(invalid)
+        .execute();
     });
   },
 
@@ -1297,13 +1274,21 @@ export const transactionRepository = {
   ): Promise<TransferSuggestionRow[]> {
     // bank_account is derived from accounts.name over the FK (ADR-088) so the
     // display label survives the out-of-band drop of the string column.
-    return queryRows(
+    return checkedRows(
       transferSuggestionRowSchema,
-      `SELECT t.id, t.date, t.amount, t.currency, acct.name AS bank_account, t.memo, t.recipient_id
-       FROM transactions t
-       LEFT JOIN accounts acct ON t.account_id = acct.id
-       WHERE t.id = ANY($1)`,
-      [ids],
+      db
+        .selectFrom("transactions as t")
+        .leftJoin("accounts as acct", "t.account_id", "acct.id")
+        .select([
+          "t.id",
+          "t.date",
+          "t.amount",
+          "t.currency",
+          "acct.name as bank_account",
+          "t.memo",
+          "t.recipient_id",
+        ])
+        .where(sql<boolean>`t.id = ANY(${ids})`),
     );
   },
 
@@ -1315,8 +1300,14 @@ export const transactionRepository = {
    * @returns rows affected (0 when the guard rejected the mark)
    */
   async markAutoTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
-    const result = await query(MARK_AUTO_LEG_SQL, [id, peerId]);
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ is_transfer: true, transfer_peer_id: peerId, transfer_source: "auto" })
+      .where("id", "=", id)
+      .where("is_transfer", "=", false)
+      .where("transfer_source", "is", null)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -1325,8 +1316,18 @@ export const transactionRepository = {
    * @returns rows affected
    */
   async markManualTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
-    const result = await query(MARK_MANUAL_LEG_SQL, [id, peerId]);
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ is_transfer: true, transfer_peer_id: peerId, transfer_source: "manual" })
+      .where("id", "=", id)
+      .where((eb) =>
+        eb.or([
+          eb("transfer_source", "is", null),
+          eb("transfer_source", "in", ["auto", "manual"]),
+        ]),
+      )
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -1337,8 +1338,14 @@ export const transactionRepository = {
    * @returns rows affected
    */
   async revertAutoTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
-    const result = await query(REVERT_AUTO_LEG_SQL, [id, peerId]);
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
+      .where("id", "=", id)
+      .where("transfer_peer_id", "=", peerId)
+      .where("transfer_source", "=", "auto")
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -1349,27 +1356,50 @@ export const transactionRepository = {
   ): Promise<
     Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active" | "transfer_source">[]
   > {
-    return queryRows(
+    return checkedRows(
       transferLegRowSchema,
-      `SELECT id, amount, account_id, is_active, transfer_source FROM transactions WHERE id = ANY($1) ORDER BY id FOR UPDATE`,
-      [ids],
+      db
+        .selectFrom("transactions")
+        .select(["id", "amount", "account_id", "is_active", "transfer_source"])
+        .where(sql<boolean>`id = ANY(${ids})`)
+        .orderBy("id")
+        .forUpdate(),
     );
   },
 
   /** Lock every endpoint the manual re-pair can read or release, in one order. */
   async lockTransferGraphForMark(ids: TransactionId[]) {
     const schema = transferLegRowSchema.extend(transferPeerPointerRowSchema.shape);
-    const discoverSql = `SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id
-      FROM transactions WHERE id = ANY($1::int[]) OR transfer_peer_id = ANY($1::int[])
-        OR id IN (SELECT transfer_peer_id FROM transactions WHERE id = ANY($1::int[]))
-      ORDER BY id LIMIT 501`;
-    const before = await queryRows(schema, discoverSql, [ids]);
+    const columns = [
+      "id",
+      "amount",
+      "account_id",
+      "is_active",
+      "transfer_source",
+      "transfer_peer_id",
+    ] as const;
+    const discover = db
+      .selectFrom("transactions")
+      .select(columns)
+      .where(
+        sql<boolean>`id = ANY(${ids}::int[]) OR transfer_peer_id = ANY(${ids}::int[])
+          OR id IN (SELECT transfer_peer_id FROM transactions WHERE id = ANY(${ids}::int[]))`,
+      )
+      .orderBy("id")
+      .limit(501);
+    const before = await checkedRows(schema, discover);
     if (before.length > 500) throw new ConflictError("Transfer graph is too large; review its links before retrying");
-    const locked = await queryRows(schema,
-      `SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id
-       FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
-      [before.map((row) => row.id)]);
-    const after = await queryRows(schema, discoverSql, [ids]);
+    const beforeIds = before.map((row) => row.id);
+    const locked = await checkedRows(
+      schema,
+      db
+        .selectFrom("transactions")
+        .select(columns)
+        .where(sql<boolean>`id = ANY(${beforeIds}::int[])`)
+        .orderBy("id")
+        .forUpdate(),
+    );
+    const after = await checkedRows(schema, discover);
     const signature = (rows: typeof before) => JSON.stringify(rows.map((row) => [row.id, row.transfer_peer_id, row.transfer_source]));
     if (signature(before) !== signature(locked) || signature(before) !== signature(after)) {
       throw new ConflictError("Transfer pairing changed; reload and retry");
@@ -1385,13 +1415,15 @@ export const transactionRepository = {
    * @returns rows released
    */
   async releaseTransferPeersOf(ids: TransactionId[], lockedIds: TransactionId[]): Promise<number> {
-    const result = await query(
-      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)
-          AND transfer_source IN ('auto', 'manual') AND id = ANY($2::int[])`,
-      [ids, lockedIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
+      .where(sql<boolean>`transfer_peer_id = ANY(${ids})`)
+      .where(sql<boolean>`id <> ALL(${ids})`)
+      .where("transfer_source", "in", ["auto", "manual"])
+      .where(sql<boolean>`id = ANY(${lockedIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -1401,12 +1433,24 @@ export const transactionRepository = {
   async lockTransferPairForUnmark(id: TransactionId): Promise<{ peer: TransactionId | undefined; peerPointsBack: boolean }> {
     // Discover without a lock, then acquire the complete known pair in one order.
     // If discovery became stale, reject instead of locking a newly found peer.
-    const discovered = await queryRows(transferPeerPointerRowSchema,
-      "SELECT transfer_peer_id, transfer_source FROM transactions WHERE id = $1", [id]);
+    const discovered = await checkedRows(
+      transferPeerPointerRowSchema,
+      db
+        .selectFrom("transactions")
+        .select(["transfer_peer_id", "transfer_source"])
+        .where("id", "=", id),
+    );
     const expectedPeer = discovered[0]?.transfer_peer_id ?? undefined;
     const ids = expectedPeer === undefined ? [id] : [id, expectedPeer];
-    const locked = await queryRows(transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
-      "SELECT id, transfer_peer_id, transfer_source FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE", [ids]);
+    const locked = await checkedRows(
+      transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
+      db
+        .selectFrom("transactions")
+        .select(["id", "transfer_peer_id", "transfer_source"])
+        .where(sql<boolean>`id = ANY(${ids}::int[])`)
+        .orderBy("id")
+        .forUpdate(),
+    );
     const target = locked.find((row) => row.id === id);
     if ((target?.transfer_peer_id ?? undefined) !== expectedPeer) {
       throw new ConflictError("Transfer pairing changed; reload and retry");
@@ -1425,12 +1469,14 @@ export const transactionRepository = {
    * Record a rejected pairing (sticky, per-pair — migration 0070).
    */
   async insertTransferDismissal(aId: TransactionId, bId: TransactionId): Promise<void> {
-    await query(
-      `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
-         VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
-         ON CONFLICT DO NOTHING`,
-      [aId, bId],
-    );
+    await db
+      .insertInto("transfer_dismissals")
+      .values({
+        txn_a_id: sql<TransactionId>`LEAST(${aId}::int, ${bId}::int)`,
+        txn_b_id: sql<TransactionId>`GREATEST(${aId}::int, ${bId}::int)`,
+      })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
   },
 
   /**
@@ -1439,12 +1485,18 @@ export const transactionRepository = {
    * @returns rows affected
    */
   async clearTransferMark(id: TransactionId): Promise<number> {
-    const result = await query(
-      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1
-        AND (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'))`,
-      [id],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("transactions")
+      .set({ is_transfer: false, transfer_peer_id: null, transfer_source: null })
+      .where("id", "=", id)
+      .where((eb) =>
+        eb.or([
+          eb("transfer_source", "is", null),
+          eb("transfer_source", "in", ["auto", "manual"]),
+        ]),
+      )
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   // ---------------------------------------------------------------------------
@@ -1456,14 +1508,16 @@ export const transactionRepository = {
     fingerprint: string | null | undefined,
   ): Promise<TransactionId | undefined> {
     if (version == null || !fingerprint) return undefined;
-    const rows = await queryRows(
+    const row = await checkedRow(
       transactionKeyRowSchema,
-      `SELECT id FROM transactions
-        WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
-        LIMIT 1`,
-      [version, fingerprint],
+      db
+        .selectFrom("transactions")
+        .select("id")
+        .where("dedup_fingerprint_version", "=", version)
+        .where("dedup_fingerprint", "=", fingerprint)
+        .limit(1),
     );
-    return rows[0]?.id ?? undefined;
+    return row?.id ?? undefined;
   },
 
   /**
@@ -1488,21 +1542,23 @@ export const transactionRepository = {
     accountId: AccountId | null;
     currency: CurrencyCode;
   }): Promise<number> {
-    const rows = await queryRows(
+    const row = await checkedRow(
       intCountRowSchema,
-      `SELECT COUNT(*)::int AS n
-         FROM transactions t
-        WHERE t.dedup_fingerprint IS NULL
-          AND t.is_active = true
-          AND t.date = $1
-          AND t.amount = $2
-          AND t.recipient_id IS NOT DISTINCT FROM $3::integer
-          AND COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = $4
-          AND t.account_id IS NOT DISTINCT FROM $5::integer
-          AND t.currency = $6`,
-      [date, amount, recipientId, memo, accountId, currency],
+      db
+        .selectFrom("transactions as t")
+        .select(sql<number>`COUNT(*)::int`.as("n"))
+        .where("t.dedup_fingerprint", "is", null)
+        .where("t.is_active", "=", true)
+        .where(sql<boolean>`t.date = ${date}`)
+        .where(sql<boolean>`t.amount = ${amount}`)
+        .where(sql<boolean>`t.recipient_id IS NOT DISTINCT FROM ${recipientId}::integer`)
+        .where(
+          sql<boolean>`COALESCE(BTRIM(t.memo, E' \\t\\n\\r\\f\\013'), '') = ${memo}`,
+        )
+        .where(sql<boolean>`t.account_id IS NOT DISTINCT FROM ${accountId}::integer`)
+        .where("t.currency", "=", currency),
     );
-    return nanToZero(Number(rows[0]?.n));
+    return nanToZero(Number(row?.n));
   },
 
   /**
@@ -1533,34 +1589,24 @@ export const transactionRepository = {
     dedupFingerprint,
     fingerprintVersion,
   }: ImportedTransactionInput): Promise<TransactionId | undefined> {
-    const rows = await queryRows(
+    // A template, not insertInto(): a NULL recipient or amount must reach the
+    // NOT NULL constraint so the caller's savepoint rejects just this row.
+    const row = await checkedRow(
       transactionKeyRowSchema,
-      `INSERT INTO transactions
-                (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
-                 import_batch_id, matched_pattern_id, source_record_hash,
-                 dedup_fingerprint, dedup_fingerprint_version, bank_sequence, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)
-             ON CONFLICT DO NOTHING
-             RETURNING id`,
-      [
-        date,
-        accountId ?? null,
-        recipientId,
-        categoryId,
-        amount,
-        memo,
-        currency,
-        balance,
-        comment,
-        importBatchId,
-        matchedPatternId,
-        sourceRecordHash ?? null,
-        dedupFingerprint ?? null,
-        fingerprintVersion ?? null,
-        bankSequence ?? null,
-      ],
+      sql`
+        INSERT INTO transactions
+          (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
+           import_batch_id, matched_pattern_id, source_record_hash,
+           dedup_fingerprint, dedup_fingerprint_version, bank_sequence, is_active)
+        VALUES (${date}, ${accountId ?? null}, ${recipientId}, ${categoryId}, ${amount},
+                ${memo}, ${currency}, ${balance}, ${comment}, ${importBatchId},
+                ${matchedPatternId}, ${sourceRecordHash ?? null}, ${dedupFingerprint ?? null},
+                ${fingerprintVersion ?? null}, ${bankSequence ?? null}, true)
+        ON CONFLICT DO NOTHING
+        RETURNING id
+      `,
     );
-    return rows[0]?.id ?? undefined;
+    return row?.id ?? undefined;
   },
 };
 

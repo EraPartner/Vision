@@ -11,9 +11,11 @@
  * re-running the same pair is a no-op, including after series completion.
  */
 
+import { sql } from "kysely";
 import { matchesTolerance } from "../lib/plannedMatching.ts";
 import plannedTransactionService from "./plannedTransactionService.ts";
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { db } from "../database/db.ts";
 import { nextOccurrenceYmd } from "../lib/calculations/recurrence.ts";
 import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
@@ -73,21 +75,21 @@ export async function executePlanned({
       throw new ConflictError("Planned transaction is inactive or complete");
     }
     // Lock the ledger row as well: deletion and edits must not race validation.
-    const {
-      rows: [transaction],
-    } = await query<{
-      currency: string;
-      amount: string;
-      transaction_date: Date;
-      recipient_cluster_id: number | null;
-      is_active: boolean;
-    }>(
-      `SELECT t.currency, t.amount, t.date AS transaction_date, t.is_active,
-          COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id
-        FROM transactions t LEFT JOIN recipients r ON r.id = t.recipient_id
-        WHERE t.id = $1 FOR UPDATE OF t`,
-      [executedTransactionId],
-    );
+    const transaction = await db
+      .selectFrom("transactions as t")
+      .leftJoin("recipients as r", "r.id", "t.recipient_id")
+      .select((eb) => [
+        "t.currency",
+        "t.amount",
+        "t.date as transaction_date",
+        "t.is_active",
+        eb.fn
+          .coalesce("r.primary_recipient_id", "t.recipient_id")
+          .as("recipient_cluster_id"),
+      ])
+      .where("t.id", "=", executedTransactionId)
+      .forUpdate("t")
+      .executeTakeFirst();
     if (!transaction) throw new NotFoundError("Transaction not found");
     if (!transaction.is_active) {
       throw new ConflictError("Executed transaction must be active");
@@ -101,11 +103,13 @@ export async function executePlanned({
       );
     }
     if (expectedOccurrence !== undefined) {
-      const linked = await query(
-        "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = $1 LIMIT 1",
-        [executedTransactionId],
-      );
-      if ((linked.rowCount ?? 0) > 0)
+      const linked = await db
+        .selectFrom("planned_transaction_executions")
+        .select(sql<number>`1`.as("linked"))
+        .where("executed_transaction_id", "=", executedTransactionId)
+        .limit(1)
+        .executeTakeFirst();
+      if (linked)
         throw new ConflictError(
           "Transaction is already linked to a planned payment",
         );

@@ -1,5 +1,6 @@
+import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   categoryActiveRowSchema,
   categoryMergeNodeRowSchema,
@@ -11,6 +12,7 @@ import {
 } from "../database/rows/catalog.ts";
 import type { CategoryNodeRow } from "../database/rows/catalog.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { asCategoryId } from "@vision/types/brands";
 import type { CategoryId } from "@vision/types/brands";
 
 export interface CategoryNode {
@@ -72,14 +74,70 @@ function mapNode(row: CategoryNodeRow | undefined): CategoryNode | null {
   };
 }
 
-const NODE_SELECT = `SELECT c.id,c.name,c.parent_id,p.ids,p.names,p.path_name,p.depth,
-  c.description,c.is_active,c.hierarchy_only,c.legacy_compatible
-  FROM categories c JOIN category_paths p ON p.id=c.id`;
+function selectNodes() {
+  return db
+    .selectFrom("categories as c")
+    .innerJoin("category_paths as p", "p.id", "c.id")
+    .select([
+      "c.id",
+      "c.name",
+      "c.parent_id",
+      "p.ids",
+      "p.names",
+      "p.path_name",
+      "p.depth",
+      "c.description",
+      "c.is_active",
+      "c.hierarchy_only",
+      "c.legacy_compatible",
+    ]);
+}
+
+async function readNode(id: CategoryId): Promise<CategoryNode | null> {
+  const row = await checkedRow(
+    categoryNodeRowSchema,
+    selectNodes().where("c.id", "=", id),
+  );
+  return mapNode(row);
+}
+
+/** Serialises hierarchy writes: one transaction-scoped advisory lock. */
+async function lockHierarchy(): Promise<void> {
+  await sql`SELECT pg_advisory_xact_lock(1128356178, 1)`.execute(db);
+}
+
+async function requireActiveParent(parentId: CategoryId): Promise<void> {
+  const parent = await checkedRow(
+    categoryActiveRowSchema,
+    db
+      .selectFrom("categories")
+      .select(["id", "is_active"])
+      .where("id", "=", parentId)
+      .forUpdate(),
+  );
+  if (!parent) throw invalid("Parent category does not exist");
+  if (!parent.is_active) throw invalid("An inactive category cannot be a parent");
+}
+
+async function upsertRootAlias(
+  general: string,
+  targetId: CategoryId,
+): Promise<void> {
+  await db
+    .insertInto("category_root_aliases")
+    .values({ general, target_category_id: targetId })
+    .onConflict((oc) =>
+      oc.column("general").doUpdateSet((eb) => ({
+        target_category_id: eb.ref("excluded.target_category_id"),
+      })),
+    )
+    .execute();
+}
 
 export async function listCategoryNodes(): Promise<CategoryNode[]> {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     categoryNodeRowSchema,
-    `${NODE_SELECT} ORDER BY p.names,c.id`,
+    selectNodes().orderBy(["p.names", "c.id"]),
   );
   return rows.map((row) => mapNode(row));
 }
@@ -87,12 +145,7 @@ export async function listCategoryNodes(): Promise<CategoryNode[]> {
 export async function getCategoryNode(
   id: CategoryId,
 ): Promise<CategoryNode | null> {
-  const row = await queryOne(
-    categoryNodeRowSchema,
-    `${NODE_SELECT} WHERE c.id=$1`,
-    [id],
-  );
-  return mapNode(row);
+  return readNode(id);
 }
 
 export async function createCategoryNode({
@@ -103,53 +156,45 @@ export async function createCategoryNode({
   const normalized = name.trim().toUpperCase();
   if (!normalized || normalized.length > 100)
     throw invalid("Category name must contain 1 to 100 characters");
-  return withTransaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
+  return withTransaction(async () => {
+    await lockHierarchy();
     if (parentId !== null) {
-      const parent = await queryOne(
-        categoryActiveRowSchema,
-        `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
-        [parentId],
-        client,
-      );
-      if (!parent) throw invalid("Parent category does not exist");
-      if (!parent.is_active)
-        throw invalid("An inactive category cannot be a parent");
+      await requireActiveParent(parentId);
     } else {
-      const reserved = (
-        await client.query(
-          "SELECT 1 FROM category_root_aliases WHERE general=$1 LIMIT 1",
-          [normalized],
-        )
-      ).rows[0];
+      const reserved = await db
+        .selectFrom("category_root_aliases")
+        .select(sql<number>`1`.as("reserved"))
+        .where("general", "=", normalized)
+        .limit(1)
+        .executeTakeFirst();
       if (reserved)
         throw conflict(
           "This root name is reserved by a legacy category redirect",
         );
     }
-    const { id } = requireRow(
-      await queryOne(
+    const nextId = requireRow(
+      await checkedRow(
         categoryNextIdRowSchema,
-        `SELECT nextval(pg_get_serial_sequence('categories','id')) AS id`,
-        [],
-        client,
+        sql`SELECT nextval(pg_get_serial_sequence('categories','id')) AS id`,
       ),
       "category nextval",
     );
+    // categories.id is a serial INTEGER, so the BIGINT nextval fits a number.
+    const id = asCategoryId(Number(nextId.id));
     try {
-      await client.query(
-        `INSERT INTO categories
-          (id,general,detail,name,parent_id,description,hierarchy_only,legacy_compatible)
-         VALUES ($1,$2,$3,$4,$5,$6,false,false)`,
-        [
+      await db
+        .insertInto("categories")
+        .values({
           id,
-          `__HIERARCHY_${id}`,
-          normalized,
-          normalized,
-          parentId,
+          general: `__HIERARCHY_${id}`,
+          detail: normalized,
+          name: normalized,
+          parent_id: parentId,
           description,
-        ],
-      );
+          hierarchy_only: false,
+          legacy_compatible: false,
+        })
+        .execute();
     } catch (error) {
       if (pgErrorCode(error) === "23505")
         throw conflict(
@@ -157,13 +202,7 @@ export async function createCategoryNode({
         );
       throw error;
     }
-    const created = await queryOne(
-      categoryNodeRowSchema,
-      `${NODE_SELECT} WHERE c.id=$1`,
-      [id],
-      client,
-    );
-    return mapNode(created);
+    return readNode(id);
   });
 }
 
@@ -171,13 +210,11 @@ export async function updateCategoryNode(
   id: CategoryId,
   { name, parentId, description, is_active: isActive }: CategoryNodePatch,
 ): Promise<CategoryNode | null> {
-  return withTransaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
-    const existing = await queryOne(
+  return withTransaction(async () => {
+    await lockHierarchy();
+    const existing = await checkedRow(
       categoryRowSchema,
-      `SELECT * FROM categories WHERE id=$1 FOR UPDATE`,
-      [id],
-      client,
+      db.selectFrom("categories").selectAll().where("id", "=", id).forUpdate(),
     );
     if (!existing) return null;
     if (name !== undefined && (!name.trim() || name.trim().length > 100))
@@ -185,42 +222,33 @@ export async function updateCategoryNode(
     const nextParent = parentId === undefined ? existing.parent_id : parentId;
     const nextName =
       name === undefined ? existing.name : name.trim().toUpperCase();
-    if (nextParent !== null) {
-      const parent = await queryOne(
-        categoryActiveRowSchema,
-        `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
-        [nextParent],
-        client,
-      );
-      if (!parent) throw invalid("Parent category does not exist");
-      if (!parent.is_active)
-        throw invalid("An inactive category cannot be a parent");
-    }
+    if (nextParent !== null) await requireActiveParent(nextParent);
     if (isActive === false) {
-      const activeChild = (
-        await client.query(
-          `SELECT id FROM categories WHERE parent_id=$1 AND is_active=true LIMIT 1`,
-          [id],
-        )
-      ).rows[0];
+      const activeChild = await db
+        .selectFrom("categories")
+        .select("id")
+        .where("parent_id", "=", id)
+        .where("is_active", "=", true)
+        .limit(1)
+        .executeTakeFirst();
       if (activeChild)
         throw conflict(
           "Deactivate or move active children before deactivating a parent",
         );
     }
     try {
-      await client.query(
-        `UPDATE categories
-         SET name=$2,parent_id=$3,description=$4,is_active=$5,updated_at=NOW()
-         WHERE id=$1`,
-        [
-          id,
-          nextName,
-          nextParent,
-          description === undefined ? existing.description : description,
-          isActive ?? existing.is_active,
-        ],
-      );
+      await db
+        .updateTable("categories")
+        .set({
+          name: nextName,
+          parent_id: nextParent,
+          description:
+            description === undefined ? existing.description : description,
+          is_active: isActive ?? existing.is_active,
+          updated_at: sql<Date>`NOW()`,
+        })
+        .where("id", "=", id)
+        .execute();
     } catch (error) {
       if (pgErrorCode(error) === "23505")
         throw conflict(
@@ -237,55 +265,41 @@ export async function updateCategoryNode(
         existing.parent_id === null &&
         (nextName !== existing.name || nextParent !== null)
       ) {
-        await client.query(
-          `INSERT INTO category_root_aliases (general,target_category_id)
-           VALUES ($1,$2) ON CONFLICT (general) DO UPDATE
-           SET target_category_id=EXCLUDED.target_category_id`,
-          [existing.name, id],
-        );
+        await upsertRootAlias(existing.name, id);
       }
       if (nextParent === null && nextName === existing.general) {
-        await client.query(
-          "DELETE FROM category_root_aliases WHERE general=$1 AND target_category_id=$2",
-          [existing.general, id],
-        );
+        await db
+          .deleteFrom("category_root_aliases")
+          .where("general", "=", existing.general)
+          .where("target_category_id", "=", id)
+          .execute();
       } else {
-        await client.query(
-          `INSERT INTO category_root_aliases (general,target_category_id)
-           VALUES ($1,$2) ON CONFLICT (general) DO UPDATE
-           SET target_category_id=EXCLUDED.target_category_id`,
-          [existing.general, id],
-        );
+        await upsertRootAlias(existing.general, id);
       }
     }
-    const updated = await queryOne(
-      categoryNodeRowSchema,
-      `${NODE_SELECT} WHERE c.id=$1`,
-      [id],
-      client,
-    );
-    return mapNode(updated);
+    return readNode(id);
   });
 }
 
 export async function deleteCategoryNode(id: CategoryId): Promise<boolean> {
-  return withTransaction(async (client) => {
-    const existing = (
-      await client.query(`SELECT id FROM categories WHERE id=$1 FOR UPDATE`, [
-        id,
-      ])
-    ).rows[0];
+  return withTransaction(async () => {
+    const existing = await db
+      .selectFrom("categories")
+      .select("id")
+      .where("id", "=", id)
+      .forUpdate()
+      .executeTakeFirst();
     if (!existing) return false;
-    const child = (
-      await client.query(
-        `SELECT id FROM categories WHERE parent_id=$1 LIMIT 1`,
-        [id],
-      )
-    ).rows[0];
+    const child = await db
+      .selectFrom("categories")
+      .select("id")
+      .where("parent_id", "=", id)
+      .limit(1)
+      .executeTakeFirst();
     if (child)
       throw conflict("Move or delete children before deleting their parent");
     try {
-      await client.query(`DELETE FROM categories WHERE id=$1`, [id]);
+      await db.deleteFrom("categories").where("id", "=", id).execute();
     } catch (error) {
       if (pgErrorCode(error) === "23503")
         throw conflict(
@@ -305,14 +319,23 @@ export async function mergeCategoryNodes(
   targetId: CategoryId,
 ): Promise<CategoryNode | null> {
   if (sourceId === targetId) throw invalid("Source and target must differ");
-  return withTransaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
-    const nodes = await queryRows(
+  return withTransaction(async () => {
+    await lockHierarchy();
+    const nodes = await checkedRows(
       categoryMergeNodeRowSchema,
-      `SELECT id,is_active,general,detail,legacy_compatible,hierarchy_only
-         FROM categories WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE`,
-      [[sourceId, targetId]],
-      client,
+      db
+        .selectFrom("categories")
+        .select([
+          "id",
+          "is_active",
+          "general",
+          "detail",
+          "legacy_compatible",
+          "hierarchy_only",
+        ])
+        .where("id", "in", [sourceId, targetId])
+        .orderBy("id")
+        .forUpdate(),
     );
     if (nodes.length !== 2) return null;
     if (!nodes.find((node) => node.id === targetId)?.is_active)
@@ -321,24 +344,25 @@ export async function mergeCategoryNodes(
     // row is the source.
     const source = nodes.find((node) => node.id === sourceId)!;
     const targetBelowSource =
-      (
-        await client.query(
-          `SELECT 1 FROM category_ancestors
-         WHERE category_id=$1 AND ancestor_id=$2 LIMIT 1`,
-          [targetId, sourceId],
-        )
-      ).rows.length > 0;
+      (await db
+        .selectFrom("category_ancestors")
+        .select(sql<number>`1`.as("found"))
+        .where("category_id", "=", targetId)
+        .where("ancestor_id", "=", sourceId)
+        .limit(1)
+        .executeTakeFirst()) !== undefined;
     if (targetBelowSource)
       throw invalid("Merge target cannot be inside the source subtree");
 
     try {
-      await client.query(
-        `UPDATE categories SET parent_id=$2 WHERE parent_id=$1`,
-        [sourceId, targetId],
-      );
-      const references = await queryRows(
+      await db
+        .updateTable("categories")
+        .set({ parent_id: targetId })
+        .where("parent_id", "=", sourceId)
+        .execute();
+      const references = await checkedRows(
         categoryReferenceRowSchema,
-        `SELECT ns.nspname AS schema_name, rel.relname AS table_name,
+        sql`SELECT ns.nspname AS schema_name, rel.relname AS table_name,
                   att.attname AS column_name
            FROM pg_constraint con
            JOIN pg_class rel ON rel.oid=con.conrelid
@@ -349,8 +373,6 @@ export async function mergeCategoryNodes(
              AND cardinality(con.conkey)=1
              AND con.conrelid <> 'categories'::regclass
              AND rel.relname NOT IN ('category_merge_aliases','category_root_aliases')`,
-        [],
-        client,
       );
       for (const ref of references) {
         if (ref.schema_name !== "public")
@@ -361,41 +383,40 @@ export async function mergeCategoryNodes(
           !identifier.test(ref.column_name)
         )
           throw conflict("Unsupported category reference identifier");
-        await client.query(
-          `UPDATE public."${ref.table_name}" SET "${ref.column_name}"=$2 WHERE "${ref.column_name}"=$1`,
-          [sourceId, targetId],
-        );
+        const column = sql.ref(ref.column_name);
+        await sql`UPDATE ${sql.table(`public.${ref.table_name}`)}
+          SET ${column}=${targetId} WHERE ${column}=${sourceId}`.execute(db);
       }
       // Retain redirects through chains such as A -> B -> C. These rows also
       // have category foreign keys, but handling them explicitly documents
       // the invariant and avoids relying on the generic reference discovery.
-      await client.query(
-        `UPDATE category_merge_aliases SET target_category_id=$2 WHERE target_category_id=$1`,
-        [sourceId, targetId],
-      );
-      await client.query(
-        `UPDATE category_root_aliases SET target_category_id=$2 WHERE target_category_id=$1`,
-        [sourceId, targetId],
-      );
+      await db
+        .updateTable("category_merge_aliases")
+        .set({ target_category_id: targetId })
+        .where("target_category_id", "=", sourceId)
+        .execute();
+      await db
+        .updateTable("category_root_aliases")
+        .set({ target_category_id: targetId })
+        .where("target_category_id", "=", sourceId)
+        .execute();
       if (source.legacy_compatible) {
-        await client.query(
-          `INSERT INTO category_merge_aliases (general,detail,target_category_id)
-           VALUES ($1,$2,$3)
-           ON CONFLICT (general,detail) DO UPDATE
-             SET target_category_id=EXCLUDED.target_category_id`,
-          [source.general, source.detail, targetId],
-        );
+        await db
+          .insertInto("category_merge_aliases")
+          .values({
+            general: source.general,
+            detail: source.detail,
+            target_category_id: targetId,
+          })
+          .onConflict((oc) =>
+            oc.columns(["general", "detail"]).doUpdateSet((eb) => ({
+              target_category_id: eb.ref("excluded.target_category_id"),
+            })),
+          )
+          .execute();
       }
-      if (source.hierarchy_only) {
-        await client.query(
-          `INSERT INTO category_root_aliases (general,target_category_id)
-           VALUES ($1,$2)
-           ON CONFLICT (general) DO UPDATE
-             SET target_category_id=EXCLUDED.target_category_id`,
-          [source.general, targetId],
-        );
-      }
-      await client.query(`DELETE FROM categories WHERE id=$1`, [sourceId]);
+      if (source.hierarchy_only) await upsertRootAlias(source.general, targetId);
+      await db.deleteFrom("categories").where("id", "=", sourceId).execute();
     } catch (error) {
       if (pgErrorCode(error) === "23505")
         throw conflict(
@@ -403,12 +424,6 @@ export async function mergeCategoryNodes(
         );
       throw error;
     }
-    const merged = await queryOne(
-      categoryNodeRowSchema,
-      `${NODE_SELECT} WHERE c.id=$1`,
-      [targetId],
-      client,
-    );
-    return mapNode(merged);
+    return readNode(targetId);
   });
 }

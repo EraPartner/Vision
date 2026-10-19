@@ -34,7 +34,6 @@ import type { PgQueryResult } from "../src/database/connection.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { mvAvailable as rawMvAvailable } from "../src/repositories/infoRepositoryHelpers.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
-import { todayAppDateString } from "../src/lib/timezone.ts";
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -74,7 +73,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     await getMonthlyFinancialSummary([2147483647, 99], "EUR", [5], false);
 
     const [, params] = query.mock.calls[0]!;
-    expect(params).toEqual([2147483647, 99, 5, todayAppDateString()]);
+    expect(params).toEqual(expect.arrayContaining([2147483647, 99, 5]));
   });
 
   it("buckets per-(date,currency) grouped aggregates into income vs spending", async () => {

@@ -5,8 +5,8 @@
  * (user_id, method_id, as_of_month).
  */
 
-import { query } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../database/db.ts";
 import { forecastAccuracyRowSchema } from "../database/rows/info.ts";
 import type { ForecastAccuracyRow } from "../database/rows/info.ts";
 
@@ -16,6 +16,17 @@ import type { ForecastAccuracyRow } from "../database/rows/info.ts";
  * sample.
  */
 export type AccuracyRow = ForecastAccuracyRow;
+
+const accuracyColumns = [
+  "user_id",
+  "method_id",
+  sql<string>`to_char(as_of_month, 'YYYY-MM')`.as("as_of_month"),
+  "mae",
+  "rmse",
+  "mape",
+  "sample_days",
+  "recorded_at",
+] as const;
 
 export interface AccuracyUpsert {
   userId: string;
@@ -40,18 +51,28 @@ async function upsert({
   mape,
   sampleDays,
 }: AccuracyUpsert): Promise<void> {
-  await query(
-    `INSERT INTO cashflow_forecast_accuracy
-            (user_id, method_id, as_of_month, mae, rmse, mape, sample_days, recorded_at)
-          VALUES ($1, $2, ($3 || '-01')::date, $4, $5, $6, $7, NOW())
-     ON CONFLICT (user_id, method_id, as_of_month) DO UPDATE
-        SET mae         = EXCLUDED.mae,
-            rmse        = EXCLUDED.rmse,
-            mape        = EXCLUDED.mape,
-            sample_days = EXCLUDED.sample_days,
-            recorded_at = NOW()`,
-    [userId, methodId, asOfMonth, mae, rmse, mape, sampleDays],
-  );
+  await db
+    .insertInto("cashflow_forecast_accuracy")
+    .values({
+      user_id: userId,
+      method_id: methodId,
+      as_of_month: sql<Date>`(${asOfMonth} || '-01')::date`,
+      mae,
+      rmse,
+      mape,
+      sample_days: sampleDays,
+      recorded_at: sql<Date>`NOW()`,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "method_id", "as_of_month"]).doUpdateSet((eb) => ({
+        mae: eb.ref("excluded.mae"),
+        rmse: eb.ref("excluded.rmse"),
+        mape: eb.ref("excluded.mape"),
+        sample_days: eb.ref("excluded.sample_days"),
+        recorded_at: sql<Date>`NOW()`,
+      })),
+    )
+    .execute();
 }
 
 /**
@@ -66,15 +87,15 @@ async function getHistory({
   methodId: string;
   limitMonths?: number;
 }): Promise<AccuracyRow[]> {
-  return queryRows(
+  return checkedRows(
     forecastAccuracyRowSchema,
-    `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
-            mae, rmse, mape, sample_days, recorded_at
-       FROM cashflow_forecast_accuracy
-      WHERE user_id = $1 AND method_id = $2
-      ORDER BY as_of_month DESC
-      LIMIT $3`,
-    [userId, methodId, limitMonths],
+    db
+      .selectFrom("cashflow_forecast_accuracy")
+      .select(accuracyColumns)
+      .where("user_id", "=", userId)
+      .where("method_id", "=", methodId)
+      .orderBy("as_of_month", "desc")
+      .limit(limitMonths),
   );
 }
 
@@ -86,15 +107,15 @@ async function getLatestByMethod({
 }: {
   userId: string;
 }): Promise<AccuracyRow[]> {
-  return queryRows(
+  return checkedRows(
     forecastAccuracyRowSchema,
-    `SELECT DISTINCT ON (method_id)
-            user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
-            mae, rmse, mape, sample_days, recorded_at
-       FROM cashflow_forecast_accuracy
-      WHERE user_id = $1
-      ORDER BY method_id, as_of_month DESC`,
-    [userId],
+    db
+      .selectFrom("cashflow_forecast_accuracy")
+      .distinctOn("method_id")
+      .select(accuracyColumns)
+      .where("user_id", "=", userId)
+      .orderBy("method_id")
+      .orderBy("as_of_month", "desc"),
   );
 }
 
@@ -109,16 +130,19 @@ async function getAllHistory({
   userId: string;
   limitMonths?: number;
 }): Promise<AccuracyRow[]> {
-  return queryRows(
+  return checkedRows(
     forecastAccuracyRowSchema,
-    `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
-            mae, rmse, mape, sample_days, recorded_at
-       FROM cashflow_forecast_accuracy
-      WHERE user_id = $1
-        AND as_of_month >=
-            (date_trunc('month', CURRENT_DATE) - make_interval(months => $2))::date
-      ORDER BY method_id, as_of_month ASC`,
-    [userId, limitMonths],
+    db
+      .selectFrom("cashflow_forecast_accuracy")
+      .select(accuracyColumns)
+      .where("user_id", "=", userId)
+      .where(
+        "as_of_month",
+        ">=",
+        sql<Date>`(date_trunc('month', CURRENT_DATE) - make_interval(months => ${limitMonths}))::date`,
+      )
+      .orderBy("method_id")
+      .orderBy("as_of_month", "asc"),
   );
 }
 

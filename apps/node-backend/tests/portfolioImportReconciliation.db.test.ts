@@ -1728,7 +1728,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
           waiting =
             (
               await pool.query(
-                "SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%SELECT id FROM accounts WHERE id = ANY%'",
+                "SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query ILIKE '%from \"accounts\" where \"id\" = ANY%'",
               )
             ).rows.length > 0;
           if (waiting) break;

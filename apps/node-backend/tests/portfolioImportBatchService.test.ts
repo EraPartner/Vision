@@ -304,7 +304,7 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
 
     expect(res).toEqual({ deleted: 1 });
     expect(query).toHaveBeenCalledWith(
-      "DELETE FROM transactions WHERE id = ANY($1::int[])",
+      expect.stringMatching(/delete from "?transactions"? where "?id"? = ANY/i),
       [[812]],
     );
     expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();

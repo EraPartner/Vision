@@ -2,8 +2,12 @@
  * Info sub-repository: category statistics and transaction summaries.
  */
 
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { queryPrepared } from "../database/connection.ts";
-import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { checkedRows, compileQuery, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
+import { checkRows } from "../database/rowContracts.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
 import {
   bankLabelRowSchema,
@@ -11,7 +15,6 @@ import {
   categoryPivotRowSchema,
   mvCategoryTotalsRowSchema,
 } from "../database/rows/info.ts";
-import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import {
   toDecimal,
   toNumber,
@@ -25,6 +28,10 @@ import {
   type UnconvertedTally,
 } from "../lib/unconvertedTally.ts";
 import {
+  andClauses,
+  exclusionClauses,
+} from "../lib/filterBuilder.ts";
+import {
   mvAvailable,
   mapRowsForAmountConversion,
   buildCategoryFromConvertedRows,
@@ -32,6 +39,7 @@ import {
 } from "./infoRepositoryHelpers.ts";
 import type { CategoryTotal } from "./infoRepositoryHelpers.ts";
 import { nanToZero } from "../lib/math.ts";
+import { asAccountId } from "@vision/types/brands";
 
 export interface CategoryPivotCell {
   categoryId: number | null;
@@ -65,6 +73,20 @@ function parseCountRow(rows: Array<{ count: string }>): number {
   return parseInt(row.count, 10);
 }
 
+/** Run a built query as the named prepared statement `name`. */
+async function prepared(name: string, builder: BuiltQuery) {
+  const { sql: text, parameters } = compileQuery(builder);
+  return queryPrepared(name, text, parameters);
+}
+
+/** One `count(*)` over active transactions. */
+function countActiveTransactions() {
+  return db
+    .selectFrom("transactions")
+    .select(sql<string>`count(*)`.as("count"))
+    .where("is_active", "=", true);
+}
+
 export const statisticsRepository = {
   /**
    * Category totals in `targetCurrency`. Rows without a stored rate are left
@@ -77,33 +99,26 @@ export const statisticsRepository = {
     unconverted: UnconvertedTally = createUnconvertedTally(),
   ): Promise<CategoryTotal[]> {
     const includeTransfers = await getIncludeTransfers();
-    const exclusion = buildExclusionClauses({
+    const exclusion = exclusionClauses({
       excludedCategoryIds: filters.excludedCategoryIds ?? [],
       excludedRecipientIds: filters.excludedRecipientIds ?? [],
-      startParamIdx: ancestorCategoryId === undefined ? 1 : 2,
     });
-    const params: unknown[] =
-      ancestorCategoryId === undefined
-        ? [...exclusion.params]
-        : [ancestorCategoryId, ...exclusion.params];
-    const clauses = exclusion.whereSql ? [exclusion.whereSql] : [];
-    if (filters.startDate) {
-      params.push(filters.startDate);
-      clauses.push(`t.date >= $${params.length}`);
-    }
-    if (filters.endDate) {
-      params.push(filters.endDate);
-      clauses.push(`t.date <= $${params.length}`);
-    }
-    const filterSql = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
+    const dateClauses: RawBuilder<unknown>[] = [];
+    if (filters.startDate) dateClauses.push(sql`t.date >= ${filters.startDate}`);
+    if (filters.endDate) dateClauses.push(sql`t.date <= ${filters.endDate}`);
+    const hasFilters = exclusion.active || dateClauses.length > 0;
+    const filterSql = sql`${exclusion.where} ${andClauses(dateClauses)}`;
+    const transferFilter = includeTransfers
+      ? sql``
+      : sql`AND t.is_transfer = false`;
 
     if (ancestorCategoryId !== undefined) {
       // Expand the effective category only once through the ancestry view. A
       // transaction assigned directly to the ancestor and one assigned four
       // levels below both contribute one row to this one requested rollup.
-      const rows = await queryRows(
+      const rows = await checkedRows(
         categoryCurrencyAmountRowSchema,
-        `
+        sql`
         SELECT ancestor.id AS category_id, ancestor.path_name AS name,
                SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency
         FROM transactions t
@@ -111,14 +126,13 @@ export const statisticsRepository = {
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
         JOIN category_ancestors ancestry
           ON ancestry.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
-         AND ancestry.ancestor_id = $1
+         AND ancestry.ancestor_id = ${ancestorCategoryId}
         JOIN categories ancestor ON ancestor.id = ancestry.ancestor_id
         WHERE t.is_active = true
-          ${includeTransfers ? "" : "AND t.is_transfer = false"}
+          ${transferFilter}
           ${filterSql}
         GROUP BY ancestor.id, ancestor.path_name, t.currency
       `,
-        params,
       );
       const { converted } = partitionConvertedRows(
         await convertRowsToEur(
@@ -150,13 +164,13 @@ export const statisticsRepository = {
     // The MV (mv_category_totals) is built transfer-excluding, so it is only a
     // valid fast path when the caller also wants transfers excluded.
     if (
-      !filterSql &&
+      !hasFilters &&
       !includeTransfers &&
       (await mvAvailable("mv_category_totals"))
     ) {
-      const catRows = await queryRows(
+      const catRows = await checkedRows(
         mvCategoryTotalsRowSchema,
-        "SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500",
+        sql`SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500`,
       );
       const { converted } = partitionConvertedRows(
         await convertRowsToEur(
@@ -183,9 +197,9 @@ export const statisticsRepository = {
     // default → PRIMARY recipient's default), matching transactionRepository —
     // an alias row categorised via its primary must not show as UNCATEGORISED
     // here while the transactions list shows it categorised.
-    const categoryAmountRows = await queryRows(
+    const categoryAmountRows = await checkedRows(
       categoryCurrencyAmountRowSchema,
-      `
+      sql`
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.path_name, 'UNCATEGORISED') AS name,
              SUM(t.amount) AS amount,
@@ -196,13 +210,12 @@ export const statisticsRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
-        ${includeTransfers ? "" : "AND t.is_transfer = false"}
+        ${transferFilter}
         ${filterSql}
       GROUP BY COALESCE(c.id, -1),
                COALESCE(c.path_name, 'UNCATEGORISED'),
                t.currency
     `,
-      params,
     );
 
     const { converted: catConverted } = partitionConvertedRows(
@@ -237,16 +250,19 @@ export const statisticsRepository = {
     // Account labels for filter dropdowns, sourced from accounts.name (ADR-088).
     // EXISTS keeps the prior behaviour: only accounts that actually have active
     // transactions appear (an account is "seen" once it has activity).
-    const result = await queryPrepared(
+    const result = await prepared(
       "info_get_banks",
-      `SELECT a.name AS bank_account
-         FROM accounts a
-        WHERE a.id IN (
-          SELECT t.account_id FROM transactions t
-           WHERE t.is_active = true AND t.account_id IS NOT NULL
+      db
+        .selectFrom("accounts as a")
+        .select("a.name as bank_account")
+        .where("a.id", "in", (eb) =>
+          eb
+            .selectFrom("transactions as t")
+            .select("t.account_id")
+            .where("t.is_active", "=", true)
+            .where("t.account_id", "is not", null),
         )
-        ORDER BY a.name`,
-      [],
+        .orderBy("a.name"),
     );
     return checkRows(bankLabelRowSchema, result.rows).map(
       (r) => r.bank_account,
@@ -261,18 +277,17 @@ export const statisticsRepository = {
     // count (reuses the cached prepared statement); present → a parameterized,
     // separately-cached prepared statement so the two query shapes don't collide.
     if (accountId != null) {
-      const result = await queryPrepared(
+      const result = await prepared(
         "info_tx_count_by_account",
-        "SELECT count(*) FROM transactions WHERE is_active = true AND account_id = $1",
-        [accountId],
+        countActiveTransactions().where(
+          "account_id",
+          "=",
+          asAccountId(accountId),
+        ),
       );
       return parseCountRow(checkRows(countRowSchema, result.rows));
     }
-    const result = await queryPrepared(
-      "info_tx_count",
-      "SELECT count(*) FROM transactions WHERE is_active = true",
-      [],
-    );
+    const result = await prepared("info_tx_count", countActiveTransactions());
     return parseCountRow(checkRows(countRowSchema, result.rows));
   },
 
@@ -288,30 +303,18 @@ export const statisticsRepository = {
     unconverted_currencies: string[];
   }> {
     const includeTransfers = await getIncludeTransfers();
-    // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses,
-    // shared with every other money surface): 3-level category COALESCE and
-    // ALIAS-AWARE recipient exclusion. The bare `t.recipient_id NOT IN` here
-    // previously kept an excluded recipient's transactions whenever they were
-    // recorded under an alias of the excluded primary — disagreeing with the
-    // dashboard/forecast.
-    const excl = buildExclusionClauses({
+    // Canonical exclusion clauses (shared with every other money surface):
+    // 3-level category COALESCE and ALIAS-AWARE recipient exclusion. The bare
+    // `t.recipient_id NOT IN` here previously kept an excluded recipient's
+    // transactions whenever they were recorded under an alias of the excluded
+    // primary — disagreeing with the dashboard/forecast.
+    const excl = exclusionClauses({
       excludedCategoryIds,
       excludedRecipientIds,
     });
-    const params = excl.params;
-    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-    const dateFilters = [];
-    if (startDate) {
-      params.push(startDate);
-      dateFilters.push(`t.date >= $${params.length}`);
-    }
-    if (endDate) {
-      params.push(endDate);
-      dateFilters.push(`t.date <= $${params.length}`);
-    }
-    const dateWhere = dateFilters.length > 0
-      ? `AND ${dateFilters.join(" AND ")}`
-      : "";
+    const dateFilters: RawBuilder<unknown>[] = [];
+    if (startDate) dateFilters.push(sql`t.date >= ${startDate}`);
+    if (endDate) dateFilters.push(sql`t.date <= ${endDate}`);
 
     // Aggregate in SQL per (category, period, date, currency) instead of
     // streaming every active transaction into JS. Conversion uses each row's
@@ -324,7 +327,9 @@ export const statisticsRepository = {
     // recipient default → PRIMARY recipient's default), matching
     // transactionRepository — the same expression appears in the SELECT, the
     // NOT NULL filter and the GROUP BY, and all three must stay identical.
-    const sql = `
+    const pivotRows = await checkedRows(
+      categoryPivotRowSchema,
+      sql`
       SELECT
         COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
         CASE WHEN c.legacy_compatible
@@ -346,16 +351,15 @@ export const statisticsRepository = {
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       LEFT JOIN category_paths path ON path.id = c.id
       WHERE t.is_active = true
-        ${includeTransfers ? "" : "AND t.is_transfer = false"}
+        ${includeTransfers ? sql`` : sql`AND t.is_transfer = false`}
         AND COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NOT NULL
-        ${exclusionWhere}
-        ${dateWhere}
+        ${excl.where}
+        ${andClauses(dateFilters)}
       GROUP BY COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
                c.id, path.ids, path.names, TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
       ORDER BY period
-    `;
-
-    const pivotRows = await queryRows(categoryPivotRowSchema, sql, params);
+    `,
+    );
 
     // Two conversion legs per group (income + expense) so each converts at its
     // own date's rate. cnt is the whole group's count — counted once (income leg).

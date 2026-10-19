@@ -1,7 +1,6 @@
-import { query } from '../database/connection.ts';
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
 import { customParserConfigRowSchema } from '../database/rows/imports.ts';
-import { buildSetClauses } from '../lib/sqlClauses.ts';
 import { checkDataContract } from '../lib/dataContract.ts';
 import { storedParserConfigSchema } from '../lib/parserConfigSchema.ts';
 
@@ -12,7 +11,11 @@ import type {
 
 export type { FormattedCustomParserConfig };
 
-const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
+const COLUMNS = ['id', 'name', 'kind', 'config_json', 'created_at', 'updated_at'] as const;
+
+function selectConfigs() {
+  return db.selectFrom('custom_parser_configs').select(COLUMNS);
+}
 
 function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
   // pg returns JSONB already parsed; tolerate a string just in case.
@@ -36,19 +39,17 @@ function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
 
 const customParserConfigRepository = {
   async getAll(kind = 'transaction'): Promise<FormattedCustomParserConfig[]> {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       customParserConfigRowSchema,
-      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE kind = $1 ORDER BY name ASC`,
-      [kind],
+      selectConfigs().where('kind', '=', kind).orderBy('name', 'asc'),
     );
     return rows.map(mapRow);
   },
 
   async getById(id: number): Promise<FormattedCustomParserConfig | undefined> {
-    const r = await queryOne(
+    const r = await checkedRow(
       customParserConfigRowSchema,
-      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE id = $1`,
-      [id],
+      selectConfigs().where('id', '=', id),
     );
     return r ? mapRow(r) : undefined;
   },
@@ -57,10 +58,9 @@ const customParserConfigRepository = {
     name: string,
     kind = 'transaction',
   ): Promise<FormattedCustomParserConfig | undefined> {
-    const r = await queryOne(
+    const r = await checkedRow(
       customParserConfigRowSchema,
-      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE name = $1 AND kind = $2`,
-      [name, kind],
+      selectConfigs().where('name', '=', name).where('kind', '=', kind),
     );
     return r ? mapRow(r) : undefined;
   },
@@ -74,12 +74,12 @@ const customParserConfigRepository = {
     config: unknown;
     kind?: string;
   }): Promise<FormattedCustomParserConfig> {
-    const r = await queryOne(
+    const r = await checkedRow(
       customParserConfigRowSchema,
-      `INSERT INTO custom_parser_configs (name, kind, config_json)
-       VALUES ($1, $2, $3::jsonb)
-       RETURNING ${COLUMNS}`,
-      [name, kind, JSON.stringify(config)],
+      db
+        .insertInto('custom_parser_configs')
+        .values({ name, kind, config_json: sql`${JSON.stringify(config)}::jsonb` })
+        .returning(COLUMNS),
     );
     // INSERT ... RETURNING without ON CONFLICT yields its row or throws.
     if (!r) throw new Error('custom_parser_configs insert returned no row');
@@ -90,29 +90,32 @@ const customParserConfigRepository = {
     id: number,
     { name, config }: { name?: string | undefined; config?: unknown },
   ): Promise<FormattedCustomParserConfig | undefined> {
-    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
-    const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses({
-      name,
-      config_json: config !== undefined ? JSON.stringify(config) : undefined,
-    });
-    // config_json needs the ::jsonb cast the generic builder does not emit.
-    const castFields = fields.map((f) => f.startsWith('config_json = ') ? `${f}::jsonb` : f);
+    if (name === undefined && config === undefined) return this.getById(id);
 
-    if (castFields.length === 0) return this.getById(id);
-
-    values.push(id);
-    const r = await queryOne(
+    const r = await checkedRow(
       customParserConfigRowSchema,
-      `UPDATE custom_parser_configs SET ${castFields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
-      values,
+      db
+        .updateTable('custom_parser_configs')
+        .set({
+          ...(name !== undefined && { name }),
+          ...(config !== undefined && {
+            config_json: sql`${JSON.stringify(config)}::jsonb`,
+          }),
+        })
+        .where('id', '=', id)
+        .returning(COLUMNS),
     );
     return r ? mapRow(r) : undefined;
   },
 
   /** @returns true if a row was removed */
   async delete(id: number): Promise<boolean> {
-    const result = await query(`DELETE FROM custom_parser_configs WHERE id = $1 RETURNING id`, [id]);
-    return result.rows.length > 0;
+    const deleted = await db
+      .deleteFrom('custom_parser_configs')
+      .where('id', '=', id)
+      .returning('id')
+      .executeTakeFirst();
+    return deleted !== undefined;
   },
 };
 

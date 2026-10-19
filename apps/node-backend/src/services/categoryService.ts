@@ -5,7 +5,7 @@
  * vision-local/no-repo-direct-from-route); they go through this service, which
  * is where category name→id resolution and bulk operations belong.
  */
-import { queryRows } from "../database/rowContracts.ts";
+import { checkedRows, db } from "../database/db.ts";
 import { categoryKeyRowSchema } from "../database/rowSchemas.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import type { CategoryId } from "@vision/types/brands";
@@ -37,12 +37,15 @@ export async function resolveCategoryIdByName(
   name: string,
 ): Promise<CategoryId> {
   const normalized = String(name).toUpperCase().trim();
-  const byPath = await queryRows(
+  const byPath = await checkedRows(
     categoryKeyRowSchema,
-    `SELECT id FROM categories
-     WHERE path_name = $1 AND is_active = true
-     ORDER BY id LIMIT 2`,
-    [normalized],
+    db
+      .selectFrom("categories")
+      .select("id")
+      .where("path_name", "=", normalized)
+      .where("is_active", "=", true)
+      .orderBy("id")
+      .limit(2),
   );
   if (byPath.length > 1)
     throw new ValidationError(
@@ -59,16 +62,25 @@ export async function resolveCategoryIdByName(
   }
   const general = normalized.slice(0, delimiter).trim();
   const detail = normalized.slice(delimiter + 1).trim();
-  const legacy = await queryRows(
+  const legacy = await checkedRows(
     categoryKeyRowSchema,
-    `SELECT id FROM categories
-     WHERE general = $1 AND detail = $2 AND is_active = true
-     UNION
-     SELECT c.id FROM category_merge_aliases a
-     JOIN categories c ON c.id = a.target_category_id
-     WHERE a.general = $1 AND a.detail = $2 AND c.is_active = true
-     ORDER BY id LIMIT 2`,
-    [general, detail],
+    db
+      .selectFrom("categories")
+      .select("id")
+      .where("general", "=", general)
+      .where("detail", "=", detail)
+      .where("is_active", "=", true)
+      .union(
+        db
+          .selectFrom("category_merge_aliases as a")
+          .innerJoin("categories as c", "c.id", "a.target_category_id")
+          .select("c.id")
+          .where("a.general", "=", general)
+          .where("a.detail", "=", detail)
+          .where("c.is_active", "=", true),
+      )
+      .orderBy("id")
+      .limit(2),
   );
   const [legacyMatch] = legacy;
   if (legacy.length !== 1 || !legacyMatch) {

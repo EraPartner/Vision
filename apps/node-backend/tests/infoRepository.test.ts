@@ -1055,8 +1055,19 @@ describe("InfoRepository", () => {
       ).toBe(false);
       const live = calls.find(({ sql }) => sql.includes("WITH months AS"));
       expect(live).toBeTruthy();
-      expect(live!.sql).toContain("t.account_id = ANY($3::int[])");
-      expect(live!.params).toEqual(["2026-01-01", "2026-06-30", [3, 7]]);
+      // The account filter binds the requested ids, and with both bounds
+      // given no app-date anchor is bound.
+      const placeholder = /t\.account_id = ANY\(\$(\d+)::int\[\]\)/.exec(
+        live!.sql,
+      );
+      expect(placeholder).toBeTruthy();
+      expect(live!.params?.[Number(placeholder![1]) - 1]).toEqual([3, 7]);
+      const bounds = ["2026-01-01", "2026-06-30"];
+      expect(
+        live!.params?.every(
+          (p) => Array.isArray(p) || bounds.includes(p as string),
+        ),
+      ).toBe(true);
     });
   });
 

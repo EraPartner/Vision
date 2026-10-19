@@ -28,8 +28,9 @@ import { parse } from "csv-parse/sync";
 import { z } from "zod";
 import { parseCategoryName } from "@vision/shared-utils";
 import { logger } from "../config/logger.ts";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRows, db } from "../database/db.ts";
 import {
   categoryPairIdRowSchema,
   recipientIdentityRowSchema,
@@ -210,17 +211,16 @@ async function selectCategories(
   generals: string[],
   details: string[],
 ): Promise<CategoryIdRow[]> {
-  return queryRows(
+  return checkedRows(
     categoryPairIdRowSchema,
-    `SELECT COALESCE(c.id, a.target_category_id) AS id,
+    sql`SELECT COALESCE(c.id, a.target_category_id) AS id,
             want.general, want.detail
-       FROM UNNEST($1::text[], $2::text[]) AS want(general, detail)
+       FROM UNNEST(${generals}::text[], ${details}::text[]) AS want(general, detail)
        LEFT JOIN categories c
          ON c.general = want.general AND c.detail = want.detail
        LEFT JOIN category_merge_aliases a
          ON a.general = want.general AND a.detail = want.detail
        WHERE c.id IS NOT NULL OR a.target_category_id IS NOT NULL`,
-    [generals, details],
   );
 }
 
@@ -239,7 +239,7 @@ async function resolveCategories(
   if (pairs.length === 0) return resolved;
   // Both batch call sites run inside withTransaction. Serialize with merges so
   // a pair cannot be reinserted between alias lookup and insertion.
-  await query("SELECT pg_advisory_xact_lock(1128356178, 1)");
+  await sql`SELECT pg_advisory_xact_lock(1128356178, 1)`.execute(db);
 
   for (const row of await selectCategories(
     pairs.map((p) => p.general),
@@ -251,13 +251,13 @@ async function resolveCategories(
   const missing = pairs.filter((p) => !resolved.has(categoryKeyOf(p)));
   if (missing.length === 0) return resolved;
 
-  const inserted = await queryRows(
+  const inserted = await checkedRows(
     categoryPairIdRowSchema,
-    `INSERT INTO categories (general, detail, description, is_active)
-     SELECT UNNEST($1::text[]), UNNEST($2::text[]), NULL, true
+    sql`INSERT INTO categories (general, detail, description, is_active)
+     SELECT UNNEST(${missing.map((p) => p.general)}::text[]),
+            UNNEST(${missing.map((p) => p.detail)}::text[]), NULL, true
      ON CONFLICT (general, detail) DO NOTHING
      RETURNING id, general, detail`,
-    [missing.map((p) => p.general), missing.map((p) => p.detail)],
   );
   for (const row of inserted) {
     resolved.set(categoryKeyOf(row), { id: row.id, created: true });
@@ -282,12 +282,16 @@ async function resolveCategories(
 async function selectRecipients(
   normalizedNames: string[],
 ): Promise<RecipientIdentityRow[]> {
-  return queryRows(
+  return checkedRows(
     recipientResolutionRowSchema,
-    `SELECT id, normalized_name, notes, default_category_id
-       FROM recipients
-      WHERE normalized_name = ANY($1::text[])`,
-    [normalizedNames],
+    db
+      .selectFrom("recipients")
+      .select(["id", "normalized_name", "notes", "default_category_id"])
+      .where(
+        "normalized_name",
+        "=",
+        sql<string>`ANY(${normalizedNames}::text[])`,
+      ),
   );
 }
 
@@ -318,13 +322,13 @@ async function resolveRecipients(
   const missing = names.filter((n) => !resolved.has(n.normalized));
   if (missing.length === 0) return resolved;
 
-  const inserted = await queryRows(
+  const inserted = await checkedRows(
     recipientIdentityRowSchema,
-    `INSERT INTO recipients (name, normalized_name, is_active)
-     SELECT UNNEST($1::text[]), UNNEST($2::text[]), true
+    sql`INSERT INTO recipients (name, normalized_name, is_active)
+     SELECT UNNEST(${missing.map((n) => n.upper)}::text[]),
+            UNNEST(${missing.map((n) => n.normalized)}::text[]), true
      ON CONFLICT (normalized_name) DO NOTHING
      RETURNING id, normalized_name`,
-    [missing.map((n) => n.upper), missing.map((n) => n.normalized)],
   );
   for (const row of inserted) {
     resolved.set(row.normalized_name, {
@@ -358,6 +362,24 @@ async function resolveRecipients(
  * charged to the row that caused it, and the rest of the file still counts,
  * exactly as the per-row try/catch charged it.
  */
+function setRecipientNotes(id: RecipientId, notes: string) {
+  return db
+    .updateTable("recipients")
+    .set({ notes })
+    .where("id", "=", id)
+    .execute();
+}
+
+/** Set a default category only on a recipient that has none yet. */
+function claimDefaultCategory(id: RecipientId, categoryId: CategoryId) {
+  return db
+    .updateTable("recipients")
+    .set({ default_category_id: categoryId })
+    .where("id", "=", id)
+    .where("default_category_id", "is", null)
+    .execute();
+}
+
 async function flushRecipientUpdates<
   U extends { rowIndex: number; name: string },
 >(
@@ -526,17 +548,10 @@ async function importRecipientRowsBatched(
     outcomes,
     "notes",
     (all) =>
-      query(
-        `UPDATE recipients r SET notes = u.notes
-         FROM UNNEST($1::int[], $2::text[]) AS u(id, notes)
-        WHERE r.id = u.id`,
-        [all.map((u) => u.id), all.map((u) => u.notes)],
-      ),
-    (one) =>
-      query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [
-        one.notes,
-        one.id,
-      ]),
+      sql`UPDATE recipients r SET notes = u.notes
+         FROM UNNEST(${all.map((u) => u.id)}::int[], ${all.map((u) => u.notes)}::text[]) AS u(id, notes)
+        WHERE r.id = u.id`.execute(db),
+    (one) => setRecipientNotes(one.id, one.notes),
   );
 
   for (const account of bankAccounts) {
@@ -564,17 +579,10 @@ async function importRecipientRowsBatched(
     outcomes,
     "default category",
     (all) =>
-      query(
-        `UPDATE recipients r SET default_category_id = u.category_id
-         FROM UNNEST($1::int[], $2::int[]) AS u(id, category_id)
-        WHERE r.id = u.id AND r.default_category_id IS NULL`,
-        [all.map((u) => u.id), all.map((u) => u.categoryId)],
-      ),
-    (one) =>
-      query(
-        `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
-        [one.categoryId, one.id],
-      ),
+      sql`UPDATE recipients r SET default_category_id = u.category_id
+         FROM UNNEST(${all.map((u) => u.id)}::int[], ${all.map((u) => u.categoryId)}::int[]) AS u(id, category_id)
+        WHERE r.id = u.id AND r.default_category_id IS NULL`.execute(db),
+    (one) => claimDefaultCategory(one.id, one.categoryId),
   );
 
   for (const outcome of outcomes) {
@@ -605,10 +613,7 @@ async function importRecipientRowsPerRow(
       if (!recipient) throw new Error("recipient could not be resolved");
 
       if (row.address && !recipient.notes) {
-        await query(`UPDATE recipients SET notes = $1 WHERE id = $2`, [
-          row.address,
-          recipient.id,
-        ]);
+        await setRecipientNotes(recipient.id, row.address);
       }
 
       if (row.bankAccount) {
@@ -634,10 +639,7 @@ async function importRecipientRowsPerRow(
             detail,
           });
           if (!category) throw new Error("category could not be resolved");
-          await query(
-            `UPDATE recipients SET default_category_id = $1 WHERE id = $2 AND default_category_id IS NULL`,
-            [category.id, recipient.id],
-          );
+          await claimDefaultCategory(recipient.id, category.id);
         } else if (row.categoryStr.indexOf(":") <= 0) {
           logger.warn(
             `Recipient import: invalid category format "${row.categoryStr}" for "${row.name}" — expected GENERAL:DETAIL`,

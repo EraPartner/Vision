@@ -39,7 +39,7 @@ describe("Settings storage and retrieval", () => {
 
     const upsertCall = query.mock.calls.find(
       ([sql]) =>
-        typeof sql === "string" && sql.includes("INSERT INTO user_settings"),
+        typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(upsertCall).toBeTruthy();
     expect(upsertCall![1][0]).toBe(key);
@@ -122,7 +122,7 @@ describe("Settings storage and retrieval", () => {
 
     const upsertCall = query.mock.calls.find(
       ([sql]) =>
-        typeof sql === "string" && sql.includes("INSERT INTO user_settings"),
+        typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(upsertCall).toBeTruthy();
     expect(upsertCall![1][0]).toEqual(["dashboard_settings"]);
@@ -141,7 +141,7 @@ describe("Settings storage and retrieval", () => {
 
     const hasBulkUpsert = query.mock.calls.some(
       ([sql]) =>
-        typeof sql === "string" && sql.includes("INSERT INTO user_settings"),
+        typeof sql === "string" && /insert into "?user_settings"?/i.test(sql),
     );
     expect(hasBulkUpsert).toBe(false);
   });

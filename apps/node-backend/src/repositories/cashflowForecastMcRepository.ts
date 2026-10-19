@@ -1,10 +1,11 @@
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   forecastMcCacheRowSchema,
   forecastUserIdRowSchema,
 } from "../database/rows/info.ts";
 import type { ForecastMcCacheRow } from "../database/rows/info.ts";
+import type { Json } from "../database/schema.generated.ts";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -20,13 +21,15 @@ export async function get({
   month: string;
   filterHash: string;
 }): Promise<McCacheRow | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     forecastMcCacheRowSchema,
-    `SELECT payload, computed_at
-       FROM cashflow_forecast_mc
-      WHERE user_id = $1 AND month = ($2 || '-01')::date AND filter_hash = $3
-      LIMIT 1`,
-    [userId, month, filterHash],
+    db
+      .selectFrom("cashflow_forecast_mc")
+      .select(["payload", "computed_at"])
+      .where("user_id", "=", userId)
+      .where("month", "=", sql<Date>`(${month} || '-01')::date`)
+      .where("filter_hash", "=", filterHash)
+      .limit(1),
   );
   return row ?? null;
 }
@@ -51,16 +54,24 @@ export async function upsert({
   mcPaths: number;
   payload: object;
 }): Promise<void> {
-  await query(
-    `INSERT INTO cashflow_forecast_mc (user_id, month, filter_hash, mc_paths, payload, computed_at)
-     VALUES ($1, ($2 || '-01')::date, $3, $4, $5::jsonb, NOW())
-     ON CONFLICT (user_id, month, filter_hash)
-     DO UPDATE SET
-       mc_paths    = EXCLUDED.mc_paths,
-       payload     = EXCLUDED.payload,
-       computed_at = NOW()`,
-    [userId, month, filterHash, mcPaths, JSON.stringify(payload)],
-  );
+  await db
+    .insertInto("cashflow_forecast_mc")
+    .values({
+      user_id: userId,
+      month: sql<Date>`(${month} || '-01')::date`,
+      filter_hash: filterHash,
+      mc_paths: mcPaths,
+      payload: sql<Json>`${JSON.stringify(payload)}::jsonb`,
+      computed_at: sql<Date>`NOW()`,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "month", "filter_hash"]).doUpdateSet((eb) => ({
+        mc_paths: eb.ref("excluded.mc_paths"),
+        payload: eb.ref("excluded.payload"),
+        computed_at: sql<Date>`NOW()`,
+      })),
+    )
+    .execute();
 }
 
 /**
@@ -70,7 +81,7 @@ export async function upsert({
  * clearing the whole (tiny) table is fine.
  */
 export async function clearAll(): Promise<void> {
-  await query("DELETE FROM cashflow_forecast_mc");
+  await db.deleteFrom("cashflow_forecast_mc").execute();
 }
 
 /**
@@ -81,9 +92,9 @@ export async function getActiveUserIds({
   strict = false,
 }: { strict?: boolean } = {}): Promise<string[]> {
   try {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       forecastUserIdRowSchema,
-      `SELECT DISTINCT user_id FROM cashflow_forecast_accuracy`,
+      db.selectFrom("cashflow_forecast_accuracy").select("user_id").distinct(),
     );
     const ids = rows.map((r) => r.user_id);
     if (!ids.includes("anonymous")) ids.push("anonymous");

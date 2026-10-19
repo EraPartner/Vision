@@ -67,6 +67,13 @@ type ParsedRows<T> = T[] & { skipped?: number; excluded?: number };
 
 // loose: an opaque placeholder. Both parsers are mocked, so the tests only
 // check that the config is forwarded untouched, not that it is well formed.
+/** Bank staging-row INSERTs issued on either the pool or a transaction client. */
+function stagingInserts(): number {
+  return [...query.mock.calls, ...clientQuery.mock.calls].filter(([sql]) =>
+    /insert into "?import_staging_rows"?/i.test(String(sql)),
+  ).length;
+}
+
 const CONFIG = loose<CustomTransactionParserConfig & PortfolioParserConfig>({
   dateColumn: "D",
   recipientColumn: "R",
@@ -187,7 +194,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
       message: expect.stringContaining("2 source row(s)"),
       details: { rejected_rows: 2, parsed_rows: 1 },
     });
-    expect(clientQuery).not.toHaveBeenCalled();
+    expect(stagingInserts()).toBe(0);
     expect(query.mock.calls.some(([sql]) => sql.includes("rows_total"))).toBe(
       false,
     );
@@ -209,7 +216,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
       status: 400,
       details: { rejected_rows: 2, parsed_rows: 0 },
     });
-    expect(clientQuery).not.toHaveBeenCalled();
+    expect(stagingInserts()).toBe(0);
   });
 
   it("shares zero-row and 500-row chunk progress across both stage pipelines", async () => {
@@ -236,7 +243,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
 
     expect(bankResult).toEqual({ rowsTotal: 501, rowsSkipped: 2 });
     expect(bankProgress).toEqual([0, 500, 501]);
-    expect(clientQuery).toHaveBeenCalledTimes(2);
+    expect(stagingInserts()).toBe(2);
 
     clientQuery.mockClear();
     const portfolioRows: ParsedRows<{
@@ -261,7 +268,11 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
 
     expect(portfolioResult).toEqual({ rowsTotal: 501, rowsSkipped: 3 });
     expect(portfolioProgress).toEqual([0, 500, 501]);
-    expect(clientQuery).toHaveBeenCalledTimes(2);
+    expect(
+      [...query.mock.calls, ...clientQuery.mock.calls].filter(([sql]) =>
+        /insert into "?portfolio_import_staging_rows"?/i.test(String(sql)),
+      ),
+    ).toHaveLength(2);
   });
 
   it("persists and reports the zero-row lifecycle without opening a chunk transaction", async () => {
@@ -282,11 +293,12 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
 
     expect(bankResult).toEqual({ rowsTotal: 0, rowsSkipped: 7 });
     expect(bankProgress).toEqual([{ phase: "staging", current: 0, total: 0 }]);
-    expect(clientQuery).not.toHaveBeenCalled();
+    expect(stagingInserts()).toBe(0);
     expect(
       query.mock.calls.some(
         ([sql, params]) =>
-          /UPDATE import_batches SET rows_total/.test(sql) && params![0] === 0,
+          /update "?import_batches"? set "?rows_total"?/i.test(sql) &&
+          params![0] === 0,
       ),
     ).toBe(true);
 
@@ -310,7 +322,7 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
     expect(
       query.mock.calls.some(
         ([sql, params]) =>
-          /UPDATE portfolio_import_batches SET rows_total/.test(sql) &&
+          /update "?portfolio_import_batches"? set "?rows_total"?/i.test(sql) &&
           params![0] === 0,
       ),
     ).toBe(true);

@@ -12,8 +12,9 @@
  *   without a stored rate has no rate (callers flag it), never a constant
  */
 
-import { query } from "../../database/connection.ts";
-import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../../database/db.ts";
+import { RowContractError } from "../../database/rowContracts.ts";
 import {
   currencyDatePairRowSchema,
   currencyDayKeyRowSchema,
@@ -46,6 +47,18 @@ import {
 } from "./rateFetcher.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import type { HistoricalRateIndex, RateTable } from "../../types/rows.ts";
+
+/** Every stored rate of the given currencies, with calendar-day dates. */
+function selectHistoricalRates(currencies: readonly string[]) {
+  return db
+    .selectFrom("exchange_rates")
+    .select([
+      "currency_code",
+      sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("rate_date"),
+      "rate_to_eur",
+    ])
+    .where("currency_code", "=", sql<string>`ANY(${currencies}::text[])`);
+}
 
 /** Message of a caught value, for log metadata. */
 function errorMessage(err: unknown) {
@@ -136,13 +149,11 @@ export async function getHistoricalRateIndex(
   }
 
   const union = fresh ? [...new Set([...cache.currencies, ...wanted])] : wanted;
-  const rows = await queryRows(
+  const rows = await checkedRows(
     historicalRateRowSchema,
-    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = ANY($1::text[])
-     ORDER BY currency_code ASC, rate_date ASC`,
-    [union],
+    selectHistoricalRates(union)
+      .orderBy("currency_code", "asc")
+      .orderBy("rate_date", "asc"),
   );
   const index = buildHistoricalRateIndex(rows);
   historicalIndexCache = { index, currencies: union, builtAt: Date.now() };
@@ -199,14 +210,13 @@ function mergeFetchedRatesIntoHistoricalIndex(
 export async function listLatestStoredRates(): Promise<{
   rows: LatestStoredRateDbRow[];
 }> {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     latestStoredRateRowSchema,
-    `
-      SELECT currency_code, rate_to_eur, rate_date, fetched_at
-      FROM exchange_rates
-      WHERE is_latest = true
-      ORDER BY currency_code ASC
-    `,
+    db
+      .selectFrom("exchange_rates")
+      .select(["currency_code", "rate_to_eur", "rate_date", "fetched_at"])
+      .where("is_latest", "=", true)
+      .orderBy("currency_code", "asc"),
   );
   return { rows };
 }
@@ -592,12 +602,9 @@ async function repairHistoricalRatesFromFullHistory(
       ),
     ),
   ].filter(Boolean);
-  const storedRows = await queryRows(
+  const storedRows = await checkedRows(
     historicalRateRowSchema,
-    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = ANY($1::text[])`,
-    [currencies],
+    selectHistoricalRates(currencies),
   );
   const storedByKey = new Map(
     storedRows.map((r) => [
@@ -641,8 +648,7 @@ async function repairHistoricalRatesFromFullHistory(
  * their missing historical rates are still backfilled in exchange_rates.
  */
 async function stampTransactionFxRates() {
-  const result = await query(
-    `UPDATE portfolio_transactions pt
+  const result = await sql`UPDATE portfolio_transactions pt
      SET fx_rate_to_eur = sub.rate
      FROM (
        SELECT pt2.id,
@@ -665,15 +671,14 @@ async function stampTransactionFxRates() {
        AND pt.fx_rate_to_eur IS NULL
        AND pt.import_batch_id IS NULL
        AND pt.source_record_hash IS NULL
-       AND pt.dedup_fingerprint IS NULL`,
-  );
-  return result.rowCount ?? 0;
+       AND pt.dedup_fingerprint IS NULL`.execute(db);
+  return Number(result.numAffectedRows ?? 0n);
 }
 
 export async function backfillPortfolioHistoricalRates() {
-  const pairRows = await queryRows(
+  const pairRows = await checkedRows(
     currencyDatePairRowSchema,
-    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+    sql`SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
      FROM portfolio_transactions pt
      WHERE pt.currency IS NOT NULL
        AND UPPER(pt.currency::text) <> 'EUR'
@@ -694,9 +699,9 @@ export async function backfillPortfolioHistoricalRates() {
     });
   }
 
-  const missingRows = await queryRows(
+  const missingRows = await checkedRows(
     currencyDatePairRowSchema,
-    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+    sql`SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
      FROM portfolio_transactions pt
      LEFT JOIN exchange_rates er
        ON er.currency_code = UPPER(pt.currency::text)
@@ -734,14 +739,13 @@ export async function backfillPortfolioHistoricalRates() {
   if (resolvedPairs.length > 0) {
     const codes = resolvedPairs.map((p) => p.currencyCode);
     const dates = resolvedPairs.map((p) => p.rateDate);
-    const existsRows = await queryRows(
+    const existsRows = await checkedRows(
       currencyDayKeyRowSchema,
-      `SELECT er.currency_code, er.rate_date::text AS rate_date
+      sql`SELECT er.currency_code, er.rate_date::text AS rate_date
          FROM exchange_rates er
-         JOIN UNNEST($1::text[], $2::text[]) AS want(currency_code, rate_date)
+         JOIN UNNEST(${codes}::text[], ${dates}::text[]) AS want(currency_code, rate_date)
            ON er.currency_code = want.currency_code
           AND er.rate_date = want.rate_date::date`,
-      [codes, dates],
     );
     const present = new Set(
       existsRows.map(

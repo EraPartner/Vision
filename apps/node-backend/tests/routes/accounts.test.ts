@@ -239,7 +239,7 @@ describe("Account Routes — portfolio cache invalidation", () => {
   });
 
   it("close forwards balance handling and refreshes transaction-derived caches", async () => {
-    closeAccount.mockResolvedValue(partial({ account_id: 1, adjustments: [] }));
+    closeAccount.mockResolvedValue(partial({ account_id: asAccountId(1), adjustments: [] }));
     await api
       .post(`${BASE}/1/close`)
       .send({ balance_handling: "adjustment" })

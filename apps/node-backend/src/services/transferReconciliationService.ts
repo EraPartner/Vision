@@ -12,7 +12,9 @@
  * are sticky and never overwritten by auto-detection.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { db } from "../database/db.ts";
 import { transactionRepository } from "../repositories/transactionRepository.ts";
 import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
 import { invalidateStatisticsCaches } from "./info/cache.ts";
@@ -281,14 +283,19 @@ export async function backfillTransfersOnce(): Promise<{
   skipped: boolean;
   pairsCreated?: number;
 }> {
-  const { rows } = await query(
-    "SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled' LIMIT 1",
-  );
-  if (rows.length > 0) return { skipped: true };
+  const done = await db
+    .selectFrom("user_settings")
+    .select("key")
+    .where("key", "=", "transfers_backfilled")
+    .limit(1)
+    .executeTakeFirst();
+  if (done) return { skipped: true };
   const result = await reconcileTransfers();
-  await query(
-    "INSERT INTO user_settings (key, value) VALUES ('transfers_backfilled', 'true'::jsonb) ON CONFLICT (key) DO NOTHING",
-  );
+  await db
+    .insertInto("user_settings")
+    .values({ key: "transfers_backfilled", value: sql`'true'::jsonb` })
+    .onConflict((oc) => oc.column("key").doNothing())
+    .execute();
   logger.info(
     `[transfers] one-time backfill complete: ${result.pairsCreated} pair(s)`,
   );

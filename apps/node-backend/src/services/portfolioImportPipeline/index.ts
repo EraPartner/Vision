@@ -21,8 +21,8 @@
  *    already correct when the auto-commit path returns.
  */
 
-import { query } from "../../database/connection.ts";
-import { queryOne } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, db } from "../../database/db.ts";
 import { batchBrokerageRowSchema } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
@@ -62,6 +62,16 @@ export type PortfolioImportProgressCallback = (progress: {
  */
 export type PortfolioImportBatchId = number;
 
+async function markAwaitingReview(
+  batchId: PortfolioImportBatchId,
+): Promise<void> {
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({ status: "awaiting_review" })
+    .where("id", "=", String(batchId))
+    .execute();
+}
+
 /**
  * Stage → validate → match a batch that already exists, then decide whether it
  * needs user review.
@@ -99,10 +109,7 @@ async function prepareImport({
   // "0 imported" success. Fail loudly instead — the user needs to fix the mapping.
   if (rowsTotal === 0) {
     if (customConfig.format === "nexo_pro_spot_history" && rowsSkipped === 0) {
-      await query(
-        `UPDATE portfolio_import_batches SET status = 'awaiting_review' WHERE id = $1`,
-        [batchId],
-      );
+      await markAwaitingReview(batchId);
       return {
         batchId,
         rowsTotal: 0,
@@ -130,10 +137,12 @@ async function prepareImport({
 
   // Brokerage imports (ADR-095) ALWAYS go through staged review — the user must
   // confirm cash-vs-trade routing and instrument matching before any fan-out.
-  const brRow = await queryOne(
+  const brRow = await checkedRow(
     batchBrokerageRowSchema,
-    `SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_batches")
+      .select("is_brokerage")
+      .where("id", "=", String(batchId)),
   );
   const isBrokerage = brRow?.is_brokerage === true;
 
@@ -147,10 +156,7 @@ async function prepareImport({
     unresolved > 0;
 
   if (requiresReview) {
-    await query(
-      `UPDATE portfolio_import_batches SET status = 'awaiting_review' WHERE id = $1`,
-      [batchId],
-    );
+    await markAwaitingReview(batchId);
     logger.info("[portfolio-pipeline] awaiting review", {
       batchId,
       matchSourceCounts,
@@ -192,19 +198,20 @@ export async function commitPortfolioImport({
   // while silently stranding the failed rows. The status is driven by the actual
   // remaining error rows, not this run's `errors` count, so a re-commit that
   // fixes the last error correctly flips the batch back to 'complete'.
-  await query(
-    `UPDATE portfolio_import_batches
-        SET status = CASE
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({
+      status: sql<string>`CASE
               WHEN EXISTS (
                 SELECT 1 FROM portfolio_import_staging_rows
-                 WHERE batch_id = $1 AND status = 'error'
+                 WHERE batch_id = ${batchId} AND status = 'error'
               ) THEN 'complete_with_errors'
               ELSE 'complete'
-            END,
-            completed_at = NOW()
-      WHERE id = $1`,
-    [batchId],
-  );
+            END`,
+      completed_at: sql<Date>`NOW()`,
+    })
+    .where("id", "=", String(batchId))
+    .execute();
 
   if (imported > 0) {
     try {
@@ -324,10 +331,16 @@ export async function runPortfolioImportPipeline({
       errors: totalErrors,
     };
   } catch (err) {
-    await query(
-      `UPDATE portfolio_import_batches SET status = 'failed', completed_at = NOW(), error_summary = $2 WHERE id = $1`,
-      [batchId, String(errorMessage(err) || err).slice(0, 2000)],
-    ).catch((updateErr: unknown) => {
+    await db
+      .updateTable("portfolio_import_batches")
+      .set({
+        status: "failed",
+        completed_at: sql<Date>`NOW()`,
+        error_summary: String(errorMessage(err) || err).slice(0, 2000),
+      })
+      .where("id", "=", String(batchId))
+      .execute()
+      .catch((updateErr: unknown) => {
       logger.error("[portfolio-pipeline] failed to mark batch failed", {
         batchId,
         error: errorMessage(updateErr),

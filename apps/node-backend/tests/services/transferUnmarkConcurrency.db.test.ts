@@ -86,7 +86,7 @@ describe.skipIf(!hasTestDatabase())(
           const waiting =
             await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
           WHERE datname=current_database() AND wait_event_type='Lock'
-            AND query LIKE 'SELECT%transfer_peer_id%FOR UPDATE%'`);
+            AND query ~* '^\\s*select.*transfer_peer_id.*for update'`);
           if (waiting.rows[0].n >= 2) {
             blocked = true;
             break;
@@ -144,7 +144,7 @@ describe.skipIf(!hasTestDatabase())(
         while (Date.now() < deadline) {
           const waiting = await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
             WHERE datname=current_database() AND wait_event_type='Lock'
-              AND query LIKE 'SELECT id FROM transactions%FOR UPDATE%'`);
+              AND query ~* '^\\s*select "?id"? from "?transactions"?.*for update'`);
           if (waiting.rows[0].n > 0) { blocked = true; break; }
           await new Promise((done) => setTimeout(done, 10));
         }
@@ -200,7 +200,7 @@ describe.skipIf(!hasTestDatabase())(
           const waiting =
             await pool.query(`SELECT count(*)::int AS n FROM pg_stat_activity
           WHERE datname=current_database() AND wait_event_type='Lock'
-            AND query LIKE 'SELECT%transfer_peer_id%FOR UPDATE%'`);
+            AND query ~* '^\\s*select.*transfer_peer_id.*for update'`);
           if (waiting.rows[0].n >= 2) {
             blocked = true;
             break;

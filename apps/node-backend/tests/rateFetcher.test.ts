@@ -440,7 +440,7 @@ describe("getRateToEurForDate", () => {
     expect(r).toBeCloseTo(1 / 1.1, 4);
     // saveHistoricalRate should have been invoked
     const sqlCalls = query.mock.calls.map((c) => c[0]);
-    expect(sqlCalls.some((s) => s.includes("INSERT INTO exchange_rates"))).toBe(
+    expect(sqlCalls.some((s) => /insert into "?exchange_rates/i.test(s))).toBe(
       true,
     );
   });
@@ -460,7 +460,7 @@ describe("getRateToEurForDate", () => {
       saveFetchedHistoricalRate: false,
     });
     const sqlCalls = query.mock.calls.map((c) => c[0]);
-    expect(sqlCalls.some((s) => s.includes("INSERT INTO exchange_rates"))).toBe(
+    expect(sqlCalls.some((s) => /insert into "?exchange_rates/i.test(s))).toBe(
       false,
     );
   });

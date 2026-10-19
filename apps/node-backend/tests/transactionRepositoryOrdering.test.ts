@@ -171,7 +171,7 @@ describe("transaction list count cache", () => {
     withTransaction.mockImplementation(async (fn) =>
       fn({
         query: vi.fn().mockImplementation(async (sql: string) => ({
-          rows: sql.includes("FROM accounts")
+          rows: /from "?accounts"?/i.test(sql)
             ? [{ id: 1, is_active: true }]
             : [{ id: 9, account_id: 1 }],
           rowCount: 1,
@@ -190,14 +190,15 @@ describe("transaction list count cache", () => {
     expect(countCalls()).toHaveLength(1);
 
     const client = {
-      query: vi.fn(async (sql: string): Promise<FakeResult> => {
-        if (sql.startsWith("SELECT 1 FROM transactions")) {
-          return { rows: [{ exists: 1 }] };
+      query: vi.fn(async (text: string): Promise<FakeResult> => {
+        const sql = text.replaceAll('"', "").trim().toLowerCase();
+        if (sql.startsWith("select id from transactions where")) {
+          return { rows: [{ id: 9 }] };
         }
-        if (sql.startsWith("SELECT id FROM tags")) {
+        if (sql.startsWith("select id from tags")) {
           return { rows: [{ id: 3 }] };
         }
-        if (sql.includes("FROM transactions t")) {
+        if (sql.includes("from transactions t")) {
           return { rows: [txRow({ id: asTransactionId(9) })] };
         }
         return { rows: [] };

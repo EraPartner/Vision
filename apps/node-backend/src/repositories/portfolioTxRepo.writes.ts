@@ -1,12 +1,12 @@
 /** Parameterized SQL writes for portfolio transactions. */
 
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { PortfolioTxnType } from "../database/schema.generated.ts";
 import {
   portfolioTransactionDbRowSchema,
   portfolioTransactionKeyRowSchema,
 } from "../database/rows/portfolio.ts";
-import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { mapPortfolioTxRow } from "./portfolioTxRepo.reads.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
 
@@ -52,69 +52,42 @@ export interface PortfolioTransactionInput {
 export async function insert(
   payload: PortfolioTransactionInput,
 ): Promise<PortfolioTransactionRow | null> {
-  const columns = [
-    "investment_id",
-    "type",
-    "date",
-    "amount",
-    "units",
-    "price_per_unit",
-    "fees",
-    "taxes",
-    "dividend_amount_convention",
-    "currency",
-    "note",
-    "is_recurring",
-    "recurrence_interval",
-    "recurrence_end_date",
-    "fx_rate_to_eur",
-    "account_id",
-  ];
-  const values: unknown[] = [
-    payload.investment_id,
-    payload.type,
-    payload.date,
-    payload.amount,
-    payload.units ?? null,
-    payload.price_per_unit ?? null,
-    payload.fees ?? 0,
-    payload.taxes ?? 0,
-    payload.dividend_amount_convention ?? "unknown",
-    payload.currency,
-    payload.note || null,
-    payload.is_recurring || false,
-    payload.recurrence_interval || null,
-    payload.recurrence_end_date || null,
-    payload.fx_rate_to_eur ?? null,
-    payload.account_id ?? null,
-  ];
-  if (
+  const withImportBatch =
     payload.import_batch_id != null &&
-    (await hasPortfolioTransactionImportBatchIdColumn())
-  ) {
-    columns.push("import_batch_id");
-    values.push(payload.import_batch_id);
-  }
-  if (payload.dedup_fingerprint) {
-    columns.push(
-      "source_record_hash",
-      "dedup_fingerprint",
-      "dedup_fingerprint_version",
-    );
-    values.push(
-      payload.source_record_hash ?? null,
-      payload.dedup_fingerprint,
-      payload.dedup_fingerprint_version,
-    );
-  }
-  const row = await queryOne(
+    (await hasPortfolioTransactionImportBatchIdColumn());
+  const row = await checkedRow(
     portfolioTransactionDbRowSchema,
-    `INSERT INTO portfolio_transactions
-       (${columns.join(", ")})
-       VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
-       ON CONFLICT DO NOTHING
-       RETURNING *`,
-    values,
+    db
+      .insertInto("portfolio_transactions")
+      .values({
+        investment_id: payload.investment_id,
+        // The enum column rejects an unknown type; NOT NULL rejects a missing
+        // amount or currency (an explicit NULL skips the currency default).
+        type: sql<PortfolioTxnType>`${payload.type}`,
+        date: payload.date,
+        amount: sql<string>`${payload.amount ?? null}`,
+        units: payload.units ?? null,
+        price_per_unit: payload.price_per_unit ?? null,
+        fees: payload.fees ?? 0,
+        taxes: payload.taxes ?? 0,
+        dividend_amount_convention:
+          payload.dividend_amount_convention ?? "unknown",
+        currency: sql<CurrencyCode>`${payload.currency ?? null}`,
+        note: payload.note || null,
+        is_recurring: payload.is_recurring || false,
+        recurrence_interval: payload.recurrence_interval || null,
+        recurrence_end_date: payload.recurrence_end_date || null,
+        fx_rate_to_eur: payload.fx_rate_to_eur ?? null,
+        account_id: payload.account_id ?? null,
+        ...(withImportBatch && { import_batch_id: payload.import_batch_id }),
+        ...(payload.dedup_fingerprint && {
+          source_record_hash: payload.source_record_hash ?? null,
+          dedup_fingerprint: payload.dedup_fingerprint,
+          dedup_fingerprint_version: payload.dedup_fingerprint_version ?? null,
+        }),
+      })
+      .onConflict((oc) => oc.doNothing())
+      .returningAll(),
   );
   return row ? mapPortfolioTxRow(row) : null;
 }
@@ -140,13 +113,14 @@ export async function updateFields(
     "fx_rate_to_eur",
     "account_id",
   ];
-  const { clauses, params, nextIdx } = buildSetClauses(fields, { allowed });
+  // undefined fields are skipped; `allowed` whitelists the column names.
+  const clauses = Object.entries(fields)
+    .filter(([key, value]) => value !== undefined && allowed.includes(key))
+    .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
   if (clauses.length === 0) return unchanged;
-  params.push(id);
-  const row = await queryOne(
+  const row = await checkedRow(
     portfolioTransactionDbRowSchema,
-    `UPDATE portfolio_transactions SET ${clauses.join(", ")} WHERE id = $${nextIdx} RETURNING *`,
-    params,
+    sql`UPDATE portfolio_transactions SET ${sql.join(clauses)} WHERE id = ${id} RETURNING *`,
   );
   return row ? mapPortfolioTxRow(row) : null;
 }
@@ -154,21 +128,23 @@ export async function updateFields(
 export async function hardDelete(
   id: PortfolioTransactionId,
 ): Promise<boolean> {
-  const result = await query(
-    "DELETE FROM portfolio_transactions WHERE id = $1",
-    [id],
-  );
-  return (result.rowCount ?? 0) > 0;
+  const result = await db
+    .deleteFrom("portfolio_transactions")
+    .where("id", "=", id)
+    .executeTakeFirst();
+  return result.numDeletedRows > 0n;
 }
 
 export async function hardDeleteByImportBatch(
   batchId: number | string,
 ): Promise<PortfolioTransactionId[]> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
-  const rows = await queryRows(
+  const rows = await checkedRows(
     portfolioTransactionKeyRowSchema,
-    "DELETE FROM portfolio_transactions WHERE import_batch_id = $1 RETURNING id",
-    [batchId],
+    db
+      .deleteFrom("portfolio_transactions")
+      .where("import_batch_id", "=", String(batchId))
+      .returning("id"),
   );
   return rows.map((row) => row.id);
 }
@@ -177,9 +153,10 @@ export async function repointAccount(
   targetId: AccountId,
   sourceIds: AccountId[],
 ): Promise<number> {
-  const result = await query(
-    "UPDATE portfolio_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])",
-    [targetId, sourceIds],
-  );
-  return result.rowCount ?? 0;
+  const result = await db
+    .updateTable("portfolio_transactions")
+    .set({ account_id: targetId })
+    .where("account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
 }

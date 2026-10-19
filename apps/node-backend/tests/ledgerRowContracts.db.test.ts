@@ -32,6 +32,7 @@ import {
 import { loose } from "./helpers/partial.ts";
 import type { ExpressResponse } from "../src/types/express.ts";
 import {
+  asAccountId,
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
@@ -205,11 +206,11 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
 
   it("closes an account with an adjustment through the checked lock, balance and insert rows", async () => {
     await seed();
-    await expect(previewAccountPortfolioLots(accountId)).resolves.toMatchObject(
+    await expect(previewAccountPortfolioLots(asAccountId(accountId))).resolves.toMatchObject(
       { eligible_count: 0, transaction_ids: [] },
     );
 
-    const result = await closeAccount(accountId, {
+    const result = await closeAccount(asAccountId(accountId), {
       balance_handling: "adjustment",
     });
     expect(result.already_closed).toBe(false);
@@ -222,7 +223,7 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
       }),
     ]);
 
-    const again = await closeAccount(accountId, {
+    const again = await closeAccount(asAccountId(accountId), {
       balance_handling: "adjustment",
     });
     expect(again.already_closed).toBe(true);

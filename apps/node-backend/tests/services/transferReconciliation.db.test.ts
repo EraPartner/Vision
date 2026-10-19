@@ -432,7 +432,7 @@ describe.skipIf(!hasTestDatabase())(
           while (Date.now() < deadline) {
             waiting = (
               await getTestPool()!.query(
-                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM transactions%FOR UPDATE%') AS waiting",
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ~* 'from \"?transactions\"?.*for update') AS waiting",
               )
             ).rows[0].waiting;
             if (waiting) break;

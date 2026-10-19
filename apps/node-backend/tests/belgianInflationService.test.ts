@@ -401,7 +401,7 @@ describe("belgianInflationService", () => {
     const insertCalls = query.mock.calls.filter(
       ([sql]) =>
         typeof sql === "string" &&
-        sql.includes("INSERT INTO belgian_inflation_rates"),
+        /insert into "?belgian_inflation_rates"?/i.test(sql),
     );
     expect(insertCalls).toHaveLength(1);
 

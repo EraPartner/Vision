@@ -105,11 +105,13 @@ describe("portfolio import zero-row guard", () => {
       }),
     ).rejects.toBeInstanceOf(ValidationError);
 
-    const failedUpdate = query.mock.calls.find(([sql]) =>
-      /SET status = 'failed'/.test(sql),
+    const failedUpdate = query.mock.calls.find(
+      ([sql, params]) =>
+        /update "?portfolio_import_batches"?/i.test(sql) &&
+        params?.[0] === "failed",
     );
     expect(failedUpdate).toBeDefined();
-    expect(failedUpdate![1]![0]).toBe(42);
+    expect(failedUpdate![1]).toContain("42");
     expect(failedUpdate![1]![1]).toMatch(/failed to parse/);
   });
 });

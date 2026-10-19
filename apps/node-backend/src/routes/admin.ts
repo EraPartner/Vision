@@ -13,16 +13,16 @@
 
 import { Router } from "express";
 import https from "https";
+import { sql } from "kysely";
 import { z } from "zod";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
 import {
   checkConnection,
   getClient,
   getTableCount,
-  query,
 } from "../database/connection.ts";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption: checks the stats/VACUUM catalog rows above
-import { checkRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, compileQuery } from "../database/db.ts";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption as above
 import {
   databaseSizeRowSchema,
@@ -346,9 +346,10 @@ router.post(
 // ── Database Maintenance ───────────────────────────────────────────────────────
 
 router.get("/database/stats", async (_req, res) => {
-  const [tablesResult, sizeResult] = await Promise.all([
-    query(
-      `
+  const [tables, size] = await Promise.all([
+    checkedRows(
+      tableStatsRowSchema,
+      sql`
       SELECT
         schemaname,
         relname AS table_name,
@@ -361,16 +362,14 @@ router.get("/database/stats", async (_req, res) => {
       FROM pg_stat_user_tables
       ORDER BY size_bytes DESC
     `,
-      [],
     ),
-    query(
-      `SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size`,
-      [],
+    checkedRow(
+      databaseSizeRowSchema,
+      sql`SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size`,
     ),
   ]);
-  const [size] = checkRows(databaseSizeRowSchema, sizeResult.rows);
   res.ok({
-    tables: checkRows(tableStatsRowSchema, tablesResult.rows),
+    tables,
     db_size: size?.db_size ?? null,
   });
 });
@@ -382,13 +381,11 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
   const { table } = parseInput(vacuumBodySchema, req.body ?? {});
 
   // Validate table name against actual user tables to prevent injection
-  const allowed = await query(
-    `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
-    [],
+  const allowed = await checkedRows(
+    userTableNameRowSchema,
+    sql`SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
   );
-  const allowedNames = new Set(
-    checkRows(userTableNameRowSchema, allowed.rows).map((r) => r.relname),
-  );
+  const allowedNames = new Set(allowed.map((r) => r.relname));
 
   if (table != null && !allowedNames.has(table)) {
     throw new ValidationError(`Unknown table: ${table}`);
@@ -398,12 +395,13 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
   const client = await getClient();
   try {
     await client.query("SET statement_timeout = 120000");
-    // codeql[js/sql-injection]: `table` is validated against the allowlist
-    // populated from pg_stat_user_tables above; double-quoting the identifier
-    // prevents identifier-injection. VACUUM also rejects parameterized
-    // identifiers, so dynamic SQL is the only viable form here.
-    const sql = table ? `VACUUM ANALYZE "${table}"` : "VACUUM ANALYZE";
-    await client.query(sql);
+    // `table` is validated against the allowlist populated from
+    // pg_stat_user_tables above and quoted as an identifier. VACUUM rejects
+    // parameterized identifiers, so it cannot be a bound parameter.
+    const vacuum = compileQuery(
+      table ? sql`VACUUM ANALYZE ${sql.id(table)}` : sql`VACUUM ANALYZE`,
+    );
+    await client.query(vacuum.sql);
   } catch (err) {
     if (err instanceof Error && "code" in err && err.code === "42501") {
       // insufficient_privilege

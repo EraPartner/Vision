@@ -918,7 +918,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | `createPattern` / `updatePattern` / `deletePattern` | Pattern lifecycle                    |
 | `listPatternsForRecipient(recipientId)`             | Recipient pattern list               |
 
-**Dependencies:** `connection.js`, `lib/sqlClauses.ts`, `logger.js`, typed error classes.
+**Dependencies:** `connection.js`, `logger.js`, typed error classes.
 
 ---
 
@@ -931,7 +931,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 | --------------------------------------------- | ----------------------------------------------------------- |
 | `streamCsvExport(res, filters)`               | builds the WHERE model and streams `text/csv`               |
 | `streamNdjsonExport(res, filters)`            | builds the WHERE model and streams `application/x-ndjson`   |
-| `buildIdListWhere(ids)`                       | fixed-id export clause and parameters                       |
+| `buildIdListWhere(ids)`                       | `{ where }`: fixed-id export predicate (`sql` fragment)     |
 | `streamBulkTransactionExport(res, selection)` | resolves and streams a bulk export in one database snapshot |
 
 **Dependencies:** `database/connection.ts`, `bulkSelection.js`, `lib/filterBuilder.ts`, `lib/csv.ts`, `lib/money.ts`, `calculations/portfolioMath.js`, logger and typed errors.
@@ -956,11 +956,12 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 **File:** [[apps/node-backend/src/lib/filterBuilder.ts]]
 **Purpose:** Builds parameterised `WHERE` clauses for transaction queries from a normalised filter object. Single source of truth shared by list, export, bulk and aggregation paths to keep filter semantics consistent.
 
-| Function                         | Returns           |
-| -------------------------------- | ----------------- |
-| `buildTransactionWhere(filters)` | `{ sql, params }` |
+| Function                         | Returns                                         |
+| -------------------------------- | ----------------------------------------------- |
+| `buildTransactionWhere(filters)` | Kysely `sql` fragment with bound values         |
+| `exclusionClauses(opts)`         | `{ joins, where, active }` Kysely `sql` fragments |
 
-**Dependencies:** none (pure).
+**Dependencies:** `kysely` (`sql` tag only), `lib/validation.ts`.
 
 ---
 

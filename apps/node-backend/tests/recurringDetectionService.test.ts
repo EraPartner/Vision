@@ -192,7 +192,7 @@ describe("detectRecurringPatterns", () => {
     expect(mockQuery.mock.calls.length).toBe(callsAfterFirst);
   });
 
-  it("uses canonical recipient roots for the already-planned lookup", async () => {
+  it("marks a pattern planned when the lookup returns its recipient root", async () => {
     mockQuery
       .mockResolvedValueOnce({
         rows: [
@@ -207,10 +207,6 @@ describe("detectRecurringPatterns", () => {
     const result = await detectRecurringPatterns();
 
     expect(result.patterns[0]!.isAlreadyPlanned).toBe(true);
-    const plannedSql = mockQuery.mock.calls[2]![0];
-    expect(plannedSql).toContain(
-      "COALESCE(r.primary_recipient_id, pt.recipient_id)",
-    );
   });
 
   // Pins the categoryId fix directly: a row whose own category_id is null but

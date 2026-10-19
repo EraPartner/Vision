@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { sql } from "kysely";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
@@ -109,7 +110,7 @@ describe("export date serialization", () => {
     const res = mockRes();
 
     await expect(
-      streamCsvExport(res, { whereSql: "1=1", params: [], nextParamIdx: 1 }),
+      streamCsvExport(res, { where: sql`1=1` }),
     ).rejects.toThrow("stream failed");
     expect(res.destroy).toHaveBeenCalledWith(
       expect.objectContaining({ message: "stream failed" }),
@@ -122,9 +123,7 @@ describe("export date serialization", () => {
     const res = mockRes();
 
     await streamCsvExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
     });
 
     const dataRow = res.chunks[1]; // [0] is the header line
@@ -141,9 +140,7 @@ describe("export date serialization", () => {
     const res = mockRes();
 
     await streamCsvExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
       includeBalance: true,
     });
 
@@ -162,9 +159,7 @@ describe("export date serialization", () => {
     const res = mockRes();
 
     await streamCsvExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
       includeBalance: true,
     });
 
@@ -179,9 +174,7 @@ describe("export date serialization", () => {
     const res = mockRes();
 
     await streamNdjsonExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
     });
 
     const parsed = JSON.parse(res.chunks[0]!);
@@ -195,9 +188,7 @@ describe("export tag aggregation", () => {
     const res = mockRes();
 
     await streamCsvExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
     });
 
     // Tags column (10th) preserves order and joins with ';'.
@@ -209,9 +200,7 @@ describe("export tag aggregation", () => {
     const res = mockRes();
 
     await streamNdjsonExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
     });
 
     expect(JSON.parse(res.chunks[0]!).tags).toEqual(["alpha", "beta", "gamma"]);
@@ -222,9 +211,7 @@ describe("export tag aggregation", () => {
     const res = mockRes();
 
     await streamNdjsonExport(res, {
-      whereSql: "1=1",
-      params: [],
-      nextParamIdx: 1,
+      where: sql`1=1`,
     });
 
     // dbQuery calls: [0] probe, [1] first chunk.

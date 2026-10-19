@@ -7,7 +7,8 @@
  * occurrence identity, and mark the row 'validated' or 'error'.
  */
 
-import { query } from "../../database/connection.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../../database/db.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { logger } from "../../config/logger.ts";
 import { toYmd } from "../calculations/portfolioMath.ts";
@@ -19,7 +20,6 @@ import {
   assignImportIdentities,
   portfolioIdentityBase,
 } from "../importIdentity.ts";
-import { queryOne, queryRows } from "../../database/rowContracts.ts";
 import {
   pendingPortfolioStagingRowSchema,
   validateBatchRowSchema,
@@ -65,19 +65,26 @@ export async function validateBatch({
   batchId: PortfolioImportBatchId;
   onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{ validated: number; duplicates: number; errors: number }> {
-  await query(
-    `UPDATE portfolio_import_batches SET status = 'validating' WHERE id = $1`,
-    [batchId],
-  );
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({ status: "validating" })
+    .where("id", "=", String(batchId))
+    .execute();
 
-  const batchRow = await queryOne(
+  const batchRow = await checkedRow(
     validateBatchRowSchema,
-    `SELECT b.default_asset_class, b.default_type, b.custom_config, b.is_brokerage,
-            b.adapter_name, a.import_identity::text AS account_import_identity
-       FROM portfolio_import_batches b
-       LEFT JOIN accounts a ON a.id = b.account_id
-      WHERE b.id = $1`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_batches as b")
+      .leftJoin("accounts as a", "a.id", "b.account_id")
+      .select([
+        "b.default_asset_class",
+        "b.default_type",
+        "b.custom_config",
+        "b.is_brokerage",
+        "b.adapter_name",
+        sql<string | null>`a.import_identity::text`.as("account_import_identity"),
+      ])
+      .where("b.id", "=", String(batchId)),
   );
   const batch: Partial<ValidateBatchRow> = batchRow ?? {};
   const defaultAssetClass = batch.default_asset_class || undefined;
@@ -93,20 +100,38 @@ export async function validateBatch({
     : false;
   // Native funding is a new source-ID format. Keep its calendar date on the
   // wire without changing legacy field fingerprints already stored by CSV imports.
-  const dateProjection =
+  const txDate =
     config.format === "ibkr_funding_history"
-      ? "to_char(tx_date, 'YYYY-MM-DD') AS tx_date"
-      : "tx_date";
+      ? sql<Date | string | null>`to_char(tx_date, 'YYYY-MM-DD')`
+      : sql<Date | string | null>`tx_date`;
 
-  const allRows = await queryRows(
+  const allRows = await checkedRows(
     pendingPortfolioStagingRowSchema,
-    `SELECT id, row_index, status, ${dateProjection}, type_raw, symbol_raw, name_raw, units,
-            price_per_unit, amount, fees, taxes, currency, note, raw_data,
-            source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details
-       FROM portfolio_import_staging_rows
-      WHERE batch_id = $1
-      ORDER BY row_index ASC`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_staging_rows")
+      .select([
+        "id",
+        "row_index",
+        "status",
+        txDate.as("tx_date"),
+        "type_raw",
+        "symbol_raw",
+        "name_raw",
+        "units",
+        "price_per_unit",
+        "amount",
+        "fees",
+        "taxes",
+        "currency",
+        "note",
+        "raw_data",
+        "source_transaction_id",
+        "source_account_identity",
+        "asset_transfer_details",
+        "asset_adjustment_details",
+      ])
+      .where("batch_id", "=", String(batchId))
+      .orderBy("row_index", "asc"),
   );
 
   // App-timezone calendar day (ADR-009), computed once — used to reject
@@ -186,8 +211,7 @@ export async function validateBatch({
       errorMessages.push(null);
     }
 
-    await query(
-      `UPDATE portfolio_import_staging_rows s
+    await sql`UPDATE portfolio_import_staging_rows s
           SET status        = v.status,
               type          = v.type::portfolio_txn_type,
               route         = v.route,
@@ -196,30 +220,21 @@ export async function validateBatch({
               dedup_fingerprint_version = v.fingerprint_version,
               dedup_occurrence = v.occurrence,
               error_message = v.error_message
-         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::smallint[], $8::integer[], $9::text[])
+         FROM unnest(${ids}::bigint[], ${statuses}::text[], ${types}::text[], ${routes}::text[],
+                     ${txHashes}::text[], ${sourceRecordHashes}::text[], ${fingerprintVersions}::smallint[],
+                     ${occurrences}::integer[], ${errorMessages}::text[])
               AS v(id, status, type, route, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
-        WHERE s.id = v.id`,
-      [
-        ids,
-        statuses,
-        types,
-        routes,
-        txHashes,
-        sourceRecordHashes,
-        fingerprintVersions,
-        occurrences,
-        errorMessages,
-      ],
-    );
+        WHERE s.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: "validating", current: seen, total });
   }
 
   if (errors > 0) {
-    await query(
-      `UPDATE portfolio_import_batches SET rows_error = COALESCE(rows_error, 0) + $2 WHERE id = $1`,
-      [batchId, errors],
-    );
+    await db
+      .updateTable("portfolio_import_batches")
+      .set({ rows_error: sql<number>`COALESCE(rows_error, 0) + ${errors}` })
+      .where("id", "=", String(batchId))
+      .execute();
   }
 
   // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic

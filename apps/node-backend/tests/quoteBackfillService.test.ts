@@ -443,10 +443,10 @@ describe("Quote Backfill Service", () => {
       await refreshQuotesForInvestment(42);
 
       expect(query).toHaveBeenCalledTimes(2);
-      expect(query).toHaveBeenLastCalledWith(
-        "DELETE FROM asset_price_history WHERE investment_id = $1",
-        [42],
-      );
+      // The last statement deletes every stored quote of investment 42.
+      const [deleteSql, deleteParams] = query.mock.calls.at(-1)!;
+      expect(String(deleteSql)).toMatch(/^delete from "asset_price_history"/i);
+      expect(deleteParams).toEqual([42]);
     });
 
     it("backfills and cleans up for a valid investment", async () => {

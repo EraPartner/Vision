@@ -5,13 +5,15 @@
  * Table is defined in db/migrations/0001_baseline.sql.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   settingRowSchema,
   settingValueRowSchema,
 } from "../database/rows/catalog.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
+import type { Json } from "../database/schema.generated.ts";
 
 /**
  * Settings whose values are plain strings. The legacy self-heal in
@@ -50,6 +52,16 @@ export interface SettingExpectation {
  *
  * @param value Parsed JSONB value from pg.
  */
+/** `JSON.stringify(value)` bound as a jsonb parameter (undefined binds NULL). */
+const jsonb = (value: unknown) =>
+  sql<Json>`${JSON.stringify(value)}::jsonb`;
+
+const settingRows = () =>
+  db.selectFrom("user_settings").select(["key", "value"]).orderBy("key");
+
+const settingValue = (key: string) =>
+  db.selectFrom("user_settings").select("value").where("key", "=", key);
+
 function reviveLegacyJsonString(
   key: string,
   value: SettingValue,
@@ -67,10 +79,7 @@ export const settingsRepository = {
     settings: Record<string, SettingValue>;
     expected: Record<string, SettingExpectation>;
   }> {
-    const rows = await queryRows(
-      settingRowSchema,
-      "SELECT key, value FROM user_settings ORDER BY key",
-    );
+    const rows = await checkedRows(settingRowSchema, settingRows());
     const settings = Object.fromEntries(
       rows.map((row) => [row.key, reviveLegacyJsonString(row.key, row.value)]),
     );
@@ -84,11 +93,7 @@ export const settingsRepository = {
   async getRecord(
     key: string,
   ): Promise<{ value?: SettingValue; expected: SettingExpectation }> {
-    const row = await queryOne(
-      settingValueRowSchema,
-      "SELECT value FROM user_settings WHERE key = $1",
-      [key],
-    );
+    const row = await checkedRow(settingValueRowSchema, settingValue(key));
     if (!row) return { expected: { exists: false } };
     return {
       value: reviveLegacyJsonString(key, row.value),
@@ -110,17 +115,20 @@ export const settingsRepository = {
     expected: { exists: true; value: V };
   }> {
     const result = expected.exists
-      ? await query(
-          `UPDATE user_settings SET value = $2::jsonb, updated_at = NOW()
-          WHERE key = $1 AND value = $3::jsonb RETURNING key`,
-          [key, JSON.stringify(value), JSON.stringify(expected.value)],
-        )
-      : await query(
-          `INSERT INTO user_settings (key, value, updated_at)
-          VALUES ($1, $2::jsonb, NOW()) ON CONFLICT (key) DO NOTHING RETURNING key`,
-          [key, JSON.stringify(value)],
-        );
-    if ((result.rowCount ?? 0) === 0)
+      ? await db
+          .updateTable("user_settings")
+          .set({ value: jsonb(value), updated_at: sql<Date>`NOW()` })
+          .where("key", "=", key)
+          .where("value", "=", jsonb(expected.value))
+          .executeTakeFirst()
+          .then((r) => r.numUpdatedRows)
+      : await db
+          .insertInto("user_settings")
+          .values({ key, value: jsonb(value), updated_at: sql<Date>`NOW()` })
+          .onConflict((oc) => oc.column("key").doNothing())
+          .executeTakeFirst()
+          .then((r) => r.numInsertedOrUpdatedRows ?? 0n);
+    if (result === 0n)
       throw new ConflictError("Settings changed. Reload before saving again.");
     return { key, value, expected: { exists: true, value } };
   },
@@ -148,12 +156,12 @@ export const settingsRepository = {
   ): Promise<true> {
     if (!expected.exists)
       throw new ConflictError("Settings changed. Reload before deleting.");
-    const result = await query(
-      `DELETE FROM user_settings
-      WHERE key = $1 AND value = $2::jsonb RETURNING key`,
-      [key, JSON.stringify(expected.value)],
-    );
-    if ((result.rowCount ?? 0) === 0)
+    const result = await db
+      .deleteFrom("user_settings")
+      .where("key", "=", key)
+      .where("value", "=", jsonb(expected.value))
+      .executeTakeFirst();
+    if (result.numDeletedRows === 0n)
       throw new ConflictError("Settings changed. Reload before deleting.");
     return true;
   },
@@ -163,11 +171,7 @@ export const settingsRepository = {
    * @returns Parsed JSONB value, or null.
    */
   async get(key: string): Promise<SettingValue> {
-    const row = await queryOne(
-      settingValueRowSchema,
-      "SELECT value FROM user_settings WHERE key = $1",
-      [key],
-    );
+    const row = await checkedRow(settingValueRowSchema, settingValue(key));
     if (!row) return null;
     return reviveLegacyJsonString(key, row.value);
   },
@@ -176,10 +180,7 @@ export const settingsRepository = {
    * Get all settings as a key→value map.
    */
   async getAll(): Promise<Record<string, SettingValue>> {
-    const rows = await queryRows(
-      settingRowSchema,
-      "SELECT key, value FROM user_settings ORDER BY key",
-    );
+    const rows = await checkedRows(settingRowSchema, settingRows());
     const settings: Record<string, SettingValue> = {};
     for (const row of rows) {
       settings[row.key] = reviveLegacyJsonString(row.key, row.value);
@@ -192,14 +193,16 @@ export const settingsRepository = {
    * @param value Arbitrary JSON-serialisable value.
    */
   async set<V>(key: string, value: V): Promise<{ key: string; value: V }> {
-    const jsonValue = JSON.stringify(value);
-
-    await query(
-      `INSERT INTO user_settings (key, value, updated_at)
-       VALUES ($1, $2::jsonb, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = NOW()`,
-      [key, jsonValue],
-    );
+    await db
+      .insertInto("user_settings")
+      .values({ key, value: jsonb(value), updated_at: sql<Date>`NOW()` })
+      .onConflict((oc) =>
+        oc.column("key").doUpdateSet({
+          value: jsonb(value),
+          updated_at: sql<Date>`NOW()`,
+        }),
+      )
+      .execute();
     return { key, value };
   },
 
@@ -208,11 +211,11 @@ export const settingsRepository = {
    * @returns true if a row was removed
    */
   async delete(key: string): Promise<boolean> {
-    const result = await query(
-      "DELETE FROM user_settings WHERE key = $1 RETURNING key",
-      [key],
-    );
-    return (result.rowCount ?? 0) > 0;
+    const result = await db
+      .deleteFrom("user_settings")
+      .where("key", "=", key)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 
   /**
@@ -230,13 +233,12 @@ export const settingsRepository = {
       values.push(JSON.stringify(value));
     }
 
-    await query(
-      `INSERT INTO user_settings (key, value, updated_at)
-       SELECT u.key, u.value::jsonb, NOW()
-       FROM UNNEST($1::text[], $2::text[]) AS u(key, value)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [keys, values],
-    );
+    await sql`
+      INSERT INTO user_settings (key, value, updated_at)
+      SELECT u.key, u.value::jsonb, NOW()
+      FROM UNNEST(${keys}::text[], ${values}::text[]) AS u(key, value)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `.execute(db);
   },
 };
 

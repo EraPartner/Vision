@@ -14,7 +14,8 @@
  * of dismiss records lives elsewhere (UI layer owns it).
  */
 
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../database/db.ts";
 import { categoryOutlierExpenseRowSchema } from "../database/rows/catalog.ts";
 import { logger } from "../config/logger.ts";
 import { addAll, roundMoney, toDecimal } from "../lib/money.ts";
@@ -328,19 +329,22 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
     // Expenses of the last ~7 calendar months: the current (partial) month
     // plus 6 full prior months for the baseline. Bounded so the scan cost
     // stays flat regardless of total history size.
-    const rows = await queryRows(
+    const rows = await checkedRows(
       categoryOutlierExpenseRowSchema,
-      `
-      SELECT t.date, t.amount, t.category_id,
-             c.path_name AS category_name
-      FROM transactions t
-      LEFT JOIN categories c ON t.category_id = c.id
-      WHERE t.is_active = true
-        AND t.category_id IS NOT NULL
-        AND t.amount < 0
-        AND t.date >= CURRENT_DATE - INTERVAL '7 months'
-      ORDER BY t.category_id, t.date
-    `,
+      db
+        .selectFrom("transactions as t")
+        .leftJoin("categories as c", "t.category_id", "c.id")
+        .select([
+          "t.date",
+          "t.amount",
+          "t.category_id",
+          "c.path_name as category_name",
+        ])
+        .where("t.is_active", "=", true)
+        .where("t.category_id", "is not", null)
+        .where(sql<boolean>`t.amount < 0`)
+        .where("t.date", ">=", sql<Date>`CURRENT_DATE - INTERVAL '7 months'`)
+        .orderBy(["t.category_id", "t.date"]),
     );
 
     const findings = computeOutliers(rows, new Date());

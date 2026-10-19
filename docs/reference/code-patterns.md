@@ -644,14 +644,25 @@ against what node-postgres really returns ([[docs/adr/193-zod-runtime-contracts|
 [[docs/adr/194-runtime-contracts-completion|ADR-194]]):
 
 ```ts
-import { queryOne, queryRows, requireRow } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { requireRow } from "../database/rowContracts.ts";
 import { accountRowSchema, countRowSchema } from "../database/rowSchemas.ts";
 
-const rows = await queryRows(accountRowSchema, sql, params);
-const account = await queryOne(accountRowSchema, sqlById, [id], client); // first row or undefined
-const [row] = await queryRows(countRowSchema, countSql, []);
+const rows = await checkedRows(accountRowSchema, db.selectFrom("accounts").selectAll());
+const account = await checkedRow( // first row or undefined
+  accountRowSchema,
+  db.selectFrom("accounts").selectAll().where("id", "=", id),
+);
+const row = await checkedRow(
+  countRowSchema,
+  db.selectFrom("accounts").select(sql<string>`COUNT(*)`.as("count")),
+);
 return parseInt(requireRow(row, "account count").count, 10);
 ```
+
+Queries are built with Kysely's `db` ([[docs/adr/226-kysely-query-builder|ADR-226]]); analytical
+SQL uses the `sql` tag, and `queryRows`/`queryOne` remain for SQL strings that stay raw.
 
 | Rule             | Detail                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -982,9 +993,10 @@ const total = page ? await repository.getCount({ active }) : items.length;
 res.ok(listBody(items, total, page)); // adds limit/offset only when paging
 ```
 
-Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
-([[apps/node-backend/src/lib/sqlClauses.ts]]) so a `null` limit emits no `LIMIT`
-clause at all, rather than a large default that silently caps the result.
+Repository side: add `.limit(limit).offset(offset)` to the Kysely query (or a
+`sql` LIMIT/OFFSET fragment) only when `limit` is set, so a `null` limit emits no
+`LIMIT` clause at all, rather than a large default that silently caps the result
+(see `accountRepository.getAll` in [[apps/node-backend/src/repositories/accountRepository.ts]]).
 
 ### Frontend Consumption
 
@@ -1757,48 +1769,41 @@ Centralized SQL WHERE clause builder for transaction-like queries. Consolidates 
 
 ### Usage
 
-```js
-import {
-  buildTransactionWhere,
-  validateInt4Ids,
-} from "../lib/filterBuilder.ts";
+```ts
+import { sql } from "kysely";
+import { checkedRows } from "../database/db.ts";
+import { buildTransactionWhere, exclusionClauses } from "../lib/filterBuilder.ts";
 
-const opts = {
+const where = buildTransactionWhere({
   startDate: "2026-01-01",
   endDate: "2026-12-31",
   categoryId: 5,
-  excludedCategoryIds: [10, 11, 12],
-  excludedRecipientIds: [20, 21],
-  bankAccount: "CH93%", // ILIKE substring
+  bankAccount: "CH93", // ILIKE substring
   active: true,
-  startParamIdx: 1,
-};
+});
+const excl = exclusionClauses({ excludedCategoryIds: [10, 11], excludedRecipientIds: [20] });
 
-const { sql, params, nextParamIdx } = buildTransactionWhere(opts);
-
-const query = `
-  SELECT t.*, r.name, c.general, c.detail
-  FROM transactions t
-  LEFT JOIN recipients r ON t.recipient_id = r.id
-  LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-  LEFT JOIN categories c ON t.category_id = c.id
-  LEFT JOIN categories rc ON r.default_category_id = rc.id
-  LEFT JOIN categories pc ON pr.default_category_id = pc.id
-  WHERE ${sql}
-  ORDER BY t.date DESC
-  LIMIT 50;
-`;
-
-const result = await db.query(query, params);
+const rows = await checkedRows(
+  someRowSchema,
+  sql`SELECT t.* FROM transactions t
+      ${excl.joins}
+      WHERE ${where} ${excl.where}
+      ORDER BY t.date DESC LIMIT ${50}`,
+);
 ```
 
 ### Contract
 
-Every builder returns `{ sql, params, nextParamIdx }`:
+The builders return Kysely `sql` fragments (ADR-226) whose values are bound
+parameters, so they compose into a larger `sql` template without placeholder
+bookkeeping:
 
-- `sql` — Composable fragment with no leading/trailing whitespace guarantees
-- `params` — Flattened array of bind parameters (in order with `sql`)
-- `nextParamIdx` — First unused `$`-index for further predicates
+- `buildTransactionWhere(opts)` — the predicate (`1=1 AND …`) over `transactions t`;
+  only `recipientName` references the joined `r`.
+- `exclusionClauses(opts)` — `{ joins, where, active }`: `where` is `AND <predicates>`
+  (empty when nothing is excluded) and `joins` is `EXCLUSION_JOINS` (the `r`/`pr`
+  recipient joins) only when a predicate exists. `andClauses(list)` joins further
+  fragments the same way.
 
 ### Options
 
@@ -1813,6 +1818,7 @@ Every builder returns `{ sql, params, nextParamIdx }`:
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `validateInt4Ids(ids, fieldName?)` | Validate a list of PostgreSQL INT4 IDs. **Rejects, does not filter** — throws `ValidationError` if any element is not a plain digit string or integer number in `1..2^31-1`. Nullish input means "no ids" and returns `[]` |
 | `buildTransactionWhere(opts)`      | Build full transaction WHERE clause with all filters; includes `recipientGroupId` support (Phase Q)                                                                                                                        |
+| `exclusionClauses(opts)`           | Dashboard/info exclusion predicates (category descendants under the effective category, primary-recipient groups) with their `r`/`pr` joins                                                                                 |
 
 ### Recipient Group Resolution (Phase Q)
 
