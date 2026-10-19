@@ -14,7 +14,7 @@ aliases: [ADR-116, gated release promotion, release attestations]
 ## Status
 
 > [!warning] Partially superseded
-> [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]] retired the source-launcher
+> [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]] retired the source-launcher
 > update channel on 2026-10-19. Releases no longer build or attest a
 > source-launcher ZIP; the DMG and native app ZIP attestations remain.
 

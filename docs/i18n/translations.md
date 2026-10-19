@@ -493,7 +493,7 @@ Code links: [[apps/frontend/src/hooks/useUpcomingPlannedPayments.ts]], [[apps/fr
 
 #### Electron-Native Desktop Integration (June 2026, ADR-072)
 
-The original V12 integration added 11 keys. The cross-platform About follow-up adds `menu.about`, bringing the native group to 12 keys and the current locale source to **3,136 keys** per `generate-locales` on 2026-08-27. On 2026-10-19 the macOS-only shell ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]) removed the Windows/Linux About item and the `menu.about` key.
+The original V12 integration added 11 keys. The cross-platform About follow-up adds `menu.about`, bringing the native group to 12 keys and the current locale source to **3,136 keys** per `generate-locales` on 2026-08-27. On 2026-10-19 the macOS-only shell ([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]) removed the Windows/Linux About item and the `menu.about` key.
 
 **10 `menu.*` keys** — native desktop application menu labels:
 

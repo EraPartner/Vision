@@ -6,7 +6,7 @@ date: 2026-10-19
 updated: 2026-10-19
 last_modified: 2026-10-06
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
-description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-218), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
+description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.ts", "apps/node-backend/src/backup/coverage.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
 ---
@@ -309,7 +309,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v2 for
 - **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
 - **Mode:** CBC (confidentiality only; no authentication)
 - **Confidentiality:** ✅ Provided | **Authenticity:** ❌ Not provided | **Per-backup Entropy:** ❌ No
-- **Status:** Not written since 2026-04-28 and no longer restored since 2026-10-19 ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]], superseding ADR-040's v1-readable clause). Restore refuses the file by its magic before any decryption with "This backup uses the retired v1 encryption format, which Vision no longer restores." Restore such a file with an older Vision release and create a new backup.
+- **Status:** Not written since 2026-04-28 and no longer restored since 2026-10-19 ([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]], superseding ADR-040's v1-readable clause). Restore refuses the file by its magic before any decryption with "This backup uses the retired v1 encryption format, which Vision no longer restores." Restore such a file with an older Vision release and create a new backup.
 
 **v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
 

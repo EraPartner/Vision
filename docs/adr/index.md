@@ -273,7 +273,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-19: Minimal macOS Electron shell hardening; retire v1 backups (accepted)
 
-[[docs/adr/218-minimal-electron-shell-hardening|ADR-218]] makes the shell macOS-only, flips
+[[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] makes the shell macOS-only, flips
 packaged Electron fuses before the ad-hoc seal (`NODE_OPTIONS` and inspect arguments off, asar
 integrity and asar-only loading on, RunAsNode kept for the update installer), denies permissions
 in every profile, sandboxes all renderers and refuses webviews. The watchdog pauses during sleep,
@@ -283,7 +283,7 @@ offer Vision in Open With, and a banner shows backend loss. Restore refuses reti
 
 ### 2026-10-19: Retire the source-launcher update channel (accepted)
 
-[[docs/adr/217-retire-source-launcher-update-channel|ADR-217]] removes `launch.command`, the
+[[docs/adr/218-retire-source-launcher-update-channel|ADR-218]] removes `launch.command`, the
 `vision-source-launcher-*.zip` release asset with its source SBOM and attestation, and the
 generated shell installer. The packaged app updater is the only in-app install path; development
 runs report `update_mode: "source"` and open the release page. It supersedes the source-launcher
@@ -569,7 +569,7 @@ audited mutable tables that lacked them.
 [[docs/adr/116-gated-release-candidate-promotion|ADR-116]] (Accepted) publishes Docker candidates
 without tags, scans and migration-tests the exact digest, and promotes only a passing index. The
 release scan shares CI's accepted-risk file, while the DMG, native ZIP, and source-launcher ZIP gain
-GitHub attestations before the release is created. (Source-launcher ZIP retired by ADR-217.)
+GitHub attestations before the release is created. (Source-launcher ZIP retired by ADR-218.)
 
 ### 2026-08-31: Asynchronous import materialized-view refresh
 

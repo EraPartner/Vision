@@ -14,7 +14,7 @@ aliases: [adr-196, electron typescript, type-safety phase 5b]
 ## Status
 
 > [!warning] Partially superseded
-> [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]] retired the source-launcher
+> [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]] retired the source-launcher
 > update channel on 2026-10-19. The source launcher is no longer a
 > build entry point; the TypeScript shell decisions remain active.
 

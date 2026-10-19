@@ -45,7 +45,7 @@ group Restore backup
     UI -> Main     : retry with passphrase
   end
   alt retired v1 magic (VISIONBAK1 / VISIONENC1)
-    Backup -> Main : refuse before decryption (ADR-218)
+    Backup -> Main : refuse before decryption (ADR-219)
     Main -> UI     : "retired v1 encryption format,\nVision no longer restores it"
   end
   Main -> Backup : decryptBundle(file, passphrase)
@@ -76,7 +76,7 @@ note right of Backup
   - per-backup random salt (was static)
   - scrypt N=2^15 (was 2^14)
   - v1 (CBC) files are refused by magic
-    header since 2026-10-19 (ADR-218).
+    header since 2026-10-19 (ADR-219).
 end note
 
 note right of Main

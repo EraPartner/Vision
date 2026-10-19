@@ -1,14 +1,14 @@
 ---
-title: "ADR-218: Minimal macOS Electron shell hardening and v1 backup retirement"
+title: "ADR-219: Minimal macOS Electron shell hardening and v1 backup retirement"
 type: adr
 status: accepted
 date: 2026-10-19
 tags: [adr, electron, security, macos, packaging, fuses, sandbox, permissions, power-monitor, native-theme, file-associations, backup, encryption, retirement, adr-040, adr-155]
 description: "Accepted on 2026-10-19. The shell is macOS-only. Packaged builds flip Electron fuses before the ad-hoc seal (NODE_OPTIONS and inspect arguments off, embedded asar integrity and asar-only loading on; RunAsNode stays on for the update installer). Permission handlers apply in every profile, every renderer is sandboxed and webviews are refused. The health watchdog pauses during sleep, and logout or shutdown skips the optional backup-on-quit. Native UI follows the Appearance choice. Vision is offered for .csv files in Open With at Alternate rank. The renderer shows a reconnecting banner on backend loss. Retired v1 (AES-256-CBC, static salt) backups are refused; Tor decided this on 2026-10-19. Supersedes ADR-040's v1-readable clause and extends ADR-155."
-aliases: [adr-218, electron fuses, minimal electron shell, retire v1 backup encryption]
+aliases: [adr-219, electron fuses, minimal electron shell, retire v1 backup encryption]
 ---
 
-# ADR-218: Minimal macOS Electron shell hardening and v1 backup retirement
+# ADR-219: Minimal macOS Electron shell hardening and v1 backup retirement
 
 ## Status
 

@@ -605,7 +605,7 @@ Implementation notes:
 
 - Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
 - Every successful response uses the same core contract: `up_to_date`, `current_version`, `latest_version`, and `update_mode`. The no-release fallback therefore remains safe for the same frontend type as a normal release response.
-- `update_mode` is `source` | `native`. This HTTP route always answers `source` (browser deployments update from their host); inside Electron the renderer asks the updater bridge instead, which answers `native` for the packaged app and `source` for a development run. `source_launcher_available` and the `dev` value were removed by [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]].
+- `update_mode` is `source` | `native`. This HTTP route always answers `source` (browser deployments update from their host); inside Electron the renderer asks the updater bridge instead, which answers `native` for the packaged app and `source` for a development run. `source_launcher_available` and the `dev` value were removed by [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]].
 - The up-to-date comparison remains `latest === current` or `latest === v${current}` ([[apps/node-backend/src/routes/admin.ts]]).
 
 ---

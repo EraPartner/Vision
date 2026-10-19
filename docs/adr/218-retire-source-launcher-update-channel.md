@@ -1,14 +1,14 @@
 ---
-title: "ADR-217: Retire the source-launcher update channel; packaged app updates only"
+title: "ADR-218: Retire the source-launcher update channel; packaged app updates only"
 type: adr
 status: accepted
 date: 2026-10-19
 tags: [adr, electron, updates, release, packaging, retirement, adr-023, adr-116, adr-196]
 description: "Accepted on 2026-10-19 by Tor. The source-launcher distribution and update channel (packaging/electron/unsigned/launch.command, the vision-source-launcher-*.zip release asset, its source SBOM and attestation, and the generated rsync shell installer) is removed. The packaged Vision.app updater stays the only in-app install path; unpackaged development runs report update_mode \"source\" and open the release page."
-aliases: [adr-217, retire source launcher, packaged updates only]
+aliases: [adr-218, retire source launcher, packaged updates only]
 ---
 
-# ADR-217: Retire the source-launcher update channel; packaged app updates only
+# ADR-218: Retire the source-launcher update channel; packaged app updates only
 
 ## Status
 

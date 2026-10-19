@@ -14,7 +14,7 @@ related_code: ["packaging/electron/main.js", "packaging/electron/backup/bundle.j
 ## Status
 
 > [!warning] Partially superseded
-> [[docs/adr/218-minimal-electron-shell-hardening|ADR-218]] retired v1 backup encryption on
+> [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] retired v1 backup encryption on
 > 2026-10-19. Restore now refuses `VISIONENC1` and `VISIONBAK1` files instead of keeping them
 > readable indefinitely; the v2 AES-256-GCM format below remains active.
 

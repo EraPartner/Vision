@@ -274,7 +274,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    - If lock unavailable (another instance running), quit immediately
    - Otherwise, register `second-instance` handler to focus existing window
    - At module load, `app.enableSandbox()` sandboxes every renderer and a `web-contents-created`
-     hook cancels `will-attach-webview` ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]])
+     hook cancels `will-attach-webview` ([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]])
 
 2. **Security Headers Registration** via `registerSecurityHeaders()`
    - Installs the fail-closed permission request handler and the origin-scoped permission check
@@ -544,7 +544,7 @@ settings). Simplified merged view:
   file reaches the app through the `open-file` handoff described in
   [[#CSV Import Handoff — Two Paths]].
 
-#### Electron Fuses (ADR-218)
+#### Electron Fuses (ADR-219)
 
 The `afterPack` hook, `packaging/electron/scripts/finalize-native-package.ts`, verifies the
 native runtime manifest and then flips `ELECTRON_FUSES` through electron-builder's
@@ -599,7 +599,7 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 The shell supports Apple Silicon macOS only. `main.ts` has no Windows or Linux branches: the
 window always uses macOS chrome, closing the last window keeps the app running until an explicit
 Quit, and the badge, menus, vibrancy and accent color use the macOS APIs directly. Adding another
-platform would need those branches back ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]).
+platform would need those branches back ([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]).
 
 ### Bundled Components
 
@@ -715,7 +715,7 @@ Services, Hide, Hide Others, Show All and Quit; File ends with Close Window.
 `setAboutPanelOptions` supplies the application name, running version, and the
 copyright and AGPL-3.0 license line for the macOS About panel. The former
 Windows/Linux Help-menu About item and its `menu.about` key were removed by
-[[docs/adr/218-minimal-electron-shell-hardening|ADR-218]].
+[[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
 The repository and documentation Help items use fixed HTTPS destinations from
 the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
 
@@ -836,7 +836,7 @@ also the format new encrypted files use. A retired v1 AES-256-CBC file (`VISIONE
 `VISIONBAK1`) is still recognised as encrypted, so the passphrase prompt appears, but
 `decryptFile` then refuses it before decrypting with "This backup uses the retired v1 encryption
 format, which Vision no longer restores." and writes no plaintext
-([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]).
+([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]).
 
 **Bundle Format:**
 
@@ -882,7 +882,7 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for detailed 
 ### Application Updates (April–August 2026)
 
 Only the packaged app installs updates in-app; the source-launcher channel was retired by
-[[docs/adr/217-retire-source-launcher-update-channel|ADR-217]]. See
+[[docs/adr/218-retire-source-launcher-update-channel|ADR-218]]. See
 [[docs/features/application-updates|Application Updates Feature]] for the current architecture,
 IPC handlers, and frontend behavior.
 
@@ -1063,7 +1063,7 @@ contextBridge.exposeInMainWorld("electronRecovery", electronRecovery);
   later change creates, and a `web-contents-created` hook cancels
   `will-attach-webview`, so no `<webview>` can attach.
 - Packaged builds also flip Electron fuses before the ad-hoc seal; see
-  [[#Electron Fuses (ADR-218)]].
+  [[#Electron Fuses (ADR-219)]].
 
 ### Error Page (Sandbox-Safe)
 
@@ -1510,5 +1510,5 @@ that writer saves again. See [[docs/adr/173-conditional-settings-replacement|ADR
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
 - [[docs/adr/196-electron-shell-typescript|ADR-196: Electron Shell TypeScript]] — strict TypeScript compiled into `out/`
-- [[docs/adr/218-minimal-electron-shell-hardening|ADR-218: Minimal Electron Shell Hardening]] — macOS-only shell, fuses, permissions in every profile, power events, native theme, CSV Open With, backend banner, v1 backup retirement
+- [[docs/adr/219-minimal-electron-shell-hardening|ADR-219: Minimal Electron Shell Hardening]] — macOS-only shell, fuses, permissions in every profile, power events, native theme, CSV Open With, backend banner, v1 backup retirement
 - [[docs/security/index]] — Security documentation

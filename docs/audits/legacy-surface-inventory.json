@@ -1079,11 +1079,11 @@
       "title": "AES-256-CBC VISIONBAK1 backup reader",
       "domain": "Electron/backup/security",
       "classification": "historical-record-only",
-      "disposition": "Retired on 2026-10-19 by ADR-218, which supersedes ADR-040's v1-readable clause. The CBC decoder and v1 key derivation are removed; restore refuses VISIONBAK1 and VISIONENC1 by name before decryption.",
+      "disposition": "Retired on 2026-10-19 by ADR-219, which supersedes ADR-040's v1-readable clause. The CBC decoder and v1 key derivation are removed; restore refuses VISIONBAK1 and VISIONENC1 by name before decryption.",
       "paths": [
         "packaging/electron/backup/encrypted-file.ts",
         "packaging/electron/backup/bundle.ts",
-        "docs/adr/218-minimal-electron-shell-hardening.md"
+        "docs/adr/219-minimal-electron-shell-hardening.md"
       ],
       "readers": "None. Restore recognises the v1 magic only to refuse the file with the retired-format message.",
       "writers": "New backups write authenticated VISIONBAK2 only.",

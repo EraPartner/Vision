@@ -141,7 +141,7 @@ unchanged.
    verified commit with pinned runtime inputs. It scans the packaged app into a CycloneDX software
    bill of materials (SBOM), checks that it contains components, and attests the artifacts and SBOM
    through GitHub. The former source-launcher bundle and source SBOM were retired by
-   [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]]. The app does not
+   [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]]. The app does not
    have Apple Developer ID signing or notarization.
 3. **Create GitHub Release** downloads the staged artifacts, verifies build provenance, and adds
    every asset to a release-environment-gated draft. It checks exact asset names, sizes, digests

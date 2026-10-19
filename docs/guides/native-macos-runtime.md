@@ -147,7 +147,7 @@ alongside the current AES-256-GCM path, and fixed v1 AES-256-CBC vectors that mu
 Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore reads
 only AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`), the format new encrypted files use. Retired
 AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) are refused by name before decryption
-([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]). The macOS Keychain-backed `safeStorage` protects the
+([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]). The macOS Keychain-backed `safeStorage` protects the
 passphrase at rest, while the backup key itself is derived with scrypt.
 
 ## Updates and reports

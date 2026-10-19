@@ -339,7 +339,7 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 
 **Optional Encryption:** AES-256-GCM with scrypt key derivation. Restore reads only this v2
 format; retired AES-256-CBC v1 files are refused by name
-([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]).
+([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]).
 
 **Backup IPC handlers (9 total):** Handlers in `packaging/electron/main.ts`:
 
