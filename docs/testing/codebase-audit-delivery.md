@@ -2,7 +2,7 @@
 title: Codebase audit implementation delivery
 type: testing
 status: active
-date: 2026-10-18
+date: 2026-10-19
 tags: [audit, implementation, verification, recovery, performance]
 description: Implementation ledger for the October 2026 audit and the user-authorized waiver of further optional live acceptance checks.
 ---
@@ -24,7 +24,8 @@ outside this delivery. The filing workflow changes do not establish tax-rule cor
 ## Implementation ledger
 
 All 40 audit implementations, both walkthrough remediations and the selective test cleanup are
-delivered. TODO retains only the separately excluded Belgian tax correctness/household item.
+delivered. The separately excluded Belgian tax correctness and household item was delivered later in
+phases A to F ([[docs/adr/199-belgian-tax-source-verification]] to [[docs/adr/203-belgian-tax-pension-type-activity-income]]) and removed from TODO.
 Completion here means the implementation boundary authorized by the user, not successful live
 acceptance or confirmed reproduction of the original native warning.
 
