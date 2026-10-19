@@ -34,8 +34,16 @@ module.exports = {
       severity: "error",
       comment:
         "The import does not resolve. Fix the path or add the package to the workspace's package.json.",
-      from: {},
+      from: { pathNot: "^packaging/electron/" },
       to: { couldNotResolve: true },
+    },
+    {
+      name: "electron-not-to-unresolvable-file",
+      severity: "error",
+      comment:
+        "The import does not resolve. The CI lint job does not install the desktop shell's packages, so only relative imports are checked there.",
+      from: { path: "^packaging/electron/" },
+      to: { couldNotResolve: true, path: "^\\." },
     },
     {
       name: "no-undeclared-package",
