@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { renderHook } from "@testing-library/react";
+/**
+ * useStatistics request contract, observed at the HTTP boundary (MSW): which
+ * aggregation endpoints are requested, for which window, and with which
+ * exclusions. Settings and exclusion inputs are stubbed; react-query is real.
+ */
+import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { server } from "@/test/msw/server";
+import { createQueryWrapper } from "@/test/queryWrapper";
 
-vi.mock("@tanstack/react-query", () => ({ useQuery: vi.fn() }));
 vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({ appSettings: { defaultCurrency: "USD" } }),
 }));
@@ -14,161 +20,121 @@ vi.mock("@/hooks/useExcludedIds", () => ({
         isReady: true,
     }),
 }));
-vi.mock("@/lib/api/aggregations", () => ({
-    getAggregationMonthlySummary: vi.fn().mockResolvedValue({ data: {} }),
-    getAggregationAverageVsCurrent: vi.fn().mockResolvedValue({ data: {} }),
-    getAggregationCategoryPivot: vi.fn().mockResolvedValue({ data: {} }),
-    getAggregationRecipientInsights: vi.fn().mockResolvedValue({ data: {} }),
-    getAggregationRecipientByYear: vi.fn().mockResolvedValue({ data: {} }),
-}));
 
-import { useQuery } from "@tanstack/react-query";
-import {
-    getAggregationCategoryPivot,
-    getAggregationMonthlySummary,
-    getAggregationRecipientByYear,
-    getAggregationRecipientInsights,
-} from "@/lib/api/aggregations";
-import { aggregationKeys } from "@/lib/queryKeys";
 import { useRecipientInsights, useStatistics } from "../useStatistics";
 
-interface CapturedQueryOptions {
-    queryKey: readonly unknown[];
-    queryFn: () => Promise<unknown>;
-    enabled?: boolean;
-    staleTime?: number;
+interface SeenRequest {
+    endpoint: string;
+    params: URLSearchParams;
 }
 
-describe("useStatistics filtered queries", () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date("2026-09-07T12:00:00"));
-        vi.clearAllMocks();
-        vi.mocked(useQuery).mockReturnValue({
-            data: undefined,
-            error: null,
-            isError: false,
-            isLoading: false,
-        } as never);
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
-    it("preserves all four keys, exclusion arguments, and shared query policy", async () => {
-        renderHook(() => useStatistics());
-
-        const filtered = vi
-            .mocked(useQuery)
-            .mock.calls.map(
-                ([options]) => options as unknown as CapturedQueryOptions,
-            )
-            .filter(({ enabled }) => enabled === true);
-
-        expect(filtered).toHaveLength(4);
-        expect(filtered.map(({ queryKey }) => queryKey)).toEqual([
-            aggregationKeys.monthlySummaryFiltered("USD", [7], [8], "24m"),
-            aggregationKeys.categoryPivotFiltered("USD", [7], [8], "24m"),
-            aggregationKeys.recipientByYearFiltered("USD", [7], [8], "24m"),
-            aggregationKeys.recipientInsightsFiltered("USD", [7], [8], "24m"),
-        ]);
-        expect(filtered.every(({ staleTime }) => staleTime === 60_000)).toBe(
-            true,
-        );
-
-        await Promise.all(filtered.map(({ queryFn }) => queryFn()));
-
-        const exclusions = {
-            excluded_category_ids: [7],
-            excluded_recipient_ids: [8],
-        };
-        const dateRange = {
-            start_date: "2024-10-01",
-            end_date: "2026-09-07",
-        };
-        expect(getAggregationMonthlySummary).toHaveBeenCalledWith({
-            currency: "USD",
-            ...dateRange,
-            ...exclusions,
+let seen: SeenRequest[] = [];
+function record({ request }: { request: Request }) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/aggregations/")) {
+        seen.push({
+            endpoint: url.pathname.replace("/api/aggregations/", ""),
+            params: url.searchParams,
         });
-        expect(getAggregationCategoryPivot).toHaveBeenCalledWith({
-            currency: "USD",
-            ...dateRange,
-            ...exclusions,
-        });
-        expect(getAggregationRecipientByYear).toHaveBeenCalledWith({
-            currency: "USD",
-            ...dateRange,
-            excluded_recipient_ids: [8],
-            excluded_category_ids: [7],
-        });
-        expect(getAggregationRecipientInsights).toHaveBeenCalledWith({
-            currency: "USD",
-            ...dateRange,
-            ...exclusions,
-        });
-    });
+    }
+}
 
-    it("uses the explicit all-time contract without date bounds", async () => {
-        renderHook(() => useStatistics("all"));
+function summarize({ endpoint, params }: SeenRequest) {
+    return {
+        endpoint,
+        currency: params.get("currency"),
+        start_date: params.get("start_date"),
+        end_date: params.get("end_date"),
+        excluded_category_ids: params.getAll("excluded_category_ids"),
+        excluded_recipient_ids: params.getAll("excluded_recipient_ids"),
+    };
+}
 
-        const calls = vi
-            .mocked(useQuery)
-            .mock.calls.map(
-                ([options]) => options as unknown as CapturedQueryOptions,
+const ENDPOINTS = [
+    "monthly-summary",
+    "category-pivot",
+    "recipient-by-year",
+    "recipient-insights",
+];
+
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-07T12:00:00"));
+    seen = [];
+    server.events.on("request:start", record);
+});
+
+afterEach(() => {
+    server.events.removeListener("request:start", record);
+    vi.useRealTimers();
+});
+
+describe("useStatistics requests", () => {
+    it("requests each chart unfiltered and with the active exclusions over the 24-month window", async () => {
+        renderHook(() => useStatistics(), { wrapper: createQueryWrapper() });
+
+        await waitFor(() => expect(seen).toHaveLength(8));
+
+        const requests = seen.map(summarize);
+        const window = { start_date: "2024-10-01", end_date: "2026-09-07" };
+        for (const endpoint of ENDPOINTS) {
+            const forEndpoint = requests.filter((r) => r.endpoint === endpoint);
+            expect(forEndpoint, endpoint).toHaveLength(2);
+            expect(forEndpoint).toEqual(
+                expect.arrayContaining([
+                    {
+                        endpoint,
+                        currency: "USD",
+                        ...window,
+                        excluded_category_ids: [],
+                        excluded_recipient_ids: [],
+                    },
+                    {
+                        endpoint,
+                        currency: "USD",
+                        ...window,
+                        excluded_category_ids: ["7"],
+                        excluded_recipient_ids: ["8"],
+                    },
+                ]),
             );
-        await Promise.all(calls.map(({ queryFn }) => queryFn()));
+        }
+    });
 
-        expect(getAggregationMonthlySummary).toHaveBeenCalledWith({
-            currency: "USD",
-            all_time: true,
+    it("sends no date bounds for the all-time window", async () => {
+        renderHook(() => useStatistics("all"), {
+            wrapper: createQueryWrapper(),
         });
-        expect(getAggregationCategoryPivot).toHaveBeenCalledWith({
-            currency: "USD",
-            all_time: true,
-        });
-        expect(getAggregationRecipientByYear).toHaveBeenCalledWith({
-            currency: "USD",
-            all_time: true,
-        });
-        expect(getAggregationRecipientInsights).toHaveBeenCalledWith({
-            currency: "USD",
-            all_time: true,
-        });
+
+        await waitFor(() => expect(seen).toHaveLength(8));
+
+        expect(new Set(seen.map(({ endpoint }) => endpoint))).toEqual(
+            new Set(ENDPOINTS),
+        );
+        for (const { endpoint, params } of seen) {
+            expect(params.get("currency"), endpoint).toBe("USD");
+            expect(params.has("start_date"), endpoint).toBe(false);
+            expect(params.has("end_date"), endpoint).toBe(false);
+        }
+        const monthly = seen.filter((r) => r.endpoint === "monthly-summary");
+        expect(monthly.every(({ params }) => params.get("all_time") === "true")).toBe(true);
     });
 });
 
 describe("useRecipientInsights window", () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date("2026-09-07T12:00:00"));
-        vi.clearAllMocks();
-        vi.mocked(useQuery).mockReturnValue({ data: undefined } as never);
-    });
+    it("requests the selected 24-month window with both exclusion lists", async () => {
+        renderHook(() => useRecipientInsights("USD", [7], [8], "24m"), {
+            wrapper: createQueryWrapper(),
+        });
 
-    afterEach(() => vi.useRealTimers());
-
-    it("keys and requests the selected 24-month window", async () => {
-        renderHook(() => useRecipientInsights("USD", [7], [8], "24m"));
-        const options = vi.mocked(useQuery).mock
-            .calls[0]![0] as unknown as CapturedQueryOptions;
-
-        expect(options.queryKey).toEqual(
-            aggregationKeys.recipientInsightsWithExclusions(
-                "USD",
-                [7],
-                [8],
-                "24m",
-            ),
-        );
-        await options.queryFn();
-        expect(getAggregationRecipientInsights).toHaveBeenCalledWith({
+        await waitFor(() => expect(seen).toHaveLength(1));
+        expect(summarize(seen[0]!)).toEqual({
+            endpoint: "recipient-insights",
             currency: "USD",
             start_date: "2024-10-01",
             end_date: "2026-09-07",
-            excluded_category_ids: [7],
-            excluded_recipient_ids: [8],
+            excluded_category_ids: ["7"],
+            excluded_recipient_ids: ["8"],
         });
     });
 });

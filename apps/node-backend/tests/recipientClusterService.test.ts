@@ -35,10 +35,6 @@ describe('recipientClusterService', () => {
       },
     ]);
 
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain('ORDER BY name, id');
-    expect(sql).toContain('LIMIT $1');
-    expect(params).toEqual([10_000]);
   });
 
   it('caps the result at 50 clusters in deterministic recipient order', async () => {

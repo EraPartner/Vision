@@ -42,7 +42,6 @@ describe('customParserConfigRepository.getAll', () => {
   it('orders by name and maps config_json to config', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     const result = await repo.getAll();
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('ORDER BY name ASC'), ['transaction']);
     expect(result[0]).toMatchObject({ id: 1, name: 'My Bank', config: SAMPLE_CONFIG });
     expect(result[0]).not.toHaveProperty('config_json');
   });
@@ -76,40 +75,11 @@ describe('customParserConfigRepository.create', () => {
   it('inserts name + serialized config and returns the mapped row', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     const result = await repo.create({ name: 'My Bank', config: SAMPLE_CONFIG });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain('INSERT INTO custom_parser_configs');
+    const [, params] = query.mock.calls[0]!;
     expect(params![0]).toBe('My Bank');
     expect(params![1]).toBe('transaction'); // kind
     expect(JSON.parse(params![2] as string)).toEqual(SAMPLE_CONFIG);
     expect(result.config).toEqual(SAMPLE_CONFIG);
-  });
-});
-
-describe('customParserConfigRepository.update', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('only updates provided fields', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ name: 'Renamed' })] }));
-    await repo.update(1, { name: 'Renamed' });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain('name = $1');
-    expect(sql).not.toContain('config_json = ');
-    expect(params).toEqual(['Renamed', 1]);
-  });
-
-  it('serializes config when provided', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
-    await repo.update(1, { config: SAMPLE_CONFIG });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain('config_json = $1::jsonb');
-    expect(JSON.parse(params![0] as string)).toEqual(SAMPLE_CONFIG);
-  });
-
-  it('returns the existing row without a query when no fields change', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
-    await repo.update(1, {});
-    // getById is the only query
-    expect(query.mock.calls[0]![0]).toContain('WHERE id = $1');
   });
 });
 

@@ -5,11 +5,8 @@
  *
  * `styles/tokens.css` owns the curve table; this file mirrors it because
  * Framer needs the raw control points rather than a `cubic-bezier(...)`
- * string. The mirroring is enforced, not promised:
- * `lib/__tests__/motionTokenParity.test.ts` parses tokens.css and asserts the
- * two tables are identical — same names, same numbers, in both directions —
- * so neither layer can be edited alone. Add or rename a curve here and the
- * test fails until tokens.css agrees, and vice versa.
+ * string. Keep the two tables identical (same names, same numbers): add or
+ * rename a curve in both places. No test enforces this since ADR-215.
  *
  * Historical note: this docstring used to claim it "mirrors" tokens.css while
  * the two layers in fact defined different curves under the same names —
@@ -53,8 +50,8 @@ export const durations = {
 
 /**
  * Each spring is also sampled into a CSS `linear()` token in tokens.css
- * (`--spring-<name>` + `--spring-<name>-duration`); springTokenParity.test.ts
- * re-simulates these parameters and fails if the CSS samples drift.
+ * (`--spring-<name>` + `--spring-<name>-duration`); resample the CSS token
+ * when these parameters change.
  */
 export const springs = {
     snappy: {

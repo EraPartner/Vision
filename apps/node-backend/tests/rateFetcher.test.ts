@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Mock } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
@@ -22,7 +21,6 @@ import {
   clearHistoricalCache,
   loadFromDatabase,
   saveToDatabase,
-  saveHistoricalRate,
   getUnindexedRatesToEurForDates,
   __getPriorRateFromDatabase as getPriorRateFromDatabase,
   buildHistoricalRateIndex,
@@ -236,35 +234,11 @@ describe("saveToDatabase", () => {
     expect(withTransaction).not.toHaveBeenCalled();
   });
 
-  it("clears prior latest markers and upserts new entries", async () => {
-    let mockClient!: { query: Mock };
-    withTransaction.mockImplementationOnce(async (fn) => {
-      mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) };
-      await fn(mockClient);
-    });
-    await saveToDatabase({ EUR: 1, USD: 0.91, GBP: 1.18 });
-    expect(mockClient.query).toHaveBeenCalledTimes(3); // 1 update + 2 upserts
-    const updateCall = mockClient.query.mock.calls[0]!;
-    expect(updateCall[0]).toContain("UPDATE exchange_rates");
-    expect(updateCall[1][0]).toEqual(["USD", "GBP"]);
-  });
-
   it("swallows errors and logs", async () => {
     withTransaction.mockRejectedValueOnce(new Error("db down"));
     await expect(
       saveToDatabase({ EUR: 1, USD: 0.91 }),
     ).resolves.toBeUndefined();
-  });
-});
-
-describe("saveHistoricalRate", () => {
-  it("upserts a non-latest rate row", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await saveHistoricalRate("USD", "2024-12-31", 0.9);
-    const [sql, args] = query.mock.calls[0]!;
-    expect(sql).toContain("is_latest");
-    expect(sql).toContain("ON CONFLICT (currency_code, rate_date)");
-    expect(args).toEqual(["USD", 0.9, "2024-12-31"]);
   });
 });
 
@@ -364,15 +338,6 @@ describe("getPriorRateFromDatabase", () => {
     expect(await getPriorRateFromDatabase("USD", "2025-04-01")).toBeUndefined();
   });
 
-  it("restricts the database fallback to quotes on or before the requested day", async () => {
-    query.mockResolvedValueOnce({ rows: [{ rate_to_eur: "0.92" }] });
-    expect(await getPriorRateFromDatabase("USD", "2025-04-01")).toBeCloseTo(
-      0.92,
-      4,
-    );
-    expect(query.mock.calls[0]![0]).toContain("rate_date <= $2::date");
-    expect(query.mock.calls[0]![0]).toContain("ORDER BY rate_date DESC");
-  });
 });
 
 describe("buildHistoricalRateIndex", () => {

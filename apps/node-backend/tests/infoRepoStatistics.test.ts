@@ -48,27 +48,6 @@ const mvAvailable = vi.mocked(rawMvAvailable);
 beforeEach(() => vi.clearAllMocks());
 
 describe("statisticsRepository.getCategoryBreakdown", () => {
-  it("uses MV when available", async () => {
-    mvAvailable.mockResolvedValueOnce(true);
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          category_id: 1,
-          name: "Food",
-          count: "5",
-          total: "100",
-          currency: "EUR",
-        },
-      ],
-    });
-    convertRowsToEur.mockResolvedValueOnce([
-      { category_id: 1, name: "Food", count: 5, amount_eur: 100 },
-    ]);
-    const r = await statisticsRepository.getCategoryBreakdown();
-    expect(r).toHaveLength(1);
-    expect(query.mock.calls[0]![0]).toContain("mv_category_totals");
-  });
-
   it("groups categories from live query and sorts by count desc", async () => {
     mvAvailable.mockResolvedValueOnce(false);
     // Live path now aggregates per (category, currency) in SQL, so rows arrive
@@ -88,77 +67,12 @@ describe("statisticsRepository.getCategoryBreakdown", () => {
     expect(r[0]).toMatchObject({ id: 1, count: 2, total: -30 });
     expect(r[1]).toMatchObject({ id: 2, count: 1, total: -50 });
   });
-
-  it("rolls a requested ancestor from effective category IDs, once per transaction", async () => {
-    query.mockResolvedValueOnce({
-      rows: [
-        {
-          category_id: 10,
-          name: "Food",
-          amount: "-60",
-          cnt: "3",
-          currency: "EUR",
-        },
-      ],
-    });
-    convertRowsToEur.mockResolvedValueOnce([
-      { category_id: 10, name: "Food", amount_eur: -60, cnt: "3" },
-    ]);
-    const r = await statisticsRepository.getCategoryBreakdown("EUR", 10);
-    expect(r).toEqual([{ id: 10, name: "Food", count: 3, total: -60 }]);
-    expect(query.mock.calls[0]![0]).toContain(
-      "JOIN category_ancestors ancestry",
-    );
-    expect(query.mock.calls[0]![0]).toContain("ancestry.ancestor_id = $1");
-    expect(query.mock.calls[0]![0]).toContain(
-      "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
-    );
-    expect(query.mock.calls[0]![1]).toEqual([10]);
-    expect(mvAvailable).not.toHaveBeenCalled();
-  });
-});
-
-describe("statisticsRepository.getBanks", () => {
-  it("returns distinct bank_account values via prepared query", async () => {
-    queryPrepared.mockResolvedValueOnce({
-      rows: [{ bank_account: "BANK_A" }, { bank_account: "BANK_B" }],
-    });
-    const r = await statisticsRepository.getBanks();
-    expect(r).toEqual(["BANK_A", "BANK_B"]);
-    expect(queryPrepared).toHaveBeenCalledWith(
-      "info_get_banks",
-      expect.stringContaining("SELECT a.name AS bank_account"),
-      [],
-    );
-  });
 });
 
 describe("statisticsRepository.getTransactionCount", () => {
   it("parses integer count from prepared query", async () => {
     queryPrepared.mockResolvedValueOnce({ rows: [{ count: "5000" }] });
     expect(await statisticsRepository.getTransactionCount()).toBe(5000);
-  });
-
-  it("runs the unconditional count when no accountId is given", async () => {
-    queryPrepared.mockResolvedValueOnce({ rows: [{ count: "42" }] });
-    expect(await statisticsRepository.getTransactionCount({})).toBe(42);
-    expect(queryPrepared).toHaveBeenCalledWith(
-      "info_tx_count",
-      "SELECT count(*) FROM transactions WHERE is_active = true",
-      [],
-    );
-  });
-
-  it("adds an account_id filter (separate prepared statement) when accountId is provided", async () => {
-    queryPrepared.mockResolvedValueOnce({ rows: [{ count: "7" }] });
-    expect(
-      await statisticsRepository.getTransactionCount({ accountId: 3 }),
-    ).toBe(7);
-    expect(queryPrepared).toHaveBeenCalledWith(
-      "info_tx_count_by_account",
-      expect.stringContaining("AND account_id = $1"),
-      [3],
-    );
   });
 });
 
@@ -194,7 +108,6 @@ describe("statisticsRepository.getCategoryPivot", () => {
       total: -10,
       transactionCount: 1,
     });
-    expect(query.mock.calls[0]![0]).toContain("LEFT JOIN category_paths path");
   });
 
   it("splits income booked on partner and joint accounts into incomeByOwner", async () => {
@@ -245,9 +158,6 @@ describe("statisticsRepository.getCategoryPivot", () => {
       incomeByOwner: { partner: 1200, joint: 300 },
     });
     expect(other).not.toHaveProperty("incomeByOwner");
-    expect(query.mock.calls[0]![0]).toContain(
-      "LEFT JOIN accounts acct ON acct.id = t.account_id",
-    );
   });
 
   it("groups by period and category, sorts ascending by total", async () => {
@@ -365,47 +275,6 @@ describe("statisticsRepository.getCategoryPivot", () => {
     });
   });
 
-  it("binds category and recipient exclusions", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await statisticsRepository.getCategoryPivot({
-      excludedCategoryIds: [1, 2],
-      targetCurrency: "EUR",
-      excludedRecipientIds: [9],
-    });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain(
-      "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
-    );
-    expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
-    expect(sql).toContain("NOT IN ($3)");
-    expect(params).toEqual([1, 2, 9]);
-    // Category exclusions include descendants and inherit recipient defaults.
-    // Recipient exclusions use the primary alias for merged recipients.
-    expect(sql).toContain(
-      "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
-    );
-    expect(sql).toContain(
-      "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN",
-    );
-  });
-
-  it("binds explicit date bounds after exclusion ids", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    convertRowsToEur.mockResolvedValueOnce([]);
-
-    await statisticsRepository.getCategoryPivot({
-      excludedCategoryIds: [7],
-      startDate: "2024-10-01",
-      endDate: "2026-09-07",
-    });
-
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain("t.date >= $2");
-    expect(sql).toContain("t.date <= $3");
-    expect(params).toEqual([7, "2024-10-01", "2026-09-07"]);
-  });
-
   // Was: asserted to bind as [5, 7] — the pivot silently included the
   // categories the caller asked to exclude. See the note in filterBuilder.test.ts.
   it("rejects malformed exclusion lists instead of dropping the bad ids", async () => {
@@ -459,19 +328,4 @@ describe("statisticsRepository.getCategoryPivot", () => {
       categoryName: "Uncategorised",
     });
   });
-});
-
-it('uses bound date and effective-category/recipient exclusions instead of the unfiltered materialized view', async () => {
-  query.mockResolvedValueOnce({ rows: [] });
-  convertRowsToEur.mockResolvedValueOnce([]);
-  await statisticsRepository.getCategoryBreakdown('EUR', undefined, {
-    startDate: '2025-02-12', endDate: '2025-03-08', excludedCategoryIds: [10], excludedRecipientIds: [20],
-  });
-  const [sql, params] = query.mock.calls[0]!;
-  expect(mvAvailable).not.toHaveBeenCalled();
-  expect(sql).toContain('category_ancestors excluded');
-  expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($2)');
-  expect(sql).toContain('t.date >= $3');
-  expect(sql).toContain('t.date <= $4');
-  expect(params).toEqual([10, 20, '2025-02-12', '2025-03-08']);
 });

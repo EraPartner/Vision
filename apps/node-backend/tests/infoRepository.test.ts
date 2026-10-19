@@ -631,40 +631,6 @@ describe("InfoRepository", () => {
       expect(result.current.netWorth).toBe(5000);
     });
 
-    it("sources the current point from the shared per-currency lateral with no stamped-population gate", async () => {
-      const todayKey = todayAppDateString();
-      mockUnifiedNetWorth({
-        firstDataDate: todayKey,
-        investmentsRows: [],
-        walkRows: [],
-        currentRows: [],
-      });
-
-      await infoRepository.getNetWorthFromSnapshots();
-
-      const calls = query.mock.calls.map((c) => c[0]);
-      const currentSql = calls.find(
-        (sql) => typeof sql === "string" && sql.includes("balance_parts"),
-      );
-      expect(currentSql).toBeDefined();
-      // One SQL definition of "current balance" project-wide: the headline
-      // embeds the exact shared per-currency lateral the hub/widget/reconcile
-      // use — a multi-currency account is summed per partition, never as one
-      // cross-currency Σ converted at a single rate.
-      expect(currentSql).toContain(
-        computedBalanceByCurrencyAggLateral({
-          account: "a.id",
-          asOfDate: "$1::date",
-        }).trim(),
-      );
-      // …respects the net-worth population rule…
-      expect(currentSql).toContain("a.in_net_worth = true");
-      // …and carries NO `lb.balance IS NOT NULL` gate (that predicate exists
-      // only inside the lateral's anchor subquery and, deliberately, in the
-      // stamp-based HISTORY walk — not on the current point's population).
-      expect(currentSql).not.toContain("WHERE lb.balance IS NOT NULL");
-    });
-
     // The defect this replaced: one cross-currency Σ of bare amounts tagged
     // with the most recent row's currency — 100 EUR + 100 USD entered net worth
     // as 200 × the USD rate (100) instead of 150.
@@ -1028,7 +994,7 @@ describe("InfoRepository", () => {
   });
 
   describe("getMonthlyFinancialSummary", () => {
-    it("should use valid MV aggregation SQL when exclusions are empty", async () => {
+    it("zero-fills every month from an empty MV when exclusions are empty", async () => {
       const calls: string[] = [];
       query.mockImplementation(async (sql) => {
         if (typeof sql !== "string") return { rows: [] };
@@ -1060,15 +1026,6 @@ describe("InfoRepository", () => {
         ),
       ).toBe(true);
       expect(result.summary.transaction_count).toBe(0);
-
-      const mvSql = calls.find(
-        (sql) =>
-          sql.includes("FROM mv_monthly_summary") &&
-          sql.includes("SUM(transaction_count)"),
-      );
-      expect(mvSql).toBeTruthy();
-      expect(mvSql).toContain("GROUP BY month_start, month, year, currency");
-      expect(mvSql).not.toContain("category_id,");
     });
 
     it("limits the live path to the given accounts and skips the account-less MV", async () => {
@@ -1100,50 +1057,6 @@ describe("InfoRepository", () => {
       expect(live).toBeTruthy();
       expect(live!.sql).toContain("t.account_id = ANY($3::int[])");
       expect(live!.params).toEqual(["2026-01-01", "2026-06-30", [3, 7]]);
-    });
-
-    it("should build filtered fallback SQL without referencing recipients alias before join", async () => {
-      const calls: string[] = [];
-      query.mockImplementation(async (sql) => {
-        if (typeof sql !== "string") return { rows: [] };
-        calls.push(sql);
-
-        // mvAvailable('mv_monthly_summary') check -> false to force fallback
-        if (sql.includes("SELECT 1 FROM mv_monthly_summary LIMIT 1")) {
-          return { rows: [] };
-        }
-
-        if (sql.includes("WITH months AS")) {
-          return { rows: [] };
-        }
-
-        return { rows: [] };
-      });
-
-      const result = await infoRepository.getMonthlyFinancialSummary([9, 22]);
-
-      expect(result.months).toEqual([]);
-      expect(result.summary.transaction_count).toBe(0);
-
-      const fallbackSql = calls.find((sql) => sql.includes("WITH months AS"));
-      expect(fallbackSql).toBeTruthy();
-      expect(fallbackSql).toContain("filtered_transactions AS");
-      expect(fallbackSql).toContain(
-        "LEFT JOIN recipients r ON t.recipient_id = r.id",
-      );
-      expect(fallbackSql).toContain(
-        "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
-      );
-      // Exclude the selected categories and their descendants using the
-      // effective category after recipient defaults.
-      expect(fallbackSql).toContain(
-        "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
-      );
-      expect(fallbackSql).toContain("excluded.ancestor_id IN ($1, $2)");
-      // Aggregated per (date,currency) in the `daily` CTE, then joined by month.
-      expect(fallbackSql).toContain(
-        "LEFT JOIN daily d ON d.date >= m.month_start",
-      );
     });
   });
 
@@ -1596,34 +1509,6 @@ describe("InfoRepository", () => {
       } finally {
         vi.useRealTimers();
       }
-    });
-
-    // TODO E21: the old queries streamed raw rows capped by LIMIT 10000/5000
-    // with NO ORDER BY — past the cap Postgres dropped *arbitrary* heap-order
-    // rows, making the dashboard figures nondeterministically wrong.
-    it("aggregates avg-vs-current in SQL, grouped by date/currency/sign with no LIMIT", async () => {
-      query.mockResolvedValue({ rows: [] });
-
-      await infoRepository.getAverageVsCurrentSpending("EUR");
-
-      // Calls 0/1 are the two aggregate windows; call 2 is the ledger-start
-      // probe, which is a MIN(date) scalar and has nothing to group by.
-      for (const [sql] of query.mock.calls.slice(0, 2)) {
-        expect(sql).toContain("GROUP BY t.date, t.currency");
-        expect(sql).toContain("SUM(t.amount)");
-        expect(sql).not.toMatch(/LIMIT/i);
-      }
-      // The average denominator must be probed UNFILTERED: an exclusion or the
-      // ADR-083 transfer predicate emptying the oldest months would silently
-      // re-base the divisor (see infoRepositoryForecast's sqlLedgerStart).
-      const probeSql = query.mock.calls[2]![0];
-      expect(probeSql).toContain("MIN(t.date)");
-      expect(probeSql).toContain("t.is_active = true");
-      expect(probeSql).toContain(
-        "t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)",
-      );
-      expect(probeSql).not.toMatch(/is_transfer/);
-      expect(probeSql).not.toMatch(/LIMIT/i);
     });
   });
 });

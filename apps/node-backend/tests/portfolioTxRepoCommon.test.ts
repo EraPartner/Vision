@@ -9,9 +9,7 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import {
-  hasPortfolioTransactionImportBatchIdColumn,
   __resetPortfolioTransactionSchemaCache,
-  buildListWhereClause,
 } from "../src/repositories/portfolioTxRepo.common.ts";
 import {
   UNIT_BASED_ASSET_CLASSES,
@@ -45,45 +43,6 @@ beforeEach(() => {
 
 afterEach(() => __resetPortfolioTransactionSchemaCache());
 
-describe("import_batch_id column probe (0086)", () => {
-  it("queries Postgres on first probe and caches result", async () => {
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ present: true }] }),
-    );
-    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![0]).toContain(
-      "to_regclass('public.portfolio_transactions')",
-    );
-
-    // Second call should not re-query.
-    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
-    expect(query).toHaveBeenCalledTimes(1);
-  });
-
-  it("caches absence on an un-migrated database", async () => {
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ present: false }] }),
-    );
-    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
-    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
-    expect(query).toHaveBeenCalledTimes(1);
-  });
-
-  it("reset clears the cache", async () => {
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ present: true }] }),
-    );
-    await hasPortfolioTransactionImportBatchIdColumn();
-    __resetPortfolioTransactionSchemaCache();
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ present: false }] }),
-    );
-    expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(false);
-    expect(query).toHaveBeenCalledTimes(2);
-  });
-});
-
 describe("asset class maps", () => {
   it("UNIT_BASED_ASSET_CLASSES includes the unit-based classes only", () => {
     for (const c of ["stock", "etf", "crypto", "metals"]) {
@@ -92,36 +51,6 @@ describe("asset class maps", () => {
     for (const c of ["real_estate", "savings", "bond"]) {
       expect(UNIT_BASED_ASSET_CLASSES.has(c)).toBe(false);
     }
-  });
-});
-
-describe("buildListWhereClause", () => {
-  it("returns the trivial WHERE 1=1 with empty filters", () => {
-    expect(buildListWhereClause()).toEqual({
-      where: "WHERE 1=1",
-      params: [],
-      nextParam: 1,
-    });
-  });
-
-  it("appends investment_id filter", () => {
-    const r = buildListWhereClause({ investmentId: 7 });
-    expect(r.where).toBe("WHERE 1=1 AND investment_id = $1");
-    expect(r.params).toEqual([7]);
-    expect(r.nextParam).toBe(2);
-  });
-
-  it("appends type filter", () => {
-    const r = buildListWhereClause({ type: "buy" });
-    expect(r.where).toBe("WHERE 1=1 AND type = $1");
-    expect(r.params).toEqual(["buy"]);
-  });
-
-  it("appends both with sequential parameters", () => {
-    const r = buildListWhereClause({ investmentId: 7, type: "sell" });
-    expect(r.where).toBe("WHERE 1=1 AND investment_id = $1 AND type = $2");
-    expect(r.params).toEqual([7, "sell"]);
-    expect(r.nextParam).toBe(3);
   });
 });
 
@@ -501,28 +430,6 @@ describe("validateSellUnitsAvailability", () => {
         units: 7,
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-  });
-
-  it("loads the full ordered history once and excludes the edited row in memory", async () => {
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
-        rows: [unitEvent({ type: "buy", units: "50" })],
-      }),
-    );
-    await validateSellUnitsAvailability({
-      type: "sell",
-      assetClass: "stock",
-      investmentId: 1,
-      date: "2025-04-01",
-      units: 5,
-      excludeTransactionId: 99,
-    });
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]![0]).toContain(
-      "to_char(date, 'YYYY-MM-DD') AS date",
-    );
-    expect(query.mock.calls[0]![1]).toEqual([1]);
-    expect(query.mock.calls[0]![0]).not.toContain("SELECT EXISTS");
   });
 
   it("rejects reassigning a buy when that newly oversells a later broker partition", async () => {

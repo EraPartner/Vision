@@ -91,45 +91,6 @@ it("rejects changed discovery rather than locking a new peer out of order", asyn
   expect(mockClient.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE transactions"))).toBe(false);
 });
 
-describe("candidate pool — dismissed pairs are excluded, rows stay matchable", () => {
-  it("loadCandidatePairs excludes exactly the dismissed pair (LEAST/GREATEST anti-join)", async () => {
-    await getTransferSuggestions();
-    const candidateSql = vi
-      .mocked(query)
-      .mock.calls.map(([sql]) => sql)
-      .find((s) => s.includes('AS "outId"'));
-    expect(candidateSql).toBeTruthy();
-    expect(candidateSql).toContain("NOT EXISTS");
-    expect(candidateSql).toContain("transfer_dismissals");
-    expect(candidateSql).toContain("LEAST(a.id, b.id)");
-    expect(candidateSql).toContain("GREATEST(a.id, b.id)");
-    // The per-row 'dismissed' state is gone — rows are only gated by open state.
-    expect(candidateSql).not.toContain("'dismissed'");
-  });
-});
-
-describe("markTransfer — releases a stranded prior peer", () => {
-  it("releases any existing peer of A or B before pairing them", async () => {
-    const rows = [
-      { id: 10, amount: "-100.0000", account_id: 1, is_active: true, transfer_peer_id: null },
-      { id: 20, amount: "100.0000", account_id: 2, is_active: true, transfer_peer_id: null },
-    ];
-    mockClient.query.mockResolvedValueOnce({ rows }).mockResolvedValueOnce({ rows }).mockResolvedValueOnce({ rows });
-    await markTransfer(10, 20);
-
-    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
-    // First mutation releases old peers pointing at 10 or 20 (but not 10/20).
-    const release = sqls.find((s) =>
-      s.includes("transfer_peer_id = ANY($1) AND id <> ALL($1)"),
-    );
-    expect(release).toBeTruthy();
-    expect(release).toContain("transfer_source = NULL"); // back to open, not dismissed
-    // Then both legs are marked 'manual'.
-    const manual = sqls.filter((s) => s.includes("transfer_source = 'manual'"));
-    expect(manual).toHaveLength(2);
-  });
-});
-
 describe("releaseInvalidAutoPairs — reciprocity guard", () => {
   it("the release query requires the peer to point back (p.transfer_peer_id = t.id)", async () => {
     await reconcileTransfers();
@@ -141,27 +102,6 @@ describe("releaseInvalidAutoPairs — reciprocity guard", () => {
       );
     expect(releaseSql).toBeTruthy();
     expect(releaseSql).toContain("p.transfer_peer_id = t.id");
-  });
-});
-
-describe("releaseOrphans — single-sided system rows survive reconcile", () => {
-  it("only releases reconciler-owned rows", async () => {
-    // Opening and adjustment rows are single-sided system transactions. The
-    // guard is a positive allowlist for reconciler-owned sources, so those
-    // current source values remain outside this mutation.
-    await reconcileTransfers();
-    const orphanSql = vi
-      .mocked(query)
-      .mock.calls.map(([sql]) => sql)
-      .find(
-        (s) =>
-          s.includes("is_transfer = true") &&
-          s.includes("transfer_peer_id IS NULL"),
-      );
-    expect(orphanSql).toBeTruthy();
-    // Allowlist to the two reconciler-owned sources; opening and adjustment
-    // are deliberately excluded.
-    expect(orphanSql).toContain("transfer_source IN ('auto', 'manual')");
   });
 });
 

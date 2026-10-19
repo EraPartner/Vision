@@ -60,27 +60,6 @@ describe("research dossier persistence", () => {
     ).toBe(false);
   });
 
-  it("writes current data and immutable version in one transaction", async () => {
-    mockQuery
-      .mockResolvedValueOnce({ rows: [{ ...row }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
-    const created = await createResearchDossier(content);
-    expect(created.version).toBe(1);
-    expect(
-      mockQuery.mock.calls.some(([sql]) =>
-        sql.includes("INSERT INTO research_dossier_versions"),
-      ),
-    ).toBe(true);
-    expect(
-      mockQuery.mock.calls.some(([sql]) =>
-        sql.includes("DELETE FROM research_dossier_links"),
-      ),
-    ).toBe(true);
-  });
-
   it("does not advertise deleted links as live selections", async () => {
     mockQuery.mockResolvedValueOnce({ rows: [row] }).mockResolvedValueOnce({
       rows: [

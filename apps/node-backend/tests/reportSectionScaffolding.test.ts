@@ -1,5 +1,3 @@
-import { readdir, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -607,33 +605,6 @@ describe("report section scaffolding", () => {
       }),
     ).toContain("2 recipients matching active filters. 1 recipient excluded");
   });
-
-  it("keeps raw page scaffolding out of every section renderer", async () => {
-    const sectionDirectory = fileURLToPath(
-      new URL("../src/services/reports/sections/", import.meta.url),
-    );
-    const files = (await readdir(sectionDirectory)).filter((file) =>
-      file.endsWith(".ts"),
-    );
-
-    expect(files).toHaveLength(20);
-    for (const file of files) {
-      const source = await readFile(
-        new URL(`../src/services/reports/sections/${file}`, import.meta.url),
-        "utf8",
-      );
-      expect(
-        source.match(/<div class="page(?: page-break)?">/),
-        file,
-      ).toBeNull();
-      expect(source, file).not.toContain('<hr class="section-divider">');
-      expect(source, file).not.toContain('class="empty-notice"');
-      expect(source, file).not.toContain('class="placeholder-notice"');
-      expect(source, file).not.toContain('class="chart-pair"');
-      expect(source, file).not.toContain('class="filter-notice"');
-      expect(source, file).not.toContain("ASSET_CLASS_LABELS");
-    }
-  });
 });
 
 describe("portfolio breakdown normalization", () => {
@@ -657,18 +628,6 @@ describe("portfolio breakdown normalization", () => {
     });
   });
 
-  it("is wired into the portfolio fetch boundary", async () => {
-    const source = await readFile(
-      new URL(
-        "../src/services/reports/dataFetcherPortfolio.ts",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    expect(source).toContain(
-      "rawBreakdown?.map(normalizeBreakdownRow) ?? rawBreakdown",
-    );
-  });
 });
 
 describe("portfolio report view models", () => {

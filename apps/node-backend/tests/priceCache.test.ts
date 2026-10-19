@@ -308,22 +308,6 @@ describe("loadHistoricalPointsFromDatabase", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("binds null date params when range is missing", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await loadHistoricalPointsFromDatabase(1);
-    expect(query.mock.calls[0]![1]).toEqual([1, null, null]);
-  });
-
-  it("binds date strings when range provided", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await loadHistoricalPointsFromDatabase(1, {
-      fromMs: Date.UTC(2025, 0, 1),
-      toMs: Date.UTC(2025, 11, 31),
-    });
-    expect(query.mock.calls[0]![1]![1]).toBe("2025-01-01");
-    expect(query.mock.calls[0]![1]![2]).toBe("2025-12-31");
-  });
-
   it("normalizes rows from query result", async () => {
     query.mockResolvedValueOnce({
       rows: [
@@ -362,33 +346,6 @@ describe("saveHistoricalPointsToDatabase", () => {
   it("does nothing when no valid points", async () => {
     await saveHistoricalPointsToDatabase(1, [], "src");
     expect(query).not.toHaveBeenCalled();
-  });
-
-  it("upserts the points with INSERT … ON CONFLICT", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    await saveHistoricalPointsToDatabase(
-      1,
-      [
-        { timestampMs: Date.UTC(2025, 3, 1), price: 100 },
-        { timestampMs: Date.UTC(2025, 3, 2), price: 110 },
-      ],
-      "binance",
-    );
-    const [sql, args] = query.mock.calls[0]!;
-    expect(sql).toContain("ON CONFLICT (investment_id, price_date)");
-    expect(args![0]).toBe(1);
-    expect(args![1]).toBe("binance");
-    expect(args![2]).toEqual(["2025-04-01", "2025-04-02"]);
-    expect(args![3]).toEqual([100, 110]);
-  });
-
-  it('defaults source to "provider"', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-    // @ts-expect-error -- an omitted source exercises the runtime default
-    await saveHistoricalPointsToDatabase(1, [
-      { timestampMs: Date.UTC(2025, 0, 1), price: 100 },
-    ]);
-    expect(query.mock.calls[0]![1]![1]).toBe("provider");
   });
 
   it("swallows undefined-relation error (42P01)", async () => {

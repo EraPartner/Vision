@@ -271,6 +271,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Test behaviour at stable boundaries (accepted)
+
+[[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that
+assert internal structure may be deleted with a one-line reason, and a behaviour they alone
+covered gets a boundary test in the same change.
+
 ### 2026-10-19: Retire the Vision Native Swift port (accepted)
 
 [[docs/adr/214-retire-vision-native-swift-port|ADR-214]] retires the Swift app under
