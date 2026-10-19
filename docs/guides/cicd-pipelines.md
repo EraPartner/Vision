@@ -29,7 +29,7 @@ scan, or publish a product container image. The required aggregate check remains
 
 `.github/workflows/ci.yml` runs seven jobs
 ([[docs/adr/221-proportional-ci|ADR-221]]). `Detect Changes` classifies the diff with
-`scripts/ci-classify.py`; `Repo Checks` and `CI Complete` run on every diff, and the four code
+`scripts/ci-classify.ts`; `Repo Checks` and `CI Complete` run on every diff, and the four code
 jobs run only when the diff is classified as code:
 
 | Job                                     | Runs on             | Evidence                                                                                                                                                                                                                                 |
@@ -62,11 +62,14 @@ A change that lowers coverage below a threshold therefore fails on `main` after 
 pull request. Run `bun run test:coverage` locally when a change may affect coverage. The backend
 job still reports backend coverage on the pull request.
 
-The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
-initial preload graph and 1374 KB for all route assets. The 2026-10-13 build, including the
-read-only extreme-year report context, measured 474.69 KB and 1373.85 KB respectively. The extreme-year helper adds 0.55 KB to preload and
-1.56 KB overall over the preceding 474.14 KB / 1372.29 KB build. The household schema, migration,
-and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model|ADR-200]].
+The frontend build is followed by `size:check`. Its reviewed gzip limits are 460 KB for the
+initial preload graph and 1374 KB for all route assets
+(`apps/frontend/scripts/check-bundle-size.ts`). The last recorded measurement, after the
+type-aware lint rules of [[docs/adr/225-static-checks-for-agents|ADR-225]], is 459.52 KB and
+1372.93 KB respectively. The preload limit was lowered when the Belgian tax engine and its tax
+tables left the browser ([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]); the
+remaining household schema and migration helpers stay lazy as required by
+[[docs/adr/200-belgian-tax-household-model|ADR-200]].
 The checker reads the generated `index.html` and assets to catch new eager imports and total
 bundle growth.
 
@@ -138,7 +141,8 @@ using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
 The backend job enables the audit and transaction performance probes and sets
 `VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
 `apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
-migrated schema. Migrator and adoption behaviour is covered by the ordinary suite
+migrated schema. Migrator behaviour, including the refusal of a database still on Alembic
+([[docs/adr/224-remove-alembic-adoption|ADR-224]]), is covered by the ordinary suite
 (`tests/migrate.db.test.ts`). The same job then builds the production frontend once and starts the
 native production stack twice, in sequence: first migrate, `/health` and, when the latest
 migration ships a `.down.sql`, a down/up round trip (`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the

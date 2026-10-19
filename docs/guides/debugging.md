@@ -63,11 +63,16 @@ Validates request parameters before they reach route handlers:
 
 ### Error Response Format
 
+Errors use the unified envelope from `apps/node-backend/src/middleware/errorHandler.ts`
+([[docs/adr/026-unified-api-response-envelope|ADR-026]]):
+
 ```json
 {
-  "error": "Bad Request",
-  "detail": "Amount must be a valid number",
-  "status": 400
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Amount must be a valid number"
+  }
 }
 ```
 
@@ -140,8 +145,12 @@ bun run dev
 
 #### 2. Database Query Logging
 
-```javascript
-// In connection.js consumers, log database errors from caught query failures
+Every query, including Kysely-built ones ([[docs/adr/226-kysely-query-builder|ADR-226]]), runs
+through `query()` in `apps/node-backend/src/database/connection.ts`, which logs slow queries at
+`warn`.
+
+```typescript
+// Log database errors from caught query failures
 logger.error("Database error", { error: err.message });
 ```
 
@@ -216,7 +225,7 @@ console.log("AppSettings:", settings);
 
 ```bash
 # Open DevTools in Electron window
-# Cmd+Option+I (macOS) / Ctrl+Shift+I (Windows/Linux)
+# Cmd+Option+I (Vision desktop is macOS-only)
 ```
 
 #### 3. IPC Communication

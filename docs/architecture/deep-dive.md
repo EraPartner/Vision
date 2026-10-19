@@ -233,16 +233,14 @@ Frontend Dependencies:
 
 Backend Dependencies:
 ├── Express (HTTP server)
-├── pg (PostgreSQL client)
+├── pg (PostgreSQL client and pool)
+├── Kysely (query builder over pg via query(), migrator over db/migrations/, kysely-codegen types)
 ├── Bun (runtime/package manager)
-├── yahoo-finance2 (market data)
-├── binance-api (crypto data)
-└── express-rate-limit (rate limiting)
-(zero-dependency compression and CORS live in dedicated middleware modules)
+└── yahoo-finance2 (market data)
+(Binance prices use fetch; rate limiting, compression and CORS live in dedicated middleware modules)
 
 Shared:
-├── Zod (request parsing, data and response contracts — backend, frontend, @vision/types)
-└── Kysely (migrator over db/migrations/, kysely-codegen types)
+└── Zod (request parsing, data and response contracts — backend, frontend, @vision/types)
 ```
 
 ---
@@ -305,7 +303,7 @@ App
 ### Defense in Depth
 
 1. **Input validation** — Zod schemas on frontend; on the backend, routes parse params, query and body with zod through `parseInput` ([[docs/adr/193-zod-runtime-contracts|ADR-193]])
-2. **Parameterized queries** — All SQL uses `$1, $2` parameters
+2. **Parameterized queries** — Kysely's builder and `sql` tag bind every value as a parameter ([[docs/adr/226-kysely-query-builder|ADR-226]])
 3. **Rate limiting** — Global + per-route rate limiters
 4. **CSP headers** — Content-Security-Policy for Electron renderer
 5. **Sandbox** — Electron context isolation

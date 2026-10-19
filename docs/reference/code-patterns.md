@@ -556,83 +556,88 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > while older service and repository call sites are migrated, but new route models must not emit
 > `null` for absence.
 
-```js
-import { query } from "../database/connection.ts";
+```ts
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import { entityRowSchema } from "../database/rows/<area>.ts";
 
 export const entityRepository = {
-  async getAll({ limit = 50, offset = 0, active = true, ...filters } = {}) {
-    let sql = `SELECT * FROM table_name WHERE 1=1`;
-    const params = [];
-    let paramIdx = 1;
-
-    if (active) sql += ` AND is_active = true`;
-    sql += ` ORDER BY id DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
-    params.push(limit, offset);
-
-    const result = await query(sql, params);
-    return result.rows;
+  async getAll({ limit = 50, offset = 0, active = true } = {}) {
+    let builder = db.selectFrom("table_name").selectAll();
+    if (active) builder = builder.where("is_active", "=", true);
+    return checkedRows(
+      entityRowSchema,
+      builder.orderBy("id", "desc").limit(limit).offset(offset),
+    );
   },
 
-  async getCount({ active = true, ...filters } = {}) {
-    let sql = `SELECT count(*) FROM table_name WHERE 1=1`;
-    const params = [];
-    // Same filter logic as getAll
-    const result = await query(sql, params);
-    return parseInt(result.rows[0].count, 10);
+  async getCount({ active = true } = {}) {
+    let builder = db.selectFrom("table_name").select(sql<string>`count(*)`.as("count"));
+    if (active) builder = builder.where("is_active", "=", true);
+    const row = await checkedRow(countRowSchema, builder);
+    return parseInt(row!.count, 10);
   },
 
   async getById(id) {
-    const result = await query("SELECT * FROM table_name WHERE id = $1", [id]);
-    return result.rows[0] || null;
+    const row = await checkedRow(
+      entityRowSchema,
+      db.selectFrom("table_name").selectAll().where("id", "=", id),
+    );
+    return row ?? null;
   },
 
   async create(data) {
-    const sql = `INSERT INTO table_name (col1, col2) VALUES ($1, $2) RETURNING *`;
-    const result = await query(sql, [data.field1, data.field2]);
-    return result.rows[0] || null;
+    return checkedRow(
+      entityRowSchema,
+      db
+        .insertInto("table_name")
+        .values({ col1: data.field1, col2: data.field2 })
+        .returningAll(),
+    );
   },
 
   async update(id, fields) {
-    const setClauses = [];
-    const params = [];
-    let paramIdx = 1;
-
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        setClauses.push(`${key} = $${paramIdx++}`);
-        params.push(value);
-      }
-    }
+    // Skip undefined; `allowed` whitelists the column names.
+    const setClauses = Object.entries(fields)
+      .filter(([key, value]) => value !== undefined && allowed.includes(key))
+      .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
     if (setClauses.length === 0) return this.getById(id);
-    setClauses.push(`updated_at = NOW()`);
-    params.push(id);
-
-    const sql = `UPDATE table_name SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING *`;
-    const result = await query(sql, params);
-    return result.rows[0] || null;
+    return checkedRow(
+      entityRowSchema,
+      sql`UPDATE table_name SET ${sql.join(setClauses)}, updated_at = NOW()
+          WHERE id = ${id} RETURNING *`,
+    );
   },
 
   async hardDelete(id) {
-    const result = await query("DELETE FROM table_name WHERE id = $1", [id]);
-    return result.rowCount > 0;
+    const result = await db
+      .deleteFrom("table_name")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 };
 
 export default entityRepository;
 ```
 
+See [[apps/node-backend/src/repositories/watchlistRepository.ts|watchlistRepository.ts]] for a
+complete entity repository in this shape.
+
 ### Key Conventions
 
-| Pattern         | Rule                                                                        |
-| --------------- | --------------------------------------------------------------------------- |
-| DB access       | Import `query` from `../database/connection.ts`                             |
-| Filter building | `WHERE 1=1` + dynamic `AND` clauses                                         |
-| Parameters      | Positional (`$1`, `$2`) with manual index tracking                          |
-| Single row      | `result.rows[0]                                                             |     | null` |
-| Delete success  | `result.rowCount > 0`                                                       |
-| Dynamic updates | Build `SET` clauses from `Object.entries()`, skip `undefined`               |
-| SQL injection   | Use parameterized queries only, never string concatenation                  |
-| Export shape    | Entity CRUD object or specialized named functions, chosen by responsibility |
+| Pattern         | Rule                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------- |
+| DB access       | Build queries with `db` from `../database/db.ts` ([[docs/adr/226-kysely-query-builder\|ADR-226]]) |
+| Row checks      | Run reads through `checkedRows` / `checkedRow` with a row schema                             |
+| Filter building | Chain `.where(...)` conditionally; use `sql` fragments for analytical predicates             |
+| Parameters      | Values are bound by the builder or the `sql` tag; never interpolate strings into SQL         |
+| Single row      | `checkedRow(...)` returns the first row or `undefined`                                       |
+| Delete success  | `executeTakeFirst()` then `numDeletedRows > 0n`                                              |
+| Dynamic updates | Build `SET` clauses with `sql.ref(column)` from a whitelist, skip `undefined`                |
+| Transactions    | Wrap with `withTransaction` from `connection.ts`; never `db.transaction()`                   |
+| Export shape    | Entity CRUD object or specialized named functions, chosen by responsibility                  |
 
 ### Row contracts for new queries (ADR-193)
 
@@ -2361,19 +2366,22 @@ Queries without `LIMIT` can return unbounded result sets when table size grows u
 
 ### Solution
 
-```js
+```ts
 // ❌ WRONG: No limit; can return 10,000+ rows if table grows
-const stats = await query("SELECT * FROM transactions ORDER BY date DESC");
+const stats = await db.selectFrom("transactions").selectAll().orderBy("date", "desc").execute();
 
 // ✓ CORRECT: Explicit LIMIT prevents runaway result sets
-const stats = await query(
-  "SELECT * FROM transactions ORDER BY date DESC LIMIT 500",
-);
+const stats = await db
+  .selectFrom("transactions")
+  .selectAll()
+  .orderBy("date", "desc")
+  .limit(500)
+  .execute();
 
-// ✓ CORRECT: Even for aggregations, bound the output
-const catStats = await query(
-  "SELECT category_id, count, total FROM mv_category_totals ORDER BY count DESC LIMIT 500",
-);
+// ✓ CORRECT: Even for aggregations (runtime views use the sql tag), bound the output
+const catStats = await sql`
+  SELECT category_id, count, total FROM mv_category_totals ORDER BY count DESC LIMIT 500
+`.execute(db);
 ```
 
 ### Guidelines
@@ -2472,73 +2480,41 @@ function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
 
 ### Streaming Large Exports
 
-For large datasets, stream in fixed-size chunks to keep memory bounded:
+For large datasets, stream in fixed-size chunks to keep memory bounded. The export pipeline
+([[apps/node-backend/src/services/transactionExport.ts|transactionExport.ts]], `streamExport`)
+builds its probe and chunk queries with Kysely's `sql` tag, so filter values are bound
+parameters, and pages by keyset rather than `OFFSET`:
 
-```js
-const CSV_EXPORT_CHUNK_SIZE = 1000;
+```ts
+export const EXPORT_CHUNK_SIZE = 1000;
 
-router.get('/export/csv', rateLimiter(...), async (req, res) => {
-  try {
-    // Build filter clauses (dynamic WHERE with parameterized queries)
-    const filterClauses = ['t.is_active = true'];
-    const params = [];
-    let paramIdx = 1;
-    // ... add date, category, bank_account filters with params.push() ...
+// `where` is a Kysely sql fragment built from the validated filters.
+const probe = await run(sql`SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${where} LIMIT 1`);
+if (probe.rows.length === 0) throw new NotFoundError("No transactions found matching filters");
 
-    // Probe for empty results before streaming
-    const probe = await dbQuery(
-      `SELECT 1 FROM transactions t WHERE ${filterClauses.join(' AND ')} LIMIT 1`,
-      params
-    );
-    if (probe.rows.length === 0) {
-      throw new NotFoundError('No transactions found');
-    }
+res.setHeader("Content-Type", contentType);
+res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+writeHeader?.(res);
 
-    // Set response headers
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=transactions_export_${new Date().toISOString().slice(0, 19)}.csv`);
-
-    // Write CSV header
-    res.write('Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment\n');
-
-    // Stream in chunks to bound memory
-    let offset = 0;
-    while (true) {
-      const chunkSql = `
-        SELECT t.id, t.date, t.bank_account,
-               COALESCE(pr.name, r.name) AS recipient_name,
-               t.memo, t.amount, t.currency, t.balance,
-               CASE WHEN c.id IS NOT NULL THEN c.general || ':' || c.detail ELSE '' END AS category_name,
-               t.comment
-        FROM transactions t
-        LEFT JOIN recipients r ON t.recipient_id = r.id
-        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-        LEFT JOIN categories c ON t.category_id = c.id
-        WHERE ${filterClauses.join(' AND ')}
-        ORDER BY t.date ASC, t.id ASC
-        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
-      `;
-
-      const chunk = await dbQuery(chunkSql, [...params, CSV_EXPORT_CHUNK_SIZE, offset]);
-      if (chunk.rows.length === 0) break;
-
-      const lines = chunk.rows.map(row => buildTransactionCsvRow(row));
-      res.write(lines.join('\n') + '\n');
-
-      if (chunk.rows.length < CSV_EXPORT_CHUNK_SIZE) break;
-      offset += CSV_EXPORT_CHUNK_SIZE;
-    }
-
-    res.end();
-  } catch (err) {
-    logger.error('Error exporting', { error: err.message });
-    if (!res.headersSent) {
-      res.status(500).json({ ok: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'Error exporting' } });
-    } else {
-      res.end();  // Headers already sent, close gracefully
-    }
-  }
-});
+let cursor: { date: string; id: number } | undefined;
+while (true) {
+  const keyset = cursor
+    ? sql`AND (t.date, t.id) > (${cursor.date}::date, ${cursor.id}::bigint)`
+    : sql``;
+  const chunk = await run(sql`
+    SELECT t.id, t.date, ... ${EXPORT_JOINS_SQL}
+     WHERE ${where} ${keyset}
+     ORDER BY t.date ASC, t.id ASC
+     LIMIT ${EXPORT_CHUNK_SIZE}`);
+  const rows = checkRows(exportTransactionRowSchema, chunk.rows);
+  const last = rows.at(-1);
+  if (!last) break;
+  for (const row of rows) await writeWithBackpressure(res, formatRow(row));
+  cursor = { date: toYmd(last.date), id: last.id };
+  if (rows.length < EXPORT_CHUNK_SIZE) break;
+}
+res.end();
+// On a mid-stream failure (headers already sent) the response is destroyed, not answered as JSON.
 ```
 
 ### Key Points
@@ -2547,9 +2523,9 @@ router.get('/export/csv', rateLimiter(...), async (req, res) => {
 | ------------------ | ---------------------------------------------------------------------------------- |
 | **Escaping**       | **All fields must use `escapeCsvValue()`** to prevent CWE-1236 formula injection   |
 | **Chunk size**     | 1000–5000 rows per chunk depending on row width; tuned to balance memory + latency |
-| **Stable sort**    | `ORDER BY date ASC, id ASC` ensures no gaps or duplicate rows across chunks        |
+| **Stable sort**    | `ORDER BY date ASC, id ASC` with a `(date, id)` keyset cursor: no gaps or duplicates |
 | **Probe first**    | Check for empty results before streaming headers (early 404 return)                |
-| **Error recovery** | If headers sent, close gracefully (`res.end()`); otherwise return JSON error       |
+| **Error recovery** | If headers sent, destroy the response; otherwise let the error handler answer      |
 | **Rate limiting**  | Apply per-route limiter to protect DB from concurrent bulk exports                 |
 
 ---
@@ -3014,58 +2990,56 @@ Vision is a single-user application, but the HTTP process can overlap user reque
 
 ### Pattern
 
-```js
+```ts
+import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
+import { db } from "../database/db.ts";
 
 export async function complexMultiStepOperation(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {
     throw new Error("Invalid inputs");
   }
 
-  return withTransaction(async (client) => {
-    const primaryCheck = await client.query(
-      `SELECT id FROM primary_table WHERE id = $1 FOR UPDATE`,
-      [primaryId],
-    );
-    if (!primaryCheck.rows.length) {
+  // Built queries run through query(), so they join the ambient transaction.
+  return withTransaction(async () => {
+    const primary = await db
+      .selectFrom("primary_table")
+      .select("id")
+      .where("id", "=", primaryId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!primary) {
       throw new Error("Primary not found");
     }
 
-    const step1 = await client.query(
-      `UPDATE table1 SET primary_id = $1 WHERE primary_id = ANY($2)`,
-      [primaryId, aliasIds],
-    );
+    const step1 = await db
+      .updateTable("table1")
+      .set({ primary_id: primaryId })
+      .where(sql<boolean>`primary_id = ANY(${aliasIds}::int[])`)
+      .executeTakeFirst();
 
-    const step2 = await client.query(
-      `UPDATE table2 SET primary_id = $1 WHERE primary_id = ANY($2)`,
-      [primaryId, aliasIds],
-    );
-
-    await client.query(
-      `INSERT INTO dedup_table (primary_id, unique_field, data)
-       SELECT $1, unique_field, data FROM source_table WHERE id = ANY($2)
-       ON CONFLICT (primary_id, unique_field) DO NOTHING`,
-      [primaryId, aliasIds],
-    );
-
-    await client.query(
-      `UPDATE primary_table SET primary_reference_id = $1 WHERE id = ANY($2)`,
-      [primaryId, aliasIds],
-    );
+    await db
+      .insertInto("dedup_table")
+      .columns(["primary_id", "unique_field", "data"])
+      .expression(
+        db
+          .selectFrom("source_table")
+          .select([sql.lit(primaryId).as("primary_id"), "unique_field", "data"])
+          .where(sql<boolean>`id = ANY(${aliasIds}::int[])`),
+      )
+      .onConflict((oc) => oc.columns(["primary_id", "unique_field"]).doNothing())
+      .execute();
 
     return {
       primaryId,
       mergedAliasIds: aliasIds,
-      reassigned: {
-        table1: step1.rowCount,
-        table2: step2.rowCount,
-      },
+      reassigned: { table1: Number(step1.numUpdatedRows) },
     };
   });
 }
 ```
 
-`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. A nested `withTransaction` reuses that client and receives a unique savepoint, so an inner failure can be caught without opening an independent transaction or poisoning the outer one. Nested calls must be awaited sequentially: concurrent siblings are rejected after the active savepoint settles because one PostgreSQL client cannot safely interleave savepoint lifetimes. Deeper nesting remains lexical. Pass the callback client explicitly when that makes the boundary clearer. Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
+`withTransaction` owns `BEGIN`, `COMMIT`, rollback, and client release. Its ambient transaction context also makes module-level `query()` calls inside the callback join the same client. A nested `withTransaction` reuses that client and receives a unique savepoint, so an inner failure can be caught without opening an independent transaction or poisoning the outer one. Nested calls must be awaited sequentially: concurrent siblings are rejected after the active savepoint settles because one PostgreSQL client cannot safely interleave savepoint lifetimes. Deeper nesting remains lexical. Pass the callback client explicitly when that makes the boundary clearer. Open transactions with `withTransaction`, never Kysely's `db.transaction()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). Do not hand-roll transaction lifecycle code unless the operation needs a deliberately different protocol such as the database editor.
 
 ### Key Conventions
 
@@ -3105,35 +3079,28 @@ The alternative is not permission for arbitrary partial writes: every chunk must
 
 **Solution:** Split into two separate queries within the same transaction:
 
-```javascript
-// WRONG: PostgreSQL rejects this
-const result = await client.query(
-  `
-  SELECT id FROM transactions WHERE id = $1
-  GROUP BY id, amount
-  FOR UPDATE OF t
-`,
-  [transactionId],
-);
+```ts
+// WRONG: PostgreSQL rejects FOR UPDATE combined with GROUP BY
+//   SELECT id FROM transactions WHERE id = $1 GROUP BY id, amount FOR UPDATE OF t
 
-// CORRECT: Separate the lock from the aggregate
-const lockResult = await client.query(
-  `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
-  [transactionId],
-);
-if (lockResult.rows.length === 0)
-  throw new NotFoundError("Transaction not found");
+// CORRECT: separate the lock from the aggregate (splitRepository.lockAndGetTotals)
+const locked = await db
+  .selectFrom("transactions")
+  .select("id")
+  .where("id", "=", transactionId)
+  .forUpdate()
+  .executeTakeFirst();
+if (!locked) throw new NotFoundError("Transaction not found");
 
-const aggregateResult = await client.query(
-  `
-  SELECT ABS(t.amount) AS transaction_total,
-         COALESCE(SUM(ts.amount), 0) AS current_split_total
-    FROM transactions t
-    LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
-   WHERE t.id = $1
-   GROUP BY t.id, t.amount
-`,
-  [transactionId],
+const [totals] = await checkedRows(
+  splitTotalsRowSchema,
+  sql`
+    SELECT ABS(t.amount) AS transaction_total,
+           COALESCE(SUM(ts.amount), 0) AS current_split_total
+      FROM transactions t
+      LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+     WHERE t.id = ${transactionId}
+     GROUP BY t.id, t.amount`,
 );
 ```
 

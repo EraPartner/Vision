@@ -6,7 +6,7 @@ date: {YYYY-MM-DD}
 tags: [feature, {domain}, frontend, backend]
 description: {Brief description of the feature}
 aliases: [feature, {feature-name}]
-related_code: ["apps/frontend/src/pages/{page-folder}/", "apps/node-backend/src/services/{service}.js"]
+related_code: ["apps/frontend/src/pages/{page-folder}/", "apps/node-backend/src/services/{service}.ts"]
 ---
 
 # {Feature Name}

@@ -1429,7 +1429,7 @@
           {
             "id": "be.repos",
             "label": "Repository layer",
-            "sub": "35 repositories  ·  data access",
+            "sub": "repositories/  ·  Kysely data access",
             "kind": "backend",
             "x": 580,
             "y": 648
@@ -1445,7 +1445,7 @@
           {
             "id": "sv.update",
             "label": "App update service",
-            "sub": "routes/admin · 3-mode updates",
+            "sub": "routes/admin · native/source updates",
             "kind": "service",
             "x": 940,
             "y": 648
@@ -5523,7 +5523,7 @@
                 "title": "Run migrations",
                 "note": "Apply pending db/migrations files before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/database/migrate.ts runs Kysely's Migrator in one transaction: an empty database gets 0001_baseline.sql and a fingerprint check, an Alembic database is adopted only at 0128 with the baseline fingerprint, and anything else fails closed (ADR-222)."
+                "annotation": "apps/node-backend/src/database/migrate.ts runs Kysely's Migrator in one transaction: an empty database gets 0001_baseline.sql and a fingerprint check, a database that still carries alembic_version, or holds application objects without a migration marker, is refused (ADR-224)."
               },
               {
                 "from": "db.migrations",

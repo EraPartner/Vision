@@ -169,25 +169,23 @@ runtime fork and restore enforceable foreign keys. See
 
 ---
 
-## 10. Hardcoded Fallback Rates vs. External API Only
+## 10. Stored Rates Only vs. Hard-coded Fallback Rates
 
-**Decision:** Multi-source rates with hardcoded fallback (~40 currencies)
+**Decision:** Multi-source rates (ECB, open.er-api.com) persisted in `exchange_rates`; conversion
+reads the stored rows only. The hard-coded `FALLBACK_RATES` table was removed on 2026-10-19
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
 
-| Aspect          | Multi-Source + Fallback (Chosen)    | External API Only       |
-| --------------- | ----------------------------------- | ----------------------- |
-| Reliability     | High (fallback always available)    | Dependent on API uptime |
-| Accuracy        | Good (hardcoded rates may be stale) | Always current          |
-| Offline support | Partial (fallback rates)            | None                    |
-| Complexity      | Moderate (merge logic)              | Simple                  |
+| Aspect          | Stored rates only (Chosen)                          | Hard-coded fallback (retired)       |
+| --------------- | --------------------------------------------------- | ----------------------------------- |
+| Reliability     | Works offline once a provider has succeeded         | Always had some rate                |
+| Accuracy        | Real fetched rates only                             | Constants could be badly stale      |
+| Missing rate    | Amount left out and reported as unconverted         | Silently converted at a constant    |
+| Complexity      | Callers report `unconverted_*` / incomplete figures | Simple merge                        |
 
-**Trade-off:** Hardcoded rates may be stale but ensure the app works even when all external APIs are down. The `warmCache()` function refreshes rates on startup.
-
-> [!note] Revised 2026-10-19
-> Displayed figures no longer use the hard-coded rates
-> ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). Conversion reads the stored
-> `exchange_rates` rows only; once a provider has succeeded the app keeps working offline from
-> them, and a currency without a stored rate is flagged as unavailable instead of converted at a
-> possibly stale constant. Only the Belgian tax dashboards still read `FALLBACK_RATES`.
+**Trade-off:** A currency that never had a stored rate shows as unconverted instead of producing a
+plausible but possibly wrong total. The `warmCache()` function refreshes rates on startup. See
+`services/currency/currencyConversionService.ts`, `services/currency/latestRateConversion.ts` and
+`lib/unconvertedTally.ts`.
 
 ---
 

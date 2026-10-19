@@ -414,8 +414,10 @@ The same pattern is applied in `infoRepo.monthly.js` for the all-time live path:
 
 Any INSERT path that previously wrote explicit NULL must now write `'EUR'`. See [[docs/adr/086-currency-integrity|ADR-086]].
 
-> [!warning] AUTHORED, NOT YET APPLIED
-> Migration `0046_currency_integrity.py` is authored and pending user review/apply.
+> [!note] Part of the baseline
+> Historical Alembic migration `0046_currency_integrity` is applied in
+> `db/migrations/0001_baseline.sql` (`chk_transactions_currency_iso`,
+> `chk_planned_transactions_currency_iso`).
 
 ### One Primary Bank Account Per Recipient (migration 0047)
 
@@ -429,8 +431,9 @@ CREATE UNIQUE INDEX uq_recipient_primary_account
 
 This moves the "at most one primary per recipient" invariant from application code into the database. Pre-existing duplicates were demoted (lowest `id` wins) before the index was built.
 
-> [!warning] AUTHORED, NOT YET APPLIED
-> Migration `0047_one_primary_bank_account_per_recipient.py` is authored and pending user review/apply.
+> [!note] Part of the baseline
+> Historical Alembic migration `0047_one_primary_bank_account_per_recipient` is applied in
+> `db/migrations/0001_baseline.sql` (`uq_recipient_primary_account`).
 
 ### Category FK ON DELETE SET NULL (migration 0048)
 
@@ -438,8 +441,9 @@ The three FKs from `transactions.category_id`, `recipients.default_category_id`,
 
 FKs that protect financial history (e.g. `transactions.recipient_id`) are deliberately left as RESTRICT.
 
-> [!warning] AUTHORED, NOT YET APPLIED
-> Migration `0048_category_fk_on_delete_set_null.py` is authored and pending user review/apply.
+> [!note] Part of the baseline
+> Historical Alembic migration `0048_category_fk_on_delete_set_null` is applied in
+> `db/migrations/0001_baseline.sql`.
 
 ---
 
@@ -447,7 +451,7 @@ FKs that protect financial history (e.g. `transactions.recipient_id`) are delibe
 
 | Anti-Pattern                          | Why Bad                                       | Solution                                                                  |
 | ------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
-| Dynamic SQL without parameters        | SQL injection risk                            | Always use `$1, $2` parameters                                            |
+| Dynamic SQL without parameters        | SQL injection risk                            | Build with Kysely or its `sql` tag so values are bound                    |
 | SELECT * in application code          | Breaks on schema change                       | Explicit column lists                                                     |
 | Missing WHERE clause on UPDATE/DELETE | Accidental data loss                          | Always include WHERE                                                      |
 | Unbounded queries                     | Memory exhaustion                             | Always use LIMIT                                                          |

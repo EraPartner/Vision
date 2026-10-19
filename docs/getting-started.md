@@ -124,9 +124,9 @@ When creating new docs, use the templates:
 ```bash
 bun install           # Install dependencies
 bun run native:prepare # Prepare the native runtime payload
-bun run dev           # Start native Electron development
+bun run dev           # Start private PostgreSQL, backend and Vite
 bun run build         # Production build
-bun run test          # Run all tests
+bun run test          # Backend Vitest suite
 bun run db:migrate    # Run database migrations
 ```
 

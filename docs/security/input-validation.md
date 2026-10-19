@@ -494,26 +494,24 @@ parseOptionalPagination(query, { defaultLimit, maxLimit })
 For operations on columns that may not exist in all schema versions (e.g., `planned_transactions.recipient_id`), Vision uses a two-step approach:
 
 1. **Schema Validation:** Query `information_schema.columns` to check column existence before attempting to update it
-2. **Parameterized Update:** If column exists, run a fully parameterized UPDATE using `ANY($2::int[])` for ID arrays
+2. **Bound Update:** If the column exists, run a Kysely query-builder UPDATE whose ID array is a bound parameter in `ANY(...::int[])`
 
-**Example:** Recipient merge service
+**Example:** Recipient merge service (`recipientMergeService.ts` calling
+`apps/node-backend/src/repositories/plannedTransactionRepository.ts`)
 
-```javascript
+```typescript
 // Step 1: Check if column exists (safe, no data modification)
-const colCheck = await client.query(
-  `SELECT 1 FROM information_schema.columns
+const { rows } = await sql`SELECT 1 FROM information_schema.columns
    WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
-   LIMIT 1`,
-);
+   LIMIT 1`.execute(db);
 
-// Step 2: Only run UPDATE if column exists (fully parameterized)
-if (colCheck.rows.length > 0) {
-  const plannedRes = await client.query(
-    `UPDATE planned_transactions
-        SET recipient_id = $1
-      WHERE recipient_id = ANY($2::int[])`,
-    [primaryId, ids], // Fully parameterized — no string interpolation
-  );
+// Step 2: Only run UPDATE if column exists (values are bound parameters)
+if (rows.length > 0) {
+  await db
+    .updateTable("planned_transactions")
+    .set({ recipient_id: primaryId })
+    .where("recipient_id", "=", sql<RecipientId>`ANY(${aliasIds}::int[])`)
+    .executeTakeFirst();
 }
 ```
 

@@ -129,7 +129,7 @@ Never print the passphrase. A signed and notarized production build provides the
 | `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
 | `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
 | `BACKUP_PRE_BASELINE`               | Backup predates the TypeScript migration baseline | Not restorable by this version; restore only backups taken after the switch ([[docs/adr/222-typescript-migrations-kysely-baseline\|ADR-222]]) |
-| `PORT_IN_USE`                       | An unknown process owns a required loopback port  | Identify and stop the exact process or choose a valid development port                                                                        |
+| `PORT_COLLISION`, `POSTGRES_PORT_COLLISION` | An unknown process owns a required loopback port | Identify and stop the exact process or choose a valid development port                                                                        |
 | `APP_ERROR`                         | Sanitized backend failure                         | Correlate the request ID with structured logs                                                                                                 |
 
 ## Related

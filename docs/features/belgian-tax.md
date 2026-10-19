@@ -189,7 +189,7 @@ Modules are split by concern:
 
 **Decimal accumulation:** monetary sums and products inside these functions accumulate via `decimal.js` internally and return `number`. This eliminates float-accumulation drift across many transactions while leaving the public API type-stable (`number` in, `number` out).
 
-**De-duplication:** `recordedTaxesForYear` is now the single implementation shared by both `PortfolioTaxPage` and `TaxOverviewPage`. Each page's `useMemo` calls the shared function instead of duplicating the per-transaction accumulation loop.
+**Server-side use (ADR-217):** the pages no longer call these functions. `buildPortfolioTaxDashboard` (`packages/shared-utils/src/belgianTax/portfolioDashboard.ts`, served by `GET /api/belgian-tax/portfolio-dashboard`) runs the estimators for the Portfolio Tax page, and `buildTaxDashboard` (`apps/node-backend/src/services/tax/dashboardService.ts`, served by `GET /api/belgian-tax/dashboard`) calls `recordedTaxesForYear` for the tax overview.
 
 **Tests:** `packages/shared-utils/tests/belgianTax/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Run by `bun run test:packages` since ADR-217 (previously part of the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
@@ -293,7 +293,7 @@ Investments of type `real_estate` include Belgian-specific fields:
 | cadastral_income      | NUMERIC(12,2) | Kadastraal inkomen   |
 | municipality_tax_rate | NUMERIC(8,4)  | Municipal tax rate   |
 
-**Migration:** `0010_investments_municipality_tax_fields.py`
+**Migration:** historical Alembic `0010_investments_municipality_tax_fields.py`, now part of `db/migrations/0001_baseline.sql`
 
 ---
 
@@ -408,7 +408,7 @@ Inflation data is persisted to `belgian_inflation_rates` table:
 | GET    | `/api/info/inflation-rates?db_only=true` | Get from DB only (no remote fetch) |
 | POST   | `/api/info/inflation-rates/refresh`      | Refresh from remote sources        |
 
-**Migration:** `0023_portfolio_performance_snapshots.py`
+**Migration:** historical Alembic `0023_portfolio_performance_snapshots.py`, now part of `db/migrations/0001_baseline.sql`
 
 ---
 
@@ -528,8 +528,8 @@ transfer, the quotient on professional income only); the list is in
 
 The household is stored under `belgian_tax_household_v2`, snapshots under
 `belgian_tax_household_snapshots_v2`, whose year keys must equal the stored household's
-`taxYear` (see [[docs/api/settings|Settings API]]). The frontend
-upgrades v1 data automatically on first load with `upgradeProfileV1ToHousehold` and
+`taxYear` (see [[docs/api/settings|Settings API]]). `GET /api/belgian-tax/overview` upgrades
+v1 data automatically on first load with `upgradeProfileV1ToHousehold` and
 `upgradeSnapshotsV1ToV2` (deterministic and idempotent; no confirmation step). The v1 fields map
 to partner A and activity `act_A_1`; a `married_joint` profile adds partner B with a
 `net_professional_amount` activity `act_B_1` and is assumed joint until relationship dates are
@@ -544,8 +544,9 @@ migrated `isSpouseDisabled` entry. Frozen
 snapshot meta may carry `frozenHouseholdResult`.
 
 **Load (phase B2).** `BelgianTaxProfileProvider` loads `lib/belgianTax/householdRuntime.ts` with a
-dynamic import, so its zod schemas stay out of the boot bundle, and resolves the
-stored values with `loadHouseholdSettings`:
+dynamic import, so its zod schemas stay out of the boot bundle, and in parallel reads
+`GET /api/belgian-tax/overview`. The server resolves the stored values with `loadHouseholdSettings`
+(`packages/shared-utils/src/belgianTax/overview.ts`):
 
 - A v2 value that passes `parseHouseholdV2` / `parseHouseholdSnapshotsV2` is used as stored and
   never rewritten on load.
@@ -553,42 +554,44 @@ stored values with `loadHouseholdSettings`:
   v1 key is absent too). The v1 settings schema accepts `null` fields, so the upgrade treats
   `null` as absent and fills the v1 defaults into the live profile and into each v1 snapshot
   (a v1 snapshot without `region` takes the default region). When the v1 key exists, the
-  upgraded v2 value is written immediately, but only if it passes `parseHouseholdV2` /
-  `parseHouseholdSnapshotsV2`; otherwise it stays in memory unsaved and a console warning is
-  logged, because the settings API would reject that write and every later save of the key.
-- An invalid v2 value logs a console warning with the validation issues and the stored raw
-  value, and falls back to the v1 upgrade or the defaults; it is not overwritten until the user
-  edits. The store sets `storedHouseholdUnreadable`, and the tax overview's disclaimer banner
-  then says that the saved household could not be read and that the next change replaces it.
+  overview reports a pending upgrade and the provider writes the upgraded v2 value immediately,
+  but only if it passes `parseHouseholdV2` / `parseHouseholdSnapshotsV2`; otherwise it stays in
+  memory unsaved and the overview returns a warning that the provider logs, because the settings
+  API would reject that write and every later save of the key.
+- An invalid v2 value produces an overview warning (logged by the provider) and falls back to the
+  v1 upgrade or the defaults; it is not overwritten until the user edits. The store sets
+  `storedHouseholdUnreadable`, and the tax overview's disclaimer banner then says that the saved
+  household could not be read and that the next change replaces it.
 
-`loadHouseholdRuntime` retries the dynamic import once. When the retry fails too, the store sets
-`householdLoadFailed` and clears `isLoading`: the tax overview shows an error instead of its
-content, no Belgian-tax setting is written for the rest of the session, and the deduction
-candidates card disables its confirm action (edits are no-ops while `household` is `null`).
+`loadHouseholdRuntime` retries the dynamic import once. When the retry or the overview request
+fails, the store sets `householdLoadFailed` and clears `isLoading`: the tax overview shows an
+error instead of its content, no Belgian-tax setting is written for the rest of the session, and
+the deduction candidates card disables its confirm action (edits are no-ops while `household` is
+`null`).
 
 The v1 keys are kept but no longer written: no backend code reads `belgian_tax_profile` or
 `belgian_tax_profile_snapshots_v1` (reports receive the projected profile in the request body).
 
-**Store.** `household` and `householdSnapshots` are the source of truth; `householdResult` holds
-the raw `HouseholdTaxResult` (per partner, quotient, CSSS, issues). `calculation` is
-`toBelgianTaxCalculation(computeHouseholdTax(household), household)`, and `calculationForYear`,
-`displayCalculationForYear` and `resolveBelgianTaxCalculation` compute through the household of
-that year. `profile`, `snapshots` and `profileForYear` are `projectHouseholdToProfileV1`
-projections (filled with the v1 defaults), and `updateProfile` / `updateSnapshot` apply their v1
-patches with `applyProfileV1PatchToHousehold`. A one-partner household gives the same calculation
-as `computeBelgianPIT` on its projection. Freezing and filing store `frozenHouseholdResult` next
-to `frozenCalculation`; unfreezing clears both. A `'patched'` audit entry records the v1
-`changes` and the top-level `householdChanges`.
+**Store.** `household` and `householdSnapshots` are the source of truth. The store holds no
+calculation (ADR-217): `hydratedComputation` keeps the overview's figures for the household they
+were computed for, and every other figure comes from the server through
+`POST /api/belgian-tax/compute` (`computeTaxYearResults`, `resolveTaxYearFigures`, and the
+`useHouseholdComputation` / `useTaxYearFigures` hooks). `profile`, `snapshots` and
+`profileForYear` are `projectProfileV1` projections (filled with the v1 defaults), and
+`updateProfile` / `updateSnapshot` apply their v1 patches with `applyProfileV1PatchToHousehold`.
+Freezing and filing store the server's `frozenHouseholdResult` next to `frozenCalculation`;
+unfreezing clears both. A `'patched'` audit entry records the v1 `changes` and the top-level
+`householdChanges`.
 
 `updateHousehold(update)` and `updateHouseholdSnapshot(year, update)` take a shallow patch or an
 updater returning the next household. The lazily loaded runtime applies it
 (`applyHouseholdUpdate`) and rejects a result that fails `parseHouseholdV2`, so an invalid edit
-never reaches the store or the settings API. A live edit recomputes the result, calculation and
-projection and archives the previous year when the income year advances, like `updateProfile`;
+never reaches the store or the settings API. A live edit updates the projection and archives
+the previous year when the income year advances, like `updateProfile`;
 live edits add no audit entry. A snapshot edit stays on its year and appends a `'patched'`
 entry with only `householdChanges`, which the history dialog summarises.
-`resolveBelgianTaxHouseholdResult(state, year)` returns the result shown for a year: the frozen
-one, the live one, or a fresh computation.
+`resolveTaxYearFigures(state, year)` returns the figures shown for a year: the frozen ones, or
+the server's computation of that year's household.
 
 **Issues.** Each `HouseholdTaxIssueCode` and severity has an EN/NL string under
 `tax.household.issue.*`. The tax overview lists the live year's issues, one line per code, in its
