@@ -77,7 +77,7 @@ public struct StatisticsView: View {
                     ) {
                         Text(strings.t("statsPage.window.rolling24")).tag(StatisticsWindow.rolling24)
                         Text(strings.t("statsPage.window.allTime")).tag(StatisticsWindow.all)
-                    }.pickerStyle(.segmented).frame(maxWidth: 280)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     Menu {
                         if model.hasData {
                             Button(strings.t("statsPage.menu.exportPdf")) { shell.openStatisticsReport() }
@@ -86,6 +86,7 @@ public struct StatisticsView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .menuIndicator(.hidden)
                     .accessibilityLabel(strings.t("statsPage.menu.label"))
                 }
                 if model.isLoading {
@@ -96,8 +97,7 @@ public struct StatisticsView: View {
                 } else if !model.hasData {
                     Text(strings.t("statsPage.noDataTitle")).font(.title2)
                     Text(strings.t("statsPage.noDataDesc")).foregroundStyle(theme.secondaryLabel)
-                    Button(strings.t("statsPage.importBtn")) { shell.navigate(to: "/import") }.buttonStyle(
-                        .borderedProminent)
+                    Button(strings.t("statsPage.importBtn")) { shell.navigate(to: "/import") }.buttonStyle(.visionPrimary)
                 } else {
                     Picker(
                         strings.t("statsPage.title"),
@@ -108,7 +108,7 @@ public struct StatisticsView: View {
                             })
                     ) {
                         ForEach(StatisticsTab.allCases, id: \.self) { tab in Text(strings.t(tab.labelKey)).tag(tab) }
-                    }.pickerStyle(.segmented)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     content
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -200,63 +200,15 @@ public struct StatisticsView: View {
         }
     }
     private func rhythm(_ snapshot: StatisticsSnapshot) -> some View {
-        card("statsPage.rhythm.title") {
-            let months = snapshot.monthly.orderedMonths
-            let chosen = months.first { $0.id == model.printLocalState.selection["rhythm"] } ?? months.last
-            if let chosen {
-                let net = chosen.total_income - abs(chosen.total_spending)
-                Text(
-                    strings.t(
-                        "statsPage.rhythm.netIn",
-                        [
-                            "month": periodLabel(chosen.id)
-                                + (chosen.id == model.currentPeriod ? " " + strings.t("statsPage.rhythm.soFar") : "")
-                        ])
-                )
-                .foregroundStyle(theme.secondaryLabel)
-                MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.visionLargeTitle)
-                if let index = months.firstIndex(where: { $0.id == chosen.id }), index > 0 {
-                    let before = months[index - 1].total_income - abs(months[index - 1].total_spending)
-                    HStack {
-                        DeltaPill(
-                            net - before,
-                            label: MoneyText.text(net - before, currency: currency, settings: settings))
-                        Text(strings.t("statsPage.rhythm.vsPrevious"))
-                    }
-                }
-            }
-            chart(
-                [
-                    InsightChartSeries(
-                        id: "net", label: strings.t("statsPage.net"),
-                        points: months.map {
-                            InsightChartPoint(key: $0.id, value: $0.total_income - abs($0.total_spending))
-                        })
-                ], key: "rhythm", bars: true, rangeComparison: false)
-            if let extremes = snapshot.extremes(currentPeriod: model.currentPeriod) {
-                HStack {
-                    LabeledContent(
-                        strings.t("statsPage.rhythm.strongest"),
-                        value: periodLabel(extremes.best.id) + " · "
-                            + money(extremes.best.total_income - abs(extremes.best.total_spending)))
-                    LabeledContent(
-                        strings.t("statsPage.rhythm.toughest"),
-                        value: periodLabel(extremes.worst.id) + " · "
-                            + money(extremes.worst.total_income - abs(extremes.worst.total_spending)))
-                    LabeledContent(
-                        strings.t("statsPage.rhythm.inTheBlack"), value: "\(extremes.positive)/\(extremes.count)")
-                }
-            }
-            HStack {
-                LabeledContent(
-                    strings.t("statsPage.rhythm.typicalIn"),
-                    value: money(snapshot.totalIncome / Decimal(max(1, months.count))))
-                LabeledContent(strings.t("statsPage.rhythm.typicalOut"), value: money(snapshot.averageSpending))
-            }
-            if !isPrinting {
-                Text(strings.t("statsPage.rhythm.scrubHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            }
-        }
+        StatisticsRhythmCard(
+            snapshot: snapshot, currentPeriod: model.currentPeriod, currency: currency, settings: settings,
+            strings: strings, isPrinting: isPrinting,
+            selection: isPrinting
+                ? .constant(model.printLocalState.selection["rhythm"])
+                : Binding(
+                    get: { model.printLocalState.selection["rhythm"] },
+                    set: { model.printLocalState.selection["rhythm"] = $0 }),
+            periodLabel: periodLabel)
     }
     private func monthlySeries(_ snapshot: StatisticsSnapshot?, average: Bool) -> [InsightChartSeries] {
         let months = snapshot?.monthly.orderedMonths ?? []
@@ -431,7 +383,7 @@ public struct StatisticsView: View {
                                     Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
                                         shell.navigate(to: "/transactions")
                                     }
-                                    .buttonStyle(.link).frame(width: pivotColumnWidth, height: 32)
+                                    .buttonStyle(.visionLink).frame(width: pivotColumnWidth, height: 32)
                                 }
                             }.fontWeight(.semibold)
                         }
@@ -506,7 +458,7 @@ public struct StatisticsView: View {
                             categoryIds: ids, period: period, label: name, uncategorised: uncategorised
                         ).string
                     )
-                }.buttonStyle(.link).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
+                }.buttonStyle(.visionLink).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
                     .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
             }
         }

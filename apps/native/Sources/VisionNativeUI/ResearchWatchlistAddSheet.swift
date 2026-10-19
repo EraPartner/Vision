@@ -105,7 +105,7 @@ public struct ResearchWatchlistAddSheet: View {
                     } label: {
                         if model.isSubmitting { ProgressView().controlSize(.small) }
                         Text(strings.t("addWatchlist.submit"))
-                    }.buttonStyle(.borderedProminent)
+                    }.buttonStyle(.visionPrimary)
                         .disabled(model.draft.targetPrice.isEmpty || model.isSubmitting || model.hasUncertainCreate)
                 }
             } else {

@@ -43,7 +43,7 @@ struct PickerButton<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.visionOutline)
         .disabled(disabled)
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.control)

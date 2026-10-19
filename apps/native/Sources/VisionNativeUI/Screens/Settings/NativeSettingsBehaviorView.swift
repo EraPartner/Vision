@@ -88,7 +88,7 @@ public struct NativeSettingsBehaviorView: View {
                     description: strings.t("settings.app.recurringDismissalsResetHint")
                 ) {
                     Button(strings.t("settings.app.reset")) { Task { await model.resetRecurringDismissals() } }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                 }
             }
         }

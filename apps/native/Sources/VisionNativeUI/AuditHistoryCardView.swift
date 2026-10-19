@@ -54,7 +54,7 @@ struct AuditHistoryCardView: View {
             Button(strings.t("admin.audit.refresh")) {
                 Task { await model.load() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(model.busy)
         }
@@ -79,7 +79,7 @@ struct AuditHistoryCardView: View {
             Button(strings.t("admin.audit.enroll")) {
                 Task { await model.enroll() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(model.busy || model.enrollBusy)
             if model.enrollFailed {
@@ -124,7 +124,7 @@ struct AuditHistoryCardView: View {
                 Button(strings.t("admin.audit.loadMore")) {
                     Task { await model.loadMore() }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .disabled(model.busy)
             }
@@ -141,7 +141,7 @@ struct AuditHistoryCardView: View {
                 Button(strings.t("admin.audit.export")) {
                     Task { await model.exportSnapshot() }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .disabled(model.isExportDisabled)
                 outcome(model.exportMessage, success: "admin.audit.exportSuccess", failed: "admin.audit.exportFailed")
@@ -222,7 +222,7 @@ struct AuditHistoryCardView: View {
                 }
                 .disabled(model.isTransferImportDisabled)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             outcome(model.transferMessage, success: "admin.audit.transferSuccess", failed: "admin.audit.transferFailed")
         }
@@ -236,7 +236,7 @@ struct AuditHistoryCardView: View {
             Button(strings.t("admin.audit.rotate")) {
                 Task { await model.rotateKey() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(model.isRotateDisabled)
             outcome(model.rotationMessage, success: "admin.audit.rotateSuccess", failed: "admin.audit.rotateFailed")

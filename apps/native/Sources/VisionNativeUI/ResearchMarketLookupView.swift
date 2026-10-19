@@ -31,7 +31,8 @@ public struct ResearchMarketLookupView: View {
                             Button(strings.t("research.mapping.button")) { Task { await model.mapping.begin() } }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("marketLookup.menu"))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("marketLookup.menu"))
                     }
                 }
                 ResearchSymbolSearchView(
@@ -153,7 +154,7 @@ public struct ResearchMarketLookupView: View {
         Button(strings.t(model.existingHolding == nil ? "portfolio.addInvestment" : "form.addTransaction.title")) {
             let date = VisionFormat.appDate(Date(), format: shell.settings.dateFormat, timeZone: .current)
             Task { await model.action.begin(notes: strings.t("addInvFromMarket.notesDefault", ["date": date])) }
-        }.buttonStyle(.borderedProminent)
+        }.buttonStyle(.visionPrimary)
     }
     private func quoteHero(_ quote: ResearchQuote) -> some View {
         HStack(alignment: .top, spacing: 16) {

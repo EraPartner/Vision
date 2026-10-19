@@ -36,7 +36,7 @@ public struct TableDataEditorView: View {
                     } label: {
                         Label(strings.t("dbEditor.addRow"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(model.isReadOnly || model.isReviewLocked)
                 }
             }
@@ -148,7 +148,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Label(strings.t("dbEditor.applyFilters"), systemImage: "magnifyingglass")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .disabled(pending)
             if model.isShowingPreviousPage {
                 ProgressView()
@@ -171,7 +171,7 @@ public struct TableDataEditorView: View {
                 } label: {
                     Label(strings.t("dbEditor.preview"), systemImage: "eye")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .disabled(locked)
             }
         }
@@ -328,6 +328,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuIndicator(.hidden)
             .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in
@@ -372,6 +373,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuIndicator(.hidden)
             .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in
@@ -525,7 +527,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "chevron.left")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .disabled(!model.canGoToPreviousPage)
             .accessibilityLabel(strings.t("dbEditor.prevPage"))
             .help(strings.t("dbEditor.prevPage"))
@@ -536,7 +538,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "chevron.right")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .disabled(!model.canGoToNextPage)
             .accessibilityLabel(strings.t("dbEditor.nextPage"))
             .help(strings.t("dbEditor.nextPage"))
@@ -638,7 +640,7 @@ struct ReviewChangesSheet: View {
                 Button(model.isCommitting ? strings.t("dbEditor.committing") : strings.t("dbEditor.commit")) {
                     Task { await model.commit(strings: strings) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .tint(model.hasDeletes ? theme.destructive : theme.primary)
                 .disabled(!model.canCommit)
             }

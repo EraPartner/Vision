@@ -12,13 +12,12 @@ struct VisionPageHeader<Actions: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
+            // PageHeader's default icon: a bare 20 pt muted glyph in a 36 pt slot (its gradient
+            // tile only shows when a page passes an icon colour).
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(Color(token: theme.palette.mutedForeground))
                 .frame(width: 36, height: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                        .fill(theme.foreground.opacity(0.06)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)

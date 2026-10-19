@@ -162,7 +162,7 @@ struct ResearchDossierAccessedAtField: View {
                     Text(ResearchDossierDateDisplay.localPrefix(value)).monospacedDigit()
                     Spacer(minLength: 0)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.bordered).accessibilityLabel(label)
+            }.buttonStyle(.visionOutline).accessibilityLabel(label)
                 .popover(isPresented: $isOpen) {
                     DatePicker(
                         label,

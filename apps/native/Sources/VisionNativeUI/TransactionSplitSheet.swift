@@ -79,7 +79,7 @@ struct TransactionSplitSheet: View {
             } label: {
                 Label(strings.t("splitDialog.addPerson"), systemImage: "plus")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             if form.splitType == .custom && !form.validEntries.isEmpty {
                 Text(
@@ -219,7 +219,7 @@ struct TransactionSplitSheet: View {
                     Text(strings.t(form.isPending ? "splitDialog.splitting" : "splitDialog.split"))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(!form.canSubmit(format: format))
         }

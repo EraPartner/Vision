@@ -109,7 +109,7 @@ public struct PortfolioImportReviewView: View {
                 } label: {
                     if model.isBusy { ProgressView().controlSize(.small) }
                     Text(strings.t("portfolioImport.review.commit"))
-                }.buttonStyle(.borderedProminent).disabled(!model.canCommit)
+                }.buttonStyle(.visionPrimary).disabled(!model.canCommit)
             }
         }
     }

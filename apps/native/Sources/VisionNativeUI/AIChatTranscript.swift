@@ -39,7 +39,7 @@ struct AIChatTranscript: View {
                                 } icon: {
                                     Image(systemName: "sparkles").foregroundStyle(theme.primary)
                                 }
-                            }.buttonStyle(.bordered).controlSize(.small).disabled(model.composerDisabled)
+                            }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.composerDisabled)
                         }.padding(24).frame(maxWidth: 672).visionCardBackground().frame(maxWidth: .infinity)
                     }
                     ForEach(model.messages) { message in
@@ -62,8 +62,7 @@ struct AIChatTranscript: View {
                             .font(.footnote).foregroundStyle(theme.secondaryLabel)
                             Spacer()
                             if snapshot.lastRequest != nil && !model.composerDisabled {
-                                Button(strings.t("common.retry")) { Task { await model.retryLastTurn() } }.buttonStyle(
-                                    .bordered)
+                                Button(strings.t("common.retry")) { Task { await model.retryLastTurn() } }.buttonStyle(.visionOutline)
                             }
                         }.padding(.horizontal, 12).padding(.vertical, 8)
                             .background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))

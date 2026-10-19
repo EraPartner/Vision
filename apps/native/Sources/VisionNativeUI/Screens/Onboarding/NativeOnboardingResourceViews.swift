@@ -75,7 +75,7 @@ struct NativeOnboardingBankView: View {
                                 )
                                 .accessibilityHidden(true)
                             }.frame(maxWidth: .infinity, minHeight: 85).padding(10)
-                        }.buttonStyle(.bordered).accessibilityAddTraits(
+                        }.buttonStyle(.visionOutline).accessibilityAddTraits(
                             model.draft.selectedBank == adapter.key ? .isSelected : [])
                     }
                 }
@@ -113,7 +113,7 @@ struct NativeOnboardingImportView: View {
                 Text(strings.t("onboarding.import.review.desc"))
                 Button(strings.t("onboarding.import.review.cta")) {
                     Task { await model.finish(path: ImportRoutes.reviewPath(review.batchId)) }
-                }.buttonStyle(.borderedProminent)
+                }.buttonStyle(.visionPrimary)
                 Text(strings.t("onboarding.import.review.later")).font(.caption).foregroundStyle(.secondary)
             } else {
                 CSVDropzone(

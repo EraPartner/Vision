@@ -46,7 +46,7 @@ struct AIInvestigationHistoryView: View {
                 ?? strings.t("aiResearch.inspectRecords")
         ) {
             Task { await model.loadHistory() }
-        }.buttonStyle(.bordered)
+        }.buttonStyle(.visionOutline)
         if model.recordCount != nil {
             Button(strings.t("aiResearch.deleteRecords"), role: .destructive) { Task { await model.deleteHistory() } }
         }

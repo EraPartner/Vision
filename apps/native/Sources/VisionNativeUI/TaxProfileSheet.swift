@@ -75,7 +75,7 @@ struct TaxProfileSheet: View {
                 if model.isSaving { ProgressView().controlSize(.small) }
                 Button(strings.t(model.step == .region ? "tax.profile.save" : "common.next")) {
                     Task { _ = await model.next() }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(model.isSaving)
+                }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(model.isSaving)
             }.padding(.horizontal, 24).padding(.vertical, 14)
         }.frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 780)
             .foregroundStyle(theme.foreground).interactiveDismissDisabled(true)

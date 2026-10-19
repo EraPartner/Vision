@@ -31,7 +31,7 @@ public struct AccountsView: View {
                 } label: {
                     Label(strings.t("accounts.addTitle"), systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
             }
             content
         }
@@ -74,7 +74,7 @@ public struct AccountsView: View {
                     } label: {
                         Label(strings.t("accounts.addTitle"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                 }
             }
         } else {
@@ -227,13 +227,11 @@ struct AccountHubRow: View {
             // The whole row opens the account; the drift chip and the menu are their own
             // buttons, so the row is a tap target rather than a button around them.
             HStack(alignment: .center, spacing: 12) {
+                // ListRow's leading glyph: a bare 18 pt icon in label-secondary, no tile.
                 Image(systemName: AccountKinds.kind(account)?.symbol ?? "building.columns")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.primary)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                            .fill(theme.primary.opacity(0.12)))
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     titleLine
@@ -430,7 +428,7 @@ struct AccountsErrorCard: View {
                 Spacer()
                 if let retry {
                     Button(strings.t("common.retry"), action: retry)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                 }
             }

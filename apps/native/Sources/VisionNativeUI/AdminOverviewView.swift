@@ -131,12 +131,12 @@ public struct AdminOverviewView: View {
                     Button(strings.t("admin.token.save")) {
                         Task { await model.saveToken() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(!model.canSaveToken)
                     Button(strings.t("admin.token.clear")) {
                         Task { await model.clearToken() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .disabled(!model.canClearToken)
                 }
                 if model.hasToken {

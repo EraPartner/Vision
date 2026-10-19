@@ -23,7 +23,7 @@ struct ResearchDossierConfirmationView: View {
                     Spacer()
                     Button(strings.t(review.confirmKey), role: review.destructive ? .destructive : nil) {
                         Task { await model.confirmPendingReview() }
-                    }.buttonStyle(.borderedProminent).tint(review.destructive ? theme.destructive : theme.primary)
+                    }.buttonStyle(.visionPrimary).tint(review.destructive ? theme.destructive : theme.primary)
                         .keyboardShortcut(.defaultAction).disabled(blocksConfirmation)
                 }
             }.padding(24).frame(width: 470).accessibilityElement(children: .contain)

@@ -16,12 +16,12 @@ struct SavedChartsView: View {
                     Text(strings.tc("customChart.savedCount", model.charts.count)).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()
-                Button(strings.t("customChart.newChart")) { model.begin() }.buttonStyle(.borderedProminent)
+                Button(strings.t("customChart.newChart")) { model.begin() }.buttonStyle(.visionPrimary)
             }
             if model.isLoading {
                 ProgressView().padding()
             } else if model.charts.isEmpty {
-                Button(strings.t("customChart.createFirst")) { model.begin() }.buttonStyle(.bordered)
+                Button(strings.t("customChart.createFirst")) { model.begin() }.buttonStyle(.visionOutline)
             }
             ForEach(model.charts, id: \.id) { chart in
                 AdminCard(padding: VisionPageLayout.padding) {
@@ -35,6 +35,7 @@ struct SavedChartsView: View {
                             } label: {
                                 Image(systemName: "ellipsis")
                             }
+                            .menuIndicator(.hidden)
                             .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
                         }
                         if let dataset = model.datasets[chart.id] {
@@ -203,7 +204,7 @@ private struct CustomChartBuilderSheet: View {
                 Button(strings.t(model.isSaving ? "customChart.saving" : "customChart.builder.save")) {
                     Task { await model.save() }
                 }
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(
+                .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(
                     !draft.canSave || model.isSaving)
             }
         }.padding(24).frame(width: 740, height: 740).interactiveDismissDisabled(model.isSaving)
@@ -250,7 +251,7 @@ private struct CustomChartBuilderSheet: View {
                             } label: {
                                 Label(name, systemImage: "xmark")
                             }
-                            .buttonStyle(.bordered).controlSize(.small)
+                            .buttonStyle(.visionOutline).controlSize(.small)
                             .accessibilityLabel(strings.t("customChart.removeSeries", ["name": name]))
                         }
                     }
@@ -272,7 +273,7 @@ private struct ChartEntityPicker: View {
     @State private var isOpen = false
     @State private var search = ""
     var body: some View {
-        Button(title) { isOpen.toggle() }.buttonStyle(.bordered)
+        Button(title) { isOpen.toggle() }.buttonStyle(.visionOutline)
             .popover(isPresented: $isOpen) {
                 VStack(alignment: .leading, spacing: 8) {
                     TextField(strings.t("table.searchAllColumns"), text: $search).textFieldStyle(.roundedBorder)

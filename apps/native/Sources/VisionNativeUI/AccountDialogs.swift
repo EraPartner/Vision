@@ -214,7 +214,7 @@ struct AccountFormSheet: View {
                         Text(strings.t(form.submitKey))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.isSavingForm || !form.canSubmit)
             }
@@ -516,7 +516,7 @@ struct ReconcileSheet: View {
                         Text(strings.t("accounts.reconcile.readingSubmit"))
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .disabled(busy || !draft.canSaveReading)
                 Divider()
                 HStack {
@@ -634,9 +634,9 @@ private struct ResolutionButtonStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         if prominent {
-            content.buttonStyle(.borderedProminent)
+            content.buttonStyle(.visionPrimary)
         } else {
-            content.buttonStyle(.bordered)
+            content.buttonStyle(.visionOutline)
         }
     }
 }
@@ -647,7 +647,7 @@ private struct SinceButtonStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         if emphasized {
-            content.buttonStyle(.bordered)
+            content.buttonStyle(.visionOutline)
         } else {
             content.buttonStyle(.borderless)
         }
@@ -699,7 +699,7 @@ struct OpeningBalanceSheet: View {
                         Text(strings.t("accounts.openingBalance.submit"))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canSubmit)
             }
@@ -798,7 +798,7 @@ struct MergeAccountSheet: View {
                         Text(strings.t("accounts.mergeConfirm"))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .tint(theme.destructive)
                 .disabled(!draft.canMerge)
             }
@@ -819,7 +819,7 @@ struct MergeAccountSheet: View {
                     Text(strings.t("accounts.mergePreview.failed"))
                         .foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await model.retryMergePreview() } }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                 }
             case .loaded(let data)?:
@@ -952,7 +952,7 @@ struct CloseAccountSheet: View {
                         Text(strings.t("accounts.close.confirm"))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canClose)
             }
@@ -1020,7 +1020,7 @@ struct BrokerTransferSheet: View {
                 Spacer()
                 if draft.receipt != nil {
                     Button(strings.t("common.close")) { model.closeTransfer() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.visionPrimary)
                         .keyboardShortcut(.defaultAction)
                 } else {
                     Button(strings.t("common.cancel")) { model.closeTransfer() }
@@ -1037,7 +1037,7 @@ struct BrokerTransferSheet: View {
                             Text(strings.t("portfolio.brokerTransfer.confirm"))
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(!draft.canTransfer)
                 }
             }
@@ -1066,7 +1066,7 @@ struct BrokerTransferSheet: View {
             AccountCallout(tint: theme.warning) {
                 Text(strings.t("portfolio.brokerTransfer.unavailable"))
                 Button(strings.t("common.retry")) { Task { await model.loadTransferPreview() } }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
             }
         } else if draft.preview.value?.eligibleCount == 0 {
@@ -1082,7 +1082,7 @@ struct BrokerTransferSheet: View {
                 Text(strings.t("portfolio.brokerTransfer.accountsFailed"))
                     .fixedSize(horizontal: false, vertical: true)
                 Button(strings.t("common.retry")) { Task { await model.loadTransferAccounts() } }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
             }
         } else if let preview = draft.preview.value {

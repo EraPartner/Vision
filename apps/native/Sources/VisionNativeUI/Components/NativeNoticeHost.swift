@@ -47,7 +47,7 @@ struct NativeNoticeHost: View {
                     }
                     if let key = entry.actionTitleKey {
                         Button(strings.t(key)) { Task { await center.performAction(entry.id) } }
-                            .buttonStyle(.bordered).controlSize(.small)
+                            .buttonStyle(.visionOutline).controlSize(.small)
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)

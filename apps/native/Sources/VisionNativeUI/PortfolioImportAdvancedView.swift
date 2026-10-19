@@ -143,7 +143,7 @@ struct PortfolioImportAdvancedView: View {
                             systemImage: "arrow.up.doc"
                         ) {
                             Task { await model.importFile() }
-                        }.buttonStyle(.borderedProminent).disabled(!model.canImport || isLocked)
+                        }.buttonStyle(.visionPrimary).disabled(!model.canImport || isLocked)
                     }
                 }.padding(.top, 16)
             }

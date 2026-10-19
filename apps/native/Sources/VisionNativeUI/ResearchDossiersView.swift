@@ -27,9 +27,10 @@ public struct ResearchDossiersView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .menuIndicator(.hidden)
                     .accessibilityLabel(strings.t("dossiers.menu"))
                     Button(strings.t("dossiers.new"), systemImage: "plus") { model.requestNew() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.visionPrimary)
                 }
                 if let error = model.error {
                     ResearchDossierMessage(text: strings.t(error), kind: .error) {

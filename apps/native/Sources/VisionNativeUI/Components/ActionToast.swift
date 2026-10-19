@@ -38,7 +38,7 @@ struct ActionToast: View {
                 }
                 if let actionTitle {
                     Button(actionTitle, action: action)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                         .background {
                             // The shortcut lives on its own invisible button so a click on Undo

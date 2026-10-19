@@ -176,6 +176,6 @@ struct PortfolioImportStatementView: View {
     private func batchLink(_ id: Int) -> some View {
         Button(strings.t("portfolioImport.session.batch", ["id": String(id)])) {
             shell.navigate(to: "/portfolio/import/\(id)/review")
-        }.buttonStyle(.link)
+        }.buttonStyle(.visionLink)
     }
 }

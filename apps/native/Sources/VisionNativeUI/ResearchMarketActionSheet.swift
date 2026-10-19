@@ -62,7 +62,7 @@ struct ResearchMarketActionSheet: View {
                                 await model.recordTransaction()
                             }
                         }
-                    }.buttonStyle(.borderedProminent).disabled(
+                    }.buttonStyle(.visionPrimary).disabled(
                         model.isSubmitting || model.hasUncertainWrite
                             || (model.step == "new"
                                 && model.investment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -94,7 +94,7 @@ struct ResearchMarketActionSheet: View {
                         Text(strings.t("addInvFromMarket.option.addTxnDesc", ["name": holding.name])).font(.caption)
                             .foregroundStyle(theme.secondaryLabel)
                     }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                }.buttonStyle(.bordered)
+                }.buttonStyle(.visionOutline)
             }
             Button {
                 model.step = "new"
@@ -108,7 +108,7 @@ struct ResearchMarketActionSheet: View {
                         )
                     ).font(.caption).foregroundStyle(theme.secondaryLabel)
                 }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            }.buttonStyle(.bordered)
+            }.buttonStyle(.visionOutline)
         }
     }
     private var newInvestment: some View {

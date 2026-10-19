@@ -41,7 +41,7 @@ struct NativeOnboardingRestoreView: View {
                                 strings.t(
                                     model.restoreRunning ? "settings.restore.running" : "onboarding.restore.button"))
                         }
-                    }.buttonStyle(.bordered).controlSize(.small).disabled(model.restoreRunning).padding(.top, 4)
+                    }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.restoreRunning).padding(.top, 4)
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(16)

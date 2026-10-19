@@ -73,6 +73,7 @@ struct AIChatConversationRail: View {
                             } label: {
                                 Image(systemName: "ellipsis").frame(width: 20, height: 24)
                             }
+                            .menuIndicator(.hidden)
                             .menuStyle(.borderlessButton).fixedSize().accessibilityLabel(
                                 strings.t("aiChat.conversationActions"))
                         }.padding(.horizontal, 10).padding(.vertical, 9)
@@ -139,7 +140,7 @@ private struct AIChatRenameSheet: View {
             HStack {
                 Spacer()
                 Button(strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(strings.t("common.save"), action: save).buttonStyle(.borderedProminent)
+                Button(strings.t("common.save"), action: save).buttonStyle(.visionPrimary)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isRenaming)
             }
         }.padding(24).frame(width: 400).onAppear { focused = true }

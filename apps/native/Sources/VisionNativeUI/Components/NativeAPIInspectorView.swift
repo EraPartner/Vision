@@ -264,7 +264,7 @@ private struct NativeAPIMetricsView: View {
                     }
                 }
                 Button("Reset all metrics", role: .destructive) { model.reset() }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
             }
             .padding(12)
         }

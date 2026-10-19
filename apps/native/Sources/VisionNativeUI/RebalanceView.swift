@@ -135,7 +135,7 @@ public struct RebalanceView: View {
                 if model.isComputing { ProgressView().controlSize(.small) }
                 Text(strings.t("rebalance.compute"))
             }
-        }.buttonStyle(.borderedProminent).disabled(!model.canCompute)
+        }.buttonStyle(.visionPrimary).disabled(!model.canCompute)
     }
     func projectionCard(_ value: RebalanceCashProjection) -> some View {
         card("rebalance.commitment.title") {

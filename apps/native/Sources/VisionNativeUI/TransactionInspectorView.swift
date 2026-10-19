@@ -178,7 +178,7 @@ struct TransactionInspectorView: View {
                 .foregroundStyle(theme.secondaryLabel)
                 .fixedSize(horizontal: false, vertical: true)
             Button(title, action: perform)
-                .buttonStyle(.link)
+                .buttonStyle(.visionLink)
                 .font(.footnote)
         }
     }
@@ -400,7 +400,7 @@ struct TransactionAttachmentsPanel: View {
                         Text(strings.t("txPage.uploadAttachment"))
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .disabled(attachments.isUploading)
             }
@@ -485,7 +485,7 @@ struct TransactionAttachmentsPanel: View {
                 Button(item.filename) {
                     Task { await attachments.preview(item) }
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.visionLink)
                 .lineLimit(1)
                 Text(TransactionAttachmentsModel.size(item.sizeBytes))
                     .font(.caption)

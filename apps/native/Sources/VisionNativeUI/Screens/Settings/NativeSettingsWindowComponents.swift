@@ -113,6 +113,8 @@ struct NativeSettingsSelectRow: View {
             Picker(title, selection: $value) {
                 ForEach(options) { Text($0.label).tag($0.value) }
             }.labelsHidden().accessibilityLabel(title)
+                // The web select: a fixed `w-48` field, value at the leading edge.
+                .frame(width: 200)
         }
     }
 }

@@ -75,9 +75,9 @@ struct ResearchLifeScenarioPanel: View {
             HStack(spacing: 12) {
                 Button(strings.t(model.running ? "research.lifeScenario.running" : "research.lifeScenario.run")) {
                     Task { await model.run() }
-                }.buttonStyle(.borderedProminent).disabled(model.running || model.saving)
+                }.buttonStyle(.visionPrimary).disabled(model.running || model.saving)
                 Button(strings.t("research.lifeScenario.save")) { Task { await model.saveDraft() } }
-                    .buttonStyle(.bordered).disabled(!model.canSave)
+                    .buttonStyle(.visionOutline).disabled(!model.canSave)
                 if model.draft.id != nil {
                     Button(strings.t("research.lifeScenario.delete"), role: .destructive) {
                         Task { await model.deleteDraft() }

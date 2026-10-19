@@ -103,7 +103,7 @@ public struct AnalysisWorkspaceView: View {
                         await Task.yield()
                         scroll(proxy, to: "analysis-" + section)
                     }
-                }.buttonStyle(.bordered)
+                }.buttonStyle(.visionOutline)
                     .disabled(section == "present" && model.displayedResult == nil)
             }
         }.accessibilityElement(children: .contain).accessibilityLabel(strings.t("analysis.workflow.title"))
@@ -180,7 +180,7 @@ public struct AnalysisWorkspaceView: View {
                         model.startBlank()
                         templatesOpen = false
                         builderOpen = true
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(.visionOutline)
                 }.padding(.top, 12)
             }
         }
@@ -203,13 +203,13 @@ public struct AnalysisWorkspaceView: View {
                             builderOpen = true
                         }
                     }
-                }.buttonStyle(.borderedProminent).disabled(model.activeRequest != nil)
+                }.buttonStyle(.visionPrimary).disabled(model.activeRequest != nil)
                 if model.activeRequest != nil {
                     ProgressView().controlSize(.small)
                     Button(strings.t("analysis.cancel"), systemImage: "stop", role: .destructive) {
                         Task { await model.cancel() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                 }
             }
             DisclosureGroup(isExpanded: $builderOpen) {
@@ -276,8 +276,7 @@ public struct AnalysisWorkspaceView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t(feedback.message)).foregroundStyle(feedback.error ? theme.destructive : theme.foreground)
                 if feedback.error {
-                    Button(strings.t("analysis.savedActionRetry")) { Task { await model.loadSavedList() } }.buttonStyle(
-                        .bordered)
+                    Button(strings.t("analysis.savedActionRetry")) { Task { await model.loadSavedList() } }.buttonStyle(.visionOutline)
                 }
             }
         }

@@ -107,15 +107,16 @@ struct TransactionsTableCard: View {
                     .accessibilityLabel(strings.t("aria.clearSearch"))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(maxWidth: 420)
+            // The web search input: full width, `h-9`, `border-input/70` on `bg-background/80`.
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 32)
             .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .fill(theme.foreground.opacity(0.04)))
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    .fill(Color(token: theme.palette.background, opacity: 0.8)))
             .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .strokeBorder(theme.border, lineWidth: 1))
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
             .overlay(alignment: .topLeading) {
                 if suggestionsOpen {
                     TransactionSearchSuggestionsView(
@@ -242,9 +243,9 @@ struct TransactionsTableCard: View {
                 .frame(width: Self.selectWidth, alignment: .leading)
             if isCompact {
                 Text(strings.t("txPage.col.recipient"))
-                    .font(.caption.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(theme.secondaryLabel)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 11)
                     .frame(minWidth: Self.summaryWidth, maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -256,7 +257,7 @@ struct TransactionsTableCard: View {
                         maxWidth: isFlexible(column) ? .infinity : nil, alignment: .leading)
             }
             Text(strings.t("table.edit"))
-                .font(.caption.weight(.medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
                 .frame(width: Self.editWidth, alignment: .center)
                 .accessibilityAddTraits(.isHeader)
@@ -287,10 +288,10 @@ struct TransactionsTableCard: View {
                 filterButton(column, title: title)
             } else {
                 Text(title)
-                    .font(.caption.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(theme.secondaryLabel)
                     .lineLimit(1)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 11)
                     .accessibilityAddTraits(.isHeader)
             }
             Spacer(minLength: 0)
@@ -312,7 +313,7 @@ struct TransactionsTableCard: View {
         } label: {
             HStack(spacing: 4) {
                 Text(title)
-                    .font(.caption.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Image(systemName: active.map { $0.ascending ? "arrow.up" : "arrow.down" } ?? "arrow.up.arrow.down")
                     .imageScale(.small)
@@ -321,7 +322,7 @@ struct TransactionsTableCard: View {
                     .accessibilityHidden(true)
             }
             .foregroundStyle(theme.secondaryLabel)
-            .padding(.vertical, 8)
+            .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -341,7 +342,7 @@ struct TransactionsTableCard: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
-        .opacity(hasFilter || hoveredHeader == key || openFilter == key ? 1 : 0.35)
+        .opacity(hasFilter || hoveredHeader == key || openFilter == key ? 1 : 0)
         .help(label)
         .accessibilityLabel(label)
         .popover(
@@ -410,7 +411,7 @@ struct TransactionsTableCard: View {
                 Button(strings.t("txPage.importLink")) {
                     shell.navigate(to: "/import")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
             }
         }
     }
@@ -570,6 +571,7 @@ struct TransactionRowView: View {
         } else {
             Text(VisionFormat.appDate(row.date, format: settings.dateFormat))
                 .monospacedDigit()
+                .foregroundStyle(theme.secondaryLabel)
                 .strikethrough(!row.isActive)
         }
     }
@@ -659,7 +661,7 @@ struct TransactionRowView: View {
             Text(row.isActive ? strings.t("txPage.statusActive") : strings.t("txPage.statusInactive"))
                 .font(.footnote.weight(.medium))
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.visionOutline)
         .controlSize(.small)
         .disabled(model.updatesInFlight > 0)
         .accessibilityAddTraits(row.isActive ? .isSelected : [])

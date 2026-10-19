@@ -76,7 +76,7 @@ struct AnalysisFormulaEditorView: View {
             if let preview = model.preview { AnalysisWorkbenchReportView(output: preview, model: model, shell: shell) }
             if !model.draft.formulas.isEmpty {
                 Button(t("applyFormulas")) { Task { await model.run(apply: true) } }
-                    .buttonStyle(.borderedProminent).disabled(!model.canApplyFormulas)
+                    .buttonStyle(.visionPrimary).disabled(!model.canApplyFormulas)
             }
         }
     }

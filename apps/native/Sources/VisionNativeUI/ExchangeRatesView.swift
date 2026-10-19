@@ -58,7 +58,7 @@ public struct ExchangeRatesView: View {
                     .symbolEffect(.rotate, options: .repeat(.continuous), isActive: model.isRefreshing)
             }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.visionOutline)
         .controlSize(.large)
         .disabled(disabled)
     }
@@ -123,7 +123,7 @@ public struct ExchangeRatesView: View {
                 Button(strings.t("common.retry")) {
                     Task { await model.retry() }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)

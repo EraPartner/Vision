@@ -18,58 +18,83 @@ struct PortfolioSeriesChart: View {
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     private var keys: [String] { Array(Set(series.flatMap { $0.points.map(\.key) })).sorted() }
+    /// Each key's position: the x axis is quantitative over these indices, so it draws only
+    /// the requested ticks. A String-keyed (categorical) axis drew a grid line and a label
+    /// for every day of a long series.
+    private var keyIndex: [String: Int] {
+        Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
+    }
+    /// The web AreaChart's fitted domain: the data range plus a margin, not zero-based, so a
+    /// slowly growing portfolio fills the plot instead of a flat line at the top.
+    private var yDomain: ClosedRange<Double> {
+        let values = series.flatMap { $0.points.map { coordinate($0.value) } }
+        guard let low = values.min(), let high = values.max() else { return 0...1 }
+        let span = high - low
+        let margin = span > 0 ? span * 0.08 : max(abs(high) * 0.05, 1)
+        return (low - margin)...(high + margin)
+    }
 
     var body: some View {
+        let keys = self.keys
+        let index = keyIndex
+        let domain = yDomain
         VStack(alignment: .leading, spacing: 10) {
             Chart {
                 ForEach(series) { line in
+                    let color = lineColor(line)
                     ForEach(line.points) { point in
-                        if area && !line.dashed {
+                        if area && !line.dashed, let x = index[point.key] {
                             AreaMark(
-                                x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
-                                stacking: .unstacked
+                                x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
+                                yEnd: .value(line.label, coordinate(point.value)),
+                                series: .value(title, line.id)
                             )
-                            .foregroundStyle(by: .value(title, line.id)).opacity(0.12)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [color.opacity(0.28), color.opacity(0.02)], startPoint: .top,
+                                    endPoint: .bottom)
+                            )
                             .accessibilityHidden(true)
                         }
-                        LineMark(
-                            x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
-                            series: .value(title, line.id)
-                        )
-                        .foregroundStyle(by: .value(title, line.id))
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: line.dashed ? [5, 4] : []))
-                        .accessibilityLabel(line.label + ". " + dateLabel(point.key))
-                        .accessibilityValue(format(point.value))
+                        if let x = index[point.key] {
+                            LineMark(
+                                x: .value(title, x), y: .value(line.label, coordinate(point.value)),
+                                series: .value(title, line.id)
+                            )
+                            .foregroundStyle(color)
+                            .lineStyle(
+                                StrokeStyle(
+                                    lineWidth: line.dashed ? 1.5 : 2.5, lineCap: .round, lineJoin: .round,
+                                    dash: line.dashed ? [4, 4] : [])
+                            )
+                            .accessibilityLabel(line.label + ". " + dateLabel(point.key))
+                            .accessibilityValue(format(point.value))
+                        }
                     }
                 }
-                if let selected, keys.contains(selected) {
-                    RuleMark(x: .value(title, selected)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
+                if let selected, let x = index[selected] {
+                    RuleMark(x: .value(title, x)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
                 }
-                if let selected, let rangeStart, keys.contains(selected), keys.contains(rangeStart) {
-                    RectangleMark(
-                        xStart: .value(title, min(selected, rangeStart)),
-                        xEnd: .value(title, max(selected, rangeStart))
-                    )
-                    .foregroundStyle(theme.primary.opacity(0.08))
+                if let selected, let rangeStart, let a = index[selected], let b = index[rangeStart] {
+                    RectangleMark(xStart: .value(title, min(a, b)), xEnd: .value(title, max(a, b)))
+                        .foregroundStyle(theme.primary.opacity(0.08))
                 }
             }
-            .chartXScale(domain: keys)
-            .chartForegroundStyleScale(
-                domain: series.map(\.id),
-                range: series.enumerated().map { index, line in
-                    colors[line.id] ?? Color(token: palette[index % palette.count])
-                }
-            )
+            .chartXScale(domain: 0...max(keys.count - 1, 1))
+            .chartYScale(domain: domain)
             .chartLegend(.hidden)
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys)) { value in
-                    AxisGridLine()
-                    AxisValueLabel { if let key = value.as(String.self) { Text(dateLabel(key)) } }
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(Array(keys.indices), count: 5)) { value in
+                    AxisValueLabel {
+                        if let position = value.as(Int.self), keys.indices.contains(position) {
+                            Text(dateLabel(keys[position]))
+                        }
+                    }
                 }
             }
             .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(theme.border.opacity(0.5))
                     AxisValueLabel { if let value = value.as(Double.self) { Text(format(Decimal(value), axis: true)) } }
                 }
             }
@@ -142,6 +167,10 @@ struct PortfolioSeriesChart: View {
             }
         }
     }
+    private func lineColor(_ line: InsightChartSeries) -> Color {
+        let position = series.firstIndex { $0.id == line.id } ?? 0
+        return colors[line.id] ?? Color(token: palette[position % palette.count])
+    }
     private var palette: [HSLColor] {
         [
             theme.palette.chart1, theme.palette.chart2, theme.palette.chart3,
@@ -175,7 +204,12 @@ struct PortfolioSeriesChart: View {
     private func key(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
         guard let anchor = proxy.plotFrame else { return nil }
         let frame = geometry[anchor]
-        return proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: String.self)
+        guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self) else {
+            return nil
+        }
+        let keys = self.keys
+        guard !keys.isEmpty else { return nil }
+        return keys[min(max(Int(position.rounded()), 0), keys.count - 1)]
     }
     private func moveSelection(_ press: KeyPress) -> KeyPress.Result {
         guard !keys.isEmpty else { return .ignored }

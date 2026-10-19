@@ -101,7 +101,7 @@ struct ImportExportCard: View {
                     Button(strings.t(model.showsFilters ? "importPage.hideFilters" : "importPage.showFilters")) {
                         Task { await model.toggleFilters() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
                 }
                 if model.showsFilters {
@@ -125,7 +125,7 @@ struct ImportExportCard: View {
                             }
                             .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.large)
                         .disabled(model.isExporting)
                     }
@@ -222,7 +222,7 @@ struct ImportSetupReferenceCard: View {
                         Image(systemName: "chevron.down")
                             .rotationEffect(.degrees(model.isSetupReferenceExpanded ? 180 : 0))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .accessibilityLabel(strings.t("importPage.toggleSetupReference"))
                     .help(strings.t("importPage.toggleSetupReference"))
                 }
@@ -342,7 +342,7 @@ struct SimpleCSVImportCard: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .controlSize(.large)
                 .disabled(!model.canImport)
             }

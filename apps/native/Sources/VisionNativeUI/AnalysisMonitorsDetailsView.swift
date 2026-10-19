@@ -20,7 +20,7 @@ struct AnalysisMonitorsDetailsView: View {
                             }.disabled(model.isBusy)
                             Button(strings.t("monitors.delete"), role: .destructive) { model.deletingRule = rule }
                                 .disabled(model.isBusy)
-                        }.buttonStyle(.bordered).controlSize(.small)
+                        }.buttonStyle(.visionOutline).controlSize(.small)
                     }
                     VStack(alignment: .leading, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -57,7 +57,7 @@ struct AnalysisMonitorsDetailsView: View {
                             draft: draft, strings: strings, update: model.updateEdit, focus: $focus)
                         Button(strings.t("monitors.save"), systemImage: "square.and.arrow.down") {
                             Task { await model.save() }
-                        }.buttonStyle(.borderedProminent)
+                        }.buttonStyle(.visionPrimary)
                     }.disabled(model.isBusy).onSubmit { Task { await model.save() } }
                     Divider()
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {

@@ -31,7 +31,7 @@ struct AIInvestigationAnswerView: View {
                 Button(strings.t("aiResearch.openAnalysis")) {
                     shell.navigate(
                         to: NativeRoute(path: "/analysis", query: [.init(name: "savedAnalysis", value: id)]).string)
-                }.buttonStyle(.bordered).controlSize(.small)
+                }.buttonStyle(.visionOutline).controlSize(.small)
             }
             if let evidence = selectedEvidence { evidenceDetail(evidence) }
         }
@@ -61,7 +61,7 @@ struct AIInvestigationAnswerView: View {
         ForEach(Array(ids.enumerated()), id: \.offset) { _, id in
             let evidence = answer.evidence.last { $0.id == id }
             Button(evidence?.label ?? id) { selectedEvidenceID = id }
-                .buttonStyle(.link).font(.caption).multilineTextAlignment(.leading)
+                .buttonStyle(.visionLink).font(.caption).multilineTextAlignment(.leading)
                 .help(evidence?.excerpt ?? "")
         }
     }

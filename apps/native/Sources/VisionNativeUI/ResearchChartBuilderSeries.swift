@@ -30,7 +30,8 @@ struct ResearchChartBuilderSeriesView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("research.builder.seriesMenu", ["name": label(series)]))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("research.builder.seriesMenu", ["name": label(series)]))
                     }
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 10) { seriesControls(series) }
@@ -143,7 +144,8 @@ struct ResearchChartBuilderIndicatorsView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                    }.accessibilityLabel(
+                    }
+                    .menuIndicator(.hidden).accessibilityLabel(
                         strings.t(
                             "research.builder.indicatorMenu",
                             ["indicator": name + " (" + String(indicator.period) + ")"]))

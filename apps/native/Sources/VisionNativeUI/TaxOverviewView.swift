@@ -90,21 +90,14 @@ public struct TaxOverviewView: View {
                 TaxYearSwitcherView(
                     overview: overview, availableYears: data?.yearCalculations.map(\.year) ?? [],
                     actions: screens.actions, shell: shell)
-                // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
-                if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
-                    Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
-                        .disabled(screens.actions.isSaving)
-                }
-                Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
-                    Task { await screens.exportYearCsv() }
-                }.disabled(screens.actions.isSaving)
+                // YearActionsMenu: Mark as filed and CSV export live in the more menu, as on the web.
                 actionsMenu(overview)
                 Button(
                     strings.t(overview.hasProfile ? "tax.profile.edit" : "tax.profile.setup"),
                     systemImage: "slider.horizontal.3"
                 ) {
                     openProfile(overview)
-                }.buttonStyle(.borderedProminent).disabled(screens.actions.isSaving)
+                }.buttonStyle(.visionPrimary).disabled(screens.actions.isSaving)
             }
         }
     }
@@ -118,6 +111,7 @@ public struct TaxOverviewView: View {
             Divider()
             Text(strings.t("tax.yearActions.menuLabel", ["year": String(overview.year)]))
             if !filed {
+                Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
                 Button(
                     strings.t(frozen ? "tax.yearActions.unfreeze" : "tax.yearActions.freeze"), systemImage: "snowflake"
                 ) {
@@ -137,6 +131,7 @@ public struct TaxOverviewView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuIndicator(.hidden)
         .accessibilityLabel(strings.t("tax.menu.label")).disabled(screens.actions.isSaving)
     }
     @ViewBuilder private func content(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
@@ -152,8 +147,7 @@ public struct TaxOverviewView: View {
                         symbol: "person.crop.circle.badge.plus", title: strings.t("tax.noProfile.title"),
                         description: strings.t("tax.noProfile.desc")
                     ) {
-                        Button(strings.t("tax.profile.setup")) { openLiveProfile(overview) }.buttonStyle(
-                            .borderedProminent)
+                        Button(strings.t("tax.profile.setup")) { openLiveProfile(overview) }.buttonStyle(.visionPrimary)
                     }
                 }
             } else {
@@ -204,20 +198,37 @@ public struct TaxOverviewView: View {
         }
     }
     private func disclaimer(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
-        TaxCard(title: strings.t("tax.belgianRulesDesc")) {
-            Text(strings.t("tax.disclaimerTitle") + ": " + strings.t("tax.disclaimerText"))
+        // The web disclaimer: a quiet info callout, not a titled card.
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle")
                 .foregroundStyle(theme.secondaryLabel)
-            if overview.storedValueInvalid { Text("• " + strings.t("tax.household.storedUnreadable")) }
-            if !overview.isHistorical {
-                ForEach(uniqueIssues(overview), id: \.code) { issue in
-                    Text(
-                        "• " + strings.t("tax.household.issue.severity." + issue.severity) + ": "
-                            + strings.t("tax.household.issue." + issue.code)
-                    )
-                    .font(.callout).foregroundStyle(issue.severity == "info" ? theme.secondaryLabel : theme.warning)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("tax.belgianRulesDesc"))
+                    .font(.callout.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Text(strings.t("tax.disclaimerTitle") + ": " + strings.t("tax.disclaimerText"))
+                    .font(.callout)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                if overview.storedValueInvalid {
+                    Text("• " + strings.t("tax.household.storedUnreadable")).font(.callout)
+                }
+                if !overview.isHistorical {
+                    ForEach(uniqueIssues(overview), id: \.code) { issue in
+                        Text(
+                            "• " + strings.t("tax.household.issue.severity." + issue.severity) + ": "
+                                + strings.t("tax.household.issue." + issue.code)
+                        )
+                        .font(.callout).foregroundStyle(issue.severity == "info" ? theme.secondaryLabel : theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(16)
+        .visionCardBackground()
     }
     private func uniqueIssues(_ overview: OpenAPI.BelgianTaxOverview) -> [OpenAPI.BelgianTaxHouseholdTaxIssue] {
         var seen = Set<String>()

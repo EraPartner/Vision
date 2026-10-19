@@ -121,7 +121,7 @@ struct AnalysisQueryBuilderView: View {
                     Text(strings.t("analysis.filters")).font(.callout.weight(.medium))
                     Spacer()
                     Button(strings.t("analysis.addFilter"), systemImage: "plus") { model.addFilter() }
-                        .buttonStyle(.bordered).disabled(dataset.fields.isEmpty)
+                        .buttonStyle(.visionOutline).disabled(dataset.fields.isEmpty)
                 }
                 ForEach(Array(model.plan.filters.enumerated()), id: \.offset) { index, filter in
                     filterRow(filter, index: index, dataset: dataset)
@@ -229,7 +229,7 @@ struct AnalysisSQLEditorView: View {
                         ForEach(Array(dataset.fields.prefix(12))) { field in
                             Button(field.id) {
                                 model.sql += (model.sql.isEmpty || model.sql.hasSuffix(" ") ? "" : " ") + field.id
-                            }.font(.caption.monospaced()).buttonStyle(.bordered)
+                            }.font(.caption.monospaced()).buttonStyle(.visionOutline)
                         }
                     }
                 }

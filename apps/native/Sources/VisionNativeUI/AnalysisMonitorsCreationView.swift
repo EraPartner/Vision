@@ -23,7 +23,7 @@ struct AnalysisMonitorsCreationView: View {
                                 Text(strings.t(kind.labelKey)).multilineTextAlignment(.leading)
                                 Spacer(minLength: 0)
                             }.frame(maxWidth: .infinity, alignment: .leading)
-                        }.buttonStyle(.bordered).tint(kind == draft.kind ? .accentColor : .secondary)
+                        }.buttonStyle(.visionOutline).tint(kind == draft.kind ? .accentColor : .secondary)
                     }
                 }
                 if draft.kind == .threshold { analysisTarget } else { dossierTarget }
@@ -45,7 +45,7 @@ struct AnalysisMonitorsCreationView: View {
                     Text(strings.t("monitors.baselineHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
                     AnalysisMonitorsScheduleView(draft: draft, strings: strings, update: model.updateNew, focus: $focus)
                     Button(strings.t("monitors.create"), systemImage: "plus") { Task { await model.create() } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.visionPrimary)
                 }
             }
             .disabled(model.isBusy)

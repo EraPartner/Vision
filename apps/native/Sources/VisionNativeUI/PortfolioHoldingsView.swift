@@ -79,7 +79,7 @@ public struct PortfolioHoldingsView: View {
                         Button(strings.t("addInv.title"), systemImage: "plus") {
                             editing.beginAddInvestment(allowedAssetClasses: classes)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.visionPrimary)
                         Menu {
                             if assetClass != "crypto" {
                                 Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
@@ -87,7 +87,8 @@ public struct PortfolioHoldingsView: View {
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("portfolio.menu"))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
                 if model.isLoading || (isRealEstate && (model.rentLoading || (missingRentRate && shell.exchangeRates.isLoading))) {
@@ -115,7 +116,7 @@ public struct PortfolioHoldingsView: View {
                             Button(strings.t("addInv.title")) {
                                 editing.beginAddInvestment(allowedAssetClasses: classes)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.visionPrimary)
                         }
                     }
                 } else {
@@ -149,6 +150,8 @@ public struct PortfolioHoldingsView: View {
     private var summary: some View {
         let value = total { $0.currentValue }
         return AdminCard(padding: 24) {
+            // The web summary: the value on the left, the figures in a grid on the right.
+            HStack(alignment: .top, spacing: 32) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(
                     strings.t(
@@ -162,8 +165,11 @@ public struct PortfolioHoldingsView: View {
                     colored: false
                 ).font(.visionLargeTitle)
                 if isUnitBased { PortfolioPriceFreshnessCaption(holdings: holdings, shell: shell) }
+            }
+            .frame(minWidth: 220, alignment: .leading)
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 190), alignment: .leading)], alignment: .leading, spacing: 16
+                    columns: Array(repeating: GridItem(.flexible(minimum: 120), alignment: .leading), count: 3),
+                    alignment: .leading, spacing: 14
                 ) {
                     if isUnitBased {
                         figure("portfolio.realizedPnl", total { $0.realizedGain }, signed: true)
@@ -218,11 +224,16 @@ public struct PortfolioHoldingsView: View {
         }
     }
     private func figure(_ key: String, _ amount: Decimal, signed: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let color = signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground
+        return VStack(alignment: .leading, spacing: 3) {
             Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            Text(money(amount, signed: signed)).font(Font.visionTitle3).monospacedDigit()
-                .foregroundStyle(signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground)
+            MoneyText.styled(
+                money(amount, signed: signed),
+                decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first, color: color
+            )
+            .font(.visionDisplayHeadline).monospacedDigit()
         }
+        .accessibilityElement(children: .combine)
     }
     private var holdingsTable: some View {
         let columns = tableColumns
@@ -283,7 +294,16 @@ public struct PortfolioHoldingsView: View {
                 key: "name", title: strings.t("portfolio.asset"), width: 250, minWidth: 200, flexible: true,
                 cell: { holding in
                     AnyView(
-                        VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 10) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(theme.secondaryLabel)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                                    .fill(theme.foreground.opacity(0.06)))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
                             if let symbol = holding.symbol {
                                 Button(symbol) {
                                     shell.navigate(
@@ -295,12 +315,16 @@ public struct PortfolioHoldingsView: View {
                                             ]
                                         ).string)
                                 }
-                                .buttonStyle(.link)
+                                .buttonStyle(.plain)
+                                .font(.callout.weight(.semibold))
                             }
                             Button(holding.name) { Task { await model.openDetail(id: holding.id) } }.buttonStyle(.plain)
+                                .font(holding.symbol == nil ? .callout.weight(.semibold) : .caption)
+                                .foregroundStyle(holding.symbol == nil ? theme.foreground : theme.secondaryLabel)
                             if holding.oversold {
                                 VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
                             }
+                        }
                         })
                 }),
             LocalDataColumn(
@@ -347,7 +371,7 @@ public struct PortfolioHoldingsView: View {
                 alignment: .trailing,
                 cell: { h in
                     AnyView(
-                        VStack(alignment: .trailing, spacing: 3) {
+                        HStack(spacing: 8) {
                             Text(money(h.unrealizedGain, signed: true)).foregroundStyle(
                                 h.unrealizedGain >= 0 ? theme.gain : theme.loss
                             ).monospacedDigit()

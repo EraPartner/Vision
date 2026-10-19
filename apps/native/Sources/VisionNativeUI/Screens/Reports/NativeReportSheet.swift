@@ -53,7 +53,7 @@ public struct NativeReportSheet: View {
                 if model.isSubmitting { ProgressView().controlSize(.small) }
                 Button(model.isSubmitting ? strings.t("export.downloading") : strings.t("export.download")) {
                     Task { await model.submit() }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!model.canSubmit)
+                }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(!model.canSubmit)
             }.padding(20)
         }.frame(width: 560, height: 660)
             .onDisappear { model.didDisappear() }

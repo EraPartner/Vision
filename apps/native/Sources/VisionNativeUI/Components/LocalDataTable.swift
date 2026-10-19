@@ -141,15 +141,15 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.headline)
+                .font(.visionTitle3)
                 .accessibilityAddTraits(.isHeader)
             Text(subtitle)
                 .font(.callout)
                 .foregroundStyle(theme.secondaryLabel)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
     }
 
     private var toolbar: some View {
@@ -173,15 +173,15 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                     .accessibilityLabel(strings.t("aria.clearSearch"))
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .frame(maxWidth: 360)
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 32)
             .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .fill(theme.foreground.opacity(0.04)))
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    .fill(Color(token: theme.palette.background, opacity: 0.8)))
             .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .strokeBorder(theme.border, lineWidth: 1))
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
             if query.showsClearAll {
                 Button {
                     query.clearAll()
@@ -197,9 +197,9 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, title.isEmpty && subtitle.isEmpty ? 16 : 0)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 20)
+        .padding(.top, title.isEmpty && subtitle.isEmpty ? 20 : 0)
+        .padding(.bottom, 12)
     }
 
     private var chips: some View {
@@ -294,7 +294,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         } label: {
             HStack(spacing: 4) {
                 Text(column.title)
-                    .font(.caption.weight(.medium))
+                    .font(.callout.weight(.medium))
                     .lineLimit(1)
                 Image(systemName: active.map { $0.ascending ? "arrow.up" : "arrow.down" } ?? "arrow.up.arrow.down")
                     .imageScale(.small)
@@ -303,7 +303,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                     .accessibilityHidden(true)
             }
             .foregroundStyle(theme.secondaryLabel)
-            .padding(.vertical, 8)
+            .padding(.vertical, 11)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -322,7 +322,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
-        .opacity(hasFilter || hoveredHeader == column.key || openFilter == column.key ? 1 : 0.35)
+        .opacity(hasFilter || hoveredHeader == column.key || openFilter == column.key ? 1 : 0)
         .help(label)
         .accessibilityLabel(label)
         .popover(isPresented: filterPresented(column.key), arrowEdge: .bottom) {
@@ -356,7 +356,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             ForEach(columns) { column in
                 column.cell(row)
                     .padding(.trailing, 8)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 11)
                     .frame(width: column.flexible ? nil : width(of: column), alignment: column.alignment)
                     .frame(
                         minWidth: column.flexible ? width(of: column) : nil,

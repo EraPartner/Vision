@@ -55,7 +55,7 @@ struct AnalysisReusableView: View {
                 } else {
                     Task { await model.save() }
                 }
-            }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
+            }.buttonStyle(.visionPrimary).frame(maxWidth: .infinity)
                 .disabled(model.displayedResult == nil || model.isSaving || model.savedAction)
             if let saved = model.selectedSaved {
                 versions(saved)
@@ -108,7 +108,7 @@ struct AnalysisReusableView: View {
                 theme.secondaryLabel)
             Button(strings.t(model.versionsLoading ? "common.loading" : "analysis.versionHistory")) {
                 Task { await model.loadVersions() }
-            }.buttonStyle(.bordered).disabled(model.versionsLoading)
+            }.buttonStyle(.visionOutline).disabled(model.versionsLoading)
             if let versions = model.versions {
                 let earlier = versions.map(\.version).filter { $0 != saved.version }
                 if earlier.isEmpty {
@@ -141,14 +141,13 @@ struct AnalysisReusableView: View {
     @ViewBuilder private var proposalButtons: some View {
         Button(strings.t("analysis.generateProposal")) {
             Task { await model.generateProposal(instruction: model.proposalJson, model: nil) }
-        }.buttonStyle(.borderedProminent).disabled(
+        }.buttonStyle(.visionPrimary).disabled(
             model.isProposalLoading || model.proposalJson.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        Button(strings.t("analysis.revalidateProposal")) { Task { await model.previewProposal() } }.buttonStyle(
-            .bordered
+        Button(strings.t("analysis.revalidateProposal")) { Task { await model.previewProposal() } }.buttonStyle(.visionOutline
         ).disabled(model.isProposalLoading)
         if model.proposalPreview != nil {
             Button(strings.t("analysis.applyProposal")) { Task { await model.applyProposal() } }
-                .buttonStyle(.bordered).disabled(model.savedAction || model.isSaving)
+                .buttonStyle(.visionOutline).disabled(model.savedAction || model.isSaving)
         }
     }
     private func text(_ path: ReferenceWritableKeyPath<AnalysisWorkspaceModel, String>) -> Binding<String> {
@@ -216,6 +215,7 @@ struct AnalysisSavedLibraryView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                         }
+                        .menuIndicator(.hidden)
                         .accessibilityLabel(strings.t("analysis.rowMenu", ["name": saved.name]))
                         .disabled(model.savedAction || model.isSaving)
                     }.padding(10)

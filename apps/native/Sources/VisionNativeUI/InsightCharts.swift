@@ -343,11 +343,11 @@ struct HomeCategoryChart: View {
                 HStack {
                     ForEach(slices) { slice in
                         Button(slice.name) { navigate(slice.route.string) }
-                            .buttonStyle(.link).font(.caption)
+                            .buttonStyle(.visionLink).font(.caption)
                     }
                 }
                 if let selected {
-                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.bordered)
+                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.visionOutline)
                 }
             }
         }

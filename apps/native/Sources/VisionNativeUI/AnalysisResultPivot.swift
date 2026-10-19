@@ -64,7 +64,7 @@ struct AnalysisResultPivot: View {
                 Button(strings.t(model.isPivotLoading ? "analysis.ext.pivot.running" : "analysis.ext.pivot.run")) {
                     hasRun = true
                     Task { await model.runPivot() }
-                }.buttonStyle(.borderedProminent).disabled(model.isPivotLoading || config.values.isEmpty)
+                }.buttonStyle(.visionPrimary).disabled(model.isPivotLoading || config.values.isEmpty)
                 Toggle(strings.t("analysis.ext.pivot.share"), isOn: $percentages)
             }
             if let error = model.pivotError {

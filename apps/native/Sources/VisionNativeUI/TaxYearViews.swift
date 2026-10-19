@@ -121,36 +121,44 @@ struct TaxMastheadView: View {
         }
     }
     private var identity: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(String(overview.year)).font(.visionLargeTitle).monospacedDigit()
-                    .accessibilityAddTraits(.isHeader)
-                VisionBadge(
-                    text: strings.t("tax.masthead.status." + status),
-                    tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary)
-            }
-            Text(
-                strings.t("tax.masthead.meta.region") + " · "
-                    + strings.t("tax.profile.region." + overview.household.region + ".label")
-            )
-            .foregroundStyle(theme.secondaryLabel)
+        HStack(spacing: 12) {
+            Text(String(overview.year)).font(.visionLargeTitle).monospacedDigit()
+                .accessibilityAddTraits(.isHeader)
+            VisionBadge(
+                text: strings.t("tax.masthead.status." + status),
+                tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary)
         }
     }
+    /// The web masthead meta: Region and Marginal rate as small labelled figures, then a
+    /// hairline and the Effective burden in large primary type.
     private var rates: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(strings.t("tax.masthead.meta.effectiveBurden")).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            Text(
-                overview.calculation.effectiveRate.map {
-                    VisionFormat.percent($0, digits: 1, locale: shell.settings.numberFormat.locale)
-                } ?? "—"
-            ).font(.visionLargeTitle).monospacedDigit().foregroundStyle(theme.primary)
-            Text(
-                strings.t("tax.masthead.meta.marginalRate") + " · "
-                    + (overview.calculation.marginalRate.map {
-                        VisionFormat.percent($0, digits: 0, locale: shell.settings.numberFormat.locale)
-                    } ?? "—")
-            ).foregroundStyle(theme.secondaryLabel)
+        HStack(alignment: .bottom, spacing: 24) {
+            meta(
+                strings.t("tax.masthead.meta.region"),
+                value: strings.t("tax.profile.region." + overview.household.region + ".label"))
+            meta(
+                strings.t("tax.masthead.meta.marginalRate"),
+                value: overview.calculation.marginalRate.map {
+                    VisionFormat.percent($0, digits: 0, locale: shell.settings.numberFormat.locale)
+                } ?? "—")
+            Rectangle().fill(theme.border).frame(width: 1, height: 40).accessibilityHidden(true)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(strings.t("tax.masthead.meta.effectiveBurden")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+                Text(
+                    overview.calculation.effectiveRate.map {
+                        VisionFormat.percent($0, digits: 1, locale: shell.settings.numberFormat.locale)
+                    } ?? "—"
+                ).font(.visionLargeTitle).monospacedDigit().foregroundStyle(theme.primary)
+            }
+            .accessibilityElement(children: .combine)
         }
+    }
+    private func meta(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            Text(value).font(.visionDisplayHeadline).monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -181,7 +189,7 @@ struct TaxMarkFiledSheet: View {
                 Spacer()
                 Button(shell.strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                     .disabled(!TaxYearMutation.canFile(overview))
             }
         }.padding(24).frame(width: 480).disabled(actions.isSaving)

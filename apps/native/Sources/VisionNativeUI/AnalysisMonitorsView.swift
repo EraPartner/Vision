@@ -122,6 +122,6 @@ struct AnalysisMonitorsPager: View {
             }
             Button(strings.t("monitors.next")) { Task { await change(offset + pageSize) } }.disabled(
                 offset + pageSize >= total)
-        }.buttonStyle(.bordered).controlSize(.small)
+        }.buttonStyle(.visionOutline).controlSize(.small)
     }
 }

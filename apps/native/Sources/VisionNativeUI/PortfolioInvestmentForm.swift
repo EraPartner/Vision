@@ -63,7 +63,7 @@ struct PortfolioInvestmentForm: View {
                                         Text(strings.t("addInv.desc." + value)).font(.callout).foregroundStyle(
                                             theme.secondaryLabel)
                                     }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                }.buttonStyle(.bordered)
+                                }.buttonStyle(.visionOutline)
                             }
                         } else {
                             fields
@@ -89,7 +89,7 @@ struct PortfolioInvestmentForm: View {
                 Button(strings.t("common.cancel")) { model.cancelEditor() }
                 if !typeSelection {
                     Button(strings.t(isEditing ? "common.save" : "addInv.create")) { save() }
-                        .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                        .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                 }
                 if model.isSaving { ProgressView().controlSize(.small) }
             }.padding(20)

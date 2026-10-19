@@ -60,6 +60,6 @@ public struct ShellFXStatusBanner: View {
             Task { await model.refresh() }
         } label: {
             Label(shell.strings.t("exchangeRates.refresh"), systemImage: "arrow.clockwise")
-        }.buttonStyle(.bordered).controlSize(.small).disabled(model.isBusy)
+        }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.isBusy)
     }
 }

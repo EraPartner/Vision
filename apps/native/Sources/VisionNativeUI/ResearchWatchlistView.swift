@@ -89,7 +89,7 @@ public struct ResearchWatchlistView: View {
     private var addButton: some View {
         Button(strings.t("watchlist.addButton"), systemImage: "plus") {
             model.add.begin(numberFormat: shell.settings.numberFormat)
-        }.buttonStyle(.borderedProminent)
+        }.buttonStyle(.visionPrimary)
     }
 }
 
@@ -141,6 +141,7 @@ private struct ResearchWatchlistRow: View {
                 } label: {
                     Image(systemName: "ellipsis")
                 }
+                .menuIndicator(.hidden)
                 .menuStyle(.borderlessButton).fixedSize()
                 .accessibilityLabel(strings.t("watchlist.rowMenu", ["name": ResearchWatchlistUI.name(item)]))
             }.padding(.top, 4)
@@ -150,7 +151,7 @@ private struct ResearchWatchlistRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let symbol = item.symbol, !symbol.isEmpty {
-                    Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.link).font(.headline)
+                    Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.visionLink).font(.headline)
                         .multilineTextAlignment(.leading)
                     Text(symbol).font(.caption2.monospaced().weight(.medium))
                         .foregroundStyle(theme.foreground.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 1)

@@ -110,7 +110,8 @@ struct ResearchMarketMappingSheet: View {
                                     }
                                 } label: {
                                     Image(systemName: "ellipsis")
-                                }.accessibilityLabel(
+                                }
+                                .menuIndicator(.hidden).accessibilityLabel(
                                     strings.t("research.mapping.rowMenu", ["provider": mapping.provider]))
                             }.padding(.vertical, 5)
                         }
@@ -143,7 +144,7 @@ struct ResearchMarketMappingSheet: View {
                 Spacer()
                 Button(strings.t("research.mapping.confirm", ["n": String(model.selectedCount)])) {
                     Task { await model.save() }
-                }.buttonStyle(.borderedProminent).disabled(
+                }.buttonStyle(.visionPrimary).disabled(
                     model.selectedCount == 0 || model.isSaving || model.isResolving)
             }
         }.padding(24).frame(width: 650).frame(maxHeight: 760)
