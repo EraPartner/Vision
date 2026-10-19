@@ -47,6 +47,13 @@ Returns `{ items: Account[], total, links }`. Pagination is **opt-in**: send nei
 count, no `limit`/`offset` keys). Send either and the body adds `limit` + `offset`
 while `total` stays the full match count.
 
+`computed_balance` converts each currency partition into the account currency at the latest
+**stored** exchange rate (`services/currency/latestRateConversion.ts`), the same rates
+`GET /api/accounts/totals` uses. Since 2026-10-19 a partition whose currency has no stored rate is
+left out and listed in `unconverted_currencies` (`balance_incomplete: true`); before, an empty or
+partial rate table fell back to the hard-coded `FALLBACK_RATES` constants. Covered on real
+PostgreSQL by [[apps/node-backend/tests/accountTotals.db.test.ts]].
+
 ### GET /api/accounts/totals
 
 > [!info] Added 2026-10-19 (non-breaking, additive). Registered before `/:id` in the router.
@@ -276,7 +283,7 @@ Read-only dry-run of merging **this** account (`:id`, the source) **into**
   ([[docs/adr/094-balance-reconciliation-drift|ADR-094]]) evaluated **per currency**
   (`computedBalanceByCurrencyAggLateral`, the same builder the accounts hub uses) over the
   **union** of survivor + source active rows as if they were already one account, each currency
-  partition then converted at its own current rate into the survivor's native currency
+  partition then converted at the latest stored rate into the survivor's native currency
   (`projectedBalanceCurrency`). It therefore equals the `computed_balance` the hub reports for
   the survivor once the merge lands.
 - `balanceParts` preserves every native partition. When a required source or target exchange rate

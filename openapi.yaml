@@ -2145,17 +2145,19 @@ components:
     ExchangeRates:
       type: object
       required:
-        [total_rates, rates, fallback_rates, source, is_stale, last_fetched_at]
+        [total_rates, rates, source, is_stale, last_fetched_at]
       properties:
         total_rates: { type: integer, minimum: 0 }
         rates:
           type: array
           items: { $ref: "#/components/schemas/ExchangeRate" }
-        fallback_rates:
-          type: object
-          description: Built-in rates to EUR by currency code, used when no stored rate exists
-          additionalProperties: { type: number }
-        source: { type: string, enum: [database, fallback] }
+        source:
+          type: string
+          enum: [database, fallback]
+          description: >-
+            `database` when rates are stored. `fallback` when none are stored yet;
+            amounts in other currencies are then unavailable (flagged), never
+            converted at built-in constants.
         is_stale:
           { type: boolean, description: The stored rate date is before today }
         last_fetched_at: { type: string, format: date-time, nullable: true }
@@ -3258,7 +3260,7 @@ components:
 
     PortfolioSummaryItem:
       type: object
-      required: [id, fullyAssigned, oversold, byAccount]
+      required: [id, fullyAssigned, oversold, byAccount, accountTotals]
       additionalProperties: true
       properties:
         id: { type: integer, format: int32 }
@@ -3270,7 +3272,9 @@ components:
         originalCurrency: { type: string }
         summarySource: { type: string }
         is_active: { type: boolean }
-        usedFallbackRate: { type: boolean }
+        usedFallbackRate:
+          type: boolean
+          description: A transaction-date rate was missing (current-rate fallback), or the holding's currency has no latest stored rate, in which case the current figures stay unconverted rather than use a built-in constant. Archived presentation rows set it only for the missing stored rate.
         gainLossPercent: { type: number }
         interestRate: { type: number }
         transactionCount:
@@ -3332,6 +3336,10 @@ components:
           type: array
           description: Exact current holdings and profit/loss partitions for this investment.
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        accountTotals:
+          type: array
+          description: This investment's figures per broker account (account_id null for unassigned), every contribution kind summed with Decimal and rounded once. The Portfolio broker filter reads these instead of adding byAccount rows.
+          items: { $ref: "#/components/schemas/PortfolioSummaryAccountTotals" }
 
     PortfolioSummaryByAccountItem:
       type: object
@@ -3357,6 +3365,32 @@ components:
           type: string
           enum: [position, non_position]
           description: Lot-bearing position result or standalone income/adjustment partition.
+        oversold: { type: boolean }
+        currentValue: { type: number }
+        totalInvested: { type: number }
+        realizedGain: { type: number }
+        unrealizedGain: { type: number }
+        gainLoss: { type: number }
+
+    PortfolioSummaryAccountTotals:
+      type: object
+      required:
+        [
+          account_id,
+          assignment,
+          oversold,
+          currentValue,
+          totalInvested,
+          realizedGain,
+          unrealizedGain,
+          gainLoss,
+        ]
+      properties:
+        account_id: { type: integer, format: int32, nullable: true }
+        assignment:
+          type: string
+          enum: [account, unassigned]
+          description: Stable machine-readable identity for accountless contributions.
         oversold: { type: boolean }
         currentValue: { type: number }
         totalInvested: { type: number }
@@ -3481,7 +3515,16 @@ components:
     PortfolioSummaryData:
       type: object
       required:
-        [currency, computed_at, totals, summaries, byAccount, byAssetClass, byAssetGroup]
+        [
+          currency,
+          computed_at,
+          totals,
+          summaries,
+          byAccount,
+          accountTotals,
+          byAssetClass,
+          byAssetGroup,
+        ]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
@@ -3501,6 +3544,10 @@ components:
         byAccount:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        accountTotals:
+          type: array
+          description: Portfolio-wide figures per broker account (account_id null for unassigned), summed over every investment and contribution kind with Decimal and rounded once, sorted by currentValue descending. The Portfolio broker filter's holdings and P/L subtotals.
+          items: { $ref: "#/components/schemas/PortfolioSummaryAccountTotals" }
         byAssetClass:
           type: array
           description: Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order.
@@ -5094,11 +5141,13 @@ components:
           description: >-
             The account's anchor+delta computed balance (ADR-094), denominated in
             `currency`. On a multi-currency account each currency partition is
-            computed separately and converted into `currency` at today's rate, so
-            this figure moves with exchange rates. A partition with no usable
-            source or target rate is excluded rather than treated as 1:1; when
-            that happens `balance_incomplete` is true and the native amount is
-            available in `balance_parts`.
+            computed separately and converted into `currency` at the latest
+            stored exchange rate, so this figure moves with exchange rates. A
+            partition without a stored source or target rate is excluded rather
+            than converted at a built-in constant or 1:1; when that happens
+            `balance_incomplete` is true, the currency is listed in
+            `unconverted_currencies` and the native amount is available in
+            `balance_parts`.
         balance_parts:
           type: array
           description: Native per-currency ledger balances; only returned by the list endpoint.
@@ -10202,7 +10251,7 @@ paths:
                               funding: { type: integer }
                           projectedBalance:
                             type: number
-                            description: Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency
+                            description: Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at the latest stored rate into the survivor's currency (a partition without one is excluded and listed in unconvertedCurrencies)
                           projectedBalanceCurrency:
                             type: string
                             description: The survivor's native currency (ISO-4217)

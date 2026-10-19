@@ -356,6 +356,7 @@ export const PORTFOLIO_SUMMARY_STUB = {
     },
     summaries: [],
     byAccount: [],
+    accountTotals: [],
     byAssetClass: [],
     byAssetGroup: assetGroupTotalsStub(),
     archivedInKindIncome: [],
@@ -427,6 +428,7 @@ export const PORTFOLIO_SUMMARY_ITEM_STUB = {
     fullyAssigned: true,
     oversold: false,
     byAccount: [],
+    accountTotals: [],
 };
 
 /** A `saved_charts` row (routes/savedCharts.ts). */
@@ -1079,6 +1081,7 @@ export const defaultHandlers = [
             },
             summaries: [],
             byAccount: [],
+            accountTotals: [],
         }),
     ),
 
@@ -1087,7 +1090,6 @@ export const defaultHandlers = [
         ok({
             total_rates: 0,
             rates: [],
-            fallback_rates: {},
             source: "fallback",
             is_stale: true,
             last_fetched_at: null,

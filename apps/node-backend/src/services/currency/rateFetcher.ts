@@ -351,7 +351,7 @@ export async function loadFromDatabase(): Promise<RateTable | null> {
     });
     return null;
   }
-  // Checked outside the try: a database failure degrades to the fallback
+  // Checked outside the try: a database failure degrades to no stored
   // rates, but a row that breaks its contract is a bug that must surface.
   const rows = checkRows(fxRateRowSchema, rawRows);
   if (rows.length === 0) return null;
