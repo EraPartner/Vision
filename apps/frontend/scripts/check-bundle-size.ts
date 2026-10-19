@@ -123,7 +123,9 @@ const BUDGETS_KB = {
   // (with ADR-216 merged).
   // Raised from 1362 for React 19.3 and the aligned Radix family update (boot-preload
   // chunks only): 1360.09 -> 1370.39 measured.
-  total: 1372,
+  // Raised from 1372 for the explicit number and currency checks of the type-aware lint rules
+  // and the holding-tone module split (ADR-225; boot preload 459.52): 1371.28 -> 1372.93 measured.
+  total: 1374,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

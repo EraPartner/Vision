@@ -75,7 +75,7 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 `bun run lint` runs three checks in parallel: frontend ESLint, `lint:deps` and `lint:dead`.
 Backend ESLint stays `bun run lint:backend`. CI runs both commands in its existing `Lint` job
-([[docs/adr/224-static-checks-for-agents|ADR-224]]).
+([[docs/adr/225-static-checks-for-agents|ADR-225]]).
 
 - **Import boundaries (`bun run lint:deps`).** dependency-cruiser
   ([[config/dependency-cruiser.cjs]], resolving through `config/tsconfig.depcruise.json`) checks

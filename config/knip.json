@@ -81,6 +81,10 @@
       ],
       "ignoreDependencies": [
         "app-builder-lib"
+      ],
+      "ignoreBinaries": [
+        "electron",
+        "install-electron"
       ]
     },
     "packages/shared-utils": {

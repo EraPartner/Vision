@@ -273,7 +273,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-19: Static checks for agents (accepted)
 
-[[docs/adr/224-static-checks-for-agents|ADR-224]] makes `bun run lint` run frontend ESLint,
+[[docs/adr/225-static-checks-for-agents|ADR-225]] makes `bun run lint` run frontend ESLint,
 `lint:deps` (dependency-cruiser: no runtime cycles, unresolvable or undeclared imports, app-to-app
 imports, packages importing apps, or frontend imports of the Belgian tax engine) and `lint:dead`
 (knip) in parallel. Frontend and backend share type-aware typescript-eslint rules from
