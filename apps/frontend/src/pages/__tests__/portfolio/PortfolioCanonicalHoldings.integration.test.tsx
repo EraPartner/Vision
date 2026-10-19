@@ -4,7 +4,7 @@ import { renderHook, screen, waitFor, within } from "@testing-library/react";
 import { http } from "msw";
 import CryptoPage from "@/pages/portfolio/CryptoPage";
 import { usePortfolioSummaries } from "@/hooks/portfolio/usePortfolioSummaries";
-import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
+import { holdingPnl } from "@/hooks/portfolio/holdingPnl";
 import { renderWithApp } from "@/test/renderWithApp";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import { server } from "@/test/msw/server";
@@ -215,13 +215,14 @@ describe("canonical portfolio holdings", () => {
                         investments: [investment, archived],
                         transactions,
                         canonicalSummaries: [summary],
-                        requireCanonical: true,
+                        canonicalArchivedSummaries: [
+                            { ...summary, id: 2, is_active: false },
+                        ],
                     });
-                    const computePnl = useFxAwarePnl(currency);
                     const [holding] = portfolio.summaries;
                     return {
                         portfolio,
-                        pnl: holding ? computePnl(holding) : undefined,
+                        pnl: holding ? holdingPnl(holding) : undefined,
                     };
                 },
                 { wrapper: createQueryWrapper() },
@@ -241,7 +242,7 @@ describe("canonical portfolio holdings", () => {
                 unrealizedTarget: 6,
             });
             expect(result.current.portfolio.inactiveSummaries[0]).toMatchObject(
-                { id: 2, summarySource: "local", is_active: false },
+                { id: 2, summarySource: "canonical", is_active: false },
             );
         },
     );

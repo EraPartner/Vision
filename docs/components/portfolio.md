@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-10-10
-updated: 2026-10-10
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     components,
@@ -188,7 +188,7 @@ Shows detailed information about an investment.
 
 ### FX-Aware P&L (2026-06-28)
 
-`InvestmentDetailDialog` now computes FX-aware P&L internally via the `useFxAwarePnl` hook. The props `fxAwarePnl` and `fxAwareCurrency` have been **removed** from the component interface — the dialog self-computes these values regardless of which page opens it (Stocks, Crypto, Overview, dashboard, Real Estate, or Savings).
+`InvestmentDetailDialog` computes FX-aware P&L internally (since 2026-10-19 via `holdingPnl`, which reads the server summary's gains; previously the deleted `useFxAwarePnl` hook). The props `fxAwarePnl` and `fxAwareCurrency` have been **removed** from the component interface — the dialog self-computes these values regardless of which page opens it (Stocks, Crypto, Overview, dashboard, Real Estate, or Savings).
 
 The FX-aware realized/unrealized rows are gated on `holding.currency !== targetCurrency`. EUR or base-currency holdings never show the FX rows.
 
@@ -207,7 +207,7 @@ the row menu. Without the props the dialog keeps its original uncontrolled trigg
 
 See [[docs/features/portfolio#unified-fx-aware-pl-in-investmentdetaildialog-2026-06-28|Portfolio — Unified FX-Aware P&L]] for the full description of the computation logic.
 
-Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/lib/dateUtils.ts]]
+Code links: [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/portfolio/holdingPnl.ts]], [[apps/frontend/src/lib/dateUtils.ts]]
 
 ### EditInvestmentDialog
 

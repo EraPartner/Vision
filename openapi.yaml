@@ -5543,6 +5543,37 @@ components:
           format: date-time
           nullable: true
 
+    PlannedTotals:
+      type: object
+      required: [currency, today, month_end, rest_of_month, monthly_equivalent]
+      properties:
+        currency:
+          type: string
+        today:
+          type: string
+          format: date
+        month_end:
+          type: string
+          format: date
+        rest_of_month:
+          type: object
+          required: [incoming, outgoing, unconverted_count]
+          properties:
+            incoming:
+              type: number
+            outgoing:
+              type: number
+              description: Negative or zero.
+            unconverted_count:
+              type: integer
+        monthly_equivalent:
+          type: object
+          required: [total, unconverted_count]
+          properties:
+            total:
+              type: number
+            unconverted_count:
+              type: integer
     PlannedTransaction:
       type: object
       required:
@@ -12204,6 +12235,40 @@ paths:
                           days:
                             type: integer
 
+  /api/planned-transactions/totals:
+    get:
+      summary: Planned totals in one display currency
+      description: >
+        Server-computed planned totals. `rest_of_month` sums every occurrence
+        due from today to the end of the calendar month (recurring rows counted
+        once per occurrence, bounded by recurrence end date and max occurrences),
+        split into incoming and outgoing. `monthly_equivalent` is the signed net
+        monthly amount of active recurring rows (weekly = 30.4375/7 per month).
+        Amounts are converted at the latest stored exchange rates; rows without a
+        rate are left out and counted in `unconverted_count`.
+      operationId: getPlannedTotals
+      tags: [PlannedTransactions]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
+      responses:
+        "200":
+          description: Planned totals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PlannedTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
   /api/planned-transactions/match-suggestions:
     get:
       summary: List planned payments with likely-matching unlinked transactions

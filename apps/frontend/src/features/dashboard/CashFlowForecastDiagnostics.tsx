@@ -162,51 +162,13 @@ export function CashFlowForecastDiagnostics({
         return sorted.map((e, i) => ({ ...e, rank: i + 1 }));
     }, [diagnostics.backtest]);
 
-    // Mirror the backend ensemble (services/calculations/forecast/methods/
-    // ensemble.js#computeWeights) EXACTLY: shrunk inverse-RMSE² + a uniform
-    // floor. Previously this panel showed unshrunk 1/MAE² with no floor, so its
-    // "weights" could differ wildly from the weights the ensemble actually used.
-    const inverseWeights = useMemo(() => {
-        // Keep in sync with ensemble.js constants.
-        const MIN_RMSE = 1e-6;
-        const SHRINKAGE_PRIOR_DAYS = 30;
-        const DEFAULT_SAMPLE_DAYS = SHRINKAGE_PRIOR_DAYS;
-        const UNIFORM_FLOOR = 0.05;
-
-        const rows = ranked
-            .filter((e) => Number.isFinite(e.rmse) && e.rmse > 0)
-            .map((e) => ({
-                methodId: e.method_id,
-                rmse: e.rmse,
-                // Approximate the per-method sample size from the backtest months.
-                sampleDays:
-                    e.per_month.reduce((s, p) => s + (p.sample_days || 0), 0) ||
-                    DEFAULT_SAMPLE_DAYS,
-            }));
-        if (rows.length === 0) return new Map<string, number>();
-
-        const meanRmse = rows.reduce((s, r) => s + r.rmse, 0) / rows.length;
-        const raw = rows.map((r) => {
-            const shrunkRmse =
-                (r.sampleDays * r.rmse + SHRINKAGE_PRIOR_DAYS * meanRmse) /
-                (r.sampleDays + SHRINKAGE_PRIOR_DAYS);
-            return {
-                methodId: r.methodId,
-                w: 1 / Math.max(shrunkRmse, MIN_RMSE) ** 2,
-            };
-        });
-        const total = raw.reduce((s, r) => s + r.w, 0);
-        const m = raw.length;
-        return new Map(
-            raw.map((r) => [
-                r.methodId,
-                (1 - UNIFORM_FLOOR) * (r.w / total) + UNIFORM_FLOOR / m,
-            ]),
-        );
-    }, [ranked]);
+    const ensembleWeights = useMemo(
+        () => new Map(Object.entries(diagnostics.ensemble_weights ?? {})),
+        [diagnostics.ensemble_weights],
+    );
 
     const topWeight = Math.max(
-        ...Array.from(inverseWeights.values(), (v) => v),
+        ...Array.from(ensembleWeights.values(), (v) => v),
         0,
     );
 
@@ -294,7 +256,7 @@ export function CashFlowForecastDiagnostics({
                     </p>
                 </section>
 
-                {inverseWeights.size > 0 && (
+                {ensembleWeights.size > 0 && (
                     <section>
                         <h3 className="mb-1 type-headline text-foreground">
                             {t("cashflow.diagnostics.suggestedWeights")}
@@ -304,10 +266,10 @@ export function CashFlowForecastDiagnostics({
                         </p>
                         <div className="space-y-2">
                             {ranked
-                                .filter((e) => inverseWeights.has(e.method_id))
+                                .filter((e) => ensembleWeights.has(e.method_id))
                                 .map((e) => {
                                     const w =
-                                        inverseWeights.get(e.method_id) ?? 0;
+                                        ensembleWeights.get(e.method_id) ?? 0;
                                     const pct = Math.round(w * 100);
                                     const barPct =
                                         topWeight > 0

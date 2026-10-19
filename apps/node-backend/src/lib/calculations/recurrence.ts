@@ -46,6 +46,7 @@ import {
 } from "../timezone.ts";
 import { formatDateToYmd } from "../dateFormat.ts";
 import { PLANNED_RECURRENCE_PATTERNS } from "@vision/types/recurrence";
+import { divide, type Decimal } from "../money.ts";
 
 // The named cadences this module recognises, single-sourced in
 // @vision/types/recurrence alongside the portfolio vocabulary. Note this list
@@ -93,6 +94,24 @@ function parseRecurrenceStep(
     if (days >= 1) return { unit: "day", amount: days };
   }
   return undefined;
+}
+
+/** Average calendar days per month (365.25 / 12). */
+const DAYS_PER_MONTH = "30.4375";
+
+/**
+ * How many occurrences of `pattern` fall in an average month: 1 for monthly,
+ * 1/3 for quarterly, 30.4375/7 for weekly. undefined for a pattern the
+ * grammar does not recognise.
+ */
+export function monthlyOccurrenceFactor(
+  pattern: string | null | undefined,
+): Decimal | undefined {
+  const step = parseRecurrenceStep(pattern);
+  if (!step) return undefined;
+  return step.unit === "month"
+    ? divide(1, step.amount)
+    : divide(DAYS_PER_MONTH, step.amount);
 }
 
 // Guard against infinite expansion on tiny custom intervals.

@@ -4442,14 +4442,14 @@
               {
                 "from": "fe.hooks",
                 "to": "be.routes",
-                "payload": "GET /api/info/portfolio-summary?currency for canonical active holdings",
-                "annotation": "apps/frontend/src/hooks/usePortfolio.ts combines metadata and editable ordinary transactions with usePortfolioSummaryQuery. apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts uses server quantities, custody-aware gains, separate totalInKindIncome and oversold state for active holdings; pending or failed canonical requests gate the display."
+                "payload": "GET /api/info/portfolio-summary?currency for canonical active holdings; ?active=false for archived holdings",
+                "annotation": "apps/frontend/src/hooks/usePortfolio.ts combines metadata and editable ordinary transactions with usePortfolioSummaryQuery and, when an archived holding exists, useAllHoldingsSummaryQuery (active=false). apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts uses server quantities, custody-aware gains, separate totalInKindIncome and oversold state for active and archived holdings and computes nothing locally; pending or failed canonical requests gate the display."
               },
               {
                 "from": "be.routes",
                 "to": "fe.pages",
-                "payload": "eight-decimal quantities plus target-currency gains, totalInKindIncome / archivedInKindIncome and assignment state",
-                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay. Archived included income alone uses archivedInKindIncome dated conversion; ordinary archived gains/basis remain local, and missing foreign dated income remains unavailable."
+                "payload": "eight-decimal quantities plus target-currency gains, totalInKindIncome and assignment state for active and archived holdings",
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; apps/frontend/src/hooks/portfolio/holdingPnl.ts reads canonical target-currency realizedGain/unrealizedGain without a replay. Since 2026-10-19 archived holdings use the canonical active=false summaries (dated FX, configured cost-basis method) instead of a browser rebuild at today's FX; archivedPresentation remains for the Belgian tax dashboard."
               },
               {
                 "from": "sv.portfolioreconciliation",

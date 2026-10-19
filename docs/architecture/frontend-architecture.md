@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -847,8 +847,9 @@ const queryClient = new QueryClient({
 Active portfolio summaries are server state. `usePortfolio` combines investment metadata and CRUD
 transactions with `usePortfolioSummaryQuery`; it gates active display on the canonical query's
 loading/error state. `usePortfolioSummaries` preserves ordinary transaction arrays for editing,
-while active holdings, custody-aware quantities and gains come from the server. Archived summaries
-retain local ordinary-history calculations. See [[docs/features/portfolio#Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)|Portfolio summary ownership]].
+while active holdings, custody-aware quantities and gains come from the server. Since 2026-10-19
+archived holdings also use server summaries (`useAllHoldingsSummaryQuery`, `active=false`); the
+browser computes no portfolio figures ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). See [[docs/features/portfolio#Per-account breakdown in portfolio summary (ADR-108 partitioned P&L, 2026-08-10)|Portfolio summary ownership]].
 
 ### 3. API Client Pattern
 

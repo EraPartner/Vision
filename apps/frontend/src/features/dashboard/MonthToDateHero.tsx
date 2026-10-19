@@ -7,7 +7,8 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { appLanguageToLocale } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
-import { useMonthToDate, useRestOfMonthPlanned } from "./useHomeQueries";
+import { usePlannedTotals } from "@/features/planned/usePlannedTotals";
+import { useMonthToDate } from "./useHomeQueries";
 
 interface MonthToDateHeroProps {
     currency: string;
@@ -30,7 +31,8 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
     const { appSettings } = useAppSettings();
     const fmt = useCurrencyFormatter();
     const { data, isLoading } = useMonthToDate(currency);
-    const { data: planned } = useRestOfMonthPlanned();
+    const { data: plannedTotals } = usePlannedTotals(currency);
+    const planned = plannedTotals?.rest_of_month;
 
     const monthName = useMemo(
         () =>
@@ -108,13 +110,13 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
         {
             key: "in",
             label: t("home.plannedIn"),
-            amount: planned?.incomingTotal ?? 0,
+            amount: planned?.incoming ?? 0,
             tone: "text-gain",
         },
         {
             key: "out",
             label: t("home.plannedOut"),
-            amount: planned?.outgoingTotal ?? 0,
+            amount: planned?.outgoing ?? 0,
             tone: "text-foreground",
         },
     ];

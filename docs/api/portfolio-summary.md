@@ -34,6 +34,7 @@ related_code:
     "apps/node-backend/src/routes/info/_cache.js",
     "apps/node-backend/src/routes/info/_liveSummary.js",
     "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts",
+    "apps/frontend/src/hooks/portfolio/holdingPnl.ts",
     "apps/frontend/src/lib/api/info.ts",
   ]
 ---
@@ -44,8 +45,8 @@ For mixed-currency bookings, native asset gain converts the transaction's princi
 and income to the investment's quote currency using dated on-or-before rates. Target-currency
 totals retain the original booked amounts and their dated conversion. This daily-rate attribution
 does not isolate broker intraday conversion markup; a missing quote rate sets `usedFallbackRate`.
-Frontend fallback calculations defer mixed-currency holdings to this canonical summary because
-their local rate cache cannot reconstruct dated quote-currency basis.
+Since 2026-10-19 the web frontend has no local fallback calculation: active and archived holdings
+both come from this endpoint ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
 
 > [!abstract] Overview
 > Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's _current_ investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
@@ -61,8 +62,9 @@ and gain/return formulas; units, cost basis, sale proceeds and valuation are unc
 older responses means zero. This additive subtotal does not infer tax treatment. Active canonical summaries supply it directly to the frontend.
 The additive `archivedInKindIncome` array contains `{ id, totalInKindIncome }` for archived holdings,
 converted from the literal income currency on its transaction date to the response currency. It is
-always present on current responses (empty when none); absent older metadata means unknown. The
-frontend overrides only the archived income subtotal, keeping archived ordinary gain/basis policy.
+always present on current responses (empty when none); absent older metadata means unknown. Until
+2026-10-19 the frontend overrode only the archived income subtotal with it; it now reads archived
+holdings, including `totalInKindIncome`, from the `active=false` canonical summaries.
 Foreign income without canonical dated metadata is disclosed as unavailable rather than converted
 using the investment currency or current rate. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and
 [[docs/features/portfolio]].
@@ -98,13 +100,20 @@ return `400 VALIDATION_ERROR`. The global API limit and this endpoint's existing
 still apply. No write or migration is added.
 
 The all-investment response also supplies `archivedPresentation`, containing inactive holdings
-only. This preserves `usePortfolioSummaries` archive behavior: ordinary CRUD history is limited
+only. It reproduces the archive behavior that `usePortfolioSummaries` had before 2026-10-19: ordinary CRUD history is limited
 to the newest 1000 rows per investment and replayed by the shared TypeScript portfolio helper,
 then converted at the latest stored quote-currency rate with the same static-rate/original-value
 fallback as the web. Custody and adjustment events remain in the canonical summaries, rather
 than being introduced into the retained ordinary archive display. `totalInKindIncome` alone
 continues to use the canonical transaction-date bridge. `transactionCount` records the archive
 history count; `summarySource` is `local`. Converted ordinary values retain web precision.
+
+> [!note] Web portfolio changed on 2026-10-19
+> The web portfolio (`usePortfolio` → `useAllHoldingsSummaryQuery`) now shows archived holdings
+> from the canonical `summaries` of the `active=false` response, with dated FX and the configured
+> cost-basis method, and keeps the default response for current totals
+> ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). The paragraph below describes the
+> earlier policy; the Belgian tax dashboard still reads `archivedPresentation`.
 
 Archive views must use `archivedPresentation` for those ordinary figures, keeping the
 active response for current totals. They must not replace these display values with canonical
@@ -526,6 +535,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 - [[docs/adr/074-fx-attribution-historical-rates|ADR-074]] — FX attribution decision and rationale
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]] — Single source of truth architecture decision
 - [[docs/adr/073-shared-portfolio-math-package|ADR-073]] — Shared portfolio math (fxMultiplier converted track)
+- [[docs/adr/216-server-owned-domain-calculations|ADR-216]] — Domain calculations run on the server; archived holdings read from this endpoint
 - [[docs/integrations/currency-conversion|Currency Conversion]] — ECB full-history tier, on-or-before convention
 - [[docs/reference/code-patterns#portfolio-totals-pattern|Portfolio Totals Pattern]] — Implementation guidelines
 

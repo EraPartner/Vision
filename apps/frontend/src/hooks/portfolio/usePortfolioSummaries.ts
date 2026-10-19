@@ -1,129 +1,26 @@
 /**
- * Composes investment queries + shared calculations into InvestmentSummary[].
+ * Composes investment queries + backend summaries into InvestmentSummary[].
  * Provides totals and byAssetClass() filtered view.
  *
- * Active production holdings use canonical backend summaries, which include
- * custody and asset adjustments. Ordinary CRUD transactions stay attached for
- * dialogs. Archived holdings retain their existing local history calculation.
+ * Every figure comes from the backend portfolio summary (dated FX, configured
+ * cost-basis method, custody and asset adjustments): active holdings from the
+ * default summary, archived ones from the all-holdings summary. Ordinary CRUD
+ * transactions stay attached for dialogs.
  */
 
 import { useCallback, useMemo } from "react";
 import type { AssetClass, Investment, PortfolioTransaction } from "@/types/api";
 import type { InvestmentSummary } from "@/types/portfolio";
 import type { PortfolioSummaryItem } from "@/lib/api/info";
-import {
-    buildInvestmentSummaryCorePartitioned,
-    type CostBasisMethod,
-} from "@vision/shared-utils/portfolio";
-import { todayYmd } from "@/lib/timezone";
-import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { useExchangeRates } from "@/hooks/useExchangeRates";
-import { toNumber, multiply, addAll } from "@vision/shared-utils/money";
-import { hasForeignCurrencyAmounts } from "./localPortfolioCurrency";
-
-interface BuildSummaryOpts {
-    costBasisMethod: CostBasisMethod;
-    targetCurrency: string;
-    /** Multiplier converting the investment's native currency → targetCurrency. */
-    multiplier: number;
-    today: string;
-}
-
-function buildSummary(
-    inv: Investment,
-    txns: PortfolioTransaction[],
-    { costBasisMethod, targetCurrency, multiplier, today }: BuildSummaryOpts,
-): InvestmentSummary {
-    const { core, fullyAssigned } = buildInvestmentSummaryCorePartitioned(
-        inv,
-        txns,
-        {
-            costBasisMethod,
-            todayYmd: today,
-        },
-    );
-
-    const conv = (v: Parameters<typeof multiply>[0]) =>
-        toNumber(multiply(v, multiplier));
-
-    return {
-        ...inv,
-        // All monetary fields below are converted to the app's display currency;
-        // the native currency stays available for labelling (mirrors the backend
-        // summary response shape).
-        currency: targetCurrency,
-        originalCurrency: (inv.currency || "EUR").toUpperCase(),
-        assetClass: inv.asset_class,
-        totalUnits: toNumber(core.totalUnits),
-        totalInvested: conv(core.totalInvested),
-        totalFees: conv(core.totalFees),
-        totalTaxes: conv(core.totalTaxes),
-        feeTransactions: conv(core.feeTxnAmount),
-        taxTransactions: conv(core.taxTxnAmount),
-        totalDividends: conv(core.totalDividends),
-        totalIncome: conv(core.totalIncome),
-        totalInKindIncome: localInKindIncome(
-            txns,
-            inv.currency || "EUR",
-            targetCurrency,
-        ),
-        currentValue: conv(core.currentValue),
-        currentPrice: Number(inv.current_price)
-            ? conv(Number(inv.current_price))
-            : undefined,
-        interestRate: Number(inv.interest_rate) || undefined,
-        avgCostBasis: conv(core.avgCostBasis),
-        realizedGain: conv(core.realizedGain),
-        unrealizedGain: conv(core.unrealizedGain),
-        totalGain: conv(core.totalGain),
-        gainLoss: conv(core.gainLoss),
-        gainLossPercent: toNumber(core.gainLossPercent),
-        accruedInterest: conv(core.accruedInterest),
-        projectedAnnualInterest: conv(core.projectedAnnualInterest),
-        totalAppreciation: conv(core.totalAppreciation),
-        totalBuyCost: conv(core.totalBuyCost),
-        totalSellProceeds: conv(core.totalSellProceeds),
-        fullyAssigned,
-        oversold: core.oversold,
-        summarySource: "local",
-        transactions: txns,
-    } as InvestmentSummary;
-}
-
-// Never apply the investment's currency or today's rate to literal income paid
-// in another currency. Same-currency amounts need no rate; foreign subtotals
-// wait for the canonical dated projection.
-function localInKindIncome(
-    txns: PortfolioTransaction[],
-    nativeCurrency: string,
-    targetCurrency: string,
-): number | undefined {
-    const income = txns.filter(
-        (tx) => tx.income_recognition_role === "included_in_units",
-    );
-    if (
-        income.some(
-            (tx) =>
-                (tx.currency || nativeCurrency).toUpperCase() !==
-                targetCurrency,
-        )
-    )
-        return undefined;
-    return toNumber(addAll(income.map((tx) => tx.amount)));
-}
+import { toNumber, addAll } from "@vision/shared-utils/money";
 
 interface UsePortfolioSummariesInput {
     investments: Investment[];
     transactions: PortfolioTransaction[];
+    /** Server summaries of active holdings. */
     canonicalSummaries?: PortfolioSummaryItem[] | undefined;
-    canonicalArchivedInKindIncome?:
-        | Array<{
-              id: number;
-              totalInKindIncome: number;
-          }>
-        | undefined;
-    /** Hide active ordinary-only calculations while canonical data is unavailable. */
-    requireCanonical?: boolean | undefined;
+    /** Server summaries that include archived holdings (`active=false`). */
+    canonicalArchivedSummaries?: PortfolioSummaryItem[] | undefined;
 }
 
 // Stable empty result so a single-class lookup with no matches keeps its
@@ -134,15 +31,8 @@ export function usePortfolioSummaries({
     investments,
     transactions,
     canonicalSummaries,
-    canonicalArchivedInKindIncome,
-    requireCanonical = false,
+    canonicalArchivedSummaries,
 }: UsePortfolioSummariesInput) {
-    const { appSettings } = useAppSettings();
-    const { multiplierFor } = useExchangeRates();
-    const costBasisMethod: CostBasisMethod =
-        appSettings.costBasisMethod ?? "weighted_avg";
-    const targetCurrency = (appSettings.defaultCurrency || "EUR").toUpperCase();
-
     const allSummaries: InvestmentSummary[] = useMemo(() => {
         const txnsByInvestment = new Map<number, PortfolioTransaction[]>();
         for (const txn of transactions) {
@@ -151,82 +41,45 @@ export function usePortfolioSummaries({
             else txnsByInvestment.set(txn.investment_id, [txn]);
         }
 
-        const today = todayYmd();
-        const canonicalById = new Map(
+        const activeById = new Map(
             (canonicalSummaries ?? []).map((summary) => [summary.id, summary]),
         );
-        const archivedIncomeById =
-            canonicalArchivedInKindIncome === undefined
-                ? undefined
-                : new Map(
-                      canonicalArchivedInKindIncome.map((item) => [
-                          item.id,
-                          item.totalInKindIncome,
-                      ]),
-                  );
+        const archivedById = new Map(
+            (canonicalArchivedSummaries ?? []).map((summary) => [
+                summary.id,
+                summary,
+            ]),
+        );
         return investments.flatMap((inv) => {
-            const txns = txnsByInvestment.get(inv.id) ?? [];
-            if (inv.is_active && (requireCanonical || canonicalSummaries)) {
-                const canonical = canonicalById.get(inv.id);
-                if (!canonical) return [];
-                return [
-                    {
-                        ...inv,
-                        ...canonical,
-                        // The summary passes `SELECT i.*` through untyped: NUMERIC
-                        // columns arrive as strings and maturity_date as a
-                        // serialized local-midnight Date (the previous UTC day east
-                        // of UTC). The investment row carries them correctly.
-                        cadastral_income: inv.cadastral_income,
-                        municipality_tax_rate: inv.municipality_tax_rate,
-                        maturity_date: inv.maturity_date,
-                        maturityDate: inv.maturity_date,
-                        totalInKindIncome: canonical.totalInKindIncome ?? 0,
-                        assetClass: inv.asset_class,
-                        asset_class: inv.asset_class,
-                        price_provider: inv.price_provider,
-                        current_price: inv.current_price,
-                        summarySource: "canonical" as const,
-                        transactions: txns,
-                    },
-                ];
-            }
-            // A booking currency can differ from the investment's quote currency.
-            // Wait for the dated canonical projection rather than price that basis
-            // or its fees using the local current-rate cache. Archived holdings
-            // never receive a canonical summary, so they always stay local.
-            if (
-                inv.is_active &&
-                hasForeignCurrencyAmounts(txns, inv.currency || "EUR")
-            )
-                return [];
-            const local = buildSummary(inv, txns, {
-                costBasisMethod,
-                targetCurrency,
-                multiplier: multiplierFor(
-                    inv.currency || "EUR",
-                    targetCurrency,
-                ),
-                today,
-            });
-            if (!inv.is_active) {
-                local.totalInKindIncome = archivedIncomeById
-                    ? (archivedIncomeById.get(inv.id) ?? 0)
-                    : (canonicalById.get(inv.id)?.totalInKindIncome ??
-                      local.totalInKindIncome);
-            }
-            return [local];
+            // A holding without its server summary is still loading.
+            const canonical = (inv.is_active ? activeById : archivedById).get(
+                inv.id,
+            );
+            if (!canonical) return [];
+            return [
+                {
+                    ...inv,
+                    ...canonical,
+                    // The summary passes `SELECT i.*` through untyped: NUMERIC
+                    // columns arrive as strings and maturity_date as a
+                    // serialized local-midnight Date (the previous UTC day east
+                    // of UTC). The investment row carries them correctly.
+                    is_active: inv.is_active,
+                    cadastral_income: inv.cadastral_income,
+                    municipality_tax_rate: inv.municipality_tax_rate,
+                    maturity_date: inv.maturity_date,
+                    maturityDate: inv.maturity_date,
+                    totalInKindIncome: canonical.totalInKindIncome ?? 0,
+                    assetClass: inv.asset_class,
+                    asset_class: inv.asset_class,
+                    price_provider: inv.price_provider,
+                    current_price: inv.current_price,
+                    summarySource: "canonical" as const,
+                    transactions: txnsByInvestment.get(inv.id) ?? [],
+                },
+            ];
         });
-    }, [
-        investments,
-        transactions,
-        costBasisMethod,
-        targetCurrency,
-        multiplierFor,
-        canonicalSummaries,
-        canonicalArchivedInKindIncome,
-        requireCanonical,
-    ]);
+    }, [investments, transactions, canonicalSummaries, canonicalArchivedSummaries]);
 
     const summaries = useMemo(
         () => allSummaries.filter((summary) => summary.is_active),

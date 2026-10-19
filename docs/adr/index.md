@@ -289,6 +289,13 @@ generated shell installer. The packaged app updater is the only in-app install p
 runs report `update_mode: "source"` and open the release page. It supersedes the source-launcher
 parts of ADR-023, ADR-116 and ADR-196.
 
+### 2026-10-19: Domain calculations run on the server (accepted)
+
+[[docs/adr/216-server-owned-domain-calculations|ADR-216]] keeps financial figures on the
+server; the browser only previews unsaved input. It adds `GET /api/planned-transactions/totals`,
+returns the applied forecast `ensemble_weights`, and reads archived holdings from
+`portfolio-summary?active=false` instead of rebuilding them in the browser.
+
 ### 2026-10-19: Test behaviour at stable boundaries (accepted)
 
 [[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that
