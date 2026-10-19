@@ -140,8 +140,9 @@ export default function StatisticsPage() {
         graphExclusions,
         toggleGraphExclusion,
         exclusionsApply,
+        unfilteredData,
     } = useStatistics(statisticsWindow);
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [activeTab, setActiveTab] = useTabParam(STATISTICS_TABS, "overview");
     const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -315,6 +316,14 @@ export default function StatisticsPage() {
     return (
         <PageShell className="" data-print-page="statistics">
             {header}
+            {(unfilteredData?.unconvertedCount ?? 0) > 0 && (
+                <p className="type-footnote text-warning">
+                    {tc(
+                        "common.fxUnavailableTransactions",
+                        unfilteredData?.unconvertedCount ?? 0,
+                    )}
+                </p>
+            )}
 
             <Tabs
                 value={activeTab}

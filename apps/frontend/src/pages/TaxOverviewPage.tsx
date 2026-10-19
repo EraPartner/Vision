@@ -109,6 +109,7 @@ export default function TaxOverviewPage() {
         suggestions,
         hasProfile,
         isEmpty,
+        unconvertedCurrencies,
     } = useTaxOverviewData();
     // Household engine notes for the live year (ADR-200); one line per issue code.
     const isViewingHistorical = useBelgianTaxProfile(
@@ -258,6 +259,13 @@ export default function TaxOverviewPage() {
                     description={`${t("tax.disclaimerTitle")}: ${t("tax.disclaimerText")}`}
                     notes={householdNotes}
                 />
+                {unconvertedCurrencies.length > 0 && (
+                    <p className="type-footnote text-warning">
+                        {t("tax.fxUnavailable", {
+                            currencies: unconvertedCurrencies.join(", "),
+                        })}
+                    </p>
+                )}
 
                 {householdLoadFailed ? (
                     <PageError message={t("tax.household.loadFailed")} />

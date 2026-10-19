@@ -315,6 +315,11 @@ export function BankBalancesWidget() {
                             (active-only, non-zero-balance) entity population. */}
                         {tc("bankWidget.acrossAccounts", accounts.length)}
                     </p>
+                    {data.unconverted_count > 0 && (
+                        <p className="mt-1 type-footnote text-warning">
+                            {t("accounts.totalIncomplete")}
+                        </p>
+                    )}
                 </CardContent>
             </Card>
 

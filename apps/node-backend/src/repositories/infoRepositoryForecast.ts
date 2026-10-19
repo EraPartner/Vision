@@ -55,7 +55,11 @@ import {
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
 } from "./infoRepositoryHelpers.ts";
-import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
+import type { ConvertedRow, ConvertibleRow } from "./infoRepositoryHelpers.ts";
+import {
+  createUnconvertedTally,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { buildExclusionClauses } from "../lib/filterBuilder.ts";
@@ -63,6 +67,12 @@ import {
   countObservedMonths,
   monthKeyFromDbDate,
 } from "../lib/observedMonths.ts";
+
+/** Transactions behind one aggregated (date, currency) row. */
+function countOf(row: ConvertibleRow): number {
+  const cnt: unknown = (row as { cnt?: unknown }).cnt;
+  return parseInt(String(cnt ?? 1), 10) || 0;
+}
 
 function safeMoneyInput(value: DecimalInput): DecimalInput {
   return Number.isFinite(Number(value)) ? value : 0;
@@ -198,7 +208,7 @@ export async function getCashflowComparison(
   // convert-then-SUM. day_of_month/month_key are deterministic functions of the
   // grouped date column, so they remain valid in the SELECT list.
   const sqlPast = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date,
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
     FROM transactions t
@@ -212,7 +222,7 @@ export async function getCashflowComparison(
   `;
 
   const sqlCurrent = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date,
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month
     FROM transactions t
     ${categoryExclusionJoin}
@@ -234,7 +244,7 @@ export async function getCashflowComparison(
   // These two carry no exclusion params, so they number their own from $1
   // ($1 = the anchor date, $2 = HISTORY_MONTHS) rather than reusing `anchor`.
   const sqlPlannedCurrent = `
-    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date,
+    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
     FROM planned_transactions pt
     WHERE pt.is_active = true
@@ -245,7 +255,7 @@ export async function getCashflowComparison(
   `;
 
   const sqlPlannedHist = `
-    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date,
+    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
     FROM planned_transactions pt
@@ -313,6 +323,8 @@ export async function getCashflowComparison(
     queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
   ]);
 
+  // Groups without a stored rate are left out and counted (transactions).
+  const unconverted = createUnconvertedTally();
   const [
     pastConverted,
     currentCashflowConverted,
@@ -327,6 +339,8 @@ export async function getCashflowComparison(
     ],
     targetCurrency,
     "date",
+    unconverted,
+    countOf,
   );
 
   const monthDayNet: Record<string, Record<string, number>> = {};
@@ -445,6 +459,7 @@ export async function getCashflowComparison(
     year: Number(todayYmd.slice(0, 4)),
     without_planned: withoutPlanned,
     with_planned: withPlanned,
+    ...unconvertedFields(unconverted),
   };
 }
 
@@ -488,7 +503,7 @@ export async function getCashflowForecastData(
   // conversion is per (currency, date), so this is identical to the old per-row
   // stream (see getCashflowComparison for the full rationale).
   const sqlHistory = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
@@ -499,7 +514,7 @@ export async function getCashflowForecastData(
     GROUP BY t.date, t.currency
   `;
   const sqlCurrent = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
@@ -513,7 +528,7 @@ export async function getCashflowForecastData(
   // `is_transfer` column (ADR-083 flagged `transactions` only). No exclusion
   // params either, so these two number their own from $1.
   const sqlPlannedCurrent = `
-    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
@@ -522,7 +537,7 @@ export async function getCashflowForecastData(
     GROUP BY pt.planned_date, pt.currency
   `;
   const sqlPlannedHist = `
-    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
@@ -546,6 +561,8 @@ export async function getCashflowForecastData(
       ]),
     ]);
 
+  // Groups without a stored rate are left out and counted (transactions).
+  const unconverted = createUnconvertedTally();
   const [histConv, currentConv, plannedCurConv, plannedHistConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
@@ -556,6 +573,8 @@ export async function getCashflowForecastData(
       ],
       targetCurrency,
       "date",
+      unconverted,
+      countOf,
     );
 
   return {
@@ -569,6 +588,7 @@ export async function getCashflowForecastData(
     plannedCurrent: aggregateByDate(plannedCurConv),
     plannedHist: aggregateByDate(plannedHistConv),
     historyMonths,
+    unconverted,
   };
 }
 
@@ -622,7 +642,7 @@ export async function getCashflowForecastDataRolling(
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
   const sqlHistory = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
@@ -633,7 +653,7 @@ export async function getCashflowForecastDataRolling(
     GROUP BY t.date, t.currency
   `;
   const sqlCurrent = `
-    SELECT SUM(t.amount) AS amount, t.currency, t.date
+    SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
     ${categoryExclusionJoin}
     WHERE t.is_active = true
@@ -647,7 +667,7 @@ export async function getCashflowForecastDataRolling(
   // No exclusion params either, so this one numbers its own from $1
   // ($1 = the anchor date, $2 = daysForward).
   const sqlPlannedFuture = `
-    SELECT SUM(pt.amount) AS amount, pt.currency, pt.planned_date AS date
+    SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
@@ -672,6 +692,8 @@ export async function getCashflowForecastDataRolling(
     queryRows(dailyAmountRowSchema, sqlPlannedFuture, [todayYmd, daysForward]),
   ]);
 
+  // Groups without a stored rate are left out and counted (transactions).
+  const unconverted = createUnconvertedTally();
   const [histConv, currentConv, plannedConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
@@ -681,6 +703,8 @@ export async function getCashflowForecastDataRolling(
       ],
       targetCurrency,
       "date",
+      unconverted,
+      countOf,
     );
 
   return {
@@ -693,6 +717,7 @@ export async function getCashflowForecastDataRolling(
     ),
     plannedCurrent: aggregateByDate(plannedConv),
     historyMonths,
+    unconverted,
   };
 }
 
@@ -749,6 +774,7 @@ export async function getCashflowForecastDataByCategory(
   // is identical to the old per-row stream.
   const selectCols = `
     SUM(t.amount) AS amount,
+    COUNT(*) AS cnt,
     t.currency,
     t.date,
     COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS category_id,
@@ -801,6 +827,8 @@ export async function getCashflowForecastDataByCategory(
     ]),
   ]);
 
+  // Groups without a stored rate are left out and counted (transactions).
+  const unconverted = createUnconvertedTally();
   const [histConv, currentConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
@@ -809,6 +837,8 @@ export async function getCashflowForecastDataByCategory(
       ],
       targetCurrency,
       "date",
+      unconverted,
+      countOf,
     );
 
   const aggregateByDateAndCategory = (
@@ -851,5 +881,6 @@ export async function getCashflowForecastDataByCategory(
     scheduledActualByCategory: aggregateByDateAndCategory(
       currentConv.filter((row) => rowIsoDate(row) > todayYmd),
     ),
+    unconverted,
   };
 }

@@ -111,6 +111,22 @@ All endpoints follow the unified response envelope (ADR-026) with a nested aggre
 
 **Frontend unwrapping:** After `unwrapEnvelope()` strips the outer `ok/meta` layer, consumers receive `{ data, meta: { source, computedAt } }` (the aggregation envelope).
 
+## Amounts without a stored exchange rate (2026-10-19)
+
+An amount whose currency has no stored rate is never added 1:1 or at a constant
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). Additive since 2026-10-19:
+`monthly-summary`, `category-breakdown`, `category-pivot`, `recipient-insights`,
+`recipient-by-year`, `cashflow-comparison`, `average-vs-current` and `sankey` leave such
+transactions out of every figure, including transaction counts, and add `data.unconverted_count`
+(transactions left out) and `data.unconverted_currencies` (sorted). `bank-balances` leaves the
+currency partition out of the account balance, the totals and the history, lists it in the
+account's `unconverted_currencies`, and counts partitions in `data.unconverted_count`. The
+forecast endpoints leave such history and planned rows out of their inputs and report them in the
+optional `data.unconverted_count` / `data.unconverted_currencies` (absent on cache entries written
+before the fields existed). `recipient-pivot` and `tag-pivot` report them in
+`conversion.unconvertedCount` / `conversion.unconvertedCurrencies`. Both fields are zero or empty
+when every amount converted. See [[docs/integrations/currency-conversion#Unconverted amounts are never added 1:1 (2026-10-19)|Currency Conversion]].
+
 ## Monetary Precision (Phase 9)
 
 All monetary values in aggregation responses use **Decimal.js** for precision to eliminate IEEE 754 floating-point drift. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for the decision rationale and [[docs/reference/code-patterns#money-utility-pattern-phase-9|Money Utility Pattern]] for implementation details.
@@ -445,15 +461,19 @@ The canonical parameters are `start_date` and `end_date`. Retired `start` or `en
   },
   "conversion": {
     "usedHistoricalFallback": true,
-    "affectedCurrencies": ["USD"]
+    "affectedCurrencies": ["USD"],
+    "unconvertedCount": 0,
+    "unconvertedCurrencies": []
   }
 }
 ```
 
 `conversion.usedHistoricalFallback` is true when any requested historical rate was unavailable and
-the conversion service used a current rate or identity fallback. Totals keep their existing values
-for compatibility. `affectedCurrencies` identifies the source currencies involved so the client can
-warn that those totals may be incomplete.
+the conversion service used the latest stored rate instead. `affectedCurrencies` identifies the
+source currencies involved so the client can warn about it. A row with no stored rate at all is
+left out of the pivot (never added 1:1): `unconvertedCount` counts its transactions and
+`unconvertedCurrencies` lists its currencies (additive, 2026-10-19). The tag pivot returns the same
+`conversion` object.
 
 **Field Descriptions:**
 
@@ -464,7 +484,7 @@ warn that those totals may be incomplete.
 | `name`             | string | Recipient display name                 |
 | `total`            | number | Recipient spending in this period      |
 | `transactionCount` | number | Transaction count in this period       |
-| `conversion`       | object | Historical-rate completeness metadata  |
+| `conversion`       | object | Rate completeness metadata (`PeriodPivotConversion`) |
 
 **Frontend Usage:**
 

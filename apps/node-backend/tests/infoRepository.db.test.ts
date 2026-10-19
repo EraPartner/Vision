@@ -302,6 +302,8 @@ describe.skipIf(!hasTestDatabase())(
       expect(await infoRepository.getRecipientInsights("EUR")).toEqual({
         topMerchants: [],
         monthOverMonth: [],
+        unconverted_count: 0,
+        unconverted_currencies: [],
       });
     });
 

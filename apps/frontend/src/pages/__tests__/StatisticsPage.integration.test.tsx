@@ -18,7 +18,7 @@ function LocationProbe() {
 }
 
 /** Monthly summary with one real month so useStatistics returns non-empty data. */
-function monthlySummaryWithData() {
+function monthlySummaryWithData(unconvertedCount = 0) {
     return ok({
         data: {
             months: [
@@ -41,6 +41,8 @@ function monthlySummaryWithData() {
                 period_start: "2025-03-01",
                 period_end: "2025-03-31",
             },
+            unconverted_count: unconvertedCount,
+            unconverted_currencies: unconvertedCount > 0 ? ["XYZ"] : [],
         },
         meta: {
             computedAt: "2025-04-01T00:00:00.000Z",
@@ -51,7 +53,7 @@ function monthlySummaryWithData() {
 
 function emptyAggregation(data: Record<string, unknown>) {
     return ok({
-        data,
+        data: { unconverted_count: 0, unconverted_currencies: [], ...data },
         meta: {
             computedAt: "2025-04-01T00:00:00.000Z",
             source: "live" as const,
@@ -153,6 +155,22 @@ describe("StatisticsPage (integration)", () => {
         ).toBeInTheDocument();
 
         consoleSpy.mockRestore();
+    });
+
+    it("says how many transactions were left out for want of an exchange rate", async () => {
+        useDataHandlers();
+        server.use(
+            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+                monthlySummaryWithData(2),
+            ),
+        );
+        renderWithApp(<StatisticsPage />);
+
+        expect(
+            await screen.findByText(
+                "2 transactions left out: exchange rates unavailable",
+            ),
+        ).toBeInTheDocument();
     });
 
     it("shows tab triggers when data is available", async () => {

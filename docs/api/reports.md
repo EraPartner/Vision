@@ -453,6 +453,11 @@ value from one selected historical snapshot when available, with its valuation d
 holdings remain a separately labelled table. Without a snapshot, current totals are used and
 inflation-adjusted value is unavailable. Allocation-only exports skip snapshots and dividends.
 
+A dividend or recorded tax whose currency has no stored exchange rate is left out of the report
+figures, never added 1:1 (2026-10-19, [[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
+The Dividend Income section and the tax executive summary then show an "Incomplete" warning that
+names the currencies and the number of transactions left out.
+
 Annual client PIT is included only for an explicit calendar-year report whose `taxProfile.taxYear`
 matches. The frontend requires that year to be the live profile year or have its own saved
 snapshot, and uses the frozen display calculation when present. A missing historical profile is

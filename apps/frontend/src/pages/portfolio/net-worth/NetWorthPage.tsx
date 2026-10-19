@@ -395,6 +395,11 @@ export default function NetWorthPage() {
                             scope="investment"
                             className="type-footnote text-label-tertiary"
                         />
+                        {(data.unconvertedCurrencies?.length ?? 0) > 0 && (
+                            <p className="type-footnote text-warning">
+                                {t("accounts.totalIncomplete")}
+                            </p>
+                        )}
                         <dl className="pt-2">
                             <div className="min-w-0">
                                 <dt className="type-caption text-label-tertiary">

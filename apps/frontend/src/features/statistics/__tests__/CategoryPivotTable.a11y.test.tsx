@@ -40,6 +40,7 @@ const DATA: StatisticsData = {
     totalSpending: 100,
     averageMonthlySpending: 50,
     averageMonthlyIncome: 0,
+    unconvertedCount: 0,
 };
 
 function renderTable() {

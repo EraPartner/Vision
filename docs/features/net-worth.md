@@ -288,6 +288,11 @@ cash, converted at the latest stored rate, with the live portfolio summary's `by
 partitions. The page only localizes labels and sorts rows (unassigned last). When an account's cash
 currency has no stored rate the server returns `total: null` and the card shows its unavailable
 state instead of mixing currencies.
+
+In `GET /api/info/net-worth`, a balance whose currency has no stored rate is left out of the hero
+and the snapshots rather than added 1:1. The response lists it in `unconvertedCurrencies`, and the
+page hero and the Home net-worth card show "Total is incomplete because at least one native balance
+could not be converted."
 Brokerage rows can therefore contain cash and holdings; wallet and crypto-exchange rows contain
 holdings only. The null-account partition is shown as localized **Unassigned** with an **Assign to
 an account** link to `/portfolio`, where each investment's unassigned lots are assigned.

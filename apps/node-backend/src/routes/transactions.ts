@@ -23,6 +23,11 @@ import {
 } from "../services/transactionBulkService.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
+  createUnconvertedTally,
+  noteUnconverted,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
+import {
   validateId,
   assertYmd,
   assertOptionalId,
@@ -72,7 +77,9 @@ const router = Router();
  * repository's own row shape.
  */
 type FormattableTransactionRow = EnrichedTransactionRow & {
-  amount_eur?: number | string;
+  amount_eur?: number | string | undefined;
+  /** normalize_to_eur found no stored rate: `amount_eur` is the native amount. */
+  amount_eur_unconverted?: true;
 };
 
 const transactionIdParams = entityIdParamsSchema(TransactionIdSchema);
@@ -738,9 +745,19 @@ router.get("/", async (req, res) => {
     total = result.total;
   }
 
+  // A row without a stored rate keeps its native amount in `amount_eur` and
+  // carries `amount_eur_unconverted: true`; the page counts such rows.
+  let unconverted: ReturnType<typeof unconvertedFields> | undefined;
   if (normalizeToEur) {
-    // The input rows with `amount_eur` added.
-    items = await convertRowsToEur(items, targetCurrency || "EUR");
+    const tally = createUnconvertedTally();
+    items = (await convertRowsToEur(items, targetCurrency || "EUR")).map(
+      (row) => {
+        if (row.amount_eur !== undefined) return row;
+        noteUnconverted(tally, row.currency);
+        return { ...row, amount_eur_unconverted: true as const };
+      },
+    );
+    unconverted = unconvertedFields(tally);
   }
 
   res.ok({
@@ -749,6 +766,7 @@ router.get("/", async (req, res) => {
     limit: opts.limit,
     offset: opts.offset,
     links: [],
+    ...unconverted,
   });
 });
 
@@ -992,6 +1010,7 @@ function formatTransaction(row: FormattableTransactionRow | null) {
     memo: row.memo,
     amount,
     amount_eur: amountEur,
+    ...(row.amount_eur_unconverted && { amount_eur_unconverted: true }),
     currency: row.currency,
     balance: row.balance != null ? toNumber(toDecimal(row.balance)) : null,
     // Per-account running balance — present only when the list was queried

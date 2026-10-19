@@ -10,6 +10,10 @@ import type { CategoryPivotOptions } from "../../../repositories/infoRepositoryS
 import infoRepository from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "./_envelope.ts";
 import { assertCategoryInvariants } from "./_invariants.ts";
+import {
+  createUnconvertedTally,
+  unconvertedFields,
+} from "../../../lib/unconvertedTally.ts";
 
 export async function computeCategoryBreakdown({
   targetCurrency = "EUR",
@@ -19,21 +23,17 @@ export async function computeCategoryBreakdown({
   targetCurrency?: string | undefined;
   ancestorCategoryId?: number | undefined;
 } = {}) {
-  const categories = Object.keys(filters).length
-    ? await infoRepository.getCategoryBreakdown(
-        targetCurrency,
-        ancestorCategoryId,
-        filters,
-      )
-    : ancestorCategoryId === undefined
-      ? await infoRepository.getCategoryBreakdown(targetCurrency)
-      : await infoRepository.getCategoryBreakdown(
-          targetCurrency,
-          ancestorCategoryId,
-        );
+  // Rows without a stored rate are left out of the categories and counted.
+  const unconverted = createUnconvertedTally();
+  const categories = await infoRepository.getCategoryBreakdown(
+    targetCurrency,
+    ancestorCategoryId,
+    filters,
+    unconverted,
+  );
   assertCategoryInvariants(categories);
   return buildEnvelope(
-    { categories },
+    { categories, ...unconvertedFields(unconverted) },
     {
       source:
         ancestorCategoryId === undefined && !Object.keys(filters).length

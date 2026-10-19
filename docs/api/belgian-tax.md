@@ -124,8 +124,16 @@ Household rows are omitted for single-person households and legacy frozen filing
 household result.
 
 Recorded portfolio taxes include active and inactive investments, explicit tax transactions and
-per-transaction tax fields. They use the web's latest stored FX table with static fallback rates and
-its original-amount fallback for an unavailable rate, rather than portfolio flow-date FX. Manual
+per-transaction tax fields. They use the latest stored FX rates rather than portfolio flow-date
+FX. Since 2026-10-19 there are no static fallback rates and no original-amount fallback: an amount
+without a stored rate is left out. Both dashboards add (additively) `unconvertedCurrencies` and
+`incompleteFigures`, the response fields that miss such an amount (for this dashboard
+`portfolioTaxesForYear`, `totalTaxIncludingPortfolio`, `totalTaxIncludingPropertyEstimate`, and
+`yearlyIncome`, `monthlyIncomeTax` and `recordedIncomeByPartner` when recorded income has an
+unconverted transaction). The portfolio dashboard lists `totals`, `taxBreakdown`, `feeBreakdown`,
+`taxByAssetClass`, `investmentBreakdown`, `yearlyCostTrend`, `dividend` or `estimates.<name>`; an
+estimate in that list is a lower bound, not a guess. Both arrays are empty when every amount
+converted. Manual
 adjustments are excluded from this recorded-only figure. Partner attribution and portfolio tax
 helpers now live in the shared TypeScript package with frontend compatibility exports.
 

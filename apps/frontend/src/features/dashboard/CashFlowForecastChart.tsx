@@ -78,7 +78,7 @@ export function CashFlowForecastChart({
     currency = DEFAULT_CURRENCY,
     embedded = false,
 }: CashFlowForecastChartProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -324,6 +324,14 @@ export function CashFlowForecastChart({
             )}
             {data && !isLoading && (
                 <>
+                    {(data?.unconverted_count ?? 0) > 0 && (
+                        <p className="mb-3 type-footnote text-warning">
+                            {tc(
+                                "common.fxUnavailableTransactions",
+                                data?.unconverted_count ?? 0,
+                            )}
+                        </p>
+                    )}
                     <Disclosure className="mb-3">
                         <DisclosureSummary
                             tone="footnote"

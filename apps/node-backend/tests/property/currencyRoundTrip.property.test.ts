@@ -80,14 +80,25 @@ describe("property: currency round-trip identity", () => {
 
   const CURRENCIES = ["EUR", ...Object.keys(STORED_RATES)];
 
+  /** Every currency here has a stored rate, so conversion always succeeds. */
+  async function convert(
+    amount: number,
+    from: string | undefined,
+    to: string | undefined,
+  ) {
+    const value = await convertToCurrency(amount, from, to);
+    if (value === undefined) throw new Error(`no rate for ${from}→${to}`);
+    return value;
+  }
+
   it("convert(convert(x, A, B), B, A) ≈ x across 200 random (x, A, B) triples", async () => {
     const rng = seeded(0xface0ff);
     for (let i = 0; i < 200; i++) {
       const from = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
       const to = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
       const amount = 1 + rng() * 10000;
-      const forward = await convertToCurrency(amount, from, to);
-      const back = await convertToCurrency(forward, to, from);
+      const forward = await convert(amount, from, to);
+      const back = await convert(forward, to, from);
       const ratio = Math.abs(back - amount) / amount;
       expect(
         ratio,
@@ -113,12 +124,8 @@ describe("property: currency round-trip identity", () => {
       const c = CURRENCIES[Math.floor(rng() * CURRENCIES.length)];
       if (a === b || b === c) continue;
       const amount = 1 + rng() * 5000;
-      const viaB = await convertToCurrency(
-        await convertToCurrency(amount, a, b),
-        b,
-        c,
-      );
-      const direct = await convertToCurrency(amount, a, c);
+      const viaB = await convert(await convert(amount, a, b), b, c);
+      const direct = await convert(amount, a, c);
       if (direct === 0) continue;
       const ratio = Math.abs(viaB - direct) / Math.abs(direct);
       expect(ratio).toBeLessThan(EPSILON_RATIO);

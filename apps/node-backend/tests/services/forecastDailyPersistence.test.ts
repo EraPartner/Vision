@@ -9,6 +9,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
       plannedCurrent: [],
       plannedHist: [],
       historyMonths: 36,
+      unconverted: { count: 0, currencies: new Set<string>() },
     })),
   },
 }));

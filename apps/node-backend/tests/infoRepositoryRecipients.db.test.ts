@@ -808,6 +808,8 @@ describe.skipIf(!hasTestDatabase())(
           conversion: {
             affectedCurrencies: [],
             usedHistoricalFallback: false,
+            unconvertedCount: 0,
+            unconvertedCurrencies: [],
           },
         });
       });

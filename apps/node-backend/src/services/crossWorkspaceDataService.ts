@@ -27,6 +27,8 @@ interface CashAccountEntry {
   accountCurrency: string;
   balance: number;
   balanceCurrency: string;
+  /** Currency partitions left out of `balance` for want of a stored rate. */
+  unconvertedCurrencies: string[];
 }
 
 // Roll the fine-grained `asset_class` taxonomy up into the coarse allocation
@@ -64,6 +66,7 @@ export async function assembleRebalanceInputs({
   availableCash: number;
   cashAccounts: CashAccountEntry[];
   cashCurrencies: string[];
+  unconvertedCurrencies: string[];
 }> {
   const target = (currency || "EUR").toUpperCase();
 
@@ -107,11 +110,13 @@ export async function assembleRebalanceInputs({
 
   const cashAccounts: CashAccountEntry[] = [];
   const cashCurrencies = new Set<string>();
+  const unconvertedCurrencies = new Set<string>();
   let availableCash = toDecimal(0);
   for (const r of rows) {
     const acctCurrency = (r.currency || "EUR").toUpperCase();
     const partitions = r.balance_parts ?? [];
     let accountTotal = toDecimal(0);
+    const accountUnconverted: string[] = [];
     for (const part of partitions) {
       const partCurrency = (part.currency || "EUR").toUpperCase();
       cashCurrencies.add(partCurrency);
@@ -122,6 +127,13 @@ export async function assembleRebalanceInputs({
           : rates
             ? convertWithRates(native, partCurrency, target, rates)
             : await convertToCurrency(native, partCurrency, target);
+      // No stored rate: the partition is not deployable cash; it is listed,
+      // never counted 1:1.
+      if (converted === undefined) {
+        accountUnconverted.push(partCurrency);
+        unconvertedCurrencies.add(partCurrency);
+        continue;
+      }
       accountTotal = accountTotal.plus(toDecimal(converted));
     }
     availableCash = availableCash.plus(accountTotal);
@@ -137,6 +149,7 @@ export async function assembleRebalanceInputs({
       accountCurrency: acctCurrency,
       balance: toNumber(roundToCents(accountTotal)),
       balanceCurrency: target,
+      unconvertedCurrencies: accountUnconverted,
     });
   }
 
@@ -146,6 +159,7 @@ export async function assembleRebalanceInputs({
     availableCash: toNumber(roundToCents(availableCash)),
     cashAccounts,
     cashCurrencies: [...cashCurrencies],
+    unconvertedCurrencies: [...unconvertedCurrencies].sort(),
   };
 }
 

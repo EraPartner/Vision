@@ -13,6 +13,7 @@ function monthlySummary(
     net_amount: number;
     transaction_count?: number;
   }>,
+  unconverted_count = 0,
 ) {
   return {
     months: months.map((m) => ({
@@ -22,6 +23,8 @@ function monthlySummary(
       transaction_count: m.transaction_count ?? 1,
     })),
     summary: { total_spending: 0, total_income: 0, net_amount: 0, transaction_count: 0, period_start: '', period_end: '' },
+    unconverted_count,
+    unconverted_currencies: unconverted_count > 0 ? ['XYZ'] : [],
   };
 }
 
@@ -37,6 +40,8 @@ function categoryPivot(entries: Record<string, Array<{ categoryId: number | null
         })),
       ]),
     ),
+    unconverted_count: 0,
+    unconverted_currencies: [],
   };
 }
 
@@ -53,6 +58,8 @@ function recipientInsights(
       transactionCount: m.transactionCount ?? 1,
     })),
     monthOverMonth: [],
+    unconverted_count: 0,
+    unconverted_currencies: [],
   };
 }
 
@@ -68,12 +75,24 @@ function recipientByYear(entries: Record<string, Array<{ recipientId: number; na
         })),
       ]),
     ),
+    unconverted_count: 0,
+    unconverted_currencies: [],
   };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('mapToStatisticsData', () => {
+  it('carries the transactions the server left out for want of a rate', () => {
+    const result = mapToStatisticsData(
+      monthlySummary([{ year: 2026, month: 1, total_income: 0, total_spending: -10, net_amount: -10 }], 2),
+      categoryPivot({}),
+      recipientInsights([]),
+      recipientByYear({}),
+    );
+    expect(result.unconvertedCount).toBe(2);
+  });
+
   it('returns zeros for empty dataset', () => {
     const result = mapToStatisticsData(
       monthlySummary([]),

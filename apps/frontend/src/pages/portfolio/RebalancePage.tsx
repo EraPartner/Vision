@@ -950,6 +950,12 @@ export default function RebalancePage() {
                                 <p className="mt-1 type-footnote text-label-secondary">
                                     {t("rebalance.availableCashHint")}
                                 </p>
+                                {((inputs.data ?? result).unconvertedCurrencies
+                                    ?.length ?? 0) > 0 && (
+                                    <p className="mt-1 type-footnote text-warning">
+                                        {t("accounts.totalIncomplete")}
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
                         <Card>

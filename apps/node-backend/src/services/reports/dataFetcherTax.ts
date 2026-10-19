@@ -13,6 +13,10 @@ import {
   loadCurrentRates,
   getHistoricalRateIndex,
 } from "../currency/currencyConversionService.ts";
+import {
+  createUnconvertedTally,
+  noteUnconverted,
+} from "../../lib/unconvertedTally.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
 import { getTaxTable } from "./belgianTaxTables.ts";
 import type { ResolvedTaxYearTable } from "./belgianTaxTables.ts";
@@ -157,6 +161,8 @@ export type TaxTransactionAggregates = {
   byMonth: TaxMonthBucket[];
   byAssetClass: TaxAssetClassBucket[];
   byInvestment: TaxInvestmentBucket[];
+  /** Rows left out of every total for want of a stored rate. */
+  unconvertedCount: number;
   unconvertedCurrencies: string[];
 };
 
@@ -192,6 +198,8 @@ export type TaxReportData = {
   byMonth: TaxMonthBucket[];
   byAssetClass: TaxAssetClassBucket[];
   byInvestment: TaxInvestmentBucket[];
+  /** Rows left out of every total for want of a stored rate. */
+  unconvertedCount: number;
   unconvertedCurrencies: string[];
 };
 
@@ -326,11 +334,11 @@ async function fetchTaxTransactions(
   const byAssetClass = new Map<string, TaxAssetClassBucket>();
   const byInvestment = new Map<number, TaxInvestmentBucket>();
 
-  // Currencies for which no rate (historical or current) could be resolved, so a
-  // row was summed into the target total at an unconverted 1:1 rate. Surfaced so
-  // the PDF can annotate the figure as approximate instead of silently reporting
-  // e.g. 1000 KRW as 1000 EUR. (ADR-085.)
-  const missingRateCurrencies = new Set<string>();
+  // Rows for which no stored rate (historical or latest) converts the source or
+  // the target currency are left out of every total and counted, so the PDF
+  // can say the figures are incomplete instead of reporting e.g. 1000 KRW as
+  // 1000 EUR (ADR-085, ADR-216).
+  const unconverted = createUnconvertedTally();
 
   // Belgian tax values foreign-currency income and transactions at the exchange rate
   // on the date the income was collected / the transaction took place — not today's
@@ -392,15 +400,6 @@ async function fetchTaxTransactions(
     const rowRates: Record<string, number> = { EUR: 1 };
     if (fromRate !== undefined) rowRates[cur] = fromRate;
     if (toRate !== undefined) rowRates[toCur] = toRate;
-    // No rate resolved for a non-target foreign currency → convertWithRates will
-    // sum it 1:1. Record it so the report can flag the total as approximate.
-    if (
-      cur !== toCur &&
-      cur !== "EUR" &&
-      (fromRate === undefined || fromRate === null)
-    ) {
-      missingRateCurrencies.add(cur);
-    }
     const convert = (v: string) =>
       cur !== toCur
         ? convertWithRates(Number(v), cur, toCur, rowRates)
@@ -409,6 +408,10 @@ async function fetchTaxTransactions(
     const taxes = convert(row.taxes);
     const fees = convert(row.fees);
     const amount = convert(row.amount);
+    if (taxes === undefined || fees === undefined || amount === undefined) {
+      noteUnconverted(unconverted, cur);
+      continue;
+    }
 
     // Classify taxes by transaction type. Belgian TOB (beurstaks) is levied on
     // BOTH legs of an exchange transaction — "transfer and acquisition" are
@@ -539,9 +542,9 @@ async function fetchTaxTransactions(
       addAll([b.taxes, b.fees]).comparedTo(addAll([a.taxes, a.fees])),
     ),
     byInvestment: [...byInvestment.values()].sort((a, b) => b.total - a.total),
-    // Foreign currencies that were summed at an unconverted 1:1 rate (no FX rate
-    // available). Empty when every row converted cleanly.
-    unconvertedCurrencies: [...missingRateCurrencies].sort(),
+    // Rows left out for want of a stored rate; zero when every row converted.
+    unconvertedCount: unconverted.count,
+    unconvertedCurrencies: [...unconverted.currencies].sort(),
   };
 }
 
@@ -605,6 +608,7 @@ export async function fetchTaxData(
     byMonth: txns?.byMonth ?? [],
     byAssetClass: txns?.byAssetClass ?? [],
     byInvestment: txns?.byInvestment ?? [],
+    unconvertedCount: txns?.unconvertedCount ?? 0,
     unconvertedCurrencies: txns?.unconvertedCurrencies ?? [],
   };
 }

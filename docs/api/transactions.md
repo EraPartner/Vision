@@ -6,7 +6,7 @@ path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-10-19
 updated: 2026-10-19
-last_modified: 2026-10-13
+last_modified: 2026-10-19
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -64,6 +64,7 @@ Notes:
 
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- A row whose currency has no stored rate is not converted 1:1. Additive (2026-10-19): it carries `amount_eur_unconverted: true` and keeps its native amount in `amount_eur`, and the list body adds `unconverted_count` (rows on this page) and `unconverted_currencies`. Both list fields appear only with `normalize_to_eur=true`.
 - A repeated or bracketed `target_currency`, `bank_account`, `recipient_name`, `search`, or `sort_by` key returns `400 VALIDATION_ERROR` (`<name> must be a single value`). When several query parameters are invalid, the `400` message lists every problem, joined with `; `.
 - `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` by default — magnitude-based, so they do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign, OR pass `amount_signed=true` to compare the signed amount directly (2026-06-28, additive, non-breaking — [[apps/node-backend/src/lib/filterBuilder.ts]]).
 - `amount_signed=true` switches the comparison column from `ABS(t.amount)` to `t.amount`, so the bounds may be negative and `+50` vs `-50` match exactly. It is orthogonal to `transaction_type` (both can be combined). The frontend search-suggestion UI sends it automatically when the user prefixes the amount with `+` or `-`.

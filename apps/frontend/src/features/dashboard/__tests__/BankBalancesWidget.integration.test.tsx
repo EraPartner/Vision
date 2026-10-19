@@ -107,11 +107,14 @@ function mockWidgetApi({
                 accounts: payloadAccounts.map((account) => ({
                     first_transaction: null,
                     last_transaction: null,
+                    unconverted_currencies: [],
                     ...account,
                 })),
                 total_net_position: total,
                 history,
                 total_history: totalHistory,
+                unconverted_count: 0,
+                unconverted_currencies: [],
             }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>

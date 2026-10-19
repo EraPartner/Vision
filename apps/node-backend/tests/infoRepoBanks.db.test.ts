@@ -199,6 +199,8 @@ describe.skipIf(!hasTestDatabase())(
         total_net_position: 0,
         history: {},
         total_history: [],
+        unconverted_count: 0,
+        unconverted_currencies: [],
       });
     });
 

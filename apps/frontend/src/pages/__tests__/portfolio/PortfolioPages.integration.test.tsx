@@ -312,6 +312,7 @@ describe("Portfolio pages (integration)", () => {
                     },
                     monthlyChange: 100,
                     monthlyChangePercent: 0.92,
+                    unconvertedCurrencies: [],
                     snapshots: [
                         {
                             date: "2026-07-01",
@@ -404,6 +405,7 @@ describe("Portfolio pages (integration)", () => {
                     },
                     monthlyChange: 0,
                     monthlyChangePercent: 0,
+                    unconvertedCurrencies: [],
                     snapshots: [
                         {
                             date: "2026-09-08",
@@ -470,6 +472,7 @@ describe("Portfolio pages (integration)", () => {
                     },
                     monthlyChange: 0,
                     monthlyChangePercent: 0,
+                    unconvertedCurrencies: [],
                     snapshots: [
                         {
                             date: "2026-09-08",
@@ -506,6 +509,7 @@ describe("Portfolio pages (integration)", () => {
                     },
                     monthlyChange: 100,
                     monthlyChangePercent: 0.84,
+                    unconvertedCurrencies: [],
                     snapshots: [
                         {
                             date: "2026-07-01",
@@ -556,6 +560,7 @@ describe("Portfolio pages (integration)", () => {
                     },
                     monthlyChange: 100,
                     monthlyChangePercent: 0.84,
+                    unconvertedCurrencies: [],
                     snapshots: [
                         {
                             date: "2026-08-01",
@@ -791,6 +796,31 @@ describe("Portfolio pages (integration)", () => {
         const url = requests.at(-1)!;
         expect(url.searchParams.get("year")).toMatch(/^\d{4}$/);
         expect(url.searchParams.get("currency")).toBe("EUR");
+    });
+
+    it("PortfolioTaxPage says which currencies have no stored exchange rate", async () => {
+        server.use(
+            http.get(
+                `${API_BASE}/api/belgian-tax/portfolio-dashboard`,
+                ({ request }) => {
+                    const year = Number(
+                        new URL(request.url).searchParams.get("year"),
+                    );
+                    return ok({
+                        ...portfolioTaxDashboardStub(year),
+                        isEmpty: false,
+                        unconvertedCurrencies: ["XYZ"],
+                        incompleteFigures: ["totals", "taxBreakdown"],
+                    });
+                },
+            ),
+        );
+        renderWithApp(<PortfolioTaxPage />);
+        expect(
+            await screen.findByText(
+                /incomplete: no exchange rate is stored for XYZ/i,
+            ),
+        ).toBeInTheDocument();
     });
 
     it("PortfolioTaxPage shows empty state when no investment data", async () => {
