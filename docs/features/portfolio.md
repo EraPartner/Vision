@@ -242,9 +242,9 @@ Implementation notes:
 - Custom provider refresh can resolve latest quote either via explicit latest path, or from latest point in configured history payload when latest path is not provided.
 - New API endpoint `GET /api/investments/:id/price-history` serves provider-backed history (yahoo/custom) with read-through DB persistence in `asset_price_history`.
 - Historical migrations 0017, 0018, 0021, and 0022 contain inheritance-aware upgrade logic for databases that pass through those revisions; this is not a runtime schema fork.
-- Migration dependency: `0017_investment_custom_provider_history` applies custom-provider latest/history columns to inheritance storage, conditionally patches legacy `investments` table only when relation kind is table/partition, creates `metals_investments` if missing, and refreshes the compatibility view/trigger for metals + new provider fields ([[alembic/versions/0017_investment_custom_provider_history.py]]).
-- Migration dependency: `0021_update_price_provider_enum` migrates the `price_provider` enum from `coingecko`/`kraken` to `binance` by altering `investments_base.price_provider`, dropping the column default before enum type conversion and restoring `DEFAULT 'manual'` after conversion. To prevent dependency failures in PostgreSQL, it dynamically backs up and drops all dependent `public` views referencing `investments_base` (including column-level dependencies such as `price_provider`), recreates those views from captured definitions after the enum swap, and recreates the `update_investments_view_instead` trigger on `investments` when `investments_view_update_instead()` exists ([[alembic/versions/0021_update_price_provider_enum.py]]).
-- Migration dependency: `0018_metals_transactions_inheritance_split` introduces dedicated `metals_transactions`, migrates existing metals transaction rows out of `stock_transactions`, and refreshes `portfolio_transactions` compatibility view joins ([[alembic/versions/0018_metals_transactions_inheritance_split.py]]).
+- Migration dependency: `0017_investment_custom_provider_history` applies custom-provider latest/history columns to inheritance storage, conditionally patches legacy `investments` table only when relation kind is table/partition, creates `metals_investments` if missing, and refreshes the compatibility view/trigger for metals + new provider fields (`0017_investment_custom_provider_history`).
+- Migration dependency: `0021_update_price_provider_enum` migrates the `price_provider` enum from `coingecko`/`kraken` to `binance` by altering `investments_base.price_provider`, dropping the column default before enum type conversion and restoring `DEFAULT 'manual'` after conversion. To prevent dependency failures in PostgreSQL, it dynamically backs up and drops all dependent `public` views referencing `investments_base` (including column-level dependencies such as `price_provider`), recreates those views from captured definitions after the enum swap, and recreates the `update_investments_view_instead` trigger on `investments` when `investments_view_update_instead()` exists (`0021_update_price_provider_enum`).
+- Migration dependency: `0018_metals_transactions_inheritance_split` introduces dedicated `metals_transactions`, migrates existing metals transaction rows out of `stock_transactions`, and refreshes `portfolio_transactions` compatibility view joins (`0018_metals_transactions_inheritance_split`).
 
 ## Portfolio Transactions
 
@@ -302,7 +302,7 @@ Rules:
 - Appreciation uses **Increase in value**, with help explaining that the amount is the change since the last recorded value. It is added to the existing property value, not treated as a replacement valuation; see [[docs/features/net-worth#Non-Unit Asset Valuation Formulas (2026-05-18, ADR-061)|Net Worth]].
 - Unit-based `sell` validation enforces holdings sufficiency on both create and update (oversell transactions are rejected).
 - `updated_at` captures edit timestamps.
-- Migration compatibility: when `portfolio_transactions` is a compatibility view in inherited schemas, migration `0016_add_fx_rate_to_portfolio_transactions` guards `ALTER TABLE` by relation kind (`r`/`p` only), while preserving the view recreation path for `relkind='v'` ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/guides/deployment|Deployment Guide]]).
+- Migration compatibility: when `portfolio_transactions` is a compatibility view in inherited schemas, migration `0016_add_fx_rate_to_portfolio_transactions` guards `ALTER TABLE` by relation kind (`r`/`p` only), while preserving the view recreation path for `relkind='v'` (`0016_add_fx_rate_to_portfolio_transactions`, [[docs/guides/deployment|Deployment Guide]]).
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
@@ -337,7 +337,7 @@ Oversell safety behavior:
 - Investment detail modal can display both base portfolio metrics and FX-aware realized/unrealized values when provided by stocks/ETF listing flows.
 - Metals listing explicitly uses base (non-FX-aware) realized/unrealized calculations.
 
-Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.ts]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]
+Code links: [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/types/api.ts]], [[apps/node-backend/src/routes/investments.ts]], `0016_add_fx_rate_to_portfolio_transactions`
 
 ### Portfolio Unit Math — Shared Frontend Library (June 2026)
 
@@ -777,7 +777,7 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[app
 - Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
 - Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
 
-Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/main.ts]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
+Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/main.ts]], `0019_asset_price_history_cache`, [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ## Cost Basis Methods (Phase 6)
 
@@ -920,10 +920,7 @@ Each investment can be individually included in or excluded from the ticker. The
 - **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
 - **Write path**: `investmentRepository.update()` peels `show_in_ticker` out of the PATCH body — it is **not** in `allowed` / `BASE_ALLOWED_FIELDS` — and UPSERTs it via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`, then returns the joined read.
 - **Backup**: `investment_ticker_prefs` is registered in `BACKUP_COVERED_TABLES` in `apps/node-backend/src/backup/coverage.ts` and is included in `.visionbak` exports.
-- **NOT auto-applied** — the user runs `bun run db:upgrade`.
-
-> [!warning] Apply migration 0061 before deploying the ticker manager
-> Until `bun run db:upgrade` is run, the `investment_ticker_prefs` table does not exist. The `PATCH /api/investments/:id` call for `show_in_ticker` will be accepted by the Express route but the upsert into the side table will fail with a "relation does not exist" error. Apply the migration first.
+- The table is part of the `0001` migration baseline, so every install has it.
 
 ### i18n keys
 
@@ -1127,7 +1124,7 @@ unrealized gains remain separate in the breakdown.
 When a transaction or quote currency lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
 
 > [!warning]
-> The FX-neutral chart toggle on the Portfolio page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.
+> The FX-neutral chart toggle on the Portfolio page needs `value_fx_neutral` (historical migration `0039_add_value_fx_neutral_to_snapshots`, now part of the `0001` baseline) to be populated by recomputed snapshots. Until then, the toggle is hidden.
 
 ### Semantics of invested/gainLoss after ADR-074
 
@@ -1359,6 +1356,9 @@ immutable pair receipts and guarded rollback. The role does not determine tax tr
 
 ## Migrations
 
+Historical Alembic revisions, kept as history. Their combined result is `db/migrations/0001_baseline.sql`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]); the `.py` files exist only in Git history.
+
 - `0004_portfolio_tables.py` — Initial portfolio tables (`investments`, `portfolio_transactions`)
 - `0006_price_providers.py` — Added `price_provider` enum type
 - `0010_investments_municipality_tax_fields.py` — Added `municipality` and `cadastral_income` to real estate investments
@@ -1375,8 +1375,8 @@ immutable pair receipts and guarded rollback. The role does not determine tax tr
 - `0023_portfolio_performance_snapshots.py` — Added `portfolio_performance_snapshots` table for daily performance caching
 - `0024_per_class_invested_columns.py` — Added per-class invested columns (`stocks_etfs_invested`, `crypto_invested`, `metals_invested`) to performance snapshots
 - `0039_add_value_fx_neutral_to_snapshots.py` — Added nullable `value_fx_neutral NUMERIC(18,2)` to `portfolio_performance_snapshots`; writer detects column presence and degrades gracefully (ADR-074)
-- `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (**authored, not applied** — run `bun run db:upgrade`)
-- `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (**authored, not applied** — run `bun run db:upgrade`)
+- `0057_portfolio_import_batches_account_id.py` — Adds `account_id` FK to `portfolio_import_batches` so committed lots inherit the destination account (now part of the `0001` baseline)
+- `0058_watchlist_added_price.py` — Adds `added_price NUMERIC(18,6) NULLABLE` to `watchlist` for the what-if backtest (now part of the `0001` baseline)
 - `0061_investments_show_in_ticker.py` — Historically created the `investment_ticker_prefs` side
   table without altering the then-variable `investments` relation. The side table remains part of
   the canonical schema after migration 0087. Absent row = visible; downgrade drops the table.

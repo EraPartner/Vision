@@ -22,7 +22,6 @@ async function main(): Promise<void> {
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: nativePayloadRoot,
     browserRuntimeRoot: nativePayloadRoot,
-    alembicPath: path.join(nativePayloadRoot, "vision-alembic"),
     runtimeId,
     appPort: 3002,
     postgresPort: Number(process.env.VISION_POSTGRES_PORT || 54329),

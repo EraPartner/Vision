@@ -2,7 +2,7 @@
 title: Getting Started
 type: map-of-content
 status: active
-date: 2026-09-08
+date: 2026-10-19
 tags: [getting-started, onboarding, moc, new-developer]
 description: Map of Content for new developers and AI agents to quickly navigate the Vision knowledge base
 aliases: [start here, onboarding, new dev, beginner]
@@ -21,7 +21,7 @@ Start with the [[docs/guides/setup\|Setup Guide]] to get the project running loc
 
 ```
 Setup Guide
-├── Prerequisites (Bun, Node.js, Python, PostgreSQL 18)
+├── Prerequisites (Bun, Node.js, PostgreSQL 18)
 ├── Clone & Install
 ├── Environment Variables
 ├── Database Setup
@@ -127,7 +127,7 @@ bun run native:prepare # Prepare the native runtime payload
 bun run dev           # Start native Electron development
 bun run build         # Production build
 bun run test          # Run all tests
-bun run db:upgrade    # Run database migrations
+bun run db:migrate    # Run database migrations
 ```
 
 ### Key Directories
@@ -136,7 +136,7 @@ bun run db:upgrade    # Run database migrations
 | ------------------------ | -------------------- |
 | `apps/frontend/src/`     | React frontend       |
 | `apps/node-backend/src/` | Node.js backend      |
-| `alembic/versions/`      | Database migrations  |
+| `db/migrations/`         | Database migrations  |
 | `docs/`                  | This knowledge base  |
 | `config/`                | Shared configuration |
 | `i18n/`                  | Localization files   |

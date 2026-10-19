@@ -6,7 +6,6 @@ import { spawnSync } from "node:child_process";
 
 import { appRoot } from "../paths";
 import { preparePostgresRuntime } from "./prepare-postgres-runtime";
-import { prepareAlembicRuntime } from "./prepare-alembic-runtime";
 import { prepareChromiumRuntime } from "./prepare-chromium-runtime";
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
@@ -88,7 +87,7 @@ function copyTree(source: string, destination: string): void {
     recursive: true,
     filter: (entry) => {
       const name = path.basename(entry);
-      return !["__pycache__", ".ruff_cache", ".DS_Store"].includes(name);
+      return name !== ".DS_Store";
     },
   });
 }
@@ -180,12 +179,9 @@ export function run(): void {
     signCompiledBackend(path.join(stagingRoot, "vision-backend"));
 
     copyTree(frontendRoot, path.join(stagingRoot, "dist"));
-    copyTree(path.join(repoRoot, "alembic"), path.join(stagingRoot, "alembic"));
-    fs.mkdirSync(path.join(stagingRoot, "config"), { recursive: true });
-    fs.copyFileSync(
-      path.join(repoRoot, "config", "alembic.ini"),
-      path.join(stagingRoot, "config", "alembic.ini"),
-    );
+    // The compiled backend applies db/migrations in-process on boot and reads
+    // db/schema-inventory.sql to verify the baseline fingerprint.
+    copyTree(path.join(repoRoot, "db"), path.join(stagingRoot, "db"));
     fs.mkdirSync(path.join(stagingRoot, "config", "postgres"), {
       recursive: true,
     });
@@ -196,11 +192,6 @@ export function run(): void {
     preparePostgresRuntime({
       sourceBin: process.env.VISION_POSTGRES_SOURCE_BIN,
       destination: path.join(stagingRoot, "postgres"),
-    });
-    prepareAlembicRuntime({
-      python: process.env.VISION_PYTHON_BIN,
-      prebuilt: process.env.VISION_ALEMBIC_RUNTIME_BIN,
-      destination: path.join(stagingRoot, "vision-alembic"),
     });
     prepareChromiumRuntime({
       source: process.env.VISION_CHROMIUM_SOURCE,

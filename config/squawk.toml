@@ -1,0 +1,43 @@
+# Squawk lint for db/migrations/*.sql (`bun run db:lint`, CI Lint job).
+#
+# Only destructive or app-breaking DDL fails the lint: dropping tables, columns or databases,
+# TRUNCATE ... CASCADE, column type changes and renames. Every migration auto-applies at backend
+# startup, so such a change must ship after the code that stops reading the object. When a
+# destructive statement is intended, put this directly above it, naming the rule and the reason:
+#
+#   -- squawk-ignore ban-drop-column
+#
+# Style and online-migration advice for large multi-tenant databases is excluded: Vision runs one
+# single-user database and applies migrations inside the migrator's transaction at startup.
+# Squawk enables new rules by default; if an upgrade adds a non-destructive rule that fires,
+# add it here.
+pg_version = "18.0"
+assume_in_transaction = true
+excluded_paths = ["*0001_baseline.sql", "*.down.sql"]
+excluded_rules = [
+  "adding-field-with-default",
+  "adding-foreign-key-constraint",
+  "adding-not-nullable-field",
+  "adding-required-field",
+  "adding-serial-primary-key-field",
+  "ban-alter-domain-with-add-constraint",
+  "ban-char-field",
+  "ban-concurrent-index-creation-in-transaction",
+  "ban-create-domain-with-constraint",
+  "ban-drop-not-null",
+  "ban-uncommitted-transaction",
+  "constraint-missing-not-valid",
+  "disallowed-unique-constraint",
+  "prefer-bigint-over-int",
+  "prefer-bigint-over-smallint",
+  "prefer-identity",
+  "prefer-robust-stmts",
+  "prefer-text-field",
+  "prefer-timestamp-tz",
+  "require-concurrent-index-creation",
+  "require-concurrent-index-deletion",
+  "require-lock-timeout",
+  "require-statement-timeout",
+  "require-timeout-settings",
+  "transaction-nesting",
+]

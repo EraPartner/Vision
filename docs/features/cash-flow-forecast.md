@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-19
 updated: 2026-10-19
-last_modified: 2026-09-05
+last_modified: 2026-10-19
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -23,9 +23,7 @@ related_code:
   - apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx
   - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/lib/api/aggregations.ts
-  - alembic/versions/0012_cashflow_forecast_accuracy.py
-  - alembic/versions/0013_cashflow_forecast_mc.py
-  - alembic/versions/0016_cashflow_forecast_mc_rolling.py
+  - db/migrations/0001_baseline.sql
 ---
 
 # Cash Flow Forecast
@@ -679,7 +677,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 ### Phase D: Accuracy Persistence & Diagnostics Dashboard Update
 
-**New Table:** `cashflow_forecast_accuracy` (created by Alembic migration 0012)
+**New Table:** `cashflow_forecast_accuracy` (created by historical Alembic migration 0012; part of the `0001` baseline)
 
 - Columns: id (serial PK), user_id (text, default 'anonymous'), method_id (text), as_of_month (DATE, projected as YYYY-MM), mae (DOUBLE), rmse (DOUBLE), mape (DOUBLE), sample_days (int), recorded_at (timestamptz)
 - Unique constraint on (user_id, method_id, as_of_month)
@@ -717,7 +715,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 ### Phase E: Nightly MC Materialization & Cache-Aware Endpoint
 
-**New Table:** `cashflow_forecast_mc` (created by Alembic migration 0013)
+**New Table:** `cashflow_forecast_mc` (created by historical Alembic migration 0013; part of the `0001` baseline)
 
 - Columns: id (serial PK), user_id (text, default 'anonymous'), month (DATE, accepted as YYYY-MM), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
 - Unique constraint on (user_id, month, filter_hash)
@@ -1016,7 +1014,7 @@ The `mode` and `rollingDays` parameters are persisted to the URL via `useSearchP
 
 The rolling forecast endpoint now uses a dedicated materialized cache table:
 
-**New Table:** `cashflow_forecast_mc_rolling` (created by Alembic migration 0016)
+**New Table:** `cashflow_forecast_mc_rolling` (created by historical Alembic migration 0016; part of the `0001` baseline)
 
 - Columns: id (serial PK), user_id (text, default 'anonymous'), today_iso (DATE, accepted as YYYY-MM-DD), days_back (int), days_forward (int), filter_hash (text), mc_paths (int, default 1000), payload (JSONB), computed_at (timestamptz, default NOW())
 - Unique constraint on `(user_id, today_iso, days_back, days_forward, filter_hash)` ensures idempotent cache writes

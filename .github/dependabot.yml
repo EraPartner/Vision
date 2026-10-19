@@ -28,16 +28,6 @@ updates:
       electron:
         patterns: ["*"]
 
-  - package-ecosystem: "pip"
-    directory: "/config"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    groups:
-      pip:
-        patterns: ["*"]
-
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

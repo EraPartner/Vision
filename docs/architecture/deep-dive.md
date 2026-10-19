@@ -2,8 +2,8 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     architecture,
@@ -242,7 +242,7 @@ Backend Dependencies:
 
 Shared:
 ├── Zod (request parsing, data and response contracts — backend, frontend, @vision/types)
-└── Alembic (migrations)
+└── Kysely (migrator over db/migrations/, kysely-codegen types)
 ```
 
 ---

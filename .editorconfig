@@ -16,10 +16,6 @@ indent_size = 2
 [apps/frontend/src/**.{ts,tsx,js,jsx,css}]
 indent_size = 4
 
-# Python (Alembic migrations + tooling config) — 4-space, ruff-formatted.
-[*.py]
-indent_size = 4
-
 # Markdown may use trailing spaces as hard line breaks; leave them alone.
 [*.md]
 trim_trailing_whitespace = false

@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
@@ -564,61 +563,5 @@ describe.skipIf(!hasTestDatabase())(
         ),
       ).toBe(0);
     });
-    it.skipIf(process.env.VISION_TEST_DB_ISOLATED !== "1")(
-      "executes guarded downgrade and upgrade on the disposable cluster",
-      async () => {
-        const position = await seed(),
-          input = await stage(position);
-        await commitPortfolioAssetTransfer(input);
-        const root = path.resolve(import.meta.dirname, "../../..");
-        const migrate = (operation: string, target: string) =>
-          spawnSync(
-            process.execPath,
-            [
-              path.join(root, "apps/node-backend/scripts/db-migrate.ts"),
-              operation,
-              target,
-            ],
-            { cwd: root, env: process.env, encoding: "utf8", timeout: 30000 },
-          );
-        const refused = migrate(
-          "downgrade",
-          "0120_portfolio_import_reconciliation",
-        );
-        expect(refused.status).not.toBe(0);
-        expect(`${refused.stdout}${refused.stderr}`).toContain(
-          "Roll back their imports before downgrade",
-        );
-        // Alembic commits each preceding downgrade before a guarded older step.
-        expect(migrate("upgrade", "head").status).toBe(0);
-        expect(await transferCount()).toBe(1);
-        await rollbackPortfolioAssetTransfersForBatch(input.batch.id);
-        try {
-          const downgraded = migrate(
-            "downgrade",
-            "0120_portfolio_import_reconciliation",
-          );
-          expect(downgraded.status).toBe(0);
-          expect(
-            (
-              await pool.query(
-                "SELECT to_regclass('public.portfolio_asset_transfers') AS relation",
-              )
-            ).rows[0].relation,
-          ).toBeNull();
-        } finally {
-          const upgraded = migrate("upgrade", "head");
-          expect(upgraded.status).toBe(0);
-        }
-        expect(
-          (
-            await pool.query(
-              "SELECT to_regclass('public.portfolio_asset_transfers') AS relation",
-            )
-          ).rows[0].relation,
-        ).toBe("portfolio_asset_transfers");
-      },
-      90000,
-    );
   },
 );

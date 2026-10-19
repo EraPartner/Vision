@@ -1,14 +1,16 @@
 ---
 title: ADR-165 - Reviewed Fresh Database Baseline and Guarded Bridge
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-19
 tags: [adr, database, alembic, migration, backup, recovery]
 description: Install a single reviewed PostgreSQL 18 snapshot into empty databases while preserving historical upgrades and requiring a restore-tested bridge for existing installations.
 aliases: [fresh database baseline, squashed baseline bridge]
 ---
 
 # ADR-165: Reviewed Fresh Database Baseline and Guarded Bridge
+
+> [!note] Superseded by [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] on 2026-10-19.
 
 ## Context
 

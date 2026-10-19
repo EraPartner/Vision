@@ -2,8 +2,8 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-10-13
-last_modified: 2026-10-11
+date: 2026-10-19
+last_modified: 2026-10-19
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -164,7 +164,7 @@ Code link: [[apps/node-backend/src/routes/investments.ts]]
 - Spike sanitization: isolated one-day anomalies replaced with geometric interpolation
 - Frontend reads from persisted DB table instead of computing on-demand
 
-Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]], [[alembic/versions/0023_portfolio_performance_snapshots.py]], [[alembic/versions/0024_per_class_invested_columns.py]]
+Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]], `0023_portfolio_performance_snapshots`, `0024_per_class_invested_columns`
 
 ---
 

@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-08
-last_modified: 2026-09-27
-updated: 2026-10-08
+date: 2026-10-19
+last_modified: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     integration,
@@ -353,9 +353,10 @@ compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The cu
 5. Add a probe entry in `services/providerHealthService.ts` when the provider supports a useful
    health probe.
 
-**Database** 6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
-defined in `0001_initial_database_schema.py`; adding a value follows the enum-migration safety
-pattern used by `0022_add_kinesis_price_provider_enum.py`).
+**Database** 6. Add the value to the `price_provider` PostgreSQL enum via a **new** numbered `db/migrations/` file
+(`bun run db:new -- add_<provider>_price_provider`, typically `ALTER TYPE price_provider ADD VALUE`;
+the enum is defined in `db/migrations/0001_baseline.sql`), then run `bun run db:codegen`. See
+[[docs/guides/migrations|Database Migration Guide]].
 
 **Contract + frontend** 7. Add the value to the `price_provider` enum in `openapi.yaml`, run `bun run generate:types`, and
 update the hand-written `PriceProvider` union in `apps/frontend/src/types/api.ts`. 8. Add the provider to `FALLBACK_CATALOG` in `features/portfolio/usePriceProviderCatalog.ts` so an
@@ -382,4 +383,4 @@ they need no separate per-dialog catalog edits.
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
-Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.ts]], [[apps/node-backend/src/routes/admin.ts]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.ts]], [[apps/node-backend/src/routes/admin.ts]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], `0019_asset_price_history_cache`

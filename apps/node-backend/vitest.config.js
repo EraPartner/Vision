@@ -61,8 +61,9 @@ export default defineConfig({
         // Process entrypoint: invokes start() at import time and installs
         // process.exit handlers, so it cannot be imported by a unit test.
         "src/main.{js,ts}",
-        // Migration glue: execFile()s the alembic CLI against a live database
-        // and a Python toolchain; exercised by migration runs, not by Vitest.
+        // Migration runner: needs a live PostgreSQL 18 database, so only the
+        // DB-gated migrate.db.test.ts exercises it; counting it would skew the
+        // no-DB figure the thresholds track.
         "src/database/migrate.{js,ts}",
       ],
       // Ratchet gate — tracks current actual coverage so regressions are caught

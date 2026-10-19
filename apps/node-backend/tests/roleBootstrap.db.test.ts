@@ -255,7 +255,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
   }, 30_000);
 
   it("covers tables created later by the migration role (default privileges)", async () => {
-    // Simulates Alembic creating a new table AFTER the bootstrap ran.
+    // Simulates a migration creating a new table AFTER the bootstrap ran.
     await pool.query(
       "CREATE TABLE vb_rb_future_table (id serial PRIMARY KEY, v text)",
     );

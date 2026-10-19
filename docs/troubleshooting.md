@@ -2,7 +2,7 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-09-08
+date: 2026-10-19
 tags:
   [
     troubleshooting,
@@ -53,19 +53,22 @@ database or attachments; they may be the only recoverable copy. See
 ### Upgrade fails
 
 ```bash
-bun run db:current
-bun run db:history
-bun run db:check
+bun run db:status
+bun run db:drift-check
+bun run db:lint
 ```
 
-Read the first failing migration and database error. Do not stamp past a failure or run a bare
-Alembic write. Use the guarded `bun run db:*` commands. A destructive downgrade requires a verified
-backup and explicit review.
+All pending migrations run in one transaction, so a failure rolls the whole run back. Read the
+first failing migration and database error and fix it in a new or corrected unapplied file. A
+database still carrying `alembic_version` is adopted only at
+`0128_category_path_on_legacy_rename` with the baseline fingerprint; `db:drift-check` names the
+differing objects. A destructive `db:migrate:down` requires a verified backup and explicit review.
+See [[docs/guides/migrations|Database Migration Guide]].
 
 ### Target database is not up to date
 
-Stop application writers, run `bun run db:upgrade` with the owner connection, and verify
-`bun run db:current`. Do not point migration commands at the real Vision database when diagnosing
+Stop application writers, run `bun run db:migrate` with the owner connection, and verify
+`bun run db:status`. Do not point migration commands at the real Vision database when diagnosing
 with a disposable test database.
 
 ## Frontend
@@ -120,13 +123,14 @@ Never print the passphrase. A signed and notarized production build provides the
 
 ## Common error messages
 
-| Error                               | Meaning                                          | Action                                                                 |
-| ----------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `LEGACY_RUNTIME_MIGRATION_REQUIRED` | Saved state belongs to the retired runtime       | Migrate with Vision 1.0.2 before upgrading                             |
-| `INVALID_PASSPHRASE`                | Encrypted backup authentication failed           | Re-enter the passphrase; do not modify the bundle                      |
-| `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema             | Upgrade Vision before restoring                                        |
-| `PORT_IN_USE`                       | An unknown process owns a required loopback port | Identify and stop the exact process or choose a valid development port |
-| `APP_ERROR`                         | Sanitized backend failure                        | Correlate the request ID with structured logs                          |
+| Error                               | Meaning                                           | Action                                                                                                                                        |
+| ----------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LEGACY_RUNTIME_MIGRATION_REQUIRED` | Saved state belongs to the retired runtime        | Migrate with Vision 1.0.2 before upgrading                                                                                                    |
+| `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
+| `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
+| `BACKUP_PRE_BASELINE`               | Backup predates the TypeScript migration baseline | Not restorable by this version; restore only backups taken after the switch ([[docs/adr/222-typescript-migrations-kysely-baseline\|ADR-222]]) |
+| `PORT_IN_USE`                       | An unknown process owns a required loopback port  | Identify and stop the exact process or choose a valid development port                                                                        |
+| `APP_ERROR`                         | Sanitized backend failure                         | Correlate the request ID with structured logs                                                                                                 |
 
 ## Related
 

@@ -87,7 +87,7 @@ const envSchema = z
 
     DATABASE_URL: stringEnv(DEFAULT_DATABASE_URL),
     // Least-privilege setup (optional): privileged connection string used for
-    // Alembic DDL (alembic/env.py prefers it over DATABASE_URL) and for the
+    // migrations (database/migrate.ts prefers it over DATABASE_URL) and for the
     // boot-time role bootstrap (database/roleBootstrap.ts) that creates the
     // non-superuser app role on already-initialised databases. Unset = classic
     // single-role setup.
@@ -190,9 +190,6 @@ const envSchema = z
     PUPPETEER_EXECUTABLE_PATH: optionalStringEnv, // services/reports/puppeteerRenderer.js
     VISION_BOOT_TRACE: optionalStringEnv, // main.ts (disabled when '0')
     VISION_MIGRATE_TIMEOUT_MS: optionalStringEnv, // database/migrate.ts
-    ALEMBIC_BIN: optionalStringEnv, // database/migrate.ts
-    ALEMBIC_CONFIG: optionalStringEnv, // database/migrate.ts
-    VISION_CACHE_DIR: optionalStringEnv, // database/migrate.ts
     VISION_RUNTIME_ROOT: optionalStringEnv, // packaged native runtime resources
     VISION_NATIVE_ENV_FILE: optionalStringEnv, // packaged private runtime environment
     VISION_DIST_DIR: optionalStringEnv, // packaged production frontend

@@ -2,7 +2,7 @@
 
 Vision is a self-hosted financial transaction manager. The native macOS application keeps its
 database and attachments on your Mac. Normal installation and daily use do not require Homebrew,
-Postgres.app, Python, or a separately installed Chrome.
+Postgres.app or a separately installed Chrome.
 
 ## What's in this release
 
@@ -103,7 +103,8 @@ an application update.
 
 Use the in-app backup controls to create a `.visionbak` file. Native mode preserves the existing
 bundle format, optional AES-256-GCM encryption, supported frontend/localStorage state, PostgreSQL
-data, and attachments. Restore rejects a newer schema, stages a fresh database and attachment tree,
+data, and attachments. Restore rejects a newer schema and any backup taken before Vision switched
+to its TypeScript migration baseline, stages a fresh database and attachment tree,
 and activates them only after validation. A failed activation rolls both back.
 
 Keep at least one backup outside `~/Library/Application Support/Vision` before uninstalling or

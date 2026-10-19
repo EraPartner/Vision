@@ -1054,7 +1054,7 @@ function startHealthWatchdog() {
 }
 
 // When the initial boot poll times out onto the error page, keep probing in the
-// background so a genuinely slow start — e.g. a long alembic migration after a
+// background so a genuinely slow start — e.g. a long schema migration after a
 // packaged image update, which can outlast even the extended poll budget — still
 // lands the user on the app once the backend finally answers, instead of
 // stranding them on the error page until they press Retry. Bounded, and self-
@@ -2972,7 +2972,6 @@ async function launch(): Promise<void> {
           runtimeRoot,
           postgresRuntimeRoot: nativePayloadRoot,
           browserRuntimeRoot: nativePayloadRoot,
-          alembicPath: path.join(nativePayloadRoot, "vision-alembic"),
           allowExternalPostgres:
             process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
           runtimeId: NATIVE_RUNTIME_ID,

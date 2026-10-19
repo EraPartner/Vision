@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-11
+date: 2026-10-19
 tags:
   [
     guide,
@@ -31,7 +31,6 @@ sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 | ---------- | ------- | -------------------------------------------------------- |
 | Bun        | 1.4.2   | Workspaces, development, checks, and backend compilation |
 | Node.js    | 20+     | Electron packaging tools                                 |
-| Python     | 3.12    | Alembic and the packaged migration executable            |
 | PostgreSQL | 18.6    | Native development payload or disposable database checks |
 
 ## Install
@@ -61,7 +60,7 @@ bun run dev
 ([[docs/adr/196-electron-shell-typescript|ADR-196]]), then starts Electron, a private PostgreSQL 18
 cluster, the backend, and the frontend. The cluster is stored under the `Vision Development` application-data directory. Startup creates
 separate administrator, migration-owner, and application roles, installs required extensions, runs the
-guarded migration runner, and waits for detailed readiness.
+Kysely migrator (`db/migrations/`), and waits for detailed readiness.
 
 The Vite development proxy listens on `127.0.0.1` by default because it exposes the local data
 API. `VISION_VITE_BIND_HOST` is a process environment override for the Vite config, not a
@@ -102,8 +101,8 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 | `bun run native:isolated-smoke`          | Run the complete isolated native smoke                                               |
 | `bun run native:smoke`                   | Run native backend and health checks                                                 |
 
-Alembic writes must go through `bun run db:migrate` or `bun run db:upgrade`; see
-[[docs/guides/migrations|Database Migrations]].
+Schema changes go through the Kysely migrator (`bun run db:migrate`, `bun run db:status`); no
+Python toolchain is needed. See [[docs/guides/migrations|Database Migrations]].
 
 ## Legacy installation boundary
 

@@ -2,12 +2,11 @@
  * Boot-ordering test for the deferred materialized-view lifecycle.
  *
  * `main.ts` used to `await createMaterializedViews()` + `ensureMaterializedViewIndexes()`
- * between alembic and `app.listen()`. `CREATE MATERIALIZED VIEW IF NOT EXISTS` is a
- * metadata no-op once the views exist, but a fresh install has none of them (0045
- * dropped all three and 0084/0085 drop two more to redefine them, and nothing in the
- * chain recreates them) — so on a first boot, and on any upgrade past one of those
- * migrations, full aggregation scans of `transactions` sat inside the pre-`/health`
- * window the Electron 60s poll budget is racing. They now run in the post-listen warmup.
+ * between migrations and `app.listen()`. `CREATE MATERIALIZED VIEW IF NOT EXISTS` is a
+ * metadata no-op once the views exist, but a fresh install has none of them (no
+ * migration creates them) — so on a first boot, and on any upgrade that drops one,
+ * full aggregation scans of `transactions` sat inside the pre-`/health` window the
+ * Electron 60s poll budget is racing. They now run in the post-listen warmup.
  *
  * Booting `main.ts` in-process is not possible (it calls `start()` at import and installs
  * `process.exit` handlers — it is excluded from coverage for the same reason), so this
@@ -26,8 +25,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import net from "node:net";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -150,15 +147,11 @@ describe.skipIf(!hasTestDatabase())(
         `CREATE DATABASE ${scratchDbName()} WITH TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C.UTF-8' LC_CTYPE 'C.UTF-8'`,
       );
 
-      // Own cache dir: the alembic skip-at-head cache is keyed on revision +
-      // versions/ fingerprint, so a throwaway database's entry must never be
-      // consulted for — or overwrite — the developer's real one.
-      const cacheDir = mkdtempSync(path.join(tmpdir(), "vision-bootorder-"));
       const childEnv = {
         ...process.env,
         DATABASE_URL: scratchUrl(),
+        DATABASE_URL_MIGRATIONS: scratchUrl(),
         TEST_DATABASE_URL: scratchUrl(),
-        VISION_CACHE_DIR: cacheDir,
       };
       await runToCompletion(DB_MIGRATE_JS, childEnv);
 

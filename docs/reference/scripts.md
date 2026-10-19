@@ -64,7 +64,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `build:dev`      | Build the development frontend                                            |
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
-| `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
+| `native:prepare` | Prepare the pinned PostgreSQL and report-browser development payload      |
 
 ## Static and generated checks
 
@@ -77,17 +77,18 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `typecheck:scripts`          | Type-check repository scripts and their tests      |
 | `typecheck:electron`         | Type-check the Electron shell and its preload      |
 | `typecheck:packages`         | Type-check the shared packages and their tests     |
-| `typecheck:python`           | Run `mypy --strict` over Alembic and scripts       |
 | `validate-locales`           | Validate source/generated locale parity            |
 | `generate-locales`           | Generate frontend and Electron locale outputs      |
 | `generate:types`             | Generate frontend OpenAPI types                    |
 | `check-endpoint-matrix`      | Verify the documented operation count              |
 | `check-legacy-inventory`     | Validate legacy dispositions and TODO ownership    |
 | `check-test-only-exports`    | Reject production imports of test-only helpers     |
+| `check:package-boundaries`   | Enforce private internal package boundaries        |
+| `check:agent-instructions`   | Check agent instruction and skill structure        |
+| `check:workflow-supply-chain`| Enforce the GitHub workflow supply-chain policy    |
 | `todo:list`                  | Print the current TODO ledger                      |
 | `todo:check`                 | Verify TODO counts and ledger integrity            |
-| `db:check-destructive`       | Reject unmarked destructive migration operations   |
-| `db:check-heads`             | Require one Alembic head                           |
+| `db:lint`                    | Squawk lint of `db/migrations/*.sql` (destructive DDL) |
 | `check`                      | Run the repository aggregate static and test gates |
 
 ## Tests
@@ -112,54 +113,29 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 
 `scripts/with-test-db.sh` ignores inherited database URLs by default. It creates a private native
 PostgreSQL 18 cluster with a generated password and SCRAM authentication, enables required
-extensions, migrates it, runs the requested test task, and removes it on exit. An already-disposable
+extensions, migrates it, runs the backend suite (or the forwarded Vitest arguments), and removes it on exit. An already-disposable
 caller database requires `VISION_TEST_DB_USE_CALLER=1`. It never uses the user's Vision database by
-default.
-
-For the guarded legacy-retirement migrations, run:
-
-```bash
-VISION_TEST_DB_TASK=legacy-retirements scripts/with-test-db.sh
-VISION_TEST_DB_TASK=statement-contract scripts/with-test-db.sh
-```
-
-These modes refuse caller-managed databases. They create a disposable PostgreSQL 18 cluster and
-prove the 0104 through 0106 migration lifecycles or the dropped statement-scalar application and
-rollback contract. Legacy retirement starts at 0105 and downgrades to 0103 to reconstruct the
-empty legacy cache; ADR-090 starts at 0102. Their rollback checks do not cross the later
-forward-only audit-chain migration 0117. The ADR-088 contract task reconstructs its compatibility
-columns with the real rollback script before testing the guarded drop against the fresh baseline.
+default. `VISION_TEST_DB_VERIFY_CODEGEN=1` additionally runs `bun run db:codegen --verify` after the
+migration so `schema.generated.ts` cannot drift from the migrated schema; CI sets it.
 
 ## Database
 
-| Script                        | Purpose                                                                                                                                                                            |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db:migrate`                  | Run the guarded migration command                                                                                                                                                  |
-| `db:upgrade`                  | Upgrade to the current Alembic head                                                                                                                                                |
-| `db:downgrade`                | Explicit downgrade through the guarded runner                                                                                                                                      |
-| `db:current`                  | Show current revision                                                                                                                                                              |
-| `db:history`                  | Show revision history                                                                                                                                                              |
-| `db:stamp`                    | Stamp through the guarded runner                                                                                                                                                   |
-| `db:revision`                 | Create an autogenerated revision                                                                                                                                                   |
-| `db:index-stats`              | Inspect index statistics                                                                                                                                                           |
-| `db:legacy-status`            | Read-only status for the six manual legacy database contracts                                                                                                                      |
-| `db:check`                    | Check Alembic heads and migration fidelity in a disposable database                                                                                                                |
-| `db:backup-before-baseline`   | Create and restore-test a new logical backup before upgrading an older maintained revision; leaves the source unchanged                                                            |
-| `db:bridge-baseline`          | Restore-test a new logical backup and bridge a contracted 0118 database to 0119 during approved maintenance                                                                        |
-| `db:convert-legacy-baseline`  | Convert the reviewed maintained 0118 legacy shape to canonical 0119 with a full backup, verified archive export, UTC timestamp rule, retained prior database, and recovery journal |
-| `db:rollback-legacy-baseline` | Restore the prior database name only before new writes and only when both manifests still match the conversion journal                                                             |
+All database scripts use the Kysely migrator in `apps/node-backend/src/database/migrate.ts`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). They read `DATABASE_URL`
+(falling back to `config/.env.local`) and use `DATABASE_URL_MIGRATIONS` as the owner role when set.
 
-`db:legacy-status` connects with `DATABASE_URL_MIGRATIONS` when configured, otherwise with the
-normal application database URL. It opens a read-only transaction and reports only the target
-database identity, Alembic revisions, session counts, relation and column shapes, aggregate row
-counts, and parity mismatch counts. It never prints the connection URL, application rows, or other
-sessions' SQL. The report is evidence for selecting a maintenance target; it does not prove the
-stopped-writer state or restore-tested backup and never applies a contract. The maintained
-installation's operator waived elapsed-time soak gates for the current legacy retirement on
-2026-09-13; the report identifies unfinished import batches that still block `tx_hash` removal.
-Pass `--native` to read the maintained macOS Vision runtime's private connection settings without
-printing them: `bun run db:legacy-status --native`. The target fingerprint in the report must still
-be reviewed before any maintenance operation.
+| Script            | Purpose                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------- |
+| `db:migrate`      | Apply every pending migration in `db/migrations/` (adopts an Alembic `0128` database onto the baseline) |
+| `db:migrate:down` | Revert the latest migration; refuses when it has no `.down.sql`                                      |
+| `db:status`       | List migrations and when each was applied                                                            |
+| `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |
+| `db:lint`         | Squawk lint of migration SQL with `config/squawk.toml`                                               |
+| `db:drift-check`  | Read-only comparison of a database's catalog fingerprint with the `0001` baseline                   |
+| `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` with `kysely-codegen`               |
+| `db:index-stats`  | Inspect index statistics                                                                             |
+
+See [[docs/guides/migrations|Database Migration Guide]] for the workflow.
 
 ## Locales and maintenance
 

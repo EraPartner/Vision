@@ -241,7 +241,7 @@ package "Storage & Performance" {
 package "AI & Observability" {
   class AuditVerificationService <<ADR-156>> {
     +verifyAuditHistory({trustedCheckpoint?}): Promise<Report>
-    note bottom: Scans domain links and latest chained Alembic heads.\nWithout an authenticated external checkpoint,\nreport is unavailable for tamper evidence.
+    note bottom: Scans domain links and the latest chained migration head\n(highest public.kysely_migration name).\nWithout an authenticated external checkpoint,\nreport is unavailable for tamper evidence.
   }
 
   class AuditRetentionService <<ADR-162>> {

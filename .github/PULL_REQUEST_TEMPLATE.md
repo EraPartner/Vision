@@ -30,7 +30,7 @@ See CONTRIBUTING.md and docs/guides/contributing.md.
 - [ ] No architectural change — **or** a new ADR is added under `docs/adr/` (append-only)
 - [ ] No API change — **or** `docs/api/` + `docs/reference/api-endpoint-matrix.md` updated
       (note breaking vs. non-breaking)
-- [ ] No schema change — **or** an Alembic migration **and rollback plan** are included
+- [ ] No schema change — **or** a `db/migrations/` migration **and rollback plan** are included
       (pending migrations auto-run during backend startup)
 
 ## Verification

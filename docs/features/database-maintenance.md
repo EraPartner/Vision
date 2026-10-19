@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -273,7 +273,7 @@ After a successful commit to `transactions`, `recipients`, or `categories` (the 
 
 ### Audit table
 
-Migration `alembic/versions/0059_db_editor_audit.py` creates:
+Migration `0059_db_editor_audit` creates:
 
 ```sql
 CREATE TABLE db_editor_audit (

@@ -417,7 +417,7 @@ A sliders icon at the tape's right edge (outside the edge-fade mask) opens a `Ti
 3. On error: rolls back the optimistic cache update.
 4. On settle: invalidates `investments` and `portfolio-summary` queries.
 
-The popover header shows a count badge: `portfolio.ticker.manageCount` with `{shown}` / `{total}` placeholders. The backend persists the value in the **`investment_ticker_prefs` side table** via an UPSERT in `investmentRepository.update()` (migration `0061_investments_show_in_ticker` creates this table; **not auto-applied** — run `bun run db:upgrade`). There is no `investments.show_in_ticker` column; reads `LEFT JOIN` the side table with `COALESCE(tp.show_in_ticker, true)`.
+The popover header shows a count badge: `portfolio.ticker.manageCount` with `{shown}` / `{total}` placeholders. The backend persists the value in the **`investment_ticker_prefs` side table** via an UPSERT in `investmentRepository.update()` (created by historical migration `0061_investments_show_in_ticker`; part of the `0001` migration baseline). There is no `investments.show_in_ticker` column; reads `LEFT JOIN` the side table with `COALESCE(tp.show_in_ticker, true)`.
 
 ### Usage
 
@@ -526,5 +526,5 @@ Code link: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/fronte
 - [[apps/frontend/src/lib/api.ts]] - Adds `getBelgianInflationRates({ start_month?, end_month? })` client helper for `GET /api/info/inflation-rates`; Phase 3.6 adds watchlist methods (`getWatchlist()`, `createWatchlistItem()`, `updateWatchlistItem()`, `deleteWatchlistItem()`) and market quotes method (`getMarketQuotes(symbols)`).
 - [[apps/node-backend/src/services/belgianInflationService.ts]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.
 - [[apps/node-backend/src/routes/info.ts]] - Exposes `GET /api/info/inflation-rates` and admin-limited `POST /api/info/inflation-rates/refresh`.
-- [[alembic/versions/0001_initial_database_schema.py]] - Creates `belgian_inflation_rates` table and indexes via Alembic baseline migration.
+- `db/migrations/0001_baseline.sql` - Creates the `belgian_inflation_rates` table and indexes (historically Alembic `0001_initial_database_schema`).
 - [[apps/node-backend/src/main.ts]] - Warms and schedules Belgian inflation cache refresh during backend startup lifecycle.

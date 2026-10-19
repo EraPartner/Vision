@@ -43,7 +43,7 @@ export const DATABASE_STATS_SQL = [
    END
    $vision_table_counts$`,
   `SELECT 'schema' AS key,
-          COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM alembic_version), '') AS value
+          COALESCE((SELECT max(name) FROM public.kysely_migration), '') AS value
    UNION ALL
    SELECT 'postgres_version_num', current_setting('server_version_num')
    UNION ALL

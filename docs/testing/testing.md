@@ -127,19 +127,19 @@ bun run test:db tests/services/transferReconciliation.db.test.ts
 # Keep the generated cluster after the run to inspect diagnostics
 VISION_TEST_DB_KEEP=1 bun run test:db
 
-# Exercise guarded 0104/0105 retirement lifecycles on a fresh disposable cluster
-VISION_TEST_DB_TASK=legacy-retirements scripts/with-test-db.sh
+# Also fail when schema.generated.ts drifts from the migrated schema (CI sets this)
+VISION_TEST_DB_VERIFY_CODEGEN=1 bun run test:db
 ```
 
-The `legacy-retirements` task refuses caller-managed database URLs. It verifies successful and
-fail-closed upgrades, downgrade shape restoration, and re-upgrade for the dormant import staging
-field and the upgraded-install-only exchange-rate cache.
-
 Watch mode keeps the same private cluster for reruns and removes it when Vitest exits. It clears
-inherited database URLs by default. The ADR-088 and statement-scalar contract cases need their
-separate `VISION_TEST_DB_TASK` schema modes and remain task-gated in the general suite.
+inherited database URLs by default.
 
-Requires the Python Alembic toolchain (`pip install -r config/requirements.txt`) because migrations are Alembic even though the backend is Node. `config/requirements.txt` is an exact, hash-verified lock compiled from `config/requirements.in`. The migration runner uses an explicit `ALEMBIC_BIN` first, then a tool beside `VISION_PYTHON_BIN`, `.venv-native-build`, the prepared standalone native runtime, a runnable repository `venv`, and finally `alembic` on `PATH`. It probes a candidate before selecting it, so a stale container-created virtual environment cannot cause an `ENOENT` failure.
+The wrapper builds the schema with the Kysely migrator (`db-migrate.ts up`); no Python toolchain
+is needed. It no longer has separate lifecycle tasks: migrator, adoption and baseline behaviour is
+covered by `tests/migrate.db.test.ts` and `tests/migratedSchemaContracts.db.test.ts`, which create
+disposable sibling databases through `tests/setup/migratedDatabase.ts` (gated on
+`VISION_TEST_DB_ISOLATED=1`). The ADR-088 and statement-scalar contract suites are still gated on a
+`VISION_TEST_DB_TASK` value that the wrapper no longer sets, so they skip.
 
 PostgreSQL discovery checks `VISION_TEST_POSTGRES_BIN`, `VISION_POSTGRES_BIN`, `postgres` on
 `PATH`, the Homebrew PostgreSQL 18 keg paths, and Postgres.app. `VISION_TEST_DB_PORT` selects the
@@ -147,7 +147,7 @@ loopback port and fails closed on a collision.
 
 The wrapper ignores inherited database URLs by default and creates a private cluster. Set
 `VISION_TEST_DB_USE_CALLER=1` only for an already-disposable `TEST_DATABASE_URL`; this skips native
-provisioning. Destructive migration lifecycle tasks refuse caller-managed databases.
+provisioning.
 
 #### The skip banner
 
@@ -909,7 +909,7 @@ Backend vitest runs in exactly one CI job, so the service is wired only there. `
 
 **Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the _no-DB_ figure deliberately — see the comment there before bumping them.
 
-**Migrations are required, and a bare `alembic upgrade head` will not do it.** Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, and this chain's revision identifiers are longer, so a fresh database dies on the third revision with `value too long for type character varying(32)`. Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.ts`), which runs the same `runMigrations()` path the app runs on boot and preflights that table at `VARCHAR(64)` first. All version-table-writing npm scripts (`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset`, and the backend workspace's `db:migrate*`) now route through that same wrapper — see [[docs/reference/scripts|Scripts Reference]].
+**Migrations are required.** Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.ts up`), which runs the same `runMigrations()` path the app runs on boot: an empty database receives `db/migrations/0001_baseline.sql` and its catalog fingerprint is verified, then later migrations apply in one transaction. See [[docs/guides/migrations|Database Migration Guide]] and [[docs/reference/scripts|Scripts Reference]].
 
 Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.ts]], [[apps/node-backend/tests/services/transferReconciliation.db.test.ts]]
 
@@ -1490,7 +1490,7 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 - [[apps/node-backend/tests/plannedTransactionRepository.test.ts]] adds pagination and query-efficiency coverage for `getAll`: fallback count query on empty pages and no execution/loan-schedule follow-up queries when no planned rows exist.
 
 > [!note] Schema initialization test archived
-> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
+> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); since [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] the schema comes from `db/migrations/` through the Kysely migrator.
 
 Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
