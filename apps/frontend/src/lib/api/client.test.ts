@@ -40,7 +40,7 @@ describe("backoffDelay", () => {
     it("does not resolve before 500ms on attempt 0", async () => {
         vi.useFakeTimers();
         let resolved = false;
-        backoffDelay(0).then(() => {
+        void backoffDelay(0).then(() => {
             resolved = true;
         });
         vi.advanceTimersByTime(499);

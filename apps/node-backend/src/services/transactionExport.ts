@@ -24,6 +24,7 @@ import {
   validateBulkSelection,
 } from "./bulkSelection.ts";
 import type { BulkFilterInput } from "./bulkSelection.ts";
+import { EXPORT_JOINS_SQL } from "./transactionJoins.ts";
 import type { ExpressResponse } from "../types/express.ts";
 import type Decimal from "decimal.js";
 
@@ -60,23 +61,8 @@ interface ExportWhereArgs {
  * `EnrichedTransactionRow`, not the full row (no `is_active`, `recipient_id`,
  * etc. — only the columns the export needs). Derived from its row schema.
  */
-export type { ExportTransactionRow };
-
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
-
-/**
- * Shared FROM + JOIN block for transaction list/export queries. Exported so
- * `bulkSelection` runs against the exact same join shape.
- */
-export const EXPORT_JOINS_SQL = `
-    FROM transactions t
-    LEFT JOIN recipients r ON t.recipient_id = r.id
-    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-    LEFT JOIN categories c ON t.category_id = c.id
-    LEFT JOIN categories rc ON r.default_category_id = rc.id
-    LEFT JOIN categories pc ON pr.default_category_id = pc.id
-    LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
 function buildExportTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -293,7 +279,11 @@ function resolveExportWhere(args: ExportWhereArgs): ExportWhere {
     const { sql, params, nextParamIdx } = buildTransactionWhere(args.filters);
     return { whereSql: sql, params, nextParamIdx };
   }
-  if (typeof args.whereSql !== "string" || !args.nextParamIdx) {
+  if (
+    typeof args.whereSql !== "string" ||
+    args.nextParamIdx === undefined ||
+    args.nextParamIdx === 0
+  ) {
     throw new TypeError(
       "Export filters or an explicit WHERE model are required",
     );

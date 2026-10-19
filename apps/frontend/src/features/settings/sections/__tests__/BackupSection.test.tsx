@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { BackupSection } from "@/features/settings/sections/BackupSection";
 
@@ -200,6 +201,29 @@ describe("BackupSection", () => {
                 backupDir: "/Users/me/picked",
                 backupOnQuit: false,
             });
+        });
+    });
+
+    it("reports a failed save instead of silently keeping the unsaved directory", async () => {
+        const toastError = vi.spyOn(toast, "error");
+        const selectDir = vi
+            .fn<() => Promise<string | null>>()
+            .mockResolvedValue("/Users/me/picked");
+        const saveSettings = vi
+            .fn<(s: BackupSettings) => Promise<{ success: boolean; error?: string }>>()
+            .mockResolvedValue({ success: false, error: "disk full" });
+        installElectronStubs({ selectDir, saveSettings });
+
+        const user = userEvent.setup();
+        renderWithApp(<BackupSection />);
+
+        await user.click(await screen.findByRole("button", { name: /browse/i }));
+
+        await waitFor(() => {
+            expect(toastError).toHaveBeenCalledWith(
+                expect.stringMatching(/couldn't save your settings/i),
+                expect.anything(),
+            );
         });
     });
 

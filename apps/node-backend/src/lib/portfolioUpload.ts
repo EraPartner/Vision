@@ -4,7 +4,6 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import crypto from "node:crypto";
 import { inflateRawSync } from "node:zlib";
-import { fileURLToPath } from "node:url";
 import multer from "multer";
 import readExcelFile from "read-excel-file/node";
 import * as XLSX from "xlsx";
@@ -171,7 +170,7 @@ export function assertBoundedWorkbook(bytes: Buffer) {
       offset + length > end ||
       expanded > MAX_WORKBOOK_BYTES ||
       uncompressed === 0xffffffff ||
-      bytes.readUInt16LE(offset + 8) & 1 ||
+      (bytes.readUInt16LE(offset + 8) & 1) !== 0 ||
       names.has(name)
     ) {
       throw new ValidationError(
@@ -182,7 +181,7 @@ export function assertBoundedWorkbook(bytes: Buffer) {
     if (
       localOffset + 30 > directoryOffset ||
       bytes.readUInt32LE(localOffset) !== 0x04034b50 ||
-      bytes.readUInt16LE(localOffset + 6) & 1 ||
+      (bytes.readUInt16LE(localOffset + 6) & 1) !== 0 ||
       ![0, 8].includes(method) ||
       bytes.readUInt16LE(localOffset + 8) !== method
     ) {
@@ -294,7 +293,7 @@ export async function readIbkrFundingWorkbook(
     workbook.SheetNames.length > 2 ||
     workbook.SheetNames.length === 0 ||
     new Set(workbook.SheetNames).size !== workbook.SheetNames.length ||
-    workbook.Workbook?.Sheets?.some((sheet) => sheet.Hidden)
+    workbook.Workbook?.Sheets?.some((sheet) => (sheet.Hidden ?? 0) !== 0)
   )
     throw new ValidationError(
       "IBKR funding workbook contains unsupported sheets or macros",
@@ -311,7 +310,7 @@ export async function readIbkrFundingWorkbook(
       !source ||
       !reference ||
       (source["!type"] && source["!type"] !== "sheet") ||
-      source["!merges"]?.length
+      (source["!merges"]?.length ?? 0) > 0
     )
       throw new ValidationError(
         "IBKR funding workbook contains an unsupported sheet layout",
@@ -368,36 +367,6 @@ export async function readIbkrFundingWorkbook(
     }
     return { sheet, data, sourceFileHash, sourceFormat: format };
   });
-}
-
-/**
- * Reject unsupported workbook formats before a batch or staging rows are made.
- * Run the format adapter read-only so missing or ambiguous details cannot make
- * a batch first. The dynamic import avoids a static reader/adapter cycle.
- */
-export async function assertPortfolioUploadSupported(
-  filePath: string | URL,
-  config: { format?: string },
-) {
-  const format = await detectPortfolioFileFormat(filePath);
-  if (config.format === "ibkr_funding_history") {
-    const { parseIbkrFundingHistory } =
-      await import("../services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts");
-    await parseIbkrFundingHistory(
-      filePath instanceof URL ? fileURLToPath(filePath) : filePath,
-    );
-    return;
-  }
-  if (format === "csv") return;
-  if (format !== "xlsx" || config.format !== "saxo_transaction_history")
-    throw new ValidationError(
-      "Portfolio workbooks require supported Saxo XLSX transaction history or IBKR XLS/XLSX funding history",
-    );
-  const { parseSaxoTransactionHistory } =
-    await import("../services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts");
-  await parseSaxoTransactionHistory(
-    filePath instanceof URL ? fileURLToPath(filePath) : filePath,
-  );
 }
 
 export { isLikelyPortfolioFile as __isLikelyPortfolioFile };

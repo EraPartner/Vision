@@ -49,7 +49,7 @@ export function Figure({
             <p className={cn("truncate type-title-3 tabular-nums", tone)}>
                 {value}
             </p>
-            {detail && (
+            {Boolean(detail) && (
                 <div className="truncate type-footnote text-label-secondary">
                     {detail}
                 </div>
@@ -75,7 +75,7 @@ export function FactRow({ label, value, detail, tone }: FactRowProps) {
                 <span className={cn("type-body tabular-nums", tone)}>
                     {value}
                 </span>
-                {detail && (
+                {Boolean(detail) && (
                     <span className="type-caption tabular-nums text-label-tertiary">
                         {detail}
                     </span>

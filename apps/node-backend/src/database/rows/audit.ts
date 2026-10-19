@@ -20,7 +20,6 @@ export const auditHeadRowSchema = z
     last_hash: z.string(),
   })
   .describe("audit_chain_head row");
-export type AuditHeadRow = z.output<typeof auditHeadRowSchema>;
 
 /** `readAuditHead`: the head plus the legacy cutover high-water ids. */
 export const auditHeadDetailRowSchema = auditHeadRowSchema
@@ -45,7 +44,6 @@ export const auditEntryRowSchema = z
     created_at: pgTimestamptz,
   })
   .describe("audit_chain_entries row");
-export type AuditEntryRow = z.output<typeof auditEntryRowSchema>;
 
 /** The latest entry's `sequence, entry_hash`. */
 export const auditLatestEntryRowSchema = auditEntryRowSchema

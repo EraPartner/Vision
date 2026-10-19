@@ -10,7 +10,7 @@ import type {
   FormattedCustomParserConfig,
 } from '../types/rows.ts';
 
-export type { CustomParserConfigRow, FormattedCustomParserConfig };
+export type { FormattedCustomParserConfig };
 
 const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 

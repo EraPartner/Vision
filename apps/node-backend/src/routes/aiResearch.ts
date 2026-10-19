@@ -107,7 +107,7 @@ router.get("/status", async (_req, res) => {
         id: "openai-api",
         route: "openai-api",
         status:
-          settings.aiResearch.openai.enabled && selectableOpenAiModels.length
+          settings.aiResearch.openai.enabled && selectableOpenAiModels.length > 0
             ? "configured"
             : "disabled",
         models: selectableOpenAiModels.map((model) => ({

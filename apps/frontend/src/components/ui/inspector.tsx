@@ -116,7 +116,7 @@ export interface InspectorSectionProps
 const InspectorSection = React.forwardRef<HTMLElement, InspectorSectionProps>(
     ({ className, label, children, ...props }, ref) => (
         <section ref={ref} className={cn("space-y-2", className)} {...props}>
-            {label && <h3 className="eyebrow">{label}</h3>}
+            {Boolean(label) && <h3 className="eyebrow">{label}</h3>}
             {children}
         </section>
     ),

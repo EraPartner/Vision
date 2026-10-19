@@ -76,7 +76,8 @@ export function AnalysisInterchangePanel({
     const resultColumns = useMemo(
         () =>
             result
-                ? result.declaredColumns?.length
+                ? result.declaredColumns != null &&
+                  result.declaredColumns.length > 0
                     ? result.declaredColumns
                     : result.columns
                 : [],
@@ -176,26 +177,26 @@ export function AnalysisInterchangePanel({
                                         | "decimal"
                                         | "boolean"
                                         | "date" =
-                                        values.length &&
+                                        values.length > 0 &&
                                         values.every(
                                             (v) => typeof v === "boolean",
                                         )
                                             ? "boolean"
-                                            : values.length &&
+                                            : values.length > 0 &&
                                                 values.every(
                                                     (v) =>
                                                         typeof v === "number" &&
                                                         Number.isSafeInteger(v),
                                                 )
                                               ? "integer"
-                                              : values.length &&
+                                              : values.length > 0 &&
                                                   values.every((v) =>
                                                       /^-?\d+(\.\d+)?$/.test(
                                                           String(v),
                                                       ),
                                                   )
                                                 ? "decimal"
-                                                : values.length &&
+                                                : values.length > 0 &&
                                                     values.every((v) =>
                                                         /^\d{4}-\d{2}-\d{2}$/.test(
                                                             String(v),

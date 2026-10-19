@@ -1,5 +1,6 @@
 import { epochMsToUtcYmd as toIso } from "../../../lib/dateFormat.ts";
 import { ymdToEpochDay } from "../../../lib/timezone.ts";
+import { nanToZero } from "../../../lib/math.ts";
 
 /**
  * Densify a daily {date, net} history: fill every calendar date from the first
@@ -21,7 +22,7 @@ export function densifyDailyHistory(
   if (!Array.isArray(history) || history.length === 0) return history;
   const byDate = new Map<string, number>();
   for (const r of history)
-    byDate.set(r.date, (byDate.get(r.date) ?? 0) + (Number(r.net) || 0));
+    byDate.set(r.date, (byDate.get(r.date) ?? 0) + nanToZero(Number(r.net)));
   const sortedDates = [...byDate.keys()].sort();
   const startIso = sortedDates[0];
   const lastObserved = sortedDates[sortedDates.length - 1];
@@ -37,5 +38,3 @@ export function densifyDailyHistory(
   }
   return out;
 }
-
-export default { densifyDailyHistory };

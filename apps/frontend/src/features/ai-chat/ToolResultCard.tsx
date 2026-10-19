@@ -18,17 +18,13 @@ import {
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
-import type {
-    ToolErrorDetail,
-    ToolRenderAs,
-    ToolResultPayload,
-} from "@/types/aiChat";
+import type { ToolRenderAs, ToolResultPayload } from "@/types/aiChat";
 
 const ToolResultChart = lazy(() => import("./ToolResultChart"));
 
 function toolErrorTranslationKey(error: ToolResultPayload["error"]): string {
-    if (!error || typeof error === "string") return "aiChat.toolFailed";
-    const detail = error as ToolErrorDetail;
+    if (error == null || typeof error === "string") return "aiChat.toolFailed";
+    const detail = error;
     if (detail.code === "VALIDATION_ERROR") {
         return "aiChat.toolError.validation";
     }
@@ -66,7 +62,7 @@ function formatCell(value: unknown, locale: string): string {
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     const { t } = useLanguage();
     useEffect(() => {
-        if (!result.ok && result.error) {
+        if (!result.ok && result.error != null && result.error !== "") {
             logger.error("AI tool returned an error", {
                 toolName,
                 error: result.error,

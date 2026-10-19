@@ -148,12 +148,11 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         if (!gl) return; // CSS blobs underneath remain the fallback
 
         const compile = (type: number, src: string) => {
-            const shader = gl!.createShader(type);
+            const shader = gl.createShader(type);
             if (!shader) return null;
-            gl!.shaderSource(shader, src);
-            gl!.compileShader(shader);
-            if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS))
-                return null;
+            gl.shaderSource(shader, src);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return null;
             return shader;
         };
 
@@ -168,35 +167,34 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         // Returns false if any step fails (e.g. the context is still recovering),
         // leaving the CSS blobs as the fallback.
         const buildResources = (): boolean => {
-            const vs = compile(gl!.VERTEX_SHADER, VERT);
-            const fs = compile(gl!.FRAGMENT_SHADER, FRAG);
-            const program = gl!.createProgram();
-            if (!vs || !fs || !program) return false;
-            gl!.attachShader(program, vs);
-            gl!.attachShader(program, fs);
-            gl!.linkProgram(program);
-            if (!gl!.getProgramParameter(program, gl!.LINK_STATUS))
-                return false;
-            gl!.useProgram(program);
+            const vs = compile(gl.VERTEX_SHADER, VERT);
+            const fs = compile(gl.FRAGMENT_SHADER, FRAG);
+            const program = gl.createProgram();
+            if (!vs || !fs || program == null) return false;
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+            gl.useProgram(program);
 
-            const buf = gl!.createBuffer();
-            gl!.bindBuffer(gl!.ARRAY_BUFFER, buf);
-            gl!.bufferData(
-                gl!.ARRAY_BUFFER,
+            const buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(
+                gl.ARRAY_BUFFER,
                 new Float32Array([-1, -1, 3, -1, -1, 3]),
-                gl!.STATIC_DRAW,
+                gl.STATIC_DRAW,
             );
-            const aPos = gl!.getAttribLocation(program, "a_pos");
-            gl!.enableVertexAttribArray(aPos);
-            gl!.vertexAttribPointer(aPos, 2, gl!.FLOAT, false, 0, 0);
+            const aPos = gl.getAttribLocation(program, "a_pos");
+            gl.enableVertexAttribArray(aPos);
+            gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-            gl!.enable(gl!.BLEND);
-            gl!.blendFunc(gl!.ONE, gl!.ONE_MINUS_SRC_ALPHA);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-            uRes = gl!.getUniformLocation(program, "u_res");
-            uTime = gl!.getUniformLocation(program, "u_time");
-            uC1 = gl!.getUniformLocation(program, "u_c1");
-            uC2 = gl!.getUniformLocation(program, "u_c2");
+            uRes = gl.getUniformLocation(program, "u_res");
+            uTime = gl.getUniformLocation(program, "u_time");
+            uC1 = gl.getUniformLocation(program, "u_c1");
+            uC2 = gl.getUniformLocation(program, "u_c2");
             return true;
         };
 
@@ -215,13 +213,13 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         let reducedMotion = motionQuery.matches;
 
         const draw = (timeSec: number) => {
-            gl!.uniform2f(uRes, canvas.width, canvas.height);
-            gl!.uniform1f(uTime, timeSec);
-            gl!.uniform3f(uC1, c1[0], c1[1], c1[2]);
-            gl!.uniform3f(uC2, c2[0], c2[1], c2[2]);
-            gl!.clearColor(0, 0, 0, 0);
-            gl!.clear(gl!.COLOR_BUFFER_BIT);
-            gl!.drawArrays(gl!.TRIANGLES, 0, 3);
+            gl.uniform2f(uRes, canvas.width, canvas.height);
+            gl.uniform1f(uTime, timeSec);
+            gl.uniform3f(uC1, c1[0], c1[1], c1[2]);
+            gl.uniform3f(uC2, c2[0], c2[1], c2[2]);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.drawArrays(gl.TRIANGLES, 0, 3);
         };
 
         const refreshColors = () => {
@@ -247,7 +245,7 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             const h = Math.max(1, Math.floor(window.innerHeight * scale));
             canvas.width = w;
             canvas.height = h;
-            gl!.viewport(0, 0, w, h);
+            gl.viewport(0, 0, w, h);
             // Setting canvas.width wipes the backing store; the animated loop
             // repaints next frame, but a static frame (reduced-motion or
             // static-atmosphere) must be redrawn here or the aurora blanks

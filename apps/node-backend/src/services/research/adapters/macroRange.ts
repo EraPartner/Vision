@@ -23,8 +23,8 @@ export function trimToRange<P extends { time: number }>(
 ): P[] {
   if (range === "max" || !Array.isArray(points) || points.length === 0)
     return points;
-  const months = RANGE_MONTHS[range as keyof typeof RANGE_MONTHS];
-  if (!months) return points;
+  const months: number | undefined = RANGE_MONTHS[range as keyof typeof RANGE_MONTHS];
+  if (months === undefined || months === 0) return points;
   const last = points.at(-1);
   if (!last) return points;
   const d = new Date(last.time);

@@ -100,7 +100,7 @@ export const parserConfigSchema = z.object({
     .unknown()
     .optional()
     .transform((value) =>
-      typeof value === "string" && value.length ? value : ",",
+      typeof value === "string" && value.length > 0 ? value : ",",
     ),
   encoding: csvEncodingField,
   number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
@@ -147,9 +147,10 @@ export const portfolioParserConfigSchema = z
   })
   .superRefine((config, ctx) => {
     const hasSymbol =
-      typeof config.symbolColumn === "string" && config.symbolColumn.trim();
+      typeof config.symbolColumn === "string" &&
+      config.symbolColumn.trim() !== "";
     const hasName =
-      typeof config.nameColumn === "string" && config.nameColumn.trim();
+      typeof config.nameColumn === "string" && config.nameColumn.trim() !== "";
     if (!hasSymbol && !hasName) {
       ctx.addIssue({
         code: "custom",

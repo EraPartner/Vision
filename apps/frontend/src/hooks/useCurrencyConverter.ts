@@ -54,7 +54,14 @@ export function useCurrencyConverter(targetCurrency: string) {
             if (from === to) return amount;
             const rateFrom = ratesToEur[from];
             const rateTo = ratesToEur[to];
-            if (!rateFrom || !rateTo) return undefined;
+            // A missing or zero rate cannot convert (rateTo is the divisor).
+            if (
+                rateFrom === undefined ||
+                rateFrom === 0 ||
+                rateTo === undefined ||
+                rateTo === 0
+            )
+                return undefined;
             return (amount * rateFrom) / rateTo;
         },
         [ratesToEur, targetCurrency],

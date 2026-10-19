@@ -186,7 +186,7 @@ function reconcileCategoryForecasts(
     totalAbsByDate.set(date, absSum);
   }
 
-  const catCount = categoryForecasts.length || 1;
+  const catCount = Math.max(categoryForecasts.length, 1);
 
   // Additive residual distribution instead of multiplicative ref/sum scaling.
   // Scaling is only valid when components share a sign; category daily nets are

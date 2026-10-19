@@ -333,7 +333,7 @@ export default function RecipientsPage() {
                                 {row.alias_count}
                             </Badge>
                         )}
-                        {row.primary_recipient_id && (
+                        {row.primary_recipient_id != null && (
                             <Badge
                                 variant="outline"
                                 size="sm"
@@ -380,7 +380,7 @@ export default function RecipientsPage() {
                                 onSelect={(catId) => {
                                     // Cancel any ongoing queries to prevent refetch removing this row
                                     // before the edit mode is properly cancelled
-                                    queryClient.cancelQueries({
+                                    void queryClient.cancelQueries({
                                         queryKey: recipientKeys.all,
                                     });
                                     // Cancel edit mode first to avoid stale state
@@ -591,7 +591,7 @@ export default function RecipientsPage() {
                                     />
                                     {t("recipientPatterns.title")}
                                 </DropdownMenuItem>
-                                {row.primary_recipient_id && (
+                                {row.primary_recipient_id != null && (
                                     <DropdownMenuItem
                                         disabled={unmergeMutation.isPending}
                                         onSelect={() =>
@@ -676,7 +676,7 @@ export default function RecipientsPage() {
                         pagination: {
                             totalItems,
                             isFetchingMore,
-                            onLoadMore: loadMore,
+                            onLoadMore: () => void loadMore(),
                             hasMore: hasMoreRef.current,
                         },
                     }}

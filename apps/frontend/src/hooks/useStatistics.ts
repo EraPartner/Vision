@@ -12,15 +12,13 @@ import {
     getAggregationRecipientInsights,
     getAggregationRecipientByYear,
     getSankeyFlow,
-    type CategoryPivotItem,
-    type RecipientYearlySpending,
 } from "@/lib/api/aggregations";
 import type {
     CategoryId,
     CurrencyCode,
     RecipientId,
 } from "@vision/types/brands";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -218,7 +216,7 @@ export function mapToStatisticsData(
     for (const [period, items] of Object.entries(
         categoryPivotPayload.categoryPivot ?? {},
     )) {
-        for (const item of items as CategoryPivotItem[]) {
+        for (const item of items) {
             const key = item.categoryId ?? "null";
             if (!catMap.has(key)) {
                 catMap.set(key, {
@@ -284,7 +282,7 @@ export function mapToStatisticsData(
             Object.entries(recipientByYear.recipientsByYear ?? {}).map(
                 ([year, recs]) => [
                     year,
-                    (recs as RecipientYearlySpending[]).map((r) => ({
+                    recs.map((r) => ({
                         name: r.name,
                         total: r.totalSpend,
                         count: r.transactionCount,
@@ -297,7 +295,7 @@ export function mapToStatisticsData(
     const allYears = yearlyComparison.map((y) => y.year);
     const totalIncome = monthlyData.reduce((s, m) => s + m.income, 0);
     const totalSpending = monthlyData.reduce((s, m) => s + m.spending, 0);
-    const monthCount = monthlyData.length || 1;
+    const monthCount = Math.max(monthlyData.length, 1);
 
     return {
         monthlyData,
@@ -320,7 +318,10 @@ export function mapToStatisticsData(
 
 export function useStatistics(window: StatisticsWindow = "24m") {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const dateRange = useMemo(() => getStatisticsDateRange(window), [window]);
 
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});
@@ -487,10 +488,10 @@ export function useStatistics(window: StatisticsWindow = "24m") {
         if (!unfilteredReady) return null;
 
         const unfilteredData = mapToStatisticsData(
-            monthlySummaryUnfilteredQuery.data!.data,
-            categoryPivotUnfilteredQuery.data!.data,
-            recipientInsightsQuery.data!.data,
-            recipientByYearUnfilteredQuery.data!.data,
+            monthlySummaryUnfilteredQuery.data.data,
+            categoryPivotUnfilteredQuery.data.data,
+            recipientInsightsQuery.data.data,
+            recipientByYearUnfilteredQuery.data.data,
         );
 
         if (
@@ -504,13 +505,11 @@ export function useStatistics(window: StatisticsWindow = "24m") {
         const filteredData = mapToStatisticsData(
             monthlySummaryFilteredQuery.data.data,
             categoryPivotFilteredQuery.data.data,
-            (
-                recipientInsightsFilteredQuery.data ??
-                recipientInsightsQuery.data!
-            ).data,
+            (recipientInsightsFilteredQuery.data ?? recipientInsightsQuery.data)
+                .data,
             (
                 recipientByYearFilteredQuery.data ??
-                recipientByYearUnfilteredQuery.data!
+                recipientByYearUnfilteredQuery.data
             ).data,
         );
 

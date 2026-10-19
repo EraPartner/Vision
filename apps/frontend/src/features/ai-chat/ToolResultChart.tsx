@@ -141,8 +141,7 @@ function PieResultChart({ rows, xKey, yKeys }: ToolResultChartProps) {
     }
     const data = rows.map((row) => ({
         name: String(row[xk] ?? ""),
-        value:
-            typeof row[valueKey] === "number" ? (row[valueKey] as number) : 0,
+        value: typeof row[valueKey] === "number" ? row[valueKey] : 0,
     }));
     return (
         <div className="h-56 w-full">

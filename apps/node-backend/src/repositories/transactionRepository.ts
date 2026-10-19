@@ -67,6 +67,7 @@ import type {
   TransactionTagRef,
   UnlinkedTransactionRow,
 } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 
 /**
  * Validate canonical account identity before dynamic SET clauses are built.
@@ -84,7 +85,7 @@ export async function stampAccountIdForUpdate(
   if (Object.hasOwn(sanitized, "account_id")) {
     if (
       sanitized.account_id != null &&
-      !(await accountRepository.findActiveId(sanitized.account_id, { client }))
+      (await accountRepository.findActiveId(sanitized.account_id, { client })) === undefined
     ) {
       throw new ValidationError("account_id must reference an active account");
     }
@@ -833,7 +834,7 @@ export const transactionRepository = {
         // orphan account that the former INSERT trigger would have rolled back.
         const accountId = account_id ?? null;
         if (accountId != null) {
-          if (!(await accountRepository.findActiveId(accountId, { client }))) {
+          if ((await accountRepository.findActiveId(accountId, { client })) === undefined) {
             throw new ValidationError(
               "account_id must reference an active account",
             );
@@ -1501,7 +1502,7 @@ export const transactionRepository = {
           AND t.currency = $6`,
       [date, amount, recipientId, memo, accountId, currency],
     );
-    return Number(rows[0]?.n) || 0;
+    return nanToZero(Number(rows[0]?.n));
   },
 
   /**

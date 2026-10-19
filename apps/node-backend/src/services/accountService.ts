@@ -222,7 +222,7 @@ function sanitize(body: unknown, { requireName }: { requireName: boolean }) {
   if (!result.success) {
     const msg = result.error.issues
       .map((issue) =>
-        issue.path.length
+        issue.path.length > 0
           ? `${issue.path.join(".")}: ${issue.message}`
           : issue.message,
       )
@@ -369,7 +369,7 @@ const accountService = {
                   toDecimal(statementBalance).minus(toDecimal(baseBalance)),
                 ),
               ),
-        anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+        anchor_date: row.anchor_date ?? undefined,
         post_anchor_count:
           row.post_anchor_count == null
             ? undefined
@@ -517,7 +517,7 @@ const accountService = {
       id,
       currency,
     );
-    if (!removed) {
+    if (removed === 0) {
       throw new NotFoundError(
         `Account ${id} has no ${currency} statement balance`,
       );
@@ -544,7 +544,7 @@ const accountService = {
         }
         throw err;
       }
-      if (!removed) throw new NotFoundError(`Account ${id} not found`);
+      if (removed === undefined) throw new NotFoundError(`Account ${id} not found`);
       return removed;
     });
   },

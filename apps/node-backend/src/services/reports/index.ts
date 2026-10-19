@@ -52,9 +52,6 @@ import type {
 import type { SectionEntry } from "./sectionCatalog.ts";
 
 export type { Period, PrecomputedHousehold, PrecomputedPIT, ReportHousehold, TaxProfile };
-
-export type PeriodKind = Period["kind"];
-
 export type ThemeTokens = {
   primary?: string | undefined;
   accent?: string | undefined;
@@ -400,7 +397,7 @@ function buildCoverHtml({
       : "";
 
   let pricesRow = "";
-  if (pricesAsOf) {
+  if (pricesAsOf != null && pricesAsOf !== "") {
     const pricesAsOfDate = new Date(pricesAsOf);
     const pricesAsOfStr = pricesAsOfDate.toLocaleDateString("en-US", {
       day: "numeric",
@@ -532,11 +529,11 @@ function reconcile(
   const orphan = Object.keys(renderers).filter(
     (id) => !catalogIds.includes(id),
   );
-  if (missing.length)
+  if (missing.length > 0)
     throw new Error(
       `${label} report sections without a renderer: ${missing.join(", ")}`,
     );
-  if (orphan.length)
+  if (orphan.length > 0)
     throw new Error(
       `${label} report renderers without a catalog entry: ${orphan.join(", ")}`,
     );
@@ -591,7 +588,7 @@ async function buildBody<D>({
   });
   const valid = selected.map(({ id }) => id);
 
-  if (!valid.length) {
+  if (valid.length === 0) {
     return `
       <div class="page placeholder-notice">
         <strong>No sections selected</strong>

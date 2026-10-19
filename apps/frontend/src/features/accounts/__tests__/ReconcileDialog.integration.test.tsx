@@ -850,7 +850,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             reconcilable_balance?: number;
             reconcilable_currency?: string;
         };
-        await renderDialog(legacy as Account);
+        await renderDialog(legacy);
 
         expect(baseText()).toBeNull();
         await user.type(screen.getByLabelText(/new statement reading/i), "120");

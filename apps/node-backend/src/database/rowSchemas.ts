@@ -99,7 +99,10 @@ export const plannedTransactionKeyRowSchema = z
   .describe("planned transaction id row");
 /** `SELECT id` / `RETURNING id` over `tags`. */
 export const tagKeyRowSchema = z.object({ id: pgTagId }).describe("tag id row");
-/** `SELECT id` / `RETURNING id` over `transaction_splits`. */
+/**
+ * `SELECT id` / `RETURNING id` over `transaction_splits`.
+ * @public
+ */
 export const splitKeyRowSchema = z
   .object({ id: pgSplitId })
   .describe("split id row");

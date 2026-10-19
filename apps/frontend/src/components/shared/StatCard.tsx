@@ -206,7 +206,7 @@ export function StatCard({
                             />
                         </div>
                     )}
-                    {subtitle && (
+                    {Boolean(subtitle) && (
                         <p
                             className={cn(
                                 "type-footnote text-label-secondary",

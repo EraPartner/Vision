@@ -78,7 +78,7 @@ export function scheduleAggregationRefresh() {
   if (mcClearTimer) clearTimeout(mcClearTimer);
   mcClearTimer = setTimeout(() => {
     mcClearTimer = null;
-    clearForecastMcCaches();
+    void clearForecastMcCaches();
   }, MC_CLEAR_DEBOUNCE_MS);
   if (typeof mcClearTimer.unref === "function") mcClearTimer.unref();
 }

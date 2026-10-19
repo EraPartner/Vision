@@ -102,7 +102,7 @@ import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary"
 import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 import { amountClass } from "@/features/transactions/amountClass";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -127,7 +127,10 @@ export default function AccountDetailPage() {
     // Shared drift chip content + tone (§3 F1) — identical to the hub card.
     const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
-    const displayCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const displayCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // The hub's cached population (active + archived) — the simplest source for
@@ -297,7 +300,7 @@ export default function AccountDetailPage() {
         });
         if (!ok) return;
         deleteMutation.mutate(a.id, {
-            onSuccess: () => navigate("/accounts"),
+            onSuccess: () => void navigate("/accounts"),
             onError: (err) => {
                 // Still referenced (409): route to the close flow instead of
                 // dead-ending (lifecycle D5, ADR-088 addendum) — same as the hub.
@@ -318,7 +321,7 @@ export default function AccountDetailPage() {
             account_id: String(a.id),
             filter_label: a.display_name || a.name,
         });
-        navigate(`/transactions?${params.toString()}`);
+        void navigate(`/transactions?${params.toString()}`);
     };
 
     // ── Resolution states ───────────────────────────────────────────────────

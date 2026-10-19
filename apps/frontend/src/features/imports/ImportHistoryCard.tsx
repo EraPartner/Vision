@@ -244,11 +244,11 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
     useEffect(() => {
         if (refreshKey === lastRefreshKey.current) return;
         lastRefreshKey.current = refreshKey;
-        invalidate();
+        void invalidate();
     }, [refreshKey, invalidate]);
 
     const handleRolledBack = useCallback(() => {
-        invalidate();
+        void invalidate();
     }, [invalidate]);
 
     const totalPages = Math.ceil(total / PAGE_SIZE);

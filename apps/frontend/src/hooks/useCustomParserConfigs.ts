@@ -1,16 +1,12 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-    apiClient,
-    type SavedParserConfig,
-    type CustomParserConfigPayload,
-} from "@/lib/api";
+import { apiClient, type CustomParserConfigPayload } from "@/lib/api";
 import { toast } from "sonner";
 import { importKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
-export type { SavedParserConfig, CustomParserConfigPayload };
+export type { CustomParserConfigPayload };
 
 export function useCustomParserConfigs() {
     return useQuery({
@@ -32,7 +28,7 @@ export function useCreateCustomParserConfig() {
             config: CustomParserConfigPayload;
         }) => apiClient.createCustomParserConfig(name, config),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.saved"));
@@ -58,7 +54,7 @@ export function useUpdateCustomParserConfig() {
             config?: CustomParserConfigPayload;
         }) => apiClient.updateCustomParserConfig(id, patch),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.updated"));
@@ -77,7 +73,7 @@ export function useDeleteCustomParserConfig() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCustomParserConfig(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.deleted"));

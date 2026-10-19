@@ -25,8 +25,7 @@ describe("analysis CSV interchange", () => {
                     fileName: "golden.csv",
                     size: new TextEncoder().encode(text).length,
                     importedAt: browser.importedAt,
-                    parse: (input, options) =>
-                        parseNodeCsv(input, options) as string[][],
+                    parse: (input, options) => parseNodeCsv(input, options),
                     sha256: async () => "01".repeat(32),
                 });
                 expect(server).toEqual(browser);

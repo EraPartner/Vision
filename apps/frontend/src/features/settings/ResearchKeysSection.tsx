@@ -41,7 +41,7 @@ export function ResearchKeysSection() {
             apiKey: string;
         }) => setResearchProviderKey(provider, apiKey),
         onSuccess: () => {
-            invalidate();
+            void invalidate();
             toast.success(t("settings.research.saved"));
         },
         onError: () => toast.error(t("settings.research.saveFailed")),
@@ -50,7 +50,7 @@ export function ResearchKeysSection() {
     const clearMutation = useMutation({
         mutationFn: (provider: string) => clearResearchProviderKey(provider),
         onSuccess: () => {
-            invalidate();
+            void invalidate();
             toast.success(t("settings.research.cleared"));
         },
         onError: () => toast.error(t("settings.research.clearFailed")),

@@ -59,19 +59,22 @@ aliases: [tag guide, tagging, categories, labels]
 
 ### Technology (use 0-3)
 
-| Tag               | Use For                                                      |
-| ----------------- | ------------------------------------------------------------ |
-| `react`           | React-specific content                                       |
-| `typescript`      | TypeScript-specific content                                  |
-| `postgresql`      | PostgreSQL-specific content                                  |
-| `plantuml`        | PlantUML diagrams                                            |
-| `alembic`         | Alembic migrations (historical; replaced by ADR-222)         |
-| `kysely`          | Kysely migrator, `db/migrations/` and generated DB types     |
-| `vitest`          | Vitest testing                                               |
-| `react-query`     | React Query data fetching                                    |
-| `tailwind`        | Tailwind CSS styling                                         |
-| `electron`        | Electron desktop                                             |
-| `retired-runtime` | Historical material about a removed runtime or delivery path |
+| Tag                  | Use For                                                      |
+| -------------------- | ------------------------------------------------------------ |
+| `react`              | React-specific content                                       |
+| `typescript`         | TypeScript-specific content                                  |
+| `postgresql`         | PostgreSQL-specific content                                  |
+| `plantuml`           | PlantUML diagrams                                            |
+| `alembic`            | Alembic migrations (historical; replaced by ADR-222)         |
+| `kysely`             | Kysely migrator, `db/migrations/` and generated DB types     |
+| `vitest`             | Vitest testing                                               |
+| `eslint`             | ESLint configuration and rules, including type-aware rules   |
+| `dependency-cruiser` | Import-boundary checks (`bun run lint:deps`)                 |
+| `knip`               | Dead-code detection (`bun run lint:dead`)                    |
+| `react-query`        | React Query data fetching                                    |
+| `tailwind`           | Tailwind CSS styling                                         |
+| `electron`           | Electron desktop                                             |
+| `retired-runtime`    | Historical material about a removed runtime or delivery path |
 
 ### Status (use exactly one, from frontmatter)
 

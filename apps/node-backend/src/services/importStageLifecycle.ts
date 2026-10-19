@@ -1,3 +1,4 @@
+import { nanToZero } from '../lib/math.ts';
 /**
  * Shared lifecycle for the transaction and portfolio CSV staging phases.
  * Domain parsers and INSERT shapes stay in their pipelines; this helper owns
@@ -37,7 +38,7 @@ export async function runImportStageLifecycle<T>({
   await markStaging();
   const rows = await parseRows();
   const total = rows.length;
-  const skipped = Number(rows.skipped) || 0;
+  const skipped = nanToZero(Number(rows.skipped));
   onParsed?.({ total, skipped });
   await persistTotal(total);
   onProgress?.({ phase: "staging", current: 0, total });

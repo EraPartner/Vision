@@ -65,7 +65,7 @@ export function createResearchCache({
   // never holds the process (or a test runner) open.
   if (typeof setInterval === 'function') {
     const handle = setInterval(sweep, 5 * 60_000);
-    if (handle && typeof handle.unref === 'function') handle.unref();
+    if (typeof handle.unref === 'function') handle.unref();
   }
 
   return { get, set, sweep, clear, size: () => store.size };

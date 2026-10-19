@@ -69,7 +69,7 @@ export function useTableMutationData(table: string) {
             toast.success(t("dbEditor.commitSuccess"), {
                 description: `${result.applied} ${t("dbEditor.statementsApplied")}`,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: adminKeys.dbTableAll(table),
             });
         },

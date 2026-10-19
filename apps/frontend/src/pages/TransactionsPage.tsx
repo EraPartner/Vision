@@ -437,7 +437,8 @@ export default function TransactionsPage() {
             ).split("T")[0];
             const accountId = raw?.account_id ?? row.accountId;
             const recipientId =
-                raw?.recipient_id ?? (row.recipientId || undefined);
+                raw?.recipient_id ??
+                (row.recipientId !== 0 ? row.recipientId : undefined);
             if (recipientId == null || !transactionDate || accountId == null)
                 return;
             createMutation.mutate({
@@ -449,7 +450,7 @@ export default function TransactionsPage() {
                 currency: raw?.currency || row.currency,
                 category_id: raw?.category_id ?? undefined,
                 comment: raw?.comment ?? undefined,
-                tags: row.tags?.length
+                tags: (row.tags != null && row.tags.length > 0)
                     ? row.tags.map((tag) => tag.slug)
                     : undefined,
                 allow_duplicate: true,
@@ -462,7 +463,7 @@ export default function TransactionsPage() {
 
     const handleFilterByRecipient = useCallback(
         (row: TableTransaction) => {
-            if (!row.recipientId) return;
+            if ((row.recipientId ?? 0) === 0) return;
             // Fresh filter set: "show all from X" replaces every active filter,
             // including the text search (kept in local state, so clear it too).
             setSearch("");
@@ -690,7 +691,7 @@ export default function TransactionsPage() {
                     t("txPage.field.unknown"),
                 recipientId: tx.recipient_id ?? undefined,
                 bank: (tx.bank_account as string | undefined) || tx.bank || "",
-                bankLabel: tx.account_id
+                bankLabel: tx.account_id != null
                     ? accountLabels.get(tx.account_id)
                     : undefined,
                 accountId: tx.account_id ?? undefined,
@@ -750,7 +751,7 @@ export default function TransactionsPage() {
             <AddTransactionButton
                 onCreated={(created) => {
                     setSelectedId(created.id);
-                    navigate("/transactions", {
+                    void navigate("/transactions", {
                         replace: true,
                         state: { selectTransactionId: created.id },
                     });
@@ -920,7 +921,7 @@ export default function TransactionsPage() {
                                     isFetchingMore,
                                     hasMore: hasMoreRef.current,
                                     loadMoreOffset,
-                                    onLoadMore: loadMore,
+                                    onLoadMore: () => void loadMore(),
                                 },
                             }}
                             onRowUpdate={handleUpdate}

@@ -34,7 +34,7 @@ describe("core entity update receipts", () => {
         await act(async () => {
             await result.current.mutateAsync({
                 id: asCategoryId(3),
-                data: { detail: "Food" } as never,
+                data: { detail: "Food" },
             });
         });
 
@@ -59,7 +59,7 @@ describe("core entity update receipts", () => {
         await act(async () => {
             await result.current.mutateAsync({
                 id: asRecipientId(4),
-                data: { name: "Bakery" } as never,
+                data: { name: "Bakery" },
             });
         });
 

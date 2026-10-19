@@ -97,9 +97,9 @@ describe("SymbolSearchBox", () => {
             </SymbolSearchBox>,
         );
 
-        const input = screen.getByRole("combobox", {
+        const input = screen.getByRole<HTMLInputElement>("combobox", {
             name: "Search",
-        }) as HTMLInputElement;
+        });
         await user.click(input);
         input.setSelectionRange(5, 5);
         await user.keyboard("{Home}");

@@ -2,7 +2,7 @@
 title: State Management Deep Dive
 type: component
 status: active
-date: 2026-10-06
+date: 2026-10-19
 tags: [state-management, react-query, context, frontend, patterns, workspace]
 description: Comprehensive guide to Vision's state management architecture — React Query for server state, React Context for global state, and local component state patterns
 aliases:
@@ -248,7 +248,7 @@ Local state is managed with `useState` and `useReducer` within individual compon
 | Hook                         | File                                                      | Purpose                             |
 | ---------------------------- | --------------------------------------------------------- | ----------------------------------- |
 | `useTransactions`            | [[apps/frontend/src/hooks/useTransactions.ts]]            | Transaction CRUD via React Query    |
-| `useCategories`              | [[apps/frontend/src/hooks/useCategories.ts]]              | Category CRUD                       |
+| `useAllCategories`           | [[apps/frontend/src/hooks/useCategories.ts]]              | Category list + CRUD mutations      |
 | `useRecipients`              | [[apps/frontend/src/hooks/useRecipients.ts]]              | Recipient CRUD + merge              |
 | `usePortfolio`               | [[apps/frontend/src/hooks/usePortfolio.ts]]               | Investment data fetching            |
 | `usePlannedPayments`         | [[apps/frontend/src/hooks/usePlannedPayments.ts]]         | Planned transaction CRUD            |

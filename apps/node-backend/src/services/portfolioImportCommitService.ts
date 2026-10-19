@@ -38,6 +38,7 @@ import type { PortfolioImportBatchLockRow } from "../repositories/portfolioImpor
 import type { BatchPolicy } from "./portfolioImportReconciliationService.ts";
 import type { AssetTransferEvent } from "./portfolio/portfolioAssetTransferService.ts";
 import type { AssetAdjustmentEvent } from "./portfolio/portfolioAssetAdjustmentService.ts";
+import { firstNonZero } from "../lib/math.ts";
 
 /** A batch row locked for the commit, with its id. */
 type LockedBatch = PortfolioImportBatchLockRow & { id: number };
@@ -253,9 +254,11 @@ async function commitLockedScope(
     .sort(
       (left, right) =>
         // Matched rows carry their source date.
-        left.tx_date!.localeCompare(right.tx_date!) ||
-        Number(left.batch_id) - Number(right.batch_id) ||
-        left.row_index - right.row_index,
+        firstNonZero(
+          left.tx_date!.localeCompare(right.tx_date!),
+          Number(left.batch_id) - Number(right.batch_id),
+          left.row_index - right.row_index,
+        ),
     );
   const runs: Array<{ batchId: number; rowIds: number[] }> = [];
   for (const row of scheduledRows) {
@@ -288,7 +291,7 @@ async function commitLockedScope(
         : previewPortfolioAssetAdjustment(row, undefined, {
             sourceRows: scheduledRows,
           });
-    if (prepared.error || !prepared.event)
+    if (prepared.error || prepared.event == null)
       throw new ConflictError(
         "Reviewed custody source changed during commit preparation",
       );

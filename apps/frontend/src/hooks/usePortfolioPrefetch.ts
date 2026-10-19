@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 
@@ -17,10 +17,10 @@ const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 export function usePortfolioPrefetch(_workspace?: string) {
   const queryClient = useQueryClient();
   const { appSettings } = useAppSettings();
-  const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+  const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
   const prefetchNetWorth = useCallback(() => {
-    queryClient.prefetchQuery({
+    void queryClient.prefetchQuery({
       queryKey: netWorthKeys.byCurrency(currency),
       queryFn: () => apiClient.getNetWorth({ currency }),
       staleTime: PREFETCH_STALE_TIME,
@@ -30,7 +30,7 @@ export function usePortfolioPrefetch(_workspace?: string) {
   const prefetchPerformance = useCallback(() => {
     // Same portfolioKeys.performance key PortfolioPage reads, so the
     // prefetch warms that exact cache entry.
-    queryClient.prefetchQuery({
+    void queryClient.prefetchQuery({
       queryKey: portfolioKeys.performance(currency, "all"),
       queryFn: () => apiClient.getPortfolioPerformance({ currency, period: "all" }),
       staleTime: PREFETCH_STALE_TIME,

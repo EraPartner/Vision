@@ -45,7 +45,7 @@ import { getYahooClient } from "./prices/yahooClient.ts";
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
 
-export type { InvestmentRow, PricePoint, LivePriceQuote };
+export type { InvestmentRow, PricePoint };
 
 /**
  * The provider configuration `fetchHistoricalPrices` reads: an investment row
@@ -168,10 +168,10 @@ export async function fetchLivePricesDetailed(
   ): Promise<void> => {
     try {
       await task();
-      recordProviderSuccess(key);
+      void recordProviderSuccess(key);
     } catch (err) {
       logger.error(`${label} failed`, { error: (err as Error).message });
-      recordProviderError(key, err);
+      void recordProviderError(key, err);
     }
   };
 
@@ -215,7 +215,7 @@ export async function fetchLivePricesDetailed(
 
   for (const { key, resolveId, batchFn, label } of idBasedProviders) {
     const bucket = stale[key];
-    if (!bucket?.length) continue;
+    if (!bucket || bucket.length === 0) continue;
     providerTasks.push(
       runProviderTask(key, label, async () => {
         const ids = [...new Set(bucket.map(resolveId).filter(Boolean))];
@@ -240,7 +240,7 @@ export async function fetchLivePricesDetailed(
 
   for (const { key, batchFn, label } of investmentBasedProviders) {
     const bucket = stale[key];
-    if (!bucket?.length) continue;
+    if (!bucket || bucket.length === 0) continue;
     providerTasks.push(
       runProviderTask(key, label, async () => {
         const prices = await batchFn(bucket);
@@ -394,8 +394,8 @@ async function _persistAndResolve(
     persisted.length > 0
       ? persisted
       : normalizeHistoryPoints([
-          ...(cachedDbPoints || []),
-          ...(pointsInRange || []),
+          ...(cachedDbPoints ?? []),
+          ...(pointsInRange ?? []),
         ]);
   return _filterHistoricalPoints(resolved, fromMs, toMs);
 }
@@ -489,9 +489,9 @@ export async function fetchHistoricalPrices(
         });
 
         points = normalizeHistoryPoints(
-          (chart?.quotes || [])
+          (chart?.quotes ?? [])
             .map((q) => ({
-              timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
+              timestampMs: q?.date != null ? new Date(q.date).getTime() : Number.NaN,
               price: toNumber(q?.close),
             }))
             .filter(
@@ -528,8 +528,8 @@ export async function fetchHistoricalPrices(
     // request, so paginate via startTime/endTime instead of the old limit=min(days,365) cap,
     // which silently dropped every point older than a year.
     const startMs =
-      from !== undefined ? from : Date.now() - 365 * BINANCE_DAY_MS;
-    const endMs = to !== undefined ? to : Date.now();
+      from ?? Date.now() - 365 * BINANCE_DAY_MS;
+    const endMs = to ?? Date.now();
     const cacheKey = `binance-history:${symbol}:${_dayKey(startMs)}:${_dayKey(endMs)}`;
     const cached = force ? undefined : cacheGet(cacheKey);
     let points: PricePoint[] | undefined = Array.isArray(cached?.points)
@@ -729,7 +729,7 @@ export async function sanitizePersistedKinesisHistory() {
     id: number;
   }>(`SELECT id FROM investments WHERE price_provider = 'kinesis'`, []);
 
-  const investments = investmentsResult.rows || [];
+  const investments = investmentsResult.rows ?? [];
   if (investments.length === 0) {
     logger.info("Kinesis history sanitization skipped: no kinesis investments");
     return { processed: 0, updated: 0, correctedPoints: 0, failed: 0 };

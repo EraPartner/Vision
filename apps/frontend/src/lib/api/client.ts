@@ -13,7 +13,6 @@ import {
     type ApiErrorCodeValue,
     type ApiFailure,
     type ApiResponse,
-    type ApiSuccess,
 } from "@vision/types";
 import type { z } from "zod";
 
@@ -62,6 +61,9 @@ export function backoffDelay(
         const onAbort = () => {
             clearTimeout(timer);
             signal?.removeEventListener("abort", onAbort);
+            // Mirror signal.throwIfAborted() above: reject with the signal's own
+            // reason (an AbortError DOMException unless the caller supplied one).
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- AbortSignal.reason is caller-defined; rewrapping would change abort semantics
             reject(signal?.reason);
         };
         const timer = setTimeout(() => {
@@ -165,9 +167,7 @@ export async function parseEnvelopeError(
     ) {
         return new ApiClientError({
             status: response.status,
-            code: API_ERROR_CODES.has(code as ApiErrorCodeValue)
-                ? (code as ApiErrorCodeValue)
-                : fallbackCode,
+            code: API_ERROR_CODES.has(code) ? code : fallbackCode,
             message,
             details: fail.error.details,
             requestId: fail.meta?.requestId,
@@ -241,7 +241,7 @@ export function checkResponseContract<T>(
 export function unwrapEnvelope<T>(body: unknown): T {
     if (body && typeof body === "object" && "ok" in body) {
         const envelope = body as ApiResponse<T>;
-        if (envelope.ok === true) return (envelope as ApiSuccess<T>).data;
+        if (envelope.ok === true) return envelope.data;
     }
     return body as T;
 }

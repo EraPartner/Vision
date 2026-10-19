@@ -32,4 +32,3 @@ export async function computeCashflowComparison({
   return buildEnvelope(data, { source });
 }
 
-export default { computeCashflowComparison };

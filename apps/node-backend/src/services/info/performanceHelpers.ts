@@ -21,6 +21,7 @@ import {
 } from "./cache.ts";
 import type { DecimalInput } from "../../lib/money.ts";
 import type { PortfolioPerformanceSnapshotRow } from "../../types/rows.ts";
+import { nanToZero, nonZeroOr } from "../../lib/math.ts";
 
 /**
  * The snapshot shape this module actually receives: `getSnapshots` in
@@ -100,10 +101,10 @@ export function mapPortfolioPerformanceSnapshot(
     stocks_etfs_invested: parseSnapshotNumber(snapshot.stocks_etfs_invested),
     crypto_invested: parseSnapshotNumber(snapshot.crypto_invested),
     metals_invested: parseSnapshotNumber(snapshot.metals_invested),
-    inflation_adjusted_value:
-      parseSnapshotNumber(snapshot.inflation_adjusted_value) ||
-      parseSnapshotNumber(snapshot.value) ||
-      0,
+    inflation_adjusted_value: nonZeroOr(
+      parseSnapshotNumber(snapshot.inflation_adjusted_value),
+      nanToZero(parseSnapshotNumber(snapshot.value)),
+    ),
     gain_loss: parseSnapshotNumber(snapshot.gain_loss),
     return_pct: parseSnapshotNumber(snapshot.return_pct),
     // Omitted (not 0) when the FX-neutral series isn't available — predates
@@ -123,7 +124,8 @@ export function mapPortfolioPerformanceSnapshot(
 function filterSnapshotsByPeriod<
   S extends Pick<PerformanceSnapshot, "snapshot_date">,
 >(snapshots: S[], period: string | null | undefined): S[] {
-  if (!period || period === "all" || !PERIOD_OFFSETS[period]) return snapshots;
+  if (!period || period === "all" || PERIOD_OFFSETS[period] === undefined)
+    return snapshots;
   const daysBack = PERIOD_OFFSETS[period];
   const cutoffStr = addDaysYmd(todayAppDateString(), -daysBack);
   return snapshots.filter((s) => {

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreBinaries": [
+    "mkfifo",
+    "build.ts"
+  ],
+  "ignoreIssues": {
+    "apps/frontend/src/components/ui/**": [
+      "exports",
+      "types"
+    ],
+    "apps/frontend/src/types/generated.ts": [
+      "exports",
+      "types"
+    ]
+  },
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.{ts,mjs}",
+        "scripts/tests/**/*.{ts,js}",
+        "scripts/browser-tests/*.mjs"
+      ],
+      "project": [
+        "scripts/**/*.{ts,mjs,js}"
+      ],
+      "ignoreDependencies": [
+        "prettier"
+      ],
+      "commitlint": {
+        "config": [
+          "config/commitlint.config.mjs"
+        ]
+      }
+    },
+    "apps/frontend": {
+      "entry": [
+        "scripts/*.ts",
+        "src/types/contract-guard.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "scripts/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "@fontsource/fraunces",
+        "@fontsource/inter"
+      ]
+    },
+    "apps/node-backend": {
+      "entry": [
+        "scripts/*.ts",
+        "src/integrations/openai/egress-helper.mjs",
+        "src/database/schema.generated.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,mjs}",
+        "scripts/**/*.ts",
+        "tests/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "yauzl",
+        "kysely-codegen"
+      ]
+    },
+    "packaging/electron": {
+      "entry": [
+        "preload.ts",
+        "scripts/*.ts",
+        "**/*.test.ts",
+        "assets/*.js",
+        "demo-db/*.mts"
+      ],
+      "project": [
+        "**/*.{ts,mts,js}",
+        "!out/**",
+        "!out-*/**",
+        "!dist*/**",
+        "!native-runtime/**"
+      ],
+      "ignoreDependencies": [
+        "app-builder-lib"
+      ],
+      "ignoreBinaries": [
+        "electron",
+        "install-electron"
+      ]
+    },
+    "packages/shared-utils": {
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
+    },
+    "packages/types": {
+      "project": [
+        "src/**/*.ts"
+      ]
+    }
+  },
+  "rules": {
+    "duplicates": "off"
+  }
+}

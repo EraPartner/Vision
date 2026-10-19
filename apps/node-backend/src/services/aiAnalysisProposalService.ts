@@ -153,8 +153,8 @@ export async function previewAnalysisProposal(value: unknown) {
     ...after,
     definitionId: saved.definitionId,
     version: saved.version + 1,
-    formulas: after.parameters?.formulaModel?.formulas || [],
-    assumptions: after.parameters?.formulaModel?.assumptions || [],
+    formulas: after.parameters?.formulaModel?.formulas ?? [],
+    assumptions: after.parameters?.formulaModel?.assumptions ?? [],
   });
   return { proposal, before, after, baseVersion: saved.version };
 }

@@ -64,7 +64,8 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
                     const href = safeHref(article.link);
                     const meta = [
                         article.publisher,
-                        article.publishedAt
+                        article.publishedAt !== null &&
+                        article.publishedAt !== 0
                             ? formatDateWithAppSettings(
                                   new Date(article.publishedAt),
                                   appSettings.dateFormat,

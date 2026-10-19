@@ -64,7 +64,7 @@ export async function appendAuditEvent(
   payload: Record<string, unknown>,
   client?: { query: RunQuery },
 ): Promise<AuditEntry & { createdAt: Date | undefined }> {
-  if (!payload || Array.isArray(payload) || typeof payload !== "object") {
+  if (payload == null || Array.isArray(payload) || typeof payload !== "object") {
     throw new TypeError("Audit event payload must be an object");
   }
   const encodedPayload = canonicalAuditPayload(payload);
@@ -211,7 +211,7 @@ export async function recordAuditCheckpoint(
   receipt: AuditCheckpointReceipt,
 ): Promise<{ id: string; createdAt: Date }> {
   if (
-    !receipt ||
+    receipt == null ||
     !Number.isSafeInteger(receipt.sequence) ||
     receipt.sequence < 0 ||
     !HASH_PATTERN.test(receipt.headHash) ||
@@ -294,10 +294,3 @@ export async function recordAuditCheckpoint(
     return { id: row.id, createdAt: row.created_at };
   });
 }
-
-export default {
-  appendAuditEvent,
-  readAuditSegment,
-  readAuditHead,
-  recordAuditCheckpoint,
-};

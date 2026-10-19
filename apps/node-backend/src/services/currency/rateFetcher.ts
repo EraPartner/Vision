@@ -71,7 +71,7 @@ function scheduleHistoricalFullEviction() {
     historicalEcbFullEvictTimer = null;
   }, HISTORICAL_FULL_CACHE_IDLE_MS);
   if (
-    historicalEcbFullEvictTimer &&
+    historicalEcbFullEvictTimer != null &&
     typeof historicalEcbFullEvictTimer.unref === "function"
   ) {
     historicalEcbFullEvictTimer.unref();
@@ -93,7 +93,7 @@ function scheduleHistoricalFullEviction() {
 export function normalizeDateInput(
   dateValue: string | Date | null | undefined,
 ): string | null {
-  if (!dateValue) return null;
+  if (dateValue == null || dateValue === "") return null;
   // pg returns DATE columns as a local-midnight JS Date, whose String() form is
   // "Sun Jun 01 2025 …" — the regex below never matched it, so historical-FX
   // conversion silently fell back to today's rate at every DB-row call site.
@@ -144,7 +144,7 @@ function parseEcbHistoricalXml(xmlText: string): RatesByDate {
   const dayBlocks =
     xmlText.match(
       /<Cube\s+time=['"][0-9]{4}-[0-9]{2}-[0-9]{2}['"][\s\S]*?<\/Cube>/g,
-    ) || [];
+    ) ?? [];
   for (const block of dayBlocks) {
     const timeMatch = block.match(/time=['"]([0-9]{4}-[0-9]{2}-[0-9]{2})['"]/);
     const date = timeMatch?.[1];
@@ -316,7 +316,7 @@ export function rateOnOrBeforeFromMap(
   dateStr: string,
   maxLookbackDays = 7,
 ): number | undefined {
-  if (!byDate || byDate.size === 0) return undefined;
+  if (byDate == null || byDate.size === 0) return undefined;
   // A missing part stays NaN, as it was when read past the end of the split.
   const [y = NaN, m = NaN, d = NaN] = dateStr.split("-").map(Number);
   let ts = Date.UTC(y, m - 1, d);
@@ -446,12 +446,12 @@ export async function getUnindexedRatesToEurForDates(
   }: { saveFetchedHistoricalRates?: boolean } = {},
 ): Promise<Map<string, number>> {
   const pairs: Array<{ currency: string; date: string }> = [];
-  for (const [rawCurrency, rawDates] of datesByCurrency || []) {
+  for (const [rawCurrency, rawDates] of datesByCurrency ?? []) {
     const currency = String(rawCurrency || "")
       .toUpperCase()
       .trim();
     if (!currency || currency === "EUR") continue;
-    for (const rawDate of new Set(rawDates || [])) {
+    for (const rawDate of new Set(rawDates ?? [])) {
       const date = normalizeDateInput(rawDate);
       if (date) pairs.push({ currency, date });
     }

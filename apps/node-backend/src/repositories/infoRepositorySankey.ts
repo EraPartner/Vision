@@ -58,5 +58,3 @@ export async function getSankeyAggregates({
     params,
   );
 }
-
-export default { getSankeyAggregates };

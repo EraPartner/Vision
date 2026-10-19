@@ -16,7 +16,6 @@ import {
     parseCsvText,
     type CsvPreview,
 } from "@vision/shared-utils/csv-preview";
-export type { CsvPreview } from "@vision/shared-utils/csv-preview";
 interface State {
     preview: CsvPreview | null;
     isLoading: boolean;
@@ -58,7 +57,7 @@ export function useCsvPreview(
                     text,
                     separator,
                     skipRows,
-                    (input, options) => parse(input, options) as string[][],
+                    (input, options) => parse(input, options),
                 );
                 setState({ preview, isLoading: false, error: null });
             } catch {

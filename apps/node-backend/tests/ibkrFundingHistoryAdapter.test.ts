@@ -9,7 +9,7 @@ import {
   getIbkrFundingPrimaryEvidence,
 } from "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import type { IbkrFundingSourceContext } from "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
-import { assertPortfolioUploadSupported } from "../src/lib/portfolioUpload.ts";
+import { assertPortfolioUploadSupported } from "../src/services/portfolioImportPipeline/uploadSupport.ts";
 
 const DEPOSIT_HEADERS = [
   "Request Date",

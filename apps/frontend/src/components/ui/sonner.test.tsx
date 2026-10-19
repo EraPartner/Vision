@@ -4,8 +4,8 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "@/components/ui/sonner";
 
 const themeState = vi.hoisted(() => ({
-    mode: "system" as string,
-    theme: "light" as string,
+    mode: "system",
+    theme: "light",
 }));
 
 vi.mock("@/stores/hydration/ThemeHydration", () => ({

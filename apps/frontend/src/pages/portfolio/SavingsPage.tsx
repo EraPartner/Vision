@@ -18,10 +18,8 @@ import {
     FactRow,
     Figure,
 } from "@/features/portfolio/assetPageParts";
-import {
-    toneClass,
-    useHoldingActions,
-} from "@/features/portfolio/useHoldingActions";
+import { toneClass } from "@/features/portfolio/holdingTone";
+import { useHoldingActions } from "@/features/portfolio/useHoldingActions";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
@@ -36,7 +34,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const PageIcon = PAGE_ICONS["/portfolio/savings"];
 const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
@@ -51,7 +49,10 @@ export default function SavingsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio();
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "savings.deleteAccount",
@@ -268,7 +269,8 @@ export default function SavingsPage() {
                                                         ? t("portfolio.savings")
                                                         : t("portfolio.bond")}
                                                 </Badge>
-                                                {a.interestRate ? (
+                                                {a.interestRate != null &&
+                                                a.interestRate !== 0 ? (
                                                     <span className="tabular-nums text-accent">
                                                         {formatPercent(
                                                             a.interestRate,
@@ -316,14 +318,14 @@ export default function SavingsPage() {
                                     </div>
 
                                     {(Boolean(
-                                        a.interestRate &&
+                                        (a.interestRate ?? 0) !== 0 &&
                                         a.projectedAnnualInterest > 0,
                                     ) ||
                                         a.maturityDate ||
                                         a.totalFees > 0 ||
                                         a.totalTaxes > 0) && (
                                         <dl className="divide-y divide-border/50 border-t border-border/50">
-                                            {a.interestRate &&
+                                            {(a.interestRate ?? 0) !== 0 &&
                                             a.projectedAnnualInterest > 0 ? (
                                                 <>
                                                     <FactRow

@@ -166,7 +166,7 @@ function recordEvidence(envelope: IbkrFundingEnvelope): FundingRecordEvidence {
     "Amount",
     "Status",
   ])
-    if (!record[key] || record[key]!.trim() !== record[key])
+    if (!record[key] || record[key].trim() !== record[key])
       fail("is missing an unaltered required field");
   if (
     !/^[A-Z][A-Z0-9-]{2,49}$/.test(record["Account ID"]!) ||
@@ -196,8 +196,8 @@ function recordEvidence(envelope: IbkrFundingEnvelope): FundingRecordEvidence {
       record[
         sheet === "Deposit" ? "Delivering Institution" : "Receiving Institution"
       ] || undefined,
-    method: record.Method!,
-    status: record.Status!,
+    method: record.Method,
+    status: record.Status,
   };
 }
 
@@ -295,7 +295,7 @@ export async function parseIbkrFundingHistory(
       });
     }
   }
-  if (!rows.length) fail("contains no completed funding movements");
+  if (rows.length === 0) fail("contains no completed funding movements");
   if (identities.size !== 1)
     fail("must contain one unambiguous broker account");
   context.source_account_identities = [...identities];
@@ -360,10 +360,10 @@ export function getIbkrFundingPrimaryEvidence(
       !Array.isArray(context.source_account_identities) ||
       context.source_account_identities.length !== 1 ||
       !Array.isArray(context.sheets) ||
-      !context.sheets.length ||
+      context.sheets.length === 0 ||
       context.sheets.length > 2 ||
       !Array.isArray(context.record_hashes) ||
-      !context.record_hashes.length ||
+      context.record_hashes.length === 0 ||
       context.record_hashes.some((value) => !validHash(value)) ||
       new Set(context.record_hashes).size !== context.record_hashes.length
     )
@@ -469,8 +469,3 @@ export function getIbkrFundingPrimaryEvidence(
     return undefined;
   }
 }
-
-export default {
-  name: "ibkr_funding_history",
-  parseWithConfig: parseIbkrFundingHistory,
-};

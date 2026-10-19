@@ -33,7 +33,6 @@ import {
     ResearchSearchSchema,
 } from '@vision/types/contracts';
 import type {
-    InstrumentProviderMapping,
     MappingAuditResponse,
     MappingKeyType,
     MappingResolveResponse,
@@ -65,9 +64,9 @@ interface RawEnvelope<T> {
 
 function normalizeMeta(meta: RawEnvelope<unknown>['meta']): ResearchMeta {
     return {
-        provider: (meta?.provider as string | null | undefined) ?? null,
+        provider: (meta?.provider) ?? null,
         source: (meta?.source as ResearchMeta['source']) ?? 'unavailable',
-        requestId: meta?.requestId as string | undefined,
+        requestId: meta?.requestId,
     };
 }
 
@@ -315,4 +314,3 @@ export async function clearResearchProviderKey(provider: string): Promise<void> 
     });
 }
 
-export type { InstrumentProviderMapping };

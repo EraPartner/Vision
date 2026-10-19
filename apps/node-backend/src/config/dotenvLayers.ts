@@ -20,6 +20,6 @@ export function applyDotenvContent(
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
     const value = trimmed.slice(eqIdx + 1).trim();
-    if (environment[key] === undefined) environment[key] = value;
+    environment[key] ??= value;
   }
 }

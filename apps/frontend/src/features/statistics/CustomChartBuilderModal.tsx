@@ -252,7 +252,7 @@ export function CustomChartBuilderModal({
             dateRangeEnd: state.dateRangeEnd || null,
         };
 
-        if (isEdit && editChart) {
+        if (isEdit) {
             updateChart.mutate(
                 { id: editChart.id, ...payload },
                 { onSuccess: () => onOpenChange(false) },

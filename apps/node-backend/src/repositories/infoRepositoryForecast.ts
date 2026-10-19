@@ -67,11 +67,12 @@ import {
   countObservedMonths,
   monthKeyFromDbDate,
 } from "../lib/observedMonths.ts";
+import { nanToZero } from "../lib/math.ts";
 
 /** Transactions behind one aggregated (date, currency) row. */
 function countOf(row: ConvertibleRow): number {
   const cnt: unknown = (row as { cnt?: unknown }).cnt;
-  return parseInt(String(cnt ?? 1), 10) || 0;
+  return nanToZero(parseInt(String(cnt ?? 1), 10));
 }
 
 function safeMoneyInput(value: DecimalInput): DecimalInput {
@@ -147,8 +148,8 @@ function computeAvgCumulativeByDay(
   for (const dayNet of Object.values(monthDayNet)) {
     let cum = 0;
     for (let d = 1; d <= 31; d++) {
-      cum = addMoney(cum, dayNet[d] || 0);
-      out[d] = addMoney(out[d] || 0, cum);
+      cum = addMoney(cum, dayNet[d] ?? 0);
+      out[d] = addMoney(out[d] ?? 0, cum);
     }
   }
   for (const d of Object.keys(out)) {
@@ -347,9 +348,9 @@ export async function getCashflowComparison(
   for (const row of pastConverted) {
     const eur = row.amount_eur;
     const mk = row.month_key;
-    if (!monthDayNet[mk]) monthDayNet[mk] = {};
+    monthDayNet[mk] ??= {};
     monthDayNet[mk][row.day_of_month] = addMoney(
-      monthDayNet[mk][row.day_of_month] || 0,
+      monthDayNet[mk][row.day_of_month] ?? 0,
       safeMoneyInput(eur),
     );
   }
@@ -360,7 +361,7 @@ export async function getCashflowComparison(
     const target =
       row.day_of_month <= currentDay ? currentDayNet : scheduledCurrentByDay;
     target[row.day_of_month] = addMoney(
-      target[row.day_of_month] || 0,
+      target[row.day_of_month] ?? 0,
       safeMoneyInput(row.amount_eur),
     );
   }
@@ -368,14 +369,14 @@ export async function getCashflowComparison(
   let currentCum = 0;
   const currentByDay: Record<string, number> = {};
   for (let d = 1; d <= currentDay; d++) {
-    currentCum = addMoney(currentCum, currentDayNet[d] || 0);
+    currentCum = addMoney(currentCum, currentDayNet[d] ?? 0);
     currentByDay[d] = currentCum;
   }
 
   const plannedCurrentByDay: Record<string, number> = {};
   for (const row of plannedCurrentConverted) {
     plannedCurrentByDay[row.day_of_month] = addMoney(
-      plannedCurrentByDay[row.day_of_month] || 0,
+      plannedCurrentByDay[row.day_of_month] ?? 0,
       safeMoneyInput(row.amount_eur),
     );
   }
@@ -383,9 +384,9 @@ export async function getCashflowComparison(
   const plannedHistMonthDay: Record<string, Record<string, number>> = {};
   for (const row of plannedHistConverted) {
     const mk = row.month_key;
-    if (!plannedHistMonthDay[mk]) plannedHistMonthDay[mk] = {};
+    plannedHistMonthDay[mk] ??= {};
     plannedHistMonthDay[mk][row.day_of_month] = addMoney(
-      plannedHistMonthDay[mk][row.day_of_month] || 0,
+      plannedHistMonthDay[mk][row.day_of_month] ?? 0,
       safeMoneyInput(row.amount_eur),
     );
   }
@@ -421,10 +422,7 @@ export async function getCashflowComparison(
   let scheduledCum = 0;
 
   for (let day = 1; day <= daysInMonth; day++) {
-    const avg =
-      avgCumulativeByDay[day] !== undefined
-        ? avgCumulativeByDay[day]
-        : avgCumulativeByDay[day - 1] || 0;
+    const avg = avgCumulativeByDay[day] ?? avgCumulativeByDay[day - 1] ?? 0;
     const current = day <= currentDay ? currentByDay[day] : null;
 
     withoutPlanned.push({
@@ -434,11 +432,9 @@ export async function getCashflowComparison(
     });
 
     const avgPlanned =
-      avgPlannedCumByDay[day] !== undefined
-        ? avgPlannedCumByDay[day]
-        : avgPlannedCumByDay[day - 1] || 0;
-    plannedCum = addMoney(plannedCum, plannedCurrentByDay[day] || 0);
-    scheduledCum = addMoney(scheduledCum, scheduledCurrentByDay[day] || 0);
+      avgPlannedCumByDay[day] ?? avgPlannedCumByDay[day - 1] ?? 0;
+    plannedCum = addMoney(plannedCum, plannedCurrentByDay[day] ?? 0);
+    scheduledCum = addMoney(scheduledCum, scheduledCurrentByDay[day] ?? 0);
     const currentWithPlanned =
       day <= currentDay
         ? addMoney(current ?? 0, plannedCum)

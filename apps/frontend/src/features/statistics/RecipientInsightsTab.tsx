@@ -36,7 +36,7 @@ import {
     type StatisticsWindow,
 } from "@/hooks/useStatistics";
 import type { RecipientId } from "@vision/types/brands";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 type RecipientDetailRow = {
     recipientId: RecipientId;
@@ -70,7 +70,7 @@ export function RecipientInsightsTab({
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     // Shared cached currency formatter; an optional fractionDigits override falls
     // back to the app's showDecimalPlaces setting.
     const formatCurrencyBase = useCurrencyFormatter();

@@ -20,7 +20,7 @@ export function renderDividendIncome(
     ? `<p style="color:hsl(var(--warning, 38 92% 50%));font-size:11px;margin:0 0 12px;"><strong>Incomplete:</strong> no exchange rate was available for ${escapeHtml(unconvertedCurrencies.join(', '))}; ${unconvertedCount === 1 ? '1 dividend was' : `${unconvertedCount} dividends were`} left out of these figures.</p>`
     : '';
 
-  if (!byMonth.length && !byInvestment.length && !unconvertedCount) {
+  if (byMonth.length === 0 && byInvestment.length === 0 && unconvertedCount === 0) {
     return emptySection({ title: 'Dividend Income', subtitle: 'Dividend cash flows over the selected period', heading: 'No dividend data', message: 'No dividend transactions found for the selected period.' });
   }
 

@@ -116,7 +116,7 @@ export function RecipientPatternsDialog({
         onSuccess: () => {
             toast.success(t("recipientPatterns.toast.created"));
             resetForm();
-            invalidate();
+            void invalidate();
         },
         onError: () => toast.error(t("recipientPatterns.toast.error")),
     });
@@ -132,7 +132,7 @@ export function RecipientPatternsDialog({
         onSuccess: () => {
             toast.success(t("recipientPatterns.toast.updated"));
             resetForm();
-            invalidate();
+            void invalidate();
         },
         onError: () => toast.error(t("recipientPatterns.toast.error")),
     });
@@ -142,7 +142,7 @@ export function RecipientPatternsDialog({
             apiClient.deleteRecipientPattern(recipientId, patternId),
         onSuccess: () => {
             toast.success(t("recipientPatterns.toast.deleted"));
-            invalidate();
+            void invalidate();
         },
         onError: () => toast.error(t("recipientPatterns.toast.error")),
     });
@@ -496,16 +496,23 @@ export function RecipientPatternsDialog({
                                                     min={1}
                                                     max={999}
                                                     value={form.priority}
-                                                    onChange={(e) =>
+                                                    onChange={(e) => {
+                                                        const priority =
+                                                            parseInt(
+                                                                e.target.value,
+                                                            );
                                                         setForm({
                                                             ...form,
+                                                            // Blank, invalid or 0 (below min=1) falls back to the default.
                                                             priority:
-                                                                parseInt(
-                                                                    e.target
-                                                                        .value,
-                                                                ) || 100,
-                                                        })
-                                                    }
+                                                                Number.isNaN(
+                                                                    priority,
+                                                                ) ||
+                                                                priority === 0
+                                                                    ? 100
+                                                                    : priority,
+                                                        });
+                                                    }}
                                                 />
                                             </div>
 

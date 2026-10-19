@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { enUS, nl } from "date-fns/locale";
 import { DatePicker } from "./DatePicker";
 
-const languageState = vi.hoisted(() => ({ value: "en" as "en" | "nl" }));
+const languageState = vi.hoisted(() => ({ value: "en" }));
 const dateFormatState = vi.hoisted(() => ({ value: "YYYY-MM-DD" }));
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({

@@ -92,7 +92,7 @@ export function useNetWorthTableData({
         allItems,
         totalItems,
         isLoading,
-        error: (error as Error | null) ?? null,
+        error: (error) ?? null,
         isFetchingMore,
         hasMoreRef,
         hasMore,

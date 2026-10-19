@@ -560,11 +560,6 @@ export interface InvestmentUpdate {
     price_provider_history_price_path?: string | undefined;
 }
 
-export interface InvestmentPricePoint {
-    timestampMs: number;
-    price: number;
-}
-
 export interface PortfolioTransaction {
     id: PortfolioTransactionId;
     investment_id: InvestmentId;
@@ -751,21 +746,4 @@ export interface BulkUpdateResult {
 export interface BulkExportResult {
     blob: Blob;
     exported: number;
-}
-
-// ==================== Other Types ====================
-
-export interface CategoryStats {
-    name: string;
-    count: number;
-}
-
-export interface StatisticsResponse {
-    total_transactions: number;
-    total_amount: number;
-    categories: CategoryStats[];
-}
-
-export interface BankListResponse {
-    banks: string[];
 }

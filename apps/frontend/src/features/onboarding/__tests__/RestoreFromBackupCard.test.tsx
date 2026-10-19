@@ -6,7 +6,6 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { RestoreFromBackupCard } from "@/features/onboarding/RestoreFromBackupCard";
 import type {
     ElectronBackupBridge,
-    ElectronUpdaterBridge,
 } from "@vision/types/electron";
 
 // Mock sonner toasts so we can assert without polluting the DOM.
@@ -45,7 +44,7 @@ function installElectronMocks(overrides: Partial<ElectronBackupMock> = {}): {
     };
     const updater: ElectronUpdaterMock = {};
     window.electronBackup = backup as unknown as ElectronBackupBridge;
-    window.electronUpdater = updater as unknown as ElectronUpdaterBridge;
+    window.electronUpdater = updater;
     return { backup, updater };
 }
 

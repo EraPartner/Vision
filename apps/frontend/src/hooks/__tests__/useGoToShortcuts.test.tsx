@@ -108,7 +108,9 @@ describe("go-to navigation shortcuts", () => {
         vi.useFakeTimers();
         setup();
         press("g");
-        act(() => vi.advanceTimersByTime(901));
+        act(() => {
+            vi.advanceTimersByTime(901);
+        });
         press("i");
         expect(screen.getByTestId("location").textContent).toBe("/accounts");
     });

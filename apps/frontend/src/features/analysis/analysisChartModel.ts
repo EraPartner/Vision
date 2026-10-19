@@ -35,7 +35,7 @@ export function isAnalysisResultComplete(result: AnalysisResult): boolean {
         !(result.transformationCoverage ?? []).some(
             (c) => c.complete === false,
         ) &&
-        !(result.transformationErrors ?? []).length
+        (result.transformationErrors ?? []).length === 0
     );
 }
 export function analysisChartData(
@@ -55,9 +55,10 @@ export function analysisChartData(
                 .map((r) => r.investment_id ?? r.instrument_id)
                 .filter((v) => v != null),
         ).size > 1;
-    const columns = result.declaredColumns?.length
-        ? result.declaredColumns
-        : result.columns;
+    const columns =
+        result.declaredColumns != null && result.declaredColumns.length > 0
+            ? result.declaredColumns
+            : result.columns;
     let missingUnitScope = false;
     const units = new Set(
         spec.y
@@ -69,7 +70,11 @@ export function analysisChartData(
                     const currencyColumn = unit.currencyColumn;
                     if (
                         !currencyColumn ||
-                        result.rows.some((row) => !row[currencyColumn])
+                        result.rows.some(
+                            (row) =>
+                                row[currencyColumn] == null ||
+                                row[currencyColumn] === "",
+                        )
                     )
                         missingUnitScope = true;
                     const scope = new Set(

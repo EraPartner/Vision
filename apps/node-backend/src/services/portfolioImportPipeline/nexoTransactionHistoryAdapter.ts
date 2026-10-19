@@ -79,11 +79,11 @@ function equalAmount(a: unknown, b: unknown): boolean {
   );
 }
 
-function isFiatWrapper(record: NexoRecord) {
+function isFiatWrapper(record: NexoRecord): boolean {
   const input = fiatCode(record["Input Currency"]);
   const output = fiatCode(record["Output Currency"]);
   return (
-    input &&
+    Boolean(input) &&
     input === output &&
     assetCode(record["Input Currency"]) !== assetCode(record["Output Currency"])
   );
@@ -135,7 +135,7 @@ function parseFiatWrapper(
   const fee = feeAmount(record.Fee);
   if (fee == null)
     return unsupported("Nexo cash movement fee is not a valid amount");
-  if (fee && fiatCode(record["Fee Currency"]) !== fiat)
+  if (fee !== 0 && fiatCode(record["Fee Currency"]) !== fiat)
     return unsupported(
       "Nexo cash movement fee is not in the underlying fiat currency",
     );
@@ -144,7 +144,8 @@ function parseFiatWrapper(
   const output = magnitude(record["Output Amount"]);
   const amount = deposit ? input : output;
   if (
-    !amount ||
+    amount == null ||
+    amount === 0 ||
     (deposit &&
       (output == null || (output !== 0 && !equalAmount(input, output)))) ||
     (!deposit &&
@@ -163,7 +164,7 @@ function parseFiatWrapper(
       rawData: provenance,
     }),
   ];
-  if (fee)
+  if (fee !== 0)
     rows.push(
       baseRow(record, {
         typeRaw: "Fee",
@@ -262,9 +263,12 @@ function parseTrade(record: NexoRecord): ParsedPortfolioRow {
     !inputCode ||
     !outputCode ||
     inputCode === outputCode ||
-    !inputUnits ||
-    !outputUnits ||
-    !usdValue
+    inputUnits == null ||
+    inputUnits === 0 ||
+    outputUnits == null ||
+    outputUnits === 0 ||
+    usdValue == null ||
+    usdValue === 0
   ) {
     return unsupportedRow(
       record,
@@ -287,7 +291,7 @@ function parseTrade(record: NexoRecord): ParsedPortfolioRow {
 
   const feeCurrency = assetCode(record["Fee Currency"]);
   const fee = magnitude(record.Fee);
-  if (fee && feeCurrency !== "USD") {
+  if (fee != null && fee !== 0 && feeCurrency !== "USD") {
     return unsupportedRow(
       record,
       `Nexo conversion fee in ${feeCurrency || "an unknown currency"} cannot be valued safely`,
@@ -315,7 +319,8 @@ function parseInterest(
     if (
       !isApproved(record) ||
       fiatCode(record["Input Currency"]) !== fiat ||
-      !units ||
+      units == null ||
+      units === 0 ||
       !equalAmount(record["Input Amount"], record["Output Amount"]) ||
       feeAmount(record.Fee) !== 0
     )
@@ -332,7 +337,14 @@ function parseInterest(
     });
   }
   const usdValue = magnitude(record["USD Equivalent"]);
-  if (!symbol || !units || !usdValue) return null;
+  if (
+      !symbol ||
+      units == null ||
+      units === 0 ||
+      usdValue == null ||
+      usdValue === 0
+    )
+      return null;
 
   return [
     baseRow(record, {
@@ -362,7 +374,7 @@ function parseTopUp(
 ): ParsedPortfolioRow | null {
   const symbol = assetCode(record["Output Currency"]);
   const units = magnitude(record["Output Amount"]);
-  if (!symbol || !units) return null;
+  if (!symbol || units == null || units === 0) return null;
   const origin = Number(config.transfer_origin_account_id);
   if (Number.isInteger(origin) && origin > 0) {
     if (!isApproved(record) || feeAmount(record.Fee) !== 0)
@@ -401,7 +413,7 @@ function parseInternalProMovement(record: NexoRecord): ParsedPortfolioRow {
     !isApproved(record) ||
     assetCode(record["Input Currency"]) !==
       assetCode(record["Output Currency"]) ||
-    !magnitude(record["Input Amount"]) ||
+    (magnitude(record["Input Amount"]) ?? 0) === 0 ||
     !equalAmount(record["Input Amount"], record["Output Amount"]) ||
     feeAmount(record.Fee) !== 0
   )
@@ -427,8 +439,10 @@ function parseAssetWithdrawal(record: NexoRecord): ParsedPortfolioRow {
   if (
     !symbol ||
     symbol !== output ||
-    !gross ||
-    !received ||
+    gross == null ||
+    gross === 0 ||
+    received == null ||
+    received === 0 ||
     fee == null ||
     !Number.isFinite(fee) ||
     fee < 0 ||
@@ -557,8 +571,3 @@ export async function parseNexoTransactionHistory(
   );
   return rows;
 }
-
-export default {
-  name: "nexo_transaction_history",
-  parseWithConfig: parseNexoTransactionHistory,
-};

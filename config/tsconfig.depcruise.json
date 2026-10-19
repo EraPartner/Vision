@@ -1,0 +1,19 @@
+{
+  "//": "Module resolution for dependency-cruiser only (config/dependency-cruiser.cjs): the frontend's @/ alias, no JSX transform.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "baseUrl": "../apps/frontend",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "files": [
+    "../apps/frontend/vite.config.ts"
+  ]
+}

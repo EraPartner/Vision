@@ -10,7 +10,7 @@ import { slugify } from "../lib/slugify.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import type { TagId } from "@vision/types/brands";
 
-export const tagService = {
+const tagService = {
   /**
    * List tags (active=true|false|null for all) as `{items, total}`.
    *

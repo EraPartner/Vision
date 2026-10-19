@@ -50,6 +50,7 @@ import type {
   FormulaUnit,
   FormulaUnitInput,
 } from "./analysisFormulaEngine.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 interface StandardParameterValues {
   currency?: string;
@@ -293,7 +294,7 @@ function buildDefinition({
         direction,
       })),
       limit: Math.min(
-        Math.max(Number(compiled.visualPlan.limit) || 500, 1),
+        Math.max(nonZeroOr(Number(compiled.visualPlan.limit), 500), 1),
         1000,
       ),
       generatedSql: compiled.sql,
@@ -308,7 +309,7 @@ function buildDefinition({
       type: column.type || "string",
       nullable: column.nullable !== false,
     }));
-    if (!columns.length)
+    if (columns.length === 0)
       throw new Error("Custom SQL must declare result columns");
     const visualOrigin = querySpec.visualOrigin
       ? buildDefinition({
@@ -343,7 +344,7 @@ function buildDefinition({
     expression: formula.expression,
     resultType: formula.resultType || "decimal",
     languageVersion: "vision-formula-v1",
-    dependencies: formula.dependencies || [],
+    dependencies: formula.dependencies ?? [],
     ...(formula.unit ? { unit: formula.unit } : {}),
     ...(formula.rounding ? { rounding: formula.rounding } : {}),
   }));
@@ -420,9 +421,9 @@ function versionState({
   refreshMode?: string | undefined;
 }) {
   return {
-    parameters: { ...(parameters || {}), formulaModel },
-    charts: charts || [],
-    sourceReferences: sourceReferences || [],
+    parameters: { ...(parameters ?? {}), formulaModel },
+    charts: charts ?? [],
+    sourceReferences: sourceReferences ?? [],
     refreshMode: refreshMode || "live",
   };
 }
@@ -489,9 +490,9 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
   const id = randomUUID();
   const definitionId = `analysis:${randomUUID()}`;
   const formulaModel = {
-    formulas: input.formulas || [],
-    assumptions: input.assumptions || [],
-    assumptionValues: input.assumptionValues || {},
+    formulas: input.formulas ?? [],
+    assumptions: input.assumptions ?? [],
+    assumptionValues: input.assumptionValues ?? {},
   };
   const scenarioModel = analysisScenarioModelSchema.parse(
     input.parameters?.scenarioModel ?? { attachments: [], joins: [] },
@@ -521,12 +522,12 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
         input.workspace,
         input.refreshMode || "live",
         JSON.stringify({
-          ...(input.parameters || {}),
+          ...(input.parameters ?? {}),
           formulaModel,
           scenarioModel,
         }),
-        JSON.stringify(input.charts || []),
-        JSON.stringify(input.sourceReferences || []),
+        JSON.stringify(input.charts ?? []),
+        JSON.stringify(input.sourceReferences ?? []),
       ],
     );
     await client.query(
@@ -538,7 +539,7 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
         JSON.stringify(definition),
         JSON.stringify(
           versionState({
-            parameters: { ...(input.parameters || {}), scenarioModel },
+            parameters: { ...(input.parameters ?? {}), scenarioModel },
             formulaModel,
             charts: input.charts,
             sourceReferences: input.sourceReferences,
@@ -576,7 +577,7 @@ export async function updateSavedAnalysis(
       );
     const version = Number(current.current_version) + 1;
     const currentFormulaModel: AnalysisFormulaModel = current.parameters_json
-      ?.formulaModel || {
+      ?.formulaModel ?? {
       formulas: [],
       assumptions: [],
       assumptionValues: {},
@@ -605,13 +606,13 @@ export async function updateSavedAnalysis(
     );
     const state = versionState({
       parameters: {
-        ...(input.parameters || current.parameters_json),
+        ...(input.parameters ?? current.parameters_json),
         scenarioModel,
       },
       formulaModel,
-      charts: input.charts || current.charts_json,
+      charts: input.charts ?? current.charts_json,
       sourceReferences:
-        input.sourceReferences || current.source_references_json,
+        input.sourceReferences ?? current.source_references_json,
       refreshMode: input.refreshMode || current.refresh_mode,
     });
     await client.query(
@@ -632,13 +633,13 @@ export async function updateSavedAnalysis(
         version,
         input.refreshMode || current.refresh_mode,
         JSON.stringify({
-          ...(input.parameters || current.parameters_json),
+          ...(input.parameters ?? current.parameters_json),
           formulaModel,
           scenarioModel,
         }),
-        JSON.stringify(input.charts || current.charts_json),
+        JSON.stringify(input.charts ?? current.charts_json),
         JSON.stringify(
-          input.sourceReferences || current.source_references_json,
+          input.sourceReferences ?? current.source_references_json,
         ),
       ],
     );
@@ -659,7 +660,7 @@ function runtimeRequest(saved: SavedAnalysis) {
           ),
       ),
       sql: source.text,
-      values: saved.parameters.sqlValues || [],
+      values: saved.parameters.sqlValues ?? [],
       datasetIds: source.datasetIds,
     };
   }
@@ -723,13 +724,13 @@ function finalizeSavedAnalysisResult(
     applyAnalysisScenarioModel(result, parameters.scenarioModel),
     parameters.workbench,
   );
-  const formulaModel = parameters.formulaModel || {
+  const formulaModel = parameters.formulaModel ?? {
     formulas: [],
     assumptions: [],
     assumptionValues: {},
   };
   const assumptions = Object.fromEntries(
-    (formulaModel.assumptions || []).map((item): [string, unknown] => [
+    (formulaModel.assumptions ?? []).map((item): [string, unknown] => [
       item.id,
       formulaModel.assumptionValues?.[item.id] ?? item.defaultValue,
     ]),
@@ -738,16 +739,16 @@ function finalizeSavedAnalysisResult(
   const formulaResult = evaluateAnalysisFormulas({
     rows: scenarioRows,
     inputComplete: isCompleteAnalysisResult(result),
-    formulas: formulaModel.formulas || [],
-    columns: result.declaredColumns || result.columns,
+    formulas: formulaModel.formulas ?? [],
+    columns: result.declaredColumns ?? result.columns,
     assumptionUnits: Object.fromEntries(
-      (formulaModel.assumptions || [])
+      (formulaModel.assumptions ?? [])
         .filter((item) => item.unit)
         .map((item): [string, FormulaUnitInput] => [item.id, item.unit]),
     ),
     assumptions,
   });
-  const formulaColumns = (formulaModel.formulas || [])
+  const formulaColumns = (formulaModel.formulas ?? [])
     .filter((formula) => formula.scope === "row")
     .map((formula) => ({
       id: formula.id,
@@ -757,7 +758,7 @@ function finalizeSavedAnalysisResult(
       calculationId: formula.id,
       calculationVersion: formulaResult.languageVersion,
       ...(formulaResult.formulaUnits?.[formula.id] || formula.unit
-        ? { unit: formulaResult.formulaUnits?.[formula.id] || formula.unit }
+        ? { unit: formulaResult.formulaUnits?.[formula.id] ?? formula.unit }
         : {}),
     }));
   const formulaIds = new Set(formulaColumns.map((column) => column.id));
@@ -778,12 +779,12 @@ function finalizeSavedAnalysisResult(
             ? "complete"
             : "partial",
       },
-      ...((formulaModel.formulas || []).length
-        ? { sourceResult: result.sourceResult || result }
+      ...((formulaModel.formulas ?? []).length > 0
+        ? { sourceResult: result.sourceResult ?? result }
         : {}),
       rows: formulaResult.rows,
       columns: appendFormulaColumns(result.columns),
-      ...(result.declaredColumns?.length
+      ...(result.declaredColumns && result.declaredColumns.length > 0
         ? { declaredColumns: appendFormulaColumns(result.declaredColumns) }
         : {}),
       formulaSummaries: formulaResult.summaries,
@@ -833,7 +834,7 @@ export async function runSavedAnalysis(
     const result = {
       ...rawResult,
       declaredColumns:
-        ("declaredColumns" in rawResult && rawResult.declaredColumns) ||
+        ("declaredColumns" in rawResult ? rawResult.declaredColumns : undefined) ??
         request.declaredColumns,
     };
     const finalized = finalizeSavedAnalysisResult(result, saved.parameters);
@@ -945,9 +946,9 @@ export async function restoreSavedAnalysisVersion(
         next,
         restored.name,
         restored.workspace,
-        JSON.stringify(state.parameters || locked.parameters_json),
-        JSON.stringify(state.charts || locked.charts_json),
-        JSON.stringify(state.sourceReferences || locked.source_references_json),
+        JSON.stringify(state.parameters ?? locked.parameters_json),
+        JSON.stringify(state.charts ?? locked.charts_json),
+        JSON.stringify(state.sourceReferences ?? locked.source_references_json),
         state.refreshMode || locked.refresh_mode,
       ],
     );

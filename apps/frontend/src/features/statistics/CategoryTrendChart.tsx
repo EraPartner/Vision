@@ -37,7 +37,7 @@ export const CategoryTrendChart = memo(function CategoryTrendChart({ data }: Cat
       data.allPeriods.map((period) => {
         const values: Record<string, number> = {};
         for (const cat of topCategories) {
-          values[cat.categoryId ?? -1] = Math.round(cat.expenseMonths[period] || 0);
+          values[cat.categoryId ?? -1] = Math.round(cat.expenseMonths[period] ?? 0);
         }
         return { period, date: parseISO(`${period}-01`), values };
       }),

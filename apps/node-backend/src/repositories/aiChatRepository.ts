@@ -19,8 +19,7 @@ import {
   uuidIdRowSchema,
 } from "../database/rows/ai.ts";
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
-
-export type { AiConversationRow, AiMessageRow };
+import { nanToZero } from "../lib/math.ts";
 
 const CONVERSATION_COLUMNS =
   'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
@@ -79,7 +78,7 @@ const aiChatRepository = {
     ]);
     return {
       items,
-      total: Number(countRows[0]?.total) || 0,
+      total: nanToZero(Number(countRows[0]?.total)),
     };
   },
 
@@ -92,7 +91,7 @@ const aiChatRepository = {
       `SELECT ${CONVERSATION_COLUMNS} FROM ai_conversations WHERE id = $1`,
       [id],
     );
-    return row || null;
+    return row ?? null;
   },
 
   async createConversation({
@@ -128,7 +127,7 @@ const aiChatRepository = {
         RETURNING ${CONVERSATION_COLUMNS}`,
       [id, title],
     );
-    return row || null;
+    return row ?? null;
   },
 
   /**
@@ -146,7 +145,7 @@ const aiChatRepository = {
         RETURNING ${CONVERSATION_COLUMNS}`,
       [id, model],
     );
-    return row || null;
+    return row ?? null;
   },
 
   /**

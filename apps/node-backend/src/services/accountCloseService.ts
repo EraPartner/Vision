@@ -181,11 +181,6 @@ export async function closeAccount(
   });
 }
 
-export default {
-  closeAccount,
-  normalizeCloseAccount,
-  previewAccountPortfolioLots,
-};
 
 export {
   normalizeCloseAccount as __normalizeCloseAccount,

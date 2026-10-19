@@ -193,7 +193,7 @@ export const getCapitalGainsForYear = {
       beforeYear.summaries.map((item) => [item.id, item]),
     );
     const rows = [];
-    const unsupportedAssetClasses = new Set();
+    const unsupportedAssetClasses = new Set<string>();
     let totalProceeds = toDecimal(0);
     let totalRealizedGain = toDecimal(0);
     for (const current of throughYear.summaries) {

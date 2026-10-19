@@ -138,13 +138,6 @@ export function updateActivity(
     );
 }
 
-/** Amount the activity contributes: the net figure for a net amount, else the gross. */
-export function activityAmount(activity: IncomeActivity): number {
-    return activity.kind === "net_professional_amount"
-        ? (activity.netProfessionalIncome ?? 0)
-        : activity.grossIncome;
-}
-
 function emptyReductions(): PartnerReductionInputs {
     return {
         personalPensionContributions: 0,

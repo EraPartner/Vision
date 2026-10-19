@@ -19,26 +19,7 @@ import type {
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import type { CategoryId } from "@vision/types/brands";
-
-export function useCategories(params?: {
-    limit?: number;
-    offset?: number;
-    general?: string;
-    detail?: string;
-    active?: boolean;
-    search?: string;
-}) {
-    const query = useQuery({
-        queryKey: categoryKeys.list(params),
-        queryFn: () => apiClient.getCategories(params),
-        staleTime: 2 * 60_000, // categories rarely change - 2min stale
-        placeholderData: (prev) => prev,
-    });
-    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
-    return query;
-}
 
 /**
  * The whole category list, as one cache entry shared by every consumer that
@@ -88,7 +69,7 @@ export function useCreateCategoryNode() {
         mutationFn: (input: CategoryNodeCreate) =>
             apiClient.createCategoryNode(input),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.created"));
         },
         onError: (error: Error) =>
@@ -105,7 +86,7 @@ export function useUpdateCategoryNode() {
         mutationFn: ({ id, data }: { id: CategoryId; data: CategoryNodeUpdate }) =>
             apiClient.updateCategoryNode(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) =>
@@ -121,7 +102,7 @@ export function useDeleteCategoryNode() {
     return useMutation({
         mutationFn: (id: CategoryId) => apiClient.deleteCategoryNode(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.deleted"));
         },
         onError: (error: Error) =>
@@ -143,10 +124,12 @@ export function useMergeCategoryNode() {
             targetId: CategoryId;
         }) => apiClient.mergeCategoryNode(sourceId, targetId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             invalidateTransactionData(queryClient);
-            queryClient.invalidateQueries({ queryKey: ["research-dossiers"] });
+            void queryClient.invalidateQueries({
+                queryKey: ["research-dossiers"],
+            });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) =>
@@ -164,7 +147,7 @@ export function useCreateCategory() {
         mutationFn: (category: CategoryCreate) =>
             apiClient.createCategory(category),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             if (data.wasCreated) {
                 toast.success(t("categories.created"));
             } else {
@@ -187,28 +170,11 @@ export function useUpdateCategory() {
         mutationFn: ({ id, data }: { id: CategoryId; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) => {
             toast.error(t("categories.updateFailedTitle"), {
-                description: apiErrorToMessage(error, t),
-            });
-        },
-    });
-}
-
-export function useDeleteCategory() {
-    const queryClient = useQueryClient();
-    const { t } = useLanguage();
-
-    return useMutation({
-        mutationFn: (id: CategoryId) => apiClient.deleteCategory(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-        },
-        onError: (error: Error) => {
-            toast.error(t("categories.deleteFailedTitle"), {
                 description: apiErrorToMessage(error, t),
             });
         },

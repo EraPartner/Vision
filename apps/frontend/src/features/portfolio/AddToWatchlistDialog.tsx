@@ -178,7 +178,7 @@ export function AddToWatchlistDialog({
                         : undefined,
             });
 
-            queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
+            void queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
             toast.success(t("addWatchlist.success"));
             handleClose();
         } catch {

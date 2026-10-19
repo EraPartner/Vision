@@ -462,5 +462,3 @@ function restoreAnswerText(
     })),
   };
 }
-
-export const REFERENCE_MARKER_EXAMPLE = "[[vision-ref:recipient|Example name]]";

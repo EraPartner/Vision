@@ -307,7 +307,7 @@ function scopedColumn(
     if (retainedColumns.includes(scope)) return column;
     const values = sourceRows.map((row) => row[scope]);
     if (
-      !values.length ||
+      values.length === 0 ||
       values.some(
         (value) => typeof value !== "string" || !/^[A-Z]{3}$/.test(value),
       ) ||
@@ -327,7 +327,7 @@ function scopedColumn(
       return { ...column, unit: { ...unit, instrumentColumn: scope } };
     const values = sourceRows.map((row) => row[scope]);
     if (
-      !values.length ||
+      values.length === 0 ||
       values.some((value) => value == null) ||
       new Set(values.map(String)).size !== 1
     )
@@ -420,9 +420,9 @@ export function prepareAnalysisData({
       const input = step.input;
       bounded(input?.rows, input?.columns);
       // Single-key lookups name the columns; field() rejects a missing id.
-      const left = step.keys || [step.resultColumn as string];
-      const right = step.inputKeys || [step.inputColumn as string];
-      if (!left.length || left.length !== right.length || left.length > 8)
+      const left = step.keys ?? [step.resultColumn as string];
+      const right = step.inputKeys ?? [step.inputColumn as string];
+      if (left.length === 0 || left.length !== right.length || left.length > 8)
         fail("Lookup requires one to eight corresponding keys");
       for (const [i, id] of left.entries()) {
         const a = field(schema, id);
@@ -442,7 +442,7 @@ export function prepareAnalysisData({
         lookup.set(match, row);
       }
       const bindings =
-        step.columns ||
+        step.columns ??
         input.columns
           .filter((column) => !right.includes(column.id))
           .map((column) => ({
@@ -487,7 +487,7 @@ export function prepareAnalysisData({
           ),
         };
       });
-      if (step.requireMatch && unmatchedRows)
+      if (step.requireMatch && unmatchedRows > 0)
         fail(`Lookup has ${unmatchedRows} unmatched rows`);
     } else if (step.type === "append") {
       population(complete);
@@ -521,7 +521,7 @@ export function prepareAnalysisData({
         rows: data,
         columns: schema,
         formulas: [step.formula],
-        assumptions: step.assumptions || {},
+        assumptions: step.assumptions ?? {},
         inputComplete: complete,
       });
       data = calculated.rows;
@@ -539,8 +539,8 @@ export function prepareAnalysisData({
       });
     } else if (step.type === "unpivot") {
       population(complete);
-      const ids = step.columnIds || [];
-      if (!ids.length || new Set(ids).size !== ids.length)
+      const ids = step.columnIds ?? [];
+      if (ids.length === 0 || new Set(ids).size !== ids.length)
         fail("Unpivot requires distinct value columns");
       if ((step.nameColumn || "variable") === (step.valueColumn || "value"))
         fail("Unpivot name and value columns must differ");
@@ -576,7 +576,7 @@ export function prepareAnalysisData({
       ];
     } else if (step.type === "pivot") {
       population(complete);
-      const groups: string[] = step.groupColumns || [];
+      const groups: string[] = step.groupColumns ?? [];
       groups.forEach((id) => field(schema, id));
       field(schema, step.nameColumn);
       const measure = field(schema, step.valueColumn);
@@ -641,7 +641,7 @@ export function prepareAnalysisData({
         ...slot.row,
         ...Object.fromEntries(
           categories.map((category, i) => {
-            const values = slot.values.get(category.key) || [];
+            const values = slot.values.get(category.key) ?? [];
             if (values.some((value) => value === null))
               errors.push({
                 stepIndex: index,
@@ -652,7 +652,7 @@ export function prepareAnalysisData({
               });
             const aggregate = step.aggregate || "sum";
             const value =
-              !values.length || values.some((value) => value === null)
+              values.length === 0 || values.some((value) => value === null)
                 ? null
                 : aggregate === "count"
                   ? String(values.length)
@@ -760,7 +760,7 @@ export function compareAnalysisTime({
     fail("Invalid calendar comparison configuration");
   if (
     !Array.isArray(valueColumns) ||
-    !valueColumns.length ||
+    valueColumns.length === 0 ||
     valueColumns.length > 16
   )
     fail("Select one to sixteen time measures");
@@ -798,7 +798,7 @@ export function compareAnalysisTime({
     )
       fail("Stock/balance measures require last aggregation");
   for (const id of valueColumns)
-    for (const required of field(columns, id).requiredTimeGroups || [])
+    for (const required of field(columns, id).requiredTimeGroups ?? [])
       if (!groupColumns.includes(required))
         fail(`Time comparisons require grouping by ${required}`);
   requireUnits(rows, columns, groupColumns, valueColumns);
@@ -835,7 +835,7 @@ export function compareAnalysisTime({
         row[id] == null ? null : cellDecimal(row[id]),
       );
   }
-  if (!partitions.size && !groupColumns.length && from && to)
+  if (partitions.size === 0 && groupColumns.length === 0 && from && to)
     partitions.set("[]", { group: {}, periods: new Map() });
   const output: FormulaRow[] = [];
   const errors: AnalysisExtensionError[] = [];
@@ -876,7 +876,7 @@ export function compareAnalysisTime({
         ...Object.fromEntries(
           valueColumns.map((id) => [
             id,
-            source?.[id]?.length
+            source && source[id] && source[id].length > 0
               ? source[id].some((value) => value === null)
                 ? null
                 : (aggregation === "last"
@@ -1042,7 +1042,7 @@ export function runAnalysisScenarios({
     if (!identifier.test(scenario.id || "") || ids.has(scenario.id))
       fail("Scenario identifiers must be valid and unique");
     ids.add(scenario.id);
-    const values = { ...assumptions, ...(scenario.assumptions || {}) };
+    const values = { ...assumptions, ...(scenario.assumptions ?? {}) };
     const computed = evaluation({
       rows,
       columns,
@@ -1091,7 +1091,7 @@ export function buildAnalysisSensitivity({
       (variable) =>
         !identifier.test(variable.id || "") ||
         !Array.isArray(variable.values) ||
-        !variable.values.length ||
+        variable.values.length === 0 ||
         variable.values.length > 100,
     )
   )
@@ -1198,7 +1198,7 @@ export function seekAnalysisGoal({
       assumptions: { ...assumptions, [variableId]: value.toFixed() },
       assumptionUnits,
     });
-    if (computed.errors.length || computed.summaries[outcomeId] == null)
+    if (computed.errors.length > 0 || computed.summaries[outcomeId] == null)
       fail(computed.errors[0]?.message || "Goal Seek outcome is unavailable");
     return cellDecimal(computed.summaries[outcomeId]);
   };

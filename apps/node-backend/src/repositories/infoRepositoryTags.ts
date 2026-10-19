@@ -113,4 +113,3 @@ export const tagInsightsRepository = {
   },
 };
 
-export default tagInsightsRepository;

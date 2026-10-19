@@ -46,7 +46,11 @@ import {
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { parseDecimal } from "@/lib/decimal";
-import { formatEditableNumber, DEFAULT_CURRENCY } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { todayYmd } from "@/lib/timezone";
@@ -63,7 +67,10 @@ export function RecipientOwesDetail({
     onBack,
 }: RecipientOwesDetailProps) {
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const {
         data,
         isLoading,
@@ -88,7 +95,7 @@ export function RecipientOwesDetail({
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const items = data?.items || [];
+    const items = data?.items ?? [];
     // Converted to the display currency on the server; splits in a currency
     // without a stored rate are left out (and named in the description).
     const totalOutstanding = data?.summary.remaining ?? 0;
@@ -114,7 +121,7 @@ export function RecipientOwesDetail({
     };
 
     const handleSettleAll = async () => {
-        if (!items.length) return;
+        if (items.length === 0) return;
         const unconvertedCount = data?.summary.unconverted_count ?? 0;
         const description = t("owesPage.settleAll.confirmDescription", {
             count: items.length,
@@ -139,7 +146,7 @@ export function RecipientOwesDetail({
     };
 
     const handleExportCsv = async () => {
-        if (!items.length || isExportingCsv) return;
+        if (items.length === 0 || isExportingCsv) return;
         setIsExportingCsv(true);
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
@@ -184,7 +191,7 @@ export function RecipientOwesDetail({
                             label={t("owesPage.menu")}
                         >
                             <DropdownMenuItem
-                                disabled={!items.length || isExportingCsv}
+                                disabled={items.length === 0 || isExportingCsv}
                                 onSelect={() => void handleExportCsv()}
                             >
                                 <Download
@@ -199,7 +206,7 @@ export function RecipientOwesDetail({
                         <Button
                             onClick={() => void handleSettleAll()}
                             disabled={
-                                !items.length ||
+                                items.length === 0 ||
                                 settleAllSplitsByRecipient.isPending
                             }
                         >
@@ -254,8 +261,10 @@ export function RecipientOwesDetail({
                             );
                             const splitContext = `${splitTitle}, ${splitDate}`;
                             // A split is owed in its transaction's currency.
-                            const splitCurrency =
-                                split.transaction_currency || defaultCurrency;
+                            const splitCurrency = currencyOr(
+                                split.transaction_currency,
+                                defaultCurrency,
+                            );
                             const openPayDialog = () => {
                                 setPayDialog({
                                     splitId: split.id,
@@ -295,8 +304,10 @@ export function RecipientOwesDetail({
                                                         Math.abs(
                                                             split.transaction_amount,
                                                         ),
-                                                        split.transaction_currency ||
+                                                        currencyOr(
+                                                            split.transaction_currency,
                                                             defaultCurrency,
+                                                        ),
                                                         locale,
                                                         appSettings.showDecimalPlaces ??
                                                             2,

@@ -155,7 +155,7 @@ export async function ensureAnalysisRole({
         `GRANT SELECT ON vision_analysis.${relation} TO ${ANALYSIS_ROLE}`,
       );
     }
-    return { status: exists.rows.length ? "exists" : "created" };
+    return { status: exists.rows.length > 0 ? "exists" : "created" };
   } catch (error) {
     log.warn(
       `[analysis-role] bootstrap failed (${(error as Error).message}); executor disabled.`,

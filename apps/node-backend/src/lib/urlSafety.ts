@@ -130,7 +130,7 @@ export async function assertPublicHttpUrl(
   // the IP check and slip through as a "DNS name".
   const literal =
     host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
-  if (net.isIP(literal)) {
+  if (net.isIP(literal) !== 0) {
     if (isBlockedAddress(literal)) {
       throw new BlockedUrlError(`Blocked private/loopback address: ${host}`);
     }

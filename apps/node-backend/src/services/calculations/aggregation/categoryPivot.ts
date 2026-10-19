@@ -31,5 +31,3 @@ export async function computeCategoryPivot({
     return buildEnvelope(data, { source: "live" });
   });
 }
-
-export default { computeCategoryPivot };

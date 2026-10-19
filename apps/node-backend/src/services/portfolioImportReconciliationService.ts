@@ -130,6 +130,7 @@ import type {
   KinesisIncomePairRecord,
 } from "./portfolioKinesisIncomePairs.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
+import { firstNonZero } from "../lib/math.ts";
 
 /**
  * One reconciliation history event read by column name. Custody events
@@ -838,9 +839,7 @@ function equivalentEconomics(
   const sourceRate =
     source.currency === "EUR"
       ? "1"
-      : source.fx_rate_to_eur != null
-        ? source.fx_rate_to_eur
-        : undefined;
+      : source.fx_rate_to_eur ?? undefined;
   const currentEur =
     current.currency === "EUR"
       ? current.amount
@@ -886,7 +885,7 @@ function canonicalBatchPolicies(
   const seen = new Set<number>();
   const canonical = batchPolicies.map((override) => {
     if (
-      !override ||
+      override == null ||
       !Number.isSafeInteger(override.batchId) ||
       !selected.has(override.batchId) ||
       seen.has(override.batchId) ||
@@ -1083,7 +1082,7 @@ export function buildPortfolioImportReconciliationPlan({
   const scope = batches.map((batch) => Number(batch.id)).sort((a, b) => a - b);
   const referenceIssues = new Set<string>();
   for (const batch of batches) {
-    const config = batchConfigFields(batch.custom_config) || {};
+    const config = batchConfigFields(batch.custom_config) ?? {};
     const reference = config.portfolio_performance_reference;
     const anchor = rows.find(
       (row) => Number(row.batch_id) === Number(batch.id),
@@ -1101,7 +1100,7 @@ export function buildPortfolioImportReconciliationPlan({
           (row) =>
             Number(row.batch_id) === Number(issue.batchId) &&
             row.row_index + 1 === issue.rowOrdinal,
-        ) || anchor;
+        ) ?? anchor;
       const publicIssue = {
         ...issue,
         batchId: Number(sourceRow?.batch_id ?? batch.id),
@@ -1140,7 +1139,7 @@ export function buildPortfolioImportReconciliationPlan({
           reference.originalStagingBinding)
     )
       addReference({ reason: "reference_scope_changed" });
-    for (const issue of config.reference_blockers || []) addReference(issue);
+    for (const issue of config.reference_blockers ?? []) addReference(issue);
   }
   const selectedWorkbook = rows.filter((selected) => {
     if (formatOf(selected) !== "saxo_transaction_history") return false;
@@ -1173,7 +1172,7 @@ export function buildPortfolioImportReconciliationPlan({
         /* Literal CSV. */
       }
       if (!workbook) {
-        if (selectedWorkbook.length) {
+        if (selectedWorkbook.length > 0) {
           const candidates = selectedWorkbook.filter(
             (selected) =>
               selected.source_transaction_id === row.source_transaction_id &&
@@ -1221,7 +1220,7 @@ export function buildPortfolioImportReconciliationPlan({
         row.route !== "account_internal" &&
         row.route !== "asset_transfer" &&
         row.route !== "asset_adjustment" &&
-        (!row.type || !row.investment_id))
+        (!row.type || row.investment_id == null))
     ) {
       addBlocker(row, "incomplete_source");
       continue;
@@ -1402,14 +1401,14 @@ export function buildPortfolioImportReconciliationPlan({
       investmentId: Number(row.investment_id),
       source: publicValues(source),
     };
-    const canonical =
-      identity &&
-      history.find(
-        (current) =>
-          `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}` ===
-          identity,
-      );
-    if (canonical) {
+    const canonical = identity
+      ? history.find(
+          (current) =>
+            `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}` ===
+            identity,
+        )
+      : undefined;
+    if (canonical && identity) {
       if (
         Number(canonical.investment_id) !== Number(row.investment_id) ||
         canonical.account_id !== row.account_id
@@ -1691,7 +1690,7 @@ export function buildPortfolioImportReconciliationPlan({
                   equalNumber(proof.grossUnits, current.units, 8))),
           )
         : [];
-      if (roundedDepositCandidates.length)
+      if (roundedDepositCandidates.length > 0)
         addBlocker(
           row,
           roundedDepositCandidates.length > 1
@@ -1699,7 +1698,7 @@ export function buildPortfolioImportReconciliationPlan({
             : "unproven_units",
           roundedDepositCandidates,
         );
-      else if (datedProCandidates.length)
+      else if (datedProCandidates.length > 0)
         addBlocker(
           row,
           datedProCandidates.length > 1
@@ -1751,8 +1750,8 @@ export function buildPortfolioImportReconciliationPlan({
       portfolioPerformanceReferenceIdentifiesLegacy(row, current) ||
       portfolioPerformanceRoundedDepositIdentifiesLegacy(row, current) ||
       zeroYieldIdentifiesLegacy(row, current) ||
-      Boolean(fullYield || nativeGift) ||
-      ((imported || source.type === "sell") &&
+      Boolean(fullYield ?? nativeGift) ||
+      ((imported != null || source.type === "sell") &&
         ibkrPrimaryEvidenceIdentifiesLegacy(row, source, current, rows));
     const comparable =
       equivalentEconomics(source, current, proof) || secondaryIdentity;
@@ -1829,7 +1828,7 @@ export function buildPortfolioImportReconciliationPlan({
     // Inexact or imported rows without a policy were deferred above. The cast
     // only helps the legacy non-strict program, which cannot narrow a
     // validated string through the undefined-or-isPolicy guard.
-    const policy = (effectivePolicy as AdoptPolicy | undefined) ?? "exact";
+    const policy = effectivePolicy ?? "exact";
     actions.push({
       ...baseAction,
       action: imported ? "repair_duplicate" : "adopt",
@@ -2105,7 +2104,7 @@ function completeKinesisCashRepeatPlan(
   const sourceBatches = batches.filter(
     (batch) => formatOf(batch) === "kinesis_transaction_history",
   );
-  if (!sourceBatches.length || !context.sources.length) return full;
+  if (sourceBatches.length === 0 || context.sources.length === 0) return full;
   const ids = new Set(sourceBatches.map((batch) => Number(batch.id)));
   const sourceRows = rows.filter((row) => ids.has(Number(row.batch_id)));
   const proved = classifyKinesisCash({
@@ -2164,7 +2163,7 @@ function completeKinesisIncomePlan(
       formatOf(batch) === "kinesis_transaction_history" &&
       batchConfigFields(batch.custom_config)?.yield_basis_policy === "zero",
   );
-  if (!sourceBatches.length) return full;
+  if (sourceBatches.length === 0) return full;
   const ids = new Set(sourceBatches.map((batch) => Number(batch.id)));
   const sourceRows = rows.filter((row) => ids.has(Number(row.batch_id)));
   const plannedUnits = full.plan.actions
@@ -2240,7 +2239,7 @@ function completeKinesisIncomePlan(
       record &&
       provedRecords.includes(record) &&
       action?.action === "blocked" &&
-      action.candidateTransactionIds?.length &&
+      action.candidateTransactionIds && action.candidateTransactionIds.length > 0 &&
       action.candidateTransactionIds.every((id) =>
         proved.duplicates.some(
           (other) =>
@@ -2253,7 +2252,7 @@ function completeKinesisIncomePlan(
         (issue) => Number(issue.rowId) === Number(row.id),
       );
       if (
-        issues.length &&
+        issues.length > 0 &&
         issues.every(
           (issue) => issue.reason === "existing_assigned_or_imported_history",
         )
@@ -2280,7 +2279,7 @@ function completeKinesisIncomePlan(
       !record ||
       !action ||
       conflicting ||
-      action.candidateTransactionIds?.length ||
+      (action.candidateTransactionIds && action.candidateTransactionIds.length > 0) ||
       !available(row)
     ) {
       blockers.push({
@@ -2459,21 +2458,21 @@ function boundedKinesisIncomePlan(
     if (
       !action ||
       !["insert", "blocked"].includes(action.action) ||
-      action.candidateTransactionIds?.length
+      action.candidateTransactionIds && action.candidateTransactionIds.length > 0
     ) {
       blockers.push({
         reason: "paired_income_existing_conflict",
         batchId: Number(record.row.batch_id),
         rowId: Number(record.row.id),
         rowOrdinal: record.row.row_index + 1,
-        candidateTransactionIds: action?.candidateTransactionIds || [],
+        candidateTransactionIds: action?.candidateTransactionIds ?? [],
       });
       continue;
     }
     const contested = full.plan.blockers.filter((issue) =>
       issue.candidateTransactionIds?.includes(Number(record.unit.id)),
     );
-    if (contested.length) {
+    if (contested.length > 0) {
       blockers.push(...contested);
       continue;
     }
@@ -2691,7 +2690,7 @@ function boundedKinesisCorrectionPlan(
     const contested = full.plan.blockers.filter((issue) =>
       issue.candidateTransactionIds.some((id) => ids.has(Number(id))),
     );
-    if (contested.length) {
+    if (contested.length > 0) {
       blockers.push(...contested);
       continue;
     }
@@ -2755,7 +2754,7 @@ function boundedKinesisCorrectionPlan(
     if (groupedRowIds.has(action.rowId)) continue;
     const row = rows.find((item) => Number(item.id) === action.rowId);
     const proof =
-      proofs.get(action.rowId) ||
+      proofs.get(action.rowId) ??
       (["duplicate", "settled"].includes(action.action)
         ? literalProofs.get(action.rowId)
         : undefined);
@@ -2782,7 +2781,7 @@ function boundedKinesisCorrectionPlan(
         (field) => !sameValue(field, before[field], after[field]),
       );
       if (
-        !corrections.length ||
+        corrections.length === 0 ||
         before.type !== row.type ||
         before.date !== row.tx_date ||
         !equalNumber(before.units, row.units, 8) ||
@@ -3456,11 +3455,11 @@ async function loadPlan(
       batches.flatMap(
         (batch) =>
           batchConfigFields(batch.custom_config)?.portfolio_performance_reference
-            ?.originalBatchIds || [],
+            ?.originalBatchIds ?? [],
       ),
     ),
   ].sort((a, b) => a - b);
-  const referenceOriginalRows = referenceOriginalBatchIds.length
+  const referenceOriginalRows = referenceOriginalBatchIds.length > 0
     ? await readReconciliationSources(referenceOriginalBatchIds)
     : [];
   return {
@@ -3604,9 +3603,11 @@ function projectedReconciliationHistory({
     }))
     .sort(
       (left, right) =>
-        left.row.tx_date!.localeCompare(right.row.tx_date!) ||
-        Number(left.row.batch_id) - Number(right.row.batch_id) ||
-        left.row.row_index - right.row.row_index,
+        firstNonZero(
+          left.row.tx_date!.localeCompare(right.row.tx_date!),
+          Number(left.row.batch_id) - Number(right.row.batch_id),
+          left.row.row_index - right.row.row_index,
+        ),
     );
   const proposed = proposedActions.map(({ action, row }, index) => ({
     ...(action.action === "transfer"
@@ -3703,7 +3704,7 @@ export async function applyPortfolioImportReconciliation({
     (await readReconciliationBatchScope(batchIds)).some((batch) =>
       (
         batchConfigFields(batch.custom_config)?.portfolio_performance_reference
-          ?.originalBatchIds || []
+          ?.originalBatchIds ?? []
       ).some((id: unknown) => !lockedBatchIds.includes(Number(id))),
     ) ||
     adoptions.some(
@@ -3821,8 +3822,8 @@ export async function applyPortfolioImportReconciliation({
       action.action === "duplicate" &&
       !action.isCash &&
       (reconciliationScope !== "full" ||
-        action.incomeProof ||
-        action.cashProof ||
+        Boolean(action.incomeProof) ||
+        Boolean(action.cashProof) ||
         sourceOverrides.has(action.rowId)),
   )) {
     await markAdoptedSourceDuplicate(action.rowId, action.batchId);
@@ -3858,7 +3859,7 @@ export async function completePortfolioImportIncome({
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[];
 }): Promise<Map<number, number>> {
-  if (!rowIds.length) return new Map<number, number>();
+  if (rowIds.length === 0) return new Map<number, number>();
   const loaded = await loadPlan(batchIds, adoptPolicy, batchPolicies);
   const selected = new Set(rowIds);
   const records = (loaded.incomeRecords ?? []).filter((record) =>
@@ -3867,7 +3868,7 @@ export async function completePortfolioImportIncome({
   if (
     !loaded.plan.ready ||
     records.length !== selected.size ||
-    records.some((record) => record.plannedUnitRowId)
+    records.some((record) => record.plannedUnitRowId != null)
   )
     throw new ConflictError(
       "Paired acquisition changed during the complete import",

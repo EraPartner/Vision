@@ -21,7 +21,7 @@ package "Frontend" {
   
   class Hooks {
     useTransactions
-    useCategories
+    useAllCategories
     useCategoryTree
     useRecipients
     usePlannedPayments

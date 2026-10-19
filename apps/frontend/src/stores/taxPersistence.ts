@@ -104,7 +104,8 @@ export async function persistTaxFiling(year: number, reference?: string) {
     } finally {
         filingInFlight = false;
         // Edits the filing payload would have carried are saved on their own when it never left.
-        if (pending || (hadPending && !saveSent))
+        // `pending` may have been set by edits made while this function awaited.
+        if (pending !== undefined || (hadPending && !saveSent))
             scheduleTaxPersistence(useSettingsStore.getState());
     }
 }

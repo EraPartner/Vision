@@ -219,7 +219,7 @@ export async function verifyAuditHistory({
   }
   if (
     trustedCheckpoint !== undefined &&
-    (!trustedCheckpoint ||
+    (trustedCheckpoint == null ||
       !Number.isSafeInteger(trustedCheckpoint.sequence) ||
       trustedCheckpoint.sequence < 0 ||
       typeof trustedCheckpoint.hash !== "string" ||
@@ -248,7 +248,7 @@ export async function verifyAuditHistory({
       !Array.isArray(retention.migrationHeads) ||
       retention.migrationHeads.length > 16 ||
       retention.migrationHeads.some((head) => typeof head !== "string") ||
-      !retention.domainMax ||
+      retention.domainMax == null ||
       (["dbEditor", "split", "retag"] as const).some(
         (field) =>
           !Number.isSafeInteger(retention.domainMax[field]) ||
@@ -289,7 +289,7 @@ export async function verifyAuditHistory({
       limit: pageSize,
     });
     const segment = rows.filter((row) => row.sequence <= initialHead.sequence);
-    if (!segment.length) return fail("missing_entries", sequence + 1);
+    if (segment.length === 0) return fail("missing_entries", sequence + 1);
     const result = verifyAuditChain(segment, {
       firstSequence: sequence + 1,
       previousHash: hash,
@@ -330,7 +330,7 @@ export async function verifyAuditHistory({
           row.payload.heads.some((head) => typeof head !== "string")
         )
           return fail("migration_heads_invalid", row.sequence);
-        migrationHeads = [...row.payload.heads].sort();
+        migrationHeads = [...(row.payload.heads as string[])].sort();
       }
       if (
         retention &&
@@ -369,7 +369,7 @@ export async function verifyAuditHistory({
     finalHead.hash !== initialHead.hash ||
     JSON.stringify(finalHead.legacyCutover) !==
       JSON.stringify(initialHead.legacyCutover) ||
-    extra.length
+    extra.length > 0
   )
     return fail("concurrent_change_or_head_mismatch", sequence);
 
@@ -391,7 +391,7 @@ export async function verifyAuditHistory({
   // unverified; every newer domain row must be linked to the chain.
   const cutover = initialHead.legacyCutover;
   if (
-    !cutover ||
+    cutover == null ||
     [cutover.dbEditorMaxId, cutover.splitMaxId, cutover.retagMaxId].some(
       (value) => !Number.isSafeInteger(value) || value < 0,
     )
@@ -475,5 +475,3 @@ export async function verifyAuditHistory({
     legacyUnverified,
   };
 }
-
-export default { verifyAuditHistory };

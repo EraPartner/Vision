@@ -26,7 +26,12 @@ async function acquire(signal?: AbortSignal): Promise<void> {
       const index = queue.indexOf(granted);
       if (index !== -1) queue.splice(index, 1);
       signal?.removeEventListener("abort", aborted);
-      reject(signal?.reason ?? new Error("Report request cancelled"));
+      const reason: unknown = signal?.reason;
+      reject(
+        reason instanceof Error
+          ? reason
+          : new Error("Report request cancelled", { cause: reason }),
+      );
     };
     queue.push(granted);
     signal?.addEventListener("abort", aborted, { once: true });

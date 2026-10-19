@@ -40,6 +40,7 @@ import { autoResolveFxRateToEur } from "../portfolio/fxResolve.ts";
 import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.ts";
 import { commitPortfolioAssetTransfer } from "../portfolio/portfolioAssetTransferService.ts";
 import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjustmentService.ts";
+import { nanToZero } from "../../lib/math.ts";
 
 // Rows are drained in chunked BEGIN/COMMIT (mirrors importPipeline/commit.js):
 // one transaction per chunk instead of one autocommit per statement collapses a
@@ -53,8 +54,6 @@ import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjus
  * resolved_investment_id)`, and the two `inv.*` columns come from the LEFT JOIN
  * on `investments` (null for cash rows and unresolved instruments).
  */
-export type { MatchedPortfolioStagingRow };
-
 /** Repository-normalized trade values compared for occurrence dedup. */
 type CanonicalTradeValues = {
   amount: number | undefined;
@@ -314,8 +313,8 @@ export async function commitBatch({
       historicalFxContext: rates,
     });
     if (
-      cashPlan.blockers.length ||
-      cashPlan.records.length ||
+      cashPlan.blockers.length > 0 ||
+      cashPlan.records.length > 0 ||
       cashPlan.selected.length !==
         proof.groups.flatMap((group) => group.members).length
     )
@@ -380,7 +379,7 @@ export async function commitBatch({
       );
       continue;
     }
-    if (!row.investment_id) continue;
+    if (row.investment_id == null) continue;
     const canonical = canonicalTradeValues(row);
     const identity = tradeIdentityKey(row, batchAccountId, canonical);
     tradeSeenByIdentity.set(
@@ -408,7 +407,7 @@ export async function commitBatch({
   let cashRecipientId: number | null = null;
   if (
     isBrokerage &&
-    batchAccountId &&
+    batchAccountId !== undefined &&
     matched.some((r) => r.route === "cash")
   ) {
     const brokerName = [
@@ -423,16 +422,14 @@ export async function commitBatch({
       });
       cashRecipientId = recipient?.id ?? null;
     }
-    if (cashRecipientId == null) {
-      cashRecipientId = await recipientRepository.getOrCreateSystemId();
-    }
+    cashRecipientId ??= await recipientRepository.getOrCreateSystemId();
   }
 
   // Resolve the configured IDs once per drain so all chunks use one coherent
   // mapping. Missing, malformed, deleted, or inactive IDs deliberately leave
   // the row uncategorized. Imports never create or reactivate categories.
   const cashCategoryIds = new Map<string, CategoryId>();
-  if (isBrokerage && batchAccountId) {
+  if (isBrokerage && batchAccountId !== undefined) {
     const stored = await settingsRepository.get(CASH_CATEGORY_SETTING_KEY);
     // A user setting's JSON value: an object of kind → category id when set.
     const configured: Record<string, unknown> =
@@ -566,7 +563,7 @@ export async function commitBatch({
               historicalFxContext: reproof.rates,
             });
             if (
-              checked.blockers.length ||
+              checked.blockers.length > 0 ||
               !cashImageEqual(checked.selected, reproof.actions)
             )
               throw new ConflictError("Cash ledger changed during commit", {
@@ -579,7 +576,7 @@ export async function commitBatch({
           continue;
         }
         if (isBrokerage && row.route === "cash") {
-          if (!batchAccountId) {
+          if (batchAccountId === undefined) {
             chunkErrors++;
             await markRow(
               row.id,
@@ -683,7 +680,7 @@ export async function commitBatch({
               memo,
               batchAccountId,
               cashRecipientId,
-              (row.type != null && cashCategoryIds.get(String(row.type))) ||
+              (row.type != null ? cashCategoryIds.get(String(row.type)) : undefined) ??
                 null,
             ];
             const result = row.dedup_fingerprint
@@ -736,7 +733,7 @@ export async function commitBatch({
           continue;
         }
 
-        if (!row.investment_id) {
+        if (row.investment_id == null) {
           chunkErrors++;
           await markRow(
             row.id,
@@ -1014,7 +1011,7 @@ async function countCashFieldMatches(
         AND is_active = true`,
     params,
   );
-  return Number(r?.n) || 0;
+  return nanToZero(Number(r?.n));
 }
 
 function tradeIdentityKey(
@@ -1099,7 +1096,7 @@ async function countTradeFieldMatches(
       row.currency || row.investment_currency || "EUR",
     ],
   );
-  return Number(matches?.n) || 0;
+  return nanToZero(Number(matches?.n));
 }
 
 async function hasCanonicalFingerprint(

@@ -99,7 +99,7 @@ export function CategoryCombobox({
                                 <Check
                                     className={cn(
                                         "mr-2 h-4 w-4",
-                                        !value ? "opacity-100" : "opacity-0",
+                                        value == null ? "opacity-100" : "opacity-0",
                                     )}
                                 />
                                 <span className="text-muted-foreground italic">

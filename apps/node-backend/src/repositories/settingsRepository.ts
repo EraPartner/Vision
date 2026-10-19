@@ -120,7 +120,7 @@ export const settingsRepository = {
           VALUES ($1, $2::jsonb, NOW()) ON CONFLICT (key) DO NOTHING RETURNING key`,
           [key, JSON.stringify(value)],
         );
-    if (!result.rowCount)
+    if ((result.rowCount ?? 0) === 0)
       throw new ConflictError("Settings changed. Reload before saving again.");
     return { key, value, expected: { exists: true, value } };
   },
@@ -153,7 +153,7 @@ export const settingsRepository = {
       WHERE key = $1 AND value = $2::jsonb RETURNING key`,
       [key, JSON.stringify(expected.value)],
     );
-    if (!result.rowCount)
+    if ((result.rowCount ?? 0) === 0)
       throw new ConflictError("Settings changed. Reload before deleting.");
     return true;
   },

@@ -99,7 +99,7 @@ export function getAdapter(
 ): BankCsvAdapter | null {
   if (!name) return null;
   const key = String(name).toLowerCase().replace(/\s+/g, "_");
-  return REGISTRY.get(key) || null;
+  return REGISTRY.get(key) ?? null;
 }
 
 /**

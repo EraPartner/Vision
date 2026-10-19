@@ -20,11 +20,6 @@ export const METHOD_COLORS: Record<string, string> = {
     ensemble_imse: getChartColor(7),
 };
 
-export const MC_METHOD_IDS: ReadonlySet<string> = new Set([
-    "monte_carlo_parametric",
-    "monte_carlo_block_bootstrap",
-]);
-
 export interface MergedDay {
     date: string;
     dayNum: number;
@@ -65,8 +60,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
         {
             key: "actual",
             label: actualLabel,
-            accessor: (d) =>
-                (d as MergedDay | MergedDayDate).actual as number | null,
+            accessor: (d) => d.actual,
             color: ACTUAL_COLOR,
             strokeWidth: 2.5,
             connectNulls: false,

@@ -44,7 +44,11 @@ import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { reportTaxYear } from "./taxReportHousehold";
 import { taxReportContext } from "./taxReportContext";
-import { SUPPORTED_CURRENCIES, DEFAULT_CURRENCY } from "@/utils/currency";
+import {
+    SUPPORTED_CURRENCIES,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import {
     downloadFinancialReport,
     downloadPortfolioReport,
@@ -141,7 +145,10 @@ export function ExportDialog({
         householdSnapshots: state.householdSnapshots,
         snapshotMetas: state.snapshotMetas,
     }));
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const currentYear = new Date().getFullYear();
 
     // ── Dialog state (controlled when `open` is given)

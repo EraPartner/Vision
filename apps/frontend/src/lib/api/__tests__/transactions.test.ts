@@ -148,7 +148,7 @@ describe("transactions API client", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/10`, () => ok({ id: 10 })),
         );
-        expect((await updateTransaction(asTransactionId(10), {} as never)).id).toBe(10);
+        expect((await updateTransaction(asTransactionId(10), {})).id).toBe(10);
     });
 
     it("deleteTransaction resolves on void", async () => {
@@ -172,7 +172,7 @@ describe("transactions API client", () => {
                 },
             ),
         );
-        const res = await bulkDeleteTransactions({ ids: [1, 2] } as never);
+        const res = await bulkDeleteTransactions({ ids: [1, 2] });
         expect(body).toMatchObject({ ids: [1, 2] });
         expect(res.deleted).toBe(2);
         expect(res.requested).toBe(2);

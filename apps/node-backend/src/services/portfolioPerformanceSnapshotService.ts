@@ -26,10 +26,8 @@ import {
 } from "./portfolio/portfolioSummaryService.ts";
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
-import type { PortfolioPerformanceSnapshotRow } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 import type { CurrencyCode } from "@vision/types/brands";
-
-export type { PortfolioPerformanceSnapshotRow };
 
 /** One `getSnapshots` row, as served to the performance chart. */
 export type PortfolioPerformanceSnapshot = {
@@ -91,15 +89,16 @@ export async function __storeCurrentBrokerSnapshot(
     ),
   ];
   return withTransaction(async (client) => {
-    const nameRows = accountIds.length
-      ? await queryRows(
-          accountDisplayNameRowSchema,
-          `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
+    const nameRows =
+      accountIds.length > 0
+        ? await queryRows(
+            accountDisplayNameRowSchema,
+            `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
            FROM accounts WHERE id = ANY($1::int[])`,
-          [accountIds],
-          client,
-        )
-      : [];
+            [accountIds],
+            client,
+          )
+        : [];
     const names = new Map<number, string>(
       nameRows.map((row) => [Number(row.id), row.display_name]),
     );
@@ -120,11 +119,15 @@ export async function __storeCurrentBrokerSnapshot(
         invested: toDecimal(0),
         gainLoss: toDecimal(0),
       };
-      current.value = current.value.plus(toDecimal(row.currentValue || 0));
-      current.invested = current.invested.plus(
-        toDecimal(row.totalInvested || 0),
+      current.value = current.value.plus(
+        toDecimal(nanToZero(row.currentValue)),
       );
-      current.gainLoss = current.gainLoss.plus(toDecimal(row.gainLoss || 0));
+      current.invested = current.invested.plus(
+        toDecimal(nanToZero(row.totalInvested)),
+      );
+      current.gainLoss = current.gainLoss.plus(
+        toDecimal(nanToZero(row.gainLoss)),
+      );
       byKey.set(key, current);
     }
 
@@ -133,14 +136,14 @@ export async function __storeCurrentBrokerSnapshot(
     const parity = summary.brokerSnapshotParity;
     const parityDifference = parity
       ? toDecimal(parity.partitionValue).minus(parity.totalValue)
-      : valueSum.minus(summary.totals.totalPortfolioValue || 0);
+      : valueSum.minus(nanToZero(summary.totals.totalPortfolioValue));
     if (
       parity
         ? !parityDifference.toDecimalPlaces(6).isZero()
         : parityDifference.abs().gt(BROKER_HISTORY_PARITY_TOLERANCE)
     ) {
       throw new Error(
-        `Broker snapshot parity failed: partitions=${parity?.partitionValue ?? valueSum.toFixed(2)} total=${parity?.totalValue ?? toDecimal(summary.totals.totalPortfolioValue || 0).toFixed(2)}`,
+        `Broker snapshot parity failed: partitions=${parity?.partitionValue ?? valueSum.toFixed(2)} total=${parity?.totalValue ?? toDecimal(nanToZero(summary.totals.totalPortfolioValue)).toFixed(2)}`,
       );
     }
 
@@ -282,14 +285,3 @@ async function getLatestSnapshot(currency = "EUR") {
 }
 
 export { getLatestSnapshot as __getLatestSnapshot };
-
-export default {
-  computeAndStoreSnapshots,
-  getSnapshots,
-  getBrokerSnapshots,
-  getLatestSnapshot,
-  computeMetrics,
-  computeHeatmap,
-  getBreakdownSummary,
-  getPortfolioSummary,
-};

@@ -12,6 +12,7 @@ import {
     formatCurrency,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import {
     formatDateWithAppSettings,
@@ -79,7 +80,7 @@ export default function PortfolioForecastPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     const formatPercent = usePercentFormatter();
 
     const [horizonMonths, setHorizonMonths] = useState(60);
@@ -512,18 +513,21 @@ export default function PortfolioForecastPage() {
                         <StatCard
                             icon={Target}
                             title={
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                forecast.targetValue !== 0
                                     ? t("research.forecast.probTarget")
                                     : t("research.forecast.probBelowInvested")
                             }
                             loading={isFetching && !forecast}
                             value={fmtPct(
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                    forecast.targetValue !== 0
                                     ? forecast?.probTarget
                                     : forecast?.probBelowInvested,
                             )}
                             subtitle={
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                forecast.targetValue !== 0
                                     ? moneyNode(forecast.targetValue)
                                     : moneyNode(forecast?.netInvested)
                             }
@@ -572,7 +576,7 @@ export default function PortfolioForecastPage() {
                                         new Intl.DateTimeFormat(language, {
                                             month: "short",
                                             year: "numeric",
-                                        }).format(v as Date)
+                                        }).format(v)
                                     }
                                     yTickFormat={(v) =>
                                         formatCurrency(v, currency, locale, 0)

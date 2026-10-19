@@ -36,11 +36,9 @@ export async function computeCategoryBreakdown({
     { categories, ...unconvertedFields(unconverted) },
     {
       source:
-        ancestorCategoryId === undefined && !Object.keys(filters).length
+        ancestorCategoryId === undefined && Object.keys(filters).length === 0
           ? "mv"
           : "live",
     },
   );
 }
-
-export default { computeCategoryBreakdown };

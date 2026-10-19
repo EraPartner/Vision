@@ -44,7 +44,7 @@ import {
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
 import type { PlannedTransactionId, TransactionId } from "@vision/types/brands";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /**
  * Planned (ADR-183): the next seven days, likely matches and detected
@@ -126,7 +126,7 @@ export default function PlannedPaymentsPage() {
     // Net monthly impact of active recurring rows and the money due in the
     // next-days strip, computed on the server.
     const { data: plannedTotals } = usePlannedTotals(
-        appSettings.defaultCurrency || DEFAULT_CURRENCY,
+        currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
     );
     const monthlyTotal = plannedTotals?.monthly_equivalent;
 

@@ -18,14 +18,7 @@ import {
     usePortfolioSummaryQuery,
 } from "./portfolio/usePortfolioSummary";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
-
-export {
-    useInvestmentsQuery,
-    usePortfolioTransactionsQuery,
-    useInvestmentMutations,
-} from "./portfolio/useInvestments";
-export { usePortfolioSummaries } from "./portfolio/usePortfolioSummaries";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const EMPTY_INVESTMENTS: never[] = [];
 const EMPTY_TRANSACTIONS: never[] = [];
@@ -35,7 +28,7 @@ export function usePortfolio({
     completeAssetClass,
 }: { completeHistory?: boolean; completeAssetClass?: string } = {}) {
     const { appSettings } = useAppSettings();
-    const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     const canonicalQuery = usePortfolioSummaryQuery(currency);
     const investmentsQuery = useInvestmentsQuery();
     const allInvestments = investmentsQuery.data?.items ?? EMPTY_INVESTMENTS;
@@ -75,7 +68,10 @@ export function usePortfolio({
             [
                 ...(recentQuery.data ?? EMPTY_TRANSACTIONS),
                 ...(historyQuery.data ?? EMPTY_TRANSACTIONS),
-            ].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id),
+            ].sort((a, b) => {
+                const byDate = b.date.localeCompare(a.date);
+                return byDate !== 0 ? byDate : b.id - a.id;
+            }),
         [recentQuery.data, historyQuery.data],
     );
     const activeInvestmentIds = useMemo(
@@ -125,20 +121,20 @@ export function usePortfolio({
             recentQuery.isError ||
             historyQuery.isError,
         error:
-            investmentsQuery.error ||
-            canonicalQuery.error ||
-            archivedQuery.error ||
-            recentQuery.error ||
+            investmentsQuery.error ??
+            canonicalQuery.error ??
+            archivedQuery.error ??
+            recentQuery.error ??
             historyQuery.error,
         historyIsLoading: recentQuery.isLoading || historyQuery.isLoading,
-        historyError: recentQuery.error || historyQuery.error,
+        historyError: recentQuery.error ?? historyQuery.error,
         refetch: async () =>
             Promise.all([
                 investmentsQuery.refetch(),
                 canonicalQuery.refetch(),
                 ...(archivedQuery.isEnabled ? [archivedQuery.refetch()] : []),
-                ...(recentIds.length ? [recentQuery.refetch()] : []),
-                ...(completeIds.length ? [historyQuery.refetch()] : []),
+                ...(recentIds.length > 0 ? [recentQuery.refetch()] : []),
+                ...(completeIds.length > 0 ? [historyQuery.refetch()] : []),
             ]),
         totalPortfolioValue: totals.totalPortfolioValue,
         totalGainLoss: totals.totalGainLoss,

@@ -333,7 +333,7 @@ export function ReconcileDialog({
 
     const showLedgerSince = () => {
         onOpenChange(false);
-        navigate(`/accounts/${account.id}?since=${sinceDate}`);
+        void navigate(`/accounts/${account.id}?since=${sinceDate}`);
     };
 
     /**
@@ -357,7 +357,7 @@ export function ReconcileDialog({
             <ListFilter aria-hidden />
             {t("accounts.reconcile.showSince", {
                 date: formatDateStringWithAppSettings(
-                    sinceDate!,
+                    sinceDate,
                     appSettings.dateFormat,
                 ),
             })}

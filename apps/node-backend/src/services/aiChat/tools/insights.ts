@@ -19,6 +19,7 @@ import { getQuotes } from "../../marketLookupService.ts";
 import { detectRecurringPatterns } from "../../recurringDetectionService.ts";
 import { getInsightsDigest } from "../../insightsDigestService.ts";
 import { asRecipientId } from "@vision/types/brands";
+import { currencyOrEur } from "../../../lib/currencyCode.ts";
 
 type AverageVsCurrentSpending = Awaited<
   ReturnType<typeof infoRepository.getAverageVsCurrentSpending>
@@ -41,7 +42,7 @@ export const getBankBalances = {
   ) {
     const currency = scope.currency || "EUR";
     const result = await infoRepository.getBankBalances(currency);
-    const allowedAccountIds = new Set(scope.accountIds || []);
+    const allowedAccountIds = new Set(scope.accountIds ?? []);
     const scopedAccounts = (result.accounts ?? []).filter(
       (account) =>
         allowedAccountIds.size === 0 ||
@@ -211,7 +212,7 @@ export const getRecipientInsights = {
       const amount = toDecimal(row.amount);
       const entry = byRecipient.get(name) || {
         recipient: name,
-        recipientId: row.recipient_id || null,
+        recipientId: row.recipient_id ?? null,
         count: 0,
         totalSpend: toDecimal(0),
         totalIncome: toDecimal(0),
@@ -337,7 +338,7 @@ export const getWatchlist = {
           livePrice != null
             ? roundToCents(toDecimal(livePrice)).toNumber()
             : null,
-        currency: item.currency || "EUR",
+        currency: currencyOrEur(item.currency),
         notes: item.notes || null,
       };
     });

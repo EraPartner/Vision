@@ -203,7 +203,7 @@ function createResearchMappingService({
       try {
         // adapterSupports() above guarantees the search method exists.
         const { items = [] } = await adapters[provider]!.search!(query);
-        noteSuccess(provider);
+        void noteSuccess(provider);
         const top = items[0];
         proposals.push(
           top
@@ -218,7 +218,7 @@ function createResearchMappingService({
             : { provider, status: "none" },
         );
       } catch (err) {
-        noteError(provider, err);
+        void noteError(provider, err);
         proposals.push({ provider, status: "error", error: errMessage(err) });
       }
     }
@@ -283,14 +283,14 @@ function createResearchMappingService({
       try {
         // adapterSupports() above guarantees the quote method exists.
         const q = await adapters[r.provider]!.quote!(r.provider_symbol);
-        noteSuccess(r.provider);
+        void noteSuccess(r.provider);
         quotes.push({
           provider: r.provider,
           currency: q.currency,
           price: q.price,
         });
       } catch (err) {
-        noteError(r.provider, err);
+        void noteError(r.provider, err);
         quotes.push({ provider: r.provider, error: errMessage(err) });
       }
     }

@@ -74,7 +74,7 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
         return accounts
             .filter(
                 (a) =>
-                    a.last_transaction &&
+                    Boolean(a.last_transaction) &&
                     new Date(a.last_transaction).getTime() < cutoff,
             )
             .filter(
@@ -86,7 +86,7 @@ export function NeedsAttentionList({ currency }: NeedsAttentionListProps) {
     }, [balances, dismissedAccounts]);
 
     const rows: React.ReactNode[] = [];
-    if (needsCategory && needsCategory > 0) {
+    if (needsCategory !== undefined && needsCategory > 0) {
         rows.push(
             <ListRow
                 key="needs-category"

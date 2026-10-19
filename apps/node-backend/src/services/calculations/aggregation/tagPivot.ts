@@ -35,4 +35,3 @@ export async function computeTagPivot({
   });
 }
 
-export default { computeTagPivot };

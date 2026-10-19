@@ -311,7 +311,7 @@ export function ibkrPrimaryEvidenceIdentifiesLegacy(
         Number(tax.investment_id) === Number(row.investment_id) &&
         tax.tx_date === row.tx_date,
     );
-    if (!paired.length) return zero(current.taxes);
+    if (paired.length === 0) return zero(current.taxes);
     const [taxRow] = paired;
     if (
       paired.length !== 1 ||

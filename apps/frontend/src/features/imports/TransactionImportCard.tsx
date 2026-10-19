@@ -285,7 +285,7 @@ export function TransactionImportCard({
                     // there is no completed-progress panel and no "imported N" toast to
                     // show — the review page is the entire outcome.
                     bypassNextNavigation();
-                    navigate(`/import/${custom.batch_id}/review`);
+                    void navigate(`/import/${custom.batch_id}/review`);
                     return;
                 }
                 // 201: the row count on this route is `total`. It was read as
@@ -318,7 +318,7 @@ export function TransactionImportCard({
                 data.batch_id != null
             ) {
                 bypassNextNavigation();
-                navigate(`/import/${data.batch_id}/review`);
+                void navigate(`/import/${data.batch_id}/review`);
                 return;
             }
 
@@ -598,15 +598,19 @@ export function TransactionImportCard({
                                             min="0"
                                             placeholder="0"
                                             value={customConfig.skipRows}
-                                            onChange={(e) =>
+                                            onChange={(e) => {
+                                                const skipRows = parseInt(
+                                                    e.target.value,
+                                                );
                                                 setCustomConfig({
                                                     ...customConfig,
-                                                    skipRows:
-                                                        parseInt(
-                                                            e.target.value,
-                                                        ) || 0,
-                                                })
-                                            }
+                                                    skipRows: Number.isNaN(
+                                                        skipRows,
+                                                    )
+                                                        ? 0
+                                                        : skipRows,
+                                                });
+                                            }}
                                         />
                                     </div>
                                 </div>

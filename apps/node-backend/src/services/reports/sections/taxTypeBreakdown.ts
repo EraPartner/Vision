@@ -19,7 +19,7 @@ export function renderTaxTypeBreakdown(
     { label: 'Other Taxes',                amount: data?.otherTaxTotal    ?? 0 },
   ].filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount);
 
-  if (!components.length) {
+  if (components.length === 0) {
     return emptySection({ title: 'Tax Type Breakdown', subtitle: 'Distribution of taxes and fees by type', heading: 'No tax data', message: 'No tax transactions found for the selected period.' });
   }
 

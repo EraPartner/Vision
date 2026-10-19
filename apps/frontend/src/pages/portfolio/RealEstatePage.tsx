@@ -18,13 +18,11 @@ import {
     FactRow,
     Figure,
 } from "@/features/portfolio/assetPageParts";
-import {
-    toneClass,
-    useHoldingActions,
-} from "@/features/portfolio/useHoldingActions";
+import { toneClass } from "@/features/portfolio/holdingTone";
+import { useHoldingActions } from "@/features/portfolio/useHoldingActions";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,7 +42,7 @@ export default function RealEstatePage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio({
         completeAssetClass: "real_estate",
     });
@@ -413,7 +411,7 @@ export default function RealEstatePage() {
                                                 value={
                                                     <Money
                                                         amount={
-                                                            p.cadastral_income ||
+                                                            p.cadastral_income ??
                                                             0
                                                         }
                                                         currency={
@@ -429,7 +427,7 @@ export default function RealEstatePage() {
                                                     "invDetail.municipalityTaxRate",
                                                 )}
                                                 value={`${fmtNum(
-                                                    p.municipality_tax_rate ||
+                                                    p.municipality_tax_rate ??
                                                         0,
                                                 )}%`}
                                             />

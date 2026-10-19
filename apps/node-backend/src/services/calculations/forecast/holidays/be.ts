@@ -65,4 +65,3 @@ export function isBelgianHoliday(isoDateStr: string) {
   return belgianHolidays(year).has(isoDateStr);
 }
 
-export default { belgianHolidays, isBelgianHoliday };

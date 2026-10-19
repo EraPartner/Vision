@@ -285,7 +285,7 @@ export function scheduleRefresh() {
   invalidateStatisticsCaches();
   const now = Date.now();
   if (debounceTimer) clearTimeout(debounceTimer);
-  if (debounceDeadline === null) debounceDeadline = now + REFRESH_MAX_WAIT_MS;
+  debounceDeadline ??= now + REFRESH_MAX_WAIT_MS;
   const delay = Math.max(
     0,
     Math.min(REFRESH_DEBOUNCE_MS, debounceDeadline - now),

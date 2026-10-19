@@ -58,6 +58,8 @@ import type {
   HistoricalRateIndex,
   PortfolioMathTxRow,
 } from "../../types/rows.ts";
+import { nanToZero } from "../../lib/math.ts";
+import { currencyOrEur, storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 export type DecimalInput = import("@vision/shared-utils/money").DecimalInput;
 export type Decimal = import("decimal.js").default;
@@ -221,8 +223,8 @@ export async function getPortfolioSummary(
   // currencies (per-txn fallback) are needed.
   const distinctCurrencies = [
     ...new Set([
-      ...investmentRows.map((inv) => (inv.currency || "EUR").toUpperCase()),
-      ...includedTxnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
+      ...investmentRows.map((inv) => storedCurrencyCode(inv.currency)),
+      ...includedTxnRows.map((txn) => storedCurrencyCode(txn.currency)),
     ]),
   ];
   // Current multipliers come from the latest STORED rates (ADR-216). A
@@ -249,7 +251,7 @@ export async function getPortfolioSummary(
     new Map(
       investmentRows.map((inv) => [
         Number(inv.id),
-        (inv.currency || "EUR").toUpperCase(),
+        storedCurrencyCode(inv.currency),
       ]),
     ),
   );
@@ -294,7 +296,7 @@ export async function getPortfolioSummary(
       throughDate ? [throughDate] : [],
     );
     const archiveCurrencies = [
-      ...new Set(archivedRows.map((row) => row.currency || "EUR")),
+      ...new Set(archivedRows.map((row) => currencyOrEur(row.currency))),
     ];
     const { multipliers: archiveMultipliers } = latestMultipliers(
       archiveCurrencies,
@@ -672,7 +674,7 @@ async function loadHistoricalRateIndex(
   target: string,
 ): Promise<HistoricalRateIndex> {
   const relevant = [...new Set([...currencies, target])].filter(
-    (c) => c && c !== "EUR",
+    (c) => c !== "" && c !== "EUR",
   );
   if (relevant.length === 0) return new Map();
   const rows = await queryRows(
@@ -816,7 +818,7 @@ function buildInvestmentSummary(
     currenciesWithoutRate: ReadonlySet<string>;
   },
 ) {
-  const invCurrency = (inv.currency || "EUR").toUpperCase();
+  const invCurrency = storedCurrencyCode(inv.currency);
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
 
@@ -844,7 +846,7 @@ function buildInvestmentSummary(
   const convertedAccruedInterest = conv(core.accruedInterest);
   const convertedProjectedInterest = conv(core.projectedAnnualInterest);
   const convertedTotalAppreciation = conv(core.totalAppreciation);
-  const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
+  const convertedCurrentPrice = conv(nanToZero(Number(inv.current_price)));
   const { totalUnits } = core;
   const gainLossPercent = cv.gainLossPercent;
   const usedFallbackRate =
@@ -919,7 +921,7 @@ function buildInvestmentSummary(
     // `originalCurrency` so the UI can still display it as a label.
     currency: targetCurrency,
     originalCurrency: invCurrency,
-    nativeCurrentPrice: Number(inv.current_price) || 0,
+    nativeCurrentPrice: nanToZero(Number(inv.current_price)),
     nativeAvgCostBasis: toNumber(core.avgCostBasis),
     unrealizedGainPercent: multiply(
       round2(convertedAvgCostBasis),
@@ -935,14 +937,16 @@ function buildInvestmentSummary(
     // RealEstatePage displays the latest ordinary rent amount directly because its
     // summary currency already equals the display currency. Preserve that behavior.
     estimatedMonthlyRent:
-      Number(txns.filter((t) => t.type === "rent_income").at(-1)?.amount) || 0,
+      nanToZero(
+        Number(txns.filter((t) => t.type === "rent_income").at(-1)?.amount),
+      ),
 
     // Computed numerics — pre-converted to targetCurrency
     totalUnits: round8(totalUnits),
     currentPrice: round2(convertedCurrentPrice),
     current_price: round2(convertedCurrentPrice),
-    interestRate: Number(inv.interest_rate) || 0,
-    interest_rate: Number(inv.interest_rate) || 0,
+    interestRate: nanToZero(Number(inv.interest_rate)),
+    interest_rate: nanToZero(Number(inv.interest_rate)),
 
     totalInvested: round2(convertedTotalInvested),
     totalBuyCost: round2(convertedTotalBuyCost),

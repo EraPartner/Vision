@@ -149,7 +149,7 @@ describe("accounts API client", () => {
                 return ok({ ...ACCOUNT_STUB, id: 9, name: "New" });
             }),
         );
-        const a = await createAccount({ name: "New" } as never);
+        const a = await createAccount({ name: "New" });
         expect(body).toMatchObject({ name: "New" });
         expect(a.id).toBe(9);
     });
@@ -160,7 +160,7 @@ describe("accounts API client", () => {
                 ok({ ...ACCOUNT_STUB, id: 9, name: "Edited" }),
             ),
         );
-        const a = await updateAccount(asAccountId(9), { name: "Edited" } as never);
+        const a = await updateAccount(asAccountId(9), { name: "Edited" });
         expect(a.name).toBe("Edited");
     });
 

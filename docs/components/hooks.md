@@ -33,7 +33,6 @@ the shared `hooks/` tree or feature-local `use*.ts(x)` modules; ESLint rejects d
 | Hook                           | Description                                                                                                                                                                               | File                                                                                     |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `useTransactions()`            | Transaction CRUD                                                                                                                                                                          | [[apps/frontend/src/hooks/useTransactions.ts\|useTransactions.ts]]                       |
-| `useCategories()`              | Category management                                                                                                                                                                       | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]]                           |
 | `useAllCategories(enabled?)`   | The full category list as ONE shared cache entry (`['categories','all']`) — used by `useExcludedIds` and the Settings → Statistics exclusion picker; adopts the boot preload (2026-08-11) | [[apps/frontend/src/hooks/useCategories.ts\|useCategories.ts]]                           |
 | `useRecipients()`              | Recipient management                                                                                                                                                                      | [[apps/frontend/src/hooks/useRecipients.ts\|useRecipients.ts]]                           |
 | `useBankAccounts()`            | Distinct bank account IBANs (Phase 13)                                                                                                                                                    | [[apps/frontend/src/hooks/useBankAccounts.ts\|useBankAccounts.ts]]                       |
@@ -174,26 +173,23 @@ create.mutate({
 
 ## useCategories
 
-Hook for managing categories.
+`hooks/useCategories.ts` holds the category queries and mutations. Since 2026-10-19 it has no
+paginated `useCategories(params)` list hook and no `useDeleteCategory()`: neither had a consumer,
+and `bun run lint:dead` removed them. Deletes go through `useDeleteCategoryNode()`.
 
 ### API
 
 ```typescript
-const { data, isLoading } = useCategories(options);
+const { data: categories } = useAllCategories(enabled); // ['categories', 'all']
+const { data: tree } = useCategoryTree(enabled); // full ordered hierarchy
 
 const createMutation = useCreateCategory();
 const updateMutation = useUpdateCategory();
-const deleteMutation = useDeleteCategory();
-```
 
-### Options
-
-```typescript
-interface UseCategoriesOptions {
-  limit?: number;
-  active?: boolean;
-  search?: string;
-}
+const createNode = useCreateCategoryNode();
+const updateNode = useUpdateCategoryNode();
+const mergeNode = useMergeCategoryNode();
+const deleteNode = useDeleteCategoryNode();
 ```
 
 ### User Feedback

@@ -17,6 +17,7 @@ import {
   toDecimal,
 } from "../../lib/money.ts";
 import type { InvestmentSummary } from "./portfolioSummaryService.ts";
+import { firstNonZero } from "../../lib/math.ts";
 
 const round2 = (value: Parameters<typeof roundMoney>[0]) =>
   roundMoney(value, 2);
@@ -111,9 +112,6 @@ export function buildHoldingTotals(rows: readonly TotalsInput[]) {
     usedFallbackRate: rows.some((row) => row.usedFallbackRate === true),
   };
 }
-
-export type HoldingTotals = ReturnType<typeof buildHoldingTotals>;
-
 /** One entry per asset class present in `summaries`, in canonical class order. */
 export function buildAssetClassTotals(summaries: readonly TotalsInput[]) {
   const byClass = new Map<string, TotalsInput[]>();
@@ -126,7 +124,9 @@ export function buildAssetClassTotals(summaries: readonly TotalsInput[]) {
     (group) => group.assetClasses as readonly string[],
   );
   return [...byClass.entries()]
-    .sort(([a], [b]) => rank(order, a) - rank(order, b) || a.localeCompare(b))
+    .sort(([a], [b]) =>
+      firstNonZero(rank(order, a) - rank(order, b), a.localeCompare(b)),
+    )
     .map(([assetClass, rows]) => ({ assetClass, ...buildHoldingTotals(rows) }));
 }
 

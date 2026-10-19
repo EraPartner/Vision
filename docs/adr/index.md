@@ -271,6 +271,16 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Static checks for agents (accepted)
+
+[[docs/adr/225-static-checks-for-agents|ADR-225]] makes `bun run lint` run frontend ESLint,
+`lint:deps` (dependency-cruiser: no runtime cycles, unresolvable or undeclared imports, app-to-app
+imports, packages importing apps, or frontend imports of the Belgian tax engine) and `lint:dead`
+(knip) in parallel. Frontend and backend share type-aware typescript-eslint rules from
+`config/eslint-type-aware.mjs`. The checks run in the existing CI `Lint` job; no job is added.
+Intended exports without a static importer carry the `@public` JSDoc tag; knip's duplicate-export
+rule is off.
+
 ### 2026-10-19: Remove Alembic adoption (accepted)
 
 [[docs/adr/224-remove-alembic-adoption|ADR-224]] removes the Alembic bridge, the takeover and

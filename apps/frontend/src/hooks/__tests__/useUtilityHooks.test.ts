@@ -43,7 +43,9 @@ describe("useDebounce", () => {
             { initialProps: { value: "hello" } },
         );
         rerender({ value: "world" });
-        act(() => vi.advanceTimersByTime(300));
+        act(() => {
+            vi.advanceTimersByTime(300);
+        });
         expect(result.current).toBe("world");
     });
 
@@ -53,11 +55,17 @@ describe("useDebounce", () => {
             { initialProps: { value: "a" } },
         );
         rerender({ value: "ab" });
-        act(() => vi.advanceTimersByTime(200));
+        act(() => {
+            vi.advanceTimersByTime(200);
+        });
         rerender({ value: "abc" });
-        act(() => vi.advanceTimersByTime(200));
+        act(() => {
+            vi.advanceTimersByTime(200);
+        });
         expect(result.current).toBe("a");
-        act(() => vi.advanceTimersByTime(100));
+        act(() => {
+            vi.advanceTimersByTime(100);
+        });
         expect(result.current).toBe("abc");
     });
 });

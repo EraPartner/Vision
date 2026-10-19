@@ -317,14 +317,15 @@ export function TaxComputationFlow({
                                             />
                                         </p>
                                     </div>
-                                    {(stage.note || stage.chip) && (
+                                    {(Boolean(stage.note) ||
+                                        Boolean(stage.chip)) && (
                                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                                             {stage.note && (
                                                 <span className="type-footnote text-label-secondary">
                                                     {stage.note}
                                                 </span>
                                             )}
-                                            {stage.chip && (
+                                            {Boolean(stage.chip) && (
                                                 <Badge
                                                     variant="muted"
                                                     size="sm"

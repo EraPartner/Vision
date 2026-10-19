@@ -102,7 +102,7 @@ export function LinkTransactionDialog({
     }, [payment]);
 
     useEffect(() => {
-        if (!payment?.recipient_id) return;
+        if (payment?.recipient_id == null) return;
         let cancelled = false;
         getRecipient(payment.recipient_id)
             .then((r) => {
@@ -159,7 +159,7 @@ export function LinkTransactionDialog({
     };
 
     const handleLinkAndExecute = async () => {
-        if (!payment || !selectedTxId) return;
+        if (!payment || selectedTxId === null) return;
         // The execution date is the linked transaction's own date — i.e. when the
         // money actually moved. (Falls back to the backend's app-today if absent.)
         const txDate = candidateTxs.find(
@@ -203,7 +203,7 @@ export function LinkTransactionDialog({
         }
         if (
             txFilters.matchAmount &&
-            payment &&
+            payment !== null &&
             typeof payment.amount === "number"
         ) {
             const planned = Math.abs(payment.amount);
@@ -217,7 +217,7 @@ export function LinkTransactionDialog({
         return true;
     });
 
-    const selectedTx = selectedTxId
+    const selectedTx = selectedTxId !== null
         ? candidateTxs.find((x) => x.id === selectedTxId)
         : undefined;
     const filterGroupClass =
@@ -585,7 +585,7 @@ export function LinkTransactionDialog({
                     </Button>
                     <Button
                         onClick={handleLinkAndExecute}
-                        disabled={actionLoading || !selectedTxId}
+                        disabled={actionLoading || selectedTxId === null}
                     >
                         {t("plannedPage.link.linkAndExecute")}
                     </Button>

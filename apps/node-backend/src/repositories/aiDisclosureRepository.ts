@@ -154,7 +154,7 @@ export async function reserveDisclosure({
         [grantId],
         client,
       )
-    ).flatMap((row) => row.disclosure_units_json || []);
+    ).flatMap((row) => row.disclosure_units_json ?? []);
     const distinctUnits = new Set([...priorUnits, ...preview.disclosureUnits]);
     const monthlyReserved = Number(
       (

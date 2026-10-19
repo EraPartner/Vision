@@ -157,7 +157,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             try {
                 const stored = localStorage.getItem(THEME_STORAGE_KEY);
                 if (stored === "light" || stored === "dark") {
-                    _hydrateTheme({ mode: stored as ThemeMode });
+                    _hydrateTheme({ mode: stored });
                 }
                 const storedVariant = localStorage.getItem(VARIANT_STORAGE_KEY);
                 if (isThemeVariant(storedVariant)) {
@@ -254,7 +254,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             applyThemePalette(v, t);
             const epoch = ++accentEpoch.current;
             if (!useAccent || !isElectronMac()) return;
-            getSystemAccentColor().then((hex) => {
+            // getSystemAccentColor resolves null instead of rejecting.
+            void getSystemAccentColor().then((hex) => {
                 if (epoch !== accentEpoch.current || !hex) return;
                 const hsl = hexToHslComponents(hex);
                 if (!hsl) return;

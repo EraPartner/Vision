@@ -70,7 +70,7 @@ export async function createBatch({
     [
       adapterName,
       filename || null,
-      sizeBytes || null,
+      sizeBytes ?? null,
       customConfig ? JSON.stringify(customConfig) : null,
       defaultAssetClass || null,
       defaultType || null,
@@ -169,7 +169,7 @@ function applyPortfolioAssetScope(
   rows: ParsedPortfolioRows,
   symbols: string[] | undefined,
 ): ParsedPortfolioRows {
-  if (!symbols?.length) return rows;
+  if ((symbols?.length ?? 0) === 0) return rows;
   const selected = new Set(symbols);
   const found = new Set(
     rows.map((row) => row.symbolRaw?.toUpperCase()).filter(Boolean),
@@ -204,7 +204,7 @@ async function insertStagingChunk(
   rows: ParsedPortfolioRow[],
   startIndex: number,
 ): Promise<void> {
-  if (!rows.length) return;
+  if (rows.length === 0) return;
   await withTransaction(async (client) => {
     const values: unknown[] = [];
     const placeholders: string[] = [];
@@ -223,13 +223,13 @@ async function insertStagingChunk(
         r.typeRaw || null,
         r.symbolRaw || null,
         r.nameRaw || null,
-        r.units != null ? r.units : null,
-        r.pricePerUnit != null ? r.pricePerUnit : null,
-        r.amount != null ? r.amount : null,
-        r.fees != null ? r.fees : null,
-        r.taxes != null ? r.taxes : null,
+        r.units ?? null,
+        r.pricePerUnit ?? null,
+        r.amount ?? null,
+        r.fees ?? null,
+        r.taxes ?? null,
         r.currency || null,
-        r.fxRateToEur != null ? r.fxRateToEur : null,
+        r.fxRateToEur ?? null,
         r.note || null,
         r.rawData || null,
         r.sourceId || null,

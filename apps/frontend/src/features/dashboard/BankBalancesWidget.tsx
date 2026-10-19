@@ -12,6 +12,7 @@ import {
     formatCurrencyCompact,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import {
     AlertCircle,
@@ -82,7 +83,10 @@ export function BankBalancesWidget() {
 
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const { data, isLoading, error } = useBankBalances(defaultCurrency);
     // The account entity is the source of truth for the balance CARDS: same
     // accounts, same shared balance source (computed_balance, ADR-094 Phase C)
@@ -121,7 +125,7 @@ export function BankBalancesWidget() {
         // (current 0, large past balances) must still appear in the 12-month chart.
         const chartAccounts = accounts.filter((acct) => {
             if (Math.abs(acct.balance) > 0.000001) return true;
-            return (history[acct.bank_account] || []).some(
+            return (history[acct.bank_account] ?? []).some(
                 (h) => Math.abs(h.balance) > 0.000001,
             );
         });
@@ -132,7 +136,7 @@ export function BankBalancesWidget() {
             chartAccounts.map((acct) => [
                 acct.bank_account,
                 new Map(
-                    (history[acct.bank_account] || []).map((h) => [
+                    (history[acct.bank_account] ?? []).map((h) => [
                         h.date,
                         h.balance,
                     ]),

@@ -184,7 +184,11 @@ export function PlannedPaymentsTable({
                             })}
                         </span>
                     );
-                    if (row.is_loan && row.loan_term_months) {
+                    if (
+                        row.is_loan &&
+                        row.loan_term_months != null &&
+                        row.loan_term_months !== 0
+                    ) {
                         return (
                             <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1.5 type-body">
@@ -213,7 +217,8 @@ export function PlannedPaymentsTable({
                                 />
                                 <span>
                                     {row.frequency === "custom" &&
-                                    row.custom_interval_days
+                                    row.custom_interval_days != null &&
+                                    row.custom_interval_days !== 0
                                         ? t("plannedPage.everyNDays", {
                                               n: row.custom_interval_days,
                                           })

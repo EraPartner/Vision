@@ -8,6 +8,14 @@ import type { CurrencyCode } from "@vision/types/brands";
 /** The app's fallback currency when no setting or row currency applies. */
 export const DEFAULT_CURRENCY: CurrencyCode = asCurrencyCode("EUR");
 
+/** `value`, or `fallback` when it is missing or empty. */
+export function currencyOr<F extends string>(
+    value: CurrencyCode | null | undefined,
+    fallback: F,
+): CurrencyCode | F {
+    return value ? value : fallback;
+}
+
 /**
  * Canonical list of currencies offered in currency dropdowns (account
  * creation/editing and the default-currency setting). Order matters: subset

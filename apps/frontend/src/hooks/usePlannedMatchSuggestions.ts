@@ -2,7 +2,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import type { Transaction } from "@/types/api";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import type { RecipientId } from "@vision/types/brands";
 
@@ -72,7 +71,7 @@ export function useLinkTransactionCandidates(
             if (current.uncategorised) params.uncategorised = true;
             params.active = current.active;
             const response = await apiClient.getTransactions(params);
-            return (response.items ?? []) as Transaction[];
+            return response.items ?? [];
         },
     });
     useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);

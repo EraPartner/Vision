@@ -39,7 +39,7 @@ let hiddenCache: HiddenSections | undefined;
 const listeners = new Set<() => void>();
 
 function getHidden(): HiddenSections {
-    if (!hiddenCache) hiddenCache = readHidden();
+    hiddenCache ??= readHidden();
     return hiddenCache;
 }
 

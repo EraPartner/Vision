@@ -75,5 +75,3 @@ export async function readVerifiedAuditPage({
     };
   });
 }
-
-export default { readVerifiedAuditPage };

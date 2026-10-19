@@ -506,7 +506,7 @@ function splitDelimitedRecord(line: string, delimiter = ";"): string[] | null {
  * Join the adapter's collected comment fragments, or null when there are none.
  */
 export function buildOptionalComment(commentParts: string[]): string | null {
-  return commentParts.length ? commentParts.join(" | ") : null;
+  return commentParts.length > 0 ? commentParts.join(" | ") : null;
 }
 
 /**

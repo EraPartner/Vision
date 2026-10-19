@@ -175,7 +175,7 @@ export function ResearchAnalystTab({
                 </div>
             )}
 
-            {a.recentActions && a.recentActions.length > 0 && (
+            {a.recentActions != null && a.recentActions.length > 0 && (
                 <section className="space-y-2">
                     <h3 className="type-headline text-foreground">
                         {t("market.recentActions")}

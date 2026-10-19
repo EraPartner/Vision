@@ -76,7 +76,7 @@ function mergeCompleteIntoConversationCache(
                 }
             }
             if (
-                complete.assistantMessage &&
+                complete.assistantMessage != null &&
                 !seen.has(complete.assistantMessage.id)
             ) {
                 additions.push(complete.assistantMessage);
@@ -301,10 +301,10 @@ class AiChatStreamStore {
                     this.streams.delete(id);
                     this.aborts.delete(id);
                     this.emit();
-                    queryClient.invalidateQueries({
+                    void queryClient.invalidateQueries({
                         queryKey: aiKeys.conversations,
                     });
-                    queryClient.invalidateQueries({
+                    void queryClient.invalidateQueries({
                         queryKey: aiKeys.conversation(id),
                     });
                     return;
@@ -359,11 +359,11 @@ class AiChatStreamStore {
                         "[aiChatStreamStore] completed-turn refresh failed",
                         { id, refreshError },
                     );
-                    queryClient.invalidateQueries({
+                    void queryClient.invalidateQueries({
                         queryKey: aiKeys.conversation(id),
                     });
                 }
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                     queryKey: aiKeys.conversations,
                 });
                 return null;

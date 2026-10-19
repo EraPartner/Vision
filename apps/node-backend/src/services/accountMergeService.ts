@@ -134,7 +134,7 @@ function collidingAnchorCurrencies(
   anchors: { account_id: AccountId; currency: CurrencyCode }[] | null | undefined,
 ): CurrencyCode[] {
   const accountsByCurrency = new Map<CurrencyCode, Set<AccountId>>();
-  for (const { account_id: accountId, currency } of anchors || []) {
+  for (const { account_id: accountId, currency } of anchors ?? []) {
     const code = storedCurrencyCode(currency);
     let accountIds = accountsByCurrency.get(code);
     if (!accountIds) {
@@ -215,7 +215,7 @@ export async function mergeAccounts(
     );
   }
   const ids = [...new Set(filterValidatedIdNumbers(sourceIds))];
-  if (!ids.length)
+  if (ids.length === 0)
     throw new ValidationError(
       "Provide at least one distinct source account to merge",
     );
@@ -242,7 +242,7 @@ export async function mergeAccounts(
     const srcRows = await accountRepository.lockByIdsForMerge(ids);
     const found = new Set(srcRows.map((r) => r.id));
     const missing = ids.filter((id) => !found.has(id));
-    if (missing.length)
+    if (missing.length > 0)
       throw new NotFoundError(`Account(s) not found: ${missing.join(", ")}`);
 
     // The bulk funding-account repoint below bypasses accountService's normal
@@ -268,7 +268,7 @@ export async function mergeAccounts(
         ...ids,
       ]),
     );
-    if (collisions.length) {
+    if (collisions.length > 0) {
       throw new ValidationError(
         `More than one of these accounts has an opening balance in ${collisions.join(", ")}. ` +
           "Remove the opening balance from all but one of them, then merge " +
@@ -468,10 +468,3 @@ export async function previewMerge(
     openingAnchorCollision: collidingAnchorCurrencies(anchors).length > 0,
   };
 }
-
-export default {
-  mergeAccounts,
-  previewMerge,
-  stampRangesOverlap,
-  collidingAnchorCurrencies,
-};

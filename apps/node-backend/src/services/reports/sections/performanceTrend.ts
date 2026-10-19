@@ -22,7 +22,7 @@ export function renderPerformanceTrend(
 ): string {
   const trend = data?.performanceTrend;
 
-  if (!trend?.points.length) {
+  if (!trend || trend.points.length === 0) {
     return emptySection({
       title: "Performance Trend",
       subtitle: "Portfolio value vs. invested capital over time",

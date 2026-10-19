@@ -33,6 +33,7 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
 import type { PartitionedTxnLike } from "@vision/shared-utils/portfolio";
 import type { DecimalInput } from "../../lib/money.ts";
 import type { PortfolioUnitEventRow } from "../../repositories/portfolioTxRepo.reads.ts";
+import { nanToZero } from "../../lib/math.ts";
 import { asAccountId } from "@vision/types/brands";
 import type {
   AccountId,
@@ -40,9 +41,6 @@ import type {
   InvestmentId,
   PortfolioTransactionId,
 } from "@vision/types/brands";
-
-export type PortfolioTransactionRow =
-  import("../../types/rows.ts").PortfolioTransactionRow;
 
 /**
  * The caller-facing portfolio-transaction payload, before/after
@@ -374,7 +372,7 @@ function replayUnits(
 ): number {
   let net = toDecimal(0);
   for (const row of rows) {
-    const units = toDecimal(row.units || 0);
+    const units = toDecimal(row.units === "" ? 0 : (row.units ?? 0));
     if (row.type === "buy" || row.type === "gift" || row.type === "transfer_in")
       net = net.plus(units);
     else if (
@@ -439,14 +437,16 @@ export async function validatePortfolioUnitMutation({
     accountId == null &&
     !omitCandidate &&
     !checkProjectedHistory &&
-    investmentId &&
+    investmentId != null &&
+    investmentId !== 0 &&
     (await hasAssetTransfersForInvestment(investmentId))
   )
     throw makeValidationError(
       "Acquisitions must name their custody account when asset transfer history exists",
     );
   if (type !== "sell" && !checkProjectedHistory) return;
-  if (!investmentId || (!omitCandidate && !date)) return;
+  if (investmentId == null || investmentId === 0 || (!omitCandidate && !date))
+    return;
 
   const EPSILON = 1e-8;
   const rows = await getUnitEventsForInvestment(investmentId);
@@ -468,7 +468,7 @@ export async function validatePortfolioUnitMutation({
             id: excludeTransactionId ?? Number.MAX_SAFE_INTEGER,
             type,
             date: String(date),
-            units: Number(units) || 0,
+            units: nanToZero(Number(units)),
             account_id: accountId == null ? null : Number(accountId),
           },
         ];
@@ -483,7 +483,7 @@ export async function validatePortfolioUnitMutation({
       "Acquisitions and sales must name their custody account when asset transfer history exists",
     );
 
-  const sellUnits = Number(units) || 0;
+  const sellUnits = nanToZero(Number(units));
   const numericAccountId = accountId ?? undefined;
   const accountScoped =
     type === "sell" &&
@@ -500,7 +500,7 @@ export async function validatePortfolioUnitMutation({
       // accountScoped implies numericAccountId is a positive integer (above).
       const accountRows =
         partitionTxnsByAccount(asPartitionedTxns(priorRows)).get(
-          numericAccountId!,
+          numericAccountId,
         ) ?? [];
       availableUnits = replayUnits(accountRows);
     } else {
@@ -510,7 +510,7 @@ export async function validatePortfolioUnitMutation({
       if (!accountScoped) {
         throw makeValidationError("sell units exceed available holdings");
       }
-      const label = await getAccountLabel(numericAccountId!);
+      const label = await getAccountLabel(numericAccountId);
       throw makeValidationError(
         `sell units exceed available holdings at ${label} ` +
           `(${toNumber(roundMoney(availableUnits, 8))} units held there)`,

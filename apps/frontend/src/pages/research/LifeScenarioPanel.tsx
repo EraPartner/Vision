@@ -249,7 +249,7 @@ export default function LifeScenarioPanel({
                     ? { goalValue, goalDate: `${draft.goalDate}-01` }
                     : {}),
             },
-            ...(goalMonth ? { goalMonth } : {}),
+            ...(goalMonth != null ? { goalMonth } : {}),
         };
     };
 
@@ -644,7 +644,7 @@ export default function LifeScenarioPanel({
                                     </span>
                                 }
                             />
-                            {visibleComparison.goalMonth && (
+                            {visibleComparison.goalMonth != null && (
                                 <>
                                     <ListRow
                                         title={t(

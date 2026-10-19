@@ -23,7 +23,7 @@ export function StepIntro({ title, description }: StepIntroProps) {
     return (
         <div className="space-y-1">
             <h3 className="type-headline text-foreground">{title}</h3>
-            {description && (
+            {Boolean(description) && (
                 <p className="type-footnote text-label-secondary">
                     {description}
                 </p>
@@ -89,7 +89,7 @@ export function ChoiceRow({
                 <span className="type-body font-medium text-foreground">
                     {label}
                 </span>
-                {description && (
+                {Boolean(description) && (
                     <span className="type-footnote text-label-secondary">
                         {description}
                     </span>
@@ -135,7 +135,7 @@ export function ToggleRow({
         <div className="flex items-center gap-4 px-4 py-3">
             <div className="min-w-0 flex-1 space-y-0.5">
                 <Label htmlFor={id}>{label}</Label>
-                {description && <FieldHint>{description}</FieldHint>}
+                {Boolean(description) && <FieldHint>{description}</FieldHint>}
             </div>
             <Switch
                 id={id}

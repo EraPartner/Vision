@@ -554,26 +554,34 @@ export const adminKeys = {
  * disabled globally, so only explicit invalidation refreshes them.
  */
 export function invalidateTransactionData(queryClient: QueryClient) {
-    queryClient.invalidateQueries({ queryKey: transactionKeys.all });
-    queryClient.invalidateQueries({ queryKey: transactionKeys.virtualAll });
-    queryClient.invalidateQueries({ queryKey: accountKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
-    queryClient.invalidateQueries({ queryKey: cashflowKeys.bankBalancesAll });
-    queryClient.invalidateQueries({ queryKey: monthlySummaryKeys.all });
-    queryClient.invalidateQueries({ queryKey: dashboardKeys.filteredStatsAll });
-    queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
-    queryClient.invalidateQueries({ queryKey: insightsKeys.digest });
-    queryClient.invalidateQueries({ queryKey: insightsKeys.count });
-    queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
-    queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    void queryClient.invalidateQueries({
+        queryKey: transactionKeys.virtualAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    void queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
+    void queryClient.invalidateQueries({
+        queryKey: cashflowKeys.bankBalancesAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: monthlySummaryKeys.all });
+    void queryClient.invalidateQueries({
+        queryKey: dashboardKeys.filteredStatsAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+    void queryClient.invalidateQueries({ queryKey: insightsKeys.digest });
+    void queryClient.invalidateQueries({ queryKey: insightsKeys.count });
+    void queryClient.invalidateQueries({
+        queryKey: plannedKeys.transactionsAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
+    void queryClient.invalidateQueries({
         queryKey: plannedKeys.accountTransactionsAll,
     });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
         queryKey: dashboardKeys.recentTransactionsAll,
     });
     // The tax overview's charts and recorded income derive from transactions.
-    queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
+    void queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
 }
 
 /**
@@ -582,8 +590,8 @@ export function invalidateTransactionData(queryClient: QueryClient) {
  * so a missed invalidation shows a stale total for up to 2 minutes.
  */
 export function invalidateAccountDerived(queryClient: QueryClient) {
-    queryClient.invalidateQueries({ queryKey: accountKeys.all });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
+    void queryClient.invalidateQueries({ queryKey: accountKeys.all });
+    void queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
 }
 
 /**
@@ -601,28 +609,38 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
     invalidateTransactionData(queryClient);
     // The dashboard bank-balances widget (history + net-position) and the
     // cash-flow forecast both key off account balances, so a repoint restates them.
-    queryClient.invalidateQueries({ queryKey: cashflowKeys.bankBalancesAll });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
+        queryKey: cashflowKeys.bankBalancesAll,
+    });
+    void queryClient.invalidateQueries({
         queryKey: cashflowKeys.forecastMethodsAll,
     });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
         queryKey: cashflowKeys.forecastRollingAll,
     });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
         queryKey: cashflowKeys.forecastRollingDiagnosticsAll,
     });
     // Planned payments can reference the merged/closed account.
-    queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
-    queryClient.invalidateQueries({ queryKey: plannedKeys.transactionsAll });
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({ queryKey: plannedKeys.upcomingAll });
+    void queryClient.invalidateQueries({
+        queryKey: plannedKeys.transactionsAll,
+    });
+    void queryClient.invalidateQueries({
         queryKey: plannedKeys.accountTransactionsAll,
     });
-    queryClient.invalidateQueries({ queryKey: plannedKeys.matchSuggestions });
+    void queryClient.invalidateQueries({
+        queryKey: plannedKeys.matchSuggestions,
+    });
     // Holdings move across accounts (in-specie), so the portfolio trees restate.
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.transactionsAll });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.performanceAll });
+    void queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
+    void queryClient.invalidateQueries({
+        queryKey: portfolioKeys.transactionsAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
+    void queryClient.invalidateQueries({
+        queryKey: portfolioKeys.performanceAll,
+    });
 }
 
 /**
@@ -631,12 +649,18 @@ export function invalidateAccountRepoint(queryClient: QueryClient) {
  * 2-minute staleTime on NetWorthPage, so without this it shows stale figures.
  */
 export function invalidateInvestmentData(queryClient: QueryClient) {
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.transactionsAll });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
-    queryClient.invalidateQueries({ queryKey: portfolioKeys.performanceAll });
-    queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
+    void queryClient.invalidateQueries({ queryKey: portfolioKeys.investments });
+    void queryClient.invalidateQueries({
+        queryKey: portfolioKeys.transactionsAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
+    void queryClient.invalidateQueries({
+        queryKey: portfolioKeys.performanceAll,
+    });
+    void queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
     // Recorded portfolio taxes feed both Belgian-tax dashboards.
-    queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
-    queryClient.invalidateQueries({ queryKey: taxKeys.portfolioDashboardAll });
+    void queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
+    void queryClient.invalidateQueries({
+        queryKey: taxKeys.portfolioDashboardAll,
+    });
 }

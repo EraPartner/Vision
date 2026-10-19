@@ -83,7 +83,6 @@ export {
   listBatches,
   getBatch,
   overrideInvestment,
-  setBatchAccount,
 } from "../repositories/portfolioImportBatchRepository.ts";
 
 /** One review group: a holding (or raw symbol) and its staged rows. */
@@ -175,7 +174,7 @@ function buildPortfolioImportBatchPreview(rows: PortfolioImportPreviewRow[]) {
       continue;
     }
     const source = row.match_source ?? "unresolved";
-    totals[source] = (totals[source] || 0) + 1;
+    totals[source] = (totals[source] ?? 0) + 1;
   }
   return { groups, totals };
 }
@@ -320,7 +319,7 @@ async function createInvestmentFromRow({
     config =
       typeof row.custom_config === "string"
         ? JSON.parse(row.custom_config)
-        : row.custom_config || {};
+        : row.custom_config ?? {};
   } catch {
     // Malformed historical config falls back to the batch default, matching
     // the generic create-new behavior instead of blocking review.
@@ -584,7 +583,7 @@ export async function rollbackBatch(batchId: number) {
         },
       );
     const custodySourceRows = await readReconciliationSources([batchId]);
-    if (lockedBatch)
+    if (lockedBatch != null)
       await lockReconciliationAccountsAndHistory(
         [
           ...new Set(
@@ -631,9 +630,9 @@ export async function rollbackBatch(batchId: number) {
     if (
       custodySourceRows.some(
         (row) =>
-          row.asset_transfer_details?.networkBinding ||
-          row.asset_transfer_details?.networkReceipt ||
-          row.asset_transfer_details?.nativeGiftGroupReceipt ||
+          row.asset_transfer_details?.networkBinding ??
+          row.asset_transfer_details?.networkReceipt ??
+          row.asset_transfer_details?.nativeGiftGroupReceipt ??
           row.asset_adjustment_details?.networkReceipt,
       )
     ) {
@@ -659,13 +658,13 @@ export async function rollbackBatch(batchId: number) {
           nativeBatches,
           nativeHistory,
           nativeContext,
-        ).blockers.length ||
+        ).blockers.length > 0 ||
         proveKinesisNativeGiftGroups(
           custodySourceRows,
           nativeBatches,
           nativeHistory,
           await readKinesisNativeGiftContext(nativeHistory),
-        ).blockers.length
+        ).blockers.length > 0
       )
         throw new ConflictError(
           "Native wallet source evidence changed. Refresh before undoing this import.",

@@ -78,7 +78,7 @@ router.get(
     const storedDate = rates[0]?.rate_date ?? null;
     const isStale = !storedDate || storedDate < today;
     const lastFetchedAt = rates.reduce((latest: number, row) => {
-      const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;
+      const ts = row.fetched_at != null ? new Date(row.fetched_at).getTime() : NaN;
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
     // "fallback" means nothing is stored: only EUR amounts can be converted.

@@ -374,7 +374,7 @@ describe("streamChat SSE handling", () => {
 
         const captured: Array<{ type: string; message?: unknown }> = [];
         const { result } = streamChat({ message: "hi" } as never, (e) =>
-            captured.push(e as { type: string; message?: unknown }),
+            captured.push(e),
         );
         await result;
 
@@ -402,7 +402,7 @@ describe("streamChat SSE handling", () => {
 
         const captured: Array<{ type: string; delta?: string }> = [];
         const { result } = streamChat({ message: "hi" } as never, (e) =>
-            captured.push(e as { type: string; delta?: string }),
+            captured.push(e),
         );
         await result;
 

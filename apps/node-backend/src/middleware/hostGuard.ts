@@ -32,7 +32,7 @@ function parseAuthority(value: unknown): string | undefined {
     const canonical = host.replace(/\.$/u, "");
     if (
       canonical.length > 253 ||
-      (!isIP(canonical) &&
+      (isIP(canonical) === 0 &&
         !canonical
           .split(".")
           .every(
@@ -92,11 +92,11 @@ export function createHostGuard({
       if (count !== 1) return next(new ForbiddenError("Invalid request host"));
     }
     const host = parseAuthority(req.headers.host);
-    const ip = host && isIP(host);
+    const ip = host ? isIP(host) : 0;
     if (
       host &&
       (allowed.has(host) ||
-        (ip && loopback.check(host, ip === 4 ? "ipv4" : "ipv6")))
+        (ip !== 0 && loopback.check(host, ip === 4 ? "ipv4" : "ipv6")))
     )
       return next();
     return next(new ForbiddenError("Invalid request host"));

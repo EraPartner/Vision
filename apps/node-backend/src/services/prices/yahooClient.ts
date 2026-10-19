@@ -30,11 +30,9 @@ let clientPromise: Promise<YahooClient> | null = null;
  * first call and returning the cached instance thereafter.
  */
 export function getYahooClient(): Promise<YahooClient> {
-  if (!clientPromise) {
-    clientPromise = import('yahoo-finance2').then(
+  clientPromise ??= import('yahoo-finance2').then(
       ({ default: YahooFinance }) => new YahooFinance({ suppressNotices: ['yahooSurvey'] }),
     );
-  }
   return clientPromise;
 }
 
@@ -118,7 +116,6 @@ export const yahooSearchResultSchema = z.looseObject({
     }),
   ),
 });
-export type YahooSearchResult = z.output<typeof yahooSearchResultSchema>;
 
 /** A `chart()` result: series metadata plus one entry per bar. */
 export const yahooChartResultSchema = z.looseObject({
@@ -133,7 +130,6 @@ export const yahooChartResultSchema = z.looseObject({
     }),
   ),
 });
-export type YahooChartResult = z.output<typeof yahooChartResultSchema>;
 
 /** A `quoteSummary()` result, limited to the modules and fields Vision reads. */
 export const yahooQuoteSummarySchema = z.looseObject({

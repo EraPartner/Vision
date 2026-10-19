@@ -5,7 +5,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { SavedChart } from "@/types/apiClient";
 import { aggregationKeys } from "@/lib/queryKeys";
 import type { CurrencyCode } from "@vision/types/brands";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /**
  * Static (module-level) part of a pivot-hook configuration. Keeping it out of
@@ -54,9 +54,7 @@ function buildPeriodData<
     for (const [period, items] of Object.entries(pivot)) {
         for (const item of items) {
             const id = getItemId(item);
-            if (!map[id]) {
-                map[id] = initRow(item);
-            }
+            map[id] ??= initRow(item);
             map[id].months[period] = item.total;
         }
     }
@@ -83,7 +81,10 @@ export function usePivotQuery<
     config: PivotConfig<Item, Row, Metadata, Id>,
 ) {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     const enabled = !!(chart && (all || (ids?.length ?? 0) > 0));
 

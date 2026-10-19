@@ -79,9 +79,6 @@ export function balanceProvenanceLateral({
   ) lb ON true
 `;
 }
-
-const BALANCE_PROVENANCE_LATERAL = balanceProvenanceLateral();
-
 /**
  * Same anchor+delta definition as {@link BALANCE_PROVENANCE_LATERAL}, but emitted
  * **per currency**: one row per currency the account holds.
@@ -505,11 +502,3 @@ export function computedBalanceSeriesCtes({
     CROSS JOIN LATERAL generate_series(s.from_day, s.thru_day, interval '1 day') AS g(day)
   )`;
 }
-
-export default {
-  BALANCE_PROVENANCE_LATERAL,
-  computedBalanceByCurrencyLateral,
-  computedBalanceByCurrencyAggLateral,
-  statementPartition,
-  computedBalanceSeriesCtes,
-};

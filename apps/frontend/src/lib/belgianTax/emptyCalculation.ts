@@ -41,4 +41,4 @@ export const EMPTY_BELGIAN_TAX_CALCULATION: BelgianTaxCalculation = Object.freez
     maritalQuotientBenefit: 0,
     serviceVoucherCredit: 0,
     breakdown: [],
-}) as BelgianTaxCalculation;
+});

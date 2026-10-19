@@ -190,4 +190,3 @@ export async function computeCashflowForecast({
   });
 }
 
-export default { computeCashflowForecast };

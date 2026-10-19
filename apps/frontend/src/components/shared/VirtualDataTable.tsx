@@ -302,12 +302,11 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                 ?.focus();
         }
     }, [isEditing]);
-    const rowsInteractive = !!(
-        onRowDoubleClick ||
-        onRowOpen ||
-        onRowQuickLook ||
-        onRowSelect
-    );
+    const rowsInteractive =
+        onRowDoubleClick !== undefined ||
+        onRowOpen !== undefined ||
+        onRowQuickLook !== undefined ||
+        onRowSelect !== undefined;
     const isControlTarget = (target: EventTarget | null) =>
         target instanceof HTMLElement &&
         !!target.closest(
@@ -422,7 +421,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                             col.className || "",
                         )}
                         style={
-                            width
+                            width !== undefined
                                 ? { width: `${width}px`, flex: "none" }
                                 : undefined
                         }
@@ -684,7 +683,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 isTypingRef.current = true;
                 if (debounceRef.current) clearTimeout(debounceRef.current);
                 debounceRef.current = setTimeout(() => {
-                    onSearchChange!(gateServerSearch(value));
+                    onSearchChange(gateServerSearch(value));
                     debounceRef.current = null;
                     isTypingRef.current = false;
                 }, SEARCH_DEBOUNCE_MS);
@@ -696,7 +695,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     const clearSearch = useCallback(() => {
         clearPendingSearch();
         setLocalSearchQuery("");
-        if (isServerSearch) onSearchChange!("");
+        if (isServerSearch) onSearchChange("");
     }, [clearPendingSearch, isServerSearch, onSearchChange]);
 
     // Keep local search in sync with external searchValue changes (e.g., clear from outside)
@@ -769,7 +768,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         () => {
             const widths: Record<string, number> = {};
             columns.forEach((col) => {
-                if (col.defaultWidth) widths[col.key] = col.defaultWidth;
+                if (col.defaultWidth !== undefined)
+                    widths[col.key] = col.defaultWidth;
             });
             return widths;
         },
@@ -784,7 +784,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             let changed = false;
             const next = { ...prev };
             for (const col of columnsRef.current) {
-                if (col.defaultWidth && next[col.key] === undefined) {
+                if (
+                    col.defaultWidth !== undefined &&
+                    next[col.key] === undefined
+                ) {
                     next[col.key] = col.defaultWidth;
                     changed = true;
                 }
@@ -837,12 +840,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 const col = columns.find(
                     (c) => c.key === resizingRef.current!.key,
                 );
-                const minW = col?.minWidth || 60;
+                const minW = col?.minWidth ?? 60;
                 pendingWidth = Math.min(
                     MAX_COLUMN_WIDTH,
                     Math.max(minW, resizingRef.current.startWidth + diff),
                 );
-                if (rafId == null) rafId = requestAnimationFrame(flush);
+                rafId ??= requestAnimationFrame(flush);
             };
             const finishResize = (ev?: PointerEvent) => {
                 if (
@@ -876,7 +879,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
             e.preventDefault();
             const minWidth =
-                columns.find((col) => col.key === colKey)?.minWidth || 60;
+                columns.find((col) => col.key === colKey)?.minWidth ?? 60;
             const delta = e.key === "ArrowRight" ? 10 : -10;
             setColumnWidths((prev) => ({
                 ...prev,
@@ -894,10 +897,13 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             const measuredWidth =
                 handle.parentElement?.getBoundingClientRect().width ?? 0;
             const minWidth =
-                columns.find((col) => col.key === colKey)?.minWidth || 60;
+                columns.find((col) => col.key === colKey)?.minWidth ?? 60;
             const width = Math.min(
                 MAX_COLUMN_WIDTH,
-                Math.max(minWidth, measuredWidth || fallbackWidth),
+                Math.max(
+                    minWidth,
+                    measuredWidth > 0 ? measuredWidth : fallbackWidth,
+                ),
             );
             setColumnWidths((prev) =>
                 prev[colKey] === width ? prev : { ...prev, [colKey]: width },
@@ -927,7 +933,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 newKey = key;
                 newDir = "asc";
             }
-            onSortChange!(newKey, newDir);
+            onSortChange(newKey, newDir);
         } else {
             if (localSortKey === key) {
                 if (localSortDir === "asc") setLocalSortDir("desc");
@@ -960,7 +966,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     const openFilterUniqueValues = useMemo(() => {
         if (!openFilter) return [] as string[];
         const col = columns.find((c) => c.key === openFilter);
-        if (!col || col.filterable === false || !col.header) return [];
+        const hasHeader = Boolean(col?.header);
+        if (!col || col.filterable === false || !hasHeader) return [];
         const vals = new Set<string>();
         data.forEach((row) => {
             const v = row[col.key];
@@ -1231,7 +1238,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         }
                     }
                 }
-                const updatedRow = { ...row, ...values } as T;
+                const updatedRow = { ...row, ...values };
                 onRowUpdate(sourceIndex, updatedRow);
             }
             setEditingRow(null);
@@ -1244,9 +1251,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
         clearPendingSearch();
         setColumnFilters({});
         setLocalSearchQuery("");
-        if (isServerSearch) onSearchChange!("");
+        if (isServerSearch) onSearchChange("");
         if (isServerSort) {
-            onSortChange!(null, null);
+            onSortChange(null, null);
         } else {
             setLocalSortKey(null);
             setLocalSortDir(null);
@@ -1266,7 +1273,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
     return (
         <Card className="relative overflow-hidden">
-            {(title || subtitle || actions) && (
+            {(title || subtitle || Boolean(actions)) && (
                 <CardHeader
                     className={cn(
                         "flex flex-row flex-wrap items-start gap-3 space-y-0 pb-4",
@@ -1285,7 +1292,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                             )}
                         </div>
                     )}
-                    {actions && (
+                    {Boolean(actions) && (
                         <div className="flex flex-wrap items-center gap-2">
                             {actions}
                         </div>
@@ -1297,7 +1304,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             <div
                 className={cn(
                     "px-6 pb-4 flex flex-wrap items-center gap-3",
-                    !(title || subtitle || actions) && "pt-6",
+                    !(title || subtitle || Boolean(actions)) && "pt-6",
                 )}
             >
                 <div
@@ -1364,6 +1371,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 <div className="px-6 pb-3 flex flex-wrap gap-1.5">
                     {Object.entries(columnFilters).map(([key, val]) => {
                         const col = columns.find((c) => c.key === key);
+                        const hasHeader = Boolean(col?.header);
                         return (
                             <span
                                 key={key}
@@ -1373,7 +1381,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                     aria-hidden="true"
                                     className="h-3 w-3"
                                 />
-                                {col?.header || key}: {val}
+                                {hasHeader ? col?.header : key}: {val}
                                 <button
                                     type="button"
                                     aria-label={t("aria.clearNamedFilter", {
@@ -1412,9 +1420,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         {columns.map((col) => {
                             const width = columnWidths[col.key];
                             const isSortable =
-                                col.sortable !== false && !!col.header;
+                                col.sortable !== false && Boolean(col.header);
                             const isFilterable =
-                                col.filterable !== false && !!col.header;
+                                col.filterable !== false && Boolean(col.header);
                             const hasFilter = !!columnFilters[col.key];
 
                             const ariaSort =
@@ -1436,7 +1444,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                         col.className || "",
                                     )}
                                     style={
-                                        width
+                                        width !== undefined
                                             ? {
                                                   width: `${width}px`,
                                                   flex: "none",
@@ -1480,76 +1488,83 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             </span>
                                         )}
 
-                                        {isFilterable && col.header && (
-                                            <Popover
-                                                open={openFilter === col.key}
-                                                onOpenChange={(open) =>
-                                                    setOpenFilter(
-                                                        open ? col.key : null,
-                                                    )
-                                                }
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    <button
-                                                        type="button"
-                                                        aria-label={t(
-                                                            "aria.filterColumn",
-                                                            {
-                                                                header:
-                                                                    typeof col.header ===
-                                                                    "string"
-                                                                        ? col.header
-                                                                        : "",
-                                                            },
-                                                        )}
-                                                        className={cn(
-                                                            "icon-touch-target shrink-0 rounded-chip transition-colors duration-fast focus-ring",
-                                                            hasFilter
-                                                                ? "text-primary"
-                                                                : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
-                                                        )}
-                                                    >
-                                                        <Filter className="h-3 w-3" />
-                                                    </button>
-                                                </PopoverTrigger>
-                                                <PopoverContent
-                                                    className="w-56 p-2"
-                                                    align="start"
+                                        {isFilterable &&
+                                            Boolean(col.header) && (
+                                                <Popover
+                                                    open={
+                                                        openFilter === col.key
+                                                    }
+                                                    onOpenChange={(open) =>
+                                                        setOpenFilter(
+                                                            open
+                                                                ? col.key
+                                                                : null,
+                                                        )
+                                                    }
                                                 >
-                                                    <ColumnFilter
-                                                        header={
-                                                            typeof col.header ===
-                                                            "string"
-                                                                ? col.header
-                                                                : ""
-                                                        }
-                                                        value={
-                                                            columnFilters[
+                                                    <PopoverTrigger asChild>
+                                                        <button
+                                                            type="button"
+                                                            aria-label={t(
+                                                                "aria.filterColumn",
+                                                                {
+                                                                    header:
+                                                                        typeof col.header ===
+                                                                        "string"
+                                                                            ? col.header
+                                                                            : "",
+                                                                },
+                                                            )}
+                                                            className={cn(
+                                                                "icon-touch-target shrink-0 rounded-chip transition-colors duration-fast focus-ring",
+                                                                hasFilter
+                                                                    ? "text-primary"
+                                                                    : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
+                                                            )}
+                                                        >
+                                                            <Filter className="h-3 w-3" />
+                                                        </button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-56 p-2"
+                                                        align="start"
+                                                    >
+                                                        <ColumnFilter
+                                                            header={
+                                                                typeof col.header ===
+                                                                "string"
+                                                                    ? col.header
+                                                                    : ""
+                                                            }
+                                                            value={
+                                                                columnFilters[
+                                                                    col.key
+                                                                ] || ""
+                                                            }
+                                                            onChange={(v) =>
+                                                                setColumnFilter(
+                                                                    col.key,
+                                                                    v,
+                                                                )
+                                                            }
+                                                            uniqueValues={
+                                                                openFilter ===
                                                                 col.key
-                                                            ] || ""
-                                                        }
-                                                        onChange={(v) =>
-                                                            setColumnFilter(
-                                                                col.key,
-                                                                v,
-                                                            )
-                                                        }
-                                                        uniqueValues={
-                                                            openFilter ===
-                                                            col.key
-                                                                ? openFilterUniqueValues
-                                                                : []
-                                                        }
-                                                        onClose={() =>
-                                                            setOpenFilter(null)
-                                                        }
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        )}
+                                                                    ? openFilterUniqueValues
+                                                                    : []
+                                                            }
+                                                            onClose={() =>
+                                                                setOpenFilter(
+                                                                    null,
+                                                                )
+                                                            }
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                            )}
                                     </div>
 
-                                    {col.header && (
+                                    {Boolean(col.header) && (
                                         <div
                                             role="separator"
                                             aria-orientation="vertical"
@@ -1558,12 +1573,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                     ? col.header
                                                     : col.key
                                             }
-                                            aria-valuemin={col.minWidth || 60}
+                                            aria-valuemin={col.minWidth ?? 60}
                                             aria-valuemax={MAX_COLUMN_WIDTH}
                                             aria-valuenow={Math.min(
                                                 MAX_COLUMN_WIDTH,
                                                 Math.max(
-                                                    col.minWidth || 60,
+                                                    col.minWidth ?? 60,
                                                     columnWidths[col.key] ??
                                                         col.defaultWidth ??
                                                         120,

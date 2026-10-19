@@ -10,6 +10,8 @@ import type {
   RawInvestmentRow,
 } from "./portfolioSummaryService.ts";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
+import { nanToZero, firstNonZero } from "../../lib/math.ts";
+import { storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 /** Existing usePortfolioSummaries archive presentation. Ordinary history uses the latest stored
  * quote FX (a currency without a stored rate stays unconverted and sets usedFallbackRate),
@@ -30,10 +32,11 @@ export function buildArchivedPortfolioPresentation(
     .map((inv) => {
       const txns = transactions
         .filter((t) => Number(t.investment_id) === Number(inv.id))
-        .sort(
-          (a, b) =>
-            String(b.date).localeCompare(String(a.date)) ||
+        .sort((a, b) =>
+          firstNonZero(
+            String(b.date).localeCompare(String(a.date)),
             Number(b.id) - Number(a.id),
+          ),
         )
         .slice(0, 1000);
       const { core, fullyAssigned } = buildInvestmentSummaryCorePartitioned(
@@ -42,7 +45,7 @@ export function buildArchivedPortfolioPresentation(
         { costBasisMethod, todayYmd },
       );
       const current = canonicalById.get(Number(inv.id))!;
-      const invCurrency = (inv.currency || "EUR").toUpperCase();
+      const invCurrency = storedCurrencyCode(inv.currency);
       const conv = (value: DecimalInput) =>
         toNumber(multiply(value, multipliers.get(invCurrency) ?? 1));
       return {
@@ -56,9 +59,9 @@ export function buildArchivedPortfolioPresentation(
         totalDividends: conv(core.totalDividends),
         totalIncome: conv(core.totalIncome),
         currentValue: conv(core.currentValue),
-        currentPrice: conv(Number(inv.current_price) || 0),
-        current_price: Number(inv.current_price) || 0,
-        nativeCurrentPrice: Number(inv.current_price) || 0,
+        currentPrice: conv(nanToZero(Number(inv.current_price))),
+        current_price: nanToZero(Number(inv.current_price)),
+        nativeCurrentPrice: nanToZero(Number(inv.current_price)),
         nativeAvgCostBasis: toNumber(core.avgCostBasis),
         unrealizedGainPercent: multiply(core.avgCostBasis, core.totalUnits).gt(
           0,
@@ -70,8 +73,9 @@ export function buildArchivedPortfolioPresentation(
               .times(100)
               .toNumber()
           : 0,
-        estimatedMonthlyRent:
-          Number(txns.find((t) => t.type === "rent_income")?.amount) || 0,
+        estimatedMonthlyRent: nanToZero(
+          Number(txns.find((t) => t.type === "rent_income")?.amount),
+        ),
         avgCostBasis: conv(core.avgCostBasis),
         realizedGain: conv(core.realizedGain),
         unrealizedGain: conv(core.unrealizedGain),

@@ -8,6 +8,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
 import settings from "../config/config.ts";
 import { logger } from "../config/logger.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 /**
  * The slice of a pg `PoolClient` this module and its JS callers rely on. Kept
@@ -72,10 +73,10 @@ function getAmbientTransactionClient(): PgPoolClient | null {
 // settings.database.poolSize is the sustained pool size;
 // settings.database.maxOverflow is kept for configuration parity but we use
 // the larger of the two so burst traffic is absorbed without exhausting the DB.
-const poolMax =
-  Math.max(settings.database.poolSize, settings.database.maxOverflow) ||
-  settings.database.poolSize ||
-  10;
+const poolMax = nonZeroOr(
+  Math.max(settings.database.poolSize, settings.database.maxOverflow),
+  nonZeroOr(settings.database.poolSize, 10),
+);
 
 const pool = new pg.Pool({
   connectionString: settings.database.url,
@@ -172,7 +173,7 @@ export async function query<R = unknown>(
       logger.error(`Query failed after ${duration}ms: ${text.slice(0, 100)}`, {
         error: err.message,
       });
-      throw err;
+      throw caught;
     }
   }
 }

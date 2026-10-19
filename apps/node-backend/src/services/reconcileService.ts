@@ -237,5 +237,3 @@ export async function reconcileAccount(
     };
   });
 }
-
-export default { reconcileAccount, normalizeReconcile };

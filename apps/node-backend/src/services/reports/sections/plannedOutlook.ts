@@ -45,7 +45,7 @@ export function renderPlannedOutlook(
   // Daily groups
   const days = daily_data.slice(0, MAX_DAYS);
 
-  if (!days.length) {
+  if (days.length === 0) {
     return sectionPage({
       title: 'Planned Outlook',
       subtitle: periodLabel,

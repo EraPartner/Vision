@@ -23,7 +23,7 @@ export function summarizeSeriesChart(
   const kind = t(kindKey);
   const named = seriesLabels.filter((l): l is string => Boolean(l));
   const base = t(categoryCount === 1 ? 'chart.aria.seriesOne' : 'chart.aria.seriesOther', { kind, count: categoryCount });
-  return named.length ? base + t('chart.aria.series', { names: named.join(', ') }) : base;
+  return named.length > 0 ? base + t('chart.aria.series', { names: named.join(', ') }) : base;
 }
 
 /** Summary for proportion charts (pie, donut), listing the first few segment names. */
@@ -32,7 +32,7 @@ export function summarizeProportionChart(t: TFn, kindKey: string, names: Readonl
   const named = names.filter(Boolean);
   const shown = named.slice(0, 6);
   let out = t(names.length === 1 ? 'chart.aria.segmentOne' : 'chart.aria.segmentOther', { kind, count: names.length });
-  if (shown.length) {
+  if (shown.length > 0) {
     out += t('chart.aria.segmentNames', { names: shown.join(', ') });
     if (named.length > shown.length) out += t('chart.aria.andMore', { count: named.length - shown.length });
   }
@@ -42,7 +42,7 @@ export function summarizeProportionChart(t: TFn, kindKey: string, names: Readonl
 /** Summary for a sparkline (array of numbers): point count + value range. */
 export function summarizeSparkline(t: TFn, values: ReadonlyArray<number>): string {
   const finite = values.filter((v) => Number.isFinite(v));
-  if (!finite.length) return t('chart.aria.sparklineEmpty');
+  if (finite.length === 0) return t('chart.aria.sparklineEmpty');
   let min = Infinity;
   let max = -Infinity;
   for (const v of finite) {

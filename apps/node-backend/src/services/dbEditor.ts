@@ -37,8 +37,6 @@ import type { QueryRunner } from "../types/rows.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import { dbEditorAuditRowSchema } from "../database/rows/admin.ts";
 
-export type { QueryRunner };
-
 /**
  * Column metadata for one table column, as introspected from
  * `information_schema.columns` + the primary-key query. Genuinely dynamic —
@@ -527,7 +525,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     }
   }
 
-  const cursorWhereSql = whereParts.length
+  const cursorWhereSql = whereParts.length > 0
     ? `WHERE ${whereParts.join(" AND ")}`
     : "";
 
@@ -648,7 +646,7 @@ function buildMutationSql(
     // Only columns present in the catalog survive this filter, so every
     // colMeta lookup below hits.
     const cols = Object.keys(values).filter((c) => ctx.colMeta.has(c));
-    if (!cols.length)
+    if (cols.length === 0)
       throw new ValidationError(`Insert #${ctx.index} has no values`);
     for (const c of cols) {
       if (!ctx.colMeta.get(c)!.writable) {
@@ -666,7 +664,7 @@ function buildMutationSql(
   if (change.op === "update") {
     const set = change.set ?? {};
     const cols = Object.keys(set).filter((c) => ctx.colMeta.has(c));
-    if (!cols.length)
+    if (cols.length === 0)
       throw new ValidationError(`Update #${ctx.index} has no changed columns`);
     for (const c of cols) {
       if (ctx.primaryKey.includes(c)) {
@@ -708,7 +706,7 @@ function buildMutationSql(
 }
 
 function validateChange(change: Change, ctx: MutationCtx): void {
-  if (!change || typeof change !== "object") {
+  if (change == null || typeof change !== "object") {
     throw new ValidationError(`Change #${ctx.index} is malformed`);
   }
   if (change.op === "update" || change.op === "delete") {
@@ -904,7 +902,7 @@ export async function applyMutations(
     throw new ForbiddenError("Audit tables cannot be edited");
   }
   const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
-  if (!primaryKey.length) {
+  if (primaryKey.length === 0) {
     throw new ValidationError(
       `Table "${table}" has no primary key and cannot be edited`,
     );
@@ -1054,5 +1052,3 @@ function mapDbError(error: unknown): unknown {
       return err;
   }
 }
-
-export default { getTableMeta, readRows, applyMutations };

@@ -46,7 +46,11 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
+import {
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
 import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
@@ -56,7 +60,7 @@ import { useControlledOpen } from "@/hooks/useDialogFormState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "./PortfolioOversoldBadge";
 import { FactRow } from "./assetPageParts";
-import { toneClass } from "./useHoldingActions";
+import { toneClass } from "./holdingTone";
 
 type TxnRow = InvestmentSummary["transactions"][number];
 
@@ -155,7 +159,7 @@ const TransactionRow = memo(function TransactionRow({
 }) {
     const fmtNum = (val: number, decimals = 2) =>
         getNumberFmt(locale, decimals).format(val);
-    const transactionLabel = `${getTxnTypeLabel(t, txn.type as PortfolioTxnType)} · ${formatDateStringWithAppSettings(txn.date, dateFormat)}`;
+    const transactionLabel = `${getTxnTypeLabel(t, txn.type)} · ${formatDateStringWithAppSettings(txn.date, dateFormat)}`;
     const editLabel = `${t("aria.editTransaction")}: ${transactionLabel}`;
     const deleteLabel = `${t("aria.deleteTransaction")}: ${transactionLabel}`;
     return (
@@ -169,7 +173,7 @@ const TransactionRow = memo(function TransactionRow({
                             TXN_TYPE_COLORS[txn.type as PortfolioTxnType]
                         }
                     >
-                        {getTxnTypeLabel(t, txn.type as PortfolioTxnType)}
+                        {getTxnTypeLabel(t, txn.type)}
                     </Badge>
                     <span className="flex items-center gap-1 type-caption text-label-secondary">
                         <Calendar className="h-3 w-3" aria-hidden />
@@ -182,12 +186,17 @@ const TransactionRow = memo(function TransactionRow({
                         {t("invDetail.unitsAt", {
                             units: fmtNum(txn.units, 4),
                             price: fmt(
-                                txn.price_per_unit ||
-                                    (txn.units !== 0
-                                        ? txn.amount / txn.units
-                                        : 0),
+                                txn.price_per_unit != null &&
+                                    txn.price_per_unit !== 0
+                                    ? txn.price_per_unit
+                                    : txn.units !== 0
+                                      ? txn.amount / txn.units
+                                      : 0,
                                 {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                     decimals: 2,
                                 },
                             ),
@@ -224,7 +233,7 @@ const TransactionRow = memo(function TransactionRow({
                                 ? -Math.abs(txn.amount)
                                 : Math.abs(txn.amount)
                         }
-                        currency={txn.currency || nativeCurrency}
+                        currency={currencyOr(txn.currency, nativeCurrency)}
                         signed
                     />
                 </p>
@@ -234,14 +243,20 @@ const TransactionRow = memo(function TransactionRow({
                         {(txn.fees ?? 0) > 0 &&
                             t("invDetail.fee", {
                                 amount: fmt(txn.fees ?? 0, {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                 }),
                             })}
                         {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && " · "}
                         {(txn.taxes ?? 0) > 0 &&
                             t("invDetail.tax", {
                                 amount: fmt(txn.taxes ?? 0, {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                 }),
                             })}
                     </p>
@@ -343,10 +358,11 @@ function TransactionList({
         overscan: 6,
     });
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length ? items[0]!.start : 0;
-    const paddingBottom = items.length
-        ? virtualizer.getTotalSize() - items[items.length - 1]!.end
-        : 0;
+    const paddingTop = items.length > 0 ? items[0]!.start : 0;
+    const paddingBottom =
+        items.length > 0
+            ? virtualizer.getTotalSize() - items[items.length - 1]!.end
+            : 0;
 
     return (
         <div ref={scrollRef} className="max-h-[400px] overflow-y-auto pr-2">
@@ -477,11 +493,13 @@ export function InvestmentDetailDialog({
     // is the display/target currency (all amounts are converted to it) — the
     // holding's NATIVE currency lives in `originalCurrency`, which is what decides
     // foreign-ness.
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const nativeCurrency = (
         investment.originalCurrency ||
-        investment.currency ||
-        "EUR"
+        currencyOr(investment.currency, DEFAULT_CURRENCY)
     ).toUpperCase();
     const isForeignCurrency = nativeCurrency !== targetCurrency.toUpperCase();
 
@@ -551,7 +569,7 @@ export function InvestmentDetailDialog({
             const ok = await confirm({
                 title: t("invDetail.delete.title"),
                 description: t("invDetail.delete.desc", {
-                    txType: getTxnTypeLabel(t, txn.type as PortfolioTxnType),
+                    txType: getTxnTypeLabel(t, txn.type),
                 }),
                 confirmLabel: t("invDetail.delete.confirm"),
                 variant: "destructive",
@@ -579,7 +597,7 @@ export function InvestmentDetailDialog({
         : undefined;
     const hasRealEstateFacts =
         realEstate &&
-        (investment.municipality ||
+        (Boolean(investment.municipality) ||
             investment.cadastral_income != null ||
             investment.municipality_tax_rate != null);
 
@@ -799,7 +817,9 @@ export function InvestmentDetailDialog({
                                                     },
                                                 )}
                                             />
-                                            {investment.currentPrice ? (
+                                            {investment.currentPrice !==
+                                                undefined &&
+                                            investment.currentPrice !== 0 ? (
                                                 <FactRow
                                                     label={t(
                                                         "invDetail.currentPrice",
@@ -816,7 +836,9 @@ export function InvestmentDetailDialog({
                                             ) : null}
                                         </>
                                     )}
-                                    {fixedIncome && investment.interestRate ? (
+                                    {fixedIncome &&
+                                    investment.interestRate != null &&
+                                    investment.interestRate !== 0 ? (
                                         <FactRow
                                             label={t("invDetail.interestRate")}
                                             value={`${fmtNum(investment.interestRate)}%`}

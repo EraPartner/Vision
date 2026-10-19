@@ -58,7 +58,7 @@ function Inner({
     const yScale = useMemo(() => {
         const lo = Math.min(...data);
         const hi = Math.max(...data);
-        const pad = (hi - lo) * 0.1 || 1;
+        const pad = hi !== lo ? (hi - lo) * 0.1 : 1;
         return scaleLinear({
             range: [height - 2, 2],
             domain: [lo - pad, hi + pad],

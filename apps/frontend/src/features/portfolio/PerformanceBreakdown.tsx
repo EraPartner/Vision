@@ -11,6 +11,7 @@ import {
     formatCurrency,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -139,7 +140,10 @@ export default function PerformanceBreakdown({
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     const monthLabelLocale = useMemo(
         () => appLanguageToLocale(language),
@@ -163,7 +167,7 @@ export default function PerformanceBreakdown({
         >();
         for (const item of breakdownSummary) {
             const ac = item.assetClass as AssetClass;
-            const existing = grouped.get(ac) || {
+            const existing = grouped.get(ac) ?? {
                 count: 0,
                 value: 0,
                 invested: 0,
@@ -182,10 +186,7 @@ export default function PerformanceBreakdown({
                 data.invested > 0 ? (data.gain / data.invested) * 100 : 0;
             return {
                 assetClass,
-                label:
-                    t(
-                        `performance.${assetClass}` as `performance.${AssetClass}`,
-                    ) || assetClass,
+                label: t(`performance.${assetClass}`) || assetClass,
                 count: data.count,
                 classValue: data.value,
                 classInvested: data.invested,

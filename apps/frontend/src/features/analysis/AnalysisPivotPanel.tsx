@@ -103,7 +103,7 @@ export function AnalysisPivotPanel({
                     undefined,
                     { numeric: true },
                 );
-                if (order) return order;
+                if (order !== 0) return order;
             }
             return 0;
         };
@@ -192,7 +192,7 @@ export function AnalysisPivotPanel({
     };
     if (level) {
         collect(rowDepth);
-        if (config.rows.length) collect(0);
+        if (config.rows.length > 0) collect(0);
     }
     const displayRowIds = [
         ...new Set([...(currentResult?.partitions ?? []), ...config.rows]),
@@ -507,7 +507,7 @@ export function AnalysisPivotPanel({
             <div className="flex flex-wrap items-center gap-4">
                 <Button
                     type="button"
-                    disabled={busy || !config.values.length}
+                    disabled={busy || config.values.length === 0}
                     onClick={async () => {
                         setBusy(true);
                         setError("");
@@ -563,7 +563,7 @@ export function AnalysisPivotPanel({
             {!busy && !error && !currentResult && (
                 <p role="status" className="type-callout text-label-secondary">
                     {t(
-                        !config.values.length
+                        config.values.length === 0
                             ? "analysis.ext.pivot.chooseValue"
                             : result
                               ? "analysis.ext.pivot.rerun"
@@ -571,7 +571,7 @@ export function AnalysisPivotPanel({
                     )}
                 </p>
             )}
-            {currentResult && !visibleRows.length && (
+            {currentResult && visibleRows.length === 0 && (
                 <Alert>
                     <AlertDescription>
                         {t("analysis.ext.pivot.empty")}

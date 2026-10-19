@@ -11,7 +11,7 @@ export async function withPortfolioHistoryWrite<T>(
         accountIds.map(Number).filter((id) => Number.isInteger(id) && id > 0),
       ),
     ].sort((a, b) => a - b);
-    if (accounts.length)
+    if (accounts.length > 0)
       await query(
         "SELECT id FROM accounts WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
         [accounts],

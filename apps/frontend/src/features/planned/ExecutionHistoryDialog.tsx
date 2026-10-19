@@ -67,7 +67,7 @@ export function ExecutionHistoryDialog({
                 }));
             }
 
-            if (payment.executed_transaction_id) {
+            if (payment.executed_transaction_id != null) {
                 return [
                     {
                         plannedPaymentId: payment.id,

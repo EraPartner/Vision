@@ -33,8 +33,8 @@ import type { AccountId } from "@vision/types/brands";
 import {
   portfolioUpload,
   portfolioUploadErrorTranslator,
-  assertPortfolioUploadSupported,
 } from "../lib/portfolioUpload.ts";
+import { assertPortfolioUploadSupported } from "../services/portfolioImportPipeline/uploadSupport.ts";
 import { streamImport } from "../lib/importProgress.ts";
 import { registerPortfolioImportProbeRoute } from "./portfolioImportProbeRoutes.ts";
 import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.ts";
@@ -62,6 +62,7 @@ import {
   buildPortfolioImportPreviewRouting,
   getPortfolioImportAccountForPreview,
 } from "../services/portfolioImportAccountService.ts";
+import { nanToZero } from "../lib/math.ts";
 
 const router = Router();
 
@@ -271,7 +272,7 @@ const portfolioImportConfigSchema = z
       .unknown()
       .optional()
       .transform((value, ctx) => {
-        const skipRows = parseInt(String(value), 10) || 0;
+        const skipRows = nanToZero(parseInt(String(value), 10));
         if (skipRows < 0) {
           ctx.addIssue({
             code: "custom",

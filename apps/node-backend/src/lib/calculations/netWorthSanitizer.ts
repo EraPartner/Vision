@@ -1,5 +1,6 @@
 import { roundMoney } from '../money.ts';
 import { sanitizeIsolatedValueSpikes } from './valueSpikeSanitizer.ts';
+import { nanToZero } from '../math.ts';
 
 /**
  * Smooth isolated one-day investment-value spikes while preserving sustained
@@ -23,8 +24,8 @@ export function sanitizeIsolatedDailyInvestmentSpikes(
   // `sanitized` is a same-length copy of `snapshots`.
   for (const [i, point] of sanitized.entries()) {
     if (point.investments === snapshots[i]?.investments) continue;
-    const liquid = Number(point.liquid) || 0;
-    const liabilities = Number(point.liabilities) || 0;
+    const liquid = nanToZero(Number(point.liquid));
+    const liabilities = nanToZero(Number(point.liabilities));
     point.netWorth = roundMoney(liquid + liabilities + Number(point.investments));
   }
 

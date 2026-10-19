@@ -113,7 +113,7 @@ export function buildTaxDashboard(
   const transactionYears = new Set<number>();
   for (const [period, cells] of Object.entries(pivot.categoryPivot)) {
     for (const cell of cells) {
-      const path = cell.categoryPathIds?.length
+      const path = cell.categoryPathIds?.length > 0
         ? cell.categoryPathIds
         : cell.categoryId != null
           ? [cell.categoryId]
@@ -124,8 +124,9 @@ export function buildTaxDashboard(
       incomeByMonth.set(period, (incomeByMonth.get(period) ?? 0) + cell.income);
       const owners = ownersByMonth.get(period) ?? {};
       for (const key of ["partner", "joint"] as const) {
-        if (cell.incomeByOwner?.[key])
-          owners[key] = (owners[key] ?? 0) + cell.incomeByOwner[key];
+        const ownerIncome = cell.incomeByOwner?.[key];
+        if (ownerIncome !== undefined && ownerIncome !== 0)
+          owners[key] = (owners[key] ?? 0) + ownerIncome;
       }
       ownersByMonth.set(period, owners);
     }
@@ -242,8 +243,8 @@ export function buildTaxDashboard(
     );
     for (const txn of inv.transactions)
       if (
-        (Number(txn.taxes) || 0) > 0 ||
-        (Number(txn.fees) || 0) > 0 ||
+        Number(txn.taxes) > 0 ||
+        Number(txn.fees) > 0 ||
         txn.type === "tax" ||
         txn.type === "fee"
       ) {

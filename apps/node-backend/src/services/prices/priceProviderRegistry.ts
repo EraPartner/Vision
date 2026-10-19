@@ -23,6 +23,7 @@ import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
 import { getYahooClient } from './yahooClient.ts';
 import { forEachConcurrent } from '../../lib/concurrency.ts';
 import type { InvestmentRow, PricePoint } from '../../types/rows.ts';
+import { storedCurrencyCode } from '../../lib/currencyCode.ts';
 
 export type { InvestmentRow, PricePoint };
 
@@ -173,7 +174,7 @@ export function resolveKinesisConfig(
     const assetConfig = getKinesisAssetConfig(assetName);
     if (assetConfig) {
       symbol = assetConfig.symbol;
-      timeframe = assetConfig.timeframe || KINESIS_DEFAULT_TIMEFRAME;
+      timeframe = assetConfig.timeframe ?? KINESIS_DEFAULT_TIMEFRAME;
       fromDate = assetConfig.fromDate || KINESIS_DEFAULT_FROM_DATE;
     }
   }
@@ -271,7 +272,7 @@ function _deriveLatestPriceFromHistoryPayload(
   historyConfig: CustomHistoryConfig,
 ): number | undefined {
   const points = _parseCustomHistoryPoints(data, historyConfig);
-  if (!points.length) return undefined;
+  if (points.length === 0) return undefined;
   return points[points.length - 1]?.price;
 }
 
@@ -321,7 +322,7 @@ function _removeStaleRuns(points: readonly PricePoint[], minRunLength = 8): Pric
  * @returns a shallow-copied, repaired series
  */
 export function sanitizeKinesisIsolatedSpikes(points: PricePoint[] | null | undefined): PricePoint[] {
-  if (!Array.isArray(points) || points.length < 2) return points || [];
+  if (!Array.isArray(points) || points.length < 2) return points ?? [];
 
   const sanitized = _removeStaleRuns(points).map((p) => ({ ...p }));
 
@@ -426,7 +427,7 @@ async function _fetchYahooLatestClose(symbol: string): Promise<number | undefine
     interval: '1d',
     includePrePost: false,
   });
-  const quotes = chart?.quotes || [];
+  const quotes = chart?.quotes ?? [];
 
   for (let i = quotes.length - 1; i >= 0; i -= 1) {
     const close = toNumber(quotes[i]?.close);
@@ -560,7 +561,7 @@ export const PROVIDERS = {
 
     const unresolved = symbols.filter((symbol) => !resolved.has(symbol));
 
-    if (unresolved.length) {
+    if (unresolved.length > 0) {
       await forEachConcurrent(unresolved, PROVIDER_FETCH_CONCURRENCY, async (symbol) => {
         if (prices[symbol]) return;
         try {
@@ -662,7 +663,7 @@ export const PROVIDERS = {
         }
 
         const parsedPoints = _parseKinesisTrendlinePoints(rawPoints);
-        if (!parsedPoints.length) return;
+        if (parsedPoints.length === 0) return;
 
         const latestPoint = parsedPoints[parsedPoints.length - 1];
         const usdPrice = toNumber(latestPoint?.price);
@@ -672,7 +673,7 @@ export const PROVIDERS = {
           // the latest stored rate before it becomes this asset's current
           // price. Without a stored rate the quote is skipped, never stored
           // 1:1 or at a built-in rate.
-          const invCurrency = (inv.currency || 'EUR').toUpperCase();
+          const invCurrency = storedCurrencyCode(inv.currency);
           let price = usdPrice;
           if (needsUsdToEur && invCurrency !== 'USD') {
             const converted = convertCodeAtLatestRates(

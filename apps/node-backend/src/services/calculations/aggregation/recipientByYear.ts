@@ -31,5 +31,3 @@ export async function computeRecipientByYear({
     return buildEnvelope(data, { source: "live" });
   });
 }
-
-export default { computeRecipientByYear };

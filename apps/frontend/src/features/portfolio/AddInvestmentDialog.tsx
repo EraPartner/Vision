@@ -28,7 +28,11 @@ import { priceProviderPayload } from "./priceProviderPayload";
 import { todayYmd } from "@/lib/timezone";
 import { PortfolioBrokerField } from "./PortfolioBrokerField";
 import { useManualTradeBrokerOptions } from "./manualTradeBroker";
-import { formatEditableNumber, DEFAULT_CURRENCY } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import { asAccountId } from "@vision/types/brands";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
@@ -75,7 +79,10 @@ function makeEmptyForm(defaultCurrency: CurrencyCode): InvestmentForm {
 export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<"type" | "details">("type");
     const {
@@ -242,7 +249,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     name: form.name.trim(),
                     symbol: form.symbol.trim() || undefined,
                     asset_class: form.assetClass as AssetClass,
-                    currency: form.currency || defaultCurrency,
+                    currency: currencyOr(form.currency, defaultCurrency),
                     current_price:
                         unitBased &&
                         form.priceProvider === "manual" &&
@@ -279,7 +286,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     notes: form.notes.trim() || undefined,
                     ...priceProviderPayload(form),
                 });
-                if (!investment) return;
+                if (investment == null) return;
                 investmentId = investment.id;
                 createdInvestmentIdRef.current = investmentId;
             }
@@ -303,7 +310,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                               appSettings.numberFormat,
                           )
                         : undefined,
-                    currency: form.currency || defaultCurrency,
+                    currency: currencyOr(form.currency, defaultCurrency),
                     note: t("addInv.initialPurchaseNote"),
                     account_id: effectiveBrokerId
                         ? asAccountId(Number(effectiveBrokerId))

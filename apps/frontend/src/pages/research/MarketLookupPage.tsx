@@ -236,7 +236,7 @@ export default function MarketLookupPage() {
     // change = move across the visible range. Fundamentals/news don't exist for
     // these assets, so those sections are hidden in provider mode.
     const providerQuote = useMemo<Quote | null>(() => {
-        if (!isProviderAsset || !providerInvestment) return null;
+        if (!isProviderAsset) return null;
         const pts = providerChartData?.points ?? [];
         return providerQuotePresentation(
             pts,

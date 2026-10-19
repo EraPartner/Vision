@@ -94,7 +94,7 @@ export function compression(
     );
     // A downstream static-asset cache may already have supplied precompressed
     // bytes. Do not wrap those bytes in a second gzip stream.
-    if (res.getHeader("Content-Encoding")) return;
+    if (res.getHeader("Content-Encoding") !== undefined) return;
     // Gzip buffering would batch Server-Sent Events instead of delivering each event.
     if (contentType.includes("text/event-stream")) return;
     if (String(res.getHeader("X-Accel-Buffering") ?? "").toLowerCase() === "no")

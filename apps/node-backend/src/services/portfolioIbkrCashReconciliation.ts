@@ -28,6 +28,7 @@ import type {
   ReconciliationBatchScopeRow,
   ReconciliationSourceRow,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
+import { firstNonZero } from "../lib/math.ts";
 
 /**
  * A staged cash row from any reader (reconciliation sources, commit chunks).
@@ -157,7 +158,7 @@ function getIbkrBaseCashEvidence(
       !Number.isInteger(Number(row.account_id ?? batch?.account_id)) || Number(row.account_id ?? batch?.account_id) <= 0 ||
       (batch && Number(row.batch_id) !== Number(batch.id))) return undefined;
     return {
-      version: 1, batchId: Number(row.batch_id), stagingRowId: Number(row.id), type, date: literal.Date!,
+      version: 1, batchId: Number(row.batch_id), stagingRowId: Number(row.id), type, date: literal.Date,
       baseCurrency, baseAmount: gross.toFixed(), fxRate: fx.toFixed(),
       // Equal to the staged source_record_hash, checked above.
       sourceAccount: literal.Account, sourceRecordHash: hash(raw),
@@ -237,14 +238,14 @@ export function getIbkrCashOwnerEvidence(
     const references = sources.filter((candidate) => Number(candidate.batch_id) !== Number(row.batch_id) && candidate.raw_data === row.raw_data)
       .map((candidate) => ({ row: candidate, batch: batches.find((item) => Number(item.id) === Number(candidate.batch_id)) }))
       .filter((candidate) => field(json(candidate.batch?.custom_config ?? candidate.row.custom_config), "ibkr_source_context") != null);
-    if (!references.length) return undefined;
+    if (references.length === 0) return undefined;
     const authenticated = references.map((reference) => ({ ...reference,
       proof: getIbkrBaseCashEvidence(reference.row, reference.batch) }));
     const expected = fingerprint(ownerReferenceImage(row));
     const proven = authenticated.filter((reference): reference is typeof reference & { proof: IbkrBaseCashEvidence } =>
       !!reference.proof && fingerprint(ownerReferenceImage(reference.row)) === expected);
     if (proven.length !== authenticated.length) return undefined;
-    proven.sort((left, right) => Number(left.row.batch_id) - Number(right.row.batch_id) || Number(left.row.id) - Number(right.row.id));
+    proven.sort((left, right) => firstNonZero(Number(left.row.batch_id) - Number(right.row.batch_id), Number(left.row.id) - Number(right.row.id)));
     const reference = proven[0]!;
     return { proof: { ...reference.proof, batchId: Number(row.batch_id), stagingRowId: Number(row.id), sourceFileHash: null,
       contextOrigin: "retained_repeat_source" }, reference };
@@ -255,7 +256,7 @@ function receiptOriginalSourcesEqual(
   context: IbkrCashCorrectionContext,
 ): boolean {
   const bindings = receipt.after_data.proof?.sourceBindings?.filter((binding) => field(binding.custom_config, "format") === "ibkr_transaction_history");
-  if (!bindings?.length) return false;
+  if (bindings?.length === 0) return false;
   return bindings.every((binding) => {
     const row = context.sources.find((source) => Number(source.id) === Number(binding.id) && Number(source.batch_id) === Number(binding.batch_id));
     const batch = context.batches.find((source) => Number(source.id) === Number(binding.batch_id));
@@ -293,7 +294,7 @@ export function proveIbkrCashCorrections(
     const batch = nativeBatches.find((candidate) => Number(candidate.id) === Number(row.batch_id));
     const native = getIbkrFundingPrimaryEvidence({ ...row, custom_config: batch?.custom_config ?? row.custom_config });
     if (!batch || !native || !["matched", "duplicate"].includes(row.status) || !["awaiting_review", "complete", "complete_with_errors"].includes(batch.status) ||
-      Number(row.account_id ?? batch.account_id) !== Number(batch.account_id) || !Number(batch.account_id) ||
+      Number(row.account_id ?? batch.account_id) !== Number(batch.account_id) || Number.isNaN(Number(batch.account_id)) || Number(batch.account_id) === 0 ||
       row.dedup_fingerprint !== identities[index]?.fingerprint || Number(row.dedup_fingerprint_version) !== identities[index]?.version) {
       issue(row, "ibkr_native_funding_unverified"); continue;
     }
@@ -301,7 +302,7 @@ export function proveIbkrCashCorrections(
       Number(item.row.account_id) === Number(batch.account_id) && ibkrFundingAccountMatches(item.proof.sourceAccount, native.sourceAccount));
     const nativeSigned = toDecimal(native.amount).abs().times(native.type === "withdrawal" ? -1 : 1);
     const matching = compatible.filter((item) => equal4(nativeSigned.times(item.proof.fxRate), item.proof.baseAmount));
-    if (matching.length !== 1) { issue(row, matching.length ? "ibkr_native_funding_ambiguous" : "ibkr_native_funding_source_missing", compatible); continue; }
+    if (matching.length !== 1) { issue(row, matching.length > 0 ? "ibkr_native_funding_ambiguous" : "ibkr_native_funding_source_missing", compatible); continue; }
     const original = matching[0]!;
     originalBatchIds.add(Number(original.row.batch_id));
     if (original.reference) originalBatchIds.add(Number(original.reference.row.batch_id));
@@ -408,7 +409,7 @@ export function originalCashFingerprintAlreadyCorrected(
     toDecimal(receipt.after_data.proof.original.baseAmount).eq(original.baseAmount) &&
     toDecimal(receipt.after_data.proof.original.fxRate).eq(original.fxRate) &&
     Number(receipt.after_data.snapshot.account_id) === Number(row.account_id));
-  if (!matches.length) return undefined;
+  if (matches.length === 0) return undefined;
   if (matches.length !== 1) throw stale();
   const receipt = matches[0]!;
   const current = context.ledger.find((item) => Number(item.id) === Number(receipt.transaction_id));

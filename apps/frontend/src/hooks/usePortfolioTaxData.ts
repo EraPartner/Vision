@@ -9,7 +9,7 @@ import type { BelgianPortfolioTaxDashboard } from "@/lib/api/belgianTax";
 import { getAssetClassLabel, type AssetClass } from "@/types/portfolio";
 import { asInvestmentId } from "@vision/types/brands";
 import type { InvestmentId } from "@vision/types/brands";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /** One row of the per-tax-type / per-fee-type breakdown lists. */
 export interface CostBreakdownEntry {
@@ -91,7 +91,7 @@ export function usePortfolioTaxData() {
 
     const dashboardQuery = usePortfolioTaxDashboardQuery({
         year: viewedYear,
-        currency: appSettings.defaultCurrency || DEFAULT_CURRENCY,
+        currency: currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
         enabled: !isProfileLoading,
     });
     const view = useMemo(

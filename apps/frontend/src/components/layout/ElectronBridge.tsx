@@ -98,7 +98,7 @@ export function ElectronBridge({
                 const h = handlersRef.current;
                 switch (action) {
                     case "navigate":
-                        if (isAppRoute(payload)) h.navigate(payload);
+                        if (isAppRoute(payload)) void h.navigate(payload);
                         break;
                     case "open-settings":
                         h.onOpenSettings("general");
@@ -107,7 +107,7 @@ export function ElectronBridge({
                         h.onOpenShortcuts();
                         break;
                     case "new-transaction":
-                        h.navigate("/transactions?new=1");
+                        void h.navigate("/transactions?new=1");
                         break;
                     case "toggle-sidebar":
                         h.toggleSidebar();
@@ -125,7 +125,7 @@ export function ElectronBridge({
             if (typeof name !== "string" || typeof content !== "string") return;
             const file = new File([content], name, { type: "text/csv" });
             registerPendingImportFile(file);
-            handlersRef.current.navigate("/import");
+            void handlersRef.current.navigate("/import");
         });
 
         // Window-level CSV drop. Without this, dropping a file on the shell
@@ -142,13 +142,13 @@ export function ElectronBridge({
             if (!hasFiles(e)) return;
             const handledByDropzone =
                 e.target instanceof Element &&
-                e.target.closest("[data-dropzone]");
+                e.target.closest("[data-dropzone]") !== null;
             e.preventDefault();
             if (handledByDropzone) return;
             const file = e.dataTransfer?.files?.[0];
             if (file && /\.csv$/i.test(file.name)) {
                 registerPendingImportFile(file);
-                handlersRef.current.navigate("/import");
+                void handlersRef.current.navigate("/import");
             }
         };
         window.addEventListener("dragover", onDragOver);

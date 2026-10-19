@@ -32,6 +32,7 @@ import type {
   PortfolioTransactionRow,
   PortfolioTransactionSummaryRow,
 } from "../types/rows.ts";
+import { nanToZero, nonZeroOr } from "../lib/math.ts";
 
 export type { PortfolioTransactionRow, PortfolioTransactionSummaryRow };
 
@@ -226,7 +227,7 @@ function normalizeInvestmentIds(
   investmentIds: ReadonlyArray<InvestmentId | string> | null | undefined,
 ): InvestmentId[] {
   const ids: InvestmentId[] = [];
-  for (const id of investmentIds || []) {
+  for (const id of investmentIds ?? []) {
     const result = validateId(id, "investment_id");
     if (result.valid) ids.push(asInvestmentId(result.value));
   }
@@ -252,17 +253,19 @@ export async function getAllByInvestmentIds({
 
   const safePerInvestmentLimit = Math.max(
     1,
-    Math.min(Number.parseInt(String(perInvestmentLimit), 10) || 1000, 5000),
+    Math.min(nonZeroOr(Number.parseInt(String(perInvestmentLimit), 10), 1000), 5000),
   );
-  const safeOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
+  const safeOffset = Math.max(0, nanToZero(Number.parseInt(String(offset), 10)));
   const safeLimit =
     limit == null
       ? null
       : Math.max(
           1,
           Math.min(
-            Number.parseInt(String(limit), 10) ||
+            nonZeroOr(
+              Number.parseInt(String(limit), 10),
               normalizedIds.length * safePerInvestmentLimit,
+            ),
             200000,
           ),
         );
@@ -321,7 +324,7 @@ export async function getCount({
   const params: unknown[] = [];
   let idx = 1;
 
-  if (investmentId) {
+  if (investmentId != null) {
     sql += ` AND investment_id = $${idx++}`;
     params.push(investmentId);
   } else if (Array.isArray(investmentIds) && investmentIds.length > 0) {

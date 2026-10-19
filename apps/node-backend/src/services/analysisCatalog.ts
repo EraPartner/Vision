@@ -6,6 +6,7 @@ import {
 } from "./analysisFinancialDatasets.ts";
 import type { FinancialAnalysisPlan } from "./analysisFinancialDatasets.ts";
 import type { FormulaUnit } from "./analysisFormulaEngine.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 /** [label, value type, SQL expression, optional "currency" money marker] */
 type CatalogEntry = [string, string, string, string?];
@@ -332,8 +333,8 @@ export function compileVisualAnalysis(
     const descriptor = FINANCIAL_ANALYSIS_DATASETS.find(
       (d) => d.id === plan.datasetId,
     )!;
-    const fields = [...new Set(plan.fields || [])],
-      measures = [...new Set(plan.measures || [])];
+    const fields = [...new Set(plan.fields ?? [])],
+      measures = [...new Set(plan.measures ?? [])];
     const available = [...descriptor.fields, ...descriptor.measures];
     const columns = [...fields, ...measures].map((id) => {
       const column = available.find((c) => c.id === id);
@@ -345,7 +346,7 @@ export function compileVisualAnalysis(
           : column.unit;
       return { ...column, nullable: true, ...(unit ? { unit } : {}) };
     });
-    if (!columns.length)
+    if (columns.length === 0)
       throw new Error("Select at least one field or measure");
     return {
       sql: "/* Canonical financial service; SQL execution is unavailable */",
@@ -356,9 +357,9 @@ export function compileVisualAnalysis(
         ...plan,
         fields,
         measures,
-        groups: plan.groups || [],
+        groups: plan.groups ?? [],
         joins: [],
-        limit: Math.min(plan.limit || 500, 1000),
+        limit: Math.min(nonZeroOr(plan.limit ?? 0, 500), 1000),
       },
     };
   }
@@ -385,10 +386,10 @@ export function compileVisualAnalysis(
     selected.push(
       `${fieldExpression(dataset, id, joined)} AS ${quoteIdent(id)}`,
     );
-    const fixedCurrency = (plan.filters || []).find(
+    const fixedCurrency = (plan.filters ?? []).find(
       (f) => f.fieldId === "currency" && f.operator === "eq",
     )?.value;
-    const investment = (plan.filters || []).find(
+    const investment = (plan.filters ?? []).find(
       (f) => f.fieldId === "investment_id" && f.operator === "eq",
     )?.value;
     const unit: FormulaUnit | undefined = [
@@ -423,7 +424,7 @@ export function compileVisualAnalysis(
     const measure = own(dataset.measures, id);
     if (!measure) throw new Error(`Unsupported analysis measure: ${id}`);
     selected.push(`${measure[2]} AS ${quoteIdent(id)}`);
-    const currency = (plan.filters || []).find(
+    const currency = (plan.filters ?? []).find(
       (f) => f.fieldId === "currency" && f.operator === "eq",
     )?.value;
     columns.push({
@@ -444,13 +445,13 @@ export function compileVisualAnalysis(
             ? {
                 unit: {
                   kind: "quantity",
-                  ...((plan.filters || []).find(
+                  ...((plan.filters ?? []).find(
                     (f) => f.fieldId === "investment_id" && f.operator === "eq",
                   )?.value
                     ? {
                         // Guarded by the identical find above.
                         instrumentId: String(
-                          (plan.filters || []).find(
+                          (plan.filters ?? []).find(
                             (f) =>
                               f.fieldId === "investment_id" &&
                               f.operator === "eq",
@@ -463,10 +464,10 @@ export function compileVisualAnalysis(
             : {}),
     });
   }
-  if (measures.length && groups.some((id) => !fields.includes(id))) {
+  if (measures.length > 0 && groups.some((id) => !fields.includes(id))) {
     throw new Error("Every group must also be a selected field");
   }
-  if (measures.length && fields.some((id) => !groups.includes(id))) {
+  if (measures.length > 0 && fields.some((id) => !groups.includes(id))) {
     throw new Error(
       "Selected fields must be grouped when measures are present",
     );
@@ -549,7 +550,7 @@ export function compileVisualAnalysis(
   }
 
   const groupSql =
-    measures.length && groups.length
+    measures.length > 0 && groups.length > 0
       ? `\nGROUP BY ${groups.map((id) => fieldExpression(dataset, id, joined)).join(", ")}`
       : "";
   const allowedOutputs = new Set([...fields, ...measures]);
@@ -558,13 +559,13 @@ export function compileVisualAnalysis(
       throw new Error(`Unsupported sort output: ${id}`);
     return `${quoteIdent(id)} ${direction === "desc" ? "DESC" : "ASC"}`;
   });
-  const orderSql = order.length ? `\nORDER BY ${order.join(", ")}` : "";
-  const limit = Math.min(Math.max(Number(plan.limit) || 500, 1), 1000);
+  const orderSql = order.length > 0 ? `\nORDER BY ${order.join(", ")}` : "";
+  const limit = Math.min(Math.max(nonZeroOr(Number(plan.limit), 500), 1), 1000);
   const fromSql = joined
     ? `${dataset.relation} AS analysis_base LEFT JOIN vision_analysis.accounts_v1 AS analysis_account ON analysis_account.account_id = analysis_base.account_id`
     : dataset.relation;
   const sql = `SELECT ${selected.join(", ")}\nFROM ${fromSql}${
-    where.length ? `\nWHERE ${where.join(" AND ")}` : ""
+    where.length > 0 ? `\nWHERE ${where.join(" AND ")}` : ""
   }${groupSql}${orderSql}`;
 
   return {

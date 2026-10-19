@@ -408,7 +408,7 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
 export async function deleteAnalysisMonitor(id: string) {
   monitorId(id);
   if (
-    !(await query("DELETE FROM analysis_monitors WHERE id=$1", [id])).rowCount
+    ((await query("DELETE FROM analysis_monitors WHERE id=$1", [id])).rowCount ?? 0) === 0
   )
     fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
 }

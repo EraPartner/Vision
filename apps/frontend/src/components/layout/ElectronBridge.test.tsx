@@ -7,7 +7,7 @@ import { ElectronBridge } from "./ElectronBridge";
 const mocks = vi.hoisted(() => {
     const unsubscribe = vi.fn();
     return {
-        tier: { value: "enhanced" as "reduced" | "standard" | "enhanced" },
+        tier: { value: "enhanced" },
         navigate: vi.fn(),
         toggleSidebar: vi.fn(),
         setThemeMode: vi.fn(),

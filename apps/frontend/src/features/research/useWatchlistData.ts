@@ -21,7 +21,7 @@ export function useDeleteWatchlistItem() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteWatchlistItem(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
+            void queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
             toast.success(t("watchlist.removedSuccess"));
         },
     });

@@ -95,7 +95,7 @@ export async function getNetWorthByAccount(targetCurrency: CurrencyCode) {
         name: account ? account.display_name || account.name : null,
         type: account?.type ?? null,
         cashCurrency: account
-          ? (account.currency || "EUR").toUpperCase()
+          ? storedCurrencyCode(account.currency)
           : null,
         cash,
         holdings,

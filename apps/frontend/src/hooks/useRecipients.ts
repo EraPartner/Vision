@@ -115,7 +115,7 @@ export function useCreateRecipient() {
         mutationFn: (recipient: RecipientCreate) =>
             apiClient.createRecipient(recipient),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             if (data.wasCreated) {
                 toast.success(t("recipients.created"));
             } else {
@@ -138,7 +138,7 @@ export function useUpdateRecipient() {
         mutationFn: ({ id, data }: { id: RecipientId; data: RecipientUpdate }) =>
             apiClient.updateRecipient(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             toast.success(t("recipients.updated"));
         },
         onError: (error: Error) => {
@@ -156,7 +156,7 @@ export function useDeleteRecipient() {
     return useMutation({
         mutationFn: (id: RecipientId) => apiClient.deleteRecipient(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             toast.success(t("recipients.deleted"));
         },
         onError: (error: Error) => {
@@ -180,12 +180,16 @@ export function useMergeRecipients() {
             aliasIds: RecipientId[];
         }) => apiClient.mergeRecipients(primaryId, aliasIds),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
-            queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: transactionKeys.all,
+            });
             // Statistics' recipient breakdowns live under ['aggregations', …];
             // without this a merged/unmerged identity stays split in Top
             // Recipients until staleTime expires.
-            queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: aggregationKeys.all,
+            });
             toast.success(
                 t("recipients.merged", {
                     n: String(data.merged_ids.length),
@@ -242,11 +246,15 @@ export function useUnmergeRecipient() {
     return useMutation({
         mutationFn: (id: RecipientId) => apiClient.unmergeRecipient(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
-            queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: transactionKeys.all,
+            });
             // See useMergeRecipients: keep Statistics' ['aggregations'] breakdowns
             // in sync with the recipient-identity change.
-            queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: aggregationKeys.all,
+            });
             toast.success(t("recipients.unmerged"));
         },
         onError: (error: Error) => {

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import config from "../../vite.config";
-import type { ConfigEnv, UserConfig } from "vite";
+import type { UserConfig } from "vite";
 
 afterEach(() => vi.unstubAllEnvs());
 function developmentConfig(): UserConfig {
-    return (config as (env: ConfigEnv) => UserConfig)({
+    return config({
         command: "serve",
         mode: "development",
     });

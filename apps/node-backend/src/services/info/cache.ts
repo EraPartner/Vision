@@ -78,7 +78,7 @@ function pruneExpiredCacheEntries(cache: InfoCache): void {
   const now = Date.now();
   for (const [key, value] of cache.entries()) {
     const hasInflight = Boolean(value?.inflight);
-    if (!hasInflight && (value?.expiresAt || 0) <= now) {
+    if (!hasInflight && (value?.expiresAt ?? 0) <= now) {
       cache.delete(key);
     }
   }
@@ -167,7 +167,7 @@ function setInflightCache(
   cache.set(key, {
     data: keepPreviousData ? current?.data : undefined,
     inflight,
-    expiresAt: keepPreviousData ? current?.expiresAt || 0 : 0,
+    expiresAt: keepPreviousData ? current?.expiresAt ?? 0 : 0,
   });
   enforceCacheSizeLimit(cache);
 }

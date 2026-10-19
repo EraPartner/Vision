@@ -82,7 +82,7 @@ describe("AboutSection — reset all settings", () => {
     });
 
     it("resets preferences, exclusions and includeTransfers once confirmed", async () => {
-        const info = vi.spyOn(toast, "info").mockReturnValue("t" as never);
+        const info = vi.spyOn(toast, "info").mockReturnValue("t");
         const { user, resetButton, saveSetting } =
             await renderWithCustomisedSettings();
 

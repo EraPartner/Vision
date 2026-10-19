@@ -45,7 +45,7 @@ export function HomeStep({
         update: (h: BelgianTaxHouseholdV2) => BelgianTaxHouseholdV2,
     ) => updateHouseholdRaw((h) => withoutMortgageRegion(update(h)));
     const residenceUids = useRef<string[]>([]);
-    const residences = profile.additionalResidences || [];
+    const residences = profile.additionalResidences ?? [];
     while (residenceUids.current.length < residences.length) {
         residenceUids.current.push(crypto.randomUUID());
     }
@@ -98,7 +98,7 @@ export function HomeStep({
                                 value={r.label || ""}
                                 onChange={(e) => {
                                     const copy = [
-                                        ...(profile.additionalResidences || []),
+                                        ...(profile.additionalResidences ?? []),
                                     ];
                                     copy[idx] = {
                                         ...r,
@@ -123,7 +123,7 @@ export function HomeStep({
                                 value={r.cadastralIncome}
                                 onValueChange={(value) => {
                                     const copy = [
-                                        ...(profile.additionalResidences || []),
+                                        ...(profile.additionalResidences ?? []),
                                     ];
                                     copy[idx] = {
                                         ...copy[idx],
@@ -146,7 +146,7 @@ export function HomeStep({
                                 value={r.region || profile.region}
                                 onValueChange={(v) => {
                                     const copy = [
-                                        ...(profile.additionalResidences || []),
+                                        ...(profile.additionalResidences ?? []),
                                     ];
                                     copy[idx] = {
                                         ...r,
@@ -167,7 +167,7 @@ export function HomeStep({
                         variant="outline"
                         onClick={() => {
                             const copy = [
-                                ...(profile.additionalResidences || []),
+                                ...(profile.additionalResidences ?? []),
                             ];
                             copy.push({
                                 label: "",

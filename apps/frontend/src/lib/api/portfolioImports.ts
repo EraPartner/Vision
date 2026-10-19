@@ -207,7 +207,7 @@ function configToParams(
     p.append("number_format", config.number_format ?? "auto");
     p.append("default_asset_class", config.defaultAssetClass);
     p.append("default_type", config.defaultType);
-    p.append("type_mapping", JSON.stringify(config.typeMapping || {}));
+    p.append("type_mapping", JSON.stringify(config.typeMapping ?? {}));
     p.append("date_column", config.dateColumn);
     if (config.typeColumn) p.append("type_column", config.typeColumn);
     if (config.symbolColumn) p.append("symbol_column", config.symbolColumn);
@@ -339,7 +339,7 @@ export function importPortfolioCSVWithProgress(
                         duplicates: 0,
                         errors: 0,
                         percent: 70,
-                    } as ImportProgress);
+                    });
                     continue;
                 }
                 if (event === "error")
@@ -778,8 +778,9 @@ const reconciliationPlanSchema = z.looseObject({
                     action.action === "adopt" &&
                     (action.investmentId != null ||
                         action.policy !== "prefer_source" ||
-                        !action.existingTransactionId ||
-                        !action.corrections?.length ||
+                        action.existingTransactionId === undefined ||
+                        action.corrections == null ||
+                        action.corrections.length === 0 ||
                         action.corrections.some(
                             (field) => !["amount", "currency"].includes(field),
                         ) ||
@@ -803,9 +804,9 @@ const reconciliationPlanSchema = z.looseObject({
                     });
                 if (
                     action.action === "repair_duplicate" &&
-                    (!action.existingTransactionId ||
-                        !action.importedTransactionId ||
-                        !action.originalBatchId ||
+                    (action.existingTransactionId === undefined ||
+                        action.importedTransactionId === undefined ||
+                        action.originalBatchId === undefined ||
                         !action.source ||
                         !action.existing ||
                         !action.importedExisting ||
@@ -879,7 +880,7 @@ function verifiedDateProofGroups(
         const group = groups.get(groupKey);
         if (
             action.action !== "adopt" ||
-            !action.existingTransactionId ||
+            action.existingTransactionId === undefined ||
             matchedTransactionIds.has(action.existingTransactionId) ||
             !verifiedDateCorrection(action) ||
             (group &&
@@ -907,7 +908,8 @@ function verifiedIncomeProofActions(
     const incomes = full
         ? actions.filter(
               (action) =>
-                  action.incomeProof || action.action === "record_income",
+                  action.incomeProof !== undefined ||
+                  action.action === "record_income",
           )
         : actions;
     const valid = incomes.every((action) => {
@@ -918,7 +920,7 @@ function verifiedIncomeProofActions(
                 action.action,
             ) ||
             action.dateProof ||
-            action.corrections?.length ||
+            (action.corrections != null && action.corrections.length > 0) ||
             action.cashProof ||
             action.cashValues ||
             action.cashFeeValues ||
@@ -932,7 +934,10 @@ function verifiedIncomeProofActions(
         if (proof.unitTransactionId !== undefined)
             unitIds.add(proof.unitTransactionId);
         if (full) {
-            if (!proof.unitRowId || unitRowIds.has(proof.unitRowId))
+            if (
+                proof.unitRowId === undefined ||
+                unitRowIds.has(proof.unitRowId)
+            )
                 return false;
             unitRowIds.add(proof.unitRowId);
             const units = actions.filter(
@@ -963,8 +968,8 @@ function verifiedIncomeProofActions(
                         (unit.source.income_recognition_role != null &&
                             unit.source.income_recognition_role !==
                                 "standard"))) ||
-                !unit.investmentId ||
-                !action.investmentId ||
+                unit.investmentId == null ||
+                action.investmentId == null ||
                 unit.investmentId !== action.investmentId
             )
                 return false;
@@ -981,17 +986,20 @@ function verifiedIncomeProofActions(
                 )
                     return false;
             } else if (
-                !proof.unitTransactionId ||
+                proof.unitTransactionId === undefined ||
                 unit.existingTransactionId !== proof.unitTransactionId
             )
                 return false;
-        } else if (!proof.unitTransactionId || proof.unitRowId !== undefined)
+        } else if (
+            proof.unitTransactionId === undefined ||
+            proof.unitRowId !== undefined
+        )
             return false;
         if (action.action === "record_income") {
             const source = action.source;
             return Boolean(
                 source &&
-                !action.existingTransactionId &&
+                action.existingTransactionId === undefined &&
                 source.type === "dividend" &&
                 source.income_recognition_role === "included_in_units" &&
                 source.units === null &&
@@ -1003,7 +1011,8 @@ function verifiedIncomeProofActions(
                 Number.isFinite(Number(source.amount)) &&
                 Number(source.amount) >= 0 &&
                 z.iso.date().safeParse(source.date).success &&
-                source.currency &&
+                typeof source.currency === "string" &&
+                source.currency !== "" &&
                 ["fees", "taxes"].every(
                     (field) => Number(source[field] ?? 0) === 0,
                 ),
@@ -1011,7 +1020,7 @@ function verifiedIncomeProofActions(
         }
         const incomeId = action.existingTransactionId;
         if (
-            !incomeId ||
+            incomeId === undefined ||
             incomeId === proof.unitTransactionId ||
             existingIncomeIds.has(incomeId) ||
             (action.source && action.source.type !== "dividend") ||
@@ -1056,9 +1065,9 @@ function verifiedCashProofActions(
             action.source ||
             action.existing ||
             action.importedExisting ||
-            action.corrections?.length ||
-            action.importedTransactionId ||
-            action.originalBatchId ||
+            (action.corrections != null && action.corrections.length > 0) ||
+            action.importedTransactionId !== undefined ||
+            action.originalBatchId !== undefined ||
             action.policy === "prefer_source" ||
             eventKeys.has(proof.eventKey)
         )
@@ -1067,20 +1076,20 @@ function verifiedCashProofActions(
         if (action.action === "cash") {
             if (
                 !values ||
-                action.existingTransactionId ||
-                action.existingCashFeeTransactionId
+                action.existingTransactionId !== undefined ||
+                action.existingCashFeeTransactionId !== undefined
             )
                 return false;
         } else {
             if (
-                !action.existingTransactionId ||
+                action.existingTransactionId === undefined ||
                 existingIds.has(action.existingTransactionId)
             )
                 return false;
             existingIds.add(action.existingTransactionId);
             if (proof.componentCount === 2) {
                 if (
-                    !action.existingCashFeeTransactionId ||
+                    action.existingCashFeeTransactionId === undefined ||
                     existingIds.has(action.existingCashFeeTransactionId)
                 )
                     return false;
@@ -1089,7 +1098,7 @@ function verifiedCashProofActions(
         }
         if (
             proof.componentCount === 1 &&
-            (fee || action.existingCashFeeTransactionId)
+            (fee || action.existingCashFeeTransactionId !== undefined)
         )
             return false;
         if (
@@ -1271,7 +1280,7 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
         ...(scope.cashFundingPolicy
             ? { cash_funding_policy: scope.cashFundingPolicy }
             : {}),
-        ...(overrides.length
+        ...(overrides.length > 0
             ? {
                   batch_policies: [...overrides]
                       .sort((left, right) => left.batchId - right.batchId)
@@ -1342,7 +1351,9 @@ export async function previewPortfolioImportReconciliation(
             (scope.reconciliationScope !== "correct_existing_only" ||
                 !verifiedDateProofGroups(parsed.data.actions))) ||
         (parsed.data.actions.some(
-            (action) => action.incomeProof || action.action === "record_income",
+            (action) =>
+                action.incomeProof !== undefined ||
+                action.action === "record_income",
         ) &&
             !["full", "record_in_kind_income_only"].includes(
                 scope.reconciliationScope ?? "full",
@@ -1356,19 +1367,19 @@ export async function previewPortfolioImportReconciliation(
             )) ||
         (parsed.data.actions.some(
             (action) =>
-                action.cashProof ||
-                action.cashValues ||
-                action.cashFeeValues ||
-                action.existingCashFeeTransactionId,
+                action.cashProof !== undefined ||
+                action.cashValues !== undefined ||
+                action.cashFeeValues !== undefined ||
+                action.existingCashFeeTransactionId !== undefined,
         ) &&
             ((scope.reconciliationScope ?? "full") === "full"
                 ? !verifiedCashProofActions(
                       parsed.data.actions.filter(
                           (action) =>
-                              action.cashProof ||
-                              action.cashValues ||
-                              action.cashFeeValues ||
-                              action.existingCashFeeTransactionId,
+                              action.cashProof !== undefined ||
+                              action.cashValues !== undefined ||
+                              action.cashFeeValues !== undefined ||
+                              action.existingCashFeeTransactionId !== undefined,
                       ),
                   ) ||
                   parsed.data.actions.some(
@@ -1397,9 +1408,10 @@ export async function previewPortfolioImportReconciliation(
                             "record_in_kind_income_only" &&
                             action.action === "record_income" &&
                             (!action.incomeProof ||
-                                action.dateProof ||
-                                action.corrections?.length ||
-                                action.existingTransactionId ||
+                                action.dateProof !== undefined ||
+                                (action.corrections != null &&
+                                    action.corrections.length > 0) ||
+                                action.existingTransactionId !== undefined ||
                                 action.source?.type !== "dividend" ||
                                 action.source?.income_recognition_role !==
                                     "included_in_units" ||
@@ -1416,7 +1428,8 @@ export async function previewPortfolioImportReconciliation(
                                 Number(action.source?.amount) < 0 ||
                                 !z.iso.date().safeParse(action.source?.date)
                                     .success ||
-                                !action.source?.currency ||
+                                typeof action.source?.currency !== "string" ||
+                                action.source.currency === "" ||
                                 ["fees", "taxes"].some(
                                     (field) =>
                                         Number(action.source?.[field] ?? 0) !==
@@ -1432,8 +1445,9 @@ export async function previewPortfolioImportReconciliation(
                             "correct_existing_only" &&
                             action.action === "adopt" &&
                             (action.policy !== "prefer_source" ||
-                                !action.existingTransactionId ||
-                                !action.corrections?.length ||
+                                action.existingTransactionId === undefined ||
+                                action.corrections == null ||
+                                action.corrections.length === 0 ||
                                 (action.dateProof
                                     ? !verifiedDateCorrection(action)
                                     : action.source?.date !==

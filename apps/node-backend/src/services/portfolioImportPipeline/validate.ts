@@ -79,15 +79,15 @@ export async function validateBatch({
       WHERE b.id = $1`,
     [batchId],
   );
-  const batch: Partial<ValidateBatchRow> = batchRow || {};
+  const batch: Partial<ValidateBatchRow> = batchRow ?? {};
   const defaultAssetClass = batch.default_asset_class || undefined;
   const defaultType = batch.default_type || undefined;
   const isBrokerage = batch.is_brokerage === true;
   const config: PortfolioParserConfig =
     typeof batch.custom_config === "string"
       ? (JSON.parse(batch.custom_config) as PortfolioParserConfig)
-      : batch.custom_config || {};
-  const typeMapping = config.type_mapping || {};
+      : batch.custom_config ?? {};
+  const typeMapping = config.type_mapping ?? {};
   const unitBased = defaultAssetClass
     ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass)
     : false;
@@ -254,7 +254,7 @@ function resolveAndCheck(
     today: string;
   },
 ): RowResolution {
-  if (!row.tx_date) return { error: "missing date" };
+  if (row.tx_date == null || row.tx_date === "") return { error: "missing date" };
 
   // Reject future-dated rows: a typo'd year (e.g. 2035) or a broker export with a
   // trade-settlement date ahead of today would otherwise pass validation and

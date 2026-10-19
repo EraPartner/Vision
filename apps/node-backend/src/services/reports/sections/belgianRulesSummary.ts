@@ -152,7 +152,7 @@ function renderPITBlock(
   profile: TaxProfile | null,
   currency: string,
 ): string {
-  if (!pit) return "";
+  if (pit == null) return "";
 
   // Unlike taxTables rates (fractions), the client sends bracket rates already in
   // percent units (pit.ts: `rate: br.rate * 100`) — hence isRaw.

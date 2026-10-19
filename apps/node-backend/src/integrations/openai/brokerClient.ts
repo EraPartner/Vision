@@ -77,7 +77,7 @@ function homebrewDependencyRoots(runtimePath: string): string[] {
   const pending = [runtimePath];
   const inspected = new Set<string>();
   const roots = new Set<string>();
-  while (pending.length) {
+  while (pending.length > 0) {
     const path = pending.pop();
     if (path === undefined || inspected.has(path)) continue;
     if (inspected.size >= 256)

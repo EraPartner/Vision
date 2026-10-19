@@ -54,7 +54,7 @@ function ForecastInnerImpl({
             syncId="dashboard-timeline"
             scrubbable
             data={rows}
-            xAccessor={(d) => d.dayNum as number}
+            xAccessor={(d) => d.dayNum}
             xIsDate={false}
             series={series}
             height={320}

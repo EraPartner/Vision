@@ -51,7 +51,8 @@ function recordComputeRequests(options: { delayMs?: number } = {}) {
                 household: BelgianTaxHouseholdV2;
             };
             incomes.push(household.partners[0]?.activities[0]?.grossIncome ?? 0);
-            if (options.delayMs) await delay(options.delayMs);
+            if (options.delayMs !== undefined && options.delayMs > 0)
+                await delay(options.delayMs);
             return ok(computeTaxStub(household));
         }),
     );

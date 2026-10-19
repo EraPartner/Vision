@@ -38,7 +38,7 @@ export function parseAnalysisWorkbookXml(source: string): WorkbookXmlDocument {
   parser.on("opentag", (tag) => {
     const element = new Element(
       tag.name,
-      tag.attributes as Record<string, string>,
+      tag.attributes,
     );
     const parent = stack.at(-1)!;
     parent.children.push(element);

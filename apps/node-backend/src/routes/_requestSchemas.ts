@@ -64,24 +64,36 @@ export const transactionIdSchema = () => idSchema().pipe(TransactionIdSchema);
 export const categoryIdSchema = () => idSchema().pipe(CategoryIdSchema);
 export const recipientIdSchema = () => idSchema().pipe(RecipientIdSchema);
 export const tagIdSchema = () => idSchema().pipe(TagIdSchema);
+/** @public */
 export const splitIdSchema = () => idSchema().pipe(SplitIdSchema);
+/** @public */
 export const plannedTransactionIdSchema = () =>
   idSchema().pipe(PlannedTransactionIdSchema);
 export const investmentIdSchema = () => idSchema().pipe(InvestmentIdSchema);
+/** @public */
 export const portfolioTransactionIdSchema = () =>
   idSchema().pipe(PortfolioTransactionIdSchema);
 
 /** `{ id }` params of an account route. */
 export const accountIdParams = z.object({ id: accountIdSchema() });
-/** `{ id }` params of a transaction route. */
+/**
+ * `{ id }` params of a transaction route.
+ * @public
+ */
 export const transactionIdParams = z.object({ id: transactionIdSchema() });
-/** `{ id }` params of a category route. */
+/**
+ * `{ id }` params of a category route.
+ * @public
+ */
 export const categoryIdParams = z.object({ id: categoryIdSchema() });
 /** `{ id }` params of a recipient route. */
 export const recipientIdParams = z.object({ id: recipientIdSchema() });
 /** `{ id }` params of a tag route. */
 export const tagIdParams = z.object({ id: tagIdSchema() });
-/** `{ id }` params of an investment route. */
+/**
+ * `{ id }` params of an investment route.
+ * @public
+ */
 export const investmentIdParams = z.object({ id: investmentIdSchema() });
 
 /**
@@ -95,6 +107,7 @@ export const optionalIdFilter = optionalValue.transform((value, ctx) =>
 /**
  * A nullable id in a write body: absent stays absent, `null` keeps its "clear"
  * meaning, and anything else must be a valid id.
+ * @public
  */
 export const nullableId = z.union([z.null(), idSchema()]).optional();
 

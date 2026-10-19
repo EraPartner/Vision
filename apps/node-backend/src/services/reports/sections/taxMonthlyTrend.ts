@@ -13,7 +13,7 @@ export function renderTaxMonthlyTrend(
 ): string {
   const byMonth = data?.byMonth ?? [];
 
-  if (!byMonth.length) {
+  if (byMonth.length === 0) {
     return emptySection({ title: 'Monthly Tax Trend', subtitle: 'Taxes and fees over time', heading: 'No monthly data', message: 'No tax transactions found for the selected period.' });
   }
 

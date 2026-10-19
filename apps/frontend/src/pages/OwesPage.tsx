@@ -19,13 +19,17 @@ import {
     formatCurrency,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
 import type { RecipientId } from "@vision/types/brands";
 
 export default function OwesPage() {
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     // Amounts arrive converted to the display currency on the server.
     const {
         data: summary,
@@ -69,7 +73,7 @@ export default function OwesPage() {
         );
     }
 
-    const items = summary?.items || [];
+    const items = summary?.items ?? [];
     const totalOwed = summary?.summary.remaining ?? 0;
     const unconvertedCount = summary?.summary.unconverted_count ?? 0;
 

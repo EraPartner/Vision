@@ -42,7 +42,7 @@ export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) 
             apiClient.upsertPortfolioExposureSources(bundle),
         onSuccess: () => {
             setError(null);
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: portfolioExposureQueryKey(),
             });
         },

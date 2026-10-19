@@ -18,7 +18,7 @@ import type { FormattedWatchlistRow, WatchlistRow } from '../types/rows.ts';
 // added later by the route from the price provider, not read from this table.
 const WATCHLIST_NUMERIC_FIELDS = ['target_price', 'added_price'];
 
-export type { WatchlistRow, FormattedWatchlistRow };
+export type { FormattedWatchlistRow };
 
 /** @param row A raw {@link WatchlistRow}. */
 const mapWatchlistRow = (row: WatchlistRow): FormattedWatchlistRow =>

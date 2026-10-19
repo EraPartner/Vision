@@ -34,6 +34,8 @@ import {
   unconvertedFields,
 } from "../lib/unconvertedTally.ts";
 import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
+import { nanToZero } from "../lib/math.ts";
+import { currencyOrEur } from "../lib/currencyCode.ts";
 
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
 
@@ -249,7 +251,7 @@ export const netWorthRepository = {
 
     const investmentsByDay: Record<string, number> = {};
     for (const row of snapshotRows) {
-      investmentsByDay[row.day] = Number(row.investments) || 0;
+      investmentsByDay[row.day] = nanToZero(Number(row.investments));
     }
 
     // History walk and the unified current-point balances (the same
@@ -372,7 +374,7 @@ export const netWorthRepository = {
               return parts.map((p) => ({
                 ...base,
                 balance: p.balance,
-                currency: p.currency || "EUR",
+                currency: currencyOrEur(p.currency),
               }));
             }),
             "balance",
@@ -507,7 +509,7 @@ export const netWorthRepository = {
     const liabilitiesByDay: Record<string, number> = {};
     for (const row of bankHistoryConverted) {
       const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
-      if (!bucket[row.day]) bucket[row.day] = 0;
+      bucket[row.day] ??= 0;
       // Decimal accumulation (money-hygiene): per-day EUR balances summed with
       // native `+=` drift sub-cent before the roundToCents below.
       bucket[row.day] = toNumber(
@@ -528,8 +530,8 @@ export const netWorthRepository = {
     let lastInvestments = 0;
     for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
       const dayKey = getDayKeyUtc(day);
-      const liquid = roundToCents(liquidByDay[dayKey] || 0);
-      const liabilities = roundToCents(liabilitiesByDay[dayKey] || 0);
+      const liquid = roundToCents(liquidByDay[dayKey] ?? 0);
+      const liabilities = roundToCents(liabilitiesByDay[dayKey] ?? 0);
       const dayInvestments = investmentsByDay[dayKey];
       if (
         Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey) &&
@@ -587,12 +589,12 @@ export const netWorthRepository = {
       const investments = roundToCents(liveInvestments);
       lastSnapshot.investments = investments;
       lastSnapshot.netWorth = roundToCents(
-        lastSnapshot.liquid + (lastSnapshot.liabilities || 0) + investments,
+        lastSnapshot.liquid + nanToZero(lastSnapshot.liabilities) + investments,
       );
     }
 
     const latest: Omit<NetWorthSnapshot, "date"> & { date?: string } =
-      sanitizedSnapshots[sanitizedSnapshots.length - 1] || {
+      sanitizedSnapshots[sanitizedSnapshots.length - 1] ?? {
         liquid: 0,
         liabilities: 0,
         investments: 0,

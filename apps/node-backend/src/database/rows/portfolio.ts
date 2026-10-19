@@ -46,7 +46,10 @@ export const portfolioTransactionKeyRowSchema = z
   .object({ id: pgPortfolioTransactionId })
   .describe("portfolio transaction id row");
 
-/** `SELECT id` / `RETURNING id` over `investments`. */
+/**
+ * `SELECT id` / `RETURNING id` over `investments`.
+ * @public
+ */
 export const investmentKeyRowSchema = z
   .object({ id: pgInvestmentId })
   .describe("investment id row");
@@ -845,9 +848,6 @@ export type PortfolioUnitEventDbRow = z.output<
   typeof portfolioUnitEventRowSchema
 >;
 export type PortfolioMathTxDbRow = z.output<typeof portfolioMathTxRowSchema>;
-export type PortfolioTransactionSnapshotDb = z.output<
-  typeof portfolioTransactionSnapshotSchema
->;
 export type IncomeRecognitionJournalDbRow = z.output<
   typeof incomeRecognitionJournalRowSchema
 >;
@@ -882,28 +882,9 @@ export type InvestmentDbRow = z.output<typeof investmentDbRowSchema>;
 export type SummaryInvestmentDbRow = z.output<
   typeof summaryInvestmentDbRowSchema
 >;
-export type WatchlistDbRow = z.output<typeof watchlistRowSchema>;
-export type InstrumentProviderMapDbRow = z.output<
-  typeof instrumentProviderMapRowSchema
->;
 export type ProviderHealthDbRow = z.output<typeof providerHealthRowSchema>;
 export type ProviderApiKeyDbRow = z.output<typeof providerApiKeyRowSchema>;
-export type AssetPriceHistoryDbRow = z.output<
-  typeof assetPriceHistoryRowSchema
->;
 export type HoldingWindowDbRow = z.output<typeof holdingWindowRowSchema>;
-export type SnapshotUnitInvestmentDbRow = z.output<
-  typeof snapshotUnitInvestmentRowSchema
->;
-export type SnapshotNonUnitInvestmentDbRow = z.output<
-  typeof snapshotNonUnitInvestmentRowSchema
->;
-export type SnapshotPriceHistoryDbRow = z.output<
-  typeof snapshotPriceHistoryRowSchema
->;
-export type SnapshotInflationDbRow = z.output<
-  typeof snapshotInflationRowSchema
->;
 export type FxRateDbRow = z.output<typeof fxRateRowSchema>;
 export type SnapshotFxHistoryDbRow = z.output<
   typeof snapshotFxHistoryRowSchema
@@ -911,8 +892,6 @@ export type SnapshotFxHistoryDbRow = z.output<
 export type PortfolioPerformanceSnapshotDbRow = z.output<
   typeof portfolioPerformanceSnapshotRowSchema
 >;
-export type BrokerSnapshotDbRow = z.output<typeof brokerSnapshotRowSchema>;
 export type ArchivedIncomeDbRow = z.output<typeof archivedIncomeDbRowSchema>;
 export type HistoricalRateDbRow = z.output<typeof historicalRateRowSchema>;
 export type LatestStoredRateDbRow = z.output<typeof latestStoredRateRowSchema>;
-export type CurrencyDatePairDbRow = z.output<typeof currencyDatePairRowSchema>;

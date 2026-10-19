@@ -65,35 +65,6 @@ export function buildSetClauses(
 
   return { clauses, params, nextIdx: i };
 }
-
-/**
- * Build a parameterized single-row UPDATE from a field bag, matched on `id`.
- *
- * Returns null when no writable field survives the `allowedFields` whitelist —
- * i.e. there is nothing to update. `tableName` is interpolated directly, so the
- * caller MUST pass a trusted/allowlisted identifier, never user input (every
- * current caller passes a fixed table name or one resolved from a static
- * asset-class → table map).
- *
- * @param allowedFields - whitelist of writable keys
- */
-export function buildUpdateSql(
-  tableName: string,
-  id: number | string,
-  fields: object,
-  allowedFields: AllowedKeys,
-): { sql: string; params: unknown[] } | null {
-  const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed: allowedFields });
-
-  if (!setClauses.length) return null;
-
-  params.push(id);
-  return {
-    sql: `UPDATE ${tableName} SET ${setClauses.join(', ')} WHERE id = $${idx}`,
-    params,
-  };
-}
-
 /**
  * Build parameterized INSERT column/placeholder lists from a field bag.
  */

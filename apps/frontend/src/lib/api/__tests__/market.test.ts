@@ -44,7 +44,7 @@ describe("market API client", () => {
 
   it("updateWatchlistItem PATCHes by id", async () => {
     server.use(http.patch(`${API_BASE}/api/watchlist/1`, () => ok(WATCHLIST_ITEM)));
-    expect((await updateWatchlistItem(1, {} as never)).id).toBe(1);
+    expect((await updateWatchlistItem(1, {})).id).toBe(1);
   });
 
   it("deleteWatchlistItem resolves on void", async () => {

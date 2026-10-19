@@ -20,6 +20,7 @@ import {
   roundToCents as roundToCentsDecimal,
   Decimal,
 } from "../money.ts";
+import { nanToZero } from "../math.ts";
 
 /**
  * Storage scale of split/payment money columns: NUMERIC(18,4) since migration
@@ -217,8 +218,8 @@ function computeSplitRemaining(split: {
   amount: number;
   amount_paid?: number;
 }): number {
-  const amount = Number(split?.amount) || 0;
-  const paid = Number(split?.amount_paid) || 0;
+  const amount = nanToZero(Number(split?.amount));
+  const paid = nanToZero(Number(split?.amount_paid));
   const remaining = toDecimal(amount).minus(toDecimal(paid));
   return roundToCents(remaining.lessThan(0) ? toDecimal(0) : remaining);
 }
@@ -239,8 +240,8 @@ export function computeOwedSummary(rows: SplitOutstandingRow[]): OwedSummaryRow[
   if (!Array.isArray(rows)) return [];
   return rows
     .map((row) => {
-      const totalOwed = roundToCents(Number(row.total_owed) || 0);
-      const totalPaid = roundToCents(Number(row.total_paid) || 0);
+      const totalOwed = roundToCents(nanToZero(Number(row.total_owed)));
+      const totalPaid = roundToCents(nanToZero(Number(row.total_paid)));
       const remaining = roundToCents(Math.max(0, totalOwed - totalPaid));
       return {
         recipient_id: row.recipient_id,
@@ -248,21 +249,10 @@ export function computeOwedSummary(rows: SplitOutstandingRow[]): OwedSummaryRow[
         total_owed: totalOwed,
         total_paid: totalPaid,
         remaining,
-        split_count: parseInt(row.split_count, 10) || 0,
+        split_count: nanToZero(parseInt(row.split_count, 10)),
       };
     })
     .filter((row) => row.remaining > 0)
     .sort((a, b) => b.remaining - a.remaining);
 }
 
-export default {
-  roundToCents,
-  computeBulkSplitAmount,
-  roundToMoneyPrecision,
-  normalizeMoneyAmount,
-  validateSplitAllocation,
-  validateBatchSplitAllocation,
-  validatePaymentAmount,
-  computeSplitRemaining,
-  computeOwedSummary,
-};

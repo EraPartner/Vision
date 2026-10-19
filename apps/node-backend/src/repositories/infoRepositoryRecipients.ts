@@ -39,6 +39,7 @@ import {
   mapRowsForAmountConversion,
 } from "./infoRepositoryHelpers.ts";
 import type { PeriodPivotEntity } from "./infoRepositoryHelpers.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export interface RecipientInsightsOptions {
   excludedCategoryIds?: number[] | undefined;
@@ -97,9 +98,8 @@ export function periodPivotConversion(
   const fellBack = rows.filter(
     (row) => row.used_fallback_rate === true && row.amount_eur !== undefined,
   );
-  const { unconverted } = partitionConvertedRows(
-    rows,
-    (row) => parseInt(row.cnt, 10) || 0,
+  const { unconverted } = partitionConvertedRows(rows, (row) =>
+    nanToZero(parseInt(row.cnt, 10)),
   );
   const fields = unconvertedFields(unconverted);
   return {
@@ -159,9 +159,8 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length
-      ? `AND ${dateFilters.join(" AND ")}`
-      : "";
+    const dateWhere =
+      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
 
     // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
     // the conversion below can use each row's OWN date rate, exactly as
@@ -209,7 +208,7 @@ export const recipientInsightsRepository = {
         targetCurrency,
         { useHistoricalRatesByDate: true, dateField: "date" },
       ),
-      (row) => parseInt(row.tx_count, 10) || 0,
+      (row) => nanToZero(parseInt(row.tx_count, 10)),
       unconverted,
     );
 
@@ -222,18 +221,16 @@ export const recipientInsightsRepository = {
       const eur = row.amount_eur;
       const count = parseInt(row.tx_count, 10);
 
-      if (!recipientAgg[rid]) {
-        recipientAgg[rid] = {
-          recipientId: rid,
-          name: row.recipient_name,
-          totalSpend: 0,
-          transactionCount: 0,
-          // DATE columns as calendar-day strings (Y-M-D compares
-          // lexicographically, so the min/max below still works).
-          firstSeen: toWireDate(row.first_seen),
-          lastSeen: toWireDate(row.last_seen),
-        };
-      }
+      recipientAgg[rid] ??= {
+        recipientId: rid,
+        name: row.recipient_name,
+        totalSpend: 0,
+        transactionCount: 0,
+        // DATE columns as calendar-day strings (Y-M-D compares
+        // lexicographically, so the min/max below still works).
+        firstSeen: toWireDate(row.first_seen),
+        lastSeen: toWireDate(row.last_seen),
+      };
       // Decimal accumulation (money-hygiene): native `+=` over per-currency
       // converted spend drifts sub-cent before the final round.
       recipientAgg[rid].totalSpend = toNumber(
@@ -349,8 +346,7 @@ export const recipientInsightsRepository = {
     for (const row of momConverted) {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
-      if (!momAgg[rid])
-        momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
+      momAgg[rid] ??= { name: row.recipient_name, current: 0, previous: 0 };
       // Decimal accumulation (money-hygiene), as in the top-merchants reduction
       // above: per-date conversion means a month is now many converted rows,
       // and native `+=` over them drifts sub-cent before the final round.
@@ -415,9 +411,8 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length
-      ? `AND ${dateFilters.join(" AND ")}`
-      : "";
+    const dateWhere =
+      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
@@ -450,7 +445,7 @@ export const recipientInsightsRepository = {
         targetCurrency,
         { useHistoricalRatesByDate: true, dateField: "date" },
       ),
-      (row) => parseInt(row.cnt, 10) || 0,
+      (row) => nanToZero(parseInt(row.cnt, 10)),
     );
 
     const yearRecMap: Record<string, Record<string, RecipientTotal>> = {};
@@ -458,7 +453,7 @@ export const recipientInsightsRepository = {
       const year = String(row.year);
       const rid = row.recipient_id;
       const eur = Math.abs(row.amount_eur);
-      const cnt = parseInt(row.cnt, 10) || 0;
+      const cnt = nanToZero(parseInt(row.cnt, 10));
 
       const yearRecipients = (yearRecMap[year] ??= {});
       let rec = yearRecipients[rid];

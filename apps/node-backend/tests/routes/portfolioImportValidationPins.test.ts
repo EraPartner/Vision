@@ -38,8 +38,7 @@ vi.mock("multer", () => {
   };
 });
 
-vi.mock("../../src/lib/portfolioUpload.ts", async (importOriginal) => ({
-  ...(await importOriginal()),
+vi.mock("../../src/services/portfolioImportPipeline/uploadSupport.ts", () => ({
   assertPortfolioUploadSupported: vi.fn().mockResolvedValue(undefined),
 }));
 

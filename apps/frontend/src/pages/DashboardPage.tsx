@@ -48,6 +48,7 @@ import {
     formatCurrencyCompact,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import { ChartSyncProvider } from "@/components/charts/ChartSyncContext";
 import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
@@ -77,7 +78,10 @@ export default function DashboardPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [customizeOpen, setCustomizeOpen] = useState(false);
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = useMemo(
         () => new Intl.NumberFormat(locale),
@@ -292,7 +296,7 @@ export default function DashboardPage() {
         : false;
 
     const allTransactions = useMemo(
-        () => transactionsData?.items || [],
+        () => transactionsData?.items ?? [],
         [transactionsData],
     );
 
@@ -306,9 +310,15 @@ export default function DashboardPage() {
         const excludedRecipientIdSet = new Set(excludedRecipientIds);
 
         return allTransactions.filter((tx) => {
-            if (tx.category_id && excludedCategoryIdSet.has(tx.category_id))
+            if (
+                tx.category_id != null &&
+                excludedCategoryIdSet.has(tx.category_id)
+            )
                 return false;
-            if (tx.recipient_id && excludedRecipientIdSet.has(tx.recipient_id))
+            if (
+                tx.recipient_id != null &&
+                excludedRecipientIdSet.has(tx.recipient_id)
+            )
                 return false;
             return true;
         });
@@ -331,9 +341,9 @@ export default function DashboardPage() {
     const monthlyData = useMemo(() => {
         const useExclusions = graphExclusions["monthlyTrends"] ?? true;
         if (useExclusions && exclusionsApply && monthlySummaryFiltered) {
-            return monthlySummaryFiltered.months || [];
+            return monthlySummaryFiltered.months ?? [];
         }
-        return monthlySummaryUnfiltered?.months || [];
+        return monthlySummaryUnfiltered?.months ?? [];
     }, [
         graphExclusions,
         exclusionsApply,
@@ -515,7 +525,7 @@ export default function DashboardPage() {
         needsFilteredMonthly && monthlyFilteredError,
         needsUnfilteredMonthly && monthlyUnfilteredError,
         needsFilteredRecent && recentFilteredError,
-    ].find(Boolean);
+    ].find((error) => error instanceof Error);
     const partialErrorMessage = partialError ? partialError.message : "";
     const hasAnyData =
         Boolean(statsData) ||

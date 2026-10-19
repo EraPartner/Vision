@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     components,
@@ -102,7 +102,7 @@ All glass tiers include `saturate(var(--glass-saturate))` — 180% in light mode
 - Cards nested inside an already-glass dialog (e.g., `InvestmentDetailDialog`) — avoids double-blur
 - Dashboard recent-transactions skeleton — pairs with its opaque `DataTable`
 - `Input`, `Textarea`, `Checkbox`, `RadioGroup`, `Switch`, `Slider`, `Label`
-- `Tabs`, `Accordion`, `Collapsible`, `Toggle`, `ToggleGroup`
+- `Tabs`, `Accordion`, `Collapsible`, `Toggle`, `SegmentedControl`
 - `Alert`
 - Select/Menu **triggers** (`SelectTrigger`, `MenubarTrigger`) — use `bg-background/80`; their floating content layers are glass-thick
 
@@ -419,7 +419,6 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | ScrollArea  | Scrollable container    | [[apps/frontend/src/components/ui/scroll-area.tsx\|scroll-area.tsx]]   |
 | Calendar    | Date picker calendar    | [[apps/frontend/src/components/ui/calendar.tsx\|calendar.tsx]]         |
 | Toggle      | Binary toggle           | [[apps/frontend/src/components/ui/toggle.tsx\|toggle.tsx]]             |
-| ToggleGroup | Toggle button group     | [[apps/frontend/src/components/ui/toggle-group.tsx\|toggle-group.tsx]] |
 | InputOTP    | One-time password input | [[apps/frontend/src/components/ui/input-otp.tsx\|input-otp.tsx]]       |
 
 ---

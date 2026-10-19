@@ -90,7 +90,7 @@ type ExposureSources = Awaited<
 const identifierKey = (value: IdentifierLike) =>
   `${value.type}:${value.exchange ?? ""}:${value.value}`;
 const money = (value: Decimal.Value | null | undefined) =>
-  new Decimal(value || 0);
+  new Decimal(value === "" ? 0 : (value ?? 0));
 const emit = (value: Decimal) =>
   Number(value.toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN).toString());
 const weight = (amount: Decimal, total: Decimal) =>
@@ -113,12 +113,12 @@ export async function upsertPortfolioExposureBundle(input: unknown) {
   const identifiers = new Set<string>();
   for (const item of bundle.classifications) {
     // The schema requires exactly one of investmentId / identifier.
-    const key = item.investmentId
+    const key = item.investmentId !== undefined
       ? `investment:${item.investmentId}`
       : `identifier:${identifierKey(item.identifier!)}`;
-    if ((item.investmentId ? investments : identifiers).has(key))
+    if ((item.investmentId !== undefined ? investments : identifiers).has(key))
       throw invalidSource("Exposure classification targets must be unique");
-    (item.investmentId ? investments : identifiers).add(key);
+    (item.investmentId !== undefined ? investments : identifiers).add(key);
   }
   const docs = new Set<number>();
   const fundDocuments = bundle.fundDocuments.map((item) => {
@@ -255,7 +255,7 @@ function aggregatePortfolioExposure(
   const evaluationTime = Date.parse(`${evaluationDate}T00:00:00Z`);
   const direct = new Map(
     sources.classifications
-      .filter((item) => item.investmentId)
+      .filter((item) => item.investmentId != null)
       .map((item) => [Number(item.investmentId), item]),
   );
   const byIdentifier = new Map(

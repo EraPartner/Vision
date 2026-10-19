@@ -69,7 +69,7 @@ export async function listExposureSources(): Promise<{
 export async function listExposureTargets(
   investmentIds: readonly number[],
 ): Promise<{ id: number; assetClass: string }[]> {
-  if (!investmentIds.length) return [];
+  if (investmentIds.length === 0) return [];
   return queryRows(
     exposureTargetRowSchema,
     `SELECT id,asset_class AS "assetClass"

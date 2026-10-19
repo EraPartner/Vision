@@ -353,7 +353,6 @@ export interface ResearchScorecardResponse {
 // ── Portfolio forecast (ADR-081, Pillar C) ───────────────────────────────────
 
 export type ForecastMethod = "parametric" | "block_bootstrap";
-export type ForecastReturnSource = "historical" | "blended";
 
 export interface PortfolioForecastInput {
     horizonMonths: number;

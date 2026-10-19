@@ -21,6 +21,7 @@ import type {
   ParsedBankTransactions,
 } from "./_shared.ts";
 import { toDecimal, roundMoney } from "../../../lib/money.ts";
+import { nanToZero } from "../../../lib/math.ts";
 
 const NAME = "revolut";
 const BANK_LABEL = "Revolut";
@@ -73,11 +74,11 @@ function parseRow(parts: string[]): ParsedBankTransaction | null {
   const grossAmount = parseDecimalSafe(amountStr);
   if (isNaN(grossAmount)) return null;
 
-  const fee = parseDecimalSafe(feeStr) || 0;
+  const fee = nanToZero(parseDecimalSafe(feeStr));
   // Revolut's Amount column excludes Fee — the actual balance delta is
   // amount − fee. Book the net so imported amounts reconcile with the
   // imported Balance column (fee stays visible in the comment below).
-  const amount = fee
+  const amount = fee !== 0
     ? roundMoney(toDecimal(grossAmount).minus(toDecimal(fee)))
     : grossAmount;
   const balance = balanceStr ? parseDecimalSafe(balanceStr) : null;

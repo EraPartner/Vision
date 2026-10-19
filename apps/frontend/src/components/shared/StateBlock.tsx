@@ -55,7 +55,7 @@ export function StateBlock({
             >
                 {title}
             </Heading>
-            {description && (
+            {Boolean(description) && (
                 <p
                     className={cn(
                         "mt-1 text-pretty type-callout text-label-secondary",
@@ -65,8 +65,10 @@ export function StateBlock({
                     {description}
                 </p>
             )}
-            {details && <div className="mt-3 w-full max-w-lg">{details}</div>}
-            {action && (
+            {Boolean(details) && (
+                <div className="mt-3 w-full max-w-lg">{details}</div>
+            )}
+            {Boolean(action) && (
                 <div
                     className={cn(
                         "flex max-w-full flex-wrap justify-center gap-2",

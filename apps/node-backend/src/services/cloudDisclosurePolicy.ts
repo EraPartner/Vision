@@ -71,7 +71,7 @@ export function buildDisclosurePreview(
   input: Record<string, unknown> | null | undefined,
 ): DisclosurePreviewResult {
   const payload: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input || {})) {
+  for (const [key, value] of Object.entries(input ?? {})) {
     if (!PAYLOAD_FIELDS.has(key))
       throw new Error(`Field is not eligible for cloud disclosure: ${key}`);
     if (value !== undefined && value !== null) payload[key] = value;

@@ -30,7 +30,7 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
             language: "en" as const,
             setLanguage: vi.fn(),
             t: (key: string, vars?: Record<string, string | number>) => {
-                let str = (enDict as Record<string, string>)[key] ?? key;
+                let str = enDict[key] ?? key;
                 if (vars) {
                     for (const [k, v] of Object.entries(vars)) {
                         str = str.replaceAll(`{${k}}`, String(v));

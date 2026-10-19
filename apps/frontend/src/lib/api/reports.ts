@@ -16,8 +16,6 @@ import type {
     RecipientId,
 } from "@vision/types/brands";
 
-export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
-
 export type ReportPeriod =
   | { kind: 'ytd' }
   | { kind: 'rolling'; months: number }

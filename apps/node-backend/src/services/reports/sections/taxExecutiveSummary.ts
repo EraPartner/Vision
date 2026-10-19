@@ -14,6 +14,7 @@ import {
   signClass,
 } from "../sectionHelpers.ts";
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { nanToZero } from '../../../lib/math.ts';
 
 export function renderTaxExecutiveSummary(
   data: TaxReportData | null,
@@ -63,7 +64,7 @@ export function renderTaxExecutiveSummary(
   const unconverted = Array.isArray(data?.unconvertedCurrencies)
     ? data.unconvertedCurrencies
     : [];
-  const unconvertedCount = Number(data?.unconvertedCount) || 0;
+  const unconvertedCount = nanToZero(Number(data?.unconvertedCount));
   const fxWarningHtml =
     unconverted.length > 0
       ? `<p style="color:hsl(var(--warning, 38 92% 50%));font-size:11px;margin:0 0 12px;"><strong>Incomplete:</strong> no exchange rate was available for ${unconverted.join(", ")}; ${unconvertedCount === 1 ? "1 transaction was" : `${unconvertedCount} transactions were`} left out of these totals.</p>`

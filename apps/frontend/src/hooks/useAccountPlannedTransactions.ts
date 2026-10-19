@@ -17,7 +17,7 @@ export function useAccountPlannedTransactions(
                 is_executed: false,
                 limit: 5000,
             }),
-        enabled: enabled && !!accountId,
+        enabled: enabled && accountId != null,
         retry: false,
     });
 }

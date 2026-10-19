@@ -35,6 +35,7 @@ import type {
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
+import { firstNonZero } from "../lib/math.ts";
 /** A Horizon transaction record as embedded in a receipt (validated before use). */
 export interface HorizonTransaction {
   hash: string;
@@ -311,7 +312,7 @@ export function verifyKinesisNetworkReceipt(
     seenPages.add(page.url);
     const records: unknown = member(member(page.body, "_embedded"), "records");
     if (!Array.isArray(records)) throw new Error("network_history_incomplete");
-    if (!records.length) break;
+    if (records.length === 0) break;
     transactions.push(...(records as unknown[]));
     // An absent link makes `new URL` throw, which rejects the history.
     const next = String(
@@ -333,7 +334,7 @@ export function verifyKinesisNetworkReceipt(
     page = nextPages[0];
   }
   if (
-    !transactions.length ||
+    transactions.length === 0 ||
     new Set(transactions.map((item) => member(item, "hash"))).size !==
       transactions.length
   )
@@ -345,12 +346,18 @@ export function verifyKinesisNetworkReceipt(
     return { transaction, ...operationFor(transaction, pages, asset) };
   });
   const ordered = [...operations].sort(
-    (a, b) =>
-      compareText(a.transaction.created_at, b.transaction.created_at) ||
-      comparePagingTokens(
-        a.transaction.paging_token,
-        b.transaction.paging_token,
-      ),
+    (a, b) => {
+      const byTime = compareText(
+        a.transaction.created_at,
+        b.transaction.created_at,
+      );
+      return byTime !== 0
+        ? byTime
+        : comparePagingTokens(
+            a.transaction.paging_token,
+            b.transaction.paging_token,
+          );
+    },
   );
   const [opening] = ordered;
   if (
@@ -415,7 +422,7 @@ export function verifyKinesisNetworkReceipt(
 /** Re-read generic literal source rather than trusting mutable staging metadata. */
 export function verifiedKinesisNetworkRow(row: KinesisSourceRow) {
   try {
-    const config = batchConfigFields(row.custom_config) || {};
+    const config = batchConfigFields(row.custom_config) ?? {};
     const columns = config.source_columns;
     if (!Array.isArray(columns)) return undefined;
     const records = parseCsvText(
@@ -427,7 +434,7 @@ export function verifiedKinesisNetworkRow(row: KinesisSourceRow) {
     );
     const [record] = records;
     if (records.length !== 1 || !record) return undefined;
-    const mapping = config.column_mapping || {};
+    const mapping = config.column_mapping ?? {};
     // Every failure in this try, thrown or returned, rejects the row alike.
     const cell = (column: string | undefined) =>
       column === undefined ? undefined : record[column];
@@ -523,7 +530,7 @@ export function proveKinesisNetworkBindings(
     blockers: KinesisSourceIssue[] = [];
   const selected = rows.filter(
     (row) =>
-      row.asset_transfer_details?.networkReceipt ||
+      row.asset_transfer_details?.networkReceipt ??
       row.asset_adjustment_details?.networkReceipt,
   );
   const witnesses = [
@@ -590,7 +597,7 @@ export function proveKinesisNetworkBindings(
         witness.route === "account_internal",
     );
     // Every incoming row was selected for its literal proof.
-    if (!proof || !matches.length) continue;
+    if (!proof || matches.length === 0) continue;
     // Internal documentary rows intentionally skip instrument matching. Only
     // one verified broker event may supply that missing instrument binding.
     const peers = incoming.filter(
@@ -653,7 +660,7 @@ export function proveKinesisNetworkBindings(
       verified.proof.asset !== row.symbol_raw ||
       verified.proof.date !== row.tx_date ||
       !equal(verified.proof.principal, proof.parsed.units) ||
-      evidence.issues.length
+      evidence.issues.length > 0
     ) {
       issue(row, "network_witness_unverified");
       continue;
@@ -701,7 +708,7 @@ export function proveKinesisNetworkBindings(
         current.dedup_fingerprint === row.dedup_fingerprint &&
         current.dedup_fingerprint_version === row.dedup_fingerprint_version,
     );
-    if (owners.length || canonical.length) {
+    if (owners.length > 0 || canonical.length > 0) {
       const [owner] = owners,
         [current] = canonical;
       if (
@@ -736,7 +743,7 @@ export function proveKinesisNetworkBindings(
       }
     }
     overrides.set(Number(row.id), projected);
-    if (row.status === "matched" && !canonical.length)
+    if (row.status === "matched" && canonical.length === 0)
       bindings.push({ before: row, after: projected, binding, witness });
   }
   return { overrides, bindings, blockers };
@@ -940,9 +947,12 @@ export function proveKinesisNativeGiftGroups(
     try {
       members.sort(
         (a, b) =>
-          a.receipt.transaction.created_at.localeCompare(
-            b.receipt.transaction.created_at,
-          ) || a.proof.hash.localeCompare(b.proof.hash),
+          firstNonZero(
+            a.receipt.transaction.created_at.localeCompare(
+              b.receipt.transaction.created_at,
+            ),
+            a.proof.hash.localeCompare(b.proof.hash),
+          ),
       );
       // A group holds at least the member that created it.
       const first = members[0]!,
@@ -983,7 +993,7 @@ export function proveKinesisNativeGiftGroups(
         Number(batch.rows_total) !==
           rows.filter((row) => Number(row.batch_id) === Number(batch.id))
             .length ||
-        batchConfigFields(batch.custom_config)?.included_symbols?.length ||
+        (batchConfigFields(batch.custom_config)?.included_symbols?.length ?? 0) > 0 ||
         members.some(
           (member) =>
             Number(member.row.batch_id) !== Number(batch.id) ||
@@ -1026,8 +1036,8 @@ export function proveKinesisNativeGiftGroups(
           current.dedup_fingerprint == null,
       );
       if (
-        (!owned.length && manuals.length !== 1) ||
-        (owned.length && owned.length !== 2) ||
+        (owned.length === 0 && manuals.length !== 1) ||
+        (owned.length > 0 && owned.length !== 2) ||
         manuals.length > 1 ||
         owned.some(
           ({ member, current }) =>
@@ -1036,7 +1046,7 @@ export function proveKinesisNativeGiftGroups(
         ) ||
         new Set(owned.map((item) => Number(item.current.id))).size !==
           owned.length ||
-        (owned.length && manuals.length)
+        (owned.length > 0 && manuals.length > 0)
       ) {
         for (const member of members)
           issue(member.row, "network_gift_group_contested");
@@ -1070,7 +1080,7 @@ export function proveKinesisNativeGiftGroups(
           !Array.isArray(receipt.after) ||
           receipt.after.length !== 2 ||
           receipt.after.some(
-            (image) => !image || !Number.isSafeInteger(Number(image.id)),
+            (image) => image == null || !Number.isSafeInteger(Number(image.id)),
           ) ||
           new Set(receipt.after.map((image) => Number(image.id))).size !== 2 ||
           receipt.after.some((image) => {
@@ -1079,7 +1089,7 @@ export function proveKinesisNativeGiftGroups(
             );
             return !actual || hash(actual.current) !== hash(image);
           }) ||
-          !receipt.proof.preservedBefore ||
+          receipt.proof.preservedBefore == null ||
           !matching(receipt.proof.preservedBefore) ||
           Number(receipt.proof.preservedTransactionId) !==
             Number(receipt.proof.preservedBefore.id) ||
@@ -1142,9 +1152,9 @@ export function proveKinesisNativeGiftGroups(
       for (const member of members)
         candidates.set(
           Number(member.row.id),
-          !owned.length && member === first ? [preserved] : [],
+          owned.length === 0 && member === first ? [preserved] : [],
         );
-      if (!owned.length)
+      if (owned.length === 0)
         groups.push({ proof, members: members.map((member) => member.row) });
     } catch {
       for (const member of members)

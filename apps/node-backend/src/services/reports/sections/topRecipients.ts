@@ -38,7 +38,7 @@ export function renderTopRecipients(
     (hasExclusions ? data.filteredRecipients : data.recipients)
       ?.monthOverMonth ?? [];
 
-  if (!topMerchants.length) {
+  if (topMerchants.length === 0) {
     return emptySection({
       title: "Top Recipients",
       subtitle: "Merchants by total spend",

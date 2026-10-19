@@ -195,7 +195,7 @@ export async function resetSteps(
   jobId: string,
   stepIds: readonly string[],
 ): Promise<number> {
-  if (!stepIds.length) return 0;
+  if (stepIds.length === 0) return 0;
   const result = await query(
     `UPDATE ai_investigation_steps
      SET state='pending',result_json=NULL,error_json=NULL,started_at=NULL,completed_at=NULL,updated_at=NOW()

@@ -7,7 +7,6 @@
  * a test cares about.
  */
 import type {
-  AssetPriceHistoryDbRow,
   InvestmentDbRow,
   PortfolioMathTxDbRow,
   PortfolioPerformanceSnapshotDbRow,
@@ -15,7 +14,6 @@ import type {
   PortfolioUnitEventDbRow,
   ProviderHealthDbRow,
   SummaryInvestmentDbRow,
-  WatchlistDbRow,
 } from "../../src/database/rows/portfolio.ts";
 import {
   asCurrencyCode,
@@ -163,26 +161,6 @@ export function portfolioMathTxDbRow(
   };
 }
 
-/** A `watchlist` row. */
-export function watchlistDbRow(
-  overrides: Partial<WatchlistDbRow> = {},
-): WatchlistDbRow {
-  return {
-    id: 1,
-    name: "Watch",
-    symbol: null,
-    asset_class: "stocks_etfs",
-    target_price: "0",
-    currency: asCurrencyCode("EUR"),
-    notes: null,
-    price_provider_id: null,
-    added_price: null,
-    created_at: CREATED,
-    updated_at: CREATED,
-    ...overrides,
-  };
-}
-
 /** A `provider_health` row. */
 export function providerHealthDbRow(
   overrides: Partial<ProviderHealthDbRow> = {},
@@ -194,22 +172,6 @@ export function providerHealthDbRow(
     last_error_at: null,
     last_error: null,
     consecutive_failures: 0,
-    updated_at: CREATED,
-    ...overrides,
-  };
-}
-
-/** An `asset_price_history` row. */
-export function assetPriceHistoryDbRow(
-  overrides: Partial<AssetPriceHistoryDbRow> = {},
-): AssetPriceHistoryDbRow {
-  return {
-    id: 1,
-    investment_id: asInvestmentId(1),
-    price_date: new Date(2026, 0, 15),
-    close_price: "0",
-    source: "manual",
-    fetched_at: CREATED,
     updated_at: CREATED,
     ...overrides,
   };

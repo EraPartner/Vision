@@ -76,7 +76,7 @@ export async function create(input: PlannedTransactionCreateInput) {
     await stampAccountIdForUpdate(normalized, client);
     const id = await insertPlannedTransactionInTransaction(client, normalized);
     if (
-      normalized.is_loan &&
+      Boolean(normalized.is_loan) &&
       Array.isArray(input.loan_schedule) &&
       input.loan_schedule.length > 0
     ) {

@@ -62,8 +62,8 @@ export function useAvailableTaxYears(): AvailableTaxYear[] {
         for (const inv of summaries ?? []) {
             for (const txn of inv.transactions ?? []) {
                 const hasTaxOrFee =
-                    (Number(txn.taxes) || 0) > 0 ||
-                    (Number(txn.fees) || 0) > 0 ||
+                    Number(txn.taxes) > 0 ||
+                    Number(txn.fees) > 0 ||
                     txn.type === "tax" ||
                     txn.type === "fee";
                 if (!hasTaxOrFee) continue;

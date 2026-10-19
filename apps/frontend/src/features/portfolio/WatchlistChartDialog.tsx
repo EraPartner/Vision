@@ -120,7 +120,7 @@ export function WatchlistChartDialog({
                 target_price: targetValue,
             });
 
-            queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
+            void queryClient.invalidateQueries({ queryKey: watchlistKeys.all });
             toast.success(t("watchlist.targetUpdated"));
             setEditingPrice(false);
             setNewTargetPrice("");
@@ -160,7 +160,7 @@ export function WatchlistChartDialog({
             ),
             price: p.close,
             time: p.time,
-        })) || [];
+        })) ?? [];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

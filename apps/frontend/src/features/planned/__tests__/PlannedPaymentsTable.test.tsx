@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
-import { asPlannedTransactionId, asTransactionId } from "@vision/types/brands";
+import { asCurrencyCode, asPlannedTransactionId, asTransactionId } from "@vision/types/brands";
 
 const translations = vi.hoisted<Record<string, string>>(() => ({
     "common.delete": "Delete",
@@ -90,10 +90,10 @@ vi.mock("@/components/shared/VirtualDataTable", () => ({
 
 function payment(overrides: Partial<PlannedPayment> = {}): PlannedPayment {
     return {
-        id: 1,
+        id: asPlannedTransactionId(1),
         name: "Rent",
         amount: -1000,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         due_date: "2026-09-01",
         is_recurring: true,
         frequency: "monthly",
@@ -101,7 +101,7 @@ function payment(overrides: Partial<PlannedPayment> = {}): PlannedPayment {
         is_executed: false,
         created_at: "2026-01-01T00:00:00Z",
         ...overrides,
-    } as PlannedPayment;
+    };
 }
 
 function renderTable(

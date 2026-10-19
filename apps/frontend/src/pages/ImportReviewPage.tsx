@@ -188,8 +188,10 @@ export default function ImportReviewPage() {
                 // while loading would badge every account as new for a frame.
                 isNew: key !== "" && accountsData != null && !existing.has(key),
             }))
-            .sort(
-                (a, b) => b.count - a.count || a.label.localeCompare(b.label),
+            .sort((a, b) =>
+                b.count !== a.count
+                    ? b.count - a.count
+                    : a.label.localeCompare(b.label),
             );
     }, [preview, accountsData]);
 
@@ -386,7 +388,7 @@ export default function ImportReviewPage() {
                 subtitle={t("importReview.subtitle", { n: totalRows })}
                 back={{
                     label: t("importReview.back"),
-                    onClick: () => navigate("/import"),
+                    onClick: () => void navigate("/import"),
                 }}
             />
 

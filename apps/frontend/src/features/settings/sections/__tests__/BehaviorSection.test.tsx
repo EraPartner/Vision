@@ -59,7 +59,7 @@ describe("BehaviorSection — cost basis method", () => {
         const { toast } = await import("sonner");
         const errorToast = vi
             .spyOn(toast, "error")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         const user = userEvent.setup();
         renderWithApp(<BehaviorSection />);
 
@@ -147,7 +147,7 @@ describe("BehaviorSection — brokerage cash categories", () => {
         const { toast } = await import("sonner");
         const errorToast = vi
             .spyOn(toast, "error")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         const user = userEvent.setup();
         renderWithApp(<BehaviorSection />);
 

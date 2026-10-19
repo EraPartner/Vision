@@ -25,8 +25,6 @@ const VALIDATE_CHUNK = 500;
  * `to_char`-ed to a 'YYYY-MM-DD' string rather than selected raw (see the
  * comment below), so it overrides the raw DATE of a staging row.
  */
-export type { PendingStagingRow };
-
 /**
  * Run the validate phase: reject unusable rows, hash the rest, and flag
  * intra-batch duplicates.

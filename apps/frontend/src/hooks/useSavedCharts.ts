@@ -1,12 +1,10 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, type SavedChart, type SavedChartCreate } from "@/lib/api";
+import { apiClient, type SavedChartCreate } from "@/lib/api";
 import { toast } from "sonner";
 import { savedChartKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-
-export type { SavedChart };
 
 export function useSavedCharts() {
     return useQuery({
@@ -23,7 +21,9 @@ export function useCreateSavedChart() {
         mutationFn: (payload: SavedChartCreate) =>
             apiClient.createSavedChart(payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
             toast.success(t("charts.saved"));
         },
         onError: (error: Error) => {
@@ -44,7 +44,9 @@ export function useUpdateSavedChart() {
         }: { id: number } & Partial<SavedChartCreate>) =>
             apiClient.updateSavedChart(id, payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
         },
         onError: (error: Error) => {
             toast.error(t("charts.updateFailed"), {
@@ -60,7 +62,9 @@ export function useDeleteSavedChart() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteSavedChart(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
             toast.success(t("charts.deleted"));
         },
         onError: (error: Error) => {

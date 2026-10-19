@@ -174,7 +174,7 @@ const fmpAdapter = {
     // Widened up front: it is assigned inside the onCoreError closure, which
     // control-flow narrowing cannot see.
     let coreError = undefined as Error | undefined;
-    const onCoreError = (err: Error): undefined => { if (!coreError) coreError = err; return undefined; };
+    const onCoreError = (err: Error): undefined => { coreError ??= err; return undefined; };
     const [profileRaw, ratiosRaw, keyMetricsRaw, growthRaw] = await Promise.all([
       getJson(`${BASE}/profile?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),
       getJson(`${BASE}/ratios-ttm?symbol=${enc}&apikey=${k}`).then(first).catch(onCoreError),

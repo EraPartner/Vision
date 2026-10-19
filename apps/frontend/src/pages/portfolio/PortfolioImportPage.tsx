@@ -333,9 +333,9 @@ export function PortfolioImportPage() {
                 );
             }
 
-            if (data.requires_review && data.batch_id) {
+            if (data.requires_review && data.batch_id !== 0) {
                 bypassNextNavigation();
-                navigate(`/portfolio/import/${data.batch_id}/review`);
+                void navigate(`/portfolio/import/${data.batch_id}/review`);
                 return;
             }
 
@@ -508,7 +508,7 @@ export function PortfolioImportPage() {
                         {isSpecializedFormat ? (
                             <Alert>
                                 <AlertDescription>
-                                    {t(specializedHintKey!)}
+                                    {t(specializedHintKey)}
                                 </AlertDescription>
                             </Alert>
                         ) : (
@@ -569,17 +569,22 @@ export function PortfolioImportPage() {
                                                 type="number"
                                                 min="0"
                                                 value={config.skipRows}
-                                                onChange={(e) =>
+                                                onChange={(e) => {
+                                                    const skipRows = parseInt(
+                                                        e.target.value,
+                                                    );
                                                     setConfig({
                                                         ...config,
-                                                        skipRows: Math.max(
-                                                            0,
-                                                            parseInt(
-                                                                e.target.value,
-                                                            ) || 0,
-                                                        ),
-                                                    })
-                                                }
+                                                        skipRows: Number.isNaN(
+                                                            skipRows,
+                                                        )
+                                                            ? 0
+                                                            : Math.max(
+                                                                  0,
+                                                                  skipRows,
+                                                              ),
+                                                    });
+                                                }}
                                             />
                                         </div>
                                     </DisclosureContent>

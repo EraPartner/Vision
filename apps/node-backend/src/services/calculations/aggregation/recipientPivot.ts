@@ -36,4 +36,3 @@ export async function computeRecipientPivot({
   });
 }
 
-export default { computeRecipientPivot };

@@ -43,6 +43,7 @@ import type {
   QueryRunner,
   TransactionTagRef,
 } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export type {
   QueryRunner,
@@ -348,40 +349,6 @@ export async function applyPlannedFieldUpdate(
   );
   return (r.rowCount ?? 0) > 0;
 }
-
-/**
- * Apply a parameterized field update and hydrate the resulting row.
- */
-export async function updatePlannedFields(
-  id: PlannedTransactionId,
-  sanitized: Record<string, unknown>,
-): Promise<HydratedPlannedTransactionRow | null> {
-  const {
-    clauses: setClauses,
-    params,
-    nextIdx: paramIdx,
-  } = buildSetClauses(sanitized, { quote: true });
-  if (setClauses.length === 0) return plannedTransactionRepository.getById(id);
-  setClauses.push("updated_at = NOW()");
-  params.push(id);
-  const rows = await queryRows(
-    plannedTransactionListRowSchema,
-    `WITH updated AS (
-       UPDATE planned_transactions
-       SET ${setClauses.join(", ")}
-       WHERE id = $${paramIdx}
-       RETURNING *
-     )
-     SELECT ${PLANNED_SELECT_FIELDS}
-     FROM updated pt
-     ${PLANNED_JOINS}`,
-    params,
-  );
-  const [row] = rows;
-  if (!row) return null;
-  return hydratePlannedRow(row, id);
-}
-
 /**
  * Replace one planned transaction's amortization rows using the caller's
  * transaction client.
@@ -573,7 +540,7 @@ export const plannedTransactionRepository = {
       `;
       const [countRow] = await queryRows(countRowSchema, countSql, params);
       // String(): parseInt coerced a missing row's `undefined` the same way.
-      total = parseInt(String(countRow?.count), 10) || 0;
+      total = nanToZero(parseInt(String(countRow?.count), 10));
     }
     const rows: PlannedRowInHydration[] = pageRows.map(
       ({ total_count: _total_count, ...row }) => row,
@@ -668,15 +635,15 @@ export const plannedTransactionRepository = {
     }
 
     for (const row of rows) {
-      const executions = executionsByPlannedTransactionId.get(row.id) || [];
+      const executions = executionsByPlannedTransactionId.get(row.id) ?? [];
       row.executions = executions;
       row.execution_count = executions.length;
       row.executed_transaction_id =
         executions[0]?.executed_transaction_id ?? null;
       row.loan_schedule = row.is_loan
-        ? schedulesByPlannedTransactionId.get(row.id) || []
+        ? schedulesByPlannedTransactionId.get(row.id) ?? []
         : [];
-      row.tags = tagsByPlannedTransactionId.get(row.id) || [];
+      row.tags = tagsByPlannedTransactionId.get(row.id) ?? [];
     }
 
     // The loop above attached every sub-collection to every row.

@@ -191,7 +191,7 @@ export function importCSVWithProgress(
                         duplicates: 0,
                         errors: 0,
                         percent: 100,
-                    } as ImportProgress);
+                    });
                     continue;
                 }
                 if (event === "error") {

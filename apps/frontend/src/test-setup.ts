@@ -54,7 +54,7 @@ if (typeof window !== "undefined") {
             const left = typeof options === "number" ? options : options?.left;
             if (typeof top === "number") this.scrollTop = top;
             if (typeof left === "number") this.scrollLeft = left;
-        } as typeof Element.prototype.scrollTo;
+        };
     }
 
     // ResizeObserver polyfill — required by @visx/responsive (ParentSize) and other

@@ -28,6 +28,7 @@ import { buildEnvelope } from "./_envelope.ts";
 import { assertNoNaN } from "./_invariants.ts";
 import { roundMoney } from "../../../lib/money.ts";
 import { toAppTz } from "../../../lib/timezone.ts";
+import { nanToZero } from "../../../lib/math.ts";
 
 const INCOME_NODE_ID = "__income__";
 const SPENDING_NODE_ID = "__spending__";
@@ -64,7 +65,7 @@ export async function computeSankeyFlow({
     excludedRecipientIds,
   });
 
-  if (!groupedRows.length) {
+  if (groupedRows.length === 0) {
     return buildEnvelope(
       {
         nodes: [],
@@ -86,7 +87,7 @@ export async function computeSankeyFlow({
       })),
       targetCurrency,
     ),
-    (row) => parseInt(row.cnt, 10) || 0,
+    (row) => nanToZero(parseInt(row.cnt, 10)),
   );
   const unconvertedSummary = unconvertedFields(unconverted);
 
@@ -246,5 +247,3 @@ function toCents(n: number) {
 function fromCents(cents: number) {
   return cents / 100;
 }
-
-export default { computeSankeyFlow };

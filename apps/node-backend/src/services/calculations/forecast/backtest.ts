@@ -220,7 +220,7 @@ export function walkForwardBacktest({
     entry.aggregate = {
       mae: mae / n,
       rmse: rmse / n,
-      mape: percentageSamples ? mape / percentageSamples : null,
+      mape: percentageSamples > 0 ? mape / percentageSamples : null,
       months: n,
     };
   }
@@ -332,7 +332,7 @@ export function walkForwardBacktestRolling({
     entry.aggregate = {
       mae: mae / n,
       rmse: rmse / n,
-      mape: percentageSamples ? mape / percentageSamples : null,
+      mape: percentageSamples > 0 ? mape / percentageSamples : null,
       windows: n,
     };
   }
@@ -340,4 +340,3 @@ export function walkForwardBacktestRolling({
   return Array.from(perMethod.values());
 }
 
-export default { walkForwardBacktest, walkForwardBacktestRolling };

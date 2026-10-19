@@ -10,6 +10,7 @@ import type { DecimalInput } from "../lib/money.ts";
 import { findRateOnOrBeforeInIndex } from "./currency/rateFetcher.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import type { HistoricalRateIndex } from "../types/rows.ts";
+import { nanToZero, nonZeroOr } from "../lib/math.ts";
 
 /** One financial source or output row; cells are pg values or provider data. */
 export type FinancialRow = Record<string, unknown>;
@@ -524,16 +525,16 @@ export async function executeFinancialAnalysis(
   const measures = [...new Set(plan.measures ?? [])];
   const fieldMap = new Map(descriptor.fields.map((f) => [f.id, f]));
   const measureMap = new Map(descriptor.measures.map((m) => [m.id, m]));
-  if (!fields.length && !measures.length)
+  if (fields.length === 0 && measures.length === 0)
     throw new Error("Select a financial field or measure");
   if (
-    (plan.joins ?? []).length ||
+    (plan.joins ?? []).length > 0 ||
     fields.some((f) => !fieldMap.has(f)) ||
     groups.some((f) => !fields.includes(f)) ||
     measures.some((m) => !measureMap.has(m))
   )
     throw new Error("Unsupported financial field, measure or join");
-  if (measures.length && fields.some((f) => !groups.includes(f)))
+  if (measures.length > 0 && fields.some((f) => !groups.includes(f)))
     throw new Error("Financial measure fields must be grouped");
   const filters = plan.filters ?? [];
   if (
@@ -571,7 +572,7 @@ export async function executeFinancialAnalysis(
     throw new Error("Units require one investment or investment grouping");
   if (
     plan.datasetId === "fx-history" &&
-    measures.length &&
+    measures.length > 0 &&
     !groups.includes("currency") &&
     !filters.some((f) => f.fieldId === "currency" && f.operator === "eq")
   )
@@ -694,14 +695,14 @@ export async function executeFinancialAnalysis(
     }),
   );
   let rows: FinancialRow[];
-  if (measures.length) {
+  if (measures.length > 0) {
     const buckets = new Map<string, FinancialRow[]>();
     for (const row of source) {
       const key = JSON.stringify(groups.map((f) => row[f]));
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)?.push(row);
     }
-    if (!groups.length && !buckets.size) buckets.set("[]", []);
+    if (groups.length === 0 && buckets.size === 0) buckets.set("[]", []);
     rows = [...buckets.values()].map((bucket) =>
       Object.fromEntries([
         ...fields.map((f): [string, unknown] => [f, bucket[0]?.[f] ?? null]),
@@ -733,7 +734,7 @@ export async function executeFinancialAnalysis(
             contributors = [...closing.values()];
           }
           const values = contributors.map((r) => r[field]);
-          if (!values.length || values.some((v) => v == null)) return [m, null];
+          if (values.length === 0 || values.some((v) => v == null)) return [m, null];
           const decimals = values.map((v) => toDecimal(v as DecimalInput));
           const [firstDecimal] = decimals;
           // `values` is non-empty here (checked above).
@@ -781,15 +782,15 @@ export async function executeFinancialAnalysis(
             : ["decimal", "integer"].includes(type)
               ? compareNumericCells(x, y)
               : String(x).localeCompare(String(y));
-      if (cmp) return sort.direction === "desc" ? -cmp : cmp;
+      if (cmp !== 0) return sort.direction === "desc" ? -cmp : cmp;
     }
     return 0;
   });
   const limit = Math.min(
-    Math.max(Number(options.limit ?? plan.limit) || 500, 1),
+    Math.max(nonZeroOr(Number(options.limit ?? plan.limit), 500), 1),
     1000,
   );
-  const offset = Math.max(Number(options.offset) || 0, 0);
+  const offset = Math.max(nanToZero(Number(options.offset)), 0);
   const totalRows = rows.length;
   rows = rows.slice(offset, offset + limit);
   if (Buffer.byteLength(JSON.stringify(rows)) > 2 * 1024 * 1024)
@@ -810,9 +811,9 @@ export async function executeFinancialAnalysis(
     [...selectedNumericFields].some((id) => row[id] == null);
   const partial =
     source.some(unavailable) ||
-    (plan.datasetId.endsWith("history") && !source.length) ||
+    (plan.datasetId.endsWith("history") && source.length === 0) ||
     (plan.datasetId === "benchmark-history" &&
-      (!source.length || !benchmarkCurrency));
+      (source.length === 0 || !benchmarkCurrency));
   const declaredColumns = columns.map((c) => ({
     ...c,
     ...(c.type === "decimal"

@@ -62,7 +62,7 @@ describe("recipients API client", () => {
     server.use(
       http.post(`${API_BASE}/api/recipients`, () => ok({ ...RECIPIENT_STUB, id: 9, name: "New", created: true }, { status: 201 })),
     );
-    const res = await createRecipient({ name: "New" } as never);
+    const res = await createRecipient({ name: "New" });
     expect(res.recipient.id).toBe(9);
     expect(res.wasCreated).toBe(true);
   });
@@ -71,13 +71,13 @@ describe("recipients API client", () => {
     server.use(
       http.post(`${API_BASE}/api/recipients`, () => ok({ ...RECIPIENT_STUB, id: 9, name: "Existing", created: false }, { status: 200 })),
     );
-    const res = await createRecipient({ name: "Existing" } as never);
+    const res = await createRecipient({ name: "Existing" });
     expect(res.wasCreated).toBe(false);
   });
 
   it("updateRecipient PATCHes", async () => {
     server.use(http.patch(`${API_BASE}/api/recipients/9`, () => ok({ id: 9, name: "E" })));
-    expect((await updateRecipient(asRecipientId(9), {} as never)).name).toBe("E");
+    expect((await updateRecipient(asRecipientId(9), {})).name).toBe("E");
   });
 
   it("deleteRecipient resolves on void", async () => {

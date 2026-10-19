@@ -4353,7 +4353,7 @@
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated multipart config + account + optional included_symbols; read-only workbook preflight before batch / SSE",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.ts rejects unsupported workbooks, bounds archive expansion, and preflights the detailed Saxo or native IBKR funding adapter before batch creation or SSE headers."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts builds the required mapping and validates an active broker account. assertPortfolioUploadSupported in apps/node-backend/src/services/portfolioImportPipeline/uploadSupport.ts rejects unsupported workbooks and preflights the detailed Saxo or native IBKR funding adapter; apps/node-backend/src/lib/portfolioUpload.ts bounds archive expansion. Both run before batch creation or SSE headers."
               },
               {
                 "from": "be.routes",

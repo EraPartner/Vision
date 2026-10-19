@@ -7,7 +7,6 @@ import {
 export { analysisResultCsv } from "@vision/shared-utils/analysis/interchange";
 export type {
     ScenarioAttachment,
-    ScenarioColumnType,
     AnalysisScenarioModel,
 } from "@vision/shared-utils/analysis/interchange";
 export async function parseScenarioCsv(file: File) {
@@ -18,7 +17,7 @@ export async function parseScenarioCsv(file: File) {
         fileName: file.name,
         size: file.size,
         importedAt: () => new Date().toISOString(),
-        parse: (text, options) => parse(text, options) as string[][],
+        parse: (text, options) => parse(text, options),
         sha256: async (text) => {
             const digest = await crypto.subtle.digest(
                 "SHA-256",

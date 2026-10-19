@@ -63,21 +63,24 @@ export function SettingsGroup({
     children,
     className,
 }: SettingsGroupProps) {
+    const hasLabel = Boolean(label);
     return (
         <Card className={cn("@container/settings", className)}>
-            {(label || description) && (
+            {(Boolean(label) || Boolean(description)) && (
                 <CardHeader className="space-y-0.5 px-4 pb-2 pt-4">
                     <div className="flex items-center justify-between gap-3">
-                        {label ? (
+                        {hasLabel ? (
                             <CardTitle variant="label" level={3}>
                                 {label}
                             </CardTitle>
                         ) : (
                             <span />
                         )}
-                        {aside && <div className="shrink-0">{aside}</div>}
+                        {Boolean(aside) && (
+                            <div className="shrink-0">{aside}</div>
+                        )}
                     </div>
-                    {description && (
+                    {Boolean(description) && (
                         <CardDescription className="type-footnote">
                             {description}
                         </CardDescription>
@@ -145,6 +148,7 @@ export function SelectSettingRow({
     // Give the Radix SelectTrigger (role=combobox) an accessible name by pointing
     // it at the row's title <Label> — comboboxes otherwise announce only their value.
     const labelId = useId();
+    const hasChildren = Boolean(children);
     return (
         <SettingRow
             title={title}
@@ -152,7 +156,7 @@ export function SelectSettingRow({
             labelId={labelId}
             // Supplemental content can include schedules or previews that
             // need the full row width. Only simple choices use compact rows.
-            layout={children ? "stack" : "responsive"}
+            layout={hasChildren ? "stack" : "responsive"}
         >
             <Select value={value} onValueChange={onValueChange}>
                 <SelectTrigger
@@ -203,7 +207,7 @@ export function SettingRow({
             ) : (
                 <p className={titleClassName}>{title}</p>
             )}
-            {description && (
+            {Boolean(description) && (
                 <p className="type-footnote text-label-secondary">
                     {description}
                 </p>

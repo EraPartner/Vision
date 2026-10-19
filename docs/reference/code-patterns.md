@@ -71,6 +71,58 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 ---
 
+## Static checks
+
+`bun run lint` runs three checks in parallel: frontend ESLint, `lint:deps` and `lint:dead`.
+Backend ESLint stays `bun run lint:backend`. CI runs both commands in its existing `Lint` job
+([[docs/adr/225-static-checks-for-agents|ADR-225]]).
+
+- **Import boundaries (`bun run lint:deps`).** dependency-cruiser
+  ([[config/dependency-cruiser.cjs]], resolving through `config/tsconfig.depcruise.json`) checks
+  the runtime import graph; type-only imports are ignored. It fails on runtime cycles, imports
+  that do not resolve, npm packages that no `package.json` on the path declares, imports between
+  apps (frontend, backend, Electron shell), packages that import an app, `@vision/types`
+  importing `@vision/shared-utils`, frontend code that reaches the Belgian tax engine
+  ([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]), and production code that imports
+  tests, test helpers or mocks. Layering inside a workspace (routes, services, repositories;
+  features and components) stays in each `eslint.config.js`. Break a cycle by moving the shared
+  piece into its own module, for example `services/transactionJoins.ts` (`EXPORT_JOINS_SQL`) or
+  `services/portfolioImportPipeline/uploadSupport.ts`.
+- **Type-aware rules.** [[config/eslint-type-aware.mjs]] holds the typescript-eslint rules that
+  both `eslint.config.js` files spread over their TypeScript files: `switch-exhaustiveness-check`,
+  `no-floating-promises`, `no-misused-promises`, `await-thenable`, `only-throw-error`,
+  `prefer-promise-reject-errors`, `no-for-in-array`, `require-array-sort-compare`,
+  `restrict-plus-operands`, `no-unnecessary-type-assertion`, `strict-boolean-expressions` and
+  `prefer-nullish-coalescing`. Numbers are never conditions: compare them explicitly, because 0 is
+  a valid amount. Use `??` for fallbacks. Mark a promise you deliberately do not await with `void`,
+  for example `void queryClient.invalidateQueries(...)`. In the backend, `lib/math.ts` provides
+  explicit forms of the old `||` idioms: `nanToZero(x)` for `Number(x) || 0`,
+  `nonZeroOr(x, fallback)` where 0 means "use the default", and `firstNonZero(a, b)` to chain sort
+  tie-breakers. Branded currency codes (ADR-220) read as objects to the rule, so an empty-means-default
+  fallback uses `currencyOr(code, fallback)` (frontend `utils/currency.ts`) or `currencyOrEur(code)`
+  (backend `lib/currencyCode.ts`) instead of `code || fallback`.
+- **Dead code (`bun run lint:dead`).** knip ([[config/knip.json]]) reports unused files, exports,
+  types and dependencies. Delete an unused export instead of keeping it "just in case". When an
+  export is meant to stay without a static importer (a module contract or a binding reached through
+  an injected object), add the `@public` JSDoc tag with a one-line reason:
+
+  ```ts
+  /**
+   * Delete a mapping by id.
+   * @public Reached through the injectable repository in researchMappingService.
+   */
+  export async function deleteById(id: number): Promise<boolean> {
+    // ...
+  }
+  ```
+
+  knip does not report unused exports or types in the frontend `components/ui/**` primitives or
+  the generated `src/types/generated.ts`.
+  Its duplicate-export rule is off because about 150 imports use both the named and the default
+  export of the same module.
+
+---
+
 ## Money Utility Pattern (Phase 9 + June 2026)
 
 **Source:** [[packages/shared-utils/src/money.ts]] (re-exported via [[apps/node-backend/src/lib/money.ts]] and [[apps/frontend/src/lib/money.ts]])

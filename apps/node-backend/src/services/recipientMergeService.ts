@@ -55,7 +55,7 @@ export async function mergeRecipients(
   const ids = filterValidatedIdNumbers(aliasIds).filter(
     (id) => id !== primaryId,
   );
-  if (!ids.length) {
+  if (ids.length === 0) {
     return {
       mergedAliasIds: [],
       reassigned: { transactions: 0, splits: 0, planned: 0, bankAccounts: 0 },
@@ -135,5 +135,3 @@ export async function mergeRecipients(
     };
   });
 }
-
-export default { mergeRecipients };

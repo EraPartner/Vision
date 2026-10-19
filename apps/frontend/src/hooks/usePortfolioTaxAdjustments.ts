@@ -14,6 +14,12 @@ type AdjustmentEntry = {
 
 export type PortfolioTaxAdjustmentMap = Record<string, AdjustmentEntry>;
 
+/** Persisted settings may hold strings or garbage; anything non-numeric counts as 0. */
+function toAmount(value: unknown): number {
+  const n = Number(value);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 function keyFor(taxYear: number, investmentId: InvestmentId): string {
   return `${taxYear}:${investmentId}`;
 }
@@ -31,8 +37,8 @@ export function usePortfolioTaxAdjustments() {
     (taxYear: number, investmentId: InvestmentId): AdjustmentEntry => {
       const existing = adjustments[keyFor(taxYear, investmentId)];
       return {
-        taxes: Number(existing?.taxes) || 0,
-        fees: Number(existing?.fees) || 0,
+        taxes: toAmount(existing?.taxes),
+        fees: toAmount(existing?.fees),
       };
     },
     [adjustments],
@@ -42,8 +48,8 @@ export function usePortfolioTaxAdjustments() {
     setAdjustments((prev) => ({
       ...prev,
       [keyFor(taxYear, investmentId)]: {
-        taxes: Number(entry.taxes) || 0,
-        fees: Number(entry.fees) || 0,
+        taxes: toAmount(entry.taxes),
+        fees: toAmount(entry.fees),
       },
     }));
   }, []);
@@ -52,8 +58,8 @@ export function usePortfolioTaxAdjustments() {
     const next = { ...base };
     Object.entries(values).forEach(([investmentId, value]) => {
       next[keyFor(taxYear, asInvestmentId(Number(investmentId)))] = {
-        taxes: Number(value.taxes) || 0,
-        fees: Number(value.fees) || 0,
+        taxes: toAmount(value.taxes),
+        fees: toAmount(value.fees),
       };
     });
     return next;
@@ -89,8 +95,8 @@ export function usePortfolioTaxAdjustments() {
         const investmentId = Number(investmentIdStr);
         if (!Number.isFinite(investmentId)) return;
         result[investmentId] = {
-          taxes: Number(value?.taxes) || 0,
-          fees: Number(value?.fees) || 0,
+          taxes: toAmount(value?.taxes),
+          fees: toAmount(value?.fees),
         };
       });
       return result;

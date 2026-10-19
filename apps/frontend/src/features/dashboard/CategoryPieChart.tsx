@@ -13,6 +13,7 @@ import {
     formatCurrency,
     numberFormatToLocale,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import { useNavigate } from "react-router";
@@ -32,7 +33,10 @@ export function CategoryPieChart({
     const navigate = useNavigate();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     // Color by category identity, not list position — matches the statistics
     // donut, the Sankey, and the transaction chips (utils/categoryColors).
@@ -73,7 +77,7 @@ export function CategoryPieChart({
         </div>
     );
 
-    if (!data || data.length === 0) {
+    if (data.length === 0) {
         const emptyContent = (
             <div className="flex h-72 items-center justify-center type-callout text-label-secondary">
                 {t("categoryPie.noData")}

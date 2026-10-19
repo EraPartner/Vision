@@ -2,9 +2,9 @@
 title: Components Documentation Index
 type: components-index
 status: active
-date: 2026-10-06
-updated: 2026-10-06
-last_modified: 2026-08-10
+date: 2026-10-19
+updated: 2026-10-19
+last_modified: 2026-10-19
 tags:
   [
     components,
@@ -90,7 +90,7 @@ SORT title ASC
 | Hook                   | Purpose              | Documentation                    |
 | ---------------------- | -------------------- | -------------------------------- |
 | `useTransactions()`    | Transaction CRUD     | [[docs/components/hooks\|Hooks]] |
-| `useCategories()`      | Category management  | [[docs/components/hooks\|Hooks]] |
+| `useAllCategories()`   | Category list        | [[docs/components/hooks\|Hooks]] |
 | `useRecipients()`      | Recipient management | [[docs/components/hooks\|Hooks]] |
 | `usePortfolio()`       | Investment portfolio | [[docs/components/hooks\|Hooks]] |
 | `usePlannedPayments()` | Scheduled payments   | [[docs/components/hooks\|Hooks]] |

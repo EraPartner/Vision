@@ -21,7 +21,7 @@ export function renderBankBalances(
   const accounts = data.banks?.accounts ?? [];
   const totalNetPosition = data.banks?.total_net_position ?? 0;
 
-  if (!accounts.length) {
+  if (accounts.length === 0) {
     return emptySection({ title: 'Bank Balances', subtitle: 'Current balance per account', message: 'No bank balance data available.', pageBreak: true });
   }
 

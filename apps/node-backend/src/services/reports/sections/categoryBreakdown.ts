@@ -31,7 +31,7 @@ export function renderCategoryBreakdown(
     excludedCategoryIds.length > 0 ||
     (data.exclusions?.recipientIds?.length ?? 0) > 0;
 
-  if (!cats.length) {
+  if (cats.length === 0) {
     return emptySection({
       title: "Category Breakdown",
       subtitle: "Spending by category",

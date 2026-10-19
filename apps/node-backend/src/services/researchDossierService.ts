@@ -186,12 +186,12 @@ async function validateDocuments(
       (source.contentSha256 !== undefined &&
         source.contentSha256 !== document.content_sha256) ||
       (source.passageOrdinal !== undefined &&
-        !(
+        (
           await query(
             `SELECT 1 FROM ai_research_passages WHERE document_id=$1 AND ordinal=$2`,
             [source.documentId, source.passageOrdinal],
           )
-        ).rows.length)
+        ).rows.length === 0)
     ) {
       throw new ValidationError(
         "Document source no longer matches its saved version, digest, or passage",
@@ -515,7 +515,7 @@ export async function deleteResearchDossier(id: string) {
     `DELETE FROM research_dossiers WHERE id=$1`,
     [parse(uuid, id)],
   );
-  if (!rowCount)
+  if ((rowCount ?? 0) === 0)
     throw new NotFoundError("Research dossier not found", {
       code: "DOSSIER_NOT_FOUND",
     });

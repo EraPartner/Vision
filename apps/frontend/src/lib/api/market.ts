@@ -36,8 +36,9 @@ export async function getMarketNews(
     count?: number,
 ): Promise<MarketNewsArticle[]> {
     const params: Record<string, string | number> = {};
-    if (symbols?.length) params.symbols = symbols.join(",");
-    if (count) params.count = count;
+    if (symbols != null && symbols.length > 0)
+        params.symbols = symbols.join(",");
+    if (count !== undefined && count !== 0) params.count = count;
     const { items } = await requestWithQuery<{
         items: MarketNewsArticle[];
         total: number;

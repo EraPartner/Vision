@@ -162,12 +162,14 @@ const equal = (a: DecimalInput, b: DecimalInput, places = 8) =>
   toDecimal(a)
     .toDecimalPlaces(places, 4)
     .eq(toDecimal(b).toDecimalPlaces(places, 4));
+const compareEntryKeys = ([a]: [string, unknown], [b]: [string, unknown]) =>
+  a < b ? -1 : a > b ? 1 : 0;
 const snapshotEqual = (
   a: object | null | undefined,
   b: object | null | undefined,
 ) =>
-  JSON.stringify(Object.entries(a || {}).sort()) ===
-  JSON.stringify(Object.entries(b || {}).sort());
+  JSON.stringify(Object.entries(a ?? {}).sort(compareEntryKeys)) ===
+  JSON.stringify(Object.entries(b ?? {}).sort(compareEntryKeys));
 const zero = (row: {
   amount?: DecimalInput;
   price_per_unit?: DecimalInput;
@@ -330,7 +332,7 @@ function recordedMember(
   );
   const manifests: KinesisYieldManifest[] =
     batchConfigFields(batch?.custom_config)?.portfolio_performance_reference
-      ?.yieldGroupEvidence?.manifests || [];
+      ?.yieldGroupEvidence?.manifests ?? [];
   const matches = manifests
     .flatMap((manifest) => manifest.members)
     .filter(
@@ -391,7 +393,7 @@ export function buildKinesisYieldGroups({
   const provedMappings = new Map<string, number>();
   const reservedRowIds = new Set<number>();
   const blockers: KinesisYieldBlocker[] = [...evidence.issues];
-  if (blockers.length) return { groups, blockers, evidence, reservedRowIds };
+  if (blockers.length > 0) return { groups, blockers, evidence, reservedRowIds };
   const recordGroups = new Map<
     string,
     {
@@ -540,7 +542,7 @@ export function buildKinesisYieldGroups({
           (current) =>
             Number(current.investment_id) === Number(start.row.investment_id) &&
             inside(
-              (witnessesById.get(Number(current.id)) || current).date,
+              (witnessesById.get(Number(current.id)) ?? current).date,
               lower,
               upper,
             ),
@@ -825,7 +827,7 @@ export function proveRetainedKinesisYieldGroups({
         kinesisYieldReferenceDigest(entry),
     ) ||
     entry.version !== 1 ||
-    !entry.reference ||
+    entry.reference == null ||
     entry.referenceDigest !== kinesisYieldReferenceDigest(entry.reference) ||
     batches.some((batch) => {
       // Every batch carries yield evidence (entries.length checked above).

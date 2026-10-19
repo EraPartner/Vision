@@ -320,10 +320,10 @@ describe("useCsvPreview", () => {
         vi.stubGlobal("FileReader", buildFakeFileReader(csv));
 
         const file = makeFile(csv);
-        const { result, rerender } = renderHook(
-            ({ f }: { f: File | null }) => useCsvPreview(f, ","),
-            { initialProps: { f: file as File | null } },
-        );
+        const { result, rerender } = renderHook<
+            ReturnType<typeof useCsvPreview>,
+            { f: File | null }
+        >(({ f }) => useCsvPreview(f, ","), { initialProps: { f: file } });
 
         await waitFor(() => expect(result.current.isLoading).toBe(false));
         expect(result.current.preview).not.toBeNull();

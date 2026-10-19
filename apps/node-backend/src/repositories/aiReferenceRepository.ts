@@ -77,11 +77,6 @@ export async function getScopeForJob(
   return scope ? getScope(scope.id) : null;
 }
 
-export async function deleteScope(id: string): Promise<number | null> {
-  return (await query(`DELETE FROM ai_reference_scopes WHERE id=$1`, [id]))
-    .rowCount;
-}
-
 export async function deleteExpiredUnclaimed(): Promise<number | null> {
   return (
     await query(

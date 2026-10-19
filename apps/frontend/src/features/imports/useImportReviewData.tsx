@@ -115,7 +115,7 @@ export function useImportReviewMutations(
         },
         mutationFn: async (_range: ImportDateRange) => {
             await queue.current;
-            if (failures.current.size)
+            if (failures.current.size > 0)
                 throw new Error(t("importReview.editsFailed"));
             return apiClient.commitImportBatch(batchId);
         },
@@ -128,16 +128,19 @@ export function useImportReviewMutations(
                 }),
                 { icon: <CheckCircle2 className="h-4 w-4" /> },
             );
-            if (data.auto_linked_count && data.auto_linked_count > 0) {
+            if (
+                data.auto_linked_count !== undefined &&
+                data.auto_linked_count > 0
+            ) {
                 toast.success(
                     t("importReview.toast.autoLinked", {
                         n: data.auto_linked_count,
                     }),
                 );
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                     queryKey: plannedKeys.matchSuggestions,
                 });
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                     queryKey: plannedKeys.upcomingAll,
                 });
             }
@@ -148,15 +151,17 @@ export function useImportReviewMutations(
                     {
                         action: {
                             label: t("importReview.toast.reviewAccounts"),
-                            onClick: () => navigate("/accounts"),
+                            onClick: () => void navigate("/accounts"),
                         },
                         duration: 10000,
                     },
                 );
             }
-            queryClient.invalidateQueries({ queryKey: importKeys.batchesAll });
+            void queryClient.invalidateQueries({
+                queryKey: importKeys.batchesAll,
+            });
             invalidateTransactionData(queryClient);
-            navigate("/import", {
+            void navigate("/import", {
                 replace: true,
                 state: {
                     importCommitReceipt: {
@@ -183,8 +188,10 @@ export function useImportReviewMutations(
         mutationFn: () => apiClient.rollbackImportBatch(batchId),
         onSuccess: () => {
             toast.success(t("importReview.toast.discarded"));
-            queryClient.invalidateQueries({ queryKey: importKeys.batchesAll });
-            navigate("/import", { replace: true });
+            void queryClient.invalidateQueries({
+                queryKey: importKeys.batchesAll,
+            });
+            void navigate("/import", { replace: true });
         },
         onError: (err: Error) => {
             toast.error(t("importReview.toast.discardFailed"), {

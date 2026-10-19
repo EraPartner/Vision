@@ -45,6 +45,3 @@ async function saveProjection(
 
 export default { getProjection, saveProjection };
 
-export {
-  saveProjection as __saveProjection,
-};

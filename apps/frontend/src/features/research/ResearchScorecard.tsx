@@ -87,7 +87,7 @@ export function ScorecardPanel({
     const formatPercent = usePercentFormatter();
     const formatCurrency = useCurrencyFormatter();
 
-    if (!scorecard || scorecard.evaluated === 0) {
+    if (scorecard.evaluated === 0) {
         return (
             <p className="py-2 type-callout text-label-secondary">
                 {t("research.scorecard.noData")}

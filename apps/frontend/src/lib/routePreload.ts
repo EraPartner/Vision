@@ -222,7 +222,7 @@ const preloaded = new Set<string>();
 /** Fire-and-forget chunk warmup; failures are ignored (the route's lazy()
  *  import will retry and surface errors through the normal path). */
 export function preloadRoute(url: string): void {
-    const loader = routeLoaders[url as keyof typeof routeLoaders];
+    const loader = routeLoaders[url];
     if (!loader || preloaded.has(url)) return;
     preloaded.add(url);
     loader().catch(() => {

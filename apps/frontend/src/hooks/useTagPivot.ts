@@ -7,8 +7,6 @@ import type { SavedChart } from "@/types/apiClient";
 import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
 import type { TagId } from "@vision/types/brands";
 
-export type { TagPivotItem };
-
 export interface TagPeriodData {
     tagId: TagId;
     slug: string;

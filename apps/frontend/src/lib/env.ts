@@ -93,6 +93,5 @@ export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
  * hydrate (it writes a localStorage cache for the next boot's first paint) —
  * see `lib/skin.ts`. Set VITE_SKIN_V2=true to default the build to colorblind.
  */
-export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
+export const isSkinV2Default = env.VITE_SKIN_V2;
 
-export default env;

@@ -37,6 +37,7 @@ import {
 import { formatDateToYmd, toWireDate } from "../lib/dateFormat.ts";
 import { formatYearMonthKey } from "../lib/dateKeys.ts";
 import { todayAppDateString, firstOfMonthYmd } from "../lib/timezone.ts";
+import { nanToZero } from "../lib/math.ts";
 import {
   mvAvailable,
   buildMonthlySummary,
@@ -174,22 +175,20 @@ export async function getMonthlyFinancialSummary(
           noteUnconverted(
             unconverted,
             conv.currency,
-            parseInt(r.transaction_count, 10) || 0,
+            nanToZero(parseInt(r.transaction_count, 10)),
           );
         continue;
       }
-      if (!monthMap[key]) {
-        monthMap[key] = {
-          month: r.month,
-          year: r.year,
-          period_start: toWireDate(r.month_start),
-          period_end: null,
-          total_spending: 0,
-          total_income: 0,
-          net_amount: 0,
-          transaction_count: 0,
-        };
-      }
+      monthMap[key] ??= {
+        month: r.month,
+        year: r.year,
+        period_start: toWireDate(r.month_start),
+        period_end: null,
+        total_spending: 0,
+        total_income: 0,
+        net_amount: 0,
+        transaction_count: 0,
+      };
       // Decimal accumulation (ADR money-hygiene): summing per-month EUR amounts
       // with native `+=` drifts sub-cent across many rows before the final round.
       if (conv._type === "income")
@@ -223,18 +222,16 @@ export async function getMonthlyFinancialSummary(
       const year = Number(monthStart.slice(0, 4));
       const month = Number(monthStart.slice(5, 7));
       const key = formatYearMonthKey(year, month);
-      if (!monthMap[key]) {
-        monthMap[key] = {
-          month,
-          year,
-          period_start: monthStart,
-          period_end: null,
-          total_spending: 0,
-          total_income: 0,
-          net_amount: 0,
-          transaction_count: 0,
-        };
-      }
+      monthMap[key] ??= {
+        month,
+        year,
+        period_start: monthStart,
+        period_end: null,
+        total_spending: 0,
+        total_income: 0,
+        net_amount: 0,
+        transaction_count: 0,
+      };
     }
 
     for (const m of Object.values(monthMap)) {
@@ -293,9 +290,10 @@ export async function getMonthlyFinancialSummary(
     params.push(validAccountIds);
     transactionFilters.push(`t.account_id = ANY($${params.length}::int[])`);
   }
-  const transactionWhere = transactionFilters.length
-    ? `AND ${transactionFilters.join(" AND ")}`
-    : "";
+  const transactionWhere =
+    transactionFilters.length > 0
+      ? `AND ${transactionFilters.join(" AND ")}`
+      : "";
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
   // into JS. This path converts at each transaction's historical date rate
@@ -383,18 +381,16 @@ export async function getMonthlyFinancialSummary(
   const monthMap: Record<string, MonthTotals> = {};
   for (const row of liveRows) {
     const key = formatYearMonthKey(row.year, row.month);
-    if (!monthMap[key]) {
-      monthMap[key] = {
-        month: row.month,
-        year: row.year,
-        period_start: toWireDate(row.period_start),
-        period_end: toWireDate(row.period_end),
-        total_spending: 0,
-        total_income: 0,
-        net_amount: 0,
-        transaction_count: 0,
-      };
-    }
+    monthMap[key] ??= {
+      month: row.month,
+      year: row.year,
+      period_start: toWireDate(row.period_start),
+      period_end: toWireDate(row.period_end),
+      total_spending: 0,
+      total_income: 0,
+      net_amount: 0,
+      transaction_count: 0,
+    };
   }
 
   // A (date, currency) group without a stored rate is left out of its month
@@ -413,7 +409,7 @@ export async function getMonthlyFinancialSummary(
       );
     }
     if (income.amount_eur === undefined || spending.amount_eur === undefined) {
-      noteUnconverted(unconverted, row.currency, Number(row.cnt) || 0);
+      noteUnconverted(unconverted, row.currency, nanToZero(Number(row.cnt)));
       continue;
     }
     totals.total_income = toNumber(

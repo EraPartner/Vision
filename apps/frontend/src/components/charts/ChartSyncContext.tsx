@@ -61,7 +61,7 @@ function createChartSyncStore(): ChartSyncStore {
                 return;
             }
             // Coalesce pointermove-rate publishes to one update per frame.
-            if (frame === null) frame = requestAnimationFrame(flush);
+            frame ??= requestAnimationFrame(flush);
         },
     };
 }

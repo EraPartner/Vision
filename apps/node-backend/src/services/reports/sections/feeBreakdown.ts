@@ -32,7 +32,7 @@ export function renderFeeBreakdown(
 
   const totalFees = data?.feesTotal ?? 0;
 
-  if (!rows.length && totalFees === 0) {
+  if (rows.length === 0 && totalFees === 0) {
     return emptySection({
       title: "Fee Breakdown",
       subtitle: "Broker and management fees by asset class",
@@ -58,7 +58,7 @@ export function renderFeeBreakdown(
     })
     .join("");
 
-  const chartHtml = barItems.length
+  const chartHtml = barItems.length > 0
     ? `<div class="chart-wrap">${svgHorizontalBars(barItems, { maxItems: 8 })}</div>`
     : "";
 

@@ -32,6 +32,6 @@ const skipFiles =
   process.env.VISION_SKIP_DOTENV === "1" ||
   process.env.NODE_ENV === "test" ||
   Boolean(process.env.VISION_NATIVE_ENV_FILE);
-export const dotenvLoadedFrom = (skipFiles ? [] : dotenvPaths(import.meta.url))
-  .map(applyDotenvFile)
-  .filter(Boolean);
+if (!skipFiles)
+  for (const filePath of dotenvPaths(import.meta.url))
+    applyDotenvFile(filePath);

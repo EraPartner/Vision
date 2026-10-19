@@ -33,6 +33,7 @@ import {
 } from './infoRepositoryHelpers.ts';
 import { todayAppDateString } from '../lib/timezone.ts';
 import { countObservedMonths, monthKeyFromDbDate } from '../lib/observedMonths.ts';
+import { nanToZero } from '../lib/math.ts';
 
 /** Lookback length: N complete, already-elapsed calendar months. */
 const WINDOW_MONTHS = 6;
@@ -130,7 +131,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
 
   // Groups without a stored rate are left out of both windows and counted.
   const unconverted = createUnconvertedTally();
-  const countOf = (row: { cnt: string }) => parseInt(row.cnt, 10) || 0;
+  const countOf = (row: { cnt: string }) => nanToZero(parseInt(row.cnt, 10));
   const { converted: past6Converted } = partitionConvertedRows(
     await convertRowsToEur(
       mapRowsForAmountConversion(past6Rows, 'amount', false),
@@ -150,7 +151,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     // carry a row", so an income-only month must not enter it as a populated
     // month; it is already counted as an elapsed zero-spend month.
     if (eur >= 0) continue;
-    if (!monthlySpending[monthKey]) monthlySpending[monthKey] = 0;
+    monthlySpending[monthKey] ??= 0;
     // Decimal accumulation (money-hygiene): native `+=` over many converted
     // rows drifts sub-cent before the final round.
     monthlySpending[monthKey] = toNumber(toDecimal(monthlySpending[monthKey]).plus(toDecimal(Math.abs(eur))));
@@ -199,7 +200,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   for (const row of currentConverted) {
     const dateStr = row.date instanceof Date ? formatDateToYmd(row.date) : row.date;
     const eur = row.amount_eur;
-    if (!dailyMap[dateStr]) dailyMap[dateStr] = { spending: 0, income: 0 };
+    dailyMap[dateStr] ??= { spending: 0, income: 0 };
     if (eur < 0) dailyMap[dateStr].spending = toNumber(toDecimal(dailyMap[dateStr].spending).plus(toDecimal(Math.abs(eur))));
     else dailyMap[dateStr].income = toNumber(toDecimal(dailyMap[dateStr].income).plus(toDecimal(eur)));
   }

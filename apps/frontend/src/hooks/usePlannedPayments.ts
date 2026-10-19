@@ -52,10 +52,10 @@ export function usePlannedPayments(showInactive: boolean = false) {
     // (['upcomingPlannedPayments', queryDate]). Every mutating path must bust it
     // or the banner shows stale data for up to its staleTime.
     const invalidateUpcoming = useCallback(() => {
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
             queryKey: plannedKeys.upcomingAll,
         });
-        queryClient.invalidateQueries({
+        void queryClient.invalidateQueries({
             queryKey: plannedKeys.accountTransactionsAll,
         });
     }, [queryClient]);

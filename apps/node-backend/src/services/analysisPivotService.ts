@@ -53,14 +53,14 @@ export async function executeAnalysisPivot(
   { plan, config, requestId }: AnalysisPivotRequest,
   dependencies: AnalysisPivotDependencies = {},
 ) {
-  const execute = dependencies.execute || executeAnalysisSql;
-  const rows = [...new Set(config?.rows || [])];
-  const columns = [...new Set(config?.columns || [])];
-  const measures = [...new Set(config?.values || plan?.measures || [])];
+  const execute = dependencies.execute ?? executeAnalysisSql;
+  const rows = [...new Set(config?.rows ?? [])];
+  const columns = [...new Set(config?.columns ?? [])];
+  const measures = [...new Set(config?.values ?? plan?.measures ?? [])];
   if (
     rows.length > 3 ||
     columns.length > 3 ||
-    !measures.length ||
+    measures.length === 0 ||
     measures.length > 8
   )
     throw new Error(
@@ -68,7 +68,7 @@ export async function executeAnalysisPivot(
     );
   if (rows.some((id) => columns.includes(id)))
     throw new Error("Pivot axes must be distinct");
-  const filters = [...(plan.filters || []), ...(config?.filters || [])];
+  const filters = [...(plan.filters ?? []), ...(config?.filters ?? [])];
   const partitions: string[] = [];
   const catalog = dependencies.catalog;
   // Currency and instrument stay present at every subtotal level.
@@ -134,7 +134,7 @@ export async function executeAnalysisPivot(
       if (
         result.window.kind !== "page" ||
         result.window.hasMore ||
-        result.window.offset
+        (result.window.offset ?? 0) !== 0
       )
         throw new Error(
           "Pivot exceeds the complete-output limit; narrow its filters",
@@ -142,7 +142,7 @@ export async function executeAnalysisPivot(
       financialComplete &&= result.coverage?.status !== "partial";
       unavailableRows = Math.max(
         unavailableRows,
-        result.coverage?.unavailableRows || 0,
+        result.coverage?.unavailableRows ?? 0,
       );
       totalRows += result.rows.length;
       if (totalRows > 4000)
@@ -154,7 +154,7 @@ export async function executeAnalysisPivot(
         columnDepth: c,
         groups,
         rows: result.rows,
-        columns: result.declaredColumns || compiled.columns,
+        columns: result.declaredColumns ?? compiled.columns,
       });
     }
   }
@@ -204,7 +204,7 @@ export async function executeAnalysisPivot(
     if (
       result.window.kind !== "page" ||
       result.window.hasMore ||
-      result.window.offset
+      (result.window.offset ?? 0) !== 0
     )
       throw new Error(
         "Pivot exceeds the complete-output limit; narrow its filters",
@@ -253,7 +253,7 @@ export async function executeAnalysisPivot(
   return {
     levels,
     partitions,
-    config: { rows, columns, values: measures, filters: config?.filters || [] },
+    config: { rows, columns, values: measures, filters: config?.filters ?? [] },
     coverage: {
       complete: financialComplete,
       financialComplete,

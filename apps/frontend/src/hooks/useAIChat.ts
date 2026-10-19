@@ -57,7 +57,9 @@ export function useCreateConversation() {
         mutationFn: (body: CreateConversationBody = {}) =>
             apiClient.createConversation(body),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
+            void queryClient.invalidateQueries({
+                queryKey: aiKeys.conversations,
+            });
             queryClient.setQueryData(
                 aiKeys.conversation(data.conversation.id),
                 data,
@@ -79,7 +81,9 @@ export function useRenameConversation() {
         mutationFn: ({ id, title }: { id: string; title: string }) =>
             apiClient.renameConversation(id, title),
         onSuccess: (updated) => {
-            queryClient.invalidateQueries({ queryKey: aiKeys.conversations });
+            void queryClient.invalidateQueries({
+                queryKey: aiKeys.conversations,
+            });
             queryClient.setQueryData<ConversationDetail | undefined>(
                 aiKeys.conversation(updated.id),
                 (prev) =>
@@ -110,7 +114,7 @@ export function useDeleteConversation() {
         mutationFn: (id: string) => apiClient.deleteConversation(id),
         onSuccess: (_void, id) => {
             queryClient.removeQueries({ queryKey: aiKeys.conversation(id) });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: aiKeys.conversations,
                 exact: true,
             });

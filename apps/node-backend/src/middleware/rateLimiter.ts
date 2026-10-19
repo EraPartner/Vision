@@ -73,7 +73,7 @@ function ipMatchesRule(addr: string, rule: string): boolean {
  */
 function isTrustedProxyAddr(addr: string): boolean {
   if (!addr) return false;
-  const trusted = settings.security?.trustedProxies || [];
+  const trusted = settings.security?.trustedProxies ?? [];
   if (trusted.length === 0) return false;
   const a = addr.replace(/^::ffff:/i, "");
   return trusted.some(

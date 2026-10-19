@@ -14,10 +14,7 @@ import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { useDeductionCandidates } from "@/hooks/useDeductionCandidates";
-import {
-    DEDUCTION_TYPE_PROFILE_FIELDS,
-    type BelgianTaxProfile,
-} from "@/lib/belgianTax";
+import { DEDUCTION_TYPE_PROFILE_FIELDS } from "@/lib/belgianTax";
 import type { DeductionTypeGroup } from "@/lib/api/info";
 import {
     applyDeductionCandidate,
@@ -50,7 +47,7 @@ import { todayYmd } from "@/lib/timezone";
  * partner's share to that partner's field; a home field (mortgage interest)
  * keeps the whole total. A one-partner household behaves exactly as before.
  */
-export function DeductionCandidatesCard() {
+function DeductionCandidatesCard() {
     const { profile, household, updateProfile, updateHousehold, canApply } =
         useBelgianTaxProfile((state) => ({
             profile: state.profile,
@@ -125,7 +122,7 @@ export function DeductionCandidatesCard() {
             };
             if (mapping.eligibilityField)
                 updates[mapping.eligibilityField] = true;
-            updateProfile(updates as Partial<BelgianTaxProfile>);
+            updateProfile(updates);
         }
         setAppliedTypes((prev) => new Set(prev).add(group.deductionType));
         toast.success(

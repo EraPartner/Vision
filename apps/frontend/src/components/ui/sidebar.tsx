@@ -460,7 +460,7 @@ const SidebarMenuButton = React.forwardRef<
         />
     );
 
-    if (!tooltip) {
+    if (tooltip === undefined || tooltip === "") {
         return button;
     }
 

@@ -243,4 +243,3 @@ export function fundamentalsScorecard(
   return { score, grade: gradeFor(score), evaluated, counts, flags };
 }
 
-export default { fundamentalsScorecard };

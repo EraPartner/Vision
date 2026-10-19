@@ -12,7 +12,7 @@ import AnalysisWorkspacePage from "@/pages/AnalysisWorkspacePage";
 
 import { analysisDraftSignature } from "@/features/analysis/analysisPresentation";
 
-const presentation = vi.hoisted(() => ({ language: "en" as "en" | "nl" }));
+const presentation = vi.hoisted(() => ({ language: "en" }));
 
 vi.mock("@/lib/downloadBlob", () => ({ downloadBlob: vi.fn() }));
 
@@ -170,9 +170,7 @@ describe("AnalysisWorkspacePage", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         presentation.language = "en";
-        vi.spyOn(apiClient, "getAnalysisCatalog").mockResolvedValue(
-            catalog as never,
-        );
+        vi.spyOn(apiClient, "getAnalysisCatalog").mockResolvedValue(catalog);
         vi.spyOn(apiClient, "listSavedAnalyses").mockResolvedValue([]);
         vi.spyOn(analysisApi, "executeAnalysisPivot").mockResolvedValue({
             levels: [],
@@ -186,9 +184,7 @@ describe("AnalysisWorkspacePage", () => {
             errors: [],
             summaries: {},
         });
-        vi.spyOn(apiClient, "executeAnalysis").mockResolvedValue(
-            result as never,
-        );
+        vi.spyOn(apiClient, "executeAnalysis").mockResolvedValue(result);
     });
 
     it("uses Dutch catalog and result labels without changing query identifiers", async () => {
@@ -322,7 +318,7 @@ describe("AnalysisWorkspacePage", () => {
                 sum_spending: "12.3456",
             })),
             window: { ...result.window, returnedRows: 75 },
-        } as never);
+        });
         const user = userEvent.setup();
         renderPage();
         await screen.findByText("Cash flows");
@@ -358,7 +354,7 @@ describe("AnalysisWorkspacePage", () => {
                 sum_spending: i === 31 ? null : i === 0 ? "-12.3" : "12.3",
             })),
             window: { ...result.window, returnedRows: 32 },
-        } as never);
+        });
         const user = userEvent.setup();
         const { container } = renderPage();
         await screen.findByText("Cash flows");
@@ -388,7 +384,7 @@ describe("AnalysisWorkspacePage", () => {
                 { ...result.rows[0], currency: "EUR" },
                 { ...result.rows[0], currency: "USD" },
             ],
-        } as never);
+        });
         const user = userEvent.setup();
         renderPage();
         await screen.findByText("Cash flows");
@@ -685,9 +681,7 @@ describe("AnalysisWorkspacePage", () => {
         vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
             savedChartAnalysis,
         ] as never);
-        vi.spyOn(apiClient, "deleteSavedAnalysis").mockResolvedValue(
-            undefined as never,
-        );
+        vi.spyOn(apiClient, "deleteSavedAnalysis").mockResolvedValue(undefined);
         const create = vi
             .spyOn(apiClient, "createSavedAnalysis")
             .mockResolvedValue({

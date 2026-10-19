@@ -57,7 +57,6 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
             if (
                 accountsQuery.isPending ||
                 accountsQuery.isError ||
-                !accountsQuery.data ||
                 !data ||
                 data.eligible_count === 0 ||
                 data.eligible_count > data.limit ||
@@ -106,7 +105,6 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
         !destination ||
         accountsQuery.isPending ||
         accountsQuery.isError ||
-        !accountsQuery.data ||
         preview.isLoading ||
         preview.isError ||
         !preview.data ||

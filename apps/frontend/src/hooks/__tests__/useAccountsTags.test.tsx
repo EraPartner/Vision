@@ -58,7 +58,7 @@ describe("useCreateAccount", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync({ name: "X" } as never);
+            await result.current.mutateAsync({ name: "X" });
         });
         expect(spy).toHaveBeenCalledWith({ name: "X" });
         expect(toast.success).toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe("useCreateAccount", () => {
         });
         await act(async () => {
             await result.current
-                .mutateAsync({ name: "X" } as never)
+                .mutateAsync({ name: "X" })
                 .catch(() => {});
         });
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -91,7 +91,7 @@ describe("useUpdateAccount", () => {
         await act(async () => {
             await result.current.mutateAsync({
                 id: asAccountId(3),
-                data: { name: "Y" } as never,
+                data: { name: "Y" },
             });
         });
         expect(spy).toHaveBeenCalledWith(3, { name: "Y" });
@@ -115,7 +115,7 @@ describe("useUpdateAccount", () => {
         await act(async () => {
             await result.current.mutateAsync({
                 id: asAccountId(3),
-                data: { name: "Y" } as never,
+                data: { name: "Y" },
             });
         });
         expect(invalidatedKeys()).toContainEqual(["accounts"]);
@@ -149,7 +149,7 @@ describe("useUpdateAccount", () => {
         });
         await act(async () => {
             await result.current
-                .mutateAsync({ id: asAccountId(3), data: {} as never })
+                .mutateAsync({ id: asAccountId(3), data: {} })
                 .catch(() => {});
         });
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -233,7 +233,7 @@ describe("useDeleteAccount", () => {
     it("calls deleteAccount and toasts success", async () => {
         const spy = vi
             .spyOn(apiClient, "deleteAccount")
-            .mockResolvedValue(undefined as never);
+            .mockResolvedValue(undefined);
         const { result } = renderHook(() => useDeleteAccount(), {
             wrapper: makeFullWrapper(),
         });
@@ -285,7 +285,7 @@ describe("useCreateTag", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync({ slug: "t" } as never);
+            await result.current.mutateAsync({ slug: "t" });
         });
         expect(spy).toHaveBeenCalledWith({ slug: "t" });
     });

@@ -54,10 +54,10 @@ function getPeriodValue(
     period: string,
     valueMode: PivotValueMode,
 ): number {
-    if (valueMode === "net") return cat.netMonths[period] || 0;
-    if (valueMode === "income") return cat.incomeMonths[period] || 0;
-    if (valueMode === "expense") return cat.expenseMonths[period] || 0;
-    return cat.months[period] || 0;
+    if (valueMode === "net") return cat.netMonths[period] ?? 0;
+    if (valueMode === "income") return cat.incomeMonths[period] ?? 0;
+    if (valueMode === "expense") return cat.expenseMonths[period] ?? 0;
+    return cat.months[period] ?? 0;
 }
 
 function DrillCellLink({
@@ -179,7 +179,9 @@ export function CategoryPivotTable({
                 cat.categoryName || t("txPage.field.uncategorized"),
             );
             const colon = fallback.indexOf(":");
-            const segments = cat.categoryPathSegments?.length
+            const segments =
+                cat.categoryPathSegments != null &&
+                cat.categoryPathSegments.length > 0
                 ? cat.categoryPathSegments
                 : colon < 0
                   ? [fallback]
@@ -187,7 +189,7 @@ export function CategoryPivotTable({
                         fallback.slice(0, colon),
                         fallback.slice(colon + 1).trimStart(),
                     ];
-            const ids = cat.categoryPathIds?.length
+            const ids = (cat.categoryPathIds != null && cat.categoryPathIds.length > 0)
                 ? cat.categoryPathIds
                 : [cat.categoryId ?? asCategoryId(-1)];
             const general =
@@ -234,7 +236,7 @@ export function CategoryPivotTable({
                     row = {
                         ...cat,
                         categoryId: pathIds[depth - 1] ?? cat.categoryId,
-                        categoryName: cat.categoryPathSegments?.length
+                        categoryName: (cat.categoryPathSegments != null && cat.categoryPathSegments.length > 0)
                             ? pathSegments.join(" / ")
                             : cat.categoryName,
                         categoryPathIds: pathIds,
@@ -574,7 +576,7 @@ export function CategoryPivotTable({
                                                     </td>
                                                     {visiblePeriods.map((p) => {
                                                         const val =
-                                                            group.months[p] ||
+                                                            group.months[p] ??
                                                             0;
                                                         const canClick =
                                                             val !== 0 &&
@@ -889,7 +891,7 @@ export function CategoryPivotTable({
                                     </td>
                                     {visiblePeriods.map((p) => {
                                         const r = formatCompact(
-                                            columnTotals[p] || 0,
+                                            columnTotals[p] ?? 0,
                                         );
                                         const label = formatPeriodShort(
                                             p,

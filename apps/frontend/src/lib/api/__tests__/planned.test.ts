@@ -57,7 +57,7 @@ describe("planned-transactions API client", () => {
 
   it("updatePlannedTransaction PATCHes", async () => {
     server.use(http.patch(`${API_BASE}/api/planned-transactions/11`, () => ok({ ...PLANNED_TRANSACTION_STUB, id: 11 })));
-    expect((await updatePlannedTransaction(asPlannedTransactionId(11), {} as never)).id).toBe(11);
+    expect((await updatePlannedTransaction(asPlannedTransactionId(11), {})).id).toBe(11);
   });
 
   it("deletePlannedTransaction resolves on void", async () => {

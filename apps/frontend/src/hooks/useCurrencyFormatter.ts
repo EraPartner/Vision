@@ -7,6 +7,7 @@ import {
     DEFAULT_CURRENCY,
     numberFormatToLocale,
     type PercentFormatOptions,
+    currencyOr,
 } from "@/utils/currency";
 import type { CurrencyCode } from "@vision/types/brands";
 
@@ -46,8 +47,7 @@ export function useCurrencyFormatSettings(
         () => ({
             currency:
                 defaultCurrency ||
-                appSettings.defaultCurrency ||
-                DEFAULT_CURRENCY,
+                currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
             locale: numberFormatToLocale(appSettings.numberFormat),
             decimals: appSettings.showDecimalPlaces ?? 2,
         }),

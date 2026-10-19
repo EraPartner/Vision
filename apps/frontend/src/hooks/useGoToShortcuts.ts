@@ -41,7 +41,7 @@ export function useGoToShortcuts(): void {
             disarm();
             if (target) {
                 e.preventDefault();
-                navigate(target.url);
+                void navigate(target.url);
             }
         };
 
@@ -70,7 +70,7 @@ export function useSectionCycleShortcuts(): void {
             const next = (current + delta + SECTION_CYCLE.length) % SECTION_CYCLE.length;
             const target = SECTION_CYCLE[next];
             if (target === undefined) return;
-            navigate(target.url);
+            void navigate(target.url);
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);

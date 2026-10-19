@@ -3,7 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useRecentRecipientTransactions } from "@/features/splits/owes/useRecentRecipientTransactions";
+import { toast } from "sonner";
+
 import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import type { Transaction, TransactionsListResponse } from "@/types/api";
 import { asRecipientId } from "@vision/types/brands";
@@ -107,6 +110,28 @@ describe("useRecentRecipientTransactions", () => {
         resolveNextPage(response([11], 20));
         await act(async () => Promise.all([firstLoad, secondLoad]));
         expect(result.current.items).toHaveLength(11);
+    });
+
+    it("reports a failed load-more page instead of leaving an unhandled rejection", async () => {
+        const toastError = vi.spyOn(toast, "error");
+        vi.spyOn(logger, "error").mockImplementation(() => undefined);
+        const getTransactions = vi.spyOn(apiClient, "getTransactions")
+            .mockResolvedValueOnce(response(Array.from({ length: 10 }, (_, index) => index + 1), 20))
+            .mockRejectedValueOnce(new Error("offline"));
+
+        const { result } = renderHook(
+            () => useRecentRecipientTransactions(asRecipientId(3)),
+            { wrapper: createQueryWrapper() },
+        );
+
+        await waitFor(() => expect(result.current.items).toHaveLength(10));
+        await act(async () => result.current.loadMore());
+
+        expect(getTransactions).toHaveBeenCalledTimes(2);
+        expect(toastError).toHaveBeenCalledTimes(1);
+        expect(result.current.items).toHaveLength(10);
+        expect(result.current.hasMore).toBe(true);
+        expect(result.current.isFetchingMore).toBe(false);
     });
 
     it("falls back to page length when total is absent", async () => {

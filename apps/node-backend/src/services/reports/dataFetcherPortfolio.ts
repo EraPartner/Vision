@@ -1,5 +1,4 @@
 import { periodToDateRange } from "./reportPeriod.ts";
-export { periodToDateRange } from "./reportPeriod.ts";
 /**
  * Portfolio data fetcher for PDF report generation.
  *
@@ -136,7 +135,7 @@ function normalizeBreakdownRow(row: BreakdownRow): BreakdownRow {
 function buildPerformanceTrendData(
   snapshots: SnapshotRow[] | null,
 ): PerformanceTrendData | null {
-  if (!snapshots?.length) return null;
+  if (!snapshots || snapshots.length === 0) return null;
 
   const byMonth = new Map<string, SnapshotRow>();
   for (const snapshot of snapshots) {
@@ -173,9 +172,9 @@ function buildPortfolioExecutiveSummaryData(
   snapshots: SnapshotRow[] | null,
   dividends: DividendData | null,
 ): PortfolioExecutiveSummaryData | null {
-  if (!breakdown?.length && !snapshots?.length) return null;
+  if ((!breakdown || breakdown.length === 0) && (!snapshots || snapshots.length === 0)) return null;
 
-  const latest = snapshots?.length ? snapshots[snapshots.length - 1] : null;
+  const latest = snapshots && snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
   const totalValue = latest
     ? Number(latest.value)
     : toNumber(
@@ -272,7 +271,7 @@ async function fetchDividends(
     ...new Set([...inKind.map((row) => row.currency), targetCurrency]),
   ].filter((code) => code !== "EUR");
   const historicalIndex =
-    inKind.length && currencies.length
+    inKind.length > 0 && currencies.length > 0
       ? await getHistoricalRateIndex(currencies)
       : new Map();
   let totalInKindIncome = addAll([]);
@@ -364,7 +363,7 @@ export async function fetchPortfolioData(
   const { startDate, endDate } = periodToDateRange(period);
 
   const needs = (...ids: string[]) =>
-    !sections?.length || ids.some((id) => sections.includes(id));
+    !sections || sections.length === 0 || ids.some((id) => sections.includes(id));
   const [snapshotsResult, breakdownResult, dividendsResult] =
     await Promise.allSettled([
       needs("portfolioExecutiveSummary", "performanceTrend")

@@ -194,7 +194,7 @@ export default function DbMaintenancePage() {
             toast.success(t("dbMaintenance.vacuumSuccess"), {
                 description: label,
             });
-            qc.invalidateQueries({ queryKey: adminKeys.dbStats });
+            void qc.invalidateQueries({ queryKey: adminKeys.dbStats });
         },
         onError: (err: Error, table) => {
             const label = table ?? t("dbMaintenance.allTables");
@@ -214,7 +214,7 @@ export default function DbMaintenancePage() {
     }
 
     function handleRefresh() {
-        qc.invalidateQueries({ queryKey: adminKeys.dbStats });
+        void qc.invalidateQueries({ queryKey: adminKeys.dbStats });
     }
 
     const tableCount = data?.tables.length ?? 0;

@@ -38,20 +38,13 @@ import type {
 import type {
   FormattedSplit,
   FormattedSplitPayment,
-  OwedSplitDetailRow,
   QueryRunner,
   SplitPaymentRow,
   SplitTotals,
   TransactionSplitRow,
 } from "../types/rows.ts";
 
-export type {
-  QueryRunner,
-  FormattedSplit,
-  FormattedSplitPayment,
-  OwedSplitDetailRow,
-  SplitTotals,
-};
+export type { QueryRunner, FormattedSplit, FormattedSplitPayment, SplitTotals };
 
 /**
  * A raw `getOwedByRecipientRows` row: the split columns plus its parent
@@ -618,9 +611,9 @@ export const splitRepository = {
       SET is_settled = true
       WHERE recipient_id IN (SELECT id FROM recipient_group) AND is_settled = false
     `;
-    const runner: QueryRunner = client || { query };
+    const runner: QueryRunner = client ?? { query };
     const result = await runner.query(sql, [recipientId]);
-    return { settled_count: result.rowCount || 0 };
+    return { settled_count: result.rowCount ?? 0 };
   },
 
   /**
@@ -630,7 +623,7 @@ export const splitRepository = {
     splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<boolean> {
-    const runner: QueryRunner = client || { query };
+    const runner: QueryRunner = client ?? { query };
     const result = await runner.query(
       "DELETE FROM transaction_splits WHERE id = $1",
       [splitId],

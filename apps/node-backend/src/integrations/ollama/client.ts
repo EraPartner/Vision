@@ -272,7 +272,7 @@ function createOllamaClient({
   streamIdleTimeoutMs = settings.ollama.streamIdleTimeoutMs,
   fetchImpl = globalThis.fetch,
 }: OllamaClientOptions = {}) {
-  if (!fetchImpl) {
+  if (fetchImpl == null) {
     throw new OllamaError("No fetch implementation available");
   }
 
@@ -470,7 +470,7 @@ function createOllamaClient({
       signal,
     });
 
-    const message: OllamaResponseMessage = data?.message || {};
+    const message: OllamaResponseMessage = data?.message ?? {};
     return {
       model: data?.model || model,
       role: message.role || "assistant",
@@ -480,9 +480,10 @@ function createOllamaClient({
       doneReason: data?.done_reason ?? null,
       evalCount: data?.eval_count ?? null,
       promptEvalCount: data?.prompt_eval_count ?? null,
-      totalDurationMs: data?.total_duration
-        ? Math.round(data.total_duration / 1e6)
-        : null,
+      totalDurationMs:
+        data?.total_duration !== undefined && data.total_duration !== 0
+          ? Math.round(data.total_duration / 1e6)
+          : null,
       raw: data,
     };
   }
@@ -592,7 +593,8 @@ function createOllamaClient({
     let modelName = model;
     let evalCount: number | null = null;
     let promptEvalCount: number | null = null;
-    let totalDurationNs: number | null = null;
+    // Widened initializer: assigned inside handleLine, which TS cannot see here.
+    let totalDurationNs = null as number | null;
     let doneReason: string | null = null;
     let isDone = false;
 
@@ -610,7 +612,7 @@ function createOllamaClient({
       }
 
       if (parsed.model) modelName = parsed.model;
-      const msg: OllamaResponseMessage = parsed.message || {};
+      const msg: OllamaResponseMessage = parsed.message ?? {};
       const deltaContent = typeof msg.content === "string" ? msg.content : "";
       if (deltaContent) {
         accumulatedContent += deltaContent;
@@ -694,9 +696,10 @@ function createOllamaClient({
       doneReason,
       evalCount,
       promptEvalCount,
-      totalDurationMs: totalDurationNs
-        ? Math.round(totalDurationNs / 1e6)
-        : null,
+      totalDurationMs:
+        totalDurationNs !== null && totalDurationNs !== 0
+          ? Math.round(totalDurationNs / 1e6)
+          : null,
     };
   }
 
@@ -713,12 +716,8 @@ function createOllamaClient({
 
 let defaultClient: ReturnType<typeof createOllamaClient> | null = null;
 export function getOllamaClient() {
-  if (!defaultClient) defaultClient = createOllamaClient();
+  defaultClient ??= createOllamaClient();
   return defaultClient;
-}
-
-export function __resetOllamaClientForTests() {
-  defaultClient = null;
 }
 
 export { createOllamaClient as __createOllamaClient };

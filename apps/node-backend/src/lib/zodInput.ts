@@ -21,7 +21,7 @@ export function formatZodIssues(
 ): string {
   return error.issues
     .map((issue) =>
-      issue.path.length && !omitPaths
+      issue.path.length > 0 && !omitPaths
         ? `${issue.path.join(".")}: ${issue.message}`
         : issue.message,
     )

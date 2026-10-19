@@ -75,9 +75,3 @@ export const PAGE_ICONS = {
     "/admin/endpoints": Activity,
     "/admin/exchange-rates": ArrowLeftRight,
 } as const satisfies Record<string, LucideIcon>;
-
-export type PageIconPath = keyof typeof PAGE_ICONS;
-
-export function pageIcon(path: PageIconPath): LucideIcon {
-    return PAGE_ICONS[path];
-}

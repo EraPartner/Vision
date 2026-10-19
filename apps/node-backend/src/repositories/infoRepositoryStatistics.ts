@@ -31,6 +31,7 @@ import {
   getIncludeTransfers,
 } from "./infoRepositoryHelpers.ts";
 import type { CategoryTotal } from "./infoRepositoryHelpers.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export interface CategoryPivotCell {
   categoryId: number | null;
@@ -94,7 +95,7 @@ export const statisticsRepository = {
       params.push(filters.endDate);
       clauses.push(`t.date <= $${params.length}`);
     }
-    const filterSql = clauses.length ? `AND ${clauses.join(" AND ")}` : "";
+    const filterSql = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
 
     if (ancestorCategoryId !== undefined) {
       // Expand the effective category only once through the ancestry view. A
@@ -124,13 +125,13 @@ export const statisticsRepository = {
           mapRowsForAmountConversion(rows, "amount", false),
           targetCurrency,
         ),
-        (row) => parseInt(row.cnt, 10) || 0,
+        (row) => nanToZero(parseInt(row.cnt, 10)),
         unconverted,
       );
       let count = 0;
       let total = toDecimal(0);
       for (const row of converted) {
-        count += parseInt(row.cnt, 10) || 0;
+        count += nanToZero(parseInt(row.cnt, 10));
         total = total.plus(toDecimal(row.amount_eur));
       }
       const [first] = converted;
@@ -162,7 +163,7 @@ export const statisticsRepository = {
           mapRowsForAmountConversion(catRows, "total", true),
           targetCurrency,
         ),
-        (row) => parseInt(String(row.count), 10) || 0,
+        (row) => nanToZero(parseInt(String(row.count), 10)),
         unconverted,
       );
       return buildCategoryFromConvertedRows(converted);
@@ -209,7 +210,7 @@ export const statisticsRepository = {
         mapRowsForAmountConversion(categoryAmountRows, "amount", false),
         targetCurrency,
       ),
-      (row) => parseInt(row.cnt, 10) || 0,
+      (row) => nanToZero(parseInt(row.cnt, 10)),
       unconverted,
     );
 
@@ -219,9 +220,8 @@ export const statisticsRepository = {
         row.category_id === -1 ? null : parseInt(String(row.category_id), 10);
       const eur = row.amount_eur;
       const key = catId ?? "null";
-      if (!catMap[key])
-        catMap[key] = { id: catId, name: row.name, count: 0, total: 0 };
-      catMap[key].count += parseInt(row.cnt, 10) || 0;
+      catMap[key] ??= { id: catId, name: row.name, count: 0, total: 0 };
+      catMap[key].count += nanToZero(parseInt(row.cnt, 10));
       // Decimal accumulation (money-hygiene) — native `+=` over the per-currency
       // converted subtotals drifts sub-cent before the roundToCents below.
       catMap[key].total = toNumber(
@@ -309,7 +309,7 @@ export const statisticsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length
+    const dateWhere = dateFilters.length > 0
       ? `AND ${dateFilters.join(" AND ")}`
       : "";
 
@@ -369,21 +369,21 @@ export const statisticsRepository = {
         category_path_segments: r.category_path_segments,
         date: r.date,
         currency: r.currency,
-        cnt: parseInt(r.cnt, 10) || 0,
+        cnt: nanToZero(parseInt(r.cnt, 10)),
       };
-      convRows.push({ ...base, _leg: "income", amount: Number(r.income) || 0 });
+      convRows.push({ ...base, _leg: "income", amount: nanToZero(Number(r.income)) });
       convRows.push({
         ...base,
         _leg: "expense",
-        amount: Number(r.expense) || 0,
+        amount: nanToZero(Number(r.expense)),
       });
       // Owner legs (ADR-201) only when non-zero, so a household without
       // partner or joint accounts converts exactly the rows it did before.
-      const incomePartner = Number(r.income_partner) || 0;
+      const incomePartner = nanToZero(Number(r.income_partner));
       if (incomePartner !== 0) {
         convRows.push({ ...base, _leg: "income_partner", amount: incomePartner });
       }
-      const incomeJoint = Number(r.income_joint) || 0;
+      const incomeJoint = nanToZero(Number(r.income_joint));
       if (incomeJoint !== 0) {
         convRows.push({ ...base, _leg: "income_joint", amount: incomeJoint });
       }
@@ -403,16 +403,15 @@ export const statisticsRepository = {
     const periodCatMap: Record<string, Record<string, CategoryPivotCell>> = {};
     for (const row of converted) {
       const period = row.period;
-      const catId = row.category_id
+      const catId = row.category_id != null && row.category_id !== 0
         ? parseInt(String(row.category_id), 10)
         : null;
       const catName = row.category_name || "Uncategorised";
       const eur = row.amount_eur;
       const catKey = catId ?? "null";
 
-      if (!periodCatMap[period]) periodCatMap[period] = {};
-      if (!periodCatMap[period][catKey]) {
-        periodCatMap[period][catKey] = {
+      periodCatMap[period] ??= {};
+      periodCatMap[period][catKey] ??= {
           categoryId: catId,
           categoryName: catName,
           categoryPathIds: row.category_path_ids ?? [],
@@ -422,7 +421,6 @@ export const statisticsRepository = {
           expense: 0,
           transactionCount: 0,
         };
-      }
       const cell = periodCatMap[period][catKey];
       if (row._leg === "income_partner" || row._leg === "income_joint") {
         const owner = row._leg === "income_partner" ? "partner" : "joint";

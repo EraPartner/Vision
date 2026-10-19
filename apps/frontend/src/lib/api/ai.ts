@@ -177,9 +177,7 @@ export function streamChat(
                 return {
                     type: AI_CHAT_STREAM_EVENT.TOOL_CALL,
                     name: parsed.data.name,
-                    args:
-                        (parsed.data.args as
-                            Record<string, unknown> | undefined) ?? {},
+                    args: parsed.data.args ?? {},
                 };
             }
             case AI_CHAT_STREAM_EVENT.TOOL_RESULT: {

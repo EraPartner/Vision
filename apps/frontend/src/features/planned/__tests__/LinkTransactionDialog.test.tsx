@@ -213,7 +213,7 @@ describe("LinkTransactionDialog", () => {
     it("clicking 'Link & Execute' calls onExecute with correct args, confirms and closes dialog", async () => {
         // Arrange
         setupCandidateHandler();
-        const success = vi.spyOn(toast, "success").mockReturnValue("t" as never);
+        const success = vi.spyOn(toast, "success").mockReturnValue("t");
         const user = userEvent.setup();
         const onExecute = vi.fn().mockResolvedValue(undefined);
         const onOpenChange = vi.fn();
@@ -368,7 +368,7 @@ describe("LinkTransactionDialog", () => {
     it("execution failure: onExecute rejection keeps dialog open", async () => {
         setupCandidateHandler();
         const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-        const success = vi.spyOn(toast, "success").mockReturnValue("t" as never);
+        const success = vi.spyOn(toast, "success").mockReturnValue("t");
         const user = userEvent.setup();
         const onExecute = vi.fn().mockRejectedValue(new Error("link failed"));
         const onOpenChange = vi.fn();

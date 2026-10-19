@@ -98,7 +98,7 @@ function convertAccount(
 
 /** Sum of converted balances plus the accounts that had a part left out. */
 function total(accounts: ConvertedAccount[], target: CurrencyCode) {
-  const incomplete = accounts.filter((a) => a.unconvertedCurrencies.length);
+  const incomplete = accounts.filter((a) => a.unconvertedCurrencies.length > 0);
   return {
     total: sumMoney(
       accounts.map((a) => a.balance),

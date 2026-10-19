@@ -72,6 +72,7 @@ import {
     formatEditableNumber,
     type NumberFormat,
     DEFAULT_CURRENCY,
+    currencyOr,
 } from "@/utils/currency";
 
 const MODELS: ModelPortfolio[] = [
@@ -138,7 +139,7 @@ function weightsToRows(
         sleeve,
         pct: fractionToPct(w, numberFormat),
     }));
-    return rows.length ? rows : [{ sleeve: "stocks", pct: "" }];
+    return rows.length > 0 ? rows : [{ sleeve: "stocks", pct: "" }];
 }
 
 function actualsToRows(
@@ -162,7 +163,7 @@ export default function RebalancePage() {
     const { t } = useLanguage();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const { appSettings } = useAppSettings();
-    const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
     const {
         plans,
@@ -344,7 +345,7 @@ export default function RebalancePage() {
     );
     const hasValidRows = rows.some(
         (row) =>
-            row.sleeve &&
+            row.sleeve !== "" &&
             parseDecimal(row.pct, appSettings.numberFormat, 0) > 0,
     );
 
@@ -377,12 +378,16 @@ export default function RebalancePage() {
         if (value === "custom") {
             updateDraft({
                 source: "custom",
-                rows: Object.keys(currentActuals).length
-                    ? actualsToRows(currentActuals, appSettings.numberFormat)
-                    : [
-                          { sleeve: "stocks", pct: "60" },
-                          { sleeve: "bonds", pct: "40" },
-                      ],
+                rows:
+                    Object.keys(currentActuals).length > 0
+                        ? actualsToRows(
+                              currentActuals,
+                              appSettings.numberFormat,
+                          )
+                        : [
+                              { sleeve: "stocks", pct: "60" },
+                              { sleeve: "bonds", pct: "40" },
+                          ],
                 name: "",
                 capEnabled: false,
                 cap: "",
@@ -449,7 +454,7 @@ export default function RebalancePage() {
             return;
         }
         const targetWeights = rowsToWeights(rows);
-        if (!Object.keys(targetWeights).length) {
+        if (Object.keys(targetWeights).length === 0) {
             toast.error(t("rebalance.editor.needSleeve"));
             return;
         }
@@ -940,8 +945,9 @@ export default function RebalancePage() {
                                 <p className="type-title-2 tabular-nums">
                                     <Money
                                         amount={
-                                            availableCash ||
-                                            result.availableCash
+                                            availableCash !== 0
+                                                ? availableCash
+                                                : result.availableCash
                                         }
                                         currency={currency}
                                         fractionDigits={0}

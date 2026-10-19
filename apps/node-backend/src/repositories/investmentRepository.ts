@@ -85,10 +85,15 @@ const mapInvestmentRow = (row: InvestmentDbRow): InvestmentRow => {
   );
   // DATE column: calendar-day string, not a raw pg Date (previous-day ISO
   // timestamp east of UTC once JSON-serialized).
-  if (mapped && mapped.maturity_date instanceof Date)
+  if (mapped.maturity_date instanceof Date)
     mapped.maturity_date = toWireDate(mapped.maturity_date);
   return mapped as InvestmentRow;
 };
+
+// Create stores an empty or zero price/rate as NULL ("not set").
+function blankOrZeroToNull(value: number | string | null | undefined) {
+  return value === "" || value === 0 ? null : (value ?? null);
+}
 
 // Single source of truth for the investment INSERT column list and the
 // coalescing defaults each column applies. Order is load-bearing — it drives
@@ -101,8 +106,8 @@ const INVESTMENT_INSERT_FIELDS: Array<{
   { column: "symbol", value: (f) => f.symbol || null },
   { column: "asset_class", value: (f) => f.asset_class },
   { column: "currency", value: (f) => f.currency },
-  { column: "current_price", value: (f) => f.current_price || null },
-  { column: "interest_rate", value: (f) => f.interest_rate || null },
+  { column: "current_price", value: (f) => blankOrZeroToNull(f.current_price) },
+  { column: "interest_rate", value: (f) => blankOrZeroToNull(f.interest_rate) },
   { column: "maturity_date", value: (f) => f.maturity_date || null },
   { column: "location", value: (f) => f.location || null },
   { column: "municipality", value: (f) => f.municipality || null },

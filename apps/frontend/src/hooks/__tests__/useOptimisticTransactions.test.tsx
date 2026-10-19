@@ -82,7 +82,7 @@ describe("useDeleteTransaction (optimistic)", () => {
 
         let resolveDelete!: () => void;
         vi.spyOn(apiClient, "deleteTransaction").mockImplementation(
-            () => new Promise<void>((res) => { resolveDelete = () => res(); }) as ReturnType<typeof apiClient.deleteTransaction>,
+            () => new Promise<void>((res) => { resolveDelete = () => res(); }),
         );
 
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
@@ -122,7 +122,7 @@ describe("useDeleteTransaction (optimistic)", () => {
         const qc = makeClient();
         qc.setQueryData(LIST_KEY, seedList());
         const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-        vi.spyOn(apiClient, "deleteTransaction").mockResolvedValue(undefined as unknown as void);
+        vi.spyOn(apiClient, "deleteTransaction").mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
         act(() => { result.current.mutate(asTransactionId(1)); });

@@ -344,7 +344,7 @@ export default function PlannedPaymentForm({
                     : dueDate.getDate(),
                 // keep recurrence_pattern undefined here; recurrence display for loans is handled client-side
             }),
-            recipient_id: recipientId || undefined,
+            recipient_id: recipientId,
             category_id: categoryId,
             account_id: accountId,
             tags: tags.length > 0 ? tags : undefined,

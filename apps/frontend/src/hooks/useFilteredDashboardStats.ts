@@ -5,7 +5,7 @@ import { dashboardKeys, monthlySummaryKeys } from "@/lib/queryKeys";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
-import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export interface NetHistoryPoint {
@@ -54,7 +54,10 @@ export function useMonthlySummary({
     enabled = true,
 }: UseMonthlySummaryOptions = {}) {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     return useQuery({
         queryKey: monthlySummaryKeys.summary(
@@ -124,7 +127,9 @@ export function useFilteredDashboardStats(enabled = true) {
         // Use the most recent month with data to keep cards aligned with actual latest activity.
         const monthsWithData = summaryQuery.data.months
             .filter((month) => month.transaction_count > 0)
-            .sort((a, b) => a.year - b.year || a.month - b.month);
+            .sort((a, b) =>
+                a.year !== b.year ? a.year - b.year : a.month - b.month,
+            );
 
         const latest = monthsWithData[monthsWithData.length - 1];
 

@@ -164,7 +164,7 @@ function mergeFetchedRatesIntoHistoricalIndex(
     const currency = key.slice(0, separator);
     const date = key.slice(separator + 1);
     const byDate = new Map(
-      (requestIndex.get(currency) || []).map((point) => [
+      (requestIndex.get(currency) ?? []).map((point) => [
         point.date,
         point.rate,
       ]),
@@ -224,15 +224,18 @@ export async function warmCache() {
     ]);
 
     if (ecbRates) {
-      recordProviderSuccess("ecb");
+      void recordProviderSuccess("ecb");
     } else {
-      recordProviderError("ecb", "ECB fetch returned no rates");
+      void recordProviderError("ecb", "ECB fetch returned no rates");
     }
 
     if (erarRates) {
-      recordProviderSuccess("open.er-api");
+      void recordProviderSuccess("open.er-api");
     } else {
-      recordProviderError("open.er-api", "open.er-api fetch returned no rates");
+      void recordProviderError(
+        "open.er-api",
+        "open.er-api fetch returned no rates",
+      );
     }
 
     if (!ecbRates && !erarRates) {
@@ -349,9 +352,9 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
   targetCurrency = "EUR",
   options: ConvertRowsOptions | null = {},
 ): Promise<ConvertedRow<T>[]> {
-  if (!rows || rows.length === 0) return [];
+  if (rows == null || rows.length === 0) return [];
 
-  const { useHistoricalRatesByDate = false, dateField = null } = options || {};
+  const { useHistoricalRatesByDate = false, dateField = null } = options ?? {};
   const toCur = (targetCurrency || "EUR").toUpperCase().trim();
   const rates = await getRates();
 
@@ -362,13 +365,13 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
       ? (row as Readonly<Record<string, unknown>>)[dateField]
       : undefined;
     if (fieldValue) return normalizeDateInput(toDateColumn(fieldValue));
-    return normalizeDateInput(
-      row.date ||
-        row.day ||
-        row.transaction_date ||
-        row.planned_date ||
-        row.rate_date,
-    );
+    const firstDate = [
+      row.date,
+      row.day,
+      row.transaction_date,
+      row.planned_date,
+    ].find((value) => value != null && value !== "");
+    return normalizeDateInput(firstDate ?? row.rate_date);
   }
 
   // Resolve a rate for one side of the conversion. Returns the rate plus a
@@ -459,7 +462,12 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
       ? { used_fallback_rate: true, fallback_reason: "historical_rate_missing" }
       : {};
 
-    if (!fromResolved.rate || !toResolved.rate) {
+    if (
+      fromResolved.rate == null ||
+      fromResolved.rate === 0 ||
+      toResolved.rate == null ||
+      toResolved.rate === 0
+    ) {
       logger.warn("No stored exchange rate, row left unconverted", {
         from: currency,
         to: toCur,
@@ -540,7 +548,7 @@ export function convertWithRates(
   const rateFrom = rates[from];
   const rateTo = rates[to];
 
-  if (!rateFrom || !rateTo) {
+  if (rateFrom == null || rateFrom === 0 || rateTo == null || rateTo === 0) {
     logger.warn("No stored exchange rate, amount left unconverted", {
       from,
       to,

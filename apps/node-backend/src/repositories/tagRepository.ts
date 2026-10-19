@@ -19,7 +19,7 @@ import type { TagId } from '@vision/types/brands';
 
 export type { TagRow };
 
-export const tagRepository = {
+const tagRepository = {
   /**
    * List tags, optionally filtered by active status.
    *

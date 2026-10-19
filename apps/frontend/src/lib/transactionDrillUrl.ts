@@ -34,7 +34,7 @@ export function buildTransactionDrillUrl({
     const params = new URLSearchParams();
 
     if (categoryId != null) params.set("category_id", String(categoryId));
-    else if (categoryIds?.length)
+    else if (categoryIds != null && categoryIds.length > 0)
         params.set("category_ids", categoryIds.join(","));
     if (uncategorised) params.set("uncategorised", "true");
 

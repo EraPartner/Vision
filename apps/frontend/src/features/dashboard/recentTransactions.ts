@@ -24,8 +24,8 @@ export async function fetchRecentDashboardTransactions(
         if (page.items.length === 0) break;
 
         for (const transaction of page.items) {
-            if (transaction.category_id && excludedCategoryIdSet.has(transaction.category_id)) continue;
-            if (transaction.recipient_id && excludedRecipientIdSet.has(transaction.recipient_id)) continue;
+            if (transaction.category_id != null && excludedCategoryIdSet.has(transaction.category_id)) continue;
+            if (transaction.recipient_id != null && excludedRecipientIdSet.has(transaction.recipient_id)) continue;
 
             picked.push(transaction);
             if (picked.length === MAX_RESULTS) break;

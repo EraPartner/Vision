@@ -33,7 +33,6 @@ import type {
 } from "@vision/types/brands";
 
 import { matchesTolerance, DATE_WINDOW_DAYS } from "../lib/plannedMatching.ts";
-export type { PlannedLike, TxLike } from "../lib/plannedMatching.ts";
 const SUGGESTION_LOOKBACK_DAYS = 45;
 
 function calendarDayOrdinal(value: unknown): number | undefined {
@@ -181,7 +180,7 @@ export async function autoLinkTransactions(
     const matches = candidatesByTx.get(tx.id);
     const planned = matches?.length === 1 ? matches[0] : undefined;
     if (!planned) continue;
-    if ((txIdsByPlanned.get(planned.id) || []).length !== 1) continue;
+    if ((txIdsByPlanned.get(planned.id) ?? []).length !== 1) continue;
 
     try {
       const { duplicate } = await executePlanned({
@@ -252,5 +251,3 @@ export async function getMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
   }
   return suggestions;
 }
-
-export default { matchesTolerance, autoLinkTransactions, getMatchSuggestions };

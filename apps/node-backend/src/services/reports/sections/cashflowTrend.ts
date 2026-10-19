@@ -31,7 +31,7 @@ export function renderCashflowTrend(
     });
   const months = filterMonthsByPeriod(data.monthly?.months ?? [], period);
 
-  if (!months.length) {
+  if (months.length === 0) {
     return emptySection({
       title: "Cashflow Trend",
       subtitle: "Monthly income vs. expenses",

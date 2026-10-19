@@ -62,7 +62,7 @@ export async function createBatch({
     [
       adapterName,
       filename || null,
-      sizeBytes || null,
+      sizeBytes ?? null,
       customConfig ? JSON.stringify(customConfig) : null,
     ],
   );
@@ -111,9 +111,9 @@ export async function stageBatch({
       typeof adapter.parseWithConfig === "function"
         ? adapter.parseWithConfig(filePath, customConfig)
         : adapter.parse(filePath));
-      const rejected = (rows.skipped || 0) - (rows.excluded || 0);
+      const rejected = (rows.skipped ?? 0) - (rows.excluded ?? 0);
       if (rejected > 0) {
-        const diagnostics = rows.issues?.length
+        const diagnostics = rows.issues && rows.issues.length > 0
           ? ` ${rows.issues.join("; ")}.`
           : "";
         throw new ValidationError(
@@ -151,7 +151,7 @@ async function insertStagingChunk(
   rows: ParsedBankTransaction[],
   startIndex: number,
 ): Promise<void> {
-  if (!rows.length) return;
+  if (rows.length === 0) return;
   await withTransaction(async (client) => {
     const values: unknown[] = [];
     const placeholders: string[] = [];
@@ -170,9 +170,9 @@ async function insertStagingChunk(
         r.bankAccount || null,
         r.recipient || null,
         r.memo || null,
-        r.amount != null ? r.amount : null,
+        r.amount ?? null,
         r.currency || null,
-        r.balance != null ? r.balance : null,
+        r.balance ?? null,
         r.recipientAccount || null,
         r.recipientAddress || null,
         r.recipientBankName || null,

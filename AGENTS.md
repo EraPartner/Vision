@@ -43,7 +43,7 @@ and convention. Treat docs as intent and code as current behavior; resolve confl
 bun install
 bun run dev
 bun run build
-bun run lint
+bun run lint                  # frontend ESLint + lint:deps (import boundaries) + lint:dead (knip)
 bun run lint:backend
 bun run typecheck
 bun run test

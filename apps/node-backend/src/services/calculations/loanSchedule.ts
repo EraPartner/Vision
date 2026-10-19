@@ -14,6 +14,7 @@
 import { roundMoney } from "../../lib/money.ts";
 import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
+import { nonZeroOr } from "../../lib/math.ts";
 
 const EPSILON = 0.0000001;
 
@@ -69,7 +70,7 @@ function addMonthsAtDay(
       0,
     ),
   ).getUTCDate();
-  const day = Math.max(1, Math.min(Number(preferredDay) || 1, lastDay));
+  const day = Math.max(1, Math.min(nonZeroOr(Number(preferredDay), 1), lastDay));
   const result = new Date(
     Date.UTC(
       firstOfTarget.getUTCFullYear(),

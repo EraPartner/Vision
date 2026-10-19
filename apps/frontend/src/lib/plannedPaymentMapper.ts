@@ -115,7 +115,7 @@ export function mapFromAPI(
         loan_regular_payment_amount:
             pt.loan_regular_payment_amount ?? undefined,
         loan_first_payment_date: pt.loan_first_payment_date ?? undefined,
-        loan_schedule: pt.loan_schedule || [],
+        loan_schedule: pt.loan_schedule ?? [],
         frequency: pt.is_recurring ? frequency : undefined,
         custom_interval_days,
         end_date: pt.recurrence_end_date ?? undefined,
@@ -132,8 +132,8 @@ export function mapFromAPI(
         is_executed: pt.is_executed,
         last_executed_date: pt.last_executed_date,
         executed_transaction_id: pt.executed_transaction_id,
-        execution_count: pt.execution_count || 0,
-        executions: pt.executions || [],
+        execution_count: pt.execution_count ?? 0,
+        executions: pt.executions ?? [],
         created_at: pt.created_at,
     };
 }
@@ -145,7 +145,11 @@ export function mapToCreateAPI(
     // Build recurrence_pattern from frequency
     let recurrence_pattern: string | undefined;
     if (payment.is_recurring && payment.frequency) {
-        if (payment.frequency === "custom" && payment.custom_interval_days) {
+        if (
+            payment.frequency === "custom" &&
+            payment.custom_interval_days != null &&
+            payment.custom_interval_days !== 0
+        ) {
             recurrence_pattern = `every ${payment.custom_interval_days} days`;
         } else {
             recurrence_pattern = payment.frequency;
@@ -160,7 +164,7 @@ export function mapToCreateAPI(
     return {
         planned_date: payment.due_date,
         account_id: payment.account_id!,
-        recipient_id: payment.recipient_id || undefined,
+        recipient_id: payment.recipient_id ?? undefined,
         memo: payment.name,
         amount: payment.amount,
         currency: payment.currency,
@@ -229,7 +233,11 @@ export function mapToUpdateAPI(
         updates.custom_interval_days !== undefined
     ) {
         const freq = updates.frequency;
-        if (freq === "custom" && updates.custom_interval_days) {
+        if (
+            freq === "custom" &&
+            updates.custom_interval_days != null &&
+            updates.custom_interval_days !== 0
+        ) {
             result.recurrence_pattern = `every ${updates.custom_interval_days} days`;
         } else if (freq) {
             result.recurrence_pattern = freq;

@@ -23,7 +23,7 @@ function deferredStream() {
                 result: new Promise((_resolve, rejectPromise) => {
                     reject = rejectPromise;
                 }),
-            } as ReturnType<typeof apiClient.streamChat>;
+            };
         });
 
     return {

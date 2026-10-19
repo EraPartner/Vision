@@ -902,7 +902,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         expect(plannedCard).not.toBeNull();
         expect(await screen.findByText("Landlord")).toBeInTheDocument();
         expect(
-            within(plannedCard!).getByText(
+            within(plannedCard).getByText(
                 /not part of the current balance/i,
             ),
         ).toBeInTheDocument();

@@ -59,7 +59,7 @@ describe("categories boot preload", () => {
             ),
         );
 
-        startCategoriesPreload();
+        void startCategoriesPreload();
         const taken = await takeStartedCategoriesPreload();
         expect(taken?.map((c) => c.id)).toEqual([7]);
 

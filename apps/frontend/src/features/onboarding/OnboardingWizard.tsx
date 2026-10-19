@@ -639,13 +639,13 @@ export function OnboardingWizard({
 
     const handleNavigate = (path: string) => {
         onComplete();
-        navigate(path);
+        void navigate(path);
     };
 
     const completeToDashboard = () => {
         requestDashboardArrival();
         onComplete();
-        navigate("/");
+        void navigate("/");
     };
 
     /**

@@ -16,7 +16,7 @@ import {
     asTransactionId,
 } from "@vision/types/brands";
 
-const labels = en as Record<string, string>;
+const labels = en;
 function label(key: string): string {
     const value = labels[key];
     if (value === undefined) throw new Error(`Missing locale key: ${key}`);

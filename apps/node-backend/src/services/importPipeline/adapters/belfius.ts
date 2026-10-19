@@ -72,7 +72,10 @@ function applyRunningBalances(
   let newestToOldest;
   if (haveSeq) {
     newestToOldest = [...transactions].sort(
-      (a, b) => b._seq[0] - a._seq[0] || b._seq[1] - a._seq[1],
+      (a, b) =>
+        b._seq[0] !== a._seq[0]
+          ? b._seq[0] - a._seq[0]
+          : b._seq[1] - a._seq[1],
     );
   } else {
     // Non-empty: the early return above covers an empty statement.
@@ -101,7 +104,7 @@ function applyRunningBalances(
 function parseTransactionLine(
   parts: string[],
 ): SequencedBankTransaction | null {
-  if (!parts || parts.length < MIN_FIELDS) return null;
+  if (parts == null || parts.length < MIN_FIELDS) return null;
 
   const accountNumber = cellAt(parts, 0).trim();
   const transactionDateStr = cellAt(parts, 1).trim();
@@ -128,7 +131,7 @@ function parseTransactionLine(
   const fullRecipient = normalizeToUppercase(cleanRecipientName(baseRecipient));
 
   const addressParts = [street, location].filter(Boolean);
-  const recipientFullAddress = addressParts.length
+  const recipientFullAddress = addressParts.length > 0
     ? addressParts.join(", ")
     : null;
   const memo = transactionDescription

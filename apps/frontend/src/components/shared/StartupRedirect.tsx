@@ -90,7 +90,7 @@ export function StartupRedirect() {
                 ? lastPageAtLaunch.current ?? "/"
                 : SECTION_HOME[section] ?? "/";
 
-        if (target && target !== "/") navigate(target, { replace: true });
+        if (target && target !== "/") void navigate(target, { replace: true });
     }, [isLoading, appSettings.startupSection, location.pathname, navigate]);
 
     // Mirror the (hydrated) startup section to localStorage for the next launch.

@@ -84,7 +84,7 @@ async function detect(
       bom: true,
       relax_column_count: true,
       skip_empty_lines: true,
-    }) as string[][],
+    }),
   );
 }
 
@@ -132,7 +132,7 @@ export async function probePortfolioImport(
       text,
       separator,
       options.skipRows,
-      (input, config) => parse(input, config) as string[][],
+      (input, config) => parse(input, config),
     );
   } catch {
     previewError = "parse_error";

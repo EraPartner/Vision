@@ -32,6 +32,7 @@ import type {
 } from './prices/yahooClient.ts';
 import { toAppTz } from '../lib/timezone.ts';
 import { forEachConcurrent } from '../lib/concurrency.ts';
+import { nonZeroOr } from '../lib/math.ts';
 
 // Per-symbol quote cache + in-flight coalescing. The Markets Overview polls the
 // quote route for the whole active group (tens of symbols) every 60s, which
@@ -200,10 +201,10 @@ async function buildQuote(sym: string, basic?: boolean): Promise<MarketQuote | n
       ? parseYahooPayload(yahooQuoteSummarySchema, summary.value)
       : undefined;
 
-  const sd: NonNullable<YahooQuoteSummary['summaryDetail']> = s?.summaryDetail || {};
+  const sd: NonNullable<YahooQuoteSummary['summaryDetail']> = s?.summaryDetail ?? {};
   const ks: NonNullable<YahooQuoteSummary['defaultKeyStatistics']> =
-    s?.defaultKeyStatistics || {};
-  const pr: NonNullable<YahooQuoteSummary['price']> = s?.price || {};
+    s?.defaultKeyStatistics ?? {};
+  const pr: NonNullable<YahooQuoteSummary['price']> = s?.price ?? {};
 
   const marketCap = sd.marketCap ?? pr.marketCap ?? q.marketCap;
   const trailingPE = sd.trailingPE ?? ks.trailingPE ?? q.trailingPE;
@@ -213,8 +214,8 @@ async function buildQuote(sym: string, basic?: boolean): Promise<MarketQuote | n
   const beta = sd.beta ?? ks.beta ?? q.beta;
   const priceToBook = ks.priceToBook ?? q.priceToBook;
 
-  const trendBuckets = s?.recommendationTrend?.trend || [];
-  const currentTrend = trendBuckets.find((t) => t.period === '0m') || trendBuckets[0] || null;
+  const trendBuckets = s?.recommendationTrend?.trend ?? [];
+  const currentTrend = trendBuckets.find((t) => t.period === '0m') ?? trendBuckets[0] ?? null;
   const analystConsensus = currentTrend
     ? {
       strongBuy: currentTrend.strongBuy ?? 0,
@@ -225,7 +226,7 @@ async function buildQuote(sym: string, basic?: boolean): Promise<MarketQuote | n
     }
     : null;
 
-  const recentAnalystActions = (s?.upgradeDowngradeHistory?.history || [])
+  const recentAnalystActions = (s?.upgradeDowngradeHistory?.history ?? [])
     .slice(0, 10)
     .map((h) => ({
       date: h.epochGradeDate,
@@ -300,7 +301,7 @@ export async function searchSymbols(q: string) {
   }
   const results = requireYahooPayload(yahooSearchResultSchema, payload, 'search');
 
-  const items = (results.quotes || [])
+  const items = (results.quotes ?? [])
     .filter((r) => r.symbol)
     .map((r) => ({
       symbol: r.symbol,
@@ -375,7 +376,7 @@ export async function getChart(
   const result = parseYahooPayload(yahooChartResultSchema, payload);
   if (!result) return { items: [], total: 0 };
 
-  const points = (result.quotes || [])
+  const points = (result.quotes ?? [])
     .filter((p) => p.close != null)
     .map((p) => ({
       time: yahooDateMs(p.date),
@@ -402,7 +403,7 @@ export async function getChart(
  */
 export async function getNews(symbols: string, count: string) {
   const querySymbols = symbols || 'SPY,QQQ,DIA';
-  const newsCount = Math.min(parseInt(count, 10) || 20, 50);
+  const newsCount = Math.min(nonZeroOr(parseInt(count, 10), 20), 50);
 
   let newsResults;
   try {
@@ -414,11 +415,11 @@ export async function getNews(symbols: string, count: string) {
           await yahooFinance.search(sym.trim(), { quotesCount: 0, newsCount }, NO_VALIDATE),
           'search',
         );
-        return (results.news || []).map((n) => ({
+        return (results.news ?? []).map((n) => ({
           title: n.title,
           link: n.link,
           publisher: n.publisher,
-          publishedAt: n.providerPublishTime ? new Date(n.providerPublishTime).getTime() : null,
+          publishedAt: n.providerPublishTime != null && n.providerPublishTime !== '' && n.providerPublishTime !== 0 ? new Date(n.providerPublishTime).getTime() : null,
           thumbnail: pickBestThumbnail(n.thumbnail),
           relatedSymbols: [sym.trim()],
         }));
@@ -439,7 +440,7 @@ export async function getNews(symbols: string, count: string) {
       seen.add(n.title);
       return true;
     })
-    .sort((a, b) => (b.publishedAt || 0) - (a.publishedAt || 0))
+    .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
     .slice(0, newsCount);
 
   return { items: articles, total: articles.length };

@@ -1,3 +1,4 @@
+import { nanToZero } from '../../lib/math.ts';
 /**
  * Portfolio × Research analytics (ADR-097) — pure, descriptive.
  *
@@ -34,7 +35,7 @@ function allocationDrift(
   ]);
   const out: Record<string, number> = {};
   for (const k of keys)
-    out[k] = (Number(actual?.[k]) || 0) - (Number(target?.[k]) || 0);
+    out[k] = nanToZero(Number(actual?.[k])) - nanToZero(Number(target?.[k]));
   return out;
 }
 
@@ -46,10 +47,10 @@ export function normalizeWeights(
   weights: Record<string, number>,
 ): Record<string, number> {
   const entries = Object.entries(weights ?? {});
-  const total = entries.reduce((s, [, v]) => s + (Number(v) || 0), 0);
+  const total = entries.reduce((s, [, v]) => s + nanToZero(Number(v)), 0);
   if (total <= 0) return { ...weights };
   return Object.fromEntries(
-    entries.map(([k, v]) => [k, (Number(v) || 0) / total]),
+    entries.map(([k, v]) => [k, nanToZero(Number(v)) / total]),
   );
 }
 
@@ -96,7 +97,7 @@ export function foldTargetSleeves(
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(weights ?? {})) {
     const key = REBALANCE_TARGET_ALIASES[k] ?? k;
-    out[key] = (Number(out[key]) || 0) + (Number(v) || 0);
+    out[key] = nanToZero(Number(out[key])) + nanToZero(Number(v));
   }
   return out;
 }

@@ -47,5 +47,3 @@ export async function computeMonthlySummary({
     hasExclusions || allTime || startDate || endDate ? "live" : "mv";
   return buildEnvelope(data, { source });
 }
-
-export default { computeMonthlySummary };

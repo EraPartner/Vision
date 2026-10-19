@@ -27,9 +27,7 @@ import type {
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
-import type { RecipientMatchPatternRow } from '../types/rows.ts';
-
-export type { ActivePatternRow, RecipientMatchPatternRow };
+export type { ActivePatternRow };
 
 const MIN_LCP_LENGTH = 8;
 
@@ -199,10 +197,10 @@ export async function applyPatterns(
   preloadedPatterns?: ActivePatternRow[],
 ): Promise<Map<string, { recipientId: number; patternId: number }>> {
   const result = new Map<string, { recipientId: number; patternId: number }>();
-  if (!distinctRaw.length) return result;
+  if (distinctRaw.length === 0) return result;
 
   const patternRows = preloadedPatterns ?? await loadActivePatterns();
-  if (!patternRows.length) return result;
+  if (patternRows.length === 0) return result;
 
   for (const raw of distinctRaw) {
     if (!raw) continue;
@@ -431,7 +429,7 @@ export async function updatePattern(
   const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses(updates, {
     allowed: ['pattern', 'pattern_kind', 'case_sensitive', 'priority', 'is_active', 'notes'],
   });
-  if (!fields.length) return;
+  if (fields.length === 0) return;
 
   values.push(patternId);
   await query(

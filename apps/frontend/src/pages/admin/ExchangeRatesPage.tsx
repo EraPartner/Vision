@@ -111,7 +111,9 @@ export default function ExchangeRatesPage() {
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: exchangeRateKeys.all,
+            });
             toast.success(t("exchangeRates.refreshSuccess"));
         },
         onError: () => {

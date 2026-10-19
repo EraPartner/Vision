@@ -4,7 +4,7 @@
 
 import type { Decimal } from "decimal.js";
 import type { CurrencyCode } from "@vision/types/brands";
-import { EUR } from "../lib/currencyCode.ts";
+import { currencyOrEur, EUR, storedCurrencyCode } from "../lib/currencyCode.ts";
 import { queryRows } from "../database/rowContracts.ts";
 import {
   bankBalanceRowSchema,
@@ -238,7 +238,7 @@ export const banksRepository = {
           latestBalanceRows.map((r) => ({
             ...r,
             amount: toNumber(toDecimal(r.balance)),
-            currency: r.currency || EUR,
+            currency: currencyOrEur(r.currency),
           })),
           // History rows carry no `date`: the conversion helper falls back to
           // `day` (see resolveDateFromRow), which is the right FX anchor for an
@@ -249,7 +249,7 @@ export const banksRepository = {
             .map((r) => ({
               ...r,
               amount: toNumber(toDecimal(r.balance)),
-              currency: r.currency || EUR,
+              currency: currencyOrEur(r.currency),
             })),
         ],
         targetCurrency,
@@ -290,7 +290,7 @@ export const banksRepository = {
             balance: 0,
             // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
             // to_char in the lateral; NULL (no stamp) → undefined.
-            anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+            anchor_date: row.anchor_date ?? undefined,
             post_anchor_count:
               row.post_anchor_count == null
                 ? undefined
@@ -315,7 +315,7 @@ export const banksRepository = {
       if (!convertedRows.has(`${row.account_id}|${row.currency}`)) {
         noteUnconverted(unconverted, row.currency);
         entry.account.unconverted_currencies.push(
-          (row.currency || "EUR").toUpperCase(),
+          storedCurrencyCode(row.currency),
         );
       }
     }
@@ -361,7 +361,7 @@ export const banksRepository = {
     const historyByDay: Record<string, Map<string, Decimal>> = {};
     for (const row of historyConverted) {
       const key = row.bank_account;
-      if (!historyByDay[key]) historyByDay[key] = new Map();
+      historyByDay[key] ??= new Map();
       // toYmd uses local getters for the defensive Date branch (the SQL emits
       // day via to_char, so this normally passes the string straight through).
       const day = toYmd(row.day);

@@ -10,20 +10,14 @@
  */
 
 // Re-export shared primitives (call sites do `import { API_BASE_URL, ApiClientError } from '@/lib/api'`)
-export { API_BASE_URL, ApiClientError } from "@/lib/api/client";
+export { ApiClientError } from "@/lib/api/client";
 export type {
-    AggregationEnvelope,
-    ImportProgress,
-    ImportResult,
     NetWorthSnapshot,
-    NetWorthResponse,
     SavedChart,
     SavedChartCreate,
     MarketNewsArticle,
-    ImportPreviewResponse,
     ImportPreviewGroup,
     ImportStagingRow,
-    MatchSource,
 } from "@/types/apiClient";
 
 // Domain modules
@@ -334,83 +328,10 @@ export const apiClient = {
 };
 
 // Type re-exports for call sites that import from '@/lib/api'
-export type {
-    Transaction,
-    Category,
-    Account,
-    AccountCreate,
-    AccountUpdate,
-    AccountsListResponse,
-    AccountType,
-    AccountLiquidityClass,
-    AccountTaxWrapper,
-    AccountOwner,
-    Recipient,
-    PlannedTransaction,
-    Investment,
-    PortfolioTransaction,
-    Tag,
-    TagCreate,
-    TagUpdate,
-    BulkTagRequest,
-    BulkTagResult,
-    BulkSelectionRequest,
-    BulkTransactionFilter,
-    BulkUpdateFields,
-    BulkUpdateRequest,
-    BulkExportRequest,
-    BulkDeleteResult,
-    BulkUpdateResult,
-} from "@/types/api";
-export type {
-    ChatMessage,
-    ChatRole,
-    ChatStreamEvent,
-    ChatTurnResponse,
-    Conversation,
-    ConversationDetail,
-    ConversationSummary,
-    CreateConversationBody,
-    OllamaModel,
-    OllamaModelsResponse,
-    OllamaStatus,
-    SendChatBody,
-    TokenUsage,
-    ToolRenderAs,
-    ToolResultPayload,
-} from "@/types/aiChat";
-export type {
-    SavedParserConfig,
-    CustomParserConfigPayload,
-} from "@/lib/api/imports";
-export type {
-    SplitItem,
-    SplitPayment,
-    SplitCreateInput,
-    OwedSummaryItem,
-    OwedDetailItem,
-} from "@/lib/api/splits";
+export type { Recipient } from "@/types/api";
+export type { CustomParserConfigPayload } from "@/lib/api/imports";
 export type {
     RecipientPattern,
     RecipientPatternCreate,
     RecipientPatternUpdate,
-    PatternSuggestion,
 } from "@/lib/api/recipients";
-export type {
-    ExchangeRate,
-    ExchangeRatesData,
-    PortfolioSummaryItem,
-    PortfolioSummaryResponse,
-    PortfolioSummaryTotals,
-} from "@/lib/api/info";
-export type {
-    RebalanceRequest,
-    RebalanceResponse,
-    ModelPortfolio,
-} from "@/lib/api/crossWorkspace";
-export type {
-    WatchlistItem,
-    WatchlistCreate,
-    WatchlistUpdate,
-    WatchlistListResponse,
-} from "@/types/watchlist";

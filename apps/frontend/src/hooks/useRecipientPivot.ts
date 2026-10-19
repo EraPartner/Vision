@@ -7,8 +7,6 @@ import type { SavedChart } from "@/types/apiClient";
 import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
 import type { RecipientId } from "@vision/types/brands";
 
-export type { RecipientPivotItem };
-
 export interface RecipientPeriodData {
     recipientId: RecipientId;
     name: string;

@@ -52,7 +52,6 @@ package "UI Components (Radix + Tailwind)" {
   class HoverCard
   class InputOTP
   class Menubar
-  class ToggleGroup
   class ScrollArea
   class Card
   class Label

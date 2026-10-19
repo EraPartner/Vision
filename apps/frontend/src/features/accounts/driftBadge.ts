@@ -52,11 +52,12 @@ export function statementYmd(
     >,
 ): string | undefined {
     const statementCurrency = account.reconcilable_currency ?? account.currency;
-    const collectionDate = statementCurrency
-        ? account.statement_balances?.find(
-              (item) => item.currency === statementCurrency,
-          )?.balance_date
-        : undefined;
+    const collectionDate =
+        statementCurrency !== ""
+            ? account.statement_balances?.find(
+                  (item) => item.currency === statementCurrency,
+              )?.balance_date
+            : undefined;
     const raw = collectionDate;
     if (!raw) return undefined;
     const ymd = raw.slice(0, 10);
