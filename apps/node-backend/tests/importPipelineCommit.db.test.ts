@@ -340,19 +340,23 @@ describeDb("importPipeline commit (real Postgres)", () => {
         await gate.query("COMMIT");
         const results = await outcomes;
         await observedFirst;
-        if (overrideFirst)
-          expect(results.every((result) => result.status === "fulfilled")).toBe(
-            true,
-          );
-        else
-          expect(results[1]).toMatchObject({
+        // PostgreSQL does not promise that the session queued first on a row
+        // lock acquires it first, so assert serialization, not arrival order:
+        // an override that wins lands in the commit, one that loses gets 409.
+        const [overrideResult, commitResult] = overrideFirst
+          ? results
+          : [results[1], results[0]];
+        expect(commitResult).toMatchObject({ status: "fulfilled" });
+        const overrideWon = overrideResult?.status === "fulfilled";
+        if (!overrideWon)
+          expect(overrideResult).toMatchObject({
             status: "rejected",
             reason: { status: 409 },
           });
         const posted = await committedTxns(batchId);
         expect(posted).toHaveLength(1);
         expect(posted[0].category_id).toBe(
-          overrideFirst ? categoryId : fx.categoryId,
+          overrideWon ? categoryId : fx.categoryId,
         );
       } finally {
         await gate.query("ROLLBACK");
@@ -402,14 +406,20 @@ describeDb("importPipeline commit (real Postgres)", () => {
         await gate.query("COMMIT");
         const results = await outcomes;
         await firstObserved;
-        expect(results[0]).toMatchObject({ status: "fulfilled" });
-        expect(results[1]).toMatchObject({
+        // PostgreSQL does not promise that the session queued first on a row
+        // lock acquires it first, so assert serialization, not arrival order:
+        // exactly one claim wins and the batch ends in that claim's state.
+        const [rollbackResult, commitResult] = rollbackFirst
+          ? results
+          : [results[1], results[0]];
+        const rollbackWon = rollbackResult?.status === "fulfilled";
+        expect(rollbackWon ? commitResult : rollbackResult).toMatchObject({
           status: "rejected",
-          reason: { status: rollbackFirst ? 409 : 400 },
+          reason: { status: rollbackWon ? 409 : 400 },
         });
-        expect(await committedTxns(batchId)).toHaveLength(
-          rollbackFirst ? 0 : 1,
-        );
+        if (!rollbackWon)
+          expect(commitResult).toMatchObject({ status: "fulfilled" });
+        expect(await committedTxns(batchId)).toHaveLength(rollbackWon ? 0 : 1);
         expect(
           (
             await pool.query(
@@ -417,7 +427,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
               [batchId],
             )
           ).rows[0].status,
-        ).toBe(rollbackFirst ? "aborted" : "committing");
+        ).toBe(rollbackWon ? "aborted" : "committing");
       } finally {
         await gate.query("ROLLBACK");
         gate.release();

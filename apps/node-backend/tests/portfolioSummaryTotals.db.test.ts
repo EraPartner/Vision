@@ -29,6 +29,7 @@ interface InvestmentSeed {
   price?: number;
   interestRate?: number;
   isActive?: boolean;
+  currency?: string;
 }
 
 async function investment({
@@ -37,11 +38,21 @@ async function investment({
   price = 0,
   interestRate = 0,
   isActive = true,
+  currency = "EUR",
 }: InvestmentSeed) {
   const { rows } = await getTestPool()!.query<{ id: number }>(
     `INSERT INTO investments (name, symbol, asset_class, currency, current_price, interest_rate, is_active)
-     VALUES ($1, $1, $2, 'EUR', $3, $4, $5) RETURNING id`,
-    [name, assetClass, price, interestRate, isActive],
+     VALUES ($1, $1, $2, $6, $3, $4, $5) RETURNING id`,
+    [name, assetClass, price, interestRate, isActive, currency],
+  );
+  return rows[0]!.id;
+}
+
+async function brokerAccount(name: string) {
+  const { rows } = await getTestPool()!.query<{ id: number }>(
+    `INSERT INTO accounts (name, type, currency)
+     VALUES ($1, 'brokerage'::account_type, 'EUR') RETURNING id`,
+    [name],
   );
   return rows[0]!.id;
 }
@@ -54,12 +65,17 @@ async function txn(
   {
     units = null,
     currency = "EUR",
-  }: { units?: number | null; currency?: string } = {},
+    accountId = null,
+  }: {
+    units?: number | null;
+    currency?: string;
+    accountId?: number | null;
+  } = {},
 ) {
   await getTestPool()!.query(
-    `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency)
-     VALUES ($1, $2, $3::date, $4, $5, $6)`,
-    [investmentId, type, date, amount, units, currency],
+    `INSERT INTO portfolio_transactions (investment_id, type, date, amount, units, currency, account_id)
+     VALUES ($1, $2, $3::date, $4, $5, $6, $7)`,
+    [investmentId, type, date, amount, units, currency, accountId],
   );
 }
 
@@ -105,6 +121,9 @@ describeDb("GET /api/info/portfolio-summary asset totals (real DB)", () => {
     const pool = getTestPool()!;
     await pool.query("DELETE FROM portfolio_transactions");
     await pool.query("DELETE FROM investments");
+    await pool.query(
+      "DELETE FROM accounts WHERE name LIKE 'Synthetic broker%'",
+    );
     await pool.query("DELETE FROM exchange_rates");
     await pool.query(
       "DELETE FROM user_settings WHERE key = 'cost_basis_method'",
@@ -117,6 +136,9 @@ describeDb("GET /api/info/portfolio-summary asset totals (real DB)", () => {
     const pool = getTestPool()!;
     await pool.query("DELETE FROM portfolio_transactions");
     await pool.query("DELETE FROM investments");
+    await pool.query(
+      "DELETE FROM accounts WHERE name LIKE 'Synthetic broker%'",
+    );
     await pool.query("DELETE FROM exchange_rates");
     invalidatePortfolioCaches();
     await releaseDbSuiteLock();
@@ -311,5 +333,155 @@ describeDb("GET /api/info/portfolio-summary asset totals (real DB)", () => {
       estimatedMonthlyRent: 700,
       monthlyRentRateMissing: true,
     });
+  });
+
+  it("totals each broker account on the server for the broker filter", async () => {
+    const brokerA = await brokerAccount("Synthetic broker A");
+    const brokerB = await brokerAccount("Synthetic broker B");
+    // Fund: 10 units for 100 at A and 5 units for 60 at B, price 15 →
+    // A value 150 (gain 50), B value 75 (gain 15).
+    const fund = await investment({
+      name: "Synthetic fund",
+      assetClass: "etf",
+      price: 15,
+    });
+    await txn(fund, "buy", "2026-01-02", 100, {
+      units: 10,
+      accountId: brokerA,
+    });
+    await txn(fund, "buy", "2026-01-03", 60, { units: 5, accountId: brokerB });
+    // Stock: 2 units for 20 at A, price 12 → value 24 (gain 4).
+    const stock = await investment({
+      name: "Synthetic stock",
+      assetClass: "stock",
+      price: 12,
+    });
+    await txn(stock, "buy", "2026-01-04", 20, { units: 2, accountId: brokerA });
+    // Unassigned: 1 unit for 8, price 10 → value 10 (gain 2).
+    const loose = await investment({
+      name: "Unassigned stock",
+      assetClass: "stock",
+      price: 10,
+    });
+    await txn(loose, "buy", "2026-01-05", 8, { units: 1 });
+
+    const res = await api.get("/api/info/portfolio-summary?currency=EUR");
+
+    expect(res.status).toBe(200);
+    const accountRow = (rows: Totals[], id: number | null) =>
+      rows.find((row) => row.account_id === id);
+    const fundTotals = summary(res, "Synthetic fund").accountTotals as Totals[];
+    expect(accountRow(fundTotals, brokerA)).toMatchObject({
+      assignment: "account",
+      currentValue: 150,
+      totalInvested: 100,
+      gainLoss: 50,
+      oversold: false,
+    });
+    expect(accountRow(fundTotals, brokerB)).toMatchObject({
+      currentValue: 75,
+      totalInvested: 60,
+      gainLoss: 15,
+    });
+    // Portfolio-wide subtotal per broker: fund + stock at A.
+    const totals = bodyAt(res, "data", "accountTotals") as Totals[];
+    expect(accountRow(totals, brokerA)).toMatchObject({
+      currentValue: 174,
+      totalInvested: 120,
+      gainLoss: 54,
+    });
+    expect(accountRow(totals, brokerB)).toMatchObject({
+      currentValue: 75,
+      gainLoss: 15,
+    });
+    expect(accountRow(totals, null)).toMatchObject({
+      assignment: "unassigned",
+      currentValue: 10,
+      totalInvested: 8,
+      gainLoss: 2,
+    });
+    expect(totals.map((row) => row.currentValue)).toEqual([174, 75, 10]);
+  });
+
+  it("flags a holding whose currency has no stored rate instead of using a built-in rate", async () => {
+    // USD is in the built-in constants, but nothing is stored for it.
+    const usd = await investment({
+      name: "USD stock",
+      assetClass: "stock",
+      price: 20,
+      currency: "USD",
+    });
+    await txn(usd, "buy", "2026-01-02", 100, { units: 10, currency: "USD" });
+    const archivedUsd = await investment({
+      name: "Archived USD stock",
+      assetClass: "stock",
+      price: 30,
+      currency: "USD",
+      isActive: false,
+    });
+    await txn(archivedUsd, "buy", "2026-01-02", 50, {
+      units: 2,
+      currency: "USD",
+    });
+
+    const res = await api.get("/api/info/portfolio-summary?currency=EUR");
+
+    expect(res.status).toBe(200);
+    // 10 units × 20 stays unconverted and is flagged, never × 1/1.09.
+    expect(summary(res, "USD stock")).toMatchObject({
+      currentValue: 200,
+      usedFallbackRate: true,
+    });
+    expect(bodyAt(res, "data", "totals", "usedFallbackRate")).toBe(true);
+
+    const all = await api.get(
+      "/api/info/portfolio-summary?currency=EUR&active=false",
+    );
+    expect(all.status).toBe(200);
+    const archived = (
+      bodyAt(all, "data", "archivedPresentation") as Totals[]
+    ).find((row) => row.name === "Archived USD stock");
+    expect(archived).toMatchObject({
+      currentValue: 60,
+      usedFallbackRate: true,
+    });
+  });
+
+  it("converts holdings and archived views at the stored rate", async () => {
+    await setRate("USD", "0.8", "2026-01-01");
+    const usd = await investment({
+      name: "USD stock",
+      assetClass: "stock",
+      price: 20,
+      currency: "USD",
+    });
+    await txn(usd, "buy", "2026-01-02", 100, { units: 10, currency: "USD" });
+    const archivedUsd = await investment({
+      name: "Archived USD stock",
+      assetClass: "stock",
+      price: 30,
+      currency: "USD",
+      isActive: false,
+    });
+    await txn(archivedUsd, "buy", "2026-01-02", 50, {
+      units: 2,
+      currency: "USD",
+    });
+
+    const res = await api.get(
+      "/api/info/portfolio-summary?currency=EUR&active=false",
+    );
+
+    expect(res.status).toBe(200);
+    // 200 USD × 0.8 and 60 USD × 0.8.
+    expect(summary(res, "USD stock")).toMatchObject({
+      currentValue: 160,
+      usedFallbackRate: false,
+    });
+    const archived = (
+      bodyAt(res, "data", "archivedPresentation") as Totals[]
+    ).find((row) => row.name === "Archived USD stock");
+    expect(archived).toMatchObject({ currentValue: 48 });
+    expect(archived?.usedFallbackRate).toBeUndefined();
   });
 });
