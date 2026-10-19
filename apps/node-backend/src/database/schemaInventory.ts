@@ -91,7 +91,10 @@ export function hashSchemaInventory(
   ]);
 }
 
-/** One entry per line, so a regenerated file diffs readably. */
+/**
+ * One entry per line, so a regenerated file diffs readably.
+ * @public Writes db/baseline-inventory.json when the baseline is regenerated.
+ */
 export function formatHashedInventory(entries: HashedInventoryEntry[]): string {
   return `[\n${entries.map((entry) => JSON.stringify(entry)).join(",\n")}\n]\n`;
 }
