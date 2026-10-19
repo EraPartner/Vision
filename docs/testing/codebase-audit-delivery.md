@@ -24,7 +24,8 @@ outside this delivery. The filing workflow changes do not establish tax-rule cor
 ## Implementation ledger
 
 All 40 audit implementations, both walkthrough remediations and the selective test cleanup are
-delivered. TODO retains only the separately excluded Belgian tax correctness/household item.
+delivered. The separately excluded Belgian tax correctness and household item was delivered later in
+phases A to F ([[docs/adr/199-belgian-tax-source-verification]] to [[docs/adr/203-belgian-tax-pension-type-activity-income]]) and removed from TODO.
 Completion here means the implementation boundary authorized by the user, not successful live
 acceptance or confirmed reproduction of the original native warning.
 
