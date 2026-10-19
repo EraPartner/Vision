@@ -1373,10 +1373,11 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 
 ### Startup refuses the existing database
 
-**Symptom:** The backend exits during `runMigrations()` and Electron shows the startup error page.
+**Symptom:** The backend exits during `runMigrations()`. Electron stops polling, shows the
+startup error page and a "Failed to start Vision." dialog with the error from `backend.log`.
 
-**Cause:** The database carries Alembic's `alembic_version` at a revision other than
-`0128_category_path_on_legacy_rename`, its catalog fingerprint differs from the `0001` baseline,
+**Cause:** The database carries Alembic's `alembic_version` at a revision older than
+`0126_income_recognition_check_name`, its catalog fingerprint differs from the `0001` baseline,
 or it has application objects but no migration marker. Adoption and fresh install fail closed and
 change nothing.
 

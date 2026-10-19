@@ -10,6 +10,7 @@ aliases: [migration-guide, database-schema, schema-changes]
 related_code:
   [
     "db/migrations/",
+    "db/alembic-bridge/",
     "db/schema-inventory.sql",
     "apps/node-backend/src/database/migrate.ts",
     "apps/node-backend/src/database/schemaInventory.ts",
@@ -63,13 +64,21 @@ An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fi
 and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
 back. A database with application objects but no migration marker is refused.
 
-A database still carrying `alembic_version` is adopted only when it is at exactly
-`0128_category_path_on_legacy_rename` and has the baseline fingerprint. Adoption drops
-`alembic_version`, records `0001_baseline` and appends a `version_changed`/`stamp` audit event.
-Anything else fails closed. Run `bun run db:drift-check` first: it is read-only against the
-checked database, prints the revision and both fingerprints, and on a mismatch lists the names of
-the differing objects (it builds the baseline in a temporary database on the same server and
-drops it).
+A database still carrying `alembic_version` is adopted when it is at
+`0126_income_recognition_check_name`, `0127_bank_chronology` or
+`0128_category_path_on_legacy_rename`. Below `0128`, the missing steps run first from the frozen
+SQL in `db/alembic-bridge/`, each with a `revision_applied` audit event
+([[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]]). The catalog fingerprint must then
+equal the baseline's. Adoption drops `alembic_version`, records `0001_baseline` and appends a
+`version_changed`/`stamp` audit event, all in one transaction. Anything else fails closed.
+
+Run `bun run db:drift-check` first. It reads the database URL from Vision's `runtime.env`
+(default `~/Library/Application Support/Vision/native/vision/runtime.env`, or `--env-file <path>`),
+so Vision must be running; `--from-env` uses `DATABASE_URL_MIGRATIONS`/`DATABASE_URL` instead
+(Bun loads a checkout's `.env` automatically, so this is opt-in). It runs any bridge steps in a
+transaction it rolls back, prints the revision and both fingerprints, and on a mismatch lists the
+names of the differing objects (it builds the baseline in a temporary database on the same server
+and drops it). The checked database does not change.
 
 ## Creating a migration
 

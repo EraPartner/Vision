@@ -70,6 +70,10 @@ Tor's database is the only one, and it is at `0128_category_path_on_legacy_renam
   TypeScript. The Python CI jobs (type check, dependency audit, destructive-migration check) are
   removed; migration SQL is linted by squawk inside an existing job.
 
+> [!note] Amended by [[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]] (2026-10-19)
+> The installed database was at `0126`, not `0128`. Adoption also accepts `0126` and `0127` by
+> applying the frozen `0127` and `0128` SQL first, then requiring the baseline fingerprint.
+
 ## Consequences
 
 - Development, CI and the Mac build need no Python. The app bundle no longer ships a PyInstaller

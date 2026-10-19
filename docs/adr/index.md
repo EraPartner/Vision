@@ -271,6 +271,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Adopt Alembic 0126 and 0127 through a bridge (accepted)
+
+[[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]] amends ADR-222: a database stopped at
+Alembic `0126` or `0127` gets the frozen `0127`/`0128` SQL from `db/alembic-bridge/` before the
+fingerprint check. Electron reports a backend startup failure instead of polling for minutes.
+
 ### 2026-10-19: TypeScript migrations with Kysely; one squashed baseline (accepted)
 
 [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] removes Python, Alembic and the

@@ -862,6 +862,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * The message of the backend's last "Failed to start application" log line,
+ * so the shell can show why startup stopped instead of polling until timeout.
+ */
+export function lastStartupError(log: string): string | undefined {
+  const line = log
+    .split("\n")
+    .reverse()
+    .find((entry) => entry.includes("Failed to start application"));
+  const json = line?.slice(line.indexOf("{"));
+  if (!json?.startsWith("{")) return undefined;
+  try {
+    const error = (JSON.parse(json) as { error?: unknown }).error;
+    return typeof error === "string" && error ? error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function isDetailedHealthReady(result: unknown): boolean {
   return (
     optionalFieldsOf(optionalFieldsOf(result)?.database)?.connected === true
@@ -1404,6 +1423,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   });
   let tools: NativeTools | undefined;
   let child: SpawnedChild | undefined;
+  // Set when the backend started by start() exits; cleared by the next start().
+  let backendExit: { code: number | null | undefined } | undefined;
   let postgresChild: SpawnedChild | undefined;
   let newClusterCreatedThisLaunch = false;
   let restoreSwitchOwnedThisLaunch = false;
@@ -2341,6 +2362,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       syntheticOffline: options.syntheticOffline === true,
     });
     const logFd = fs.openSync(paths.backendLog, "a", 0o600);
+    backendExit = undefined;
     child = spawnProcess(command.bin, validateArgs(command.args), {
       cwd: command.cwd,
       env,
@@ -2356,7 +2378,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       startedAt: new Date().toISOString(),
       command: path.basename(command.bin),
     });
+    const spawned = child;
     child.once("exit", async () => {
+      if (child === spawned) backendExit = { code: spawned.exitCode };
       const recorded = await readJson(paths.pid).catch(() => undefined);
       if (optionalFieldsOf(recorded)?.pid === childPid)
         await fs.promises.unlink(paths.pid).catch(() => {});
@@ -2368,6 +2392,18 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       port,
       database: config.database,
     };
+  }
+
+  /** Why the backend from the last start() exited, or undefined while it runs. */
+  async function backendStartupFailure(): Promise<string | undefined> {
+    if (!backendExit) return undefined;
+    const log = await fs.promises
+      .readFile(paths.backendLog, "utf8")
+      .catch(() => "");
+    return (
+      lastStartupError(log.slice(-65_536)) ??
+      `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`
+    );
   }
 
   function auditRequest(
@@ -3745,6 +3781,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     readState,
     writeState,
     start,
+    backendStartupFailure,
     verifyAuditHistory,
     enrollExistingAuditHistory,
     exportProtectedAuditTransfer,
