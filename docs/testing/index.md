@@ -223,6 +223,10 @@ bun vitest run src/path/to/test.test.js
 
 **Details:** [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|Phase F6 in Test Inventory]]
 
+> [!note] Removed 2026-10-19
+> `test:mutation`, `stryker.config.json` and the Stryker dev dependencies were removed: the
+> command was never in CI and no longer started under Bun (its TypeScript checker plugin did not load).
+
 ## Coverage Update (2026-04-11)
 
 - Targeted backend coverage was added for currency conversion fallback behavior and planned/transaction route patch validation branches.

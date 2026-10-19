@@ -880,6 +880,10 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **Not in CI yet:** opt-in via `bun run test:mutation` from `apps/frontend`. First baseline run before deciding whether to gate.
 
+> [!note] Removed 2026-10-19
+> `test:mutation`, `stryker.config.json` and the Stryker dev dependencies were removed: the
+> command was never in CI and no longer started under Bun (its TypeScript checker plugin did not load).
+
 **Coverage delta this phase:** baseline 1219 → **1233** vitest tests (+14 from F5);; +mutation harness (F6).
 
 ### Edge-Coverage Sweep (2026-05-02 — Phase E16)

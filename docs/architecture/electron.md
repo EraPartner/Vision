@@ -1195,6 +1195,9 @@ Every attempt keeps `--frozen-lockfile` and Bun's integrity verification enabled
 not rewrite the lockfile, clear the cache, or bypass a mismatch; a persistent failure still stops
 the image build after the third attempt.
 
+The Dockerfiles are gone, and `scripts/bun-install-with-retry.sh` was removed in October 2026
+because nothing called it any more.
+
 ### Quit and Runtime Lifecycle (June–August 2026)
 
 The `will-quit` handler delegates shutdown to the native runtime. It sends a

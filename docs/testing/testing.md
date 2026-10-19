@@ -1288,11 +1288,14 @@ See [[docs/testing/test-inventory#phase-f5--property--chaos-tests-2026-05-02|Pha
 
 See [[docs/testing/test-inventory#phase-f6--mutation-testing-stryker-2026-05-02|Phase F6 in Test Inventory]]
 
+> [!note] Removed 2026-10-19
+> `test:mutation`, `stryker.config.json` and the Stryker dev dependencies were removed: the
+> command was never in CI and no longer started under Bun (its TypeScript checker plugin did not load).
+
 ### Next Steps (Phase E+)
 
 - Coverage expansion beyond 17% statements (Phase E goal: 25%+)
 - Additional component-integration tests for complex pages (Settings, Analytics, etc.)
-- Mutation testing scope expansion (identify low-kill modules from baseline run)
 
 Reference: [[docs/testing/frontend-component-integration|Component-Integration Test Guide]], [[docs/testing/test-inventory|Test Inventory]], [[docs/reference/scripts|Scripts Reference]], [[apps/frontend/src/test-setup.ts]], [[apps/frontend/src/test/msw/handlers.ts]], [[apps/frontend/src/test/msw/contracts.test.ts]], [[apps/frontend/stryker.config.json]]
 

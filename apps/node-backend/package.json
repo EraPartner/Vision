@@ -9,7 +9,6 @@
     "start": "bun run src/main.ts",
     "dev": "VISION_DEV=true bun --watch src/main.ts",
     "test": "bun vitest run",
-    "test:watch": "VISION_RUN_PERFORMANCE_PROBES=${VISION_RUN_PERFORMANCE_PROBES:-1} VISION_RUN_AUDIT_PERFORMANCE=${VISION_RUN_AUDIT_PERFORMANCE:-1} VISION_TEST_DB_WATCH=1 ../../scripts/with-test-db.sh",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json && tsc -p tsconfig.scripts.json"
