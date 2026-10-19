@@ -48,6 +48,11 @@ if database_url.startswith("sqlite") and not database_url.startswith("sqlite:///
     default_db_path = os.path.join(config_dir, "financial_transactions.db")
     database_url = f"sqlite:///{default_db_path}"
 
+# SQLAlchemy 2.1 maps a bare postgresql:// URL to psycopg 3, but the toolchain
+# ships psycopg2 (config/requirements.txt), so pin the driver explicitly.
+if database_url.startswith("postgresql://"):
+    database_url = "postgresql+psycopg2://" + database_url[len("postgresql://") :]
+
 # The backend is Node.js; there are no Python SQLAlchemy models to import.
 # Migrations are hand-written SQL, so --autogenerate is not supported.
 target_metadata = None
