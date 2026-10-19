@@ -412,14 +412,22 @@ public struct NetWorthView: View {
         (value > 0 ? "+" : "") + VisionFormat.percent(value, locale: settings.numberFormat.locale)
     }
     private func tick(_ day: String) -> String {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.calendar = Calendar(identifier: .gregorian)
-        parser.dateFormat = "yyyy-MM-dd"
+        let parser = FormatterCache.shared("netWorth.day") {
+            let made = DateFormatter()
+            made.locale = Locale(identifier: "en_US_POSIX")
+            made.calendar = Calendar(identifier: .gregorian)
+            made.dateFormat = "yyyy-MM-dd"
+            return made
+        }
         guard let date = parser.date(from: day) else { return day }
-        let formatter = DateFormatter()
-        formatter.locale = LanguageLocale.locale(shell.strings.language)
-        formatter.dateFormat = [.month, .quarter, .halfYear].contains(model.period) ? "d MMM" : "MMM yy"
+        let locale = LanguageLocale.locale(shell.strings.language)
+        let format = [.month, .quarter, .halfYear].contains(model.period) ? "d MMM" : "MMM yy"
+        let formatter = FormatterCache.shared("netWorth.tick|\(locale.identifier)|\(format)") {
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateFormat = format
+            return made
+        }
         return formatter.string(from: date)
     }
     private func money(_ amount: Decimal) -> String {

@@ -309,9 +309,13 @@ private struct ResearchNewsRow: View {
                 interactive && hovered ? theme.foreground.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: 6))
     }
     private func relative(_ milliseconds: Decimal) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = LanguageLocale.locale(shell.strings.language)
-        formatter.unitsStyle = .abbreviated
+        let locale = LanguageLocale.locale(shell.strings.language)
+        let formatter = FormatterCache.shared("relative.abbreviated|\(locale.identifier)") {
+            let made = RelativeDateTimeFormatter()
+            made.locale = locale
+            made.unitsStyle = .abbreviated
+            return made
+        }
         return formatter.localizedString(
             for: Date(timeIntervalSince1970: NSDecimalNumber(decimal: milliseconds / 1000).doubleValue),
             relativeTo: Date())

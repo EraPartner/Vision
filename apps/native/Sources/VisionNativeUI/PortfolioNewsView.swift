@@ -74,9 +74,13 @@ struct PortfolioNewsView: View {
         }
     }
     private func relative(_ milliseconds: Decimal) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = LanguageLocale.locale(shell.strings.language)
-        formatter.unitsStyle = .abbreviated
+        let locale = LanguageLocale.locale(shell.strings.language)
+        let formatter = FormatterCache.shared("relative.abbreviated|\(locale.identifier)") {
+            let made = RelativeDateTimeFormatter()
+            made.locale = locale
+            made.unitsStyle = .abbreviated
+            return made
+        }
         let seconds = NSDecimalNumber(decimal: milliseconds / 1000).doubleValue
         return formatter.localizedString(for: Date(timeIntervalSince1970: seconds), relativeTo: Date())
     }

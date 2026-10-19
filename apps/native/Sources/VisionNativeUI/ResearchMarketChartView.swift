@@ -139,11 +139,17 @@ struct ResearchMarketChartView: View {
         }
     }
     private func tick(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = shell.settings.numberFormat.locale
-        formatter.setLocalizedDateFormatFromTemplate(
-            range == "1d" ? "jm" : ["1y", "5y", "max"].contains(range) ? "MMMyy" : "dMMM")
-        if range == "1d", formatter.dateFormat.hasPrefix("h:") { formatter.dateFormat = "h" + formatter.dateFormat }
+        let locale = shell.settings.numberFormat.locale
+        let template = range == "1d" ? "jm" : ["1y", "5y", "max"].contains(range) ? "MMMyy" : "dMMM"
+        let formatter = FormatterCache.shared("researchMarket.tick|\(locale.identifier)|\(template)") {
+            let made = DateFormatter()
+            made.locale = locale
+            made.setLocalizedDateFormatFromTemplate(template)
+            if template == "jm", made.dateFormat.hasPrefix("h:") {
+                made.dateFormat = "h" + made.dateFormat
+            }
+            return made
+        }
         return formatter.string(from: date)
     }
     private func select(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) {

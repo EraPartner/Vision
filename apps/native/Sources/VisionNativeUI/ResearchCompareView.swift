@@ -128,6 +128,15 @@ enum ResearchCompareStyle {
     }
     static func fixed(_ value: Decimal?, digits: Int = 2) -> String {
         guard let value, !value.isNaN else { return "—" }
+        let formatter = fixedFormatters.indices.contains(digits) ? fixedFormatters[digits] : fixedFormatter(digits)
+        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? VisionFormat.plain(value)
+    }
+    /// Table cells format one value each; the common digit counts reuse prebuilt formatters,
+    /// which are never mutated after creation (NumberFormatter is thread-safe for formatting).
+    private nonisolated(unsafe) static let fixedFormatters: [NumberFormatter] = (0...4).map {
+        ResearchCompareStyle.fixedFormatter($0)
+    }
+    private static func fixedFormatter(_ digits: Int) -> NumberFormatter {
         let formatter = NumberFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.numberStyle = .decimal
@@ -135,7 +144,7 @@ enum ResearchCompareStyle {
         formatter.minimumFractionDigits = digits
         formatter.maximumFractionDigits = digits
         formatter.roundingMode = .halfUp
-        return formatter.string(from: NSDecimalNumber(decimal: value)) ?? VisionFormat.plain(value)
+        return formatter
     }
     static func percent(_ value: Decimal?, settings: NativeAppSettings, signed: Bool = false) -> String {
         guard let value, !value.isNaN else { return "—" }

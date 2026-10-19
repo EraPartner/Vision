@@ -15,8 +15,10 @@ public struct ShellRootView<WebContent: View>: View {
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
     /// The landing point at the top of a native screen (`<main>` for the skip link).
     @FocusState private var contentFocused: Bool
-    /// The page-level scroll offset of the current native screen (the topbar's title).
-    @State private var pageScroll: CGFloat = 0
+    /// Whether the current native screen has scrolled past the topbar title threshold. Only
+    /// the crossing is stored: a per-pixel offset here would re-run the whole shell body (and
+    /// re-diff the sidebar) on every scroll tick and every resize frame of the sidebar animation.
+    @State private var pageScrolled = false
     /// The titlebar strip the topbar occupies.
     @State private var titlebarHeight: CGFloat = 28
     @Environment(\.scenePhase) private var scenePhase
@@ -59,7 +61,7 @@ public struct ShellRootView<WebContent: View>: View {
                         NativeScreenContainer(screen: screen, model: model)
                             .safeAreaInset(edge: .top, spacing: 0) { shellBanners }
                             .overlay(alignment: .topLeading) { contentLanding }
-                            .background { PageScrollObserver { pageScroll = $0 } }
+                            .background { PageScrollObserver { pageScrollDidChange($0) } }
                             .environment(\.colorScheme, theme.colorScheme)
                             // The mounted destination receives cold CSV/new-transaction intents.
                             .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
@@ -82,13 +84,16 @@ public struct ShellRootView<WebContent: View>: View {
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
         .overlay(alignment: .top) {
             if isNativeDetail {
-                NativeTopbar(
-                    model: model, height: titlebarHeight, scrolled: pageScroll > NativeTopbar.titleThreshold
-                )
-                .ignoresSafeArea(.container, edges: .top)
+                NativeTopbar(model: model, height: titlebarHeight, scrolled: pageScrolled)
+                    .ignoresSafeArea(.container, edges: .top)
             }
         }
-        .onChange(of: model.route.path) { pageScroll = 0 }
+        .onChange(of: model.route.path) { pageScrolled = false }
+    }
+
+    private func pageScrollDidChange(_ offset: CGFloat) {
+        let scrolled = offset > NativeTopbar.titleThreshold
+        if scrolled != pageScrolled { pageScrolled = scrolled }
     }
 
     private func unavailableView(_ theme: VisionTheme) -> some View {
