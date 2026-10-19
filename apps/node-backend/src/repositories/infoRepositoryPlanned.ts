@@ -3,7 +3,8 @@
  */
 
 import type { Decimal } from "decimal.js";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import { plannedTransactionListRowSchema } from "../database/rowSchemas.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
@@ -139,7 +140,9 @@ export const plannedRepository = {
       .split("-")
       .map((s) => parseInt(s, 10));
 
-    const sql = `
+    const plannedRows = await checkedRows(
+      plannedTransactionListRowSchema,
+      sql`
       SELECT pt.*, COALESCE(pr.name, r.name) AS recipient_name,
              -- Same 3-level resolution as plannedTransactionRepository (and as
              -- transactionRepository's CATEGORY_NAME_SQL): own (c) → recipient
@@ -164,15 +167,11 @@ export const plannedRepository = {
         AND pt.is_executed = false
         AND (
           (pt.is_recurring = true)
-          OR (pt.planned_date >= $1 AND pt.planned_date < $2)
+          OR (pt.planned_date >= ${startYmd} AND pt.planned_date < ${endYmd})
         )
       ORDER BY pt.planned_date ASC
-    `;
-
-    const plannedRows = await queryRows(plannedTransactionListRowSchema, sql, [
-      startYmd,
-      endYmd,
-    ]);
+    `,
+    );
 
     // A planned row without a stored rate is left out of every day and the
     // summary, and counted (rows, like GET /api/planned-transactions/totals).

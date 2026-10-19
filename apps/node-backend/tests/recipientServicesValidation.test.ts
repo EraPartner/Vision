@@ -82,17 +82,17 @@ describe("updatePattern — validates the row merged with stored values", () => 
 describe("mergeRecipients — flattens nested alias chains", () => {
   it("locks the entire participant set in order before any repoint", async () => {
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("FOR UPDATE"))
+      if (/for update/i.test(sql))
         return { rows: [{ id: 4, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
       return { rows: [], rowCount: 0 };
     });
     await mergeRecipients(asRecipientId(4), [asRecipientId(9), asRecipientId(2), asRecipientId(9)]);
     const lock = mockClient.query.mock.calls.find(([sql]) =>
-      sql.includes("FOR UPDATE"),
+      /for update/i.test(sql),
     );
     expect(lock![0]).toContain("primary_recipient_id");
-    expect(lock![0]).toContain("ORDER BY id FOR UPDATE");
+    expect(lock![0]).toMatch(/order by "?id"? for update/i);
     expect(lock![1]).toEqual([[2, 4, 9]]);
     const lockIndex = mockClient.query.mock.calls.indexOf(lock!);
     const writeIndex = mockClient.query.mock.calls.findIndex(([sql]) =>
@@ -103,7 +103,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
 
   it("rejects a target that became an alias while waiting, before any write", async () => {
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("FOR UPDATE"))
+      if (/for update/i.test(sql))
         return { rows: [{ id: 2, primary_recipient_id: 1 }] };
       return { rows: [] };
     });
@@ -112,7 +112,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     });
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        /^\s*(UPDATE|DELETE)\b/.test(sql),
+        /^\s*(UPDATE|DELETE)\b/i.test(sql),
       ),
     ).toBe(false);
     expect(withTransaction).toHaveBeenCalledTimes(1);
@@ -123,7 +123,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     await expect(mergeRecipients(asRecipientId(2), [asRecipientId(3)])).rejects.toBeInstanceOf(NotFoundError);
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        /^\s*(UPDATE|DELETE)\b/.test(sql),
+        /^\s*(UPDATE|DELETE)\b/i.test(sql),
       ),
     ).toBe(false);
   });
@@ -132,10 +132,10 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     const sqls: string[] = [];
     mockClient.query.mockImplementation(async (sql) => {
       sqls.push(sql);
-      if (sql.includes("FOR UPDATE"))
+      if (/for update/i.test(sql))
         return { rows: [{ id: 1, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
-      if (sql.includes("RETURNING id")) return { rows: [{ id: 3 }] };
+      if (/returning "?id"?/i.test(sql)) return { rows: [{ id: 3 }] };
       return { rows: [], rowCount: 0 };
     });
 
@@ -145,8 +145,8 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     // (distinct from the alias flag update which keys on id = ANY(...)).
     const grandchild = sqls.find(
       (s) =>
-        /SET\s+primary_recipient_id = \$1/.test(s) &&
-        /WHERE primary_recipient_id = ANY\(\$2::int\[\]\)/.test(s),
+        /set\s+"?primary_recipient_id"? = \$\d+/i.test(s) &&
+        /where "?primary_recipient_id"? = ANY\(\$\d+::int\[\]\)/i.test(s),
     );
     expect(grandchild).toBeTruthy();
   });
@@ -155,10 +155,10 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     const paramsBySql: [string, unknown][] = [];
     mockClient.query.mockImplementation(async (sql, params) => {
       paramsBySql.push([sql, params]);
-      if (sql.includes("FOR UPDATE"))
+      if (/for update/i.test(sql))
         return { rows: [{ id: 1, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
-      if (sql.includes("RETURNING id")) return { rows: [{ id: 3 }] };
+      if (/returning "?id"?/i.test(sql)) return { rows: [{ id: 3 }] };
       return { rows: [], rowCount: 0 };
     });
 

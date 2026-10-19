@@ -2,6 +2,8 @@
  * Info sub-repository: net worth from portfolio snapshots + bank balances.
  */
 
+import { sql } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import { queryRows } from "../database/rowContracts.ts";
 import {
   firstDataDateRowSchema,
@@ -37,7 +39,10 @@ import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
 import { nanToZero } from "../lib/math.ts";
 import { currencyOrEur } from "../lib/currencyCode.ts";
 
+// Two spellings of one list: the queries that splice accountBalanceSql's
+// string fragments still need the text form.
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
+const HOLDINGS_ONLY_ACCOUNT_TYPES = sql`'crypto_exchange', 'wallet'`;
 
 // ── Shared row-level resolution ────────────────────────────────────────────
 // Both of these read `transactions.account_id` and nothing else, exactly like
@@ -60,12 +65,12 @@ const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
  * detaches account_id. They stay counted because nothing attributes them to a
  * excluded account.
  */
-const NOT_TRACKING_ONLY = `
+const NOT_TRACKING_ONLY = sql`
             AND NOT EXISTS (
               SELECT 1 FROM accounts a
               WHERE a.id = t.account_id
                 AND (a.in_net_worth = false
-                     OR a.type IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL}))
+                     OR a.type IN (${HOLDINGS_ONLY_ACCOUNT_TYPES}))
             )`;
 
 /**
@@ -82,7 +87,7 @@ const NOT_TRACKING_ONLY = `
  * `netWorth = liquid + liabilities + investments` is identical either way — only
  * the presentational split between the two buckets moves.
  */
-const IS_LIABILITY_BY_ACCOUNT = `
+const IS_LIABILITY_BY_ACCOUNT = sql`
             COALESCE(
               (SELECT a.type = 'liability' FROM accounts a WHERE a.id = t.account_id),
               false
@@ -92,7 +97,7 @@ const IS_LIABILITY_BY_ACCOUNT = `
  * Whether the history WALK — not the transaction-flow fallback — is the thing
  * that will answer this request. Emits a `walk(answers boolean)` CTE; splice it
  * as the FIRST member of a WITH chain and read it as `(SELECT answers FROM walk)`.
- * Takes the end bound (app-timezone today) as `$2`.
+ * Takes the end bound (app-timezone today) as `endYmd`.
  *
  * The runtime gate is `bankHistoryConverted.length === 0` — i.e. "the walk
  * produced no rows". This predicate is that gate decided in advance, and it is
@@ -111,7 +116,8 @@ const IS_LIABILITY_BY_ACCOUNT = `
  * FUTURE-dated would be counted as "the walk answers" when the walk in fact sees
  * nothing and the fallback is what runs.
  */
-const WALK_ANSWERS_CTE = `
+function walkAnswersCte(endYmd: string) {
+  return sql`
       walk AS (
         SELECT EXISTS (
           SELECT 1
@@ -119,14 +125,15 @@ const WALK_ANSWERS_CTE = `
           JOIN accounts a ON a.id = t.account_id
           WHERE t.is_active = true
             AND a.in_net_worth = true
-            AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
-            AND t.date <= $2::date
+            AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES})
+            AND t.date <= ${endYmd}::date
         ) AS answers
       )`;
+}
 
 /**
  * Excludes rows the walk cannot value — those with a NULL `account_id` — but
- * ONLY when {@link WALK_ANSWERS_CTE} says the walk is what answers. Requires
+ * ONLY when {@link walkAnswersCte} says the walk is what answers. Requires
  * the transactions alias to be `t`; splices onto an existing WHERE.
  *
  * This is the other half of {@link NOT_TRACKING_ONLY}, and it has to be
@@ -143,9 +150,9 @@ const WALK_ANSWERS_CTE = `
  * `monthlyChangePercent` 0, and the +7.00 never counted in any snapshot).
  *
  * So the exclusion is gated on which path will answer, which the probe CAN know:
- * see {@link WALK_ANSWERS_CTE}.
+ * see {@link walkAnswersCte}.
  */
-const ATTRIBUTED_WHEN_WALK_ANSWERS = `
+const ATTRIBUTED_WHEN_WALK_ANSWERS = sql`
             AND (t.account_id IS NOT NULL OR NOT (SELECT answers FROM walk))`;
 
 export const netWorthRepository = {
@@ -200,20 +207,19 @@ export const netWorthRepository = {
     // `ATTRIBUTED_WHEN_WALK_ANSWERS` closes the same hole for the OTHER kind of
     // row the answering path cannot value — the unattributed (NULL account_id)
     // one — which is conditional rather than absolute because the fallback
-    // deliberately counts those rows. See that constant and WALK_ANSWERS_CTE.
+    // deliberately counts those rows. See that constant and walkAnswersCte.
     // The active transaction arm carries it so an unattributed row cannot move
     // the start bound when the account walk is the answering path.
-    const firstDateRows = await queryRows(
+    const firstDateRows = await checkedRows(
       firstDataDateRowSchema,
-      `
-      WITH ${WALK_ANSWERS_CTE}
+      sql`
+      WITH ${walkAnswersCte(todayYmd)}
       SELECT LEAST(
-        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
+        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = ${targetCurrency}),
         (SELECT MIN(t.date)::date FROM transactions t
-          WHERE t.is_active = true AND t.date <= $2::date ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
+          WHERE t.is_active = true AND t.date <= ${todayYmd}::date ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
       )::date AS first_data_date
     `,
-      [targetCurrency, todayYmd],
     );
 
     const firstDataDate = firstDateRows[0]?.first_data_date;
@@ -238,15 +244,14 @@ export const netWorthRepository = {
       };
     }
 
-    const snapshotRows = await queryRows(
+    const snapshotRows = await checkedRows(
       snapshotInvestmentRowSchema,
-      `
+      sql`
       SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, value AS investments
       FROM portfolio_performance_snapshots
-      WHERE currency = $1
+      WHERE currency = ${targetCurrency}
       ORDER BY snapshot_date ASC
     `,
-      [targetCurrency],
     );
 
     const investmentsByDay: Record<string, number> = {};
@@ -420,11 +425,11 @@ export const netWorthRepository = {
         },
       );
 
-      const liquidFlowRows = await queryRows(
+      const liquidFlowRows = await checkedRows(
         netWorthFlowRowSchema,
-        `
+        sql`
         WITH bounds AS (
-          SELECT $1::date AS start_date, $2::date AS end_date
+          SELECT ${firstDataDateYmd}::date AS start_date, ${todayYmd}::date AS end_date
         ),
         days AS (
           SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -491,7 +496,6 @@ export const netWorthRepository = {
         FROM tx_cumulative
         ORDER BY day, currency, is_liability
       `,
-        [firstDataDateYmd, todayYmd],
       );
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(

@@ -170,15 +170,17 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     // The MoM query (2nd call) must window the previous month to the same
     // day-of-month so a partial current month isn't compared to a full prior one.
     const momSql = query.mock.calls[1]![0];
-    expect(momSql).toContain(
-      "($1::date - DATE_TRUNC('month', $1::date)::date)",
+    expect(momSql).toMatch(
+      /\(\$\d+::date - DATE_TRUNC\('month', \$\d+::date\)::date\)/,
     );
-    // "Today" is the APP_TIMEZONE day bound once (ADR-009), not CURRENT_DATE.
+    // "Today" is the APP_TIMEZONE day (ADR-009), not CURRENT_DATE: every
+    // bound value of the MoM window and the period keys is that one day.
     expect(momSql).not.toContain("CURRENT_DATE");
-    expect(query.mock.calls[1]![1]).toEqual([
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-    ]);
-    expect(query.mock.calls[2]![1]).toEqual(query.mock.calls[1]![1]);
+    const [today] = query.mock.calls[1]![1] as unknown[];
+    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    for (const call of [query.mock.calls[1]!, query.mock.calls[2]!]) {
+      expect(new Set(call[1] as unknown[])).toEqual(new Set([today]));
+    }
     // MoM converts at HISTORICAL per-date rates like every other recipient
     // surface — the no-DB guard for the fix that ended latest-rate conversion
     // here (the DB pin proves the numbers; this pins the contract).

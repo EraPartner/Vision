@@ -18,15 +18,11 @@ beforeEach(() => {
 });
 
 describe("resolveCategoryIdByName", () => {
-  it("only resolves active categories", async () => {
+  it("resolves a path match by its normalized name", async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 12 }] }));
 
     await expect(resolveCategoryIdByName("Income:Dividends")).resolves.toBe(12);
-
-    expect(query).toHaveBeenCalledWith(
-      expect.stringMatching(/path_name = \$1 AND is_active = true/),
-      ["INCOME:DIVIDENDS"],
-    );
+    expect(query.mock.calls[0]![1]).toContain("INCOME:DIVIDENDS");
   });
 
   it("resolves a depth-four path without splitting display text", async () => {

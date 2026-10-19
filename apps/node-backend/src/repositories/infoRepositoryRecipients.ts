@@ -8,7 +8,9 @@
  * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import {
   periodKeysRowSchema,
   recipientMemberRowSchema,
@@ -24,10 +26,7 @@ import {
 } from "../lib/money.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
-import {
-  buildExclusionClauses,
-  validateInt4Ids,
-} from "../lib/filterBuilder.ts";
+import { validateInt4Ids } from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   createUnconvertedTally,
@@ -35,7 +34,9 @@ import {
   unconvertedFields,
 } from "../lib/unconvertedTally.ts";
 import {
+  andClauses,
   buildPeriodPivot,
+  exclusionClauses,
   mapRowsForAmountConversion,
 } from "./infoRepositoryHelpers.ts";
 import type { PeriodPivotEntity } from "./infoRepositoryHelpers.ts";
@@ -120,6 +121,17 @@ export function periodPivotConversion(
   };
 }
 
+/** `AND t.date >= start AND t.date <= end` for whichever bounds are set. */
+function dateRange(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): RawBuilder<unknown>[] {
+  const filters: RawBuilder<unknown>[] = [];
+  if (startDate) filters.push(sql`t.date >= ${startDate}`);
+  if (endDate) filters.push(sql`t.date <= ${endDate}`);
+  return filters;
+}
+
 export const recipientInsightsRepository = {
   /**
    * Recipient / Merchant Insights
@@ -138,29 +150,17 @@ export const recipientInsightsRepository = {
       endDate,
     }: RecipientInsightsOptions = {},
   ) {
-    // Canonical exclusion semantics (lib/filterBuilder.buildExclusionClauses,
-    // shared with the dashboard / statistics endpoints): drop hidden categories
-    // (by effective category) and excluded recipients (rolled up to the primary
-    // recipient via COALESCE(r.primary_recipient_id, t.recipient_id)). Built once
-    // and reused by both queries below since neither carries any other bound
-    // parameters. The queries' own r/pr joins satisfy the helper's join contract.
-    const excl = buildExclusionClauses({
+    // Canonical exclusion semantics (shared with the dashboard / statistics
+    // endpoints): drop hidden categories (by effective category) and excluded
+    // recipients (rolled up to the primary recipient via
+    // COALESCE(r.primary_recipient_id, t.recipient_id)). Built once and reused
+    // by both queries below. The queries' own r/pr joins satisfy the helper's
+    // join contract.
+    const excl = exclusionClauses({
       excludedCategoryIds,
       excludedRecipientIds,
     });
-    const params = excl.params;
-    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-    const dateFilters: string[] = [];
-    if (startDate) {
-      params.push(startDate);
-      dateFilters.push(`t.date >= $${params.length}`);
-    }
-    if (endDate) {
-      params.push(endDate);
-      dateFilters.push(`t.date <= $${params.length}`);
-    }
-    const dateWhere =
-      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
+    const dateWhere = andClauses(dateRange(startDate, endDate));
 
     // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
     // the conversion below can use each row's OWN date rate, exactly as
@@ -171,9 +171,9 @@ export const recipientInsightsRepository = {
     // amount < 0 is pinned, so ABS distributes over the same-sign SUM and
     // SUM-then-convert per date is identical to converting each row; tx_count
     // and the MIN/MAX date bounds are re-reduced per recipient in JS below.
-    const topRawRows = await queryRows(
+    const topRawRows = await checkedRows(
       recipientTopRawRowSchema,
-      `
+      sql`
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
         COALESCE(pr.id, r.id)       AS recipient_id,
@@ -189,11 +189,10 @@ export const recipientInsightsRepository = {
       WHERE t.amount < 0
         AND t.is_active = true
         AND t.is_transfer = false
-        ${exclusionWhere}
+        ${excl.where}
         ${dateWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `,
-      params,
     );
 
     // Historical per-date rates, matching getRecipientByYear / getRecipientPivot.
@@ -280,11 +279,10 @@ export const recipientInsightsRepository = {
     // APP_TIMEZONE calendar day, bound once and reused for the period keys
     // below, as the forecast, monthly and average-vs-current cards do.
     const todayYmd = todayAppDateString();
-    const momParams = [...params, todayYmd];
-    const today = `$${momParams.length}::date`;
-    const momRawRows = await queryRows(
+    const today = sql`${todayYmd}::date`;
+    const momRawRows = await checkedRows(
       recipientMomRawRowSchema,
-      `
+      sql`
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -307,11 +305,10 @@ export const recipientInsightsRepository = {
           OR t.date <= (DATE_TRUNC('month', ${today}) - INTERVAL '1 month')::date
                        + (${today} - DATE_TRUNC('month', ${today})::date)
         )
-        ${exclusionWhere}
+        ${excl.where}
         ${dateWhere}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), TO_CHAR(t.date, 'YYYY-MM'), t.date, t.currency
     `,
-      momParams,
     );
 
     // Historical per-date rates, matching top merchants / by-year / pivot.
@@ -326,13 +323,12 @@ export const recipientInsightsRepository = {
     // Derive the current / previous month keys in the database from the same
     // bound day as the window above, so they match the
     // `TO_CHAR(t.date, 'YYYY-MM')` buckets even at a month boundary.
-    const [periodRow] = await queryRows(
+    const [periodRow] = await checkedRows(
       periodKeysRowSchema,
-      `
-      SELECT TO_CHAR($1::date, 'YYYY-MM') AS current_period,
-             TO_CHAR($1::date - INTERVAL '1 month', 'YYYY-MM') AS prev_period
+      sql`
+      SELECT TO_CHAR(${today}, 'YYYY-MM') AS current_period,
+             TO_CHAR(${today} - INTERVAL '1 month', 'YYYY-MM') AS prev_period
     `,
-      [todayYmd],
     );
     // A FROM-less SELECT always returns exactly one row.
     if (!periodRow) throw new Error("period keys query returned no row");
@@ -392,33 +388,21 @@ export const recipientInsightsRepository = {
     unconverted_count: number;
     unconverted_currencies: string[];
   }> {
-    // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
-    // Category exclusion (incl. hidden categories) must apply here too, or the
-    // year-filtered Top Recipients view contradicts the "All years" view (which
-    // does exclude them).
-    const excl = buildExclusionClauses({
+    // Canonical exclusion clauses. Category exclusion (incl. hidden
+    // categories) must apply here too, or the year-filtered Top Recipients view
+    // contradicts the "All years" view (which does exclude them).
+    const excl = exclusionClauses({
       excludedCategoryIds,
       excludedRecipientIds,
     });
-    const params = excl.params;
-    const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-    const dateFilters: string[] = [];
-    if (startDate) {
-      params.push(startDate);
-      dateFilters.push(`t.date >= $${params.length}`);
-    }
-    if (endDate) {
-      params.push(endDate);
-      dateFilters.push(`t.date <= $${params.length}`);
-    }
-    const dateWhere =
-      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
     // same-sign SUM and converting at each row's date rate is identical to the
     // old per-transaction loop; cnt preserves transactionCount.
-    const sql = `
+    const rows = await checkedRows(
+      recipientYearRowSchema,
+      sql`
       SELECT
         EXTRACT(YEAR FROM t.date)::int AS year,
         COALESCE(pr.id, r.id) AS recipient_id,
@@ -432,12 +416,11 @@ export const recipientInsightsRepository = {
       WHERE t.is_active = true
         AND t.amount < 0
         AND t.is_transfer = false
-        ${exclusionWhere}
-        ${dateWhere}
+        ${excl.where}
+        ${andClauses(dateRange(startDate, endDate))}
       GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
-    `;
-
-    const rows = await queryRows(recipientYearRowSchema, sql, params);
+    `,
+    );
 
     const { converted, unconverted } = partitionConvertedRows(
       await convertRowsToEur(
@@ -489,47 +472,33 @@ export const recipientInsightsRepository = {
     endDate = null,
     recipientIds = null,
   }: RecipientPivotOptions = {}): Promise<RecipientPivotResult> {
-    // Canonical recipient exclusion (lib/filterBuilder.buildExclusionClauses).
-    const excl = buildExclusionClauses({ excludedRecipientIds });
-    const params = excl.params;
-    const recExclude = excl.whereSql ? `AND ${excl.whereSql}` : "";
+    // Canonical recipient exclusion.
+    const excl = exclusionClauses({ excludedRecipientIds });
 
     const periodExpr =
       bucket === "yearly"
-        ? "TO_CHAR(t.date, 'YYYY')"
-        : "TO_CHAR(t.date, 'YYYY-MM')";
-
-    const dateFilters: string[] = [];
-    if (startDate) {
-      params.push(startDate);
-      dateFilters.push(`t.date >= $${params.length}`);
-    }
-    if (endDate) {
-      params.push(endDate);
-      dateFilters.push(`t.date <= $${params.length}`);
-    }
-    const dateWhere = dateFilters.length > 0 ? dateFilters.join(" AND ") : "";
+        ? sql`TO_CHAR(t.date, 'YYYY')`
+        : sql`TO_CHAR(t.date, 'YYYY-MM')`;
 
     // Optional inclusion narrowing: the only consumer (saved CustomChart) renders
     // a handful of selected recipients, so resolve their alias members and scan
     // ONLY those rows (hits idx_transactions_recipient_date_active) instead of
     // every active expense row for all recipients. See ADR-041 amendment.
-    let recipientInclude = "";
+    let recipientInclude = sql``;
     const validIncludeIds = validateInt4Ids(recipientIds, "recipientIds");
     if (validIncludeIds.length > 0) {
-      const memberRows = await queryRows(
+      const memberRows = await checkedRows(
         recipientMemberRowSchema,
-        `WITH selected_roots AS (
+        sql`WITH selected_roots AS (
            SELECT DISTINCT COALESCE(primary_recipient_id, id) AS id
            FROM recipients
-           WHERE id = ANY($1::int[])
+           WHERE id = ANY(${validIncludeIds}::int[])
          )
          SELECT id FROM selected_roots
          UNION
          SELECT r.id
          FROM recipients r
          JOIN selected_roots sr ON r.primary_recipient_id = sr.id`,
-        [validIncludeIds],
       );
       const memberIds = [...new Set(memberRows.map((row) => Number(row.id)))];
       if (memberIds.length === 0) {
@@ -538,15 +507,16 @@ export const recipientInsightsRepository = {
           conversion: periodPivotConversion([]),
         };
       }
-      params.push(memberIds);
-      recipientInclude = `AND t.recipient_id = ANY($${params.length}::int[])`;
+      recipientInclude = sql`AND t.recipient_id = ANY(${memberIds}::int[])`;
     }
 
     // Aggregate per (recipient, period, date, currency) in SQL. amount < 0 is
     // pinned so ABS distributes over the same-sign SUM; per-date conversion is
     // identical to the old per-row loop while collapsing same-day repeat
     // purchases at one merchant. cnt preserves transactionCount.
-    const sql = `
+    const rows = await checkedRows(
+      recipientPivotRowSchema,
+      sql`
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -560,13 +530,12 @@ export const recipientInsightsRepository = {
       WHERE t.is_active = true
         AND t.amount < 0
         AND t.is_transfer = false
-        ${recExclude}
+        ${excl.where}
         ${recipientInclude}
-        ${dateWhere ? `AND ${dateWhere}` : ""}
+        ${andClauses(dateRange(startDate, endDate))}
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), ${periodExpr}, t.date, t.currency
-    `;
-
-    const rows = await queryRows(recipientPivotRowSchema, sql, params);
+    `,
+    );
 
     const all = await convertRowsToEur(
       mapRowsForAmountConversion(rows, "abs_amount", false),

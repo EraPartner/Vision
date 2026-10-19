@@ -22,17 +22,17 @@
  *
  * 2. NO INTERPOLATED VALUES. Every runtime value reaching the SQL — the anchor
  *    date, the caller-supplied `historyMonths`/`daysBack`/`daysForward`, and
- *    the module's own `HISTORY_MONTHS` — is bound, never template-interpolated,
- *    using `make_interval(months => $n::int)` / `make_interval(days => $n::int)`
- *    for the interval arithmetic. The `Number.isInteger` + range checks stay as
- *    input validation (they answer 400 on nonsense), but they are no longer the
- *    only thing standing between a caller and injection. Exclusion params keep
- *    $1..$k (buildExclusionClauses); this file's own params are allocated after
- *    them from `excl.nextParamIdx`, and each query passes exactly the
- *    contiguous prefix of $-indices it references.
+ *    the module's own `HISTORY_MONTHS` — is bound as a Kysely `sql` parameter,
+ *    never spliced into the text, using `make_interval(months => $n::int)` /
+ *    `make_interval(days => $n::int)` for the interval arithmetic. The
+ *    `Number.isInteger` + range checks stay as input validation (they answer
+ *    400 on nonsense), but they are no longer the only thing standing between
+ *    a caller and injection.
  */
 
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import {
   categoryDailyAmountRowSchema,
   dailyAmountDomRowSchema,
@@ -51,6 +51,8 @@ import {
 import type { DecimalInput } from "../lib/money.ts";
 import { formatDateToYmd } from "../lib/dateFormat.ts";
 import {
+  EXCLUSION_JOINS,
+  exclusionClauses,
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
@@ -62,7 +64,6 @@ import {
 } from "../lib/unconvertedTally.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
-import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import {
   countObservedMonths,
   monthKeyFromDbDate,
@@ -86,6 +87,14 @@ function rowIsoDate(row: ConvertedRow): string {
 }
 
 const addMoney = (...values: DecimalInput[]) => toNumber(addAll(values));
+
+/**
+ * ADR-083: internal transfers must not inflate cash-flow aggregates unless the
+ * user opts in via the runtime `includeTransfers` setting.
+ */
+async function transferFilter(): Promise<RawBuilder<unknown>> {
+  return (await getIncludeTransfers()) ? sql`` : sql`AND t.is_transfer = false`;
+}
 
 // Sum converted rows into a sorted per-day net series (SIMP-50).
 /**
@@ -173,34 +182,21 @@ export async function getCashflowComparison(
   const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
-  // Canonical exclusion clauses (lib/filterBuilder.ts). The joins are only
-  // needed when a clause actually references r/pr, so they stay conditional.
-  const excl = buildExclusionClauses({
+  // Canonical exclusion clauses. The joins are only needed when a clause
+  // actually references r/pr, so they stay conditional.
+  const excl = exclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-  const excludeParams = excl.params;
+  const anchor = sql`${todayYmd}::date`; // the APP_TIMEZONE anchor date
 
-  // This function's own bound params, allocated AFTER the exclusion params so
-  // the exclusion numbering ($1..$k) is untouched. Each query below passes the
-  // contiguous prefix it actually references — Postgres derives the parameter
-  // count from the highest $n in the text, so a referenced-but-unsupplied (or
-  // skipped) index is an error, not a no-op.
-  const pDate = excl.nextParamIdx; // the APP_TIMEZONE anchor date
-  const pMonths = pDate + 1; // HISTORY_MONTHS
-  const anchor = `$${pDate}::date`;
-
-  // ADR-083: internal transfers must not inflate cash-flow aggregates unless
-  // the user opts in via the runtime `includeTransfers` setting. Identical
-  // predicate and identical setting read as the sibling surfaces rendered on
-  // the same dashboard (infoRepositoryAverageVsCurrent.js:22-23,
-  // infoRepositoryMonthly.js:38/194, infoRepositoryStatistics.js:19/129) —
-  // without it a checking->savings transfer's outflow leg was counted here and
-  // excluded there, so two cards on one dashboard disagreed on one fixture.
-  const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
+  // ADR-083 transfer exclusion. Identical predicate and identical setting read
+  // as the sibling surfaces rendered on the same dashboard
+  // (infoRepositoryAverageVsCurrent, infoRepositoryMonthly,
+  // infoRepositoryStatistics) — without it a checking->savings transfer's
+  // outflow leg was counted here and excluded there, so two cards on one
+  // dashboard disagreed on one fixture.
+  const transfers = await transferFilter();
 
   // Aggregate in SQL per (date, currency) rather than streaming every row to
   // Node. batchConvertGroupsWithHistoricalRateFallback converts by (currency,
@@ -208,30 +204,30 @@ export async function getCashflowComparison(
   // (date, currency) share one rate — so SUM-then-convert is identical to
   // convert-then-SUM. day_of_month/month_key are deterministic functions of the
   // grouped date column, so they remain valid in the SELECT list.
-  const sqlPast = `
+  const sqlPast = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', t.date), 'YYYY-MM') AS month_key
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => $${pMonths}::int)
+      ${transfers}
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
       AND t.date < date_trunc('month', ${anchor})
-      ${categoryExclusionWhere}
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
 
-  const sqlCurrent = `
+  const sqlCurrent = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date,
            EXTRACT(DAY FROM t.date)::int AS day_of_month
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
+      ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
       AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
-      ${categoryExclusionWhere}
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
 
@@ -241,29 +237,26 @@ export async function getCashflowComparison(
   // future intents, not reconciled bank legs, so there is no detected pair to
   // net out; a user who plans an internal transfer excludes it the pre-ADR-083
   // way, via category/recipient exclusions.
-  //
-  // These two carry no exclusion params, so they number their own from $1
-  // ($1 = the anchor date, $2 = HISTORY_MONTHS) rather than reusing `anchor`.
-  const sqlPlannedCurrent = `
+  const sqlPlannedCurrent = sql`
     SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', $1::date)
-      AND pt.planned_date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')
+      AND pt.planned_date >= date_trunc('month', ${anchor})
+      AND pt.planned_date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
     GROUP BY pt.planned_date, pt.currency
   `;
 
-  const sqlPlannedHist = `
+  const sqlPlannedHist = sql`
     SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date,
            EXTRACT(DAY FROM pt.planned_date)::int AS day_of_month,
            TO_CHAR(date_trunc('month', pt.planned_date), 'YYYY-MM') AS month_key
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
-      AND pt.planned_date < date_trunc('month', $1::date)
+      AND pt.planned_date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
+      AND pt.planned_date < date_trunc('month', ${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
 
@@ -293,11 +286,11 @@ export async function getCashflowComparison(
   // it reports and the month arithmetic below cannot straddle a rollover.
   // Unfiltered means no *predicates* — the two bound values are the window
   // itself, not a filter on the ledger.
-  const sqlLedgerStart = `
+  const sqlLedgerStart = sql`
     SELECT MIN(t.date) AS first_date
     FROM transactions t
     WHERE t.is_active = true
-      AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${HISTORY_MONTHS}::int)
   `;
 
   const [
@@ -307,21 +300,11 @@ export async function getCashflowComparison(
     plannedHistRows,
     ledgerStartRows,
   ] = await Promise.all([
-    queryRows(dailyAmountMonthRowSchema, sqlPast, [
-      ...excludeParams,
-      todayYmd,
-      HISTORY_MONTHS,
-    ]),
-    queryRows(dailyAmountDomRowSchema, sqlCurrent, [
-      ...excludeParams,
-      todayYmd,
-    ]),
-    queryRows(plannedDailyAmountDomRowSchema, sqlPlannedCurrent, [todayYmd]),
-    queryRows(plannedDailyAmountMonthRowSchema, sqlPlannedHist, [
-      todayYmd,
-      HISTORY_MONTHS,
-    ]),
-    queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
+    checkedRows(dailyAmountMonthRowSchema, sqlPast),
+    checkedRows(dailyAmountDomRowSchema, sqlCurrent),
+    checkedRows(plannedDailyAmountDomRowSchema, sqlPlannedCurrent),
+    checkedRows(plannedDailyAmountMonthRowSchema, sqlPlannedHist),
+    checkedRows(ledgerStartRowSchema, sqlLedgerStart),
   ]);
 
   // Groups without a stored rate are left out and counted (transactions).
@@ -477,84 +460,68 @@ export async function getCashflowForecastData(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.ts); joins stay conditional.
-  const excl = buildExclusionClauses({
+  // Canonical exclusion clauses; joins stay conditional.
+  const excl = exclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-  const excludeParams = excl.params;
-
-  // Own bound params, allocated after the exclusion params (convention 2).
-  const pDate = excl.nextParamIdx;
-  const pMonths = pDate + 1;
-  const anchor = `$${pDate}::date`;
+  const anchor = sql`${todayYmd}::date`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
-  const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
+  const transfers = await transferFilter();
 
   // GROUP BY (date, currency) in SQL — aggregateByDate re-buckets by date and
   // conversion is per (currency, date), so this is identical to the old per-row
   // stream (see getCashflowComparison for the full rationale).
-  const sqlHistory = `
+  const sqlHistory = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => $${pMonths}::int)
+      ${transfers}
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
       AND t.date < date_trunc('month', ${anchor})
-      ${categoryExclusionWhere}
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
-  const sqlCurrent = `
+  const sqlCurrent = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
+      ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
       AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
-      ${categoryExclusionWhere}
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
   // No transfer predicate on the planned overlays: planned_transactions has no
-  // `is_transfer` column (ADR-083 flagged `transactions` only). No exclusion
-  // params either, so these two number their own from $1.
-  const sqlPlannedCurrent = `
+  // `is_transfer` column (ADR-083 flagged `transactions` only).
+  const sqlPlannedCurrent = sql`
     SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', $1::date)
-      AND pt.planned_date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')
+      AND pt.planned_date >= date_trunc('month', ${anchor})
+      AND pt.planned_date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
     GROUP BY pt.planned_date, pt.currency
   `;
-  const sqlPlannedHist = `
+  const sqlPlannedHist = sql`
     SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
-      AND pt.planned_date < date_trunc('month', $1::date)
+      AND pt.planned_date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
+      AND pt.planned_date < date_trunc('month', ${anchor})
     GROUP BY pt.planned_date, pt.currency
   `;
 
   const [histRows, currentRows, plannedCurRows, plannedHistRows] =
     await Promise.all([
-      queryRows(dailyAmountRowSchema, sqlHistory, [
-        ...excludeParams,
-        todayYmd,
-        historyMonths,
-      ]),
-      queryRows(dailyAmountRowSchema, sqlCurrent, [...excludeParams, todayYmd]),
-      queryRows(dailyAmountRowSchema, sqlPlannedCurrent, [todayYmd]),
-      queryRows(dailyAmountRowSchema, sqlPlannedHist, [
-        todayYmd,
-        historyMonths,
-      ]),
+      checkedRows(dailyAmountRowSchema, sqlHistory),
+      checkedRows(dailyAmountRowSchema, sqlCurrent),
+      checkedRows(dailyAmountRowSchema, sqlPlannedCurrent),
+      checkedRows(dailyAmountRowSchema, sqlPlannedHist),
     ]);
 
   // Groups without a stored rate are left out and counted (transactions).
@@ -614,78 +581,56 @@ export async function getCashflowForecastDataRolling(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.ts); joins stay conditional.
-  const excl = buildExclusionClauses({
+  // Canonical exclusion clauses; joins stay conditional.
+  const excl = exclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const categoryExclusionJoin = excl.whereSql ? excl.joinSql : "";
-  const categoryExclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-  const excludeParams = excl.params;
-
-  // Own bound params, allocated after the exclusion params (convention 2).
-  const pDate = excl.nextParamIdx;
-  const pDaysBack = pDate + 1;
-  const pMonths = pDate + 2;
-  const pDaysForward = pDate + 2;
-  const anchor = `$${pDate}::date`;
-  const rollingStart = `(${anchor} - make_interval(days => $${pDaysBack}::int))`;
+  const anchor = sql`${todayYmd}::date`;
+  const rollingStart = sql`(${anchor} - make_interval(days => ${daysBack}::int))`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
-  const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
+  const transfers = await transferFilter();
 
   // History ends at `today - daysBack` (exclusive) so it never overlaps with currentActual.
   // GROUP BY (date, currency) — identical to the old per-row stream (aggregateByDate re-buckets by date).
-  const sqlHistory = `
+  const sqlHistory = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
-      AND t.date >= ${rollingStart} - make_interval(months => $${pMonths}::int)
+      ${transfers}
+      AND t.date >= ${rollingStart} - make_interval(months => ${historyMonths}::int)
       AND t.date < ${rollingStart}
-      ${categoryExclusionWhere}
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
-  const sqlCurrent = `
+  const sqlCurrent = sql`
     SELECT SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency, t.date
     FROM transactions t
-    ${categoryExclusionJoin}
+    ${excl.joins}
     WHERE t.is_active = true
-      ${transferFilter}
+      ${transfers}
       AND t.date >= ${rollingStart}
-      AND t.date <= (${anchor} + make_interval(days => $${pDaysForward}::int))
-      ${categoryExclusionWhere}
+      AND t.date <= (${anchor} + make_interval(days => ${daysForward}::int))
+      ${excl.where}
     GROUP BY t.date, t.currency
   `;
   // No transfer predicate — planned_transactions has no `is_transfer` column.
-  // No exclusion params either, so this one numbers its own from $1
-  // ($1 = the anchor date, $2 = daysForward).
-  const sqlPlannedFuture = `
+  const sqlPlannedFuture = sql`
     SELECT SUM(pt.amount) AS amount, COUNT(*) AS cnt, pt.currency, pt.planned_date AS date
     FROM planned_transactions pt
     WHERE pt.is_active = true
       AND pt.is_executed = false
-      AND pt.planned_date > $1::date
-      AND pt.planned_date <= ($1::date + make_interval(days => $2::int))
+      AND pt.planned_date > ${anchor}
+      AND pt.planned_date <= (${anchor} + make_interval(days => ${daysForward}::int))
     GROUP BY pt.planned_date, pt.currency
   `;
 
   const [histRows, currentRows, plannedRows] = await Promise.all([
-    queryRows(dailyAmountRowSchema, sqlHistory, [
-      ...excludeParams,
-      todayYmd,
-      daysBack,
-      historyMonths,
-    ]),
-    queryRows(dailyAmountRowSchema, sqlCurrent, [
-      ...excludeParams,
-      todayYmd,
-      daysBack,
-      daysForward,
-    ]),
-    queryRows(dailyAmountRowSchema, sqlPlannedFuture, [todayYmd, daysForward]),
+    checkedRows(dailyAmountRowSchema, sqlHistory),
+    checkedRows(dailyAmountRowSchema, sqlCurrent),
+    checkedRows(dailyAmountRowSchema, sqlPlannedFuture),
   ]);
 
   // Groups without a stored rate are left out and counted (transactions).
@@ -744,31 +689,24 @@ export async function getCashflowForecastDataByCategory(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.ts). The r/pr joins are
-  // unconditional here (the effective-category COALESCE needs them anyway).
-  const excl = buildExclusionClauses({
+  // Canonical exclusion clauses. The r/pr joins are unconditional here (the
+  // effective-category COALESCE needs them anyway).
+  const excl = exclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
   });
-  const excludeParams = excl.params;
-  const exclusionWhere = excl.whereSql ? `AND ${excl.whereSql}` : "";
-
-  // Own bound params, allocated after the exclusion params (convention 2).
-  const pDate = excl.nextParamIdx;
-  const pMonths = pDate + 1;
-  const anchor = `$${pDate}::date`;
+  const anchor = sql`${todayYmd}::date`;
 
   // ADR-083 transfer exclusion — see getCashflowComparison for the rationale.
   // This matters doubly here: the category breakdown attributes a transfer leg
   // to whatever category the account's recipient defaults to, inventing spend
   // in a category the user never spent in.
-  const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? "" : "AND t.is_transfer = false";
+  const transfers = await transferFilter();
 
   // Aggregate per (date, currency, effective category) in SQL — aggregateByDateAndCategory
   // re-buckets by (date, category) and conversion is per (currency, date), so SUM-then-convert
   // is identical to the old per-row stream.
-  const selectCols = `
+  const selectCols = sql`
     SUM(t.amount) AS amount,
     COUNT(*) AS cnt,
     t.currency,
@@ -778,49 +716,41 @@ export async function getCashflowForecastDataByCategory(
     COALESCE(cat.detail,  'Uncategorized')                                  AS detail,
     COALESCE(cat.path_name, 'Uncategorized')                                AS path_name
   `;
-  const groupByCols = `
+  const groupByCols = sql`
     GROUP BY t.date, t.currency,
              COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
              cat.general, cat.detail, cat.path_name
   `;
-  const joins = `
-    LEFT JOIN recipients r  ON t.recipient_id = r.id
-    LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+  const joins = sql`
+    ${EXCLUSION_JOINS}
     LEFT JOIN categories cat
       ON cat.id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
   `;
 
-  const sqlHistory = `
+  const sqlHistory = sql`
     SELECT ${selectCols}
     FROM transactions t ${joins}
     WHERE t.is_active = true
-      ${transferFilter}
-      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => $${pMonths}::int)
+      ${transfers}
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${historyMonths}::int)
       AND t.date <  date_trunc('month', ${anchor})
-      ${exclusionWhere}
+      ${excl.where}
     ${groupByCols}
   `;
-  const sqlCurrent = `
+  const sqlCurrent = sql`
     SELECT ${selectCols}
     FROM transactions t ${joins}
     WHERE t.is_active = true
-      ${transferFilter}
+      ${transfers}
       AND t.date >= date_trunc('month', ${anchor})
       AND t.date <= (date_trunc('month', ${anchor}) + interval '1 month' - interval '1 day')
-      ${exclusionWhere}
+      ${excl.where}
     ${groupByCols}
   `;
 
   const [histRows, currentRows] = await Promise.all([
-    queryRows(categoryDailyAmountRowSchema, sqlHistory, [
-      ...excludeParams,
-      todayYmd,
-      historyMonths,
-    ]),
-    queryRows(categoryDailyAmountRowSchema, sqlCurrent, [
-      ...excludeParams,
-      todayYmd,
-    ]),
+    checkedRows(categoryDailyAmountRowSchema, sqlHistory),
+    checkedRows(categoryDailyAmountRowSchema, sqlCurrent),
   ]);
 
   // Groups without a stored rate are left out and counted (transactions).

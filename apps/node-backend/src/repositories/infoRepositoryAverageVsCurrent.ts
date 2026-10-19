@@ -4,16 +4,17 @@
  * ONE CLOCK, same rule as infoRepositoryForecast.js: every window edge and
  * every piece of month/day arithmetic here is anchored on
  * `todayAppDateString()` — the APP_TIMEZONE calendar day (ADR-009) — read once
- * per call and bound into the SQL as `$1::date`. Postgres `CURRENT_DATE` is not
+ * per call and bound into the SQL as a `::date` parameter. Postgres `CURRENT_DATE` is not
  * used: it follows the DB session's zone (UTC), so with the default
  * APP_TIMEZONE=Europe/Brussels the two disagree on the calendar day for the
  * couple of hours before midnight, and on a month's last day that is a whole
  * month of arithmetic — the divisor counted a month whose rows the window had
- * already excluded. `WINDOW_MONTHS` is bound too ($2), so no value is
- * template-interpolated into the SQL text.
+ * already excluded. `WINDOW_MONTHS` is bound too, so no value is spliced into
+ * the SQL text.
  */
 
-import { queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import { checkedRows } from '../database/db.ts';
 import {
   ledgerStartRowSchema,
   signedDailyAmountRowSchema,
@@ -71,7 +72,7 @@ const WINDOW_MONTHS = 6;
  */
 export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // The single clock for this call (ADR-009). Read ONCE, bound into all three
-  // queries as $1 and reused for the month/day arithmetic further down, so the
+  // queries and reused for the month/day arithmetic further down, so the
   // window edges and the divisor can never straddle a month rollover.
   const todayYmd = todayAppDateString();
   const nowYear = Number(todayYmd.slice(0, 4));
@@ -83,7 +84,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // outflow leg inflates avg/daily/projected spending — the exact thing ADR-083
   // (and the dropping of mv_cashflow_daily) set out to prevent.
   const includeTransfers = await getIncludeTransfers();
-  const transferFilter = includeTransfers ? '' : 'AND t.is_transfer = false';
+  const transferFilter = includeTransfers ? sql`` : sql`AND t.is_transfer = false`;
+  const anchor = sql`${todayYmd}::date`;
   // Aggregate in SQL, grouped by (date, currency, sign). The previous
   // row-streaming version capped the scans with LIMIT 10000/5000 and NO ORDER
   // BY — past 10k rows in the window Postgres dropped *arbitrary* heap-order
@@ -91,22 +93,22 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // bounds the result by days x currencies x 2 (no LIMIT needed), keeps one
   // signed `amount` per row so the existing conversion pipeline and sign
   // checks below work unchanged, and moves the summing where it belongs.
-  const sql6m = `
+  const sql6m = sql`
     SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
-      AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
-      AND t.date < date_trunc('month', $1::date)
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${WINDOW_MONTHS}::int)
+      AND t.date < date_trunc('month', ${anchor})
     GROUP BY t.date, t.currency, (t.amount < 0)
   `;
-  const sqlCurrent = `
+  const sqlCurrent = sql`
     SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
-      AND t.date >= date_trunc('month', $1::date)
-      AND t.date <= $1::date
+      AND t.date >= date_trunc('month', ${anchor})
+      AND t.date <= ${anchor}
     GROUP BY t.date, t.currency, (t.amount < 0)
   `;
 
@@ -116,17 +118,17 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // ledger start having history" is a property of the ledger, not of this view.
   // "Unfiltered" means no predicates; the two bound values are the window
   // itself, anchored on the same app date as everything else.
-  const sqlLedgerStart = `
+  const sqlLedgerStart = sql`
     SELECT MIN(t.date) AS first_date
     FROM transactions t
     WHERE t.is_active = true
-      AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
+      AND t.date >= date_trunc('month', ${anchor}) - make_interval(months => ${WINDOW_MONTHS}::int)
   `;
 
   const [past6Rows, currentRows, ledgerStartRows] = await Promise.all([
-    queryRows(signedDailyAmountRowSchema, sql6m, [todayYmd, WINDOW_MONTHS]),
-    queryRows(signedDailyAmountRowSchema, sqlCurrent, [todayYmd]),
-    queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, WINDOW_MONTHS]),
+    checkedRows(signedDailyAmountRowSchema, sql6m),
+    checkedRows(signedDailyAmountRowSchema, sqlCurrent),
+    checkedRows(ledgerStartRowSchema, sqlLedgerStart),
   ]);
 
   // Groups without a stored rate are left out of both windows and counted.

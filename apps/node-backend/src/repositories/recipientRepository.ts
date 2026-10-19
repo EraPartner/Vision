@@ -10,8 +10,9 @@
  *   Callers that need both can call them concurrently via Promise.all.
  */
 
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   countRowSchema,
   recipientKeyRowSchema,
@@ -27,7 +28,6 @@ import {
 } from "../database/rows/catalog.ts";
 import type { RecipientAliasRow } from "../database/rows/catalog.ts";
 import { normalizeForMatching } from "../lib/textNormalization.ts";
-import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { makeValidationError } from "../lib/repositoryErrors.ts";
 import type { EnrichedRecipientRow, RecipientRow } from "../types/rows.ts";
 import type { CategoryId, RecipientId } from "@vision/types/brands";
@@ -57,17 +57,46 @@ export interface RecipientFilters {
 }
 
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)
-const RECIPIENT_SORT_COLUMNS: Record<string, string> = {
-  name: "r.name",
-  default_category_name: `CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END`,
-  primary_bank_account: "primary_bank_account",
-  alias_count: "alias_count",
-  notes: "r.notes",
-  is_active: "r.is_active",
+const RECIPIENT_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
+  name: sql`r.name`,
+  default_category_name: sql`CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END`,
+  primary_bank_account: sql`primary_bank_account`,
+  alias_count: sql`alias_count`,
+  notes: sql`r.notes`,
+  is_active: sql`r.is_active`,
 };
 
 /**
- * Build the shared WHERE clause and params array for filter-based queries.
+ * The enriched recipient projection over `source` (aliased `r`): the default
+ * category path, primary bank account, primary name and alias count.
+ */
+function enrichedRecipients(source: RawBuilder<unknown>): RawBuilder<unknown> {
+  return sql`
+      SELECT r.*,
+             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
+             pba.account_number AS primary_bank_account,
+             pr.name AS primary_recipient_name,
+             COALESCE(ac.alias_count, 0) AS alias_count
+      FROM ${source} r
+      LEFT JOIN categories c ON r.default_category_id = c.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN LATERAL (
+        SELECT rba.account_number
+        FROM recipient_bank_accounts rba
+        WHERE rba.recipient_id = r.id AND rba.is_active = true
+        ORDER BY rba.is_primary DESC
+        LIMIT 1
+      ) pba ON true
+      LEFT JOIN (
+        SELECT primary_recipient_id, count(*)::int AS alias_count
+        FROM recipients
+        WHERE primary_recipient_id IS NOT NULL
+        GROUP BY primary_recipient_id
+      ) ac ON ac.primary_recipient_id = r.id`;
+}
+
+/**
+ * Build the shared WHERE clause for filter-based queries.
  */
 function buildWhereClause({
   name,
@@ -75,15 +104,14 @@ function buildWhereClause({
   search,
   active,
   uncategorized,
-}: RecipientFilters): { sql: string; params: unknown[]; nextParam: number } {
-  let sql = `WHERE 1=1`;
-  const params: unknown[] = [];
-  let p = 1;
+}: RecipientFilters): RawBuilder<unknown> {
+  const conditions: RawBuilder<unknown>[] = [sql`1=1`];
 
-  if (active) sql += ` AND r.is_active = true`;
+  if (active) conditions.push(sql`r.is_active = true`);
   if (name) {
-    sql += ` AND r.name COLLATE pg_catalog.pg_unicode_fast ILIKE $${p++}`;
-    params.push(`%${name}%`);
+    conditions.push(
+      sql`r.name COLLATE pg_catalog.pg_unicode_fast ILIKE ${`%${name}%`}`,
+    );
   }
   if (uncategorized) {
     // Phase 6: only surface recipients that both lack a default category
@@ -95,34 +123,53 @@ function buildWhereClause({
     // migrations 0035/0045), so the equivalent existence check is an active,
     // non-transfer transaction with a currency for this recipient. Served by
     // idx_transactions_recipient_date_active (recipient_id ... WHERE is_active).
-    sql += ` AND r.default_category_id IS NULL
+    conditions.push(sql`r.default_category_id IS NULL
              AND EXISTS (
                SELECT 1 FROM transactions t
                WHERE t.recipient_id = r.id
                  AND t.is_active = true
                  AND t.is_transfer = false
                  AND t.currency IS NOT NULL
-             )`;
+             )`);
   } else if (defaultCategoryId != null) {
-    sql += ` AND r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $${p++})`;
-    params.push(defaultCategoryId);
+    conditions.push(
+      sql`r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = ${defaultCategoryId})`,
+    );
   }
   if (search) {
     const sp = `%${search}%`;
     // Native clusters use the C locale. Select Unicode case mapping explicitly
     // for search without changing stored names, sorting, or database collation.
-    sql += ` AND (
-      r.name COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
-      r.notes COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
-      c.general COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
-      c.detail COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
-      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE $${p})
-    )`;
-    p++;
-    params.push(sp);
+    conditions.push(sql`(
+      r.name COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
+      r.notes COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
+      c.general COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
+      c.detail COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp} OR
+      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE ${sp})
+    )`);
   }
 
-  return { sql, params, nextParam: p };
+  return sql`WHERE ${sql.join(conditions, sql` AND `)}`;
+}
+
+/** `= ANY($n::int[])`: one array parameter however many ids there are. */
+function anyRecipientId(ids: RecipientId[]): RawBuilder<RecipientId> {
+  return sql<RecipientId>`ANY(${ids}::int[])`;
+}
+
+/**
+ * Insert a recipient, or touch the conflicting row so RETURNING always yields
+ * the winning row's id.
+ */
+function upsertRecipient(name: string, normalizedName: string, isActive: boolean) {
+  return db
+    .insertInto("recipients")
+    .values({ name, normalized_name: normalizedName, is_active: isActive })
+    .onConflict((oc) =>
+      oc.column("normalized_name").doUpdateSet((eb) => ({
+        normalized_name: eb.ref("excluded.normalized_name"),
+      })),
+    );
 }
 
 export const recipientRepository = {
@@ -137,11 +184,7 @@ export const recipientRepository = {
     sortBy = null,
     sortDir = null,
   }: RecipientFilters = {}): Promise<EnrichedRecipientRow[]> {
-    const {
-      sql: where,
-      params,
-      nextParam: p,
-    } = buildWhereClause({
+    const where = buildWhereClause({
       name,
       defaultCategoryId,
       search,
@@ -150,44 +193,18 @@ export const recipientRepository = {
     });
 
     // String(): the old untyped lookup coerced a null sortBy the same way.
-    const sortCol = RECIPIENT_SORT_COLUMNS[String(sortBy)] || "r.name";
-    const sortDirection = sortDir === "desc" ? "DESC" : "ASC";
-    const orderBy =
-      sortBy && RECIPIENT_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, r.name ASC`
-        : `r.name ASC`;
+    const sortCol = sortBy ? RECIPIENT_SORT_COLUMNS[sortBy] : undefined;
+    const sortDirection = sortDir === "desc" ? sql`DESC` : sql`ASC`;
+    const orderBy = sortCol
+      ? sql`${sortCol} ${sortDirection}, r.name ASC`
+      : sql`r.name ASC`;
 
-    const sql = `
-      SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
-             pba.account_number AS primary_bank_account,
-             pr.name AS primary_recipient_name,
-             COALESCE(ac.alias_count, 0) AS alias_count
-      FROM recipients r
-      LEFT JOIN categories c ON r.default_category_id = c.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN LATERAL (
-        SELECT rba.account_number
-        FROM recipient_bank_accounts rba
-        WHERE rba.recipient_id = r.id AND rba.is_active = true
-        ORDER BY rba.is_primary DESC
-        LIMIT 1
-      ) pba ON true
-      LEFT JOIN (
-        SELECT primary_recipient_id, count(*)::int AS alias_count
-        FROM recipients
-        WHERE primary_recipient_id IS NOT NULL
-        GROUP BY primary_recipient_id
-      ) ac ON ac.primary_recipient_id = r.id
+    return checkedRows(
+      enrichedRecipientRowSchema,
+      sql`${enrichedRecipients(sql`recipients`)}
       ${where}
-      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
-    `;
-
-    return queryRows(enrichedRecipientRowSchema, sql, [
-      ...params,
-      limit,
-      offset,
-    ]);
+      ORDER BY ${orderBy} LIMIT ${limit} OFFSET ${offset}`,
+    );
   },
 
   async getCount({
@@ -197,7 +214,7 @@ export const recipientRepository = {
     active = true,
     uncategorized = false,
   }: RecipientFilters = {}): Promise<number> {
-    const { sql: where, params } = buildWhereClause({
+    const where = buildWhereClause({
       name,
       defaultCategoryId,
       search,
@@ -205,41 +222,21 @@ export const recipientRepository = {
       uncategorized,
     });
 
-    const sql = `
-      SELECT count(*) FROM recipients r
+    const row = await checkedRow(
+      countRowSchema,
+      sql`SELECT count(*) FROM recipients r
       LEFT JOIN categories c ON r.default_category_id = c.id
-      ${where}
-    `;
-    const row = await queryOne(countRowSchema, sql, params);
+      ${where}`,
+    );
     return parseInt(requireRow(row, "recipient count").count, 10);
   },
 
   async getById(id: RecipientId): Promise<EnrichedRecipientRow | null> {
-    const sql = `
-      SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
-             pba.account_number AS primary_bank_account,
-             pr.name AS primary_recipient_name,
-             COALESCE(ac.alias_count, 0) AS alias_count
-      FROM recipients r
-      LEFT JOIN categories c ON r.default_category_id = c.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN LATERAL (
-        SELECT rba.account_number
-        FROM recipient_bank_accounts rba
-        WHERE rba.recipient_id = r.id AND rba.is_active = true
-        ORDER BY rba.is_primary DESC
-        LIMIT 1
-      ) pba ON true
-      LEFT JOIN (
-        SELECT primary_recipient_id, count(*)::int AS alias_count
-        FROM recipients
-        WHERE primary_recipient_id IS NOT NULL
-        GROUP BY primary_recipient_id
-      ) ac ON ac.primary_recipient_id = r.id
-      WHERE r.id = $1
-    `;
-    const row = await queryOne(enrichedRecipientRowSchema, sql, [id]);
+    const row = await checkedRow(
+      enrichedRecipientRowSchema,
+      sql`${enrichedRecipients(sql`recipients`)}
+      WHERE r.id = ${id}`,
+    );
     return row ?? null;
   },
 
@@ -274,20 +271,18 @@ export const recipientRepository = {
    */
   async getOrCreateSystemId(): Promise<RecipientId> {
     const normalized = normalizeForMatching(SYSTEM_RECIPIENT_NAME);
-    const existing = await queryOne(
+    const existing = await checkedRow(
       recipientKeyRowSchema,
-      `SELECT id FROM recipients WHERE normalized_name = $1`,
-      [normalized],
+      db
+        .selectFrom("recipients")
+        .select("id")
+        .where("normalized_name", "=", normalized),
     );
     if (existing) return existing.id;
 
-    const inserted = await queryOne(
+    const inserted = await checkedRow(
       recipientKeyRowSchema,
-      `INSERT INTO recipients (name, normalized_name, is_active)
-       VALUES ($1, $2, false)
-       ON CONFLICT (normalized_name) DO UPDATE SET normalized_name = EXCLUDED.normalized_name
-       RETURNING id`,
-      [SYSTEM_RECIPIENT_NAME, normalized],
+      upsertRecipient(SYSTEM_RECIPIENT_NAME, normalized, false).returning("id"),
     );
     return requireRow(inserted, "system recipient upsert").id;
   },
@@ -295,10 +290,12 @@ export const recipientRepository = {
   /** @param name Raw display name; normalized before the lookup. */
   async getByName(name: string): Promise<RecipientRow | null> {
     const normalized = normalizeForMatching(name);
-    const row = await queryOne(
+    const row = await checkedRow(
       recipientRowSchema,
-      `SELECT * FROM recipients WHERE normalized_name = $1`,
-      [normalized],
+      db
+        .selectFrom("recipients")
+        .selectAll()
+        .where("normalized_name", "=", normalized),
     );
     return row ?? null;
   },
@@ -325,24 +322,24 @@ export const recipientRepository = {
       );
     }
 
-    const existing = await queryOne(
+    const existing = await checkedRow(
       recipientKeyRowSchema,
-      `SELECT id FROM recipients WHERE normalized_name = $1`,
-      [normalizedName],
+      db
+        .selectFrom("recipients")
+        .select("id")
+        .where("normalized_name", "=", normalizedName),
     );
 
     let recipientId = existing?.id;
     let created = false;
     if (recipientId == null) {
       const inserted = requireRow(
-        await queryOne(
+        await checkedRow(
           recipientUpsertRowSchema,
-          `INSERT INTO recipients (name, normalized_name, is_active)
-       VALUES ($1, $2, true)
-       ON CONFLICT (normalized_name) DO UPDATE
-         SET normalized_name = EXCLUDED.normalized_name
-       RETURNING id, (xmax = 0) AS created`,
-          [upperName, normalizedName],
+          upsertRecipient(upperName, normalizedName, true).returning([
+            "id",
+            sql<boolean>`(xmax = 0)`.as("created"),
+          ]),
         ),
         "recipient upsert",
       );
@@ -368,9 +365,9 @@ export const recipientRepository = {
       is_active?: boolean | null | undefined;
     },
   ): Promise<EnrichedRecipientRow | null> {
-    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
-    // A name write always updates the derived normalized_name alongside it;
-    // null name / is_active mean "leave unchanged" (pre-mapped to undefined).
+    // undefined fields are skipped. A name write always updates the derived
+    // normalized_name alongside it; null name / is_active mean "leave
+    // unchanged".
     const hasName = name !== undefined && name !== null;
     if (
       hasName &&
@@ -380,58 +377,38 @@ export const recipientRepository = {
         `${SYSTEM_RECIPIENT_NAME} is reserved for server-generated transactions`,
       );
     }
-    const {
-      clauses: setClauses,
-      params,
-      nextIdx: paramIdx,
-    } = buildSetClauses({
-      name: hasName ? name.toUpperCase().trim() : undefined,
-      normalized_name: hasName ? normalizeForMatching(name) : undefined,
-      default_category_id,
-      notes,
-      is_active: is_active ?? undefined,
-    });
+    const changes = {
+      ...(hasName && {
+        name: name.toUpperCase().trim(),
+        normalized_name: normalizeForMatching(name),
+      }),
+      ...(default_category_id !== undefined && { default_category_id }),
+      ...(notes !== undefined && { notes }),
+      ...(is_active != null && { is_active }),
+    };
 
-    if (setClauses.length === 0) return this.getById(id);
+    if (Object.keys(changes).length === 0) return this.getById(id);
 
-    setClauses.push(`updated_at = NOW()`);
-    params.push(id);
-    const sql = `
-      WITH updated AS (
-        UPDATE recipients
-        SET ${setClauses.join(", ")}
-        WHERE id = $${paramIdx}
-        RETURNING *
-      )
-      SELECT u.*,
-             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
-             pba.account_number AS primary_bank_account,
-             pr.name AS primary_recipient_name,
-             COALESCE(ac.alias_count, 0) AS alias_count
-      FROM updated u
-      LEFT JOIN categories c ON u.default_category_id = c.id
-      LEFT JOIN recipients pr ON u.primary_recipient_id = pr.id
-      LEFT JOIN LATERAL (
-        SELECT rba.account_number
-        FROM recipient_bank_accounts rba
-        WHERE rba.recipient_id = u.id AND rba.is_active = true
-        ORDER BY rba.is_primary DESC
-        LIMIT 1
-      ) pba ON true
-      LEFT JOIN (
-        SELECT primary_recipient_id, count(*)::int AS alias_count
-        FROM recipients
-        WHERE primary_recipient_id IS NOT NULL
-        GROUP BY primary_recipient_id
-      ) ac ON ac.primary_recipient_id = u.id
-    `;
-    const row = await queryOne(enrichedRecipientRowSchema, sql, params);
+    const updated = db
+      .updateTable("recipients")
+      .set({ ...changes, updated_at: sql<Date>`NOW()` })
+      .where("id", "=", id)
+      .returningAll();
+    // One statement: the enrichment reads the updated row from the CTE.
+    const row = await checkedRow(
+      enrichedRecipientRowSchema,
+      sql`WITH updated AS (${updated})
+      ${enrichedRecipients(sql`updated`)}`,
+    );
     return row ?? null;
   },
 
   async hardDelete(id: RecipientId): Promise<boolean> {
-    const result = await query("DELETE FROM recipients WHERE id = $1", [id]);
-    return (result.rowCount ?? 0) > 0;
+    const result = await db
+      .deleteFrom("recipients")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 
   /**
@@ -443,11 +420,14 @@ export const recipientRepository = {
   ): Promise<
     Array<{ id: RecipientId; primary_recipient_id: RecipientId | null }>
   > {
-    return queryRows(
+    return checkedRows(
       recipientMergeLockRowSchema,
-      `SELECT id, primary_recipient_id FROM recipients
-       WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
-      [ids],
+      db
+        .selectFrom("recipients")
+        .select(["id", "primary_recipient_id"])
+        .where("id", "=", anyRecipientId(ids))
+        .orderBy("id")
+        .forUpdate(),
     );
   },
 
@@ -461,15 +441,14 @@ export const recipientRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<RecipientId[]> {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       recipientKeyRowSchema,
-      `UPDATE recipients
-          SET primary_recipient_id = $1,
-              updated_at = NOW()
-        WHERE id = ANY($2::int[])
-          AND id <> $1
-        RETURNING id`,
-      [primaryId, aliasIds],
+      db
+        .updateTable("recipients")
+        .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`NOW()` })
+        .where("id", "=", anyRecipientId(aliasIds))
+        .where("id", "<>", primaryId)
+        .returning("id"),
     );
     return rows.map((r) => r.id);
   },
@@ -486,39 +465,46 @@ export const recipientRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE recipients
-          SET primary_recipient_id = $1,
-              updated_at = NOW()
-        WHERE primary_recipient_id = ANY($2::int[])
-          AND id <> $1`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("recipients")
+      .set({ primary_recipient_id: primaryId, updated_at: sql<Date>`NOW()` })
+      .where("primary_recipient_id", "=", anyRecipientId(aliasIds))
+      .where("id", "<>", primaryId)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
    * Unmerge: remove primary_recipient_id from a recipient.
    */
   async unmergeRecipient(id: RecipientId): Promise<boolean> {
-    const sql = `UPDATE recipients SET primary_recipient_id = NULL, updated_at = NOW() WHERE id = $1 RETURNING id`;
-    const result = await query(sql, [id]);
-    return result.rows.length > 0;
+    const row = await db
+      .updateTable("recipients")
+      .set({ primary_recipient_id: null, updated_at: sql<Date>`NOW()` })
+      .where("id", "=", id)
+      .returning("id")
+      .executeTakeFirst();
+    return row !== undefined;
   },
 
   /**
    * Get all aliases for a primary recipient.
    */
   async getAliases(primaryId: RecipientId): Promise<RecipientAliasRow[]> {
-    const sql = `
-      SELECT r.*,
-             CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name
-      FROM recipients r
-      LEFT JOIN categories c ON r.default_category_id = c.id
-      WHERE r.primary_recipient_id = $1
-      ORDER BY r.name
-    `;
-    return queryRows(recipientAliasRowSchema, sql, [primaryId]);
+    return checkedRows(
+      recipientAliasRowSchema,
+      db
+        .selectFrom("recipients as r")
+        .leftJoin("categories as c", "r.default_category_id", "c.id")
+        .selectAll("r")
+        .select(
+          sql<string | null>`CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END`.as(
+            "default_category_name",
+          ),
+        )
+        .where("r.primary_recipient_id", "=", primaryId)
+        .orderBy("r.name"),
+    );
   },
 
   /**
@@ -534,12 +520,15 @@ export const recipientRepository = {
       ),
     ];
     if (ids.length === 0) return new Map();
-    const rows = await queryRows(
+    const rows = await checkedRows(
       recipientClusterRootRowSchema,
-      `SELECT id, COALESCE(primary_recipient_id, id) AS cluster_root
-         FROM recipients
-        WHERE id = ANY($1::int[])`,
-      [ids],
+      db
+        .selectFrom("recipients")
+        .select([
+          "id",
+          sql<RecipientId>`COALESCE(primary_recipient_id, id)`.as("cluster_root"),
+        ])
+        .where("id", "=", anyRecipientId(ids)),
     );
     const map = new Map<RecipientId, RecipientId>();
     for (const row of rows) map.set(row.id, row.cluster_root);

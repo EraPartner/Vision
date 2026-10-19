@@ -10,8 +10,8 @@
  * value (the same form adapters store in import_staging_rows.recipient_raw).
  */
 
-import { query } from '../database/connection.ts';
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
 import {
   activePatternRowSchema,
   idRowSchema,
@@ -24,7 +24,7 @@ import type {
   ActivePatternRow,
   RecipientPatternListRow,
 } from '../database/rows/catalog.ts';
-import { buildSetClauses } from '../lib/sqlClauses.ts';
+import { asRecipientId } from '@vision/types/brands';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
 export type { ActivePatternRow };
@@ -173,13 +173,23 @@ function validatePattern(row: {
  * Returns raw rows — callers compile as needed.
  */
 export async function loadActivePatterns(): Promise<ActivePatternRow[]> {
-  return queryRows(
+  return checkedRows(
     activePatternRowSchema,
-    `SELECT id, recipient_id, pattern, pattern_kind, case_sensitive,
-            priority, source, updated_at::text AS updated_at
-       FROM recipient_match_patterns
-      WHERE is_active = true
-      ORDER BY priority ASC, id ASC`,
+    db
+      .selectFrom('recipient_match_patterns')
+      .select([
+        'id',
+        'recipient_id',
+        'pattern',
+        'pattern_kind',
+        'case_sensitive',
+        'priority',
+        'source',
+        sql<string>`updated_at::text`.as('updated_at'),
+      ])
+      .where('is_active', '=', true)
+      .orderBy('priority', 'asc')
+      .orderBy('id', 'asc'),
   );
 }
 
@@ -327,10 +337,14 @@ export async function previewPatternMatches(patternRow: {
   // For literal_prefix/glob the patterns are safe POSIX ERE and Postgres is faster.
   if (patternRow.pattern_kind === 'regex') {
     const re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
-    const rows = await queryRows(
+    const rows = await checkedRows(
       recipientNameRowSchema,
-      `SELECT id, name FROM recipients WHERE is_active = true ORDER BY id LIMIT $1`,
-      [PREVIEW_REGEX_SCAN_CAP + 1],
+      db
+        .selectFrom('recipients')
+        .select(['id', 'name'])
+        .where('is_active', '=', true)
+        .orderBy('id')
+        .limit(PREVIEW_REGEX_SCAN_CAP + 1),
     );
     const truncated = rows.length > PREVIEW_REGEX_SCAN_CAP;
     const scanned = truncated ? rows.slice(0, PREVIEW_REGEX_SCAN_CAP) : rows;
@@ -341,10 +355,13 @@ export async function previewPatternMatches(patternRow: {
   const sqlPattern = buildSqlRegexPattern(patternRow);
   const op = patternRow.case_sensitive ? '~' : '~*';
 
-  const rows = await queryRows(
+  const rows = await checkedRows(
     idRowSchema,
-    `SELECT id FROM recipients WHERE is_active = true AND UPPER(name) ${op} $1`,
-    [sqlPattern],
+    db
+      .selectFrom('recipients')
+      .select('id')
+      .where('is_active', '=', true)
+      .where(sql<string>`UPPER(name)`, op, sqlPattern),
   );
 
   return {
@@ -371,21 +388,20 @@ export async function createPattern(opts: {
   const validation = validatePattern({ ...opts, pattern_kind: patternKind });
   if (!validation.valid) throw new ValidationError(validation.error);
 
-  const inserted = await queryOne(
+  const inserted = await checkedRow(
     idRowSchema,
-    `INSERT INTO recipient_match_patterns
-       (recipient_id, pattern, pattern_kind, case_sensitive, priority, source, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id`,
-    [
-      opts.recipientId,
-      opts.pattern,
-      patternKind,
-      opts.case_sensitive ?? false,
-      opts.priority ?? 100,
-      opts.source ?? 'user',
-      opts.notes ?? null,
-    ],
+    db
+      .insertInto('recipient_match_patterns')
+      .values({
+        recipient_id: asRecipientId(opts.recipientId),
+        pattern: opts.pattern,
+        pattern_kind: patternKind,
+        case_sensitive: opts.case_sensitive ?? false,
+        priority: opts.priority ?? 100,
+        source: opts.source ?? 'user',
+        notes: opts.notes ?? null,
+      })
+      .returning('id'),
   );
   return { id: requireRow(inserted, 'recipient pattern insert').id };
 }
@@ -409,10 +425,12 @@ export async function updatePattern(
     // a partial PATCH like {case_sensitive:true} must keep the stored pattern
     // (else it fails "must not be empty"), and a pattern-only edit on a regex
     // row must still run the ReDoS guard against the stored kind.
-    const stored = await queryOne(
+    const stored = await checkedRow(
       patternDefinitionRowSchema,
-      `SELECT pattern, pattern_kind, case_sensitive FROM recipient_match_patterns WHERE id = $1`,
-      [patternId],
+      db
+        .selectFrom('recipient_match_patterns')
+        .select(['pattern', 'pattern_kind', 'case_sensitive'])
+        .where('id', '=', patternId),
     );
     if (!stored) throw new NotFoundError(`Pattern ${patternId} not found`);
     const merged = {
@@ -424,25 +442,35 @@ export async function updatePattern(
     if (!validation.valid) throw new ValidationError(validation.error);
   }
 
-  // Shared clause builder (lib/sqlClauses.ts); `allowed` keeps the writable-
-  // column whitelist, undefined values are skipped (JSON bodies never carry any).
-  const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses(updates, {
-    allowed: ['pattern', 'pattern_kind', 'case_sensitive', 'priority', 'is_active', 'notes'],
-  });
-  if (fields.length === 0) return;
+  // Only the writable columns are copied (a request body may carry others);
+  // undefined values are skipped (JSON bodies never carry any).
+  const { pattern, pattern_kind, case_sensitive, priority, is_active, notes } =
+    updates;
+  const changes = {
+    ...(pattern !== undefined && { pattern }),
+    ...(pattern_kind !== undefined && { pattern_kind }),
+    ...(case_sensitive !== undefined && { case_sensitive }),
+    ...(priority !== undefined && { priority }),
+    ...(is_active !== undefined && { is_active }),
+    ...(notes !== undefined && { notes }),
+  };
+  if (Object.keys(changes).length === 0) return;
 
-  values.push(patternId);
-  await query(
-    `UPDATE recipient_match_patterns SET ${fields.join(', ')} WHERE id = $${idx}`,
-    values,
-  );
+  await db
+    .updateTable('recipient_match_patterns')
+    .set(changes)
+    .where('id', '=', patternId)
+    .execute();
 }
 
 /**
  * Delete a pattern by id.
  */
 export async function deletePattern(patternId: number): Promise<void> {
-  await query(`DELETE FROM recipient_match_patterns WHERE id = $1`, [patternId]);
+  await db
+    .deleteFrom('recipient_match_patterns')
+    .where('id', '=', patternId)
+    .execute();
 }
 
 /**
@@ -453,13 +481,24 @@ export async function deletePattern(patternId: number): Promise<void> {
 export async function listPatternsForRecipient(
   recipientId: number,
 ): Promise<RecipientPatternListRow[]> {
-  return queryRows(
+  return checkedRows(
     recipientPatternListRowSchema,
-    `SELECT id, pattern, pattern_kind, case_sensitive, priority, is_active, source, notes,
-            created_at, updated_at
-       FROM recipient_match_patterns
-      WHERE recipient_id = $1
-      ORDER BY priority ASC, id ASC`,
-    [recipientId],
+    db
+      .selectFrom('recipient_match_patterns')
+      .select([
+        'id',
+        'pattern',
+        'pattern_kind',
+        'case_sensitive',
+        'priority',
+        'is_active',
+        'source',
+        'notes',
+        'created_at',
+        'updated_at',
+      ])
+      .where('recipient_id', '=', asRecipientId(recipientId))
+      .orderBy('priority', 'asc')
+      .orderBy('id', 'asc'),
   );
 }

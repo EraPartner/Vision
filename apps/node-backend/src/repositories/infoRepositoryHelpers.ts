@@ -3,7 +3,9 @@
  * Not intended for direct use outside this folder.
  */
 
-import { query } from "../database/connection.ts";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
+import { db } from "../database/db.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
 import type {
@@ -14,6 +16,7 @@ import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.ts";
 import { nanToZero } from "../lib/math.ts";
+import { validateInt4Ids } from "../lib/filterBuilder.ts";
 
 /**
  * Whether internal transfers (ADR-083) should be counted in cash-flow
@@ -23,6 +26,77 @@ import { nanToZero } from "../lib/math.ts";
  */
 export async function getIncludeTransfers(): Promise<boolean> {
   return (await settingsRepository.get("includeTransfers")) === true;
+}
+
+// ── Exclusion predicates ───────────────────────────────────────────────────
+
+/**
+ * The r/pr joins that {@link exclusionClauses}' predicates reference:
+ * `transactions t` → recipient `r` → primary recipient `pr`.
+ */
+export const EXCLUSION_JOINS = sql`LEFT JOIN recipients r ON t.recipient_id = r.id
+LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id`;
+
+export interface ExclusionSql {
+  /** {@link EXCLUSION_JOINS} when a predicate exists, otherwise empty. */
+  joins: RawBuilder<unknown>;
+  /** `AND <predicates>`, or empty when no valid exclusions were supplied. */
+  where: RawBuilder<unknown>;
+  /** True when at least one predicate was emitted. */
+  active: boolean;
+}
+
+/**
+ * Exclusion predicates for dashboard/info aggregation queries, as Kysely SQL
+ * fragments (lib/filterBuilder.buildExclusionClauses' semantics).
+ *
+ * Excluding a category excludes every descendant of it under the effective
+ * category (own → recipient default → primary default); excluding a primary
+ * recipient also excludes its aliases. Predicates reference `t`, `r` and `pr`.
+ * @throws {ValidationError} when an id is not a valid int4
+ */
+export function exclusionClauses({
+  excludedCategoryIds = [],
+  excludedRecipientIds = [],
+}: {
+  excludedCategoryIds?: readonly unknown[] | undefined;
+  excludedRecipientIds?: readonly unknown[] | undefined;
+}): ExclusionSql {
+  const safeCats = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");
+  const safeRecs = validateInt4Ids(
+    excludedRecipientIds,
+    "excludedRecipientIds",
+  );
+  const clauses: RawBuilder<unknown>[] = [];
+
+  // A selected category excludes its direct assignments and every descendant.
+  // NOT EXISTS keeps uncategorized rows, unlike a nullable NOT IN predicate.
+  if (safeCats.length > 0) {
+    clauses.push(sql`NOT EXISTS (SELECT 1 FROM category_ancestors excluded
+        WHERE excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
+          AND excluded.ancestor_id IN (${sql.join(safeCats)}))`);
+  }
+  // The trailing -1 keeps recipient-less rows when a recipient exclusion is
+  // present: NULL NOT IN would otherwise drop them.
+  if (safeRecs.length > 0) {
+    clauses.push(
+      sql`COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${sql.join(safeRecs)})`,
+    );
+  }
+
+  const active = clauses.length > 0;
+  return {
+    joins: active ? EXCLUSION_JOINS : sql``,
+    where: andClauses(clauses),
+    active,
+  };
+}
+
+/** `AND a AND b ...`, or an empty fragment for no clauses. */
+export function andClauses(
+  clauses: readonly RawBuilder<unknown>[],
+): RawBuilder<unknown> {
+  return clauses.length > 0 ? sql`AND ${sql.join(clauses, sql` AND `)}` : sql``;
 }
 
 // ── Materialized-view cache ────────────────────────────────────────────────
@@ -35,12 +109,13 @@ export async function getIncludeTransfers(): Promise<boolean> {
 const mvCache = new Map<string, { value: boolean; expires: number }>();
 const MV_CACHE_TTL_MS = 60_000;
 
-// Allowlist of materialized-view names that may be passed to mvAvailable.
-// The function builds raw SQL with the name interpolated, which is safe
-// today because every caller passes a literal — but pinning the set here
-// keeps it that way and makes a future caller adding a user-controlled
-// name fail loudly instead of opening an injection vector.
-const ALLOWED_MV_NAMES = new Set(["mv_category_totals", "mv_monthly_summary"]);
+// Allowlist of materialized views that may be passed to mvAvailable, each with
+// its constant identifier fragment. Pinning the set keeps a future caller
+// with a user-controlled name failing loudly instead of reaching SQL.
+const ALLOWED_MVS = new Map<string, RawBuilder<unknown>>([
+  ["mv_category_totals", sql`mv_category_totals`],
+  ["mv_monthly_summary", sql`mv_monthly_summary`],
+]);
 
 /**
  * Check if a materialized view exists and has rows.
@@ -50,7 +125,8 @@ const ALLOWED_MV_NAMES = new Set(["mv_category_totals", "mv_monthly_summary"]);
  * @throws {Error} if {@code viewName} is not in the allowlist.
  */
 export async function mvAvailable(viewName: string): Promise<boolean> {
-  if (!ALLOWED_MV_NAMES.has(viewName)) {
+  const view = ALLOWED_MVS.get(viewName);
+  if (view === undefined) {
     throw new Error(`mvAvailable: unknown materialized view "${viewName}"`);
   }
   const cached = mvCache.get(viewName);
@@ -61,7 +137,7 @@ export async function mvAvailable(viewName: string): Promise<boolean> {
     mvCache.delete(viewName);
   }
   try {
-    const r = await query(`SELECT 1 FROM ${viewName} LIMIT 1`);
+    const r = await sql`SELECT 1 FROM ${view} LIMIT 1`.execute(db);
     const available = r.rows.length > 0;
     mvCache.set(viewName, {
       value: available,
