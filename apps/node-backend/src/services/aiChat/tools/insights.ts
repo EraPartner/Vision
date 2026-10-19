@@ -40,7 +40,7 @@ export const getBankBalances = {
   ) {
     const currency = scope.currency || "EUR";
     const result = await infoRepository.getBankBalances(currency);
-    const allowedAccountIds = new Set(scope.accountIds || []);
+    const allowedAccountIds = new Set(scope.accountIds ?? []);
     const scopedAccounts = (result.accounts ?? []).filter(
       (account) =>
         allowedAccountIds.size === 0 ||
@@ -209,7 +209,7 @@ export const getRecipientInsights = {
       const amount = toDecimal(row.amount);
       const entry = byRecipient.get(name) || {
         recipient: name,
-        recipientId: row.recipient_id || null,
+        recipientId: row.recipient_id ?? null,
         count: 0,
         totalSpend: toDecimal(0),
         totalIncome: toDecimal(0),

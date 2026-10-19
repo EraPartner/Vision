@@ -1,3 +1,4 @@
+import { nanToZero } from '../../lib/math.ts';
 /**
  * Shared helpers for PDF section renderers.
  *
@@ -56,7 +57,7 @@ export function fmtPct(value: number, isRaw = false, digits = 1): string {
  * Format a Date or ISO string as "12 Jan 2025".
  */
 export function fmtDate(date: Date | string | null | undefined): string {
-  if (!date) return '—';
+  if (date == null || date === '') return '—';
   const d = date instanceof Date ? date : new Date(date);
   if (isNaN(d.getTime())) return '—';
   // A 'YYYY-MM-DD' string parses as UTC midnight, so it is formatted in UTC;
@@ -348,7 +349,7 @@ export function svgHorizontalBars(
   { maxItems = 10 }: { maxItems?: number } = {},
 ): string {
   const top = items.slice(0, maxItems);
-  if (!top.length) {
+  if (top.length === 0) {
     return `<svg viewBox="0 0 500 40" width="100%" xmlns="http://www.w3.org/2000/svg"><text x="250" y="22" text-anchor="middle" fill="hsl(var(--muted))" font-size="12">No data</text></svg>`;
   }
 
@@ -403,13 +404,13 @@ export function svgGenericGroupedBarChart(
   const chartW = W - PAD_L - PAD_R;
   const chartH = H - PAD_T - PAD_B;
 
-  if (!groups.length || !seriesDefs.length) {
+  if (groups.length === 0 || seriesDefs.length === 0) {
     return emptyChartSvg(W, H);
   }
 
   const numSeries = seriesDefs.length;
   const maxVal = Math.max(
-    ...groups.flatMap(g => seriesDefs.map(s => Math.abs(Number(g[s.key]) || 0))),
+    ...groups.flatMap(g => seriesDefs.map(s => Math.abs(nanToZero(Number(g[s.key]))))),
     1
   );
   const numGroups = groups.length;
@@ -426,7 +427,7 @@ export function svgGenericGroupedBarChart(
     let startX = cx - groupTotalW / 2;
 
     for (const def of seriesDefs) {
-      const val = Math.abs(Number(g[def.key]) || 0);
+      const val = Math.abs(nanToZero(Number(g[def.key])));
       const bH = Math.max(1, (val / maxVal) * chartH);
       const op = def.opacity;
       const opacityAttr = op === null ? '' : ` opacity="${op ?? 0.85}"`;
@@ -467,7 +468,7 @@ export function svgLineChart(
   const chartH = H - PAD_T - PAD_B;
 
   const allValues = series.flatMap(s => s.values);
-  if (!allValues.length || !labels.length) {
+  if (allValues.length === 0 || labels.length === 0) {
     return emptyChartSvg(W, H);
   }
 

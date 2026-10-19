@@ -14,7 +14,7 @@ export function renderAssetClassDetail(
   const latest    = (data?.snapshots ?? []).at(-1);
   const breakdown = data?.breakdown ?? [];
 
-  if (!latest && !breakdown.length) {
+  if (!latest && breakdown.length === 0) {
     return emptySection({
       title: 'Asset Class Detail',
       subtitle: 'Invested vs. current value per asset class',

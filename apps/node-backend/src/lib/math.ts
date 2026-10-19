@@ -64,3 +64,34 @@ export function isRobustNeedle(
   const bridgeLooksNormal = Math.abs(bridge - medianReturn) <= bridgeThreshold;
   return hasLargeJump && hasLargeRevert && oppositeDirections && bridgeLooksNormal;
 }
+
+/**
+ * `value`, with NaN (unparseable input) read as 0. The explicit form of the
+ * `Number(x) || 0` idiom for values where 0 itself is legitimate. A missing
+ * value that slipped past its declared type also reads as 0, as `|| 0` did.
+ */
+export function nanToZero(value: number): number {
+  return typeof value === "number" && !Number.isNaN(value) ? value : 0;
+}
+
+/**
+ * `value`, or `fallback` when it is 0 or NaN. The explicit form of the
+ * `Number(x) || fallback` idiom for settings where 0 means "use the default"
+ * (row limits, page sizes, counts that must be at least one).
+ */
+export function nonZeroOr(value: number, fallback: number): number {
+  return typeof value !== "number" || value === 0 || Number.isNaN(value)
+    ? fallback
+    : value;
+}
+
+/**
+ * The first non-zero comparison result, or 0. Chains sort tie-breakers
+ * (`byDate || byId`) without treating a number as a boolean.
+ */
+export function firstNonZero(...comparisons: number[]): number {
+  for (const comparison of comparisons) {
+    if (comparison !== 0 && !Number.isNaN(comparison)) return comparison;
+  }
+  return 0;
+}

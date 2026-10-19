@@ -19,6 +19,7 @@ import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import type { HydratedPlannedTransactionRow } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export interface ExecutePlannedArgs {
   id: number;
@@ -100,7 +101,7 @@ export async function executePlanned({
         "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = $1 LIMIT 1",
         [executedTransactionId],
       );
-      if (linked.rowCount)
+      if ((linked.rowCount ?? 0) > 0)
         throw new ConflictError(
           "Transaction is already linked to a planned payment",
         );
@@ -118,7 +119,7 @@ export async function executePlanned({
     if (
       existing.is_recurring &&
       ((existing.max_occurrences != null &&
-        Number(existing.execution_count || 0) >=
+        nanToZero(Number(existing.execution_count)) >=
           Number(existing.max_occurrences)) ||
         (existing.is_executed &&
           (existing.max_occurrences != null ||
@@ -149,7 +150,7 @@ export async function executePlanned({
       // max_occurrences, or when the next occurrence would fall past
       // recurrence_end_date. These bounds were collected by the form but dropped
       // at every layer, so bounded recurrences generated due bills forever.
-      const priorExecutions = Number(existing.execution_count || 0);
+      const priorExecutions = nanToZero(Number(existing.execution_count));
       const reachedMaxOccurrences =
         existing.max_occurrences != null &&
         priorExecutions + 1 >= Number(existing.max_occurrences);
@@ -174,7 +175,7 @@ export async function executePlanned({
       }
     }
 
-    const tagIdsToInherit = (existing.tags || []).map((t) => t.id);
+    const tagIdsToInherit = (existing.tags ?? []).map((t) => t.id);
     const { duplicate } = await plannedTransactionService.executeAndAdvance(
       id,
       executedTransactionId,

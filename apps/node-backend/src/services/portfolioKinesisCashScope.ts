@@ -24,6 +24,7 @@ import type {
   KinesisSourceProof,
 } from "./portfolioKinesisAdoptionScope.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
+import { firstNonZero } from "../lib/math.ts";
 
 /** Proven ledger values of one native cash movement (or its funding fee). */
 export interface KinesisCashValues {
@@ -349,9 +350,10 @@ export function proveKinesisCashSources(
       for (const chain of chains.values()) {
         chain.sort(
           (a, b) =>
-            String(a.record.DateTime).localeCompare(
-              String(b.record.DateTime),
-            ) || a.row.row_index - b.row.row_index,
+            firstNonZero(
+              String(a.record.DateTime).localeCompare(String(b.record.DateTime)),
+              a.row.row_index - b.row.row_index,
+            ),
         );
         // A chain holds at least the member that created it.
         const first = chain[0]!;
@@ -401,7 +403,7 @@ export function proveKinesisCashSources(
         };
         proofs.set(Number(member.row.id), member.literal);
       }
-      if (members.length) groups.push({ groupKey, members });
+      if (members.length > 0) groups.push({ groupKey, members });
     } catch (error) {
       issue(undefined, (error as Error).message);
     }
@@ -586,7 +588,7 @@ export function classifyKinesisCash({
   return {
     ...proved,
     blockers,
-    selected: blockers.length ? [] : selected,
-    records: blockers.length ? [] : records,
+    selected: blockers.length > 0 ? [] : selected,
+    records: blockers.length > 0 ? [] : records,
   };
 }

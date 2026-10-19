@@ -22,7 +22,7 @@ import {
 } from "../database/rows/portfolio.ts";
 import type { HoldingWindowDbRow } from "../database/rows/portfolio.ts";
 import { getDayKeyUtc } from "../lib/dateKeys.ts";
-import { madReturnStats, isRobustNeedle } from "../lib/math.ts";
+import { madReturnStats, isRobustNeedle, nanToZero } from "../lib/math.ts";
 import { forEachConcurrent } from "../lib/concurrency.ts";
 import { differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import {
@@ -131,7 +131,7 @@ function computeHoldingWindows(
   let windowStart: string | null = null;
 
   for (const tx of sorted) {
-    const units = Number(tx.units) || 0;
+    const units = nanToZero(Number(tx.units));
     const prevBalance = balance;
 
     if (tx.type === "buy" || tx.type === "gift") {
@@ -435,9 +435,7 @@ function holdingWindowsNeedBackfill(
   for (const window of holdingWindows) {
     const fromDate = window?.fromDate;
     const toDate =
-      window?.toDate !== null && window?.toDate !== undefined
-        ? window.toDate
-        : today;
+      window?.toDate ?? today;
     if (!fromDate || !toDate || fromDate > toDate) continue;
 
     const inWindow = sortedStored.filter((d) => d >= fromDate && d <= toDate);
@@ -755,7 +753,7 @@ async function cleanupStaleQuotes(
     for (const w of holdingWindows) {
       windowInvIds.push(invId);
       fromDates.push(w.fromDate);
-      toDates.push(w.toDate !== null ? w.toDate : todayUtc);
+      toDates.push(w.toDate ?? todayUtc);
     }
   }
 
@@ -773,7 +771,7 @@ async function cleanupStaleQuotes(
          )`,
       [invIds, windowInvIds, fromDates, toDates],
     );
-    totalDeleted = result.rowCount || 0;
+    totalDeleted = result.rowCount ?? 0;
   } catch (error) {
     logger.warn("Failed to cleanup stale quotes", {
       investmentCount: invIds.length,

@@ -21,7 +21,7 @@ export function startAnalysisMonitorScheduler() {
   // One startup catch-up, then bounded local-only checks. Missed periods are
   // not replayed as repeated alerts after a sleeping desktop resumes.
   void tick();
-  const interval = setInterval(tick, 60_000);
+  const interval = setInterval(() => void tick(), 60_000);
   interval.unref?.();
   return interval;
 }

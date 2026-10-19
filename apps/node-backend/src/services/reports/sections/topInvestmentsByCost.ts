@@ -18,7 +18,7 @@ export function renderTopInvestmentsByCost(
 ): string {
   const byInvestment = data?.byInvestment ?? [];
 
-  if (!byInvestment.length) {
+  if (byInvestment.length === 0) {
     return emptySection({
       title: "Top Investments by Tax Cost",
       subtitle: "Investments with the highest tax and fee burden",

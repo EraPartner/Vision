@@ -19,7 +19,7 @@ export async function computeCategoryBreakdown({
   targetCurrency?: string | undefined;
   ancestorCategoryId?: number | undefined;
 } = {}) {
-  const categories = Object.keys(filters).length
+  const categories = Object.keys(filters).length > 0
     ? await infoRepository.getCategoryBreakdown(
         targetCurrency,
         ancestorCategoryId,
@@ -36,7 +36,7 @@ export async function computeCategoryBreakdown({
     { categories },
     {
       source:
-        ancestorCategoryId === undefined && !Object.keys(filters).length
+        ancestorCategoryId === undefined && Object.keys(filters).length === 0
           ? "mv"
           : "live",
     },

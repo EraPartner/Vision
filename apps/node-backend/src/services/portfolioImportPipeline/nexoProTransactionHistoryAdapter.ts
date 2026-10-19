@@ -345,7 +345,7 @@ export async function parseNexoProSpotHistory(
         const missing = REQUIRED_COLUMNS.filter(
           (column) => !normalized.includes(column),
         );
-        if (missing.length)
+        if (missing.length > 0)
           throw new ValidationError(
             `Nexo Pro Spot history is missing columns: ${missing.join(", ")}`,
           );

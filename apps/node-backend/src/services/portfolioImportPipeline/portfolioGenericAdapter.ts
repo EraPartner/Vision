@@ -241,7 +241,7 @@ function rowToParsed(
   config: PortfolioParserConfig,
   rowNumber: number,
 ): ParsedPortfolioRow | null {
-  const colMap = config.column_mapping || {};
+  const colMap = config.column_mapping ?? {};
   const dateStr = cell(row, colMap.date);
   if (!dateStr) return null;
   const date = parseDateWithFormat(dateStr, config.date_format || "");
@@ -379,7 +379,7 @@ async function parseFormat(
       columns: true,
       skip_empty_lines: true,
       delimiter: config.separator || ",",
-      from_line: (config.skip_rows || 0) + 1,
+      from_line: (config.skip_rows ?? 0) + 1,
       relax_column_count: true,
     },
     config.encoding || "utf-8",

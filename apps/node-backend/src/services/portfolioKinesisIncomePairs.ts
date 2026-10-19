@@ -237,7 +237,7 @@ export function proveKinesisIncomePairs({
     if (
       units.length > 1 ||
       planned.length > 1 ||
-      (units.length && planned.length)
+      (units.length > 0 && planned.length > 0)
     ) {
       issue(
         "paired_income_ambiguous_acquisition",
@@ -346,7 +346,7 @@ export function proveKinesisIncomePairs({
     const active = incomeContext.receipts.filter(
       (receipt) => Number(receipt.unit_transaction_id) === Number(current.id),
     );
-    if (existing.length || active.length) {
+    if (existing.length > 0 || active.length > 0) {
       const receipt = active[0],
         income = existing[0];
       const old =

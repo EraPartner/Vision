@@ -99,15 +99,21 @@ export async function streamImport<R extends StreamImportResult>(
   }: {
     filePath: string;
     errorLogMessage: string;
-    run: (onProgress: (ev: ImportProgressEvent) => Promise<void>) => Promise<R>;
+    run: (onProgress: (ev: ImportProgressEvent) => void) => Promise<R>;
     buildComplete: (result: R) => object;
   },
 ) {
   const writer = createSseWriter(req, res);
 
   try {
-    const result = await run(async (ev) => {
-      await writer.write("progress", progressToPercent(ev));
+    // The pipelines report progress synchronously and never await it, so a
+    // failed progress write is logged here instead of becoming unhandled.
+    const result = await run((ev) => {
+      writer.write("progress", progressToPercent(ev)).catch((err: unknown) => {
+        logger.warn("Import progress event write failed", {
+          error: (err as Error).message,
+        });
+      });
     });
 
     if (result.requiresReview) {

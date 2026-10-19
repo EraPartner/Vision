@@ -75,11 +75,9 @@ async function getBrowser(): Promise<Browser> {
   // Memoize the in-flight launch: two concurrent first renders otherwise both
   // launched Chromium, the second assignment overwrote `browser`, and the first
   // process leaked. The promise clears on settle so a failed launch can retry.
-  if (!launchPromise) {
-    launchPromise = launchBrowser().finally(() => {
+  launchPromise ??= launchBrowser().finally(() => {
       launchPromise = null;
     });
-  }
   return launchPromise;
 }
 

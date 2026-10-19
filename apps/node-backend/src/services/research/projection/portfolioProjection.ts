@@ -31,6 +31,7 @@ import {
   getSnapshots,
 } from '../../portfolioPerformanceSnapshotService.ts';
 import { mean, stdev, quantile, clamp, flowAdjustedLogReturns, valueAt } from './stats.ts';
+import { nanToZero } from '../../../lib/math.ts';
 
 const TRADING_DAYS_PER_MONTH = 21;
 const TRADING_DAYS_PER_YEAR = 252;
@@ -208,7 +209,7 @@ export async function runPortfolioForecast(
     || `pf:${currency}:${horizonMonths}:${paths}:${method}:${forwardBlend}:${monthlyContribution}${hasScheduleOverride ? `:${contributions.join(',')}` : ''}`;
 
   const summary = await d.getPortfolioSummary(currency);
-  const startValue = Number(summary?.totals?.totalPortfolioValue) || 0;
+  const startValue = nanToZero(Number(summary?.totals?.totalPortfolioValue));
   if (!(startValue > 0)) return { available: false, reason: 'no_holdings' };
 
   // "Net invested" is the capital actually contributed (cost basis), NOT current
@@ -218,7 +219,7 @@ export async function runPortfolioForecast(
   const investedBasis = Number(summary?.totals?.totalInvested);
   const startInvested = investedBasis > 0 ? investedBasis : startValue;
 
-  const snapshots = (await d.getSnapshots('2000-01-01', d.today(), currency)) || [];
+  const snapshots = (await d.getSnapshots('2000-01-01', d.today(), currency)) ?? [];
   // Drift/vol come from FLOW-ADJUSTED returns: raw portfolio value rises on
   // deposits as well as market moves, so feeding raw value here would read every
   // contribution as investment return and inflate the projection (see stats.js).
@@ -237,7 +238,7 @@ export async function runPortfolioForecast(
   let blendedDailyDrift = histDailyDrift;
   let forwardHoldings: ForwardHolding[] = [];
   if (forwardBlend > 0) {
-    const holdings = (summary.summaries || []).filter((h) => Number(h.currentValue) > 0);
+    const holdings = (summary.summaries ?? []).filter((h) => Number(h.currentValue) > 0);
     const ranked = [...holdings]
       .sort((a, b) => Number(b.currentValue) - Number(a.currentValue))
       .slice(0, MAX_FORWARD_HOLDINGS);
@@ -311,7 +312,7 @@ export async function runPortfolioForecast(
   const probBelowInvested = finals.filter((v) => v < netInvested).length / paths;
   // goalMonth is clamped to 1..horizonMonths above.
   const goalValues = goalMonth === undefined ? finals : valueAt(monthValues, goalMonth - 1);
-  const probTarget = targetValue ? goalValues.filter((v) => v >= targetValue).length / paths : undefined;
+  const probTarget = targetValue !== undefined && targetValue !== 0 ? goalValues.filter((v) => v >= targetValue).length / paths : undefined;
 
   return {
     available: true,

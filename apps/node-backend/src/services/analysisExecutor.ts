@@ -8,6 +8,7 @@ import {
   cancelBackendRowSchema,
 } from "../database/rows/analysis.ts";
 import { APPROVED_ANALYSIS_RELATIONS } from "./analysisCatalog.ts";
+import { nanToZero, nonZeroOr } from "../lib/math.ts";
 
 const MAX_ROWS = 1000;
 const DEFAULT_ROWS = 500;
@@ -289,10 +290,10 @@ export async function executeAnalysisSql({
   }
   const checkedSql = __validateAnalysisSql(sql, datasetIds);
   const pageLimit = Math.min(
-    Math.max(Number(limit) || DEFAULT_ROWS, 1),
+    Math.max(nonZeroOr(Number(limit), DEFAULT_ROWS), 1),
     MAX_ROWS,
   );
-  const pageOffset = Math.max(Number(offset) || 0, 0);
+  const pageOffset = Math.max(nanToZero(Number(offset)), 0);
   const client = await pool.connect();
   const startedAt = new Date().toISOString();
   let rollbackFailed = false;
@@ -328,7 +329,7 @@ export async function executeAnalysisSql({
       );
     let byteLength = Buffer.byteLength(JSON.stringify(rows));
     let byteTruncated = false;
-    while (rows.length && byteLength > MAX_RESULT_BYTES) {
+    while (rows.length > 0 && byteLength > MAX_RESULT_BYTES) {
       rows.pop();
       byteTruncated = true;
       byteLength = Buffer.byteLength(JSON.stringify(rows));

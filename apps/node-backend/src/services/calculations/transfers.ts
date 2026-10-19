@@ -62,7 +62,7 @@ export function resolveTransferMatches(candidatePairs: TransferPair[]): {
   for (const [outId, ins] of outToIns) {
     if (autoOut.has(outId)) continue;
     const candidateInIds = ins.filter((id) => !usedIn.has(id));
-    if (candidateInIds.length) suggestions.push({ outId, candidateInIds });
+    if (candidateInIds.length > 0) suggestions.push({ outId, candidateInIds });
   }
 
   return { autoPairs, suggestions };

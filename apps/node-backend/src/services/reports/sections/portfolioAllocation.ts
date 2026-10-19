@@ -12,9 +12,9 @@ export function renderPortfolioAllocation(
   { currency }: { currency: string },
 ): string {
   const snapshots = data?.snapshots ?? [];
-  const latest    = snapshots.length ? snapshots[snapshots.length - 1] : null;
+  const latest    = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
 
-  if (!latest && !data?.breakdown?.length) {
+  if (!latest && (data?.breakdown?.length ?? 0) === 0) {
     return emptySection({
       title: 'Asset Allocation',
       subtitle: 'Distribution across asset classes',

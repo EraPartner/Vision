@@ -5,6 +5,7 @@ import type {
   ResearchPassageInput,
   ResearchPassageRow,
 } from "../repositories/aiResearchDocumentRepository.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
 
@@ -112,7 +113,7 @@ function extractDocument(buffer: Buffer, mediaType: string): ExtractedDocument {
     if (passages.length >= MAX_PASSAGES) break;
   }
   flush();
-  if (!passages.length)
+  if (passages.length === 0)
     return {
       status: "failed",
       error: "No readable text was extracted",
@@ -207,7 +208,7 @@ function cosine(a: number[] | undefined, b: number[] | undefined) {
     !Array.isArray(a) ||
     !Array.isArray(b) ||
     a.length !== b.length ||
-    !a.length
+    a.length === 0
   )
     return -1;
   let dot = 0;
@@ -221,7 +222,7 @@ function cosine(a: number[] | undefined, b: number[] | undefined) {
     aa += x * x;
     bb += y * y;
   }
-  return aa && bb ? dot / Math.sqrt(aa * bb) : -1;
+  return aa !== 0 && bb !== 0 ? dot / Math.sqrt(aa * bb) : -1;
 }
 
 function cite(
@@ -268,7 +269,7 @@ export async function searchResearchDocuments(
 ) {
   const normalized = String(search || "").trim();
   if (!normalized) throw new Error("Search query is required");
-  const boundedLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
+  const boundedLimit = Math.min(Math.max(nonZeroOr(Number(limit), 8), 1), 20);
   const keyword =
     mode === "semantic"
       ? []
@@ -291,7 +292,7 @@ export async function searchResearchDocuments(
         .filter((entry) => entry.score >= 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, boundedLimit * 2);
-      semanticStatus = semantic.length ? "available" : "unavailable";
+      semanticStatus = semantic.length > 0 ? "available" : "unavailable";
     } catch (error) {
       if (signal?.aborted) throw error;
       semanticStatus = "unavailable";

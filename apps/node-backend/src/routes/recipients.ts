@@ -35,6 +35,7 @@ import {
 // deletes must schedule a refresh — otherwise the dashboard serves the old
 // grouping until an unrelated transaction mutation.
 import { scheduleRefresh } from "../services/materializedViewService.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 const router = Router();
 
@@ -44,7 +45,7 @@ const patternParams = z.object({ id: idSchema(), patternId: idSchema() });
 
 const clustersQuery = z.object({
   min_count: singleQueryString.transform((raw) =>
-    Math.max(2, parseInt(raw ?? "", 10) || 2),
+    Math.max(2, nonZeroOr(parseInt(raw ?? "", 10), 2)),
   ),
 });
 
@@ -212,7 +213,7 @@ router.post("/:id/merge", async (req, res) => {
 
   const primary = await recipientService.getById(primaryId);
   if (!primary) throw new NotFoundError("Primary recipient not found");
-  if (primary.primary_recipient_id) {
+  if (primary.primary_recipient_id != null) {
     throw new ValidationError(
       "Cannot merge into a recipient that is itself an alias. Use its primary instead.",
     );

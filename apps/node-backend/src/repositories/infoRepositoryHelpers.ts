@@ -8,6 +8,7 @@ import { convertRowsToEur } from "../services/currency/currencyConversionService
 import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.ts";
+import { nanToZero } from "../lib/math.ts";
 
 /**
  * Whether internal transfers (ADR-083) should be counted in cash-flow
@@ -141,7 +142,7 @@ export function buildPeriodPivot<T extends PeriodPivotRow>(
     // parseInt stringifies its argument itself; String() only makes it explicit.
     const id = parseInt(String(row[idField]), 10);
     const eur = Math.abs(row.amount_eur);
-    const cnt = parseInt(row.cnt, 10) || 0;
+    const cnt = nanToZero(parseInt(row.cnt, 10));
 
     const entities = (periodMap[period] ??= {});
     let entity = entities[id];

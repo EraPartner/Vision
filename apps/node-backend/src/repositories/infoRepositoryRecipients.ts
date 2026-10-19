@@ -34,6 +34,7 @@ import {
   mapRowsForAmountConversion,
 } from "./infoRepositoryHelpers.ts";
 import type { PeriodPivotEntity } from "./infoRepositoryHelpers.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export interface RecipientInsightsOptions {
   excludedCategoryIds?: number[] | undefined;
@@ -109,7 +110,7 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length
+    const dateWhere = dateFilters.length > 0
       ? `AND ${dateFilters.join(" AND ")}`
       : "";
 
@@ -165,8 +166,7 @@ export const recipientInsightsRepository = {
       const eur = row.amount_eur;
       const count = parseInt(row.tx_count, 10);
 
-      if (!recipientAgg[rid]) {
-        recipientAgg[rid] = {
+      recipientAgg[rid] ??= {
           recipientId: rid,
           name: row.recipient_name,
           totalSpend: 0,
@@ -176,7 +176,6 @@ export const recipientInsightsRepository = {
           firstSeen: toWireDate(row.first_seen),
           lastSeen: toWireDate(row.last_seen),
         };
-      }
       // Decimal accumulation (money-hygiene): native `+=` over per-currency
       // converted spend drifts sub-cent before the final round.
       recipientAgg[rid].totalSpend = toNumber(
@@ -290,8 +289,7 @@ export const recipientInsightsRepository = {
     for (const row of momConverted) {
       const rid = row.recipient_id;
       const eur = row.amount_eur;
-      if (!momAgg[rid])
-        momAgg[rid] = { name: row.recipient_name, current: 0, previous: 0 };
+      momAgg[rid] ??= { name: row.recipient_name, current: 0, previous: 0 };
       // Decimal accumulation (money-hygiene), as in the top-merchants reduction
       // above: per-date conversion means a month is now many converted rows,
       // and native `+=` over them drifts sub-cent before the final round.
@@ -350,7 +348,7 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length
+    const dateWhere = dateFilters.length > 0
       ? `AND ${dateFilters.join(" AND ")}`
       : "";
 
@@ -390,7 +388,7 @@ export const recipientInsightsRepository = {
       const year = String(row.year);
       const rid = row.recipient_id;
       const eur = Math.abs(row.amount_eur);
-      const cnt = parseInt(row.cnt, 10) || 0;
+      const cnt = nanToZero(parseInt(row.cnt, 10));
 
       const yearRecipients = (yearRecMap[year] ??= {});
       let rec = yearRecipients[rid];

@@ -5,7 +5,7 @@
  */
 
 export function mean(arr: number[]) {
-  if (!arr.length) return 0;
+  if (arr.length === 0) return 0;
   let s = 0;
   for (const v of arr) s += v;
   return s / arr.length;
@@ -36,7 +36,7 @@ export function valueAt<T>(arr: readonly T[], index: number): T {
 
 /** Linear-interpolated percentile of an ascending-sorted array. p in [0,100]. */
 export function quantile(sortedAsc: number[], p: number) {
-  if (!sortedAsc.length) return 0;
+  if (sortedAsc.length === 0) return 0;
   const idx = (p / 100) * (sortedAsc.length - 1);
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);

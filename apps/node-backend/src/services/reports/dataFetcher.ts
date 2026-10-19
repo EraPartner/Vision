@@ -339,7 +339,7 @@ export async function fetchFinancialData(
 export function filterMonthsByPeriod<
   M extends Pick<MonthRow, "year" | "month">,
 >(months: M[] | null | undefined, period: Period): M[] {
-  if (!months?.length) return [];
+  if (!months || months.length === 0) return [];
   // Resolve "today" in APP_TIMEZONE, not the server process's local time
   // (ADR-009) — the two can disagree near midnight and shift YTD/rolling
   // month boundaries by one month.

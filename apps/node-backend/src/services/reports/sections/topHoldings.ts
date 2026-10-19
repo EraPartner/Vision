@@ -13,7 +13,7 @@ export function renderTopHoldings(
 ): string {
   const breakdown = data?.breakdown ?? [];
 
-  if (!breakdown.length) {
+  if (breakdown.length === 0) {
     return emptySection({
       title: 'Top Holdings',
       subtitle: 'Largest positions by current value',

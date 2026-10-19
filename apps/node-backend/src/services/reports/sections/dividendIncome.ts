@@ -14,7 +14,7 @@ export function renderDividendIncome(
   const byMonth      = data?.dividends?.byMonth      ?? [];
   const byInvestment = data?.dividends?.byInvestment ?? [];
 
-  if (!byMonth.length && !byInvestment.length) {
+  if (byMonth.length === 0 && byInvestment.length === 0) {
     return emptySection({ title: 'Dividend Income', subtitle: 'Dividend cash flows over the selected period', heading: 'No dividend data', message: 'No dividend transactions found for the selected period.' });
   }
 

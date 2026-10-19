@@ -54,7 +54,7 @@ export async function findBestRecipientMatches(
   { threshold = DEFAULT_MATCH_THRESHOLD }: { threshold?: number } = {},
 ): Promise<Map<string, RecipientMatch>> {
   const out = new Map<string, RecipientMatch>();
-  if (!Array.isArray(names) || !names.length) return out;
+  if (!Array.isArray(names) || names.length === 0) return out;
 
   // Normalize once up-front; preserve the mapping raw -> normalized so we can
   // project results back onto the caller's original input strings.
@@ -65,7 +65,7 @@ export async function findBestRecipientMatches(
     if (!norm) continue;
     normalizedByRaw.set(raw, norm);
   }
-  if (!normalizedByRaw.size) return out;
+  if (normalizedByRaw.size === 0) return out;
 
   const uniqNorms = [...new Set(normalizedByRaw.values())];
 

@@ -33,6 +33,7 @@ import type {
   QueryRunner,
   TransactionTagRef,
 } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 
 export type {
   QueryRunner,
@@ -526,7 +527,7 @@ export const plannedTransactionRepository = {
       `;
       const [countRow] = await queryRows(countRowSchema, countSql, params);
       // String(): parseInt coerced a missing row's `undefined` the same way.
-      total = parseInt(String(countRow?.count), 10) || 0;
+      total = nanToZero(parseInt(String(countRow?.count), 10));
     }
     const rows: PlannedRowInHydration[] = pageRows.map(
       ({ total_count: _total_count, ...row }) => row,
@@ -621,15 +622,15 @@ export const plannedTransactionRepository = {
     }
 
     for (const row of rows) {
-      const executions = executionsByPlannedTransactionId.get(row.id) || [];
+      const executions = executionsByPlannedTransactionId.get(row.id) ?? [];
       row.executions = executions;
       row.execution_count = executions.length;
       row.executed_transaction_id =
         executions[0]?.executed_transaction_id ?? null;
       row.loan_schedule = row.is_loan
-        ? schedulesByPlannedTransactionId.get(row.id) || []
+        ? schedulesByPlannedTransactionId.get(row.id) ?? []
         : [];
-      row.tags = tagsByPlannedTransactionId.get(row.id) || [];
+      row.tags = tagsByPlannedTransactionId.get(row.id) ?? [];
     }
 
     // The loop above attached every sub-collection to every row.

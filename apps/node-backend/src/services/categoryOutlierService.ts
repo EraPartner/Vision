@@ -288,7 +288,7 @@ function filterDismissedFindings(
     { dismissedMs: number; deviationAtDismiss: number }
   >();
   for (const rec of dismissRecords) {
-    if (!rec) continue;
+    if (rec == null) continue;
     const dismissedMs = new Date(rec.dismissedAt).getTime();
     if (Number.isNaN(dismissedMs)) continue;
     const key = `${rec.categoryId}:${rec.monthKey}`;

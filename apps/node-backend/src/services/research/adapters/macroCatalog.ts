@@ -175,7 +175,7 @@ export function isValidSeriesId(
   seriesId: unknown,
 ): seriesId is string {
   const re = SERIES_ID_PATTERN[provider as keyof typeof SERIES_ID_PATTERN];
-  return Boolean(re && typeof seriesId === "string" && re.test(seriesId));
+  return Boolean(re != null && typeof seriesId === "string" && re.test(seriesId));
 }
 
 export { MACRO_CATALOG };

@@ -51,7 +51,7 @@ function number(value: DecimalInput): Decimal | undefined {
   }
 }
 
-function eligible(item: RepairItem) {
+function eligible(item: RepairItem): boolean {
   let config: unknown = item.row.custom_config;
   try {
     if (typeof config === "string") config = JSON.parse(config);
@@ -64,7 +64,7 @@ function eligible(item: RepairItem) {
       : undefined;
   return (
     format === "ibkr_transaction_history" &&
-    item.imported &&
+    item.imported != null &&
     id(item.imported.id) &&
     id(item.imported.import_batch_id) &&
     item.row.route === "portfolio" &&
@@ -74,7 +74,7 @@ function eligible(item: RepairItem) {
     item.row.currency === item.source.currency &&
     item.imported.currency === item.source.currency &&
     Number(item.imported.investment_id) === Number(item.row.investment_id) &&
-    item.row.dedup_fingerprint &&
+    Boolean(item.row.dedup_fingerprint) &&
     item.row.dedup_fingerprint === item.imported.dedup_fingerprint &&
     item.row.dedup_fingerprint_version ===
       item.imported.dedup_fingerprint_version
@@ -170,7 +170,7 @@ export function narrowImportedIbkrRepairCandidates<T extends RepairItem>(
     for (const candidate of item.candidates) {
       if (comparison(item, candidate) !== "exact") continue;
       const key = Number(candidate.id);
-      claims.set(key, [...(claims.get(key) || []), item]);
+      claims.set(key, [...(claims.get(key) ?? []), item]);
     }
   }
   const prepared: T[] = [];
@@ -185,7 +185,7 @@ export function narrowImportedIbkrRepairCandidates<T extends RepairItem>(
       );
     });
     if (candidates.length === item.candidates.length) prepared.push(item);
-    else if (!candidates.length)
+    else if (candidates.length === 0)
       settledDuplicates.push({ ...item, candidates });
     else prepared.push({ ...item, candidates });
   }

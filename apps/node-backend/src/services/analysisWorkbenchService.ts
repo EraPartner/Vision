@@ -98,11 +98,11 @@ export function isCompleteAnalysisResult(result: AnalysisResultLike) {
     result.complete !== false &&
     result.window?.kind === "page" &&
     !result.window.hasMore &&
-    !result.window.offset &&
+    (result.window.offset ?? 0) === 0 &&
     result.coverage?.complete !== false &&
     result.coverage?.status !== "partial" &&
-    !(result.transformationErrors || []).length &&
-    (result.transformationCoverage || []).every(
+    (result.transformationErrors ?? []).length === 0 &&
+    (result.transformationCoverage ?? []).every(
       (coverage) => coverage.complete !== false,
     )
   );
@@ -120,7 +120,7 @@ function formulaOutputColumns(
       type: formula.resultType || "decimal",
       nullable: true,
       ...(evaluated.formulaUnits?.[formula.id] || formula.unit
-        ? { unit: evaluated.formulaUnits?.[formula.id] || formula.unit }
+        ? { unit: evaluated.formulaUnits?.[formula.id] ?? formula.unit }
         : {}),
     }));
   const ids = new Set(additions.map((column) => column.id));
@@ -147,12 +147,12 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
   let request = input;
   let prepared: AnalysisResultLike = {
     rows: input.rows,
-    columns: input.columns || [],
-    window: input.window || {
+    columns: input.columns ?? [],
+    window: input.window ?? {
       kind: "page",
       offset: 0,
       hasMore: input.complete === false,
-      returnedRows: input.rows?.length || 0,
+      returnedRows: input.rows?.length ?? 0,
     },
     coverage: input.coverage,
     complete: input.complete,
@@ -185,7 +185,7 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
   const columns = formulaOutputColumns(
     // Formula requests were rebuilt above with the prepared columns.
     request.columns!,
-    request.formulas || [],
+    request.formulas ?? [],
     evaluated,
   );
   return {
@@ -199,9 +199,9 @@ export function evaluateAnalysisExtension(input: AnalysisExtensionRequest) {
       complete: request.complete && evaluated.complete,
       status: request.complete && evaluated.complete ? "complete" : "partial",
     },
-    transformationCoverage: prepared.transformationCoverage || [],
-    transformationErrors: prepared.transformationErrors || [],
-    preparationLineage: prepared.preparationLineage || [],
+    transformationCoverage: prepared.transformationCoverage ?? [],
+    transformationErrors: prepared.transformationErrors ?? [],
+    preparationLineage: prepared.preparationLineage ?? [],
   };
 }
 
@@ -210,16 +210,16 @@ export function applyAnalysisWorkbench(
   result: AnalysisResultLike,
   workbench: AnalysisWorkbench = {},
 ) {
-  const source = result.sourceResult || result;
+  const source = result.sourceResult ?? result;
   let rows = source.rows;
-  let columns = source.declaredColumns?.length
+  let columns = source.declaredColumns && source.declaredColumns.length > 0
     ? source.declaredColumns
     : source.columns;
   let complete = isCompleteAnalysisResult(source);
   const lineage: AnalysisLineageEntry[] = [];
   const coverage: AnalysisExtensionCoverage[] = [];
   const errors: AnalysisExtensionError[] = [];
-  if (workbench.steps?.length) {
+  if (workbench.steps && workbench.steps.length > 0) {
     const prepared = prepareAnalysisData({
       rows,
       columns,
@@ -236,7 +236,7 @@ export function applyAnalysisWorkbench(
       prepared.coverage.complete !== false &&
       prepared.errors.length === 0;
   }
-  if (workbench.time?.dateColumn && workbench.time.valueColumns?.length) {
+  if (workbench.time?.dateColumn && workbench.time.valueColumns?.length > 0) {
     const compared = compareAnalysisTime({
       rows,
       columns,
@@ -255,7 +255,7 @@ export function applyAnalysisWorkbench(
   }
   return {
     ...source,
-    ...(workbench.steps?.length || workbench.time?.dateColumn
+    ...((workbench.steps && workbench.steps.length > 0) || workbench.time?.dateColumn
       ? { sourceResult: source }
       : {}),
     rows,
@@ -280,27 +280,27 @@ export function applyAnalysisFormulaModel(
   model: AnalysisFormulaModel = {},
 ) {
   const assumptions = Object.fromEntries(
-    (model.assumptions || []).map((item): [string, unknown] => [
+    (model.assumptions ?? []).map((item): [string, unknown] => [
       item.id,
       model.assumptionValues?.[item.id] ?? item.defaultValue,
     ]),
   );
-  const columns = result.declaredColumns?.length
+  const columns = result.declaredColumns && result.declaredColumns.length > 0
     ? result.declaredColumns
     : result.columns;
   const evaluated = evaluateAnalysisFormulas({
     rows: result.rows,
     columns,
-    formulas: model.formulas || [],
+    formulas: model.formulas ?? [],
     assumptions,
     assumptionUnits: Object.fromEntries(
-      (model.assumptions || [])
+      (model.assumptions ?? [])
         .filter((item) => item.unit)
         .map((item): [string, FormulaUnitInput] => [item.id, item.unit]),
     ),
     inputComplete: isCompleteAnalysisResult(result),
   });
-  const formulaColumns = (model.formulas || [])
+  const formulaColumns = (model.formulas ?? [])
     .filter((f) => f.scope === "row")
     .map((f) => ({
       id: f.id,
@@ -314,8 +314,8 @@ export function applyAnalysisFormulaModel(
   const ids = new Set(formulaColumns.map((c) => c.id));
   return {
     ...result,
-    ...((model.formulas || []).length
-      ? { sourceResult: result.sourceResult || result }
+    ...((model.formulas ?? []).length > 0
+      ? { sourceResult: result.sourceResult ?? result }
       : {}),
     rows: evaluated.rows,
     complete: isCompleteAnalysisResult(result) && evaluated.complete,
@@ -342,8 +342,8 @@ export function applyAnalysisScenarioModel(
   result: AnalysisResultLike,
   model: AnalysisScenarioModelInput | null | undefined,
 ) {
-  if (!model?.joins?.length) return result;
-  const columns = result.declaredColumns?.length
+  if ((model?.joins?.length ?? 0) === 0) return result;
+  const columns = result.declaredColumns && result.declaredColumns.length > 0
     ? result.declaredColumns
     : result.columns;
   const validated = validateScenarioBindings(model, columns);

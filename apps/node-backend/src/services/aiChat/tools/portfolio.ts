@@ -102,7 +102,7 @@ export const getPortfolioHoldings = {
     });
 
     const summary = await loadCanonicalPortfolioSummary(cache);
-    const allowedInvestmentIds = new Set(scope.investmentIds || []);
+    const allowedInvestmentIds = new Set(scope.investmentIds ?? []);
     const holdings = summary.summaries
       .filter(
         (item) =>
@@ -178,7 +178,7 @@ export const getReturnsForRange = {
     });
 
     const range = await loadRangeDeltas(cache, from, to);
-    const allowedInvestmentIds = new Set(scope.investmentIds || []);
+    const allowedInvestmentIds = new Set(scope.investmentIds ?? []);
     const rows = range.rows
       .filter(
         ({ current }) =>

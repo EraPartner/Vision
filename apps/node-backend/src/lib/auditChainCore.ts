@@ -189,7 +189,7 @@ export function verifyAuditChain(
   if (entries.length > MAX_SEGMENT_ENTRIES)
     throw new RangeError("Audit segment exceeds entry limit");
   if (
-    !checkpoint ||
+    checkpoint == null ||
     !Number.isSafeInteger(checkpoint.firstSequence) ||
     checkpoint.firstSequence < 1
   ) {

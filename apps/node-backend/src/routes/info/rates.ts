@@ -79,7 +79,7 @@ router.get(
     const storedDate = rates[0]?.rate_date ?? null;
     const isStale = !storedDate || storedDate < today;
     const lastFetchedAt = rates.reduce((latest: number, row) => {
-      const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;
+      const ts = row.fetched_at != null ? new Date(row.fetched_at).getTime() : NaN;
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
     const source = rates.length > 0 ? "database" : "fallback";
@@ -96,7 +96,7 @@ router.get(
     res.ok({
       total_rates: rates.length,
       rates,
-      fallback_rates: FALLBACK_RATES || {},
+      fallback_rates: FALLBACK_RATES,
       source,
       is_stale: isStale,
       last_fetched_at:

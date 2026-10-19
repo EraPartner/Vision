@@ -407,7 +407,7 @@ export async function saveHistoricalPointsToDatabase(
   } catch (error) {
     if (hasErrorCode(error, "42P01")) return;
     if (hasErrorCode(error, "23503")) {
-      throw Object.assign(error, {
+      Object.assign(error, {
         context:
           "priceCache upsert: orphan investment_id — resolve via investigation of FK violation, never auto-drop",
       });

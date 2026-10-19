@@ -179,7 +179,7 @@ export async function overrideRecipient({
       "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
       [batchId],
     );
-    if (!batch.rowCount)
+    if ((batch.rowCount ?? 0) === 0)
       throw new ConflictError(
         "Import review has ended; reload the batch before making changes",
       );
@@ -212,7 +212,7 @@ export async function overrideCategory({
       "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
       [batchId],
     );
-    if (!batch.rowCount)
+    if ((batch.rowCount ?? 0) === 0)
       throw new ConflictError(
         "Import review has ended; reload the batch before making changes",
       );

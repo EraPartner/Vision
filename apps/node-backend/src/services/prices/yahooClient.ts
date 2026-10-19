@@ -30,11 +30,9 @@ let clientPromise: Promise<YahooClient> | null = null;
  * first call and returning the cached instance thereafter.
  */
 export function getYahooClient(): Promise<YahooClient> {
-  if (!clientPromise) {
-    clientPromise = import('yahoo-finance2').then(
+  clientPromise ??= import('yahoo-finance2').then(
       ({ default: YahooFinance }) => new YahooFinance({ suppressNotices: ['yahooSurvey'] }),
     );
-  }
   return clientPromise;
 }
 

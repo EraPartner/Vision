@@ -26,6 +26,7 @@ import {
 } from "./portfolio/portfolioSummaryService.ts";
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
+import { nanToZero } from "../lib/math.ts";
 /** One `getSnapshots` row, as served to the performance chart. */
 export type PortfolioPerformanceSnapshot = {
   snapshot_date: Date;
@@ -86,7 +87,7 @@ export async function __storeCurrentBrokerSnapshot(
     ),
   ];
   return withTransaction(async (client) => {
-    const nameRows = accountIds.length
+    const nameRows = accountIds.length > 0
       ? await queryRows(
           accountDisplayNameRowSchema,
           `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
@@ -115,11 +116,11 @@ export async function __storeCurrentBrokerSnapshot(
         invested: toDecimal(0),
         gainLoss: toDecimal(0),
       };
-      current.value = current.value.plus(toDecimal(row.currentValue || 0));
+      current.value = current.value.plus(toDecimal(nanToZero(row.currentValue)));
       current.invested = current.invested.plus(
-        toDecimal(row.totalInvested || 0),
+        toDecimal(nanToZero(row.totalInvested)),
       );
-      current.gainLoss = current.gainLoss.plus(toDecimal(row.gainLoss || 0));
+      current.gainLoss = current.gainLoss.plus(toDecimal(nanToZero(row.gainLoss)));
       byKey.set(key, current);
     }
 
@@ -128,14 +129,14 @@ export async function __storeCurrentBrokerSnapshot(
     const parity = summary.brokerSnapshotParity;
     const parityDifference = parity
       ? toDecimal(parity.partitionValue).minus(parity.totalValue)
-      : valueSum.minus(summary.totals.totalPortfolioValue || 0);
+      : valueSum.minus(nanToZero(summary.totals.totalPortfolioValue));
     if (
       parity
         ? !parityDifference.toDecimalPlaces(6).isZero()
         : parityDifference.abs().gt(BROKER_HISTORY_PARITY_TOLERANCE)
     ) {
       throw new Error(
-        `Broker snapshot parity failed: partitions=${parity?.partitionValue ?? valueSum.toFixed(2)} total=${parity?.totalValue ?? toDecimal(summary.totals.totalPortfolioValue || 0).toFixed(2)}`,
+        `Broker snapshot parity failed: partitions=${parity?.partitionValue ?? valueSum.toFixed(2)} total=${parity?.totalValue ?? toDecimal(nanToZero(summary.totals.totalPortfolioValue)).toFixed(2)}`,
       );
     }
 

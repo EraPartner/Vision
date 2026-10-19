@@ -534,7 +534,7 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
     const list = entries
       .map(({ value }) => decimal(value))
       .filter((value): value is Decimal => value !== null);
-    if (!list.length) return null;
+    if (list.length === 0) return null;
     if (ast.name === "SUM") return Decimal.sum(...list);
     if (ast.name === "AVERAGE")
       return Decimal.sum(...list).dividedBy(list.length);
@@ -582,12 +582,12 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
     const list = entries
       .map(({ value }) => decimal(value))
       .filter((value): value is Decimal => value !== null);
-    if (!list.length) return null;
+    if (list.length === 0) return null;
     if (ast.name === "MEDIAN") {
       list.sort((a, b) => a.comparedTo(b));
       // A non-empty list: mid is in range, and mid >= 1 when the length is even.
       const mid = Math.floor(list.length / 2);
-      return list.length % 2
+      return list.length % 2 !== 0
         ? decimalAt(list, mid)
         : decimalAt(list, mid - 1)
             .plus(decimalAt(list, mid))
@@ -779,7 +779,7 @@ export function evaluateAnalysisFormulas({
     );
   const ids = new Set<string>();
   for (const formula of formulas) {
-    if (!formula || !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(formula.id || ""))
+    if (formula == null || !/^[A-Za-z][A-Za-z0-9._:-]{0,127}$/.test(formula.id || ""))
       throw new AnalysisFormulaError(
         "INVALID_FORMULA",
         "Every formula needs a stable identifier",
@@ -934,7 +934,7 @@ function normalizeUnit(
   unit: FormulaUnitInput,
   assumptions: Record<string, unknown> = {},
 ): FormulaUnit | undefined {
-  if (!unit) return undefined;
+  if (unit == null || unit === "") return undefined;
   if (typeof unit === "string") {
     if (/^[A-Z]{3}$/.test(unit)) return { kind: "money", currency: unit };
     if (unit === "percent")
@@ -979,7 +979,7 @@ function inferFormulaUnit(
         "UNIT_MISMATCH",
         "Formula combines incompatible units or currencies",
       );
-    return a || b;
+    return a ?? b;
   };
   if (ast.kind === "literal") return undefined;
   if (ast.kind === "reference") {
@@ -1041,7 +1041,7 @@ function inferFormulaUnit(
         "UNIT_MISMATCH",
         "Multiplication of two dimensional values is unsupported",
       );
-    return dimensionless(a) ? b || a : a;
+    return dimensionless(a) ? b ?? a : a;
   }
   const units = ast.args.map(infer);
   if (["COUNT", "COUNTIF", "YEAR", "MONTH"].includes(ast.name))
@@ -1089,10 +1089,10 @@ function assertAggregateUnits(
   context: FormulaContext,
 ): void {
   const unit = inferFormulaUnit(ast, {
-    columns: context.columns || [],
+    columns: context.columns ?? [],
     assumptions: context.assumptions,
-    assumptionUnits: context.assumptionUnits || {},
-    formulaUnits: context.formulaUnits || {},
+    assumptionUnits: context.assumptionUnits ?? {},
+    formulaUnits: context.formulaUnits ?? {},
     rows: context.rows,
   });
   if (!unit) {
@@ -1126,7 +1126,9 @@ function assertAggregateUnits(
       entries.some(
         ({ row, value }) =>
           value == null ||
-          (unit.currencyColumn && row[unit.currencyColumn] == null),
+          (unit.currencyColumn !== undefined &&
+            unit.currencyColumn !== "" &&
+            row[unit.currencyColumn] == null),
       )
     )
       throw new AnalysisFormulaError(

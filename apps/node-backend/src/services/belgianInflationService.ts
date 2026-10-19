@@ -367,7 +367,7 @@ function parseStatbelMonthString(value: unknown): string | undefined {
   const monthNum = monthNumberForName(monthName.toLowerCase());
   const year = parseNumeric(yearPart);
   if (
-    !monthNum ||
+    monthNum === undefined ||
     year === undefined ||
     !Number.isFinite(year) ||
     year < 1900 ||
@@ -518,10 +518,9 @@ async function fetchFromStatbel(): Promise<BelgianInflationRate[]> {
       }
     }
 
-    throw (
-      lastError ??
-      new Error(`Failed to fetch Belgian inflation rates from ${url}`)
-    );
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`Failed to fetch Belgian inflation rates from ${url}`, { cause: lastError });
   };
 
   let lastError: unknown;
@@ -533,10 +532,9 @@ async function fetchFromStatbel(): Promise<BelgianInflationRate[]> {
     }
   }
 
-  throw (
-    lastError ??
-    new Error("Failed to fetch Belgian inflation rates from Statbel")
-  );
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to fetch Belgian inflation rates from Statbel", { cause: lastError });
 }
 
 async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
@@ -578,30 +576,29 @@ async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
     }
   }
 
-  throw (
-    lastError ??
-    new Error("Failed to fetch Belgian inflation rates from Eurostat")
-  );
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Failed to fetch Belgian inflation rates from Eurostat", { cause: lastError });
 }
 
 async function fetchExternalInflationRates() {
   try {
     const rates = await fetchFromStatbel();
-    recordProviderSuccess("statbel");
+    void recordProviderSuccess("statbel");
     return { source: "statbel", rates };
   } catch (statbelError) {
     logger.debug("Statbel inflation fetch failed; trying Eurostat fallback", {
       error: errorMessage(statbelError),
     });
-    recordProviderError("statbel", statbelError);
+    void recordProviderError("statbel", statbelError);
   }
 
   try {
     const rates = await fetchFromEurostat();
-    recordProviderSuccess("eurostat");
+    void recordProviderSuccess("eurostat");
     return { source: "eurostat", rates };
   } catch (eurostatError) {
-    recordProviderError("eurostat", eurostatError);
+    void recordProviderError("eurostat", eurostatError);
     throw eurostatError;
   }
 }

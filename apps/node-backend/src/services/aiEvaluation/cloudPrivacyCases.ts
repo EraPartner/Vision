@@ -326,8 +326,8 @@ export const CLOUD_PRIVACY_EVALUATION_CASES = Object.freeze([
       mode: "cloud-plan",
       exchanges: Array.from({ length: 12 }, (_, index) =>
         exchange({
-          sessionId: index % 2 ? "session-b" : "session-a",
-          analysisId: index % 2 ? "analysis-b" : "analysis-a",
+          sessionId: index % 2 !== 0 ? "session-b" : "session-a",
+          analysisId: index % 2 !== 0 ? "analysis-b" : "analysis-a",
           sequence: Math.floor(index / 2) + 1,
           body: safePlan,
         }),

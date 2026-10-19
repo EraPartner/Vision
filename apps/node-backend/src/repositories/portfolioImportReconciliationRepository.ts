@@ -183,7 +183,7 @@ export async function readKinesisNetworkContext(
         .filter(Boolean),
     ),
   ];
-  if (!ids.length) return { sources: [], batches: [] };
+  if (ids.length === 0) return { sources: [], batches: [] };
   const owners = await readReconciliationSources(ids);
   const witnessIds = owners
     .map((row) =>
@@ -203,9 +203,9 @@ export async function readKinesisNativeGiftContext(
   history: readonly ReconciliationHistoryLike[],
 ): Promise<ReconciliationReceiptContext> {
   const ids = history
-    .filter((row) => row.type === "gift" && row.dedup_fingerprint)
+    .filter((row) => row.type === "gift" && Boolean(row.dedup_fingerprint))
     .map((row) => Number(row.id));
-  if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
   const receipts = await queryRows(
     reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
@@ -224,7 +224,7 @@ export async function readKinesisNativeGiftContext(
         .map((row) => Number(row.import_batch_id)),
     ]),
   ].sort((a, b) => a - b);
-  if (!batchIds.length) return { receipts, sources: [], batches: [] };
+  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
   const [allSources, allBatches] = await Promise.all([
     readReconciliationSources(batchIds),
     readReconciliationBatchScope(batchIds),
@@ -277,7 +277,7 @@ export async function assertNoActiveKinesisNetworkConsumers(
      WHERE s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=$1::text LIMIT 1`,
     [batchId],
   );
-  if (result.rows.length)
+  if (result.rows.length > 0)
     throw new Error(
       "Native wallet evidence is still used by an active broker transfer. Undo that transfer first.",
     );
@@ -288,9 +288,9 @@ export async function readKinesisAdoptionContext(
   history: readonly ReconciliationHistoryLike[],
 ): Promise<ReconciliationReceiptContext> {
   const ids = history
-    .filter((row) => row.dedup_fingerprint && row.import_batch_id == null)
+    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
     .map((row) => Number(row.id));
-  if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
   const receipts = await queryRows(
     reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
@@ -304,7 +304,7 @@ export async function readKinesisAdoptionContext(
   const batchIds = [
     ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
   ];
-  if (!batchIds.length) return { receipts, sources: [], batches: [] };
+  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
   let batches = await readReconciliationBatchScope(batchIds);
   const referenced = [
     ...new Set([
@@ -312,7 +312,7 @@ export async function readKinesisAdoptionContext(
       ...batches.flatMap(
         (batch) =>
           batchConfigFields(batch.custom_config)
-            ?.portfolio_performance_reference?.effectiveBatchIds || [],
+            ?.portfolio_performance_reference?.effectiveBatchIds ?? [],
       ),
     ]),
   ]
@@ -329,7 +329,7 @@ export async function readSaxoAdoptionContext(
   history: readonly ReconciliationHistoryLike[],
 ): Promise<ReconciliationReceiptContext> {
   const transactionIds = history
-    .filter((row) => row.dedup_fingerprint && row.import_batch_id == null)
+    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
     .map((row) => Number(row.id));
   if (transactionIds.length === 0)
     return { receipts: [], sources: [], batches: [] };

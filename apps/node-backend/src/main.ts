@@ -506,7 +506,7 @@ async function start() {
         // A fresh baseline can introduce routines after the app role's first
         // grant pass. Apply that grant set once more only when a grant was
         // missing before migration.
-        if (appRoleBootstrap.grantFailures) {
+        if ((appRoleBootstrap.grantFailures ?? 0) > 0) {
           await ensureAppRole({
             databaseUrl: settings.database.url,
             migrationsUrl: settings.database.migrationsUrl,
@@ -515,7 +515,7 @@ async function start() {
         endMig();
         resumeRecoverableInvestigations()
           .then((count) => {
-            if (count)
+            if (count > 0)
               logger.info("Resumed recoverable AI investigations", { count });
           })
           .catch((err) =>
@@ -576,7 +576,7 @@ async function start() {
 
     // Start Express server immediately after DB is ready
     const endListen = bootMark("app_listen");
-    const server = app.listen(PORT, HOST, async () => {
+    const server = app.listen(PORT, HOST, () => {
       endListen();
       bootSummary("backend_total");
       logger.info(`Financial Transaction Manager API (Node.js) started`, {
@@ -588,16 +588,17 @@ async function start() {
 
       analysisMonitorInterval = startAnalysisMonitorScheduler();
 
-      try {
-        const intervals = await runWarmupTasks({ warmupStatus, bootMark });
-        exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
-        quotesRefreshInterval = intervals.quotesRefreshInterval;
-        cashflowForecastRefreshInterval =
-          intervals.cashflowForecastRefreshInterval;
-        holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
-      } catch (err) {
-        logger.error("Warmup tasks failed", { error: (err as Error).message });
-      }
+      runWarmupTasks({ warmupStatus, bootMark })
+        .then((intervals) => {
+          exchangeRateRefreshInterval = intervals.exchangeRateRefreshInterval;
+          quotesRefreshInterval = intervals.quotesRefreshInterval;
+          cashflowForecastRefreshInterval =
+            intervals.cashflowForecastRefreshInterval;
+          holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
+        })
+        .catch((err: unknown) => {
+          logger.error("Warmup tasks failed", { error: (err as Error).message });
+        });
     });
 
     httpServer = server;
@@ -668,8 +669,9 @@ async function shutdown(signal?: string) {
   process.exit(0);
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+// shutdown() never rejects: pool teardown runs under Promise.allSettled.
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
 // Last-resort handlers. Node terminates the process on an unhandled rejection
 // or uncaught exception anyway — but with no structured log line, so under a

@@ -259,7 +259,7 @@ const finnhubAdapter = {
         title: n.headline,
         link: n.url,
         publisher: n.source,
-        publishedAt: n.datetime ? n.datetime * 1000 : undefined,
+        publishedAt: n.datetime !== undefined && n.datetime !== 0 ? n.datetime * 1000 : undefined,
         thumbnail: n.image || undefined,
         relatedSymbols: [symbol],
       }));

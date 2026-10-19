@@ -67,7 +67,7 @@ export function createSseWriter(
     res.write(':hb\n\n');
   }, SSE_HEARTBEAT_MS);
   // Never let the heartbeat keep the event loop (or a test run) alive.
-  if (heartbeat && typeof heartbeat.unref === 'function') heartbeat.unref();
+  if (typeof heartbeat.unref === 'function') heartbeat.unref();
   const stopHeartbeat = () => {
     if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
   };

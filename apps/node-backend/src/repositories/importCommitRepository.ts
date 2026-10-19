@@ -74,7 +74,7 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
     return true;
   });
   const candidateIds = new Set(candidates.map((row) => row.stagingId));
-  const inserted = candidates.length
+  const inserted = candidates.length > 0
     ? await queryRows(
         z.object({
           id: pgInt,

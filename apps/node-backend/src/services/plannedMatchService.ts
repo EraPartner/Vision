@@ -172,7 +172,7 @@ export async function autoLinkTransactions(
     const matches = candidatesByTx.get(tx.id);
     const planned = matches?.length === 1 ? matches[0] : undefined;
     if (!planned) continue;
-    if ((txIdsByPlanned.get(planned.id) || []).length !== 1) continue;
+    if ((txIdsByPlanned.get(planned.id) ?? []).length !== 1) continue;
 
     try {
       const { duplicate } = await executePlanned({

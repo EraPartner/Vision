@@ -237,7 +237,7 @@ export const recipientRepository = {
       WHERE r.id = $1
     `;
     const row = await queryOne(enrichedRecipientRowSchema, sql, [id]);
-    return row || null;
+    return row ?? null;
   },
 
   /**
@@ -297,7 +297,7 @@ export const recipientRepository = {
       `SELECT * FROM recipients WHERE normalized_name = $1`,
       [normalized],
     );
-    return row || null;
+    return row ?? null;
   },
 
   /**
@@ -423,7 +423,7 @@ export const recipientRepository = {
       ) ac ON ac.primary_recipient_id = u.id
     `;
     const row = await queryOne(enrichedRecipientRowSchema, sql, params);
-    return row || null;
+    return row ?? null;
   },
 
   async hardDelete(id: number): Promise<boolean> {
@@ -524,7 +524,7 @@ export const recipientRepository = {
     recipientIds: Array<number | null | undefined> | null | undefined,
   ): Promise<Map<number, number>> {
     const ids = [
-      ...new Set((recipientIds || []).filter((id): id is number => id != null)),
+      ...new Set((recipientIds ?? []).filter((id): id is number => id != null)),
     ];
     if (ids.length === 0) return new Map();
     const rows = await queryRows(

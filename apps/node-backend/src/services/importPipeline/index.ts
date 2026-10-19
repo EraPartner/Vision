@@ -31,6 +31,7 @@ import { matchBatch } from "./match.ts";
 import { commitBatch } from "./commit.ts";
 import { reconcileTransfers } from "../transferReconciliationService.ts";
 import type { CustomTransactionParserConfig } from "./adapters/generic.ts";
+import { nanToZero } from "../../lib/math.ts";
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -110,10 +111,10 @@ async function prepareImport({
   // batch of blank `recipient_raw` rows) must NOT auto-commit either: they
   // would otherwise land as transactions with no resolved recipient.
   const requiresReview =
-    (matchSourceCounts.fuzzy || 0) > 0 ||
-    (matchSourceCounts.pattern || 0) > 0 ||
-    (matchSourceCounts.new || 0) > 0 ||
-    (unresolved || 0) > 0;
+    (matchSourceCounts.fuzzy ?? 0) > 0 ||
+    (matchSourceCounts.pattern ?? 0) > 0 ||
+    (matchSourceCounts.new ?? 0) > 0 ||
+    unresolved > 0;
 
   if (requiresReview) {
     await query(
@@ -265,7 +266,7 @@ export async function runImportPipeline({
       autoLinkedCount,
     } = await commitImport({ batchId, onProgress });
 
-    const totalErrors = (validateErrors || 0) + (commitErrors || 0);
+    const totalErrors = nanToZero(validateErrors) + nanToZero(commitErrors);
     await query(`UPDATE import_batches SET rows_error = $2 WHERE id = $1`, [
       batchId,
       totalErrors,

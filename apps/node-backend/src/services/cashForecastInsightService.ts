@@ -88,7 +88,7 @@ function pickPrimaryMethod(
   methods: ForecastMethod[] | null | undefined,
 ): ForecastMethod | null {
   if (!Array.isArray(methods)) return null;
-  const usable = methods.filter((m) => m && m.error == null);
+  const usable = methods.filter((m) => m != null && m.error == null);
   return (
     usable.find((m) => MC_METHOD_IDS.has(m.id) && m.bands != null) ??
     usable.find((m) => m.id === ENSEMBLE_METHOD_ID) ??

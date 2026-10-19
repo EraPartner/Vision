@@ -121,7 +121,7 @@ function parseTransaction(
       return -value;
     };
     const amount = charge("Commission") + charge("Transaction Fees");
-    if (!amount) return null;
+    if (amount === 0) return null;
     return {
       date: parseDateWithFormat(cleanCell(record.Date), "%Y-%m-%d"),
       typeRaw: "Fee",
@@ -161,9 +161,11 @@ function parseTransaction(
   // base-per-price-currency rate.
   const baseFees = commission + transactionFees;
   const fees =
-    isTrade && baseFees > 0 && exportedFxRate
+    isTrade && baseFees > 0 && exportedFxRate != null && exportedFxRate !== 0
       ? baseFees / exportedFxRate
-      : baseFees || null;
+      : baseFees !== 0
+        ? baseFees
+        : null;
 
   return {
     date: parseDateWithFormat(cleanCell(record.Date), "%Y-%m-%d"),
@@ -197,7 +199,7 @@ export async function parseIbkrTransactionHistory(
   config: { encoding?: string } = {},
 ): Promise<ParsedPortfolioRows> {
   const sourceBytes = await readFile(filePath);
-  const parsedRecords: string[][] = await parseCsvText(
+  const parsedRecords: string[][] = parseCsvText(
     decodeCsvBuffer(sourceBytes, config.encoding || "utf-8"),
     {
       skip_empty_lines: true,

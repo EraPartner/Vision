@@ -122,7 +122,7 @@ function trustedPredicates(
   scope: CloudAnalysisTrustedScope,
   existingValueCount: number,
 ) {
-  const alias = plan.joins.length ? "analysis_base." : "";
+  const alias = plan.joins.length > 0 ? "analysis_base." : "";
   const predicates: string[] = [];
   const values: unknown[] = [];
   const push = (sql: string, value: unknown) => {
@@ -135,7 +135,7 @@ function trustedPredicates(
     holdings: "account_id",
     "cash-flows": "account_id",
   }[plan.datasetId];
-  if (scope.accountIds?.length && accountField) {
+  if (scope.accountIds && scope.accountIds.length > 0 && accountField) {
     const placeholders = scope.accountIds.map((id) => {
       values.push(id);
       return `$${existingValueCount + values.length}`;
@@ -152,7 +152,7 @@ function trustedPredicates(
     push(`${alias}${dateField} >= ?`, scope.dateFrom);
   if (scope.dateTo && dateField)
     push(`${alias}${dateField} <= ?`, scope.dateTo);
-  if (scope.investmentIds?.length && plan.datasetId === "holdings") {
+  if (scope.investmentIds && scope.investmentIds.length > 0 && plan.datasetId === "holdings") {
     const placeholders = scope.investmentIds.map((id) => {
       values.push(id);
       return `$${existingValueCount + values.length}`;
@@ -163,7 +163,7 @@ function trustedPredicates(
 }
 
 function injectPredicates(sql: string, predicates: string[]) {
-  if (!predicates.length) return sql;
+  if (predicates.length === 0) return sql;
   const boundary = sql.search(/\n(?:GROUP BY|ORDER BY|LIMIT)\b/);
   const head = boundary < 0 ? sql : sql.slice(0, boundary);
   const tail = boundary < 0 ? "" : sql.slice(boundary);
@@ -201,7 +201,7 @@ export async function executeCloudAnalysisPlan(
     inputComplete:
       result.window?.kind === "page" &&
       result.window.hasMore === false &&
-      (result.window.offset || 0) === 0,
+      (result.window.offset ?? 0) === 0,
     formulas: plan.formulas,
     assumptions: {},
   });

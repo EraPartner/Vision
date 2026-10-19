@@ -118,7 +118,7 @@ function buildImportBatchPreview(rows: ImportPreviewRow[]) {
   };
   for (const row of rows) {
     const source = row.match_source ?? "unresolved";
-    totals[source] = (totals[source] || 0) + 1;
+    totals[source] = (totals[source] ?? 0) + 1;
   }
   return { groups, totals };
 }

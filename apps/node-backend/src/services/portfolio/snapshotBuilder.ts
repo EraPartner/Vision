@@ -39,6 +39,7 @@ import {
 import type { ProjectedCustodyTxn } from "@vision/shared-utils/portfolio";
 import type { DecimalInput } from "../../lib/money.ts";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
+import { nanToZero, nonZeroOr } from "../../lib/math.ts";
 
 export type Decimal = import("decimal.js").default;
 
@@ -326,7 +327,7 @@ export async function computeDailySnapshots(
       {
         id: Number(row.id),
         currency: row.currency,
-        currentPrice: Number(row.current_price) || 0,
+        currentPrice: nanToZero(Number(row.current_price)),
         assetClass: row.asset_class,
       },
     ]),
@@ -339,8 +340,8 @@ export async function computeDailySnapshots(
     (row): ParsedNonUnitInvestment => ({
       id: Number(row.id),
       currency: row.currency,
-      currentPrice: Number(row.current_price) || 0,
-      interestRate: Number(row.interest_rate) || 0,
+      currentPrice: nanToZero(Number(row.current_price)),
+      interestRate: nanToZero(Number(row.interest_rate)),
       assetClass: row.asset_class,
       activeFrom: dayPart(String(row.active_from)),
     }),
@@ -362,7 +363,7 @@ export async function computeDailySnapshots(
       priceHistoryByInvestment[invId] = byDay;
       priceHistorySortedDays[invId] = days;
     }
-    byDay[row.day] = Number(row.close_price) || 0;
+    byDay[row.day] = nanToZero(Number(row.close_price));
     days.push(row.day);
   }
   // Rows arrive ORDER BY investment_id, price_date — sorted per investment.
@@ -372,12 +373,12 @@ export async function computeDailySnapshots(
   }
 
   const inflationByMonth = new Map(
-    inflationRows.map((row) => [row.month, Number(row.monthly_rate) || 0]),
+    inflationRows.map((row) => [row.month, nanToZero(Number(row.monthly_rate))]),
   );
 
   const fxRates: Record<string, number> = { EUR: 1 };
   for (const row of fxRows) {
-    fxRates[row.currency_code] = Number(row.rate_to_eur) || 1;
+    fxRates[row.currency_code] = nonZeroOr(Number(row.rate_to_eur), 1);
   }
 
   // Historical rate_to_eur per currency, with sorted day arrays for binary-search
@@ -388,7 +389,7 @@ export async function computeDailySnapshots(
   for (const row of fxHistoryRows) {
     const cur = row.currency_code;
     if (!cur) continue;
-    const rate = Number(row.rate_to_eur) || 0;
+    const rate = nanToZero(Number(row.rate_to_eur));
     if (rate <= 0) continue;
     let byDay = fxHistoryByCurrency[cur];
     let days = fxHistorySortedDays[cur];
@@ -444,7 +445,9 @@ export async function computeDailySnapshots(
   for (const dayTxs of Object.values(txByDay)) {
     dayTxs.sort(
       (a, b) =>
-        a.investmentId - b.investmentId ||
+        a.investmentId !== b.investmentId
+          ? a.investmentId - b.investmentId
+          :
         (custodyInvestments.has(a.investmentId)
           ? a.id - b.id
           : (a.type === "sell" ? 1 : 0) - (b.type === "sell" ? 1 : 0)),
@@ -593,7 +596,7 @@ export async function computeDailySnapshots(
       return hasLastKnown ? lastKnown : inv.currentPrice;
     }
     const exactPrice = histPrices[day];
-    if (exactPrice) return exactPrice;
+    if (exactPrice !== undefined && exactPrice !== 0) return exactPrice;
 
     // Binary search for the latest price day <= `day`. Every sorted day is a
     // key of histPrices (both are filled from the same rows).
@@ -688,7 +691,7 @@ export async function computeDailySnapshots(
   for (const day of allDays) {
     // Apply transactions. Invested capital converts at the rate on the
     // transaction's own day (or the stored fx_rate_to_eur), not today's.
-    for (const tx of txByDay[day] || []) {
+    for (const tx of txByDay[day] ?? []) {
       const converted = convertAmount(
         tx.amount,
         tx.currency,
@@ -1045,7 +1048,10 @@ export async function computeDailySnapshots(
         ? ((snap.value - snap.invested) / snap.invested) * 100
         : 0;
     snap.inflation_adjusted_value =
-      snap.value / (1 + snap.cumulative_inflation / 100) || snap.value;
+      nonZeroOr(
+        snap.value / (1 + snap.cumulative_inflation / 100),
+        snap.value,
+      );
   }
 
   return sanitized;

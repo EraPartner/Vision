@@ -170,7 +170,7 @@ export function assertBoundedWorkbook(bytes: Buffer) {
       offset + length > end ||
       expanded > MAX_WORKBOOK_BYTES ||
       uncompressed === 0xffffffff ||
-      bytes.readUInt16LE(offset + 8) & 1 ||
+      (bytes.readUInt16LE(offset + 8) & 1) !== 0 ||
       names.has(name)
     ) {
       throw new ValidationError(
@@ -181,7 +181,7 @@ export function assertBoundedWorkbook(bytes: Buffer) {
     if (
       localOffset + 30 > directoryOffset ||
       bytes.readUInt32LE(localOffset) !== 0x04034b50 ||
-      bytes.readUInt16LE(localOffset + 6) & 1 ||
+      (bytes.readUInt16LE(localOffset + 6) & 1) !== 0 ||
       ![0, 8].includes(method) ||
       bytes.readUInt16LE(localOffset + 8) !== method
     ) {
@@ -293,7 +293,7 @@ export async function readIbkrFundingWorkbook(
     workbook.SheetNames.length > 2 ||
     workbook.SheetNames.length === 0 ||
     new Set(workbook.SheetNames).size !== workbook.SheetNames.length ||
-    workbook.Workbook?.Sheets?.some((sheet) => sheet.Hidden)
+    workbook.Workbook?.Sheets?.some((sheet) => (sheet.Hidden ?? 0) !== 0)
   )
     throw new ValidationError(
       "IBKR funding workbook contains unsupported sheets or macros",
@@ -310,7 +310,7 @@ export async function readIbkrFundingWorkbook(
       !source ||
       !reference ||
       (source["!type"] && source["!type"] !== "sheet") ||
-      source["!merges"]?.length
+      (source["!merges"]?.length ?? 0) > 0
     )
       throw new ValidationError(
         "IBKR funding workbook contains an unsupported sheet layout",

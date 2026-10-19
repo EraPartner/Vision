@@ -65,7 +65,7 @@ export function cleanKbcRecipientName(
   }
 
   const words = recipient.split(/\s+/).slice(0, 3);
-  if (words.length) {
+  if (words.length > 0) {
     const phrase = words.join(' ');
     return phrase.charAt(0).toUpperCase() + phrase.slice(1).toLowerCase();
   }
@@ -117,7 +117,7 @@ export function normalizeForMatching(name: string): string {
   // Split into tokens and filter empty strings
   const tokens = normalized.split(/\s+/).filter(Boolean);
 
-  if (!tokens.length) return '';
+  if (tokens.length === 0) return '';
 
   // Single word name - just return it
   const [onlyToken] = tokens;
@@ -129,7 +129,7 @@ export function normalizeForMatching(name: string): string {
   const substantial = tokens.filter(t => t.length > 1 || !/^[A-Z]$/.test(t));
 
   // If we have no substantial tokens (all were initials), return sorted originals
-  if (!substantial.length) return tokens.sort().join(' ');
+  if (substantial.length === 0) return tokens.sort().join(' ');
 
   // Sort all substantial tokens alphabetically for consistent ordering
   return substantial.sort().join(' ');

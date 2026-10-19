@@ -206,7 +206,7 @@ export async function matchBatch({
   }
 
   const matchSourceCounts: Record<string, number> = { pattern: 0, exact: 0, fuzzy: 0, new: 0 };
-  for (const info of resolved.values()) matchSourceCounts[info.matchSource] = (matchSourceCounts[info.matchSource] || 0) + 1;
+  for (const info of resolved.values()) matchSourceCounts[info.matchSource] = (matchSourceCounts[info.matchSource] ?? 0) + 1;
 
   logger.info('[pipeline:match] done', { batchId, total, matched, unresolved, ...matchSourceCounts });
   return { matched, unresolved, matchSourceCounts };

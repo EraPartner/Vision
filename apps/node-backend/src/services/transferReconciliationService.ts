@@ -33,7 +33,7 @@ export async function reconcileTransfers({
   const autoPairs =
     await transactionRepository.listUniqueTransferPairs(windowDays);
   let created = 0;
-  if (autoPairs.length) {
+  if (autoPairs.length > 0) {
     await withTransaction(async () => {
       // Lock all proposed legs in the same order as manual edits. An edit that
       // won the lock is visible to the fresh uniqueness statement below.
@@ -53,22 +53,22 @@ export async function reconcileTransfers({
         // manual mark or an already-paired row.
         const r1 = await transactionRepository.markAutoTransferLeg(outId, inId);
         const r2 = await transactionRepository.markAutoTransferLeg(inId, outId);
-        if (r1 && r2) {
+        if (r1 > 0 && r2 > 0) {
           created += 1;
         } else {
           // Exactly one leg was marked (the other lost its guarded UPDATE to a
           // concurrent mark). Revert the leg we did mark so we never commit a
           // one-way transfer pointing at a peer that points elsewhere — the
           // pair re-evaluates cleanly on the next reconcile.
-          if (r1)
+          if (r1 > 0)
             await transactionRepository.revertAutoTransferLeg(outId, inId);
-          if (r2)
+          if (r2 > 0)
             await transactionRepository.revertAutoTransferLeg(inId, outId);
         }
       }
     });
   }
-  if (created) logger.info(`[transfers] auto-paired ${created} transfer(s)`);
+  if (created > 0) logger.info(`[transfers] auto-paired ${created} transfer(s)`);
   return { pairsCreated: created };
 }
 
@@ -109,7 +109,7 @@ export async function getTransferSuggestions({
   const hasMore = pairs.length > limit;
   const page = pairs.slice(0, limit);
   const ids = [...new Set(page.flatMap((pair) => [pair.outId, pair.inId]))];
-  const rows = ids.length
+  const rows = ids.length > 0
     ? await transactionRepository.listTransferSuggestionRows(ids)
     : [];
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -159,7 +159,8 @@ export async function markTransfer(
     if (
       [a, b].some(
         (leg) =>
-          leg.transfer_source &&
+          leg.transfer_source != null &&
+          leg.transfer_source !== "" &&
           !["auto", "manual"].includes(leg.transfer_source),
       )
     ) {
@@ -215,11 +216,11 @@ export async function unmarkTransfer(id: number): Promise<{ ok: boolean }> {
   await withTransaction(async () => {
     const { peer, peerPointsBack } = await transactionRepository.lockTransferPairForUnmark(id);
 
-    if (peer && peerPointsBack) {
+    if (peer !== undefined && peerPointsBack) {
       await transactionRepository.insertTransferDismissal(id, peer);
     }
     await transactionRepository.clearTransferMark(id);
-    if (peer && peerPointsBack) {
+    if (peer !== undefined && peerPointsBack) {
       await transactionRepository.clearTransferMark(peer);
     }
   });
@@ -250,8 +251,7 @@ export function scheduleReconcile() {
   invalidateStatisticsCaches();
   const now = Date.now();
   if (reconcileTimer) clearTimeout(reconcileTimer);
-  if (reconcileDeadline === null)
-    reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;
+  reconcileDeadline ??= now + RECONCILE_MAX_WAIT_MS;
   const delay = Math.max(
     0,
     Math.min(RECONCILE_DEBOUNCE_MS, reconcileDeadline - now),
@@ -281,7 +281,7 @@ export async function backfillTransfersOnce(): Promise<{
   const { rows } = await query(
     "SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled' LIMIT 1",
   );
-  if (rows.length) return { skipped: true };
+  if (rows.length > 0) return { skipped: true };
   const result = await reconcileTransfers();
   await query(
     "INSERT INTO user_settings (key, value) VALUES ('transfers_backfilled', 'true'::jsonb) ON CONFLICT (key) DO NOTHING",

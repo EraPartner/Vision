@@ -130,7 +130,7 @@ export async function computeDeductionCandidates({
     if (!deductionType) continue; // not a recognized deductible
 
     const key = row.category_name;
-    const entry = byCategory.get(key) || {
+    const entry = byCategory.get(key) ?? {
       category: key,
       deductionType,
       total: toDecimal(0),
@@ -158,7 +158,7 @@ export async function computeDeductionCandidates({
     }
   >();
   for (const entry of byCategory.values()) {
-    const agg = typeAgg.get(entry.deductionType) || {
+    const agg = typeAgg.get(entry.deductionType) ?? {
       total: toDecimal(0),
       byOwner: zeroOwnerMoney(),
       categories: [],

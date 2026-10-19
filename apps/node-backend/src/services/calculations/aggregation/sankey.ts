@@ -59,7 +59,7 @@ export async function computeSankeyFlow({
     excludedRecipientIds,
   });
 
-  if (!groupedRows.length) {
+  if (groupedRows.length === 0) {
     return buildEnvelope(
       { nodes: [], links: [], year: targetYear },
       { source: "live" },

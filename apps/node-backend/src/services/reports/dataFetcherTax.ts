@@ -351,7 +351,7 @@ async function fetchTaxTransactions(
       ),
       toCur,
     ]),
-  ].filter((c) => c && c !== "EUR");
+  ].filter((c) => c !== "" && c !== "EUR");
 
   // Shared process-level index cache (see getHistoricalRateIndex) avoids
   // reloading the full exchange_rates history and rebuilding the index per call.

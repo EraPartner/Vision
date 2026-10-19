@@ -187,9 +187,12 @@ function parseTrade(records: KinesisRecord[]): ParsedPortfolioRow[] | null {
     assetDelta === 0 ||
     quoteDelta == null ||
     quoteDelta === 0 ||
-    !units ||
-    !price ||
-    !cashAmount
+    units == null ||
+    units === 0 ||
+    price == null ||
+    price === 0 ||
+    cashAmount == null ||
+    cashAmount === 0
   ) {
     return null;
   }
@@ -238,8 +241,10 @@ function parseDistribution(
   if (
     !symbol ||
     FIAT_CURRENCIES.has(symbol) ||
-    !units ||
-    !value ||
+    units == null ||
+    units === 0 ||
+    value == null ||
+    value === 0 ||
     !valueCurrency
   ) {
     return null;
@@ -290,7 +295,7 @@ function parseNonTrade(
   if (DISTRIBUTION_TYPES.has(type)) return parseDistribution(record, config);
 
   if (type === "Holder's_Distribution_Adjustment") {
-    if (!isFiat && delta != null && delta > 0 && amount) {
+    if (!isFiat && delta != null && delta > 0 && amount != null && amount !== 0) {
       return [
         baseRow(record, {
           typeRaw: "Gift",
@@ -316,9 +321,10 @@ function parseNonTrade(
       !isFiat &&
       delta != null &&
       delta < 0 &&
-      amount &&
+      amount != null &&
+      amount !== 0 &&
       config.yield_basis_policy === "zero" &&
-      toDecimal(number(record.Amount) || 0).eq(delta)
+      toDecimal(number(record.Amount) ?? 0).eq(delta)
     )
       return [
         baseRow(record, {
@@ -344,7 +350,7 @@ function parseNonTrade(
   }
 
   if (type === "Deposit") {
-    if (!amount) return null;
+    if (amount == null || amount === 0) return null;
     return [
       baseRow(
         record,
@@ -368,7 +374,7 @@ function parseNonTrade(
   }
 
   if (type === "Withdrawal" || type === "Withdrawal(Card Payment)") {
-    if (!amount) return null;
+    if (amount == null || amount === 0) return null;
     if (!isFiat) {
       const received = magnitude(record.Amount);
       const fee = number(record.Fee);
@@ -376,7 +382,8 @@ function parseNonTrade(
       if (
         delta == null ||
         delta >= 0 ||
-        !received ||
+        received == null ||
+        received === 0 ||
         fee == null ||
         fee < 0 ||
         (fee > 0 && feeCode !== code) ||
@@ -560,7 +567,7 @@ export async function parseKinesisTransactionHistory(
     if (cleanCell(record.Transaction_Type) !== "Trade") continue;
     const orderId = cleanCell(record.Order_ID);
     if (!orderId) continue;
-    const group = tradesByOrder.get(orderId) || [];
+    const group = tradesByOrder.get(orderId) ?? [];
     group.push(record);
     tradesByOrder.set(orderId, group);
   }
@@ -574,16 +581,14 @@ export async function parseKinesisTransactionHistory(
       const orderId = cleanCell(record.Order_ID);
       if (handledOrders.has(orderId)) continue;
       handledOrders.add(orderId);
-      const group = tradesByOrder.get(orderId) || [record];
+      const group = tradesByOrder.get(orderId) ?? [record];
       parsed = parseTrade(group);
-      if (!parsed) {
-        parsed = group.map((tradeRecord) =>
+      parsed ??= group.map((tradeRecord) =>
           unsupportedRow(
             tradeRecord,
             "Kinesis trade legs could not be paired safely",
           ),
         );
-      }
     } else {
       parsed = parseNonTrade(record, config);
       if (!parsed) skipped++;

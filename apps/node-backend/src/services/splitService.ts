@@ -39,12 +39,13 @@ import splitRepository, {
   recipientExistsInTransaction,
 } from "../repositories/splitRepository.ts";
 import type { FormattedSplit } from "../types/rows.ts";
+import { nanToZero } from "../lib/math.ts";
 
 type SplitAuditInput = Parameters<typeof splitRepository.writeAudit>[0];
 
 async function writeSplitAudit(input: SplitAuditInput) {
   const row = await splitRepository.writeAudit(input);
-  if (!row) throw new Error("Split audit insert did not return a row");
+  if (row == null) throw new Error("Split audit insert did not return a row");
   const auditDigest = crypto
     .createHash("sha256")
     .update(
@@ -304,7 +305,7 @@ export async function getOwedSummary({
       };
       recipients.set(row.recipient_id, entry);
     }
-    entry.splitCount += parseInt(row.split_count, 10) || 0;
+    entry.splitCount += nanToZero(parseInt(row.split_count, 10));
     const from = currencyCode(row.currency);
     const owed = convertAtLatestRates(
       toDecimal(row.total_owed),
@@ -322,7 +323,7 @@ export async function getOwedSummary({
       entry.owed.push(owed);
       entry.paid.push(paid);
     } else if (toDecimal(row.total_owed).gt(toDecimal(row.total_paid))) {
-      entry.unconverted.count += parseInt(row.split_count, 10) || 0;
+      entry.unconverted.count += nanToZero(parseInt(row.split_count, 10));
       entry.unconverted.currencies.add(from);
     }
   }
@@ -395,7 +396,7 @@ export async function getOwedRecipientSummary(
     const converted = convertAtLatestRates(remaining, from, target, rates);
     if (converted) amounts.push(converted);
     else if (!remaining.isZero()) {
-      unconverted.count += parseInt(row.split_count, 10) || 0;
+      unconverted.count += nanToZero(parseInt(row.split_count, 10));
       unconverted.currencies.add(from);
     }
   }

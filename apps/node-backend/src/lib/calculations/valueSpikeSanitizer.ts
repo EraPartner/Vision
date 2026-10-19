@@ -1,4 +1,5 @@
 import { addAll, roundToCents, toDecimal, toNumber } from '../money.ts';
+import { nanToZero } from '../math.ts';
 
 /**
  * Smooth isolated one-day value needles on an array of rows. Detection runs on
@@ -26,8 +27,8 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
   const decompositionTolerance = 0.05;
 
   const smoothedMean = (a: unknown, b: unknown) => {
-    const va = Number(a) || 0;
-    const vb = Number(b) || 0;
+    const va = nanToZero(Number(a));
+    const vb = nanToZero(Number(b));
     const mean = va > 0 && vb > 0 ? Math.sqrt(va * vb) : (va + vb) / 2;
     return toNumber(roundToCents(mean));
   };

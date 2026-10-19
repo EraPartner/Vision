@@ -93,7 +93,7 @@ export async function startCodexConnectProxy({
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         uploaded += initial.length;
         if (uploaded > MAX_UPLOAD_BYTES) return client.destroy();
-        if (initial.length) socket.write(initial);
+        if (initial.length > 0) socket.write(initial);
         client.on("data", (bytes: Buffer) => {
           uploaded += bytes.length;
           if (uploaded > MAX_UPLOAD_BYTES) {

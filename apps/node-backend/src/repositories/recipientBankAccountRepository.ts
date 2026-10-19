@@ -24,7 +24,7 @@ export const recipientBankAccountRepository = {
       `SELECT * FROM recipient_bank_accounts WHERE id = $1`,
       [id]
     );
-    return row || null;
+    return row ?? null;
   },
 
   async getByAccountNumber(
@@ -36,7 +36,7 @@ export const recipientBankAccountRepository = {
       `SELECT * FROM recipient_bank_accounts WHERE account_number = $1`,
       [accountNumber.trim().toUpperCase()]
     );
-    return row || null;
+    return row ?? null;
   },
 
   async getByRecipientId(
@@ -63,7 +63,7 @@ export const recipientBankAccountRepository = {
        LIMIT 1`,
       [recipientId]
     );
-    return row || null;
+    return row ?? null;
   },
 
   /**
@@ -170,7 +170,7 @@ export const recipientBankAccountRepository = {
     params.push(id);
     const sql = `UPDATE recipient_bank_accounts SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
     const row = await queryOne(recipientBankAccountRowSchema, sql, params);
-    return row || null;
+    return row ?? null;
   },
 
   /** @returns true if a row was deactivated */

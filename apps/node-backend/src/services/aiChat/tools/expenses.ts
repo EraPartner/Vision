@@ -130,7 +130,7 @@ async function loadCanonicalCashflow(
     const monthKey = `${month.year}-${String(month.month).padStart(2, "0")}`;
     const key =
       groupBy === "quarter" ? bucketKey(`${monthKey}-01`, "quarter") : monthKey;
-    const entry = buckets.get(key) || {
+    const entry = buckets.get(key) ?? {
       bucket: key,
       income: toDecimal(0),
       spend: toDecimal(0),
@@ -295,7 +295,7 @@ export const getMonthlySpend = {
       from,
       to,
       groupBy,
-      scope.accountIds || [],
+      scope.accountIds ?? [],
     );
 
     return {
@@ -306,7 +306,7 @@ export const getMonthlySpend = {
         to,
         groupBy,
         currency: canonical.currency,
-        scopedAccountIds: scope.accountIds || [],
+        scopedAccountIds: scope.accountIds ?? [],
         renderAs: "line",
         xField: "bucket",
         yFields: ["income", "spend", "net"],
@@ -506,7 +506,7 @@ function aggregateByMonthCategory(
     const month = bucketKey(toYmd(row.date));
     const category = categoryLabel(row);
 
-    const monthMap = byMonth.get(month) || new Map();
+    const monthMap = byMonth.get(month) ?? new Map();
     const entry = monthMap.get(category) || { total: toDecimal(0), count: 0 };
     entry.total = entry.total.plus(amount.abs());
     entry.count += 1;
@@ -894,7 +894,7 @@ export const getYearOverYearComparison = {
         const amount = toDecimal(row.amount);
         if (amount.gte(0)) continue;
         const label = categoryLabel(row);
-        const entry = map.get(label) || { total: toDecimal(0) };
+        const entry = map.get(label) ?? { total: toDecimal(0) };
         entry.total = entry.total.plus(amount.abs());
         map.set(label, entry);
       }
@@ -1033,7 +1033,7 @@ export const getNetCashflow = {
       from,
       to,
       groupBy,
-      scope.accountIds || [],
+      scope.accountIds ?? [],
     );
     const shaped = canonical.rows.map((row) => ({
       period: row.bucket,
@@ -1058,7 +1058,7 @@ export const getNetCashflow = {
           toDecimal(totalIncome - totalExpenses),
         ).toNumber(),
         currency: canonical.currency,
-        scopedAccountIds: scope.accountIds || [],
+        scopedAccountIds: scope.accountIds ?? [],
         renderAs: "bar",
         xField: "period",
         yField: "net",

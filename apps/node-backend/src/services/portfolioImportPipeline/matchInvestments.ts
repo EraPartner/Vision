@@ -196,7 +196,7 @@ export async function matchBatch({
     }
   }
 
-  if (ids.length) {
+  if (ids.length > 0) {
     await query(
       `UPDATE portfolio_import_staging_rows s
           SET status = 'matched',

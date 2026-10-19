@@ -5,7 +5,7 @@ import { ConflictError } from "../middleware/errorHandler.ts";
 export async function protectPlannedExecutions(
   transactionIds: readonly number[],
 ) {
-  if (!transactionIds.length) return;
+  if (transactionIds.length === 0) return;
   await query(
     "SELECT id FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE",
     [transactionIds],
@@ -14,7 +14,7 @@ export async function protectPlannedExecutions(
     "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = ANY($1::int[]) LIMIT 1",
     [transactionIds],
   );
-  if (linked.rowCount)
+  if ((linked.rowCount ?? 0) > 0)
     throw new ConflictError(
       "A selected transaction is linked to a planned payment. Remove that planned payment explicitly before deleting the transaction",
     );

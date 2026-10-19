@@ -206,7 +206,7 @@ export function applyScenarioInputs(
   modelInput: unknown,
   resultColumns?: ScenarioResultColumn[] | null,
 ): Record<string, unknown>[] {
-  const inferredColumns: ScenarioResultColumn[] = resultColumns?.length
+  const inferredColumns: ScenarioResultColumn[] = resultColumns && resultColumns.length > 0
     ? resultColumns
     : Object.entries(rows[0] ?? {}).map(([id, value]) => ({
         id,

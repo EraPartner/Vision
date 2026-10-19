@@ -50,7 +50,7 @@ export async function validateKinesisCashRollback(
 ): Promise<number[]> {
   const sources = await readReconciliationSources([batchId]);
   const owned = sources.filter((row) => cashReceipt(row));
-  if (!owned.length) return [];
+  if (owned.length === 0) return [];
   const batches = await readReconciliationBatchScope([batchId]);
   const evidence = proveKinesisCashSources(
     sources,
@@ -58,7 +58,7 @@ export async function validateKinesisCashRollback(
     "own_account_transfer",
   );
   if (
-    evidence.blockers.length ||
+    evidence.blockers.length > 0 ||
     owned.some((row) => !evidence.proofs.has(Number(row.id)))
   )
     throw stale();

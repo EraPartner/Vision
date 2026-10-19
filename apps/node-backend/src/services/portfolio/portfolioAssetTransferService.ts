@@ -175,20 +175,22 @@ export function previewPortfolioAssetTransfer(
   if (
     !Number.isInteger(investment) ||
     investment <= 0 ||
-    !row.tx_date ||
-    !toDecimal(row.units || 0).gt(0)
+    row.tx_date == null ||
+    row.tx_date === "" ||
+    !toDecimal(row.units === "" ? 0 : (row.units ?? 0)).gt(0)
   )
     return { error: "incomplete_transfer" };
   if (
     details.basisStatus !== "carried" ||
-    toDecimal(details.feeUnits || 0).lt(0) ||
-    toDecimal(details.feeUnits || 0).gte(toDecimal(row.units))
+    toDecimal(details.feeUnits === "" ? 0 : (details.feeUnits ?? 0)).lt(0) ||
+    toDecimal(details.feeUnits === "" ? 0 : (details.feeUnits ?? 0)).gte(toDecimal(row.units))
   )
     return { error: "unresolved_transfer_fee_basis" };
   if (
     !row.source_record_hash ||
     !row.dedup_fingerprint ||
-    !row.dedup_fingerprint_version
+    row.dedup_fingerprint_version == null ||
+    row.dedup_fingerprint_version === 0
   )
     return { error: "missing_transfer_identity" };
   return {
@@ -203,7 +205,7 @@ export function previewPortfolioAssetTransfer(
           ? toYmd(row.tx_date)
           : String(row.tx_date).slice(0, 10),
       units: String(row.units),
-      fee_units: String(details.feeUnits || 0),
+      fee_units: String(details.feeUnits === "" ? 0 : (details.feeUnits ?? 0)),
       amount: "0",
       fees: "0",
       taxes: "0",

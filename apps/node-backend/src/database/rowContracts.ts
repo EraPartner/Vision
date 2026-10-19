@@ -53,7 +53,7 @@ function describeType(value: unknown): string {
 
 /** Formats one issue as `path: problem`, from schema facts and type names only. */
 function describeIssue(issue: z.core.$ZodIssue): string {
-  const path = issue.path.length ? issue.path.join(".") : "(row)";
+  const path = issue.path.length > 0 ? issue.path.join(".") : "(row)";
   switch (issue.code) {
     case "invalid_type":
       return `${path}: expected ${issue.expected}, received ${describeType(issue.input)}`;

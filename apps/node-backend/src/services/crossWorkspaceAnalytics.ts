@@ -6,6 +6,7 @@
  */
 
 import { toDecimal, toNumber, roundToCents } from '../lib/money.ts';
+import { nanToZero } from '../lib/math.ts';
 
 /**
  * Net-worth / FI projection cone. Median path = exact monthly compounding
@@ -26,12 +27,12 @@ import { toDecimal, toNumber, roundToCents } from '../lib/money.ts';
   months: number;
 }): Array<{ month: number; median: number; p10: number; p90: number }> {
   const Z = 1.2816;
-  const r = Number(annualReturn) || 0;
-  const vol = Number(annualVolatility) || 0;
-  const contrib = Number(monthlyContribution) || 0;
+  const r = nanToZero(Number(annualReturn));
+  const vol = nanToZero(Number(annualVolatility));
+  const contrib = nanToZero(Number(monthlyContribution));
   const monthly = r / 12;
   const out = [];
-  let bal = Number(current) || 0;
+  let bal = nanToZero(Number(current));
   for (let m = 1; m <= months; m++) {
     bal = bal * (1 + monthly) + contrib;
     const tYears = m / 12;

@@ -59,6 +59,7 @@ import type {
   HistoricalRateIndex,
   PortfolioMathTxRow,
 } from "../../types/rows.ts";
+import { nanToZero } from "../../lib/math.ts";
 
 export type DecimalInput = import("@vision/shared-utils/money").DecimalInput;
 export type Decimal = import("decimal.js").default;
@@ -362,7 +363,11 @@ export async function getPortfolioSummary(
         const from = (inv.currency || "EUR").toUpperCase();
         return [
           from,
-          from === target || !rates[from] || !rates[target]
+          from === target ||
+          rates[from] === undefined ||
+          rates[from] === 0 ||
+          rates[target] === undefined ||
+          rates[target] === 0
             ? 1
             : divide(rates[from], rates[target]).toNumber(),
         ];
@@ -649,7 +654,7 @@ async function loadHistoricalRateIndex(
   target: string,
 ): Promise<HistoricalRateIndex> {
   const relevant = [...new Set([...currencies, target])].filter(
-    (c) => c && c !== "EUR",
+    (c) => c !== "" && c !== "EUR",
   );
   if (relevant.length === 0) return new Map();
   const rows = await queryRows(
@@ -796,7 +801,7 @@ function buildInvestmentSummary(
   const convertedAccruedInterest = conv(core.accruedInterest);
   const convertedProjectedInterest = conv(core.projectedAnnualInterest);
   const convertedTotalAppreciation = conv(core.totalAppreciation);
-  const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
+  const convertedCurrentPrice = conv(nanToZero(Number(inv.current_price)));
   const { totalUnits } = core;
   const gainLossPercent = cv.gainLossPercent;
   const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
@@ -863,7 +868,7 @@ function buildInvestmentSummary(
     // `originalCurrency` so the UI can still display it as a label.
     currency: targetCurrency,
     originalCurrency: invCurrency,
-    nativeCurrentPrice: Number(inv.current_price) || 0,
+    nativeCurrentPrice: nanToZero(Number(inv.current_price)),
     nativeAvgCostBasis: toNumber(core.avgCostBasis),
     unrealizedGainPercent: multiply(
       round2(convertedAvgCostBasis),
@@ -879,14 +884,16 @@ function buildInvestmentSummary(
     // RealEstatePage displays the latest ordinary rent amount directly because its
     // summary currency already equals the display currency. Preserve that behavior.
     estimatedMonthlyRent:
-      Number(txns.filter((t) => t.type === "rent_income").at(-1)?.amount) || 0,
+      nanToZero(
+        Number(txns.filter((t) => t.type === "rent_income").at(-1)?.amount),
+      ),
 
     // Computed numerics — pre-converted to targetCurrency
     totalUnits: round8(totalUnits),
     currentPrice: round2(convertedCurrentPrice),
     current_price: round2(convertedCurrentPrice),
-    interestRate: Number(inv.interest_rate) || 0,
-    interest_rate: Number(inv.interest_rate) || 0,
+    interestRate: nanToZero(Number(inv.interest_rate)),
+    interest_rate: nanToZero(Number(inv.interest_rate)),
 
     totalInvested: round2(convertedTotalInvested),
     totalBuyCost: round2(convertedTotalBuyCost),

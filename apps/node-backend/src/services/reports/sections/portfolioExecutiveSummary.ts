@@ -102,7 +102,7 @@ export function renderPortfolioExecutiveSummary(
       ${kpiCards}
       ${kpiCards2}
       ${
-        summary.topHoldings.length
+        summary.topHoldings.length > 0
           ? `
         <h3>Current top holdings</h3>
         <table class="data-table">

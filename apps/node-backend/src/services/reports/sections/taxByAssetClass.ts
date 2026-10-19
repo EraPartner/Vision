@@ -29,7 +29,7 @@ export function renderTaxByAssetClass(
     .filter((c) => c.taxes > 0 || c.fees > 0)
     .sort((a, b) => b.taxes + b.fees - (a.taxes + a.fees));
 
-  if (!classes.length) {
+  if (classes.length === 0) {
     return emptySection({
       title: "Tax by Asset Class",
       subtitle: "Taxes and fees broken down by asset class",

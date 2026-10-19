@@ -838,7 +838,7 @@ function formatPlannedTransaction(
         ? toNumber(toDecimal(row.loan_regular_payment_amount))
         : null,
     loan_first_payment_date: ymd(row.loan_first_payment_date) || null,
-    loan_schedule: (row.loan_schedule || []).map((entry) => ({
+    loan_schedule: (row.loan_schedule ?? []).map((entry) => ({
       installment_number: parseInt(String(entry.installment_number), 10),
       due_date: ymd(entry.due_date),
       payment_amount: toNumber(toDecimal(entry.payment_amount)),
@@ -846,9 +846,9 @@ function formatPlannedTransaction(
       interest_amount: toNumber(toDecimal(entry.interest_amount)),
       remaining_principal: toNumber(toDecimal(entry.remaining_principal)),
     })),
-    executed_transaction_id: row.executed_transaction_id || null,
-    execution_count: row.execution_count || 0,
-    executions: (row.executions || []).map((e) => ({
+    executed_transaction_id: row.executed_transaction_id ?? null,
+    execution_count: row.execution_count ?? 0,
+    executions: (row.executions ?? []).map((e) => ({
       id: e.id,
       executed_transaction_id: e.executed_transaction_id,
       execution_date: ymd(e.execution_date),

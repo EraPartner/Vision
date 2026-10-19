@@ -109,7 +109,7 @@ const yahooAdapter = {
       await yahoo.search(query, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE),
       "search",
     );
-    const items = (results.quotes || [])
+    const items = (results.quotes ?? [])
       .filter((r) => r.symbol)
       .map((r) => ({
         symbol: r.symbol,
@@ -167,7 +167,7 @@ const yahooAdapter = {
         NO_VALIDATE,
       ),
     );
-    const points = (result?.quotes || [])
+    const points = (result?.quotes ?? [])
       .filter((p) => p.close != null)
       .map((p) => ({
         time: yahooDateMs(p.date),
@@ -201,11 +201,11 @@ const yahooAdapter = {
         NO_VALIDATE,
       ),
     );
-    const sd = s?.summaryDetail || {};
-    const ks = s?.defaultKeyStatistics || {};
-    const pr = s?.price || {};
-    const fd = s?.financialData || {};
-    const ap = s?.assetProfile || {};
+    const sd = s?.summaryDetail ?? {};
+    const ks = s?.defaultKeyStatistics ?? {};
+    const pr = s?.price ?? {};
+    const fd = s?.financialData ?? {};
+    const ap = s?.assetProfile ?? {};
     const marketCap = sd.marketCap ?? pr.marketCap;
     const freeCashFlow = fd.freeCashflow;
     const fcfYield =
@@ -260,9 +260,9 @@ const yahooAdapter = {
         NO_VALIDATE,
       ),
     );
-    const trendBuckets = s?.recommendationTrend?.trend || [];
+    const trendBuckets = s?.recommendationTrend?.trend ?? [];
     const current =
-      trendBuckets.find((t) => t.period === "0m") || trendBuckets[0];
+      trendBuckets.find((t) => t.period === "0m") ?? trendBuckets[0];
     const consensus = current
       ? {
           strongBuy: current.strongBuy ?? 0,
@@ -272,8 +272,8 @@ const yahooAdapter = {
           strongSell: current.strongSell ?? 0,
         }
       : undefined;
-    const fd = s?.financialData || {};
-    const recentActions = (s?.upgradeDowngradeHistory?.history || [])
+    const fd = s?.financialData ?? {};
+    const recentActions = (s?.upgradeDowngradeHistory?.history ?? [])
       .slice(0, 10)
       .map((h) => ({
         date: h.epochGradeDate,
@@ -301,11 +301,14 @@ const yahooAdapter = {
       await yahoo.search(symbol, { quotesCount: 0, newsCount }, NO_VALIDATE),
       "search",
     );
-    const articles = (results.news || []).map((n) => ({
+    const articles = (results.news ?? []).map((n) => ({
       title: n.title,
       link: n.link,
       publisher: n.publisher,
-      publishedAt: n.providerPublishTime
+      publishedAt:
+        n.providerPublishTime != null &&
+        n.providerPublishTime !== "" &&
+        n.providerPublishTime !== 0
         ? new Date(n.providerPublishTime).getTime()
         : undefined,
       thumbnail: pickBestThumbnail(n.thumbnail),

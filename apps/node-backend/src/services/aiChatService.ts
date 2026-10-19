@@ -206,7 +206,7 @@ export class AiChatServiceError extends AppError {
     // the previous plain-Error behaviour.
     super(message, {
       code: code || "AI_CHAT_ERROR",
-      status: status || 500,
+      status: status !== undefined && status !== 0 ? status : 500,
       cause,
     });
     this.name = "AiChatServiceError";
@@ -228,7 +228,7 @@ function normalizeToolCall(
     | undefined,
 ): { name: string | undefined; rawArgs: unknown } {
   const fn: { name?: string; arguments?: unknown } =
-    toolCall?.function || toolCall || {};
+    toolCall?.function ?? toolCall ?? {};
   const name = fn.name || toolCall?.name || undefined;
   const rawArgs = fn.arguments ?? toolCall?.arguments;
   return { name, rawArgs };
@@ -632,7 +632,7 @@ async function runChatTurnLocked({
       totalDurationMs: response.totalDurationMs,
     };
 
-    if (!response.toolCalls || response.toolCalls.length === 0) {
+    if (response.toolCalls == null || response.toolCalls.length === 0) {
       const assistantMessage = await aiChatRepository.appendMessage({
         conversationId: conversation.id,
         role: "assistant",

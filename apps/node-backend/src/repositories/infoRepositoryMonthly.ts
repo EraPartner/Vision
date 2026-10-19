@@ -161,8 +161,7 @@ export async function getMonthlyFinancialSummary(
     for (const conv of mergedConverted) {
       const key = conv._key;
       const r = conv._row;
-      if (!monthMap[key]) {
-        monthMap[key] = {
+      monthMap[key] ??= {
           month: r.month,
           year: r.year,
           period_start: toWireDate(r.month_start),
@@ -172,7 +171,6 @@ export async function getMonthlyFinancialSummary(
           net_amount: 0,
           transaction_count: 0,
         };
-      }
       // Decimal accumulation (ADR money-hygiene): summing per-month EUR amounts
       // with native `+=` drifts sub-cent across many rows before the final round.
       if (conv._type === "income")
@@ -206,8 +204,7 @@ export async function getMonthlyFinancialSummary(
       const year = Number(monthStart.slice(0, 4));
       const month = Number(monthStart.slice(5, 7));
       const key = formatYearMonthKey(year, month);
-      if (!monthMap[key]) {
-        monthMap[key] = {
+      monthMap[key] ??= {
           month,
           year,
           period_start: monthStart,
@@ -217,7 +214,6 @@ export async function getMonthlyFinancialSummary(
           net_amount: 0,
           transaction_count: 0,
         };
-      }
     }
 
     for (const m of Object.values(monthMap)) {
@@ -272,7 +268,7 @@ export async function getMonthlyFinancialSummary(
     params.push(validAccountIds);
     transactionFilters.push(`t.account_id = ANY($${params.length}::int[])`);
   }
-  const transactionWhere = transactionFilters.length
+  const transactionWhere = transactionFilters.length > 0
     ? `AND ${transactionFilters.join(" AND ")}`
     : "";
 
@@ -362,8 +358,7 @@ export async function getMonthlyFinancialSummary(
   const monthMap: Record<string, MonthTotals> = {};
   for (const row of liveRows) {
     const key = formatYearMonthKey(row.year, row.month);
-    if (!monthMap[key]) {
-      monthMap[key] = {
+    monthMap[key] ??= {
         month: row.month,
         year: row.year,
         period_start: toWireDate(row.period_start),
@@ -373,7 +368,6 @@ export async function getMonthlyFinancialSummary(
         net_amount: 0,
         transaction_count: 0,
       };
-    }
   }
 
   for (const [i, row] of dailyRows.entries()) {

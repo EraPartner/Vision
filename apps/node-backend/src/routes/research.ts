@@ -52,7 +52,7 @@ const EMPTY_BY_TYPE: Record<string, unknown> = {
 };
 
 function single(value: unknown): string {
-  if (Array.isArray(value)) return value.length ? String(value[0]).trim() : "";
+  if (Array.isArray(value)) return value.length > 0 ? String(value[0]).trim() : "";
   if (value == null) return "";
   return String(value).trim();
 }

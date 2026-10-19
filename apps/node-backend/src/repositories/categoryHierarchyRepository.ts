@@ -217,7 +217,7 @@ export async function updateCategoryNode(
           nextName,
           nextParent,
           description === undefined ? existing.description : description,
-          isActive === undefined ? existing.is_active : isActive,
+          isActive ?? existing.is_active,
         ],
       );
     } catch (error) {

@@ -190,9 +190,9 @@ export function recordedPortfolioPerformanceBasis(
   const gross = event.units.filter((unit) => unit.type === "GROSS_VALUE");
   if (gross.length > 1) return undefined;
   const unit = gross[0];
-  const native = unit?.forex ||
-    unit?.amount || { amount: event.amount, currency: event.currency };
-  if (!native || !/^[A-Z]{3}$/.test(native.currency)) return undefined;
+  const native = unit?.forex ??
+    unit?.amount ?? { amount: event.amount, currency: event.currency };
+  if (native == null || !/^[A-Z]{3}$/.test(native.currency)) return undefined;
   let fxRateToEur: string | undefined;
   if (native.currency === "EUR") fxRateToEur = undefined;
   else if (
@@ -247,7 +247,7 @@ export function portfolioPerformanceTradeFacts(
           ? gross.forex
           : gross.amount?.currency === currency
             ? gross.amount
-            : gross.forex || gross.amount,
+            : gross.forex ?? gross.amount,
       )
     : currency === event.currency
       ? toDecimal(event.amount)
@@ -263,7 +263,7 @@ export function portfolioPerformanceTradeFacts(
           ? unit.forex
           : unit.amount?.currency === currency
             ? unit.amount
-            : unit.forex || unit.amount,
+            : unit.forex ?? unit.amount,
       );
       if (amount === undefined) return undefined;
       charges[unit.type] = charges[unit.type].plus(amount);
@@ -305,7 +305,7 @@ function readVerifiedPortfolioPerformanceBasisReference(
     !proof.transactionId ||
     !proof.securityId ||
     Number(proof.investmentId) !== Number(row.investment_id) ||
-    !proof.literal ||
+    proof.literal == null ||
     proof.literal.transactionId !== proof.transactionId ||
     proof.literal.securityId !== proof.securityId
   )
@@ -410,8 +410,8 @@ export function verifiedPortfolioZeroYieldSource(
       parsedDateToYmd(item.date) === row.tx_date &&
       same(item.units, row.units, 8) &&
       same(item.amount, 0) &&
-      same(item.fees || 0, 0) &&
-      same(item.taxes || 0, 0)
+      same(item.fees ?? 0, 0) &&
+      same(item.taxes ?? 0, 0)
     );
   } catch {
     return false;

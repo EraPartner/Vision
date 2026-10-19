@@ -184,7 +184,7 @@ function deriveRow(row: CommitStagingRow): DerivedRow {
     categoryId:
       row.override_category_id ?? row.recipient_default_category_id ?? null,
     // When overridden, clear matched_pattern_id — the link is now manual.
-    patternId: row.user_override_recipient_id
+    patternId: row.user_override_recipient_id != null
       ? null
       : (row.matched_pattern_id ?? null),
   };
@@ -210,7 +210,9 @@ async function commitChunkWithFingerprints({
   if (
     derived.every(
       (row) =>
-        row.idValid && row.dedupFingerprint && row.fingerprintVersion != null,
+        row.idValid &&
+        Boolean(row.dedupFingerprint) &&
+        row.fingerprintVersion != null,
     )
   ) {
     try {
@@ -308,7 +310,7 @@ async function commitChunkWithFingerprints({
           amount: d.amount,
           memo: row.memo || "",
           currency: d.currencyKey,
-          balance: row.balance != null ? row.balance : null,
+          balance: row.balance ?? null,
           bankSequence: row.bank_sequence ?? null,
           comment: row.comment || null,
           importBatchId: batchId,
@@ -400,7 +402,7 @@ async function resolveChunkAccounts(
       [...idByLabel.values()].filter((id): id is number => id != null),
     ),
   ].sort((a, b) => a - b);
-  if (accountIds.length) {
+  if (accountIds.length > 0) {
     const active = await queryRows(
       z.object({ id: z.number(), is_active: z.boolean() }),
       "SELECT id, is_active FROM accounts WHERE id = ANY($1::int[]) ORDER BY id FOR SHARE",

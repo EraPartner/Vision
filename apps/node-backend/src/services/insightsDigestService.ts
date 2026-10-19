@@ -144,8 +144,7 @@ export async function getInsightsCount() {
     };
   }
 
-  if (!refreshInFlight) {
-    refreshInFlight = getInsightsDigest()
+  refreshInFlight ??= getInsightsDigest()
       .catch((error) => {
         refreshRetryAfter = Date.now() + 60_000;
         logger.error("Background insight count refresh failed", {
@@ -155,7 +154,6 @@ export async function getInsightsCount() {
       .finally(() => {
         refreshInFlight = undefined;
       });
-  }
   return {
     count: null,
     status: state ? "pending" : "unavailable",

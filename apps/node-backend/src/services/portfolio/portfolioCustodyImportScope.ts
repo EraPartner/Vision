@@ -67,7 +67,7 @@ const signature = (event: CustodyEventLike) =>
     basisPolicy: event.basis_policy,
     eligibleSourceHashes:
       event.type === "asset_adjustment"
-        ? [...new Set(event.eligible_source_record_hashes || [])].sort()
+        ? [...new Set(event.eligible_source_record_hashes ?? [])].sort()
         : undefined,
     sourceRecordHash: event.source_record_hash,
     fingerprint: event.dedup_fingerprint,
@@ -96,7 +96,7 @@ export async function withPortfolioCustodyImportScope<T>(
     const approved = new Map<string, string>();
     for (const event of events) {
       if (
-        !event ||
+        event == null ||
         !Number.isSafeInteger(Number(event.investment_id)) ||
         Number(event.investment_id) <= 0 ||
         !/^\d{4}-\d{2}-\d{2}$/.test(event.date || "") ||

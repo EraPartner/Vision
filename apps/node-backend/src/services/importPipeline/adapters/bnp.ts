@@ -72,7 +72,7 @@ function isNonExecutedRow(status: string, rejectionReason: string): boolean {
  * @returns null when too short, non-executed, or unparseable
  */
 function parseLine(parts: string[]): ParsedBankTransaction | null {
-  if (!parts || parts.length < MIN_FIELDS) return null;
+  if (parts == null || parts.length < MIN_FIELDS) return null;
 
   const sequenceNumber = cellAt(parts, 0).trim();
   const executionDateStr = cellAt(parts, 1).trim();

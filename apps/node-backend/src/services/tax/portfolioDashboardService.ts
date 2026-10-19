@@ -76,7 +76,13 @@ export async function getPortfolioTaxDashboard(
     const fromRate = ratesToEur[from],
       toRate = ratesToEur[target];
     // Existing useCurrencyConverter display fallback is the original amount.
-    if (!fromRate || !toRate) return amount;
+    if (
+    fromRate === undefined ||
+    fromRate === 0 ||
+    toRate === undefined ||
+    toRate === 0
+  )
+    return amount;
     // Preserve the existing useCurrencyConverter display formula and order.
     // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     return (amount * fromRate) / toRate;

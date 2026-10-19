@@ -87,7 +87,7 @@ function buildDismissedSet(
   const dismissed = new Set<string>();
   if (!Array.isArray(dismissRecords)) return dismissed;
   for (const rec of dismissRecords) {
-    if (!rec || rec.recipientId == null || !rec.findingType) continue;
+    if (rec == null || rec.recipientId == null || !rec.findingType) continue;
     dismissed.add(dismissKey(rec.recipientId, rec.findingType));
   }
   return dismissed;
@@ -126,7 +126,7 @@ function topByConfidence<T extends { confidence: number }>(findings: T[]): T[] {
   const priceChangeFindings: SubscriptionPriceChangeFinding[] = [];
 
   for (const pattern of patterns) {
-    if (!pattern || pattern.direction !== 'expense') continue; // outflows only
+    if (pattern == null || pattern.direction !== 'expense') continue; // outflows only
 
     if (!dismissed.has(dismissKey(pattern.recipientId, 'new'))) {
       newFindings.push({

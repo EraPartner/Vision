@@ -33,6 +33,7 @@ import { validateBatch } from "./validate.ts";
 import { matchBatch } from "./matchInvestments.ts";
 import { commitBatch } from "./commit.ts";
 import type { PortfolioParserConfig } from "./portfolioGenericAdapter.ts";
+import { nanToZero } from "../../lib/math.ts";
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
 
@@ -141,9 +142,9 @@ async function prepareImport({
   // weaker (homonyms) and unresolved rows have no instrument yet.
   const requiresReview =
     isBrokerage ||
-    (validateErrors || 0) > 0 ||
-    (matchSourceCounts.name_exact || 0) > 0 ||
-    (unresolved || 0) > 0;
+    validateErrors > 0 ||
+    (matchSourceCounts.name_exact ?? 0) > 0 ||
+    unresolved > 0;
 
   if (requiresReview) {
     await query(
@@ -303,7 +304,7 @@ export async function runPortfolioImportPipeline({
       duplicates,
       errors: commitErrors,
     } = await commitPortfolioImport({ batchId, onProgress });
-    const totalErrors = (validateErrors || 0) + (commitErrors || 0);
+    const totalErrors = nanToZero(validateErrors) + nanToZero(commitErrors);
 
     logger.info("[portfolio-pipeline] complete", {
       batchId,

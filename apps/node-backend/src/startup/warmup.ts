@@ -139,9 +139,9 @@ async function pruneOldImportBatches() {
 function withInFlightGuard(
   name: string,
   fn: () => Promise<void>,
-): () => Promise<void> {
+): () => void {
   let running = false;
-  return async () => {
+  return () => {
     if (running) {
       logger.debug(
         `Skipping scheduled "${name}" — previous run still in progress`,
@@ -149,11 +149,15 @@ function withInFlightGuard(
       return;
     }
     running = true;
-    try {
-      await fn();
-    } finally {
-      running = false;
-    }
+    fn()
+      .catch((err: unknown) => {
+        logger.error(`Scheduled "${name}" failed`, {
+          error: (err as Error).message,
+        });
+      })
+      .finally(() => {
+        running = false;
+      });
   };
 }
 
@@ -195,7 +199,7 @@ async function persistRefreshedPrices(
   const updateResults = await Promise.all(
     Object.entries(prices).map(
       async ([investmentId, priceData]): Promise<number> => {
-        const { price, source } = priceData || {};
+        const { price, source } = priceData ?? {};
         if (price == null || Number.isNaN(price) || source === "cached")
           return 0;
 
@@ -358,7 +362,8 @@ export async function runWarmupTasks({
     });
 
   // Prune only terminal import staging; audit evidence is retained.
-  pruneOldImportBatches();
+  // Never rejects: each table's prune failure is caught and logged.
+  void pruneOldImportBatches();
 
   const online = await isInternetReachable();
   if (!online) {
@@ -509,16 +514,18 @@ export async function runWarmupTasks({
   });
   // Catch up once after startup dependencies settle. Timer ticks use the same
   // guard and successful-completion checkpoint, so restarts cannot postpone work.
-  Promise.all([exchangeRateWarmPromise, fxBackfillPromise]).then(() =>
+  // None of these reject: the warm-up promises end in .catch and daily jobs
+  // log their own failures.
+  void Promise.all([exchangeRateWarmPromise, fxBackfillPromise]).then(() =>
     refreshDailyForecast(),
   );
-  materializedViewsReady.then(() => backfillDailyGaps());
+  void materializedViewsReady.then(() => backfillDailyGaps());
   const cashflowForecastRefreshInterval = setInterval(
-    refreshDailyForecast,
+    () => void refreshDailyForecast(),
     DAILY_JOB_POLL_MS,
   );
   const holdingGapBackfillInterval = setInterval(
-    backfillDailyGaps,
+    () => void backfillDailyGaps(),
     DAILY_JOB_POLL_MS,
   );
 

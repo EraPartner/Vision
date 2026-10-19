@@ -121,7 +121,7 @@ function contributionAdjustedMonthlyReturn(
  * Ported from PerformancePage.tsx overallMetrics useMemo.
  */
 export function computeMetrics(snapshots: MetricsSnapshot[]) {
-  if (!snapshots || snapshots.length < 1) return null;
+  if (snapshots == null || snapshots.length < 1) return null;
 
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
@@ -177,7 +177,7 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
   data: Record<number, (number | null)[]>;
   maxAbsPct: number;
 } {
-  if (!snapshots || snapshots.length < 2) {
+  if (snapshots == null || snapshots.length < 2) {
     return { years: [], data: {}, maxAbsPct: 0 };
   }
 
@@ -202,7 +202,7 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
   const monthKeys = [...byMonth.keys()].sort();
   const years = [
     ...new Set(monthKeys.map((k) => parseInt(k.slice(0, 4)))),
-  ].sort();
+  ].sort((a, b) => a - b);
   const data: Record<number, (number | null)[]> = {};
   const monthlyReturns: number[] = [];
 

@@ -33,6 +33,7 @@ import {
   restoreAnswerForJob,
   validateReferenceRequest,
 } from "./aiReferenceService.ts";
+import { nanToZero } from "../lib/math.ts";
 
 type InvestigationOutcome = AiInvestigationJobRow | null | undefined;
 
@@ -208,7 +209,7 @@ function planInvestigation(
       }),
     );
   }
-  if (!steps.length)
+  if (steps.length === 0)
     steps.push({
       id: "context",
       tool: "getCategories",
@@ -323,7 +324,7 @@ function shouldReuseStep(
   return (
     existing?.state === "completed" ||
     (skipAttemptedExternal &&
-      Number(existing?.attempt || 0) > 0 &&
+      Number(existing?.attempt ?? 0) > 0 &&
       NON_REPLAYABLE_EXTERNAL_TOOLS.has(step.tool))
   );
 }
@@ -364,7 +365,7 @@ function buildRetryPlan(
       canRunInParallel: false,
     });
   }
-  if (!retries.length || plan.steps.length + retries.length > 24) return plan;
+  if (retries.length === 0 || plan.steps.length + retries.length > 24) return plan;
   return aiInvestigationPlanSchema.parse({
     ...plan,
     assumptions: [
@@ -518,7 +519,7 @@ function evidenceFromSteps(
         sourceDate: null,
         locator: [
           passage.sourceName,
-          passage.pageNumber ? `page ${passage.pageNumber}` : null,
+          passage.pageNumber != null && passage.pageNumber !== 0 ? `page ${passage.pageNumber}` : null,
           passage.section ? `section ${passage.section}` : null,
           `passage ${passage.passageOrdinal}`,
         ]
@@ -609,10 +610,10 @@ function fallbackAnswer(
   const dutch = request.language === "nl";
   return aiAnswerSchema.parse({
     schemaVersion: 1,
-    status: evidence.length ? "partial" : "abstained",
+    status: evidence.length > 0 ? "partial" : "abstained",
     depth: request.depth,
     language: request.language,
-    summary: evidence.length
+    summary: evidence.length > 0
       ? dutch
         ? "Er is bewijs verzameld, maar het gekozen model gaf geen geldige gestructureerde synthese terug."
         : "Evidence was collected, but the selected model did not return a valid structured synthesis."
@@ -812,10 +813,10 @@ export async function runInvestigationJob(
       const researchBudget = {
         searches: priorSteps
           .filter((step) => step.stepId === "web")
-          .reduce((count, step) => count + Number(step.attempt || 0), 0),
+          .reduce((count, step) => count + nanToZero(Number(step.attempt)), 0),
         pages: priorSteps
           .filter((step) => step.stepId.startsWith("web-page-"))
-          .reduce((count, step) => count + Number(step.attempt || 0), 0),
+          .reduce((count, step) => count + nanToZero(Number(step.attempt)), 0),
       };
       const cancelled = await executeSteps({
         id,
@@ -841,7 +842,7 @@ export async function runInvestigationJob(
               ),
             )
             .map((step) => ({ id: step.stepId, error: step.error }));
-          if (candidates.length) {
+          if (candidates.length > 0) {
             const inspection = await generateLocalSynthesis({
               request,
               signal: controller.signal,

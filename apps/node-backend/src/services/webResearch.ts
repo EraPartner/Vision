@@ -2,6 +2,7 @@ import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import settings from "../config/config.ts";
 import { tryReserveDay } from "../repositories/providerQuotaRepository.ts";
+import { nonZeroOr } from "../lib/math.ts";
 
 const BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 const MAX_QUERY_CHARS = 300;
@@ -127,7 +128,7 @@ export async function searchPublicWeb(
       503,
     );
   const publicQuery = assertPublicResearchQuery(query);
-  const boundedCount = Math.min(Math.max(Number(count) || 5, 1), 5);
+  const boundedCount = Math.min(Math.max(nonZeroOr(Number(count), 5), 1), 5);
   const used = await reserve("brave_search", epochMsToUtcYmd(now()), 900, 1);
   if (used === null)
     throw new WebResearchError(

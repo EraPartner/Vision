@@ -49,7 +49,7 @@ export function createCsrfGuard(getAllowedOrigins: () => string | string[]) {
 
     // No Sec-Fetch-Site header: rely on Origin when the client sent one.
     const origin = req.headers.origin;
-    if (!origin) return next(); // non-browser client
+    if (origin === undefined || origin === "") return next(); // non-browser client
 
     const allowed = getAllowedOrigins();
     if (allowed === "*") return next();

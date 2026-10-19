@@ -116,7 +116,7 @@ export async function importAnalysisInterchange(
         fileName,
         size: bytes.length,
         importedAt,
-        parse: (text, options) => parse(text, options) as string[][],
+        parse: (text, options) => parse(text, options),
         sha256: async (text) =>
           createHash("sha256")
             .update(new TextEncoder().encode(text))

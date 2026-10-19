@@ -60,6 +60,7 @@ import {
   buildPortfolioImportPreviewRouting,
   getPortfolioImportAccountForPreview,
 } from "../services/portfolioImportAccountService.ts";
+import { nanToZero } from "../lib/math.ts";
 
 const router = Router();
 
@@ -269,7 +270,7 @@ const portfolioImportConfigSchema = z
       .unknown()
       .optional()
       .transform((value, ctx) => {
-        const skipRows = parseInt(String(value), 10) || 0;
+        const skipRows = nanToZero(parseInt(String(value), 10));
         if (skipRows < 0) {
           ctx.addIssue({
             code: "custom",

@@ -50,7 +50,7 @@ export async function readDuplicateRepairContext(
       history.map((row) => Number(row.import_batch_id)).filter(Boolean),
     ),
   ];
-  const transactions = transactionIds.length
+  const transactions = transactionIds.length > 0
     ? (
         await queryRows(
           repairTransactionSnapshotRowSchema,
@@ -59,7 +59,7 @@ export async function readDuplicateRepairContext(
         )
       ).map((row) => row.snapshot)
     : [];
-  const batches = batchIds.length
+  const batches = batchIds.length > 0
     ? (
         await queryRows(
           repairBatchSnapshotRowSchema,
@@ -68,7 +68,7 @@ export async function readDuplicateRepairContext(
         )
       ).map((row) => row.snapshot)
     : [];
-  const staging = batchIds.length
+  const staging = batchIds.length > 0
     ? (
         await queryRows(
           repairStagingSnapshotRowSchema,
@@ -77,7 +77,7 @@ export async function readDuplicateRepairContext(
         )
       ).map((row) => row.snapshot)
     : [];
-  const known = transactionIds.length
+  const known = transactionIds.length > 0
     ? (
         await queryRows(
           intIdRowSchema,

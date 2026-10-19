@@ -73,7 +73,7 @@ export function proveKinesisFullYieldCandidates(
         zeroBasis(current) &&
         toDecimal(current.units ?? 0).gt(0),
     );
-    if (manual.length) candidates.set(Number(row.id), manual);
+    if (manual.length > 0) candidates.set(Number(row.id), manual);
   }
   return { candidates, evidence };
 }

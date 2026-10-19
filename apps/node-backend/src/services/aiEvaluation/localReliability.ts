@@ -118,7 +118,7 @@ function sameValue(oracle: unknown, actual: unknown) {
 }
 
 function toolCallParts(call: RawToolCall) {
-  const fn = call?.function || call || {};
+  const fn = call?.function ?? call ?? {};
   let args: unknown = fn.arguments ?? call?.arguments ?? {};
   if (typeof args === "string") {
     try {
@@ -381,7 +381,7 @@ export async function runLocalAiCase({
         }
       },
     });
-    if (!response.toolCalls?.length) {
+    if (response.toolCalls?.length === 0) {
       answer = response.content || "";
       const latencyMs = Math.round(performance.now() - startedAt);
       return {

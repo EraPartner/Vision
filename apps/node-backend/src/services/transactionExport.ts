@@ -279,7 +279,11 @@ function resolveExportWhere(args: ExportWhereArgs): ExportWhere {
     const { sql, params, nextParamIdx } = buildTransactionWhere(args.filters);
     return { whereSql: sql, params, nextParamIdx };
   }
-  if (typeof args.whereSql !== "string" || !args.nextParamIdx) {
+  if (
+    typeof args.whereSql !== "string" ||
+    args.nextParamIdx === undefined ||
+    args.nextParamIdx === 0
+  ) {
     throw new TypeError(
       "Export filters or an explicit WHERE model are required",
     );

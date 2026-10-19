@@ -322,7 +322,7 @@ function isServerFault(error: AnalysisFailure): boolean {
 function inputError(_res: ExpressResponse, caught: unknown): never {
   const error = analysisFailure(caught);
   if (isServerFault(error)) throw caught;
-  if (error.status && error.status !== 400)
+  if (error.status !== undefined && error.status !== 0 && error.status !== 400)
     throw new AppError(error.message, {
       status: error.status,
       code: error.code || "INVALID_ANALYSIS_REQUEST",
@@ -388,7 +388,7 @@ router.post("/execute", async (req, res) => {
           ...result,
           generatedSql: source.sql,
           declaredColumns:
-            ("declaredColumns" in result && result.declaredColumns) ||
+            ("declaredColumns" in result ? result.declaredColumns : undefined) ??
             source.columns,
         },
         body.scenarioModel,
@@ -510,9 +510,9 @@ router.post("/drill", async (req, res) => {
       }[dataset.id] || dataset.fields[0]?.id;
     if (primaryKey === undefined)
       throw new Error("Drill-through dataset has no fields");
-    const groups = plan.groups || [];
+    const groups = plan.groups ?? [];
     const filters = [
-      ...(plan.filters || []),
+      ...(plan.filters ?? []),
       ...groups.map((fieldId) => ({
         fieldId,
         operator: row?.[fieldId] == null ? "is-null" : "eq",
@@ -553,7 +553,7 @@ router.post("/drill", async (req, res) => {
       ...result,
       generatedSql: compiled.sql,
       declaredColumns:
-        ("declaredColumns" in result && result.declaredColumns) ||
+        ("declaredColumns" in result ? result.declaredColumns : undefined) ??
         compiled.columns,
     });
   } catch (error) {

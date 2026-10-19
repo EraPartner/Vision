@@ -79,7 +79,7 @@ export async function readKinesisCashContext(): Promise<KinesisCashContext> {
     WHERE route='cash' AND committed_txn_id IS NOT NULL AND raw_data LIKE '%"portfolioCashReceipt"%' ORDER BY batch_id`,
     )
   ).map((item) => Number(item.batch_id));
-  const [sources, batches] = ids.length
+  const [sources, batches] = ids.length > 0
     ? await Promise.all([
         readReconciliationSources(ids),
         readReconciliationBatchScope(ids),
@@ -97,7 +97,7 @@ export async function lockKinesisCashLedger(
   accountIds: readonly number[] = [],
 ): Promise<void> {
   await query("LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE");
-  if (accountIds.length)
+  if (accountIds.length > 0)
     await query(
       "SELECT account_id FROM account_statement_balances WHERE account_id=ANY($1::integer[]) ORDER BY account_id,currency FOR UPDATE",
       [accountIds],
@@ -356,8 +356,8 @@ export async function readIbkrCashCorrectionContext(): Promise<IbkrCashCorrectio
     )
   ).map((item) => Number(item.id));
   const [sources, batches, receipts] = await Promise.all([
-    ids.length ? readReconciliationSources(ids) : [],
-    ids.length ? readReconciliationBatchScope(ids) : [],
+    ids.length > 0 ? readReconciliationSources(ids) : [],
+    ids.length > 0 ? readReconciliationBatchScope(ids) : [],
     queryRows(
       ibkrCashReceiptRowSchema,
       `SELECT a.* FROM portfolio_import_reconciliation_journal a
@@ -394,7 +394,7 @@ export async function compareAndSetIbkrCashImage(
     RETURNING ${IBKR_CASH_SNAPSHOT_SQL} AS snapshot`,
   [before.id, JSON.stringify(after), JSON.stringify(before)]);
   const [row, ...extra] = checkRows(ibkrCashSnapshotRowSchema, result.rows);
-  if (!row || extra.length) throw stale();
+  if (!row || extra.length > 0) throw stale();
   return row.snapshot;
 }
 
@@ -498,5 +498,5 @@ export async function guardOriginalIbkrCashRollback(
         OR (a.after_data->'proof'->'primaryReference'->>'batchId')::bigint=$1)
       AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
     LIMIT 1`, [batchId]);
-  if (active.rows.length) throw stale();
+  if (active.rows.length > 0) throw stale();
 }

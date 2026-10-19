@@ -38,7 +38,7 @@ export function buildListWhereClause({
   let where = "WHERE 1=1";
   const params: (number | string)[] = [];
   let idx = 1;
-  if (investmentId) {
+  if (investmentId != null) {
     where += ` AND investment_id = $${idx++}`;
     params.push(investmentId);
   }

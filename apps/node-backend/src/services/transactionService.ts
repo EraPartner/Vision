@@ -89,7 +89,7 @@ async function createManualTransaction(data: ManualTransactionInput): Promise<{
   const transaction = await withTransaction(async (client) => {
     const accountId = data.account_id ?? null;
     if (accountId != null) {
-      if (!(await accountRepository.findActiveId(accountId, { client }))) {
+      if ((await accountRepository.findActiveId(accountId, { client })) === undefined) {
         throw new ValidationError(
           "account_id must reference an active account",
         );
@@ -137,7 +137,7 @@ async function createManualTransaction(data: ManualTransactionInput): Promise<{
 
     await recordManualTransactionDedupClaim({
       ...identity,
-      categoryId: data.category_id || null,
+      categoryId: data.category_id ?? null,
       comment: data.comment || null,
       transactionId: created.id,
     });
@@ -198,10 +198,10 @@ async function update(
   },
 ): Promise<EnrichedTransactionRow | null> {
   const [recipientId, categoryId] = await Promise.all([
-    fields.recipient_name && !fields.recipient_id
+    fields.recipient_name && fields.recipient_id == null
       ? resolveRecipientIdByName(fields.recipient_name)
       : fields.recipient_id,
-    fields.category_name && !fields.category_id
+    fields.category_name && fields.category_id == null
       ? resolveCategoryIdByName(fields.category_name)
       : fields.category_id,
   ]);

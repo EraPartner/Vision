@@ -53,6 +53,7 @@ import {
 import { registerParserRoutes } from "./parserConfigRoutes.ts";
 import { registerImportBatchRoutes } from "./importBatchRoutes.ts";
 import { CSV_NUMBER_FORMATS } from "../services/importPipeline/adapters/_shared.ts";
+import { nanToZero } from "../lib/math.ts";
 
 /** The shape `runImportPipeline` resolves with (services/importPipeline/index.js). */
 type ImportPipelineResult = Awaited<ReturnType<typeof runImportPipeline>>;
@@ -115,7 +116,7 @@ function buildPipelineResult(pipelineResult: ImportPipelineResult) {
     duplicates: pipelineResult.duplicates,
     errors: pipelineResult.errors,
     batch_id: pipelineResult.batchId,
-    auto_linked_count: pipelineResult.autoLinkedCount || 0,
+    auto_linked_count: pipelineResult.autoLinkedCount ?? 0,
   };
 }
 
@@ -196,7 +197,7 @@ const skipRowsField = z
   .unknown()
   .optional()
   .transform((value, ctx) => {
-    const skipRows = parseInt(String(value), 10) || 0;
+    const skipRows = nanToZero(parseInt(String(value), 10));
     if (skipRows < 0) {
       ctx.addIssue({
         code: "custom",
@@ -437,7 +438,7 @@ router.post("/csv/stream", csvUpload.single("file"), async (req, res) => {
       duplicates: pipelineResult.duplicates,
       errors: pipelineResult.errors,
       batch_id: pipelineResult.batchId,
-      auto_linked_count: pipelineResult.autoLinkedCount || 0,
+      auto_linked_count: pipelineResult.autoLinkedCount ?? 0,
     }),
   });
 });
@@ -641,7 +642,7 @@ router.post("/batches/:id/commit", async (req, res) => {
       imported,
       duplicates,
       errors,
-      auto_linked_count: autoLinkedCount || 0,
+      auto_linked_count: nanToZero(autoLinkedCount),
     }),
   );
 });

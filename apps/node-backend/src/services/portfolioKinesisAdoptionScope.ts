@@ -82,7 +82,7 @@ const hash = (value: string | Buffer) =>
 const configOf = (value: unknown): KinesisBatchConfig =>
   typeof value === "string"
     ? (JSON.parse(value) as KinesisBatchConfig)
-    : (value as KinesisBatchConfig | null) || {};
+    : (value as KinesisBatchConfig | null) ?? {};
 const tuple = (
   rawHash: string,
   sourceId: string | null | undefined,
@@ -153,8 +153,8 @@ export function proveKinesisAdoptionSources(
         throw new Error("reference source binding");
       if (
         config.format !== "kinesis_transaction_history" ||
-        config.included_symbols?.length ||
-        Number(config.scope_excluded_rows || 0) > 0 ||
+        (config.included_symbols?.length ?? 0) > 0 ||
+        Number(config.scope_excluded_rows ?? 0) > 0 ||
         context?.version !== 1 ||
         context.skipped !== 0 ||
         !/^[a-f0-9]{64}$/.test(context.source_file_hash || "") ||
@@ -287,7 +287,7 @@ export function proveKinesisAdoptionSources(
       issues.push({
         batchId: Number(batch.id),
         rowId: Number(scoped[0]?.id || 0),
-        rowOrdinal: Number(scoped[0]?.row_index || 0) + 1,
+        rowOrdinal: Number(scoped[0]?.row_index ?? 0) + 1,
         reason: "adoption_scope_source_unverified",
         candidateTransactionIds: [],
       });

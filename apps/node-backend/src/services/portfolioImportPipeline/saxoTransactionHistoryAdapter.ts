@@ -267,7 +267,13 @@ function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
   const units = magnitude(match[2]);
   const price = magnitude(match[3]);
   const instrumentCurrency = currency(match[4] || record.Instrumentvaluta);
-  if (!units || !price || !instrumentCurrency) {
+  if (
+    units == null ||
+    units === 0 ||
+    price == null ||
+    price === 0 ||
+    !instrumentCurrency
+  ) {
     return unsupportedRow(
       record,
       "Saxo trade is missing units, price, or instrument currency",
@@ -278,7 +284,11 @@ function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
   const exchangeRate = magnitude(record.Omrekeningskoers);
   const accountFees = magnitude(record["Totale kosten"]);
   const fees =
-    accountFees && accountCurrency !== instrumentCurrency && exchangeRate
+    accountFees != null &&
+    accountFees !== 0 &&
+    accountCurrency !== instrumentCurrency &&
+    exchangeRate != null &&
+    exchangeRate !== 0
       ? toNumber(divide(accountFees, exchangeRate))
       : accountFees;
 
@@ -372,7 +382,7 @@ function workbookRecords(
       `Saxo ${sheet.sheet} sheet has ambiguous duplicate headers`,
     );
   const missing = required.filter((column) => !headers.includes(column));
-  if (missing.length)
+  if (missing.length > 0)
     throw new ValidationError(
       `Saxo ${sheet.sheet} sheet is missing columns: ${missing.join(", ")}`,
     );
@@ -513,7 +523,7 @@ function parseWorkbookRecord(
     }
     bucket.push(booking);
   }
-  const entries = (key: AmountKind) => buckets.get(key) || [];
+  const entries = (key: AmountKind) => buckets.get(key) ?? [];
   const magnitudeSum = (key: AmountKind) =>
     toNumber(sumBookings(entries(key)).abs());
   const base: ParsedPortfolioRow = {
@@ -555,9 +565,12 @@ function parseWorkbookRecord(
     const nativePrice = magnitude(trade.Prijs);
     const nativeGross = magnitude(trade["Verhandelde waarde"]);
     if (
-      !units ||
-      !nativePrice ||
-      !nativeGross ||
+      units == null ||
+      units === 0 ||
+      nativePrice == null ||
+      nativePrice === 0 ||
+      nativeGross == null ||
+      nativeGross === 0 ||
       !["Buy", "Sell"].includes(parsed.typeRaw)
     )
       throw new ValidationError(
@@ -574,7 +587,7 @@ function parseWorkbookRecord(
       "Saxo workbook trade quoted prices do not agree",
     );
     const rate = magnitude(record.Omrekeningskoers);
-    if (!rate)
+    if (rate == null || rate === 0)
       throw new ValidationError(
         "Saxo workbook trade is missing its exchange rate",
       );
@@ -611,7 +624,7 @@ function parseWorkbookRecord(
     (action === "cashdividend" || action === "cash dividend")
   ) {
     if (
-      trades.length ||
+      trades.length > 0 ||
       entries("dividend").length !== 1 ||
       [...buckets.keys()].some(
         (key) => !["dividend", "tax", "fee"].includes(key),
@@ -637,7 +650,7 @@ function parseWorkbookRecord(
   }
   if (["Deposit", "Withdrawal"].includes(parsed.typeRaw)) {
     if (
-      trades.length ||
+      trades.length > 0 ||
       bookings.length !== 1 ||
       entries("cash").length !== 1 ||
       (parsed.typeRaw === "Deposit" &&

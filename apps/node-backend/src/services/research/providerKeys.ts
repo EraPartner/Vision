@@ -52,7 +52,7 @@ export function loadKeyOverrides(
   rows: Array<{ provider: string; api_key: string }>,
 ) {
   overrides.clear();
-  for (const row of rows || []) {
+  for (const row of rows ?? []) {
     if (row?.provider && row?.api_key) overrides.set(row.provider, String(row.api_key).trim());
   }
 }

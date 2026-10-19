@@ -161,7 +161,7 @@ export function buildDashboardSuggestions(
   }
 
   // Childcare
-  const childcareCap = (profile.childcareEligibleDays || 0) * childcareDailyCap;
+  const childcareCap = (profile.childcareEligibleDays ?? 0) * childcareDailyCap;
   if (profile.childcareEligible && !(profile.childcareCosts > 0)) {
     items.push({
       id: "childcare.no_amount",

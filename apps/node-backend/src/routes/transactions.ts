@@ -511,7 +511,7 @@ const transactionFilterQueryShape = {
         .split(",")
         .map((slug) => slug.trim().toLowerCase())
         .filter(Boolean);
-      return slugs.length ? slugs : undefined;
+      return slugs.length > 0 ? slugs : undefined;
     }),
 };
 
@@ -530,13 +530,9 @@ function toTransactionFilters(query: TransactionFilterQuery) {
   const amountSigned = query.amount_signed;
   const amountExact = parseAmountFilter(query.amount_exact, amountSigned);
   const amountMin =
-    amountExact != null
-      ? amountExact
-      : parseAmountFilter(query.amount_min, amountSigned);
+    amountExact ?? parseAmountFilter(query.amount_min, amountSigned);
   const amountMax =
-    amountExact != null
-      ? amountExact
-      : parseAmountFilter(query.amount_max, amountSigned);
+    amountExact ?? parseAmountFilter(query.amount_max, amountSigned);
 
   return {
     transactionId: query.transaction_id,
@@ -627,9 +623,9 @@ const transactionExportQuerySchema = bareMessages(
       startDate: opts.startDate,
       endDate: opts.endDate,
       accountId: opts.accountId,
-      accountIds: query.account_ids?.length ? query.account_ids : undefined,
+      accountIds: (query.account_ids?.length ?? 0) > 0 ? query.account_ids : undefined,
       bankAccount: opts.bankAccount,
-      bankAccounts: query.bank_accounts?.length
+      bankAccounts: (query.bank_accounts?.length ?? 0) > 0
         ? query.bank_accounts
         : undefined,
       categoryId: opts.categoryId,

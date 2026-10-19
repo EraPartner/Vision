@@ -160,7 +160,7 @@ export async function readBaselineManifest({
       const identifier = `${quoteIdentifier(relation.schema)}.${quoteIdentifier(relation.name)}`;
       const tableName = `${relation.schema}.${relation.name}`;
       let rowJson = "to_jsonb(item)";
-      for (const column of timestampUtcColumns[tableName] || []) {
+      for (const column of timestampUtcColumns[tableName] ?? []) {
         if (!/^[a-z_][a-z0-9_]*$/.test(column)) {
           throw new Error("Invalid timestamp normalization column");
         }

@@ -42,7 +42,7 @@ export async function readKinesisIncomeUnitContext(
         .map((row) => Number(row.import_batch_id)),
     ]),
   ].sort((a, b) => a - b);
-  if (!ids.length) return adopted;
+  if (ids.length === 0) return adopted;
   const batches = (await readReconciliationBatchScope(ids)).filter(
     (batch) =>
       ((typeof batch.custom_config === "object"
@@ -62,7 +62,7 @@ export async function readIncomeRecognitionContext(
   const ids = history
     .filter((row) => row.type === "dividend" || row.type === "gift")
     .map((row) => Number(row.id));
-  if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
   const receipts = await queryRows(
     incomeRecognitionJournalRowSchema,
     `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.action='record'
@@ -71,7 +71,7 @@ export async function readIncomeRecognitionContext(
     [ids],
   );
   const batchIds = [...new Set(receipts.map((row) => Number(row.batch_id)))];
-  if (!batchIds.length) return { receipts, sources: [], batches: [] };
+  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
   const [sources, batches] = await Promise.all([
     readReconciliationSources(batchIds),
     readReconciliationBatchScope(batchIds),

@@ -156,7 +156,7 @@ export async function parseWithConfig(
       columns: true,
       skip_empty_lines: true,
       delimiter: config.separator || ",",
-      from_line: (config.skip_rows || 0) + 1,
+      from_line: (config.skip_rows ?? 0) + 1,
       relax_column_count: true,
     },
     config.encoding || "utf-8",

@@ -19,7 +19,7 @@ import { normalizeDateLikeToYmd, toWireDate } from "../lib/dateFormat.ts";
 import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import { logger } from "../config/logger.ts";
 import { addAll, divide, roundMoney, toDecimal } from "../lib/money.ts";
-import { median } from "../lib/math.ts";
+import { median, firstNonZero } from "../lib/math.ts";
 
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
@@ -187,7 +187,7 @@ function detectAmountChanges(
     }
     if (Number.isNaN(aTime)) return 1;
     if (Number.isNaN(bTime)) return -1;
-    return aTime - bTime || Number(a?.id ?? 0) - Number(b?.id ?? 0);
+    return firstNonZero(aTime - bTime, Number(a?.id ?? 0) - Number(b?.id ?? 0));
   });
 
   // Compare recent charges with the immediately preceding chronological
@@ -280,14 +280,12 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     for (const row of rows) {
       const direction = Number(row.amount) < 0 ? "expense" : "income";
       const key = `${row.recipient_id}:${direction}`;
-      if (!byRecipient[key]) {
-        byRecipient[key] = {
+      byRecipient[key] ??= {
           recipientId: row.recipient_id,
           recipientName: row.recipient_name || "Unknown",
           direction,
           transactions: [],
         };
-      }
       byRecipient[key].transactions.push(row);
     }
 

@@ -198,7 +198,7 @@ function parseInvestmentBody(body: unknown): InvestmentBody {
   if (!result.success) {
     const msg = result.error.issues
       .map((issue) =>
-        issue.path.length
+        issue.path.length > 0
           ? `${issue.path.join(".")}: ${issue.message}`
           : issue.message,
       )
@@ -218,7 +218,7 @@ function parseBrokerRetagBody(body: unknown): {
   if (!result.success) {
     const message = result.error.issues
       .map((issue) =>
-        issue.path.length
+        issue.path.length > 0
           ? `${issue.path.join(".")}: ${issue.message}`
           : issue.message,
       )
@@ -227,12 +227,7 @@ function parseBrokerRetagBody(body: unknown): {
   }
   // The legacy checkJs program (no strictNullChecks) widens zod's nullable
   // output to optional; this restates the strict shape for both programs.
-  return result.data as {
-    transaction_ids: number[];
-    from_account_id: number | null;
-    to_account_id: number | null;
-    idempotency_key: string;
-  };
+  return result.data;
 }
 
 // POST and PATCH accept the same portfolio-transaction field vocabulary. Keep
@@ -383,7 +378,7 @@ function parsePortfolioTransactionBody(
   if (!result.success) {
     const msg = result.error.issues
       .map((issue) =>
-        issue.path.length
+        issue.path.length > 0
           ? `${issue.path.join(".")}: ${issue.message}`
           : issue.message,
       )
@@ -719,7 +714,7 @@ export async function refreshPrices(
     price_updated_at: string;
   }[] = [];
   for (const [investmentId, priceData] of Object.entries(prices)) {
-    const { price, source }: Partial<ResolvedPrice> = priceData || {};
+    const { price, source }: Partial<ResolvedPrice> = priceData ?? {};
     if (price == null || isNaN(price)) continue;
     priceSources[investmentId] = source || "live";
     if (source === "cached" || source === "historical_fallback") continue;
@@ -907,9 +902,7 @@ export async function createTransaction(
   // VARCHAR column — a "euro"/"€"/4-10-char value otherwise 500'd. Absent/empty
   // falls back to the investment's own currency.
   const effectiveCurrency = assertCurrency(currency) || inv.currency;
-  if (fx_rate_to_eur === undefined || fx_rate_to_eur === null) {
-    fx_rate_to_eur = await autoResolveFxRateToEur(effectiveCurrency, date);
-  }
+  fx_rate_to_eur ??= await autoResolveFxRateToEur(effectiveCurrency, date);
 
   let txn;
   try {

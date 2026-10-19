@@ -134,20 +134,22 @@ export function previewPortfolioAssetAdjustment(
     account <= 0 ||
     !Number.isInteger(investment) ||
     investment <= 0 ||
-    !row.tx_date ||
-    !toDecimal(row.units || 0).gt(0)
+    row.tx_date == null ||
+    row.tx_date === "" ||
+    !toDecimal(row.units === "" ? 0 : (row.units ?? 0)).gt(0)
   )
     return { error: "incomplete_adjustment" };
   if (
     !row.source_record_hash ||
     !row.dedup_fingerprint ||
-    !row.dedup_fingerprint_version
+    row.dedup_fingerprint_version == null ||
+    row.dedup_fingerprint_version === 0
   )
     return { error: "missing_adjustment_identity" };
   const eligibleHashes = [
     ...new Set(
       [
-        ...(details.eligibleSourceRecordHashes || []),
+        ...(details.eligibleSourceRecordHashes ?? []),
         ...sourceRows
           .filter(
             (source) =>

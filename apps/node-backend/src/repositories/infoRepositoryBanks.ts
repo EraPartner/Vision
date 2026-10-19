@@ -268,7 +268,7 @@ export const banksRepository = {
             balance: 0,
             // Provenance (WP-A1): anchor_date is already a YYYY-MM-DD string via
             // to_char in the lateral; NULL (no stamp) → undefined.
-            anchor_date: row.anchor_date == null ? undefined : row.anchor_date,
+            anchor_date: row.anchor_date ?? undefined,
             post_anchor_count:
               row.post_anchor_count == null
                 ? undefined
@@ -329,7 +329,7 @@ export const banksRepository = {
     const historyByDay: Record<string, Map<string, Decimal>> = {};
     for (const row of historyConverted) {
       const key = row.bank_account;
-      if (!historyByDay[key]) historyByDay[key] = new Map();
+      historyByDay[key] ??= new Map();
       // toYmd uses local getters for the defensive Date branch (the SQL emits
       // day via to_char, so this normally passes the string straight through).
       const day = toYmd(row.day);
