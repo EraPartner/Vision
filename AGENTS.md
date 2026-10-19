@@ -155,7 +155,6 @@ native/Electron journeys in verification reports.
 | `i18n/source/`                  | Locale source files             |
 | `apps/frontend/src/locales/`    | Generated locales               |
 | `packaging/electron/`           | Desktop shell                   |
-| `apps/native/`                  | Vision Native Swift app         |
 | `docs/`                         | Obsidian knowledge base         |
 | `docs/guides/devcontainer.md`   | Built-in agent sandbox workflow |
 

@@ -7027,13 +7027,10 @@ components:
                 type: string
               value:
                 type: number
-                x-swift-type: Decimal
               percent:
                 type: number
-                x-swift-type: Decimal
               labelPercent:
                 type: number
-                x-swift-type: Decimal
               startAngle:
                 type: number
               endAngle:
