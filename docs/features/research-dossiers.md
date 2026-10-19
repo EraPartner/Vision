@@ -2,8 +2,8 @@
 title: Research Dossiers
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags: [feature, research, dossiers, evidence, provenance, analysis]
 description: Local versioned research records for questions, thesis, evidence, conclusions, and linked financial context.
 aliases: [dossier workspace, research dossier library]
@@ -67,18 +67,3 @@ service does not send it to an AI provider.
 ### Unsaved edits when switching dossiers
 
 Selecting the current dossier keeps its draft unchanged. Selecting another dossier or New with unsaved edits opens the shared discard confirmation. Cancel retains the draft; Discard changes continues the requested selection. Saving remains explicit and successful saves do not trigger this confirmation.
-
-## Native workspace (phase 3n)
-
-`ResearchDossiersScreenView` mounts the native `/research/dossiers` editor. Its shared Core model
-retains 500-row list paging, explicit save/version CAS, immutable history/restore, current links,
-document anchors and source confirmations. Dirty New/switch requests preserve the current draft
-until Discard is confirmed; selecting the current dossier leaves it intact. Late selection/visit
-reads cannot overwrite a newer draft. A changed document clears its four source anchors, and only
-a literally empty source title is filled automatically.
-
-Export one/all uses the existing server JSON export and a native save panel. There is no JSON
-import, citation inference or financial engine in Swift. Date-only values and raw provenance stay
-intact; responsive macOS rendering, VoiceOver and synthetic Demo review remain pending. See
-[[docs/architecture/native-app|Native architecture]] and
-[[docs/reference/native-parity/research-and-ai-chat|the native parity inventory]].

@@ -559,16 +559,6 @@
         padding-left: 88px;
     }
 
-    /* Vision Native draws its sidebar under the traffic lights (ADR-204
-       phase 2), so the topbar keeps the inset only while that sidebar is
-       hidden (ElectronBridge toggles .native-sidebar-hidden). */
-    html.electron-mac.native-navigation:not(.native-sidebar-hidden):not(
-            .electron-fullscreen
-        )
-        .app-topbar {
-        padding-left: 1rem;
-    }
-
     /* The hiddenInset traffic lights (x:20, y:20, ~12px buttons) also overlap
        the sidebar's top-left, colliding with the logo in its header. Reserve
        the native strip above the header content, Finder-style. margin (not

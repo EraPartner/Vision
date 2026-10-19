@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - url-state
   - feature
@@ -391,23 +391,21 @@ are hidden while inputs are invalid or waiting for the debounce, so a visible ch
 represent a different contribution or target. This is frontend validation; the projection API
 contract in [[docs/api/research]] is unchanged.
 
-## Shared presentation calculations (native phase 3l)
+## Shared presentation calculations
 
 Compare statistics/correlations, Chart Builder rebasing/OHLC fallback/indicators, Watchlist target
 and since-added percentages, provider-history quote synthesis, analyst verdicts and market-add
 unit previews are shared pure TypeScript under `packages/shared-utils/src/research/`. The existing
 web pages import these helpers; frontend indicator and portfolio-unit compatibility exports keep
-existing callers and lazy loading. Native callers submit already-fetched values to
-[[docs/api/research#POST /api/research/presentation|the stateless presentation API]], preserving
-source order, null warmups, currency conventions and provider quota. Swift renders returned values
-and edits structural configuration; the endpoint does not fetch, persist, or invent provenance.
-The native macOS/Demo visual and keyboard checks remain pending; see
-[[docs/reference/native-parity/research-and-ai-chat|Research parity]].
+existing callers and lazy loading. API clients can submit already-fetched values to
+[[docs/api/research#POST /api/research/presentation|the stateless presentation API]], which
+preserves source order, null warmups, currency conventions and provider quota; the endpoint does
+not fetch, persist, or invent provenance.
 
-## Shared Life Scenario calculations (native phase 3m)
+## Shared Life Scenario calculations
 
 `packages/shared-utils/src/research/forecastScenario.ts` now supplies the existing web Life Scenario
-preparation, five-field comparability check and median difference. Native clients use the two
+preparation, five-field comparability check and median difference. API clients can use the two
 additive Life Scenario kinds of [[docs/api/research#POST /api/research/presentation|the same stateless
 presentation API]], then make the same two existing seeded forecasts. Scenario inputs override
 immediate main contribution/goal/seed fields; other assumptions and the fixed three-month schedule

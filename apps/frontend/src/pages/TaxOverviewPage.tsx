@@ -36,7 +36,6 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { PageShell } from "@/components/shared/PageShell";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
@@ -142,7 +141,7 @@ export default function TaxOverviewPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("budgetTax", WIDGETS);
-    const { exportOpen, setExportOpen } = useReportDialogState();
+    const [exportOpen, setExportOpen] = useState(false);
     const [customizeOpen, setCustomizeOpen] = useState(false);
 
     const exportDialog = (

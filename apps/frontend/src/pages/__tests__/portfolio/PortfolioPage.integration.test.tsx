@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { screen, act, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useLocation } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -21,10 +20,6 @@ import {
 } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
-
-function LocationProbe() {
-    return <output data-testid="location-search">{useLocation().search}</output>;
-}
 
 const CANONICAL_INVESTMENT = {
     ...INVESTMENT_STUB,
@@ -285,91 +280,6 @@ async function findHoldingsCard() {
 }
 
 describe("PortfolioPage (integration)", () => {
-    it("opens the native PDF handoff and preserves period, FX neutrality and unrelated query values on close", async () => {
-        const user = userEvent.setup();
-        renderWithApp(
-            <>
-                <PortfolioPage />
-                <LocationProbe />
-            </>,
-            {
-                initialEntries: [
-                    "/portfolio?period=1y&fx_neutral=true&source=native&export=pdf",
-                ],
-            },
-        );
-        const dialog = await screen.findByRole("dialog");
-        expect(
-            within(dialog).getByRole("heading", { name: /export pdf report/i }),
-        ).toBeInTheDocument();
-        await user.click(
-            within(dialog).getByRole("button", { name: /^cancel$/i }),
-        );
-        await waitFor(() => {
-            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-            expect(screen.getByTestId("location-search")).toHaveTextContent(
-                "?period=1y&fx_neutral=true&source=native",
-            );
-        });
-    });
-    it("keeps report configuration through investment loading, failure and a successful retry", async () => {
-        const user = userEvent.setup();
-        let release!: () => void;
-        const pending = new Promise<void>((resolve) => {
-            release = resolve;
-        });
-        let fail = true;
-        server.use(
-            http.get(`${API_BASE}/api/investments`, async () => {
-                await pending;
-                return fail
-                    ? err(500, "Synthetic portfolio read failed")
-                    : ok({
-                          items: [],
-                          total: 0,
-                          limit: 500,
-                          offset: 0,
-                          links: [],
-                      });
-            }),
-        );
-        try {
-            const { queryClient } = renderWithApp(<PortfolioPage />, {
-                initialEntries: ["/portfolio?period=1y&export=pdf"],
-            });
-            const dialog = await screen.findByRole("dialog");
-            const preset = within(dialog).getByRole("radio", {
-                name: "Last 3 months",
-            });
-            await user.click(preset);
-            expect(preset).toBeChecked();
-            release();
-            expect(
-                await screen.findByText("Synthetic portfolio read failed"),
-            ).toBeInTheDocument();
-            expect(
-                within(screen.getByRole("dialog")).getByRole("radio", {
-                    name: "Last 3 months",
-                }),
-            ).toBeChecked();
-            fail = false;
-            await act(async () => {
-                await queryClient.refetchQueries({ queryKey: ["investments"] });
-            });
-            expect(
-                await screen.findByText(
-                    /add your first investment to start tracking/i,
-                ),
-            ).toBeInTheDocument();
-            expect(
-                within(screen.getByRole("dialog")).getByRole("radio", {
-                    name: "Last 3 months",
-                }),
-            ).toBeChecked();
-        } finally {
-            release();
-        }
-    });
     // ─── Header ────────────────────────────────────────────────────────────
     // ─── Header ────────────────────────────────────────────────────────────
     it("renders the page heading", async () => {

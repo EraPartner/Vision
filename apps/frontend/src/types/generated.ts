@@ -6887,7 +6887,7 @@ export interface components {
             p75: number | null;
             p90: number | null;
         };
-        /** @description available=false contains a reason and optional historyDays. Computed monetary fields can serialize null on numeric overflow. Such an available response is rejected by the maintained PortfolioForecastSchema/native client validity guard; nullable wire representation never authorizes invented zero values or a comparison. */
+        /** @description available=false contains a reason and optional historyDays. Computed monetary fields can serialize null on numeric overflow. Such an available response is rejected by the maintained PortfolioForecastSchema validity guard; nullable wire representation never authorizes invented zero values or a comparison. */
         ResearchPortfolioForecastData: {
             available: boolean;
             /** @enum {string} */
@@ -8723,7 +8723,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination. */
+            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. */
             200: {
                 headers: {
                     "Content-Disposition"?: string;
@@ -15885,7 +15885,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Computed charts and widget data. Money is decoded directly as Decimal by the native client. */
+            /** @description Computed charts and widget data. */
             200: {
                 headers: {
                     [name: string]: unknown;

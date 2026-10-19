@@ -2,8 +2,8 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-10-13
 tags:
   [
@@ -488,26 +488,7 @@ repeated nested cards. Its panel stays mounted across mode switches. In Chat, an
 model disables new-message and tool controls; an ongoing stream keeps Cancel available. The status
 surface provides recovery without duplicating a disabled onboarding form.
 
-## Native Chat and Investigation (phase 3n)
+## Tool presentation metadata
 
-`/ai-chat` now mounts the Swift client through `AIChatScreens`. Both workflows remain mounted
-when switching modes, retaining their separate drafts/job state. Conversation paging, model/tools
-controls, explicit stop/retry and partial stream states use the existing operations; the per-
-conversation stream store remains independent of page-read lifetime. Real route exit resets local
-page drafts and Investigation state without implicitly deleting a remote job or stopping a chat turn.
-
-The server adds ordered `toolPresentation` metadata beside unchanged raw tool results for native
-tables/charts. Shared TypeScript retains source first-row inference and signed Recharts pie
-composition; Swift only draws and formats returned values. This adds no tool/provider request.
-Investigation preserves exact preview, digest-bound consent grant and frozen outbound request,
-source privacy controls, documents, history and evidence. Status refreshes follow the source
-60-second mount/reconnect freshness; ordinary focus refetch is disabled globally and focus only
-continues a paused status read. Settings shares successful status/model receipts, and acknowledged
-AgentCloak changes invalidate active OpenAI status. Documents remain mount-only and job polling retains its manual
-1.2-second policy while mounted. Only document deletion adds the existing Investigation confirmation.
-
-Portable tests cover transport/state and source presentation contracts. macOS package, responsive
-UI, keyboard/VoiceOver and Vision Demo checks remain pending. See
-[[docs/architecture/native-app|Native architecture]], [[docs/api/ai|AI Chat API]],
-[[docs/api/ai-research|AI Research API]] and
-[[docs/reference/native-parity/research-and-ai-chat|the native parity inventory]].
+The server adds ordered `toolPresentation` metadata beside unchanged raw tool results for tables
+and charts. This adds no tool/provider request. See [[docs/api/ai|AI Chat API]].

@@ -10,7 +10,7 @@ export interface DashboardDeductionSuggestion {
   noteKey?: string;
 }
 
-/** Web deduction advice extracted unchanged; Swift renders server-returned amounts only. */
+/** Web deduction advice extracted unchanged. */
 export function buildDashboardSuggestions(
   profile: BelgianTaxProfile,
   marginalRate: number,

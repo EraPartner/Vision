@@ -15,6 +15,14 @@ aliases: [ADRs, decisions, architecture decisions]
 > [!abstract] What is an ADR?
 > An ADR (Architecture Decision Record) documents a significant architectural decision along with its context, consequences, and status. Use these to understand **why** the system is built the way it is.
 
+## Desktop app decision
+
+[[docs/adr/214-retire-vision-native-swift-port|ADR-214]] retires the Vision Native Swift port
+(ADR-204, ADR-205, ADR-209 to ADR-212 superseded; ADR-213 rejected). The Electron app with the
+React/TypeScript frontend and TypeScript backend is the only desktop app; its bundled native
+PostgreSQL runtime and Vision Demo stay. Do not restart a Swift or native rewrite without a new
+ADR from Tor.
+
 ## Recovery and report resource bounds
 
 [[docs/adr/207-coordinated-native-recovery|ADR-207]] coordinates native snapshot capture and interrupted restore recovery.
@@ -269,21 +277,30 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 assert internal structure may be deleted with a one-line reason, and a behaviour they alone
 covered gets a boundary test in the same change.
 
-### 2026-10-18: Move the backend into the Mac app in Swift (proposed)
+### 2026-10-19: Retire the Vision Native Swift port (accepted)
+
+[[docs/adr/214-retire-vision-native-swift-port|ADR-214]] retires the Swift app under
+`apps/native/`, its generators, CI jobs, frontend bridges and documentation, on Tor's decision.
+It supersedes ADR-204, ADR-205, ADR-209, ADR-211 and ADR-212 (ADR-210 was already superseded)
+and rejects the proposed ADR-213. Electron stays the only desktop app; the Electron native
+PostgreSQL runtime, Vision Demo and the shared TypeScript logic and endpoints extracted during
+the port stay.
+
+### 2026-10-18: Move the backend into the Mac app in Swift (proposed; rejected 2026-10-19 by ADR-214)
 
 [[docs/adr/213-vision-native-swift-backend|ADR-213]] proposes replacing the TypeScript backend,
 route by route behind `openapi.yaml`, with a Swift backend (Hummingbird 2, PostgresNIO) running
 inside the Mac app. PostgreSQL stays supervised; Docker/Linux and Electron keep the TypeScript
 backend until they are retired. Decision record only; no code yet.
 
-### 2026-10-18: Retire the helper document (accepted)
+### 2026-10-18: Retire the helper document (accepted; superseded by ADR-214)
 
 [[docs/adr/212-vision-native-retire-helper-document|ADR-212]] supersedes ADR-210's helper
 document: native-only is the passing Debug Demo default, so the helper's entry, build, backend
 route, Swift bridge and e2e mode are removed. The retained web document stays as the opt-out and
 for every ineligible build; native-only stays Debug Demo only.
 
-### 2026-10-17: Finish phase 4 without web content (accepted)
+### 2026-10-17: Finish phase 4 without web content (accepted; superseded by ADR-214)
 
 [[docs/adr/211-vision-native-without-web-content|ADR-211]] amends ADR-210: the helper document's
 calculations (palette answers, tax report profile and context) and its storage move to Swift,
@@ -298,25 +315,25 @@ behind an explicit Debug Demo opt-in; [[docs/adr/209-vision-native-staged-web-re
 is accepted and its native history is what that mode uses. Every other launch keeps the
 retained web document; no real data moves.
 
-### 2026-10-15: Isolate a native Demo helper document (proposed; accepted 2026-10-17)
+### 2026-10-15: Isolate a native Demo helper document (proposed; accepted 2026-10-17; superseded by ADR-212)
 
 [[docs/adr/210-vision-native-helper-document|ADR-210]] proposes a default-off Debug Demo
 experiment with native presentation and routing plus a same-origin document for unchanged
 TypeScript helpers and scoped storage. It records build/readiness and native-owner prerequisites;
 no helper-only SDK mode, real-data migration or phase-4 completion is enabled by the proposal.
 
-### 2026-10-15: Stage native route authority before web retirement (proposed; accepted 2026-10-17)
+### 2026-10-15: Stage native route authority before web retirement (proposed; accepted 2026-10-17; superseded by ADR-214)
 
 [[docs/adr/209-vision-native-staged-web-retirement|ADR-209]] proposes explicit opt-in native
 history while the SDK retains renderer routing. It preserves query/leave-guard/Settings contracts
 and records storage, helper-runtime and restore-readiness gates before web retirement. The proposal
 and preparatory APIs do not certify switch-over or authorize real-data migration.
 
-### 2026-10-12: Vision Native phase 1 hand-over (accepted)
+### 2026-10-12: Vision Native phase 1 hand-over (accepted; superseded by ADR-214)
 
 [[docs/adr/205-vision-native-hand-over|ADR-205]] was accepted on 2026-10-12. It records what
 phase 1 of Vision Native delivered (runtime, shell, backup, audit anchor, Demo variant, the
-[[docs/reference/native-parity/phase-1-exit|phase 1 exit checklist]] and backup interop in CI),
+phase 1 exit checklist and backup interop in CI),
 keeps the Demo-only rule until phase 4, lists the switch-over steps deferred to phase 4 (restore
 through a backup, audit key and witness migration, Keychain service names, iCloud backup folder)
 and the product questions for Tor.
@@ -329,7 +346,7 @@ and the product questions for Tor.
 proportion (art. 147 al. 1, 2°, b-c), tests the statutory-pension limit on the gross amount, keeps
 the art. 153 limit on the total net income and applies AAFisc 40/2011 no. 19 under the quotient.
 
-### 2026-10-12: Vision Native is a Swift app target
+### 2026-10-12: Vision Native is a Swift app target (superseded by ADR-214)
 
 [[docs/adr/204-vision-native-swift-app-target|ADR-204]] records a separate Swift app, Vision
 Native (`apps/native/`, `com.vaultvoyager.vision-native`), with its own data directory. It runs

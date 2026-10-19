@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-18
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -95,7 +95,7 @@ The shared package also owns v1/v2 migration, settings validation/loading, and p
 React provider/store orchestration and CSV helpers remain in the frontend. Portfolio tax
 and recorded-income attribution are shared TypeScript modules with frontend compatibility exports. `householdRuntime` still loads on demand and re-exports the shared hydration helpers.
 
-`POST /api/belgian-tax/compute` exposes the same engine to Vision Native (ADR-204). It accepts a
+`POST /api/belgian-tax/compute` exposes the same engine over HTTP. It accepts a
 complete v2 household and returns `result` (assessment, partner/activity breakdowns, quotient,
 CSSS, totals, and issues) plus `calculation` (the legacy-compatible PIT presentation). This is a
 stateless preview: it does not select a live or historical profile, persist edits, create snapshots,
@@ -108,14 +108,11 @@ settings baselines. A fully frozen filing never calls the current engine. Legacy
 a household breakdown retains its PIT while obtaining that missing breakdown from the engine,
 as the web store does. A read does not write an upgrade, create a snapshot, or file a year.
 The `year` query accepts any four-digit year; a year outside the storable 1900–2200 snapshot range
-gets the year-pinned live estimate, which the native report context uses for custom report periods.
+gets the year-pinned live estimate, for example for a custom report period.
 
-Vision Native now renders `/tax` with native widgets, charts, profile/year actions, deduction
-review, and CSV export. `GET /api/belgian-tax/dashboard` owns chart, attribution, frozen scaling,
-and fiscal display derivation; profile edits use write-through atomic settings CAS saves and
-stateless backend previews. The shared PDF dialog remains web via `?export=pdf`. macOS build
-and the owner's Demo visual review remain pending; see [[docs/reference/native-parity/tax|the
-parity mapping]] and [[docs/architecture/native-app|native architecture]].
+`GET /api/belgian-tax/dashboard` derives the chart, attribution, frozen scaling and fiscal display
+values on the server for API clients; the web `/tax` page computes them in the frontend with the
+same shared modules. See [[docs/api/belgian-tax|the API contract]].
 
 Modules are split by concern:
 

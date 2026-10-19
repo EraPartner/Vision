@@ -6,7 +6,6 @@
  */
 
 import { useState } from "react";
-import { hasNativeShellCapability } from "@/lib/nativeShell";
 import { FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -125,12 +124,7 @@ interface ExportDialogProps {
     onOpenChange?: (open: boolean) => void;
 }
 
-export function ExportDialog(props: ExportDialogProps) {
-    if (hasNativeShellCapability("reports")) return null;
-    return <WebExportDialog {...props} />;
-}
-
-function WebExportDialog({
+export function ExportDialog({
     trigger,
     defaultType = "financial",
     open: controlledOpen,
@@ -257,7 +251,7 @@ function WebExportDialog({
                 const taxYear = reportTaxYear(period, todayYmd());
                 await downloadTaxReport({
                     ...baseOpts,
-                    ...taxReportContext(taxState, taxYear, t, undefined, period.kind === "year"),
+                    ...taxReportContext(taxState, taxYear, t, period.kind === "year"),
                 });
             }
             toast.success(t("statsPage.report.downloadSuccess"));

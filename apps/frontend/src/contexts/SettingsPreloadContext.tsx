@@ -22,7 +22,6 @@ import {
 import { apiClient } from "@/lib/api";
 import { getStartedSettingsPreload } from "@/lib/settingsPreload";
 import logger from "@/lib/logger";
-import { startNativeSettingsMirror } from "@/stores/hydration/nativeSettings";
 
 interface SettingsPreload {
     /** Raw settings map from the backend, keyed by settings key. */
@@ -45,10 +44,6 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let cancelled = false;
-        const native = startNativeSettingsMirror((key, value) => {
-            if (!cancelled)
-                setRawSettings((previous) => ({ ...previous, [key]: value }));
-        });
         // Prefer the promise started at boot (main.tsx) so the fetch overlaps JS
         // execution + mount and isn't duplicated. When nothing kicked it off
         // (e.g. a unit test rendering this provider directly), fetch here — same
@@ -78,20 +73,19 @@ export function SettingsPreloadProvider({ children }: { children: ReactNode }) {
                         // Already a key-value map (depending on backend version)
                         Object.assign(map, all);
                     }
-                    setRawSettings({ ...map, ...native.drafts });
+                    setRawSettings(map);
                 }
             })
             .catch((err) => {
                 // Backend unreachable on startup — contexts will use their own defaults
                 logger.warn("Settings preload failed; using defaults", err);
-                if (!cancelled) setRawSettings({ ...native.drafts });
+                if (!cancelled) setRawSettings({});
             })
             .finally(() => {
                 if (!cancelled) setIsLoading(false);
             });
         return () => {
             cancelled = true;
-            native.stop();
         };
     }, []);
 

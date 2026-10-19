@@ -1,8 +1,8 @@
 ---
 title: "ADR-204: Vision Native is a Swift app target that replaces the Electron shell in phases"
 type: adr
-status: accepted
-date: 2026-10-12
+status: superseded
+date: 2026-10-19
 tags:
   [
     adr,
@@ -25,6 +25,9 @@ aliases: [adr-203, vision native, swift native app, swift rewrite]
 # ADR-204: Vision Native is a Swift app target that replaces the Electron shell in phases
 
 ## Status
+
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: the Swift port is retired; the Electron app stays the only desktop app.
 
 Accepted on 2026-10-12 (decisions by Tor on 2026-10-11). It supersedes nothing yet.
 [[docs/adr/072-electron-native-desktop-integration|ADR-072]],
@@ -126,7 +129,7 @@ Facts about today's app that this decision builds on:
    navigation structure and the chart layouts. Golden screenshots from phase 0 check these three.
 8. **Rules carried into every phase.**
    - Parity rule: no functionality cut. Every screen PR shows where each inventoried action
-     lives. The inventory is at `docs/reference/native-parity/`.
+     lives. The inventory lived under `docs/reference/` until ADR-214 removed it.
    - One source for EN/NL copy: `i18n/source/en.json` and `nl.json` generate the String Catalogs.
      Nothing is retyped.
    - Money is Foundation `Decimal`, never `Double`. A lint rule enforces this.
@@ -206,5 +209,5 @@ Every phase starts only on Tor's explicit go.
 - [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]
 - [[docs/adr/196-electron-shell-typescript|ADR-196]]
 - [[docs/architecture/electron|Electron architecture]]
-- [[docs/reference/native-parity/index|Native parity inventory]]
+- Native parity inventory (page removed by ADR-214)
 - [[docs/adr/index|All ADRs]]

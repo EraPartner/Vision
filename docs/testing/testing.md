@@ -56,8 +56,10 @@ identical `tests/services/dedup.golden.test.ts` copy was removed; the persisted 
 fixture remains in `tests/golden/dedupHash.golden.test.ts`. No coverage thresholds were lowered.
 
 > [!note] No browser journeys
-> The Playwright browser journeys for the React web UI were removed on 2026-10-18. Only the Swift
-> native app is a supported UI, so React web layout has no browser coverage. The retired
+> The Playwright browser journeys for the React web UI were removed on 2026-10-18, when the Swift
+> app was planned to replace it. The Swift port was retired on 2026-10-19
+> ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]), so the React UI in Electron is the
+> only UI again and its layout currently has no browser-journey coverage. The retired
 > source-string responsive suite is not replaced. The live API contract tests still run against
 > a disposable PostgreSQL stack through `.github/scripts/with-native-stack.sh`.
 

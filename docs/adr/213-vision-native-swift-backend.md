@@ -1,8 +1,8 @@
 ---
 title: "ADR-213: Move the backend into the Mac app in Swift"
 type: adr
-status: proposed
-date: 2026-10-18
+status: superseded
+date: 2026-10-19
 tags: [adr, architecture, swift, native-app, backend, hummingbird, openapi, macos]
 description: "Proposed on 2026-10-18. Vision becomes a Mac app: the TypeScript backend is replaced, route by route behind openapi.yaml, by a Swift backend built on Hummingbird 2 and PostgresNIO that runs inside the app process. PostgreSQL stays a supervised process; Docker/Linux and Electron keep the TypeScript backend until they are retired."
 aliases: [adr-213, swift backend]
@@ -11,6 +11,9 @@ aliases: [adr-213, swift backend]
 # ADR-213: Move the backend into the Mac app in Swift
 
 ## Status
+
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: rejected and withdrawn before acceptance; no Swift backend is built.
 
 Proposed on 2026-10-18 by Tor, who chose the direction (Mac only, Swift with Hummingbird, in the
 app process) and asked for the decision record before any code. Accepting it is a separate step,
@@ -90,4 +93,4 @@ that can run inside the app. For a Mac-only app the last three outweigh Rust's a
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
 - [[docs/adr/211-vision-native-without-web-content|ADR-211: Finish phase 4 without web content]]
 - [[docs/adr/212-vision-native-retire-helper-document|ADR-212: Retire the helper document]]
-- [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]
+- Vision Native agent handoff (page removed by ADR-214)

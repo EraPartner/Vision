@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -111,7 +111,7 @@ pipeline as formula previews and saved refresh.
 ## Excel workbook interchange
 
 Browser compatibility modules now use shared TypeScript under `packages/shared-utils/src/analysis/`.
-Additive read-only multipart import/export operations expose that behavior to native clients;
+Additive read-only multipart import/export operations expose that behavior to API clients;
 see [[docs/api/analysis#Read-only CSV and workbook interchange|the exact contract]]. Exports consume
 captured result/context without rerunning Analysis; 64 MiB file transport retains the XLSX
 100,000-row capability beyond the global 1 MB JSON limit. Import retains the effective

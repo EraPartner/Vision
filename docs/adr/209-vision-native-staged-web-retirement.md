@@ -1,8 +1,8 @@
 ---
 title: "ADR-209: Stage native route authority before web retirement"
 type: adr
-status: accepted
-date: 2026-10-17
+status: superseded
+date: 2026-10-19
 tags: [adr, architecture, swift, native-app, phase-4, navigation]
 description: "Accepted on 2026-10-17 with the phase-4 go, default-off. Stages retirement of the retained renderer, beginning with default-off native routing and preserving storage, shared calculations, restore lifetime and the separate real-data switch-over gate."
 aliases: [adr-209, staged native web retirement]
@@ -11,6 +11,9 @@ aliases: [adr-209, staged native web retirement]
 # ADR-209: Stage native route authority before web retirement
 
 ## Status
+
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: the Swift port is retired; native route authority is not pursued.
 
 Accepted on 2026-10-17 (proposed 2026-10-15). Tor gave the phase-4 go on 2026-10-17
 on the condition that every new authority stays default-off until CI proves parity.
@@ -122,5 +125,5 @@ ownership relationship, and document the evidence before claiming a gate complet
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native Swift app target]]
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
-- [[docs/reference/native-parity/shell-and-settings|Shell and Settings parity]]
-- [[docs/reference/native-parity/agent-handoff|Native continuation handoff]]
+- Shell and Settings parity (page removed by ADR-214)
+- Native continuation handoff (page removed by ADR-214)

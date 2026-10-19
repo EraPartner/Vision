@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-18
+date: 2026-10-19
 tags:
   [
     reference,
@@ -13,7 +13,6 @@ tags:
     native-runtime,
     ai,
     privacy,
-    swift-baseline,
   ]
 description: Authoritative guide to Vision package scripts and their intended use.
 aliases: [scripts reference, package scripts]
@@ -43,15 +42,12 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 
 The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
-`electron:dev`, `electron:prod`, `native:prepare`, `native:*smoke`, `demo:reset-native`,
-`demo:reset-vision-native` and `test:electron` scripts run `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
+`electron:dev`, `electron:prod`, `native:prepare`, `native:*smoke`, `demo:reset-native`
+and `test:electron` scripts run `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
 `node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
 
 `demo:reset-native` asks Electron's Vision Demo to restore its canonical seed at the next launch.
-`demo:reset-vision-native` writes the same request into `Vision Native Demo/` for Vision Native
-Demo (`native-demo-cli.js reset --execute --target vision-native-demo`; `--target vision-native`
-picks the standard Vision Native variant).
 
 ## Root install scripts
 
@@ -59,48 +55,6 @@ picks the standard Vision Native variant).
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`                  |
 | `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                                      |
-| `install-native.sh` | Build Vision Native Demo (Release; `--debug`/`--measure` for Debug) and install it to `/Applications/Vision Native Demo.app` |
-
-`install-native.sh` needs `xcodegen` and `xcodebuild`. `--debug` builds the Debug configuration,
-whose Demo starts in the native-only mode ([[docs/adr/211-vision-native-without-web-content|ADR-211]];
-`VISION_NATIVE_WEB_FREE=0` opens the retained web page). `--measure` implies `--debug` and, after
-installing, runs `.github/scripts/native-e2e-smoke.sh` for the `native` and `retained` modes (and
-`electron` when `/Applications/Vision Demo.app` exists), then prints each mode's footprint, main
-process RSS, app-tree RSS and process count; the per-mode files land in
-`apps/native/build/memory-<timestamp>/`. It quits the apps it starts and uses synthetic Demo data
-only. It prepares the runtime payload with the
-same steps as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
-`build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`, and the
-Xcode build stages it into `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/` before
-signing. The script then checks the staged files and the signature. It builds the Demo variant
-unless `VISION_NATIVE_VARIANT=standard` is set, which installs `/Applications/Vision Native.app`. Set
-`VISION_NATIVE_SKIP_PAYLOAD=1` to build without a payload. It signs with the free personal team from
-`VISION_NATIVE_TEAM_ID`, or from `VISION_NATIVE_TEAM_ID = <id>` in
-`apps/native/Config/Local.xcconfig`, or ad-hoc with a warning when neither is set. The Swift package
-and the Debug app are built and tested in CI, without a payload, by the `native-macos` job
-("Native (macOS)") on a GitHub-hosted `macos-26` runner. The job runs when `apps/native/`,
-`packaging/electron/backup/`, `install-native.sh`, `ci.yml`, `packaging/electron/audit-anchor.ts`
-or `packaging/electron/scripts/native-audit-fixture.ts` changes, on every push to `main`, and when
-the diff cannot be classified. It uploads a plain and an encrypted backup bundle and an audit
-transfer written by the Swift code, and the `native-interop` job opens them on Linux with the
-Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]]).
-
-The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.yml`, run by
-`.github/scripts/native-e2e-smoke.sh <app> <out> <mode>`) runs on pushes to `codex/native-phase-*`
-branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
-runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control,
-`VISION_NATIVE_WEB_FREE=0`) and `native` (no variable: the Debug Demo default) modes; the helper
-mode was removed by [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]. A mode
-passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
-native mode, the log reports `native-only document ready` (`native-only storage unavailable`
-fails it). `native-e2e.yml` and `native-branch.yml` skip
-documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot, the app process's `footprint-<mode>.txt` and
-`vmmap-<mode>.txt` (`vmmap --summary`; the breakdown is printed in a log group), and a `metrics-<mode>.txt` (bundle
-size and resident memory of the app tree and WebKit services, also written to the step summary) as the
-`native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
-and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
-`electron` mode, the phase-0 baseline that ADR-204's phase-4 exit compares the native numbers with
-([[docs/adr/211-vision-native-without-web-content|ADR-211]]).
 
 ## Build and release inputs
 
@@ -111,10 +65,6 @@ and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
 | `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
-
-The frontend `build:native-helper` script and `scripts/build-native-helper.ts` no longer exist;
-[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] retired the ADR-210 helper document,
-and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 
 ## Static and generated checks
 
@@ -131,11 +81,6 @@ and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 | `validate-locales`           | Validate source/generated locale parity            |
 | `generate-locales`           | Generate frontend and Electron locale outputs      |
 | `generate:types`             | Generate frontend OpenAPI types                    |
-| `native:generate`            | Run the four Vision Native generators below        |
-| `native:generate-api`        | Generate the Swift OpenAPI client                  |
-| `native:generate-tokens`     | Generate the Swift design tokens                   |
-| `native:generate-strings`    | Generate the Vision Native String Catalog          |
-| `native:generate-navigation` | Generate the Swift sidebar registry                |
 | `check-endpoint-matrix`      | Verify the documented operation count              |
 | `check-legacy-inventory`     | Validate legacy dispositions and TODO ownership    |
 | `check-test-only-exports`    | Reject production imports of test-only helpers     |
@@ -144,16 +89,6 @@ and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 | `db:check-destructive`       | Reject unmarked destructive migration operations   |
 | `db:check-heads`             | Require one Alembic head                           |
 | `check`                      | Run the repository aggregate static and test gates |
-
-The `native:generate*` scripts run Bun directly (no Electron build) and write the committed Swift
-sources of Vision Native phase 2 ([[docs/architecture/native-app|Vision Native]]):
-`scripts/native-openapi.ts` reads `openapi.yaml` and the operationIds in
-`apps/native/openapi-operations.txt`; `scripts/native-design-tokens.ts` reads
-`apps/frontend/src/styles/tokens.css`, `skin-v2.css` and `themes.ts`; `scripts/native-strings.ts`
-copies the keys in `apps/native/i18n-keys.txt` from `i18n/source/{en,nl}.json` into
-`apps/native/Sources/VisionNativeUI/Resources/Localizable.xcstrings`; and
-`scripts/native-navigation.ts` reads `apps/frontend/src/lib/navigation.ts`. CI's Verify Generated
-Artifacts job runs `native:generate` and fails when anything below `apps/native/` changes.
 
 ## Tests
 
@@ -234,41 +169,6 @@ translations still require review. `sanitize-locales` repairs generated-compatib
 `calibrate:category-outliers` requires `VISION_CALIBRATION_API_BASE_URL` pointing to a loopback-only
 running Vision instance. It discards category labels, recipients, accounts, memos, and comments,
 then reports only aggregate sensitivity and timing counts. It never writes to the database.
-
-## Native rewrite baseline
-
-`scripts/native-baseline.ts` has no package script. Run it on the Mac, in your own terminal, with
-`bun scripts/native-baseline.ts`. It records the
-[[docs/adr/204-vision-native-swift-app-target|ADR-204]] phase 0 performance baseline and golden
-screenshots of the Vision Demo app; phase 4 reruns it against Vision Native. It needs only Bun, the
-Demo app and macOS built-ins (`open`, `osascript`, `ps`, `du`, `sysctl`, `screencapture`), so a
-sandboxed agent that cannot launch apps or list processes cannot run it. Give the terminal
-Accessibility access (System Events window count and keystrokes) and Screen Recording access
-(fallback captures).
-
-| Flag                 | Purpose                                                                     |
-| -------------------- | --------------------------------------------------------------------------- |
-| `--skip-screenshots` | Measure only; skip the golden screenshots                                   |
-| `--skip-launch`      | Use the running app instead of three quit-and-relaunch cold launches        |
-| `--port <n>`         | Backend port; defaults to `appPort` in the app's userData `settings.json`   |
-| `--cdp-port <n>`     | DevTools port passed as `--remote-debugging-port`; defaults to 9222         |
-| `--app <name>`       | `Vision Demo` (default) or `Vision Native`; the real Vision app is rejected |
-
-The script writes to `.vision-cache/swift-baseline/<app slug>/` (gitignored; `vision-demo` or
-`vision-native`, so both baselines can coexist for comparison): `toolchain.md`, `baseline.md`
-and `baseline.json` (each number with its method), and `screenshots/<theme>-<lang>/<route>.png`
-with `screenshots/index.md`. It measures bundle sizes with `du`, three cold launches until
-`/health` returns 200 and a window exists, the summed RSS of every process inside the bundle or
-`~/Library/Application Support/<app>/` plus its descendants (after 60 s idle on Home and after
-scrolling `/transactions` to the bottom), and the `/transactions` scroll frame rate. It drives the
-renderer at `http://localhost:<appPort>` over the Chromium DevTools Protocol, which the Electron
-shell does not block. Screenshots cover every route in
-[[docs/reference/frontend-routes|Frontend Routes]] and `routePreload.ts` in light and dark, English
-and Dutch, at 1440x900, plus the Settings sections, command palette and shortcuts overlay in light
-English. Theme, language and admin mode are switched through `PUT /api/settings/theme_settings` and
-`app_settings`, and the original values are restored at the end, also on error or Ctrl-C. Without a
-DevTools endpoint the script falls back to `screencapture -l` of the `G <key>` shortcut pages. Never
-point it at the real Vision app.
 
 ## Common sequences
 
