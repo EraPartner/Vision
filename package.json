@@ -24,7 +24,7 @@
     "dist": "npm run build && cd packaging/electron && npm run dist",
     "build:dev": "bun run --filter 'vision-frontend' build:dev",
     "preview": "bun run --filter 'vision-frontend' preview",
-    "lint": "bun run --filter 'vision-frontend' lint && bun run lint:deps && bun run lint:dead",
+    "lint": "concurrently --group --kill-others-on-fail --names \"frontend,deps,dead\" \"bun run --filter 'vision-frontend' lint\" \"bun run lint:deps\" \"bun run lint:dead\"",
     "lint:deps": "depcruise --config config/dependency-cruiser.cjs --output-type err apps/frontend/src apps/frontend/scripts apps/frontend/vite.config.ts apps/node-backend/src apps/node-backend/scripts apps/node-backend/tests packages/types/src packages/shared-utils/src packages/shared-utils/tests packaging/electron scripts",
     "lint:dead": "knip --config config/knip.json --no-progress",
     "lint:backend": "bun run --filter 'financial-transaction-manager-node' lint",

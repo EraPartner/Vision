@@ -20,6 +20,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import { typeAwareRules } from "../../config/eslint-type-aware.mjs";
 
 // ── custom local rule ─────────────────────────────────────────────────────────
 
@@ -371,7 +372,14 @@ export default [
   })),
   {
     files: ["src/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
     rules: {
+      ...typeAwareRules,
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
