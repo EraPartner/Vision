@@ -657,21 +657,10 @@ struct PlannedHistorySheet: View {
     private var history: PlannedHistoryModel { model.history }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                Text(strings.t("plannedPage.history.title"))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.closeHistory()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(strings.t("common.close"))
-                .help(strings.t("common.close"))
-            }
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("plannedPage.history.title"), closeLabel: strings.t("common.close"),
+                onClose: { model.closeHistory() })
             if history.failed && !history.isLoading {
                 HStack(spacing: 12) {
                     Text(strings.t("plannedPage.history.loadFailed"))
@@ -706,16 +695,16 @@ struct PlannedHistorySheet: View {
             } else {
                 entriesTable
             }
-            HStack {
-                Spacer()
+            VisionDialogFooter {
                 Button(strings.t("common.close")) {
                     model.closeHistory()
                 }
+                .buttonStyle(.visionOutline)
                 .keyboardShortcut(.cancelAction)
             }
         }
-        .padding(20)
-        .frame(minWidth: 680, idealWidth: 800, minHeight: 320)
+        .visionDialogPadding()
+        .frame(minWidth: 680, idealWidth: 896, minHeight: 320)
         .foregroundStyle(theme.foreground)
         .task(id: model.payments) {
             await history.load(payments: model.payments)

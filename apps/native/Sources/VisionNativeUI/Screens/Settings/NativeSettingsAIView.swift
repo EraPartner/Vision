@@ -101,14 +101,17 @@ struct NativeSettingsAIView: View {
             ) {
                 HStack {
                     Button(strings.t("settings.agentCloak.checkAgain")) { Task { await model.checkAgentCloak() } }
-                        .disabled(!model.canCheckDesktop)
-                    Button(
-                        strings.t(
-                            model.desktopStatus?.enabled == true
-                                ? "settings.agentCloak.disable" : "settings.agentCloak.enable")
-                    ) {
-                        Task { await model.toggleAgentCloak() }
-                    }.disabled(!model.canToggleDesktop)
+                        .buttonStyle(.visionOutline).disabled(!model.canCheckDesktop)
+                    // Web: outline to disable, the default (primary) variant to enable.
+                    if model.desktopStatus?.enabled == true {
+                        Button(strings.t("settings.agentCloak.disable")) {
+                            Task { await model.toggleAgentCloak() }
+                        }.buttonStyle(.visionOutline).disabled(!model.canToggleDesktop)
+                    } else {
+                        Button(strings.t("settings.agentCloak.enable")) {
+                            Task { await model.toggleAgentCloak() }
+                        }.buttonStyle(.visionPrimary).disabled(!model.canToggleDesktop)
+                    }
                 }
             }
         }
@@ -149,7 +152,7 @@ struct NativeSettingsAIView: View {
                         }
                         Button(strings.t("settings.analysisPreferences.clear")) {
                             model.clearBenchmark { settings.setAppValue("analysisBenchmark", $0) }
-                        }
+                        }.buttonStyle(.visionOutline)
                     }
                     if model.benchmarkError {
                         Text(strings.t("settings.analysisPreferences.invalidBenchmark")).foregroundStyle(
@@ -184,11 +187,11 @@ struct NativeSettingsAIView: View {
                     .textFieldStyle(.vision).font(.body.monospaced()).accessibilityLabel(status.label)
                     Button(strings.t("settings.research.save")) {
                         Task { await model.saveProviderKey(status.provider) }
-                    }.disabled(!model.canSaveKey(status.provider))
+                    }.buttonStyle(.visionOutline).disabled(!model.canSaveKey(status.provider))
                     if status.source == "settings" {
                         Button(strings.t("settings.research.clear")) {
                             Task { await model.clearProviderKey(status.provider) }
-                        }.disabled(!model.canClearKey(status.provider))
+                        }.buttonStyle(NativeSettingsGhostButtonStyle()).disabled(!model.canClearKey(status.provider))
                     }
                 }
                 Text(status.envVar).font(.caption.monospaced()).foregroundStyle(theme.tertiaryLabel)

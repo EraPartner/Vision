@@ -8,19 +8,14 @@ struct ResearchChartBuilderSaveSheet: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(strings.t("research.builder.saveAsTitle")).font(.title2.weight(.semibold))
-                Spacer()
-                Button {
-                    model.isSaveDialogPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                }.accessibilityLabel(strings.t("common.close"))
-            }
-            Text(strings.t("research.builder.saveAsDescription")).font(.callout).foregroundStyle(theme.secondaryLabel)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(strings.t("research.builder.layoutName")).font(.caption)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("research.builder.saveAsTitle"),
+                description: strings.t("research.builder.saveAsDescription"), closeLabel: strings.t("common.close"),
+                onClose: { model.isSaveDialogPresented = false })
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("research.builder.layoutName")).font(.body.weight(.medium))
+                    .foregroundStyle(theme.foreground)
                 TextField("", text: Binding(get: { model.layoutName }, set: { model.layoutName = Self.limit($0) }))
                     .textFieldStyle(.vision).focused($focused).disabled(model.isStorageAction)
                     .accessibilityLabel(strings.t("research.builder.layoutName"))
@@ -28,16 +23,17 @@ struct ResearchChartBuilderSaveSheet: View {
             }
             if !model.isStorageLoaded && model.storageStatus == .failed {
                 Button(strings.t("common.retry")) { Task { await model.retryStorageLoad() } }
+                    .buttonStyle(.visionOutline)
             }
-            HStack {
+            VisionDialogFooter {
                 Button(strings.t("common.cancel")) { model.isSaveDialogPresented = false }
-                Spacer()
+                    .buttonStyle(.visionOutline)
                 Button(strings.t("research.builder.saveLayout")) { Task { await model.saveAs() } }.buttonStyle(.visionPrimary
                 ).disabled(
                     model.layoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isStorageAction
                         || !model.isStorageLoaded)
             }
-        }.padding(24).frame(width: 470).interactiveDismissDisabled(model.isStorageAction).onAppear { focused = true }
+        }.visionDialogPadding().frame(width: 512).interactiveDismissDisabled(model.isStorageAction).onAppear { focused = true }
             .overlay(alignment: .bottom) {
                 if model.notice?.kind == .error {
                     NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)

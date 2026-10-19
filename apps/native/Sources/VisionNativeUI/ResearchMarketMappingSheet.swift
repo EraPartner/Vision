@@ -7,24 +7,19 @@ struct ResearchMarketMappingSheet: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(strings.t("research.mapping.title")).font(.title2.weight(.semibold))
-                Spacer()
-                Button {
-                    model.close()
-                } label: {
-                    Image(systemName: "xmark")
-                }.accessibilityLabel(strings.t("common.close"))
-            }
-            Text(strings.t("research.mapping.desc", ["name": model.displayName])).foregroundStyle(theme.secondaryLabel)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("research.mapping.title"),
+                description: strings.t("research.mapping.desc", ["name": model.displayName]),
+                closeLabel: strings.t("common.close"), onClose: { model.close() })
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack {
                         Text(strings.t("research.mapping.proposals")).font(.headline)
                         Spacer()
-                        Button(strings.t("research.mapping.reresolve")) { Task { await model.resolve() } }.disabled(
-                            model.isResolving)
+                        Button(strings.t("research.mapping.reresolve"), systemImage: "arrow.clockwise") {
+                            Task { await model.resolve() }
+                        }.buttonStyle(.borderless).disabled(model.isResolving)
                     }
                     if model.isResolving {
                         ProgressView().frame(maxWidth: .infinity).frame(height: 90)
@@ -78,8 +73,9 @@ struct ResearchMarketMappingSheet: View {
                     HStack {
                         Text(strings.t("research.mapping.existing")).font(.headline)
                         Spacer()
-                        Button(strings.t("research.mapping.audit")) { Task { await model.runAudit() } }.disabled(
-                            model.existing.isEmpty || model.isAuditing)
+                        Button(strings.t("research.mapping.audit")) { Task { await model.runAudit() } }
+                            .buttonStyle(.visionOutline).controlSize(.small).disabled(
+                                model.existing.isEmpty || model.isAuditing)
                     }
                     if model.isLoading {
                         ProgressView().frame(maxWidth: .infinity)
@@ -139,15 +135,14 @@ struct ResearchMarketMappingSheet: View {
                     }
                 }
             }
-            HStack {
-                Button(strings.t("common.cancel")) { model.close() }
-                Spacer()
+            VisionDialogFooter {
+                Button(strings.t("common.cancel")) { model.close() }.buttonStyle(.visionOutline)
                 Button(strings.t("research.mapping.confirm", ["n": String(model.selectedCount)])) {
                     Task { await model.save() }
                 }.buttonStyle(.visionPrimary).disabled(
                     model.selectedCount == 0 || model.isSaving || model.isResolving)
             }
-        }.padding(24).frame(width: 650).frame(maxHeight: 760)
+        }.visionDialogPadding().frame(width: 672).frame(maxHeight: 760)
             .confirmationDialog(
                 strings.t("research.mapping.remove"),
                 isPresented: Binding(

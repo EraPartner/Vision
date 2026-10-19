@@ -160,7 +160,7 @@ private struct ResearchWatchlistRow: View {
                     Text(ResearchWatchlistUI.name(item)).font(.headline)
                 }
             }
-            Text(strings.t("addWatchlist." + item.assetClass)).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(assetClassLabel(item.assetClass)).font(.caption).foregroundStyle(theme.secondaryLabel)
             if let value = metric?.sinceAddedPercent {
                 HStack(spacing: 6) {
                     Text(
@@ -202,6 +202,14 @@ private struct ResearchWatchlistRow: View {
                         + strings.t("watchlist.aboveTarget"), invert: true)
             }
         }.fixedSize(horizontal: false, vertical: true)
+    }
+    /// `addWatchlist.<class>` covers the four classes the add form offers; a row may also carry
+    /// another portfolio asset class (bond, savings, real_estate).
+    private func assetClassLabel(_ value: String) -> String {
+        for key in ["addWatchlist." + value, "portfolio.assetClass." + value] where strings.t(key) != key {
+            return strings.t(key)
+        }
+        return value
     }
     private func lookup() {
         guard let symbol = item.symbol else { return }

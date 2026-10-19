@@ -38,12 +38,13 @@ public struct NativeOnboardingView: View {
                     case .tour: tour
                     case .backup: backup
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(26)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(24)
             }
             Divider()
             footer
         }
-        .frame(width: 680, height: 650)
+        // The web wizard is `DialogContent sm:max-w-2xl` (672 pt).
+        .frame(width: 672, height: 650)
         .background(theme.background)
         .environment(\.nativeNoticeCenter, shell.notices)
         .accessibilityLabel(strings.t("onboarding.wizard.title"))
@@ -76,72 +77,116 @@ public struct NativeOnboardingView: View {
                     Text(verbatim: "Vision").font(.visionDisplayHeadline)
                 }
                 Spacer()
-                Button {
+                VisionDialogCloseButton(label: strings.t("aria.close")) {
                     Task { await model.finish() }
-                } label: {
-                    Image(systemName: "xmark")
                 }
-                .buttonStyle(.plain).accessibilityLabel(strings.t("aria.close"))
-                .keyboardShortcut(.cancelAction).help(strings.t("aria.close"))
+                .keyboardShortcut(.cancelAction)
             }
-            ProgressView(value: Double(model.stepIndex + 1), total: 7)
-                .accessibilityLabel(
-                    strings.t(
-                        "onboarding.stepOf",
-                        [
-                            "n": String(model.stepIndex + 1), "total": "7",
-                            "label": strings.t("onboarding.step.\(model.draft.step.rawValue).label"),
-                        ]))
-            Text(
-                strings.t(
-                    "onboarding.stepOf",
-                    [
-                        "n": String(model.stepIndex + 1), "total": "7",
-                        "label": strings.t("onboarding.step.\(model.draft.step.rawValue).label"),
-                    ])
-            )
-            .font(.caption).foregroundStyle(theme.secondaryLabel)
+            // The web step indicator: one `h-1.5` pill per step, filled up to the current one.
+            HStack(spacing: 6) {
+                ForEach(0..<7, id: \.self) { index in
+                    Capsule()
+                        .fill(index <= model.stepIndex ? theme.primary : theme.muted)
+                        .frame(height: 6)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(stepOfText)
+            HStack(spacing: 8) {
+                Image(systemName: stepSymbol).font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.primary).accessibilityHidden(true)
+                Text(stepOfText).font(.callout.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+            }
+            .padding(.top, 4)
         }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
             .background(
                 LinearGradient(
                     colors: [theme.primary.opacity(0.1), theme.primary.opacity(0.05), .clear],
                     startPoint: .leading, endPoint: .trailing))
     }
+    private var stepOfText: String {
+        strings.t(
+            "onboarding.stepOf",
+            [
+                "n": String(model.stepIndex + 1), "total": "7",
+                "label": strings.t("onboarding.step.\(model.draft.step.rawValue).label"),
+            ])
+    }
+    private var stepSymbol: String {
+        switch model.draft.step {
+        case .welcome: "sparkles"
+        case .overview: "square.grid.2x2"
+        case .categories: "tag"
+        case .bank: "creditcard"
+        case .importData: "square.and.arrow.up"
+        case .tour: "map"
+        case .backup: "externaldrive"
+        }
+    }
+    /// The web footer: `border-t bg-foreground/[0.02] px-6 py-4`, a ghost Back or Skip on
+    /// the leading edge and the primary step action, with its trailing arrow, opposite.
     private var footer: some View {
         HStack {
             if model.stepIndex > 0 {
-                Button(strings.t("onboarding.back"), action: model.back)
+                Button(action: model.back) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.left").accessibilityHidden(true)
+                        Text(strings.t("onboarding.back"))
+                    }
+                }.buttonStyle(NativeSettingsGhostButtonStyle())
             } else {
                 Button(strings.t("onboarding.skipSetup")) { Task { await model.finish() } }
+                    .buttonStyle(NativeSettingsGhostButtonStyle())
             }
             Spacer()
             if model.isCompleting { ProgressView().controlSize(.small) }
             if model.draft.step == .backup {
-                Button(
-                    strings.t(model.draft.reviewBatch == nil ? "onboarding.goToDashboard" : "onboarding.finishImport")
-                ) {
+                Button {
                     Task { await model.finishFinalStep() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(
+                            strings.t(
+                                model.draft.reviewBatch == nil ? "onboarding.goToDashboard" : "onboarding.finishImport")
+                        )
+                        Image(systemName: "arrow.right").accessibilityHidden(true)
+                    }
                 }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
             } else {
-                Button(
-                    strings.t(model.draft.step == .welcome ? "onboarding.getStarted" : "onboarding.nextStep"),
-                    action: model.next
-                )
+                Button(action: model.next) {
+                    HStack(spacing: 6) {
+                        Text(strings.t(model.draft.step == .welcome ? "onboarding.getStarted" : "onboarding.nextStep"))
+                        Image(systemName: "arrow.right").accessibilityHidden(true)
+                    }
+                }
                 .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
             }
-        }.padding(20)
+        }
+        .padding(.horizontal, 24).padding(.vertical, 16)
+        .background(theme.foreground.opacity(0.02))
     }
     private var welcome: some View {
         VStack(spacing: 24) {
             Image(systemName: "sparkles").font(.system(size: 64)).foregroundStyle(theme.primary).accessibilityHidden(
                 true)
-            HStack(spacing: 20) {
-                Label(strings.t("onboarding.importCSV"), systemImage: "square.and.arrow.up")
-                Label(strings.t("onboarding.step.categories.label"), systemImage: "tag")
-                Label(strings.t("onboarding.analytics"), systemImage: "chart.bar")
-            }.font(.callout)
+            // The web `Badge variant="secondary"` row.
+            HStack(spacing: 8) {
+                welcomeBadge(strings.t("onboarding.importCSV"), symbol: "square.and.arrow.up")
+                welcomeBadge(strings.t("onboarding.step.categories.label"), symbol: "tag")
+                welcomeBadge(strings.t("onboarding.analytics"), symbol: "chart.bar")
+            }
             NativeOnboardingRestoreView(onboarding: model, shell: shell)
         }.frame(maxWidth: .infinity)
+    }
+    private func welcomeBadge(_ text: String, symbol: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).accessibilityHidden(true)
+            Text(text)
+        }
+        .font(.caption.weight(.medium)).foregroundStyle(theme.foreground.opacity(0.8))
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(Capsule().fill(theme.foreground.opacity(0.06)))
     }
     private var overview: some View {
         VStack(spacing: 18) {
@@ -174,33 +219,76 @@ public struct NativeOnboardingView: View {
                 Button {
                     Task { await model.finish(path: feature.path) }
                 } label: {
-                    featureLabel(feature).frame(maxWidth: .infinity, minHeight: 65, alignment: .leading).padding(10)
+                    featureLabel(feature).frame(maxWidth: .infinity, minHeight: 65, alignment: .leading).padding(
+                        .vertical, 8)
                 }.buttonStyle(.visionOutline)
             }
         }
     }
     private func featureLabel(_ feature: NativeOnboardingFeature) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: feature.symbol).foregroundStyle(theme.primary).accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            // The web icon plate: `h-9 w-9 rounded-control bg-primary/10`.
+            Image(systemName: feature.symbol).font(.system(size: 14, weight: .medium)).foregroundStyle(theme.primary)
+                .frame(width: 32, height: 32)
+                .background(
+                    theme.primary.opacity(0.1),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                )
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(strings.t("onboarding.feature.\(feature.id).title")).font(.headline)
-                Text(strings.t("onboarding.feature.\(feature.id).desc")).font(.caption).foregroundStyle(
-                    theme.secondaryLabel)
+                    .foregroundStyle(theme.foreground)
+                Text(strings.t("onboarding.feature.\(feature.id).desc")).font(.footnote).foregroundStyle(
+                    theme.secondaryLabel
+                ).lineLimit(2).multilineTextAlignment(.leading)
             }
         }
     }
+    private func backupReasonSymbol(_ reason: String) -> String {
+        switch reason {
+        case "safe": "checkmark.shield"
+        case "local": "internaldrive"
+        default: "folder"
+        }
+    }
     private var backup: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(["safe", "local", "restore"], id: \.self) { reason in
-                Label(strings.t("onboarding.backup.reason.\(reason)"), systemImage: "checkmark.shield")
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(["safe", "local", "restore"], id: \.self) { reason in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: backupReasonSymbol(reason)).font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(theme.primary).frame(width: 32, height: 32)
+                            .background(
+                                theme.primary.opacity(0.1),
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            )
+                            .accessibilityHidden(true)
+                        Text(strings.t("onboarding.backup.reason.\(reason)")).font(.body)
+                            .foregroundStyle(theme.foreground).fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                    }
+                    .padding(12)
+                    .visionCardBackground()
+                }
             }
-            Text(strings.t("onboarding.backup.hint")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Button(strings.t("onboarding.backup.openSettings")) {
-                Task { await model.finish(settingsSection: "backup") }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("onboarding.backup.hint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                Button {
+                    Task { await model.finish(settingsSection: "backup") }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder").accessibilityHidden(true)
+                        Text(strings.t("onboarding.backup.openSettings"))
+                    }
+                }
+                .buttonStyle(.visionPrimary)
             }
-            .buttonStyle(.visionPrimary)
-            Divider()
-            Text(strings.t("onboarding.restore.orTitle")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            HStack(spacing: 12) {
+                Rectangle().fill(theme.border).frame(height: 1).accessibilityHidden(true)
+                Text(strings.t("onboarding.restore.orTitle")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    .fixedSize()
+                Rectangle().fill(theme.border).frame(height: 1).accessibilityHidden(true)
+            }
             NativeOnboardingRestoreView(onboarding: model, shell: shell)
         }
     }

@@ -243,10 +243,8 @@ private struct PortfolioImportEvidenceView: View {
             detail("fields.date", display(values["date"]))
             detail("adjustment.account", account(values["accountId"]))
             detail("fields.units", display(values["units"]))
-            detail("adjustment.kind", strings.t("portfolioImport.session.adjustment.kind.\(display(values["kind"]))"))
-            detail(
-                "adjustment.basis",
-                strings.t("portfolioImport.session.adjustment.basis.\(display(values["basisPolicy"]))"))
+            detail("adjustment.kind", labelled("adjustment.kind", display(values["kind"])))
+            detail("adjustment.basis", labelled("adjustment.basis", display(values["basisPolicy"])))
         }
     }
     private var fields: [String] {
@@ -290,6 +288,13 @@ private struct PortfolioImportEvidenceView: View {
         }
     }
     private func nonnull(_ value: TaxValue?) -> Bool { value != nil && value != .null }
+    /// `portfolioImport.session.<group>.<value>`, or the value itself (including the "—"
+    /// placeholder) when this build has no label for it.
+    private func labelled(_ group: String, _ value: String) -> String {
+        let key = "portfolioImport.session.\(group).\(value)"
+        let text = strings.t(key)
+        return text == key ? value : text
+    }
     private func display(_ value: TaxValue?, field: String = "") -> String {
         guard let value, value != .null else { return "—" }
         if field == "dividend_amount_convention", let raw = value.stringValue {

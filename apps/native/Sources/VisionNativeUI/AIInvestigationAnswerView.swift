@@ -13,9 +13,9 @@ struct AIInvestigationAnswerView: View {
     var body: some View {
         ResearchCard(padding: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(strings.t("aiResearch.status." + answer.status))
+                Text(translated("aiResearch.status." + answer.status, fallback: answer.status))
                 Spacer(minLength: 12)
-                Text(answer.language.uppercased() + " · " + answer.depth)
+                Text(answer.language.uppercased() + " · " + translated("aiResearch." + answer.depth, fallback: answer.depth))
             }.font(.footnote).foregroundStyle(theme.secondaryLabel)
             Text(answer.summary).font(.body).textSelection(.enabled)
             statementSection("aiResearch.facts", statements: answer.facts)
@@ -35,6 +35,11 @@ struct AIInvestigationAnswerView: View {
             }
             if let evidence = selectedEvidence { evidenceDetail(evidence) }
         }
+    }
+    /// A server value shown through its locale key, or as-is when no key exists for it.
+    private func translated(_ key: String, fallback: String) -> String {
+        let text = strings.t(key)
+        return text == key ? fallback : text
     }
     @ViewBuilder private func statementSection(_ key: String, statements: [AIAnswerStatement]) -> some View {
         if !statements.isEmpty {

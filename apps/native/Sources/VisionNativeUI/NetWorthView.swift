@@ -207,7 +207,10 @@ public struct NetWorthView: View {
         if row.accountId == nil {
             details.append(strings.t("networth.byAccount.unassignedHint"))
         } else if let type = row.type {
-            details.append(strings.t("accounts.type." + type))
+            // An account type the catalog lacks shows the raw type, not the key.
+            let key = "accounts.type." + type
+            let label = strings.t(key)
+            details.append(label == key ? type : label)
         }
         if abs(row.cash) > threshold, abs(row.holdings) > threshold {
             details.append(strings.t("networth.byAccount.cash") + " " + money(row.cash))

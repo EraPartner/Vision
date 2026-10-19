@@ -16,37 +16,57 @@ struct PortfolioWidgetsSheet: View {
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(strings.t("widgets.title")).font(.title2.weight(.semibold))
-            Text(strings.t("widgets.description")).foregroundStyle(theme.secondaryLabel)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("widgets.title"), description: strings.t("widgets.description"),
+                closeLabel: strings.t("common.close"), onClose: { dismiss() }
+            )
+            .keyboardShortcut(.cancelAction)
             if let error {
                 Text(error).foregroundStyle(theme.destructive)
-                if !isLoaded { Button(strings.t("common.retry")) { Task { await reload() } } }
+                if !isLoaded { Button(strings.t("common.retry")) { Task { await reload() } }.buttonStyle(.visionOutline) }
             }
             if !isLoaded && error == nil { ProgressView().frame(maxWidth: .infinity) }
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(definitions) { widget in
-                        Toggle(
-                            strings.t(widget.labelKey),
-                            isOn: Binding(
-                                get: { visible(widget.id) },
-                                set: { value in Task { await setVisible(widget.id, value) } }))
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(strings.t(widget.labelKey)).foregroundStyle(theme.foreground)
+                                if let key = widget.descriptionKey {
+                                    Text(strings.t(key)).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Toggle(
+                                strings.t(widget.labelKey),
+                                isOn: Binding(
+                                    get: { visible(widget.id) },
+                                    set: { value in Task { await setVisible(widget.id, value) } })
+                            ).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 10)
+                        if widget.id != definitions.last?.id { Divider().padding(.leading, 16) }
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous).fill(theme.card))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
             }
             .disabled(!isLoaded || isSaving)
-            HStack {
+            HStack(spacing: 8) {
                 Group {
                     Button(strings.t("widgets.showAll")) { Task { await setAll(true) } }
                     Button(strings.t("widgets.hideAll")) { Task { await setAll(false) } }
-                    Button(strings.t("widgets.reset")) { Task { await reset() } }
                 }.disabled(!isLoaded || isSaving)
-                Spacer()
+                Spacer(minLength: 0)
                 if isSaving { ProgressView().controlSize(.small) }
-                Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(strings.t("widgets.reset"), systemImage: "arrow.counterclockwise") { Task { await reset() } }
+                    .disabled(!isLoaded || isSaving)
             }
             .buttonStyle(.visionOutline)
-        }.padding(24).frame(width: 580, height: 540)
+        }.visionDialogPadding().frame(width: 448, height: 540)
     }
 }

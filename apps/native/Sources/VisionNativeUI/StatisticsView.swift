@@ -980,35 +980,17 @@ public struct StatisticsView: View {
     }
 }
 
+/// The web WidgetVisibilityDialog, shared with the portfolio and tax pages.
 private struct StatisticsWidgetsSheet: View {
     let model: StatisticsModel
     let strings: any Localizing
-    @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("widgets.title")).font(.visionCardTitle)
-            Text(strings.t("widgets.description"))
-            ForEach(InsightWidget.statistics) { widget in
-                Toggle(
-                    strings.t(widget.labelKey),
-                    isOn: Binding(
-                        get: { model.isVisible(widget.id) },
-                        set: { value in
-                            Task { await model.setWidget(widget.id, visible: value) }
-                        })
-                ).disabled(!model.widgetsLoaded || model.widgetSavePending)
-            }
-            if let error = model.widgetError { Text(error).foregroundStyle(.red) }
-            HStack {
-                HStack {
-                    Button(strings.t("widgets.showAll")) { Task { await model.allWidgets(visible: true) } }
-                    Button(strings.t("widgets.hideAll")) { Task { await model.allWidgets(visible: false) } }
-                    Button(strings.t("widgets.reset")) { Task { await model.resetWidgets() } }
-                }.disabled(!model.widgetsLoaded || model.widgetSavePending)
-                Spacer()
-                Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-        }.padding(24).frame(width: 520)
+        PortfolioWidgetsSheet(
+            definitions: InsightWidget.statistics, visible: { model.isVisible($0) },
+            setVisible: { id, value in await model.setWidget(id, visible: value) },
+            setAll: { value in await model.allWidgets(visible: value) }, reset: { await model.resetWidgets() },
+            reload: {}, isLoaded: model.widgetsLoaded, isSaving: model.widgetSavePending,
+            error: model.widgetError, strings: strings)
     }
 }
 

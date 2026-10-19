@@ -84,9 +84,15 @@ public struct HomeView: View {
                     discard: { shell.transactions.leaveGuard.discard() }))
         }
         .onDisappear { shell.removeLeaveGuard(id: InsightsRoutes.home) }
-        .sheet(isPresented: $customize) { HomeWidgetsSheet(model: model, strings: strings) }
+        .sheet(isPresented: $customize) {
+            HomeWidgetsSheet(model: model, strings: strings)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
+        }
         .sheet(isPresented: $diagnostics) {
             HomeForecastDiagnostics(model: model, settings: settings, strings: strings)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
         }
         .sheet(
             isPresented: Binding(
@@ -95,6 +101,8 @@ public struct HomeView: View {
         ) {
             if let form = shell.transactions.addForm {
                 TransactionAddSheet(model: shell.transactions, form: form, shell: shell)
+                    .environment(\.visionTheme, theme)
+                    .environment(\.colorScheme, theme.colorScheme)
             }
         }
     }
@@ -803,41 +811,76 @@ private struct HomePaceChart: View {
     private func double(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
 }
 
+/// `WidgetVisibilityDialog`: a switch per widget with its description, Show all / Hide all
+/// on the left of the footer and Reset on the right.
 private struct HomeWidgetsSheet: View {
     let model: HomeModel
     let strings: any Localizing
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionTheme) private var theme
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("widgets.title")).font(.visionCardTitle)
-            Text(strings.t("widgets.description"))
-            ForEach(InsightWidget.home) { widget in
-                VStack(alignment: .leading, spacing: 3) {
-                    Toggle(
-                        strings.t(widget.labelKey),
-                        isOn: Binding(
-                            get: { model.isVisible(widget.id) },
-                            set: { value in
-                                Task { await model.setWidget(widget.id, visible: value) }
-                            })
-                    ).disabled(!model.widgetsLoaded || model.widgetSavePending)
-                    Text(strings.t("dashboard.widgetDescriptions.\(widget.id)")).font(.caption).foregroundStyle(
-                        .secondary)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("widgets.title"), description: strings.t("widgets.description"),
+                closeLabel: strings.t("common.close"), onClose: { dismiss() })
+            .keyboardShortcut(.cancelAction)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(InsightWidget.home.enumerated()), id: \.element.id) { index, widget in
+                        if index > 0 { Divider() }
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(strings.t(widget.labelKey))
+                                    .foregroundStyle(theme.foreground)
+                                Text(strings.t("dashboard.widgetDescriptions.\(widget.id)"))
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryLabel)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            Toggle(
+                                strings.t(widget.labelKey),
+                                isOn: Binding(
+                                    get: { model.isVisible(widget.id) },
+                                    set: { value in
+                                        Task { await model.setWidget(widget.id, visible: value) }
+                                    })
+                            )
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .disabled(!model.widgetsLoaded || model.widgetSavePending)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                    }
+                }
+                .visionCardBackground()
+            }
+            .frame(height: 420)
+            if let error = model.widgetError {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(strings.t("settings.saveFailed")).foregroundStyle(theme.destructive)
+                    Text(error).font(.caption).foregroundStyle(theme.secondaryLabel)
                 }
             }
-            if let error = model.widgetError {
-                Text(strings.t("settings.saveFailed")).foregroundStyle(.red)
-                Text(error).font(.caption)
+            HStack(spacing: 8) {
+                Button(strings.t("widgets.showAll")) { Task { await model.allWidgets(visible: true) } }
+                    .buttonStyle(.visionOutline)
+                Button(strings.t("widgets.hideAll")) { Task { await model.allWidgets(visible: false) } }
+                    .buttonStyle(.visionOutline)
+                Spacer(minLength: 8)
+                Button {
+                    Task { await model.resetWidgets() }
+                } label: {
+                    Label(strings.t("widgets.reset"), systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.borderless)
             }
-            HStack {
-                HStack {
-                    Button(strings.t("widgets.showAll")) { Task { await model.allWidgets(visible: true) } }
-                    Button(strings.t("widgets.hideAll")) { Task { await model.allWidgets(visible: false) } }
-                    Button(strings.t("widgets.reset")) { Task { await model.resetWidgets() } }
-                }.disabled(model.widgetSavePending || !model.widgetsLoaded)
-                Spacer()
-                Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-        }.padding(24).frame(width: 520)
+            .controlSize(.small)
+            .disabled(model.widgetSavePending || !model.widgetsLoaded)
+        }
+        .visionDialogPadding()
+        .frame(width: 448)
+        .foregroundStyle(theme.foreground)
     }
 }

@@ -61,14 +61,13 @@ public struct AIChatView: View {
                 width = $0
             }
             .sheet(isPresented: $conversationsOpen) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text(strings.t("aiChat.conversations")).font(.researchCardTitle)
-                        Spacer()
-                        Button(strings.t("common.close")) { conversationsOpen = false }.keyboardShortcut(.cancelAction)
-                    }.padding(16)
+                VStack(alignment: .leading, spacing: 16) {
+                    VisionDialogHeader(
+                        title: strings.t("aiChat.conversations"), closeLabel: strings.t("common.close"),
+                        onClose: { conversationsOpen = false }
+                    ).keyboardShortcut(.cancelAction)
                     AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
-                }.frame(minWidth: 320, idealWidth: 380, minHeight: 450, idealHeight: 620)
+                }.visionDialogPadding().frame(minWidth: 320, idealWidth: 380, minHeight: 450, idealHeight: 620)
             }
             .overlay(alignment: .bottom) {
                 NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)

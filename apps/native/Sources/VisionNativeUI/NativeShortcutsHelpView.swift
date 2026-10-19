@@ -20,13 +20,11 @@ public struct NativeShortcutsHelpView: View {
         ]
     }
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(shell.strings.t("shortcuts.title")).font(.title3.weight(.semibold))
-                Spacer()
-                Button(shell.strings.t("common.close"), systemImage: "xmark", action: onClose)
-                    .labelStyle(.iconOnly).keyboardShortcut(.cancelAction)
-            }
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: shell.strings.t("shortcuts.title"), closeLabel: shell.strings.t("common.close"),
+                onClose: onClose)
+            .keyboardShortcut(.cancelAction)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(general.enumerated()), id: \.offset) { _, row in shortcut(row.0, row.1) }
@@ -43,7 +41,7 @@ public struct NativeShortcutsHelpView: View {
                     Text(shell.strings.t("shortcuts.rowMenu")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                 }.padding(.trailing, 8)
             }
-        }.padding(24).frame(width: 500, height: 660).foregroundStyle(theme.foreground).background(theme.card)
+        }.visionDialogPadding().frame(width: 448, height: 660).foregroundStyle(theme.foreground).background(theme.card)
     }
     private func heading(_ key: String) -> some View {
         Text(shell.strings.t(key)).font(.footnote.weight(.semibold)).foregroundStyle(theme.secondaryLabel)
@@ -51,13 +49,18 @@ public struct NativeShortcutsHelpView: View {
     }
     private func shortcut(_ key: String, _ keys: [String]) -> some View {
         HStack(spacing: 12) {
-            Text(shell.strings.t(key)).font(.callout)
+            Text(shell.strings.t(key)).font(.callout).foregroundStyle(theme.foreground)
             Spacer()
             HStack(spacing: 4) {
                 ForEach(Array(keys.enumerated()), id: \.offset) { _, text in
-                    Text(text).font(.caption.weight(.medium)).frame(minWidth: 20).padding(.horizontal, 5)
-                        .padding(.vertical, 3).background(theme.muted, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(theme.border.opacity(0.6)))
+                    Text(text).font(.caption.weight(.medium)).frame(minWidth: 20, minHeight: 20).padding(.horizontal, 6)
+                        .background(
+                            theme.foreground.opacity(0.05),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                                .strokeBorder(theme.border.opacity(0.6)))
                 }
             }.foregroundStyle(theme.secondaryLabel)
         }.accessibilityElement(children: .combine)

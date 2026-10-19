@@ -29,30 +29,23 @@ struct PortfolioInvestmentForm: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(
-                    isEditing
-                        ? strings.t("invEdit.title")
-                        : (typeSelection
-                            ? strings.t("addInv.chooseType")
-                            : strings.t(
-                                "addInv.assetTitle",
-                                ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass ?? ""))]))
-                )
-                .font(.title2).accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.dismissEditor()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless).accessibilityLabel(strings.t("common.close")).keyboardShortcut(.cancelAction)
-            }.padding(24)
+            VisionDialogHeader(
+                title: isEditing
+                    ? strings.t("invEdit.title")
+                    : (typeSelection
+                        ? strings.t("addInv.chooseType")
+                        : strings.t(
+                            "addInv.assetTitle",
+                            ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass ?? ""))])),
+                description: typeSelection ? strings.t("addInv.chooseTypeDesc") : nil,
+                closeLabel: strings.t("common.close"), onClose: { model.dismissEditor() }
+            )
+            .keyboardShortcut(.cancelAction)
+            .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 20)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         if typeSelection {
-                            Text(strings.t("addInv.chooseTypeDesc")).foregroundStyle(theme.secondaryLabel)
                             ForEach(draft?.allowedAssetClasses ?? [], id: \.self) { value in
                                 Button {
                                     model.investmentDraft?.selectAssetClass(value)
@@ -71,7 +64,7 @@ struct PortfolioInvestmentForm: View {
                         if let error = model.error {
                             Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
                         }
-                    }.padding(.horizontal, 24).padding(.bottom, 20)
+                    }.padding(.horizontal, 24).padding(.bottom, 24)
                 }
                 .onChange(of: model.issue) {
                     if let issue = model.issue {
@@ -81,19 +74,20 @@ struct PortfolioInvestmentForm: View {
                 }
             }
             Divider()
-            HStack {
+            HStack(spacing: 8) {
                 if !isEditing && !typeSelection && (draft?.allowedAssetClasses.count ?? 0) > 1 {
-                    Button(strings.t("addInv.back")) { selectingType = true }
+                    Button(strings.t("addInv.back")) { selectingType = true }.buttonStyle(.visionOutline)
                 }
-                Spacer()
-                Button(strings.t("common.cancel")) { model.cancelEditor() }
+                Spacer(minLength: 0)
+                if model.isSaving { ProgressView().controlSize(.small) }
+                Button(strings.t("common.cancel")) { model.cancelEditor() }.buttonStyle(.visionOutline)
                 if !typeSelection {
                     Button(strings.t(isEditing ? "common.save" : "addInv.create")) { save() }
                         .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                 }
-                if model.isSaving { ProgressView().controlSize(.small) }
-            }.padding(20)
-        }.frame(width: 550, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
+            }
+            .controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
+        }.frame(width: 512, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
     private var fixedIncome: Bool { PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "") }
@@ -102,8 +96,11 @@ struct PortfolioInvestmentForm: View {
     @ViewBuilder private var fields: some View {
         field("addInv.label.name", \.name, "name")
         if unitBased { field("addInv.label.ticker", \.symbol, "symbol", monospaced: true) }
-        Picker(strings.t("addInv.label.currency"), selection: text(\.currency)) {
-            ForEach(currencies, id: \.self) { Text($0).tag($0) }
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel("addInv.label.currency")
+            Picker(strings.t("addInv.label.currency"), selection: text(\.currency)) {
+                ForEach(currencies, id: \.self) { Text($0).tag($0) }
+            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
         }
         if !isEditing {
             if fixedIncome {
@@ -127,8 +124,15 @@ struct PortfolioInvestmentForm: View {
         }
         if !isEditing {
             VStack(alignment: .leading, spacing: 5) {
-                Text(strings.t("addInv.label.notes")).font(.callout)
+                fieldLabel("addInv.label.notes")
                 TextEditor(text: text(\.notes, field: "notes")).frame(minHeight: 64).focused($focused, equals: "notes")
+                    .scrollContentBackground(.hidden).padding(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     .accessibilityLabel(strings.t("addInv.label.notes"))
             }.id("notes")
         }
@@ -170,11 +174,14 @@ struct PortfolioInvestmentForm: View {
             if unitBased {
                 field("addInv.label.units", \.initialUnits, "initialUnits")
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(strings.t("addInv.label.pricePerUnit")).font(.callout)
+                    fieldLabel("addInv.label.pricePerUnit")
                     Text(computedPricePerUnit ?? "—")
                         .font(.body.monospaced()).monospacedDigit().foregroundStyle(theme.secondaryLabel)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(theme.secondaryLabel.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10)
+                        .frame(minHeight: 30)
+                        .background(
+                            theme.secondaryLabel.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
                         .accessibilityLabel(strings.t("addInv.label.pricePerUnit"))
                         .accessibilityValue(computedPricePerUnit ?? "—")
                         .textSelection(.enabled)
@@ -200,8 +207,8 @@ struct PortfolioInvestmentForm: View {
     private func field(
         _ key: String, _ path: WritableKeyPath<PortfolioInvestmentDraft, String>, _ id: String, monospaced: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.callout)
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel(key)
             TextField("", text: text(path, field: id)).textFieldStyle(.vision)
                 .font(monospaced ? .body.monospaced() : .body)
                 .focused($focused, equals: id).onSubmit(save)
@@ -214,8 +221,8 @@ struct PortfolioInvestmentForm: View {
     private func dateField(
         _ key: String, _ path: WritableKeyPath<PortfolioInvestmentDraft, String>, _ id: String, allowClear: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.callout)
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel(key)
             VisionDateField(
                 day: PlannedDay(ymd: draft?[keyPath: path], calendar: .current), placeholder: strings.t(key),
                 allowClear: allowClear,
@@ -228,6 +235,10 @@ struct PortfolioInvestmentForm: View {
                 Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
+    }
+    /// The web `Label` above an input: subheadline, medium weight, foreground.
+    private func fieldLabel(_ key: String) -> some View {
+        Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
     }
     private func save() { Task { await model.saveEditor(strings: strings) } }
 }

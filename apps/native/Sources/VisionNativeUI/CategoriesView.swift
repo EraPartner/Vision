@@ -310,7 +310,7 @@ struct CategoryNodeSheet: View {
 
     var body: some View {
         if let form = model.form {
-            AccountDialogFrame(title: strings.t(form.titleKey), width: 440) {
+            AccountDialogFrame(title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: 448) {
                 AccountField(label: strings.t("categoriesPage.nodeName")) {
                     TextField(
                         "", text: Binding(get: { model.form?.name ?? "" }, set: { model.form?.setName($0) })
@@ -344,13 +344,14 @@ struct CategoryNodeSheet: View {
                     .font(.body)
                     .frame(minHeight: 64, maxHeight: 120)
                     .scrollContentBackground(.hidden)
-                    .padding(4)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                            .fill(theme.foreground.opacity(0.04)))
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
                     .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                            .strokeBorder(theme.border, lineWidth: 1))
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     .accessibilityLabel(strings.t("addCat.descriptionOptional"))
                 }
             } footer: {
@@ -389,7 +390,8 @@ struct CategoryMergeSheet: View {
         if let draft = model.merge {
             AccountDialogFrame(
                 title: strings.t("categoriesPage.mergeTitle"), description: strings.t("categoriesPage.mergeDescription"),
-                width: 440
+                closeLabel: strings.t("common.close"),
+                width: 448
             ) {
                 AdminCard(padding: 12) {
                     VStack(alignment: .leading, spacing: 2) {

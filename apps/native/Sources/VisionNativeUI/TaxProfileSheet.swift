@@ -14,21 +14,13 @@ struct TaxProfileSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(strings.t("tax.profile.title")).font(.title2.weight(.semibold))
-                Spacer()
-                Button {
-                    close()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless).accessibilityLabel(strings.t("common.close"))
-                .keyboardShortcut(.cancelAction)
-            }.padding(.horizontal, 24).padding(.top, 20)
-            Text(strings.t("tax.profile.description"))
-                .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24).padding(.top, 8)
-            HStack(spacing: 3) {
+            VisionDialogHeader(
+                title: strings.t("tax.profile.title"), description: strings.t("tax.profile.description"),
+                closeLabel: strings.t("common.close"), onClose: { close() }
+            )
+            .keyboardShortcut(.cancelAction)
+            .padding(.horizontal, 24).padding(.top, 24)
+            HStack(spacing: 2) {
                 ForEach(TaxProfileStep.allCases, id: \.self) { step in
                     Button {
                         model.go(to: step)
@@ -36,16 +28,28 @@ struct TaxProfileSheet: View {
                         VStack(spacing: 4) {
                             Image(systemName: step.index < model.step.index ? "checkmark" : icon(step))
                             Text(strings.t(step.titleKey)).font(.caption).lineLimit(1)
-                        }.frame(maxWidth: .infinity).padding(.vertical, 7)
+                        }
+                        .foregroundStyle(model.step == step ? theme.foreground : theme.secondaryLabel)
+                        .frame(maxWidth: .infinity).padding(.vertical, 6).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                         .background(
-                            model.step == step ? theme.primary.opacity(0.15) : .clear,
-                            in: RoundedRectangle(cornerRadius: 6)
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control - 2, style: .continuous)
+                                .fill(model.step == step ? theme.card : .clear)
+                                .shadow(color: .black.opacity(model.step == step ? 0.08 : 0), radius: 1, y: 1)
                         )
                         .accessibilityAddTraits(model.step == step ? .isSelected : [])
                 }
-            }.padding(.horizontal, 24).padding(.top, 16)
-            Text(strings.t("tax.profile.stepProgress", ["current": String(model.step.index + 1), "total": "6"]))
+            }
+            .padding(2)
+            .background(
+                theme.foreground.opacity(0.05),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+            )
+            .padding(.horizontal, 24).padding(.top, 16)
+            Text(
+                strings.t(
+                    "tax.profile.stepProgress",
+                    ["current": String(model.step.index + 1), "total": String(TaxProfileStep.allCases.count)]))
                 .font(.footnote).foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24).padding(.vertical, 8)
             ScrollView {
@@ -66,17 +70,18 @@ struct TaxProfileSheet: View {
                         case .region: regionStep
                         }
                     }.disabled(model.isLocked)
-                }.padding(24)
+                }.padding(.horizontal, 24).padding(.vertical, 20)
             }
             Divider()
-            HStack {
-                Button(strings.t("common.back")) { model.back() }.disabled(model.step == .household)
-                Spacer()
+            HStack(spacing: 8) {
+                Button(strings.t("common.back"), systemImage: "chevron.left") { model.back() }
+                    .buttonStyle(.visionOutline).disabled(model.step == .household)
+                Spacer(minLength: 0)
                 if model.isSaving { ProgressView().controlSize(.small) }
                 Button(strings.t(model.step == .region ? "tax.profile.save" : "common.next")) {
                     Task { _ = await model.next() }
                 }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(model.isSaving)
-            }.padding(.horizontal, 24).padding(.vertical, 14)
+            }.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
         }.frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 780)
             .foregroundStyle(theme.foreground).interactiveDismissDisabled(true)
             .task { await model.loadCategories() }
@@ -91,15 +96,17 @@ struct TaxProfileSheet: View {
             HStack {
                 if model.isLocked {
                     Button(strings.t("tax.historical.filedLock.amendCta")) { model.amendFiledYear() }
+                        .buttonStyle(.visionOutline)
                 } else {
-                    Text(strings.t("tax.historical.filedLock.amendActive")).font(.footnote)
+                    Text(strings.t("tax.historical.filedLock.amendActive")).font(.footnote.weight(.medium))
+                        .foregroundStyle(theme.warning)
                 }
                 if let onUnfile {
                     Button(strings.t("tax.historical.filedLock.unfileCta", ["year": String(model.year)])) {
                         Task { if await model.flush(), await onUnfile() { model.didUnfile() } }
-                    }.disabled(model.isSaving)
+                    }.buttonStyle(.visionOutline).disabled(model.isSaving)
                 }
-            }
+            }.controlSize(.small)
         }
     }
     func close() { Task { _ = await model.close() } }
@@ -193,8 +200,8 @@ struct TaxProfileSheet: View {
         }
     }
     func field<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.callout.weight(.medium))
+        VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
             content()
             if strings.t(key + ".desc") != key + ".desc" {
                 Text(strings.t(key + ".desc")).font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -208,11 +215,18 @@ struct TaxProfileSheet: View {
         }
     }
     func note(_ title: String, _ body: String, year: Int) -> some View {
+        // `Alert variant="warning"`: a tinted, bordered callout.
         VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(title)).font(.callout.weight(.medium))
-            Text(strings.t(body, ["year": String(year)])).font(.footnote)
+            Text(strings.t(title)).font(.callout.weight(.medium)).foregroundStyle(theme.foreground)
+            Text(strings.t(body, ["year": String(year)])).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .background(
+                theme.warning.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                    .strokeBorder(theme.warning.opacity(0.3), lineWidth: 1))
     }
     func day(_ text: String?) -> PlannedDay? {
         guard let text else { return nil }

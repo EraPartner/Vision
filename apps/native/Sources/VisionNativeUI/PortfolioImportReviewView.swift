@@ -148,16 +148,16 @@ private struct PortfolioImportPreviewGroupView: View {
             }
             if !group.resolvableRowIds.isEmpty {
                 HStack {
-                    Text(strings.t("portfolioImport.review.holding")).font(.callout)
+                    Text(strings.t("portfolioImport.review.holding")).font(.subheadline.weight(.medium))
                     Button {
                         search = ""
                         choosing = true
                     } label: {
                         Text(group.investmentName ?? strings.t("combobox.investment.placeholder"))
                         Image(systemName: "chevron.up.chevron.down")
-                    }.popover(isPresented: $choosing) {
+                    }.buttonStyle(.visionOutline).popover(isPresented: $choosing) {
                         VStack(alignment: .leading, spacing: 10) {
-                            TextField(strings.t("combobox.investment.search"), text: $search)
+                            TextField(strings.t("combobox.investment.search"), text: $search).textFieldStyle(.vision)
                             if holdings.isEmpty {
                                 Text(strings.t("combobox.investment.empty")).foregroundStyle(theme.secondaryLabel)
                             }
@@ -181,12 +181,12 @@ private struct PortfolioImportPreviewGroupView: View {
                                     }
                                 }
                             }.frame(maxHeight: 300)
-                        }.padding().frame(width: 360)
+                        }.padding(12).frame(width: 360)
                     }
                     if unresolved {
                         Button(strings.t("portfolioImport.review.createNew"), systemImage: "plus.circle") {
                             Task { await model.createNew(group: group) }
-                        }
+                        }.buttonStyle(.visionOutline)
                     }
                     if model.busyGroup == group.id { ProgressView().controlSize(.small) }
                 }.disabled(model.isBusy || model.isLoading)

@@ -10,39 +10,38 @@ struct PortfolioTaxAdjustmentsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text(
-                        strings.t("tax.manualAdjustmentsTitle", ["year": model.adjustmentYear.map(String.init) ?? "—"])
-                    )
-                    .font(.title2).accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    Button {
-                        model.closeAdjustments()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .buttonStyle(.borderless).accessibilityLabel(strings.t("common.close"))
-                    .keyboardShortcut(.cancelAction)
-                }
-                Text(strings.t("tax.manualAdjustmentsDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
-                HStack(spacing: 40) {
+            VStack(alignment: .leading, spacing: 20) {
+                VisionDialogHeader(
+                    title: strings.t(
+                        "tax.manualAdjustmentsTitle", ["year": model.adjustmentYear.map(String.init) ?? "—"]),
+                    description: strings.t("tax.manualAdjustmentsDesc"),
+                    closeLabel: strings.t("common.close"), onClose: { model.closeAdjustments() }
+                )
+                .keyboardShortcut(.cancelAction)
+                HStack(alignment: .top, spacing: 24) {
                     total("tax.totalTaxesPaid", value: model.draftTotals.taxes)
                     total("tax.totalFeesPaid", value: model.draftTotals.fees)
-                    Spacer()
-                }.padding(.top, 6)
-            }.padding(24)
+                }
+            }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 20)
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
-                        ForEach(model.draftRows) { row in
-                            investment(row).id(row.id)
-                            if row.id != model.draftRows.last?.id { Divider() }
+                    VStack(alignment: .leading, spacing: 12) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(model.draftRows) { row in
+                                investment(row).padding(.horizontal, 16).padding(.vertical, 12).id(row.id)
+                                if row.id != model.draftRows.last?.id { Divider().padding(.leading, 16) }
+                            }
                         }
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                                .fill(theme.card))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                                .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
                         if let error = model.adjustmentsError {
                             Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
                         }
-                    }.padding(.horizontal, 24).padding(.bottom, 20)
+                    }.padding(.horizontal, 24).padding(.bottom, 24)
                 }
                 .onChange(of: model.focusInvestmentID) { _, id in
                     guard let id else { return }
@@ -51,15 +50,15 @@ struct PortfolioTaxAdjustmentsSheet: View {
                 }
             }
             Divider()
-            HStack {
-                Spacer()
+            VisionDialogFooter {
+                if model.isSavingAdjustments { ProgressView().controlSize(.small) }
                 Button(strings.t("common.cancel")) { model.closeAdjustments() }.buttonStyle(.visionOutline)
                 Button(strings.t("tax.manualAdjustmentsSave")) { save() }
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
-                if model.isSavingAdjustments { ProgressView().controlSize(.small) }
-            }.padding(20)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 16)
         }
-        .frame(width: 760, height: 720)
+        .frame(width: 768, height: 720)
         .disabled(model.isSavingAdjustments)
         .interactiveDismissDisabled(model.isSavingAdjustments)
         .onSubmit { save() }
@@ -67,14 +66,14 @@ struct PortfolioTaxAdjustmentsSheet: View {
 
     private func investment(_ row: PortfolioTaxAdjustmentDraft) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(row.name).fontWeight(.medium)
+            HStack(spacing: 8) {
+                Text(row.name).fontWeight(.medium).foregroundStyle(theme.foreground)
                 if let symbol = row.symbol {
-                    Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
+                    Text(symbol).font(.footnote.monospaced()).foregroundStyle(theme.secondaryLabel)
                 }
-                VisionBadge(text: strings.t("portfolio.assetClass." + row.assetClass))
+                VisionBadge(text: strings.t("portfolio.assetClass." + row.assetClass), small: true)
             }
-            HStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
                 amount("tax.taxes", row: row, path: \.taxes)
                 amount("tax.fees", row: row, path: \.fees)
             }
@@ -84,6 +83,7 @@ struct PortfolioTaxAdjustmentsSheet: View {
                 ) {
                     VStack(alignment: .leading, spacing: 14) {
                         if row.showsETFStructure {
+                            fieldLabel("tax.etfStructure")
                             Picker(
                                 strings.t("tax.etfStructure"),
                                 selection: Binding(
@@ -93,11 +93,13 @@ struct PortfolioTaxAdjustmentsSheet: View {
                                 ForEach(PortfolioTaxETFStructure.allCases, id: \.self) { value in
                                     Text(strings.t("tax.etfStructure." + value.rawValue)).tag(value)
                                 }
-                            }.accessibilityLabel(strings.t("tax.etfStructure") + ": " + row.name)
+                            }.labelsHidden().frame(maxWidth: 320, alignment: .leading)
+                            .accessibilityLabel(strings.t("tax.etfStructure") + ": " + row.name)
                             Text(strings.t("tax.etfStructure.desc")).font(.footnote).foregroundStyle(
                                 theme.secondaryLabel)
                         }
                         if row.showsReynders {
+                            fieldLabel("tax.subjectToReynders")
                             Picker(
                                 strings.t("tax.subjectToReynders"),
                                 selection: binding(row.id, \.reynders, default: .auto)
@@ -105,12 +107,13 @@ struct PortfolioTaxAdjustmentsSheet: View {
                                 ForEach(PortfolioTaxReyndersChoice.allCases, id: \.self) { value in
                                     Text(strings.t("tax.subjectToReynders." + value.rawValue)).tag(value)
                                 }
-                            }.accessibilityLabel(strings.t("tax.subjectToReynders") + ": " + row.name)
+                            }.labelsHidden().frame(maxWidth: 320, alignment: .leading)
+                            .accessibilityLabel(strings.t("tax.subjectToReynders") + ": " + row.name)
                             Text(strings.t("tax.subjectToReynders.desc")).font(.footnote).foregroundStyle(
                                 theme.secondaryLabel)
                             if row.reyndersResolved {
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text(strings.t("tax.reyndersInterestPortion")).font(.callout)
+                                    fieldLabel("tax.reyndersInterestPortion")
                                     TextField("100", text: binding(row.id, \.interestPortion, default: ""))
                                         .textFieldStyle(.vision).focused($interestFocused, equals: row.id)
                                         .accessibilityLabel(strings.t("tax.reyndersInterestPortion") + ": " + row.name)
@@ -133,19 +136,23 @@ struct PortfolioTaxAdjustmentsSheet: View {
         _ title: String, row: PortfolioTaxAdjustmentDraft, path: WritableKeyPath<PortfolioTaxAdjustmentDraft, String>
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(strings.t(title)).font(.callout)
+            fieldLabel(title)
             TextField(
                 LocaleNumber.editable(0, format: shell.settings.numberFormat), text: binding(row.id, path, default: "")
             )
             .textFieldStyle(.vision).accessibilityLabel(strings.t(title) + ": " + row.name)
-        }
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    /// The web `Label` above an input: subheadline, medium weight, foreground.
+    private func fieldLabel(_ key: String) -> some View {
+        Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
     }
     private func total(_ title: String, value: Decimal) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(strings.t(title)).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t(title)).font(.caption).foregroundStyle(theme.tertiaryLabel)
             Text(MoneyText.text(value, currency: shell.settings.defaultCurrency, settings: shell.settings))
-                .font(.title2).monospacedDigit().foregroundStyle(theme.loss)
-        }.accessibilityElement(children: .combine)
+                .font(.visionCardTitle).monospacedDigit().foregroundStyle(theme.loss)
+        }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
     }
     private func draft(_ id: Int) -> PortfolioTaxAdjustmentDraft? { model.draftRows.first { $0.id == id } }
     private func binding<Value>(

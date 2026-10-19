@@ -445,13 +445,14 @@ struct OwesPaymentSheet: View {
     private var strings: any Localizing { shell.strings }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("owesPage.recordDialog.title"))
-                .font(.visionCardTitle)
-                .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("owesPage.recordDialog.title"), closeLabel: strings.t("common.close"),
+                onClose: { model.closePayment() })
+            VStack(alignment: .leading, spacing: 6) {
                 Text(strings.t("owesPage.recordDialog.amount"))
                     .font(.callout.weight(.medium))
+                    .foregroundStyle(theme.foreground)
                 TextField(
                     strings.t("owesPage.recordDialog.placeholder"),
                     text: Binding(get: { model.payment?.amountText ?? "" }, set: { model.setPaymentAmount($0) })
@@ -471,9 +472,9 @@ struct OwesPaymentSheet: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
             }
-            HStack(spacing: 12) {
-                Spacer()
+            VisionDialogFooter {
                 Button(strings.t("owesPage.recordDialog.cancel")) { model.closePayment() }
+                    .buttonStyle(.visionOutline)
                     .keyboardShortcut(.cancelAction)
                 Button(action: submit) {
                     Text(
@@ -485,8 +486,8 @@ struct OwesPaymentSheet: View {
                 .disabled(model.isRecording)
             }
         }
-        .padding(24)
-        .frame(minWidth: 380)
+        .visionDialogPadding()
+        .frame(minWidth: 384, idealWidth: 384)
         .foregroundStyle(theme.foreground)
         .onAppear { amountFocused = true }
     }

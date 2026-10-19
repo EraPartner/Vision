@@ -27,17 +27,22 @@ struct NativeSettingsBackupView: View {
                 restoreGroup
             }
         }
-        .confirmationDialog(
-            strings.t("settings.restore.confirmTitle"), isPresented: $confirmingRestore, titleVisibility: .visible
-        ) {
-            Button(strings.t("settings.restore.confirmButton"), role: .destructive) {
-                Task { await model.confirmRestore() }
-            }
-            Button(strings.t("settings.restore.cancelButton"), role: .cancel) { model.cancelRestoreConfirmation() }
-        } message: {
-            Text(
-                strings.t("settings.restore.confirmDesc") + "\n"
-                    + (model.pendingConfirmationFile.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""))
+        // The web `useConfirmDialog` AlertDialog: description plus the file name in mono.
+        .sheet(isPresented: $confirmingRestore) {
+            NativeSettingsConfirmSheet(
+                title: strings.t("settings.restore.confirmTitle"),
+                message: strings.t("settings.restore.confirmDesc"),
+                detail: model.pendingConfirmationFile.map { URL(fileURLWithPath: $0).lastPathComponent },
+                confirmLabel: strings.t("settings.restore.confirmButton"),
+                cancelLabel: strings.t("settings.restore.cancelButton"),
+                onConfirm: {
+                    confirmingRestore = false
+                    Task { await model.confirmRestore() }
+                },
+                onCancel: {
+                    confirmingRestore = false
+                    model.cancelRestoreConfirmation()
+                })
         }
         .sheet(
             isPresented: Binding(
@@ -64,14 +69,21 @@ struct NativeSettingsBackupView: View {
                         .font(.system(.callout, design: .monospaced)).textSelection(.enabled).lineLimit(1)
                         .truncationMode(.head)
                         .frame(maxWidth: .infinity, alignment: .leading).help(model.backupDir)
-                        .padding(8).background(theme.background, in: RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, 10).frame(minHeight: 30)
+                        .background(
+                            Color(token: theme.palette.background, opacity: 0.8),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                                .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     Button {
                         Task { await model.browseDirectory() }
                     } label: {
                         Label(
                             strings.t(model.backupDir.isEmpty ? "settings.backup.browse" : "settings.backup.change"),
                             systemImage: "folder")
-                    }.disabled(model.backupLoading)
+                    }.buttonStyle(.visionOutline).disabled(model.backupLoading)
                 }
             }
             Divider()
@@ -96,7 +108,7 @@ struct NativeSettingsBackupView: View {
                         if model.backupRunning { ProgressView().controlSize(.small) }
                         Text(strings.t(model.backupRunning ? "settings.backup.running" : "settings.backup.runNow"))
                     }
-                }.disabled(model.backupRunning || model.backupDir.isEmpty)
+                }.buttonStyle(.visionOutline).disabled(model.backupRunning || model.backupDir.isEmpty)
             }
         }
     }
@@ -120,8 +132,9 @@ struct NativeSettingsBackupView: View {
                             if model.savingBackupPassphrase { ProgressView().controlSize(.small) }
                             Text(strings.t("settings.backup.passphrase.save"))
                         }
-                    }
+                    }.buttonStyle(.visionOutline)
                     Button(strings.t("settings.backup.passphrase.clear")) { Task { await model.clearPassphrase() } }
+                        .buttonStyle(NativeSettingsGhostButtonStyle())
                 }.disabled(model.passphraseControlsDisabled)
                 if model.encryptionStatus?.secureStorageAvailable != true {
                     Text(strings.t("settings.backup.passphrase.unavailable")).font(.caption).foregroundStyle(
@@ -136,7 +149,7 @@ struct NativeSettingsBackupView: View {
                 ) {
                     Button(strings.t("settings.backup.passphrase.bannerDismiss")) {
                         Task { await model.dismissReminder() }
-                    }
+                    }.buttonStyle(NativeSettingsGhostButtonStyle())
                 }
             }
         }
@@ -154,13 +167,20 @@ struct NativeSettingsBackupView: View {
                     )
                     .font(.system(.callout, design: .monospaced)).lineLimit(1).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading).help(model.restoreFile)
-                    .padding(8).background(theme.background, in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.horizontal, 10).frame(minHeight: 30)
+                    .background(
+                        Color(token: theme.palette.background, opacity: 0.8),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     Button {
                         Task { await model.selectRestoreFile() }
                     } label: {
                         Label(strings.t("settings.restore.selectFile"), systemImage: "folder")
                     }
-                    .disabled(model.restoreRunning)
+                    .buttonStyle(.visionOutline).disabled(model.restoreRunning)
                 }
             }
             Divider()
@@ -176,7 +196,7 @@ struct NativeSettingsBackupView: View {
                         if model.restoreRunning { ProgressView().controlSize(.small) }
                         Text(strings.t(model.restoreRunning ? "settings.restore.running" : "settings.restore.runNow"))
                     }
-                }.disabled(model.restoreRunning || model.restoreFile.isEmpty)
+                }.buttonStyle(.visionPrimary).disabled(model.restoreRunning || model.restoreFile.isEmpty)
             }
         }
     }

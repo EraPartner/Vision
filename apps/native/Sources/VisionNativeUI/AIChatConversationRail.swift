@@ -119,6 +119,7 @@ private struct AIChatRenameSheet: View {
     @State private var title: String
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionTheme) private var theme
     init(model: AIChatModel, conversation: AIChatConversation, shell: NativeShellModel) {
         self.model = model
         self.conversation = conversation
@@ -128,22 +129,22 @@ private struct AIChatRenameSheet: View {
     private var strings: any Localizing { shell.strings }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(strings.t("aiChat.renameTitle")).font(.title3.weight(.semibold))
-            VStack(alignment: .leading, spacing: 7) {
-                Text(strings.t("aiChat.renameLabel")).font(.callout)
+            VisionDialogHeader(title: strings.t("aiChat.renameTitle"), closeLabel: strings.t("common.close"))
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("aiChat.renameLabel")).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                 TextField(
                     strings.t("aiChat.renameLabel"),
                     text: Binding(get: { title }, set: { title = AIChatTextLimit.prefix($0, utf16: 120) })
                 )
                 .textFieldStyle(.vision).focused($focused).onSubmit(save)
             }
-            HStack {
-                Spacer()
+            VisionDialogFooter {
                 Button(strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+                    .buttonStyle(.visionOutline)
                 Button(strings.t("common.save"), action: save).buttonStyle(.visionPrimary)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isRenaming)
             }
-        }.padding(24).frame(width: 400).onAppear { focused = true }
+        }.visionDialogPadding().frame(width: 448).onAppear { focused = true }
     }
     private func save() {
         let value = title.trimmingCharacters(in: .whitespacesAndNewlines)

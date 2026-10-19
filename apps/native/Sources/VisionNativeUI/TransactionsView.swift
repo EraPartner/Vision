@@ -593,21 +593,11 @@ struct TransactionQuickLookSheet: View {
 
     var body: some View {
         let labels = model.labels
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(strings.t("quickLook.title"))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.closeQuickLook()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
-                .keyboardShortcut(.cancelAction)
-                .accessibilityLabel(strings.t("common.close"))
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            VisionDialogHeader(
+                title: strings.t("quickLook.title"), closeLabel: strings.t("common.close"),
+                onClose: { model.closeQuickLook() })
+            .keyboardShortcut(.cancelAction)
             VStack(alignment: .leading, spacing: 6) {
                 MoneyText(amount: row.amount, currency: row.displayCurrency, settings: settings)
                     .font(.visionLargeTitle)
@@ -651,8 +641,8 @@ struct TransactionQuickLookSheet: View {
                 .foregroundStyle(theme.tertiaryLabel)
                 .frame(maxWidth: .infinity)
         }
-        .padding(24)
-        .frame(minWidth: 420)
+        .visionDialogPadding()
+        .frame(minWidth: 384, idealWidth: 384)
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(.space) {

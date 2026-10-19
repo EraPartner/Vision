@@ -14,28 +14,28 @@ public struct ResearchWatchlistAddSheet: View {
     private var strings: any Localizing { shell.strings }
     public var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text(strings.t("addWatchlist.title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.close()
-                } label: {
-                    Image(systemName: "xmark")
-                }.buttonStyle(.borderless)
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityLabel(strings.t("common.close")).disabled(model.isSubmitting)
-            }
+            VisionDialogHeader(
+                title: strings.t("addWatchlist.title"), closeLabel: strings.t("common.close"),
+                onClose: { model.close() }
+            )
+            .keyboardShortcut(.cancelAction).disabled(model.isSubmitting)
             if let asset = model.selected {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        ResearchCard {
-                            HStack(alignment: .top) {
+                        // `rounded-card bg-foreground/[0.04] p-3`.
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .center) {
                                 VStack(alignment: .leading, spacing: 5) {
-                                    Text(asset.name).font(.headline)
+                                    Text(asset.name).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                                     Text(asset.symbol).font(.caption.monospaced())
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                                                .strokeBorder(theme.border, lineWidth: 1))
                                 }
                                 Spacer()
                                 Button(strings.t("addWatchlist.change")) { model.changeAsset() }
+                                    .buttonStyle(.borderless).controlSize(.small)
                             }
                             if let price = model.quote?.price, price > 0 {
                                 Text(
@@ -48,21 +48,31 @@ public struct ResearchWatchlistAddSheet: View {
                                                         rule: .toNearestOrAwayFromZero))
                                         ])
                                 )
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
+                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
                             }
                         }
-                        HStack(alignment: .top, spacing: 18) {
-                            Picker(strings.t("addWatchlist.assetClass"), selection: field(\.assetClass)) {
-                                ForEach(["stock", "etf", "crypto", "metals"], id: \.self) {
-                                    Text(strings.t("addWatchlist." + $0)).tag($0)
-                                }
-                            }
-                            Picker(strings.t("addWatchlist.currency"), selection: field(\.currency)) {
-                                ForEach(currencyChoices, id: \.self) { Text($0).tag($0) }
-                            }
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            theme.foreground.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                        HStack(alignment: .top, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                fieldLabel(strings.t("addWatchlist.assetClass"))
+                                Picker(strings.t("addWatchlist.assetClass"), selection: field(\.assetClass)) {
+                                    ForEach(["stock", "etf", "crypto", "metals"], id: \.self) {
+                                        Text(strings.t("addWatchlist." + $0)).tag($0)
+                                    }
+                                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 8) {
+                                fieldLabel(strings.t("addWatchlist.currency"))
+                                Picker(strings.t("addWatchlist.currency"), selection: field(\.currency)) {
+                                    ForEach(currencyChoices, id: \.self) { Text($0).tag($0) }
+                                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(strings.t("addWatchlist.targetPrice")).font(.caption)
+                        VStack(alignment: .leading, spacing: 8) {
+                            fieldLabel(strings.t("addWatchlist.targetPrice"))
                             TextField(placeholder, text: field(\.targetPrice)).textFieldStyle(.vision)
                                 .accessibilityLabel(strings.t("addWatchlist.targetPrice"))
                                 .focused($targetFocused).onSubmit { Task { await model.submit() } }
@@ -83,8 +93,8 @@ public struct ResearchWatchlistAddSheet: View {
                                     theme.destructive)
                             }
                         }
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(strings.t("addWatchlist.notesOptional")).font(.caption)
+                        VStack(alignment: .leading, spacing: 8) {
+                            fieldLabel(strings.t("addWatchlist.notesOptional"))
                             TextField(strings.t("addWatchlist.notesPlaceholder"), text: field(\.notes), axis: .vertical)
                                 .lineLimit(2...5).textFieldStyle(.vision)
                                 .accessibilityLabel(strings.t("addWatchlist.notesOptional"))
@@ -95,11 +105,11 @@ public struct ResearchWatchlistAddSheet: View {
                                 Text(error).font(.caption).foregroundStyle(theme.secondaryLabel)
                             }
                         }
-                    }.disabled(model.isSubmitting)
+                    }.padding(.horizontal, 1).disabled(model.isSubmitting)
                 }
-                HStack {
-                    Spacer()
-                    Button(strings.t("common.cancel")) { model.close() }.disabled(model.isSubmitting)
+                VisionDialogFooter {
+                    Button(strings.t("common.cancel")) { model.close() }.buttonStyle(.visionOutline)
+                        .disabled(model.isSubmitting)
                     Button {
                         Task { await model.submit() }
                     } label: {
@@ -110,7 +120,7 @@ public struct ResearchWatchlistAddSheet: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(strings.t("addWatchlist.searchLabel")).font(.caption)
+                    fieldLabel(strings.t("addWatchlist.searchLabel"))
                     ResearchSymbolSearchView(
                         text: Binding(get: { model.query }, set: { value in model.updateSearch(value) }),
                         items: model.searchResults,
@@ -121,9 +131,13 @@ public struct ResearchWatchlistAddSheet: View {
                     Spacer(minLength: 200)
                 }
             }
-        }.padding(24).frame(width: 480, height: model.selected == nil ? 540 : 560)
+        }.visionDialogPadding().frame(width: 448, height: model.selected == nil ? 540 : 560)
             .interactiveDismissDisabled(model.isSubmitting)
             .onChange(of: model.validationRevision) { _, _ in targetFocused = true }
+    }
+    /// The web `Label`: `type-body font-medium text-label-primary` above its input.
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
     }
     private var currencyChoices: [String] {
         let standard = ["USD", "EUR", "GBP"]

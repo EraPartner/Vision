@@ -9,24 +9,28 @@ struct PortfolioDetailSheet: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             if let error = model.error {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) {
                     Task { await model.load(currency: shell.settings.defaultCurrency, force: true) }
-                }
+                }.buttonStyle(.visionOutline)
             }
             if let holding = model.selectedInvestment {
                 header(holding)
                 if !holding.isActive {
                     Label(strings.t("portfolio.archivedExcluded"), systemImage: "archivebox")
                         .font(.callout).foregroundStyle(theme.secondaryLabel)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            theme.foreground.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 }
                 Picker(strings.t("invDetail.breakdown"), selection: $tab) {
                     Text(strings.t("invDetail.tab.performance")).tag("performance")
                     Text(strings.t("invDetail.tab.transactions", ["n": String(model.transactions.count)])).tag(
                         "transactions")
-                }.pickerStyle(.segmented)
+                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
                 if tab == "performance" {
                     ScrollView { performance(holding) }.frame(maxHeight: 620)
                 } else {
@@ -53,56 +57,62 @@ struct PortfolioDetailSheet: View {
                         .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity).padding(50)
                     Button(strings.t("common.retry")) {
                         Task { await model.load(currency: shell.settings.defaultCurrency, force: true) }
-                    }
+                    }.buttonStyle(.visionOutline)
                 }
-                Button(strings.t("common.close")) { model.closeDetail() }.keyboardShortcut(.cancelAction)
+                Button(strings.t("common.close")) { model.closeDetail() }
+                    .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
             }
-        }.padding(24).frame(minWidth: 680, idealWidth: 800)
+        }.visionDialogPadding().frame(minWidth: 640, idealWidth: 672)
             .portfolioEditingPresentation(model: editing, shell: shell)
             .onChange(of: model.selectedInvestment?.isActive) { previous, current in
                 if previous == true && current != true && model.error == nil { model.closeDetail() }
             }
     }
+    /// `InvestmentDetailDialog`'s header: symbol, linked name and badges on one line, the
+    /// close control top right, then the outline Edit and Archive actions.
     private func header(_ holding: PortfolioHolding) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 8) {
                 if let symbol = holding.symbol {
-                    Text(symbol).font(.caption.weight(.semibold)).foregroundStyle(theme.secondaryLabel)
-                    Button(holding.name) { research(holding, symbol: symbol) }.buttonStyle(.visionLink).font(
-                        .title2.weight(.semibold))
+                    Text(symbol).font(.headline.monospaced()).foregroundStyle(theme.primary)
+                    Button(holding.name) { research(holding, symbol: symbol) }.buttonStyle(.visionLink)
+                        .font(.visionCardTitle).lineLimit(1).accessibilityAddTraits(.isHeader)
                 } else {
-                    Text(holding.name).font(.title2.weight(.semibold))
+                    Text(holding.name).font(.visionCardTitle).foregroundStyle(theme.foreground).lineLimit(1)
+                        .accessibilityAddTraits(.isHeader)
                 }
-                HStack {
-                    VisionBadge(text: strings.t("portfolio.assetClass." + holding.assetClass))
-                    if !holding.isActive { VisionBadge(text: strings.t("portfolio.archived"), tone: .muted) }
-                    if holding.oversold {
-                        VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning)
-                            .help(strings.t("portfolio.oversold.description"))
-                    }
+                VisionBadge(text: assetClassLabel(holding.assetClass), small: true)
+                if !holding.isActive { VisionBadge(text: strings.t("portfolio.archived"), tone: .outline, small: true) }
+                if holding.oversold {
+                    VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
+                        .help(strings.t("portfolio.oversold.description"))
                 }
+                Spacer(minLength: 0)
+                VisionDialogCloseButton(label: strings.t("common.close")) { model.closeDetail() }
+                    .keyboardShortcut(.cancelAction)
             }
-            Spacer()
             if holding.isActive, let investment = model.investment(id: holding.id) {
-                Button(strings.t("common.edit"), systemImage: "pencil") {
-                    editing.beginEditInvestment(investment: investment)
+                HStack(spacing: 8) {
+                    Button(strings.t("common.edit"), systemImage: "pencil") {
+                        editing.beginEditInvestment(investment: investment)
+                    }
+                    .accessibilityLabel(strings.t("common.edit") + ": " + holding.name)
+                    .disabled(!model.historyComplete || model.historyLoading)
+                    Button(strings.t("portfolio.archiveInvestment"), systemImage: "archivebox") {
+                        editing.confirmArchive(investment: investment)
+                    }
+                    .accessibilityLabel(strings.t("portfolio.archiveInvestment") + ": " + holding.name)
+                    .disabled(!model.historyComplete || model.historyLoading)
                 }
-                .disabled(!model.historyComplete || model.historyLoading)
-                Button {
-                    editing.confirmArchive(investment: investment)
-                } label: {
-                    Image(systemName: "archivebox")
-                }
-                .accessibilityLabel(strings.t("portfolio.archiveInvestment")).disabled(
-                    !model.historyComplete || model.historyLoading)
+                .buttonStyle(.visionOutline).controlSize(.small)
             }
-            Button {
-                model.closeDetail()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.borderless).accessibilityLabel(strings.t("common.close")).keyboardShortcut(.cancelAction)
         }
+    }
+    /// `getAssetClassLabel`: the raw class when no `portfolio.assetClass.*` label exists.
+    private func assetClassLabel(_ value: String) -> String {
+        let key = "portfolio.assetClass." + value
+        let text = strings.t(key)
+        return text == key ? value : text
     }
     private func research(_ holding: PortfolioHolding, symbol: String) {
         model.closeDetail()
@@ -222,6 +232,7 @@ struct PortfolioDetailSheet: View {
             if let error = model.historyError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.openDetail(id: holding.id) } }
+                    .buttonStyle(.visionOutline)
             }
         }.padding(.trailing, 4)
     }

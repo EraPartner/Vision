@@ -197,7 +197,7 @@ struct AnalysisSavedLibraryView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(saved.name).fontWeight(.medium).foregroundStyle(theme.foreground)
-                                Text("v\(saved.version) · \(saved.refreshStatus)").font(.footnote).foregroundStyle(
+                                Text("v\(saved.version) · \(refreshStatusLabel(saved.refreshStatus))").font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                                 if let error = saved.lastError?["message"]?.stringValue {
                                     Text(error).font(.footnote).foregroundStyle(theme.destructive)
@@ -242,5 +242,11 @@ struct AnalysisSavedLibraryView: View {
         } message: {
             Text(strings.t("analysis.deleteConfirm", ["name": deletion?.name ?? ""]))
         }
+    }
+    /// The saved analysis `refreshStatus` wire value through its locale key, or as-is.
+    private func refreshStatusLabel(_ status: String) -> String {
+        let key = "analysis.refreshStatus." + status
+        let text = strings.t(key)
+        return text == key ? status : text
     }
 }

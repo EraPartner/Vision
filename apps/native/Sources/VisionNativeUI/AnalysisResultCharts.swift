@@ -216,7 +216,11 @@ struct AnalysisResultCharts: View {
     private func seriesLabel(_ id: String) -> String {
         guard let unit = columns.first(where: { $0.id == id })?.unit else { return label(id) }
         let kinds = ["money", "quantity", "ratio", "number", "dimensionless", "currency"]
-        let kind = kinds.contains(unit.kind) ? strings.t("analysis.ext.chart.unit.\(unit.kind)") : unit.kind
+        let optionKey = "analysis.ext.workbench.option.\(unit.kind)"
+        let option = strings.t(optionKey)
+        let kind =
+            kinds.contains(unit.kind)
+            ? strings.t("analysis.ext.chart.unit.\(unit.kind)") : option == optionKey ? unit.kind : option
         let currency =
             unit.currency ?? unit.currencyColumn.map { AnalysisPresentation.rawText(result.rows.first?[$0]) } ?? ""
         return "\(label(id)) (\([kind, currency].filter { !$0.isEmpty }.joined(separator: " ")))"
