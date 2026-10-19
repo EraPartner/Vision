@@ -969,7 +969,10 @@ The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/a
 
 > [!history]
 > The following paragraphs describe the former image-based pipeline. ADR-133 retired it. Current CI
-> uses native PostgreSQL and filesystem scanning; current releases publish macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]].
+> runs seven native jobs on disposable PostgreSQL 18 clusters without a filesystem vulnerability
+> scan, and current releases require a passing `CI Complete` on the tagged commit before publishing
+> macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]] and
+> [[docs/adr/221-proportional-ci|ADR-221]].
 
 **release.yml** (May 2026):
 

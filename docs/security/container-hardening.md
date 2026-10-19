@@ -2,7 +2,7 @@
 title: Retired Product Container Hardening
 type: security
 status: retired
-date: 2026-10-04
+date: 2026-10-19
 tags: [security, historical, retired-runtime, supply-chain]
 description: Historical record of the retired Docker product hardening boundary and the controls that replaced it.
 aliases: [retired container security, historical Docker hardening]
@@ -25,7 +25,9 @@ Current equivalents are:
   and loopback-only networking;
 - PostgreSQL uses separate administrator, owner/migration, and application roles;
 - packaged payloads and update archives use checksums and fixed path validation;
-- CI runs Trivy against the repository filesystem and audits Bun and Python dependencies; and
+- CI scans for secrets with gitleaks, reviews pull-request dependency changes, audits Bun and
+  Python dependencies, and runs CodeQL; the Trivy filesystem scan was removed by
+  [[docs/adr/221-proportional-ci|ADR-221]]; and
 - custom source deployments must provide their own process, network, and host isolation.
 
 Electron release jobs continue to use frozen dependency installs and narrow lifecycle-script

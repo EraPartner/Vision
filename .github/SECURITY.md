@@ -48,14 +48,14 @@ In scope — issues that could compromise a self-hosted instance or its data, fo
 
 Generally out of scope: vulnerabilities requiring a compromised host or OS account,
 self-inflicted misconfiguration of a self-hosted deployment, or findings in dependencies
-already tracked by Dependabot / `bun audit` / Trivy / CodeQL unless you can demonstrate
+already tracked by Dependabot / `bun audit` / `pip-audit` / CodeQL unless you can demonstrate
 exploitability in Vision.
 
 ## How Vision defends itself
 
 The codebase ships defense-in-depth that is documented and worth reading before reporting:
 
-- **Supply chain:** gitleaks (CI + pre-commit), `bun audit`, `pip-audit`, Trivy filesystem scan,
+- **Supply chain:** gitleaks (CI + pre-commit), `bun audit`, `pip-audit`, Dependency Review,
   CodeQL SAST, Electron release builds with `--ignore-scripts`
   ([ADR-050](docs/adr/050-ci-supply-chain-security-tooling.md)).
 - **Runtime:** input validation (Zod + server-side), rate limiting, SSRF guard, strict CSP,

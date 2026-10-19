@@ -9,7 +9,7 @@ on:
   #
   # Path filtering now happens INSIDE the workflow: the `changes` job classifies
   # the diff and the expensive tiers are gated on `changes.outputs.code`, while
-  # `changes`, `secrets-scan`, `quality-gate` and `ci-complete` always run. That
+  # `changes`, `repo-checks` and `ci-complete` always run. That
   # keeps a single required check that always reports on every diff.
   #
   # Do NOT reintroduce a top-level `paths`/`paths-ignore` filter here, and do NOT
@@ -21,10 +21,9 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-    # ready_for_review re-runs CI when a draft is marked ready, so the jobs
-    # skipped on drafts (Test (Live API Contracts)) run before "CI Complete"
-    # can pass for a merge, including an auto-merge.
-    types: [opened, synchronize, reopened, ready_for_review]
+    # No ready_for_review: every job also runs on drafts, so marking a PR
+    # ready does not need a second full run.
+    types: [opened, synchronize, reopened]
 
 permissions: {}
 
@@ -37,53 +36,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  dependency-review:
-    name: Dependency Review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-      - name: Reject vulnerable dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          fail-on-severity: high
-
-  agent-tooling:
-    name: Agent Tooling
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.2"
-      - name: Check agent instructions and CI classification
-        run: |
-          python3 scripts/check-agent-instructions.py
-          python3 scripts/tests/ci-classify.test.py
-      - name: Enforce private internal package boundaries
-        run: |
-          bun scripts/check-package-boundaries.ts
-          bun test scripts/tests/package-boundaries.test.ts
-      - name: Enforce workflow supply-chain policy
-        run: |
-          python3 scripts/check-workflow-supply-chain.py
-          python3 scripts/tests/workflow-supply-chain.test.py
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Secrets scan — gitleaks on push/PR diff range
-  # ─────────────────────────────────────────────────────────────────────────────
   # ─────────────────────────────────────────────────────────────────────────────
   # Detect Changes — classifies the diff so the code tiers can be skipped
   # on documentation-only changes WITHOUT stranding the required "CI Complete"
@@ -125,24 +77,62 @@ jobs:
         run: python3 scripts/ci-classify.py
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Commit messages — enforce the same conventional-commit contract as the
-  # local commit-msg hook. This cannot be bypassed with `git commit --no-verify`.
+  # Repo Checks — the cheap checks that run on EVERY diff, docs included: agent
+  # tooling, commit messages, secrets, dependency review and the branch
+  # protection verifier. A leaked credential in a markdown file must still fail
+  # CI, so this job has no `changes` gate.
   # ─────────────────────────────────────────────────────────────────────────────
-  commitlint:
-    name: Commitlint
+  repo-checks:
+    name: Repo Checks
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
+      # gitleaks-action lists the PR's commits via the API to scan the diff
+      # range, and dependency-review reads the PR; without pull-requests:read
+      # both 403 ("Resource not accessible by integration") on every PR.
+      pull-requests: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Reject vulnerable dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+      - name: Secrets scan (gitleaks)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: config/gitleaks.toml
+          # The scan result gates via exit code; skip the report-artifact upload so
+          # a hit Actions artifact-storage quota can't fail an otherwise-clean scan.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
+      - name: Check agent instructions and CI classification
+        run: |
+          python3 scripts/check-agent-instructions.py
+          python3 scripts/tests/ci-classify.test.py
+
+      - name: Enforce private internal package boundaries
+        run: |
+          bun scripts/check-package-boundaries.ts
+          bun test scripts/tests/package-boundaries.test.ts
+
+      - name: Enforce workflow supply-chain policy
+        run: |
+          python3 scripts/check-workflow-supply-chain.py
+          python3 scripts/tests/workflow-supply-chain.test.py
+
+      # Commit messages — enforce the same conventional-commit contract as the
+      # local commit-msg hook. This cannot be bypassed with `git commit --no-verify`.
       - name: Lint commit range
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -170,413 +160,17 @@ jobs:
             bun x commitlint --from "$from" --to "$to" --config config/commitlint.config.mjs
           fi
 
-  secrets-scan:
-    name: Secrets Scan
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      # gitleaks-action lists the PR's commits via the API to scan the diff
-      # range; without pull-requests:read it 403s ("Resource not accessible by
-      # integration") on every PR.
-      pull-requests: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: config/gitleaks.toml
-          # The scan result gates via exit code; skip the report-artifact upload so
-          # a hit Actions artifact-storage quota can't fail an otherwise-clean scan.
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Deps audit — bun audit fails on HIGH or CRITICAL vulnerabilities
-  # ─────────────────────────────────────────────────────────────────────────────
-  deps-audit:
-    name: Deps Audit (JS)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Audit JS dependencies
-        # Shared with release.yml's verify job via scripts/audit-js.sh so the
-        # audit command + accepted-risk ignore list can't drift between the two.
-        run: sh scripts/audit-js.sh
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Python deps audit — pip-audit on config/requirements*.txt
-  # ─────────────────────────────────────────────────────────────────────────────
-  pip-audit:
-    name: Deps Audit (Python)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Audit Python dependencies
-        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt -r config/requirements-dev.txt
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Lint — frontend ESLint + backend ESLint
-  # ─────────────────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Lint frontend
-        run: bun run lint
-
-      - name: Lint backend
-        run: bun run lint:backend
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Type-check — TypeScript strict check on frontend and shared packages
-  # ─────────────────────────────────────────────────────────────────────────────
-  typecheck:
-    name: Type Check
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Generate locales (required for type-check)
-        run: CI=1 bun run generate-locales
-
-      - name: Type-check frontend
-        run: cd apps/frontend && bun run typecheck
-
-      - name: Type-check shared packages
-        run: bun run typecheck:packages
-
-      - name: Test shared packages (Belgian tax engine, ADR-217)
-        run: bun run test:packages
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Backend TypeScript — strict tsc over every src/**/*.ts file (ADR-186,
-  # ADR-191). Required gate: catches type regressions before they reach main.
-  # ─────────────────────────────────────────────────────────────────────────────
-  typecheck-backend:
-    name: Type Check (Backend)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Type-check backend (strict TypeScript)
-        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.json
-
-      - name: Type-check backend tests (strict TypeScript)
-        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.tests.json
-
-      - name: Type-check backend and repository scripts (strict TypeScript, ADR-195)
-        run: |
-          apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.scripts.json
-          apps/node-backend/node_modules/.bin/tsc -p scripts/tsconfig.json
-
-      - name: Install electron workspace dependencies
-        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
-
-      - name: Type-check the Electron shell (strict TypeScript, ADR-196)
-        run: bun run typecheck:electron
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Python type check — mypy --strict over Alembic env and migrations, repo
-  # scripts and their tests (config/mypy.ini). Dependencies come from the
-  # hash-pinned runtime and dev requirement files so mypy sees shipped versions.
-  # ─────────────────────────────────────────────────────────────────────────────
-  typecheck-python:
-    name: Type Check (Python)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install pinned Python dependencies
-        run: pip install --require-hashes -r config/requirements.txt -r config/requirements-dev.txt
-
-      - name: Type-check Python (mypy --strict)
-        run: python3 -m mypy --config-file config/mypy.ini
-
-      - name: Test Alembic audit callback
-        run: python3 scripts/tests/test_audit_migration_hook.py
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Verify generated artifacts — the committed locale TS files and the
-  # OpenAPI-derived TS types must match their sources. A drift here means
-  # a developer edited openapi.yaml or i18n/source/*.json without running
-  # the matching generate script. Cheap (~30 s) and high-signal.
-  # ─────────────────────────────────────────────────────────────────────────────
-  verify-generated:
-    name: Verify Generated Artifacts
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Validate locales (en/nl key parity, generated TS integrity)
-        run: bun run validate-locales
-
-      - name: Regenerate locales and check for drift
-        run: |
-          bun run generate-locales
-          if ! git diff --exit-code -- apps/frontend/src/locales/; then
-            echo "ERROR: apps/frontend/src/locales/*.ts are out of sync with i18n/source."
-            echo "Run 'bun run generate-locales' locally and commit the regenerated files."
-            exit 1
-          fi
-          echo "Frontend locales in sync."
-
-      - name: Regenerate OpenAPI types and check for drift
-        run: |
-          bun run generate:types
-          if ! git diff --exit-code -- apps/frontend/src/types/generated.ts; then
-            echo "ERROR: apps/frontend/src/types/generated.ts is out of sync with openapi.yaml."
-            echo "Run 'bun run generate:types' locally and commit the regenerated file."
-            exit 1
-          fi
-          echo "OpenAPI types in sync."
-
-      - name: Verify endpoint matrix count matches openapi.yaml
-        run: bun run check-endpoint-matrix
-
-      - name: Test repository scripts
-        run: bun run test:scripts
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Build — verify the frontend production bundle compiles
-  # ─────────────────────────────────────────────────────────────────────────────
-  build-frontend:
-    name: Build (Frontend)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Build frontend
-        run: CI=1 bun run build
-
-      # Bundle-size regression guard — see apps/frontend/scripts/check-bundle-size.ts
-      # for what this measures and why (post-mortem: recharts leaking into the
-      # boot-preload graph via a shared module, undetected until reported).
-      - name: Check bundle size (boot-preload graph + total)
-        run: cd apps/frontend && bun run size:check
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Test — frontend (Vitest + coverage gate) + backend (Bun test)
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-frontend:
-    name: Test (Frontend)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Generate locales
-        run: CI=1 bun run generate-locales
-
-      - name: Run frontend tests with coverage
-        run: bun run test:coverage
-
-      - name: Report coverage on PR
-        if: always()
-        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2
-        with:
-          vite-config-path: apps/frontend/vite.config.ts
-          json-summary-path: apps/frontend/coverage/coverage-summary.json
-          json-final-path: apps/frontend/coverage/coverage-final.json
-
-  # Backend vitest runs in exactly ONE job (this one) — `quality-gate` is a pure
-  # results aggregator and runs no tests. The suite uses an isolated native
-  # PostgreSQL 18 cluster so DB-backed cases cannot silently skip.
-  #
-  # The cluster turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
-  # `describe.skipIf(!hasTestDatabase())` execute for real instead of silently
-  # skipping. TEST_DATABASE_URL and DATABASE_URL point at the SAME database on
-  # purpose — DB-backed suites seed through the test pool (TEST_DATABASE_URL) but
-  # the code under test queries through the app pool (DATABASE_URL), so they
-  # must be the same database or the seed is invisible to the code being tested.
-  #
-  # This database is disposable and exclusive to this job — suites may wipe any
-  # table they touch; nothing here is shared with another job or persisted.
-  test-backend:
-    name: Test (Backend)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      # Migrations are Alembic (Python) even though the backend is Node, so the
-      # bun toolchain alone cannot build the schema.
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Alembic toolchain
-        run: pip install -r config/requirements.txt
-
-      - name: Install native PostgreSQL 18
-        run: bash .github/scripts/install-postgres-18.sh
-
-      - name: Install electron workspace dependencies
-        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
-
-      - name: Run Electron and native-runtime contract tests
-        run: bun run test:electron
-
-      - name: Run backend tests with coverage
-        env:
-          VISION_RUN_PERFORMANCE_PROBES: "1"
-          VISION_RUN_AUDIT_PERFORMANCE: "1"
-        run: scripts/with-test-db.sh --coverage
-
-      - name: Run database lifecycle and contract tests
-        run: |
-          for task in migration-fidelity legacy-retirements adr090-retirement adr088-contract statement-contract; do
-            VISION_TEST_DB_TASK="$task" scripts/with-test-db.sh
-          done
-
-      - name: Report backend coverage on PR
-        if: always()
-        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2
-        with:
-          name: backend
-          vite-config-path: apps/node-backend/vitest.config.js
-          json-summary-path: apps/node-backend/coverage/coverage-summary.json
-          json-final-path: apps/node-backend/coverage/coverage-final.json
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Branch protection — Dependabot auto-merge (auto-merge.yml) lands a PR as soon
-  # as the *required* checks pass, so that automation is only ever as safe as the
-  # ruleset's required-check list. Nothing in this repo asserted that list, which
-  # meant a rename or removal server-side would silently widen what can
-  # auto-merge, with no diff to review and no failing job.
-  #
-  # This reads the rules that actually apply to the default branch and fails if
-  # our gates are not among the required checks. It queries the per-branch
-  # `rules` endpoint rather than `rulesets` on purpose: `rules` answers "what
-  # applies to this branch" and is readable with the workflow's own token, where
-  # the rulesets admin endpoint is not.
-  #
-  # This is wired into `ci-complete` and fails closed. An unreadable rules API
-  # is an unverified protection state, not evidence that the merge gates still
-  # exist; accepting it would make the verifier advisory at the exact moment it
-  # is needed.
-  # ─────────────────────────────────────────────────────────────────────────────
-  verify-branch-protection:
-    name: Verify Branch Protection
-    needs: [changes]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - name: Assert the required-check list still names our gates
+      # Branch protection — auto-merge lands a PR as soon as the *required*
+      # checks pass, so that automation is only ever as safe as the ruleset's
+      # required-check list. This reads the rules that actually apply to the
+      # default branch and fails if our gates are not among them. It queries the
+      # per-branch `rules` endpoint rather than `rulesets` on purpose: `rules`
+      # answers "what applies to this branch" and is readable with the
+      # workflow's own token, where the rulesets admin endpoint is not.
+      #
+      # It fails closed: an unreadable rules API is an unverified protection
+      # state, not evidence that the merge gates still exist.
+      - name: Verify branch protection
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -631,7 +225,7 @@ jobs:
           if [ "$MISSING" = "1" ]; then
             echo
             echo "The ruleset for '${DEFAULT_BRANCH}' no longer enforces a gate this repo relies on."
-            echo "Dependabot auto-merge lands patch/minor PRs as soon as the *required* gates pass,"
+            echo "Auto-merge lands PRs as soon as the *required* gates pass,"
             echo "so anything missing here no longer blocks a merge."
             echo "Fix the ruleset in repository settings, or update EXPECTED_CHECKS /"
             echo "EXPECTED_SCANNERS above if something was renamed deliberately."
@@ -640,174 +234,15 @@ jobs:
           echo "Branch protection OK — every expected gate is enforced."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Destructive migrations — native startup uses the guarded migration
-  # runner before accepting requests, so a DROP in alembic/versions/ reaches every
-  # installation on its next start. That is exactly how 0055 dropped bank_account
-  # ahead of its coupled code and crashed startup (ADR-088; 0055 neutered, 0056
-  # recovery).
-  # This gate makes destructive DDL state its case instead of relying on someone
-  # remembering that incident.
+  # Lint — dependency audits, ESLint, generated-artifact drift, repository
+  # script tests, the destructive-migration gate and the Python checks.
   # ─────────────────────────────────────────────────────────────────────────────
-  verify-destructive-migrations:
-    name: Verify Destructive Migrations
+  lint:
+    name: Lint
     needs: [changes]
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
-      # ubuntu-24.04 ships python3, so this stays dependency-free.
-      - name: Self-test the checker
-        run: python3 scripts/check-destructive-migrations.py --self-test
-
-      - name: Check migrations for unmarked destructive DDL
-        run: python3 scripts/check-destructive-migrations.py
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Quality Gate — all static and unit-level quality checks must pass before the
-  # native production-process checks run.
-  # ─────────────────────────────────────────────────────────────────────────────
-  quality-gate:
-    name: Quality Gate
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    needs:
-      - changes
-      - commitlint
-      - agent-tooling
-      - dependency-review
-      - secrets-scan
-      - deps-audit
-      - pip-audit
-      - lint
-      - typecheck
-      - typecheck-backend
-      - typecheck-python
-      - verify-generated
-      - build-frontend
-      - test-frontend
-      - test-backend
-      - verify-destructive-migrations
-    if: always()
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.2"
-
-      - name: Check all gates passed
-        # Values reach the script through env, never via ${{ }} interpolation
-        # into `run:` — same convention as the rest of this workflow.
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          RESULTS: ${{ toJson(needs.*.result) }}
-          EVENT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-          AGENT_TOOLING_RESULT: ${{ needs.agent-tooling.result }}
-          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency-review.result }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = pull_request ] && [ "$DEPENDENCY_REVIEW_RESULT" != success ]; then
-            echo "Dependency review did not pass: $DEPENDENCY_REVIEW_RESULT"
-            exit 1
-          fi
-          # Cancellation passes only after the existing superseded-PR policy
-          # below verifies a newer live head. Skipping is never allowed.
-          case "$AGENT_TOOLING_RESULT" in
-            success|cancelled) ;;
-            *) echo "Agent tooling did not pass: $AGENT_TOOLING_RESULT"; exit 1 ;;
-          esac
-
-          # 'skipped' is tolerated here BY DESIGN: on a docs-only diff the
-          # code jobs are gated off by `changes.outputs.code`, so they report
-          # 'skipped' and this gate must still pass. `changes` and `secrets-scan`
-          # always run, so a genuine upstream break still shows as failure.
-          # Do not tighten this to "must equal success" without also
-          # special-casing the docs-only path — that would put docs-only PRs
-          # straight back to permanently blocked.
-          #
-          # A cancelled dependency is tolerated only when the live PR head has
-          # moved away from this run's event SHA. Equal SHA, push events, missing
-          # event identity, dependency failure, and GitHub API failure all fail
-          # closed. Both aggregation jobs call the same tested policy script.
-          bun scripts/ci-cancellation-policy.ts
-          echo "All quality gates passed."
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Trivy — repository filesystem dependency and configuration scan.
-  # ─────────────────────────────────────────────────────────────────────────────
-  trivy-scan:
-    name: Trivy Scan
-    runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: [changes, quality-gate]
-    # Check Quality Gate's result directly. The implicit success() also needs
-    # every transitive dependency to succeed, and the PR-only Dependency Review
-    # is skipped on pushes, so a plain condition skips this job on main.
-    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' }}
-    permissions:
-      contents: read
-      security-events: write # required to upload SARIF to GitHub Security
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Run Trivy vulnerability scan (table — fail on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          trivyignores: .trivyignore
-
-      - name: Run Trivy vulnerability scan (SARIF — upload to GitHub Security)
-        if: always()
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: sarif
-          output: trivy-results.sarif
-          severity: HIGH,CRITICAL
-          exit-code: "0"
-          trivyignores: .trivyignore
-
-      - name: Upload Trivy SARIF to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4
-        with:
-          sarif_file: trivy-results.sarif
-          category: trivy
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Native runtime verify — migrate an isolated PostgreSQL 18 database, start
-  # the production backend, hit /health, and round-trip the latest migration.
-  # ─────────────────────────────────────────────────────────────────────────────
-  native-runtime-verify:
-    name: Native Runtime Verify
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    needs: [changes, quality-gate]
-    # Explicit Quality Gate check, as in trivy-scan, so pushes to main run it.
-    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' }}
     permissions:
       contents: read
     steps:
@@ -818,15 +253,246 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
+      - name: Audit JS dependencies
+        # Shared with release.yml's verify job via scripts/audit-js.sh so the
+        # audit command + accepted-risk ignore list can't drift between the two.
+        run: sh scripts/audit-js.sh
+
+      - name: Lint frontend
+        run: bun run lint
+
+      - name: Lint backend
+        run: bun run lint:backend
+
+      # Generated artifacts — the committed locale TS files and the
+      # OpenAPI-derived TS types must match their sources. A drift here means
+      # a developer edited openapi.yaml or i18n/source/*.json without running
+      # the matching generate script.
+      - name: Validate locales (en/nl key parity, generated TS integrity)
+        run: bun run validate-locales
+
+      - name: Regenerate locales and check for drift
+        run: |
+          bun run generate-locales
+          if ! git diff --exit-code -- apps/frontend/src/locales/; then
+            echo "ERROR: apps/frontend/src/locales/*.ts are out of sync with i18n/source."
+            echo "Run 'bun run generate-locales' locally and commit the regenerated files."
+            exit 1
+          fi
+          echo "Frontend locales in sync."
+
+      - name: Regenerate OpenAPI types and check for drift
+        run: |
+          bun run generate:types
+          if ! git diff --exit-code -- apps/frontend/src/types/generated.ts; then
+            echo "ERROR: apps/frontend/src/types/generated.ts is out of sync with openapi.yaml."
+            echo "Run 'bun run generate:types' locally and commit the regenerated file."
+            exit 1
+          fi
+          echo "OpenAPI types in sync."
+
+      - name: Verify endpoint matrix count matches openapi.yaml
+        run: bun run check-endpoint-matrix
+
+      - name: Test repository scripts
+        run: bun run test:scripts
+
+      # Destructive migrations — native startup uses the guarded migration
+      # runner before accepting requests, so a DROP in alembic/versions/ reaches
+      # every installation on its next start. That is exactly how 0055 dropped
+      # bank_account ahead of its coupled code and crashed startup (ADR-088;
+      # 0055 neutered, 0056 recovery). The checker is stdlib-only.
+      - name: Self-test the destructive-migration checker
+        run: python3 scripts/check-destructive-migrations.py --self-test
+
+      - name: Check migrations for unmarked destructive DDL
+        run: python3 scripts/check-destructive-migrations.py
+
+      # Python (Alembic env, migrations and repo scripts). Dependencies come
+      # from the hash-pinned runtime and dev requirement files so pip-audit and
+      # mypy see shipped versions.
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
         with:
           python-version: "3.12"
 
-      - name: Install native runtime dependencies
+      - name: Audit Python dependencies
+        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt -r config/requirements-dev.txt
+
+      - name: Install pinned Python dependencies
+        run: pip install --require-hashes -r config/requirements.txt -r config/requirements-dev.txt
+
+      - name: Type-check Python (mypy --strict)
+        run: python3 -m mypy --config-file config/mypy.ini
+
+      - name: Test Alembic audit callback
+        run: python3 scripts/tests/test_audit_migration_hook.py
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Type Check — strict TypeScript for the frontend, shared packages, backend,
+  # scripts and Electron shell (ADR-186, ADR-191, ADR-195, ADR-196), the shared
+  # package tests, and the production frontend build with its size guard.
+  # ─────────────────────────────────────────────────────────────────────────────
+  typecheck:
+    name: Type Check
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+
+      - name: Generate locales (required for type-check)
+        run: CI=1 bun run generate-locales
+
+      - name: Type-check frontend
+        run: cd apps/frontend && bun run typecheck
+
+      - name: Type-check shared packages
+        run: bun run typecheck:packages
+
+      - name: Test shared packages (Belgian tax engine, ADR-217)
+        run: bun run test:packages
+
+      - name: Type-check backend (strict TypeScript)
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.json
+
+      - name: Type-check backend tests (strict TypeScript)
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.tests.json
+
+      - name: Type-check backend and repository scripts (strict TypeScript, ADR-195)
         run: |
-          pip install -r config/requirements.txt
-          bash .github/scripts/install-postgres-18.sh
+          apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.scripts.json
+          apps/node-backend/node_modules/.bin/tsc -p scripts/tsconfig.json
+
+      - name: Install electron workspace dependencies
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
+
+      - name: Type-check the Electron shell (strict TypeScript, ADR-196)
+        run: bun run typecheck:electron
+
+      - name: Build frontend
+        run: CI=1 bun run build
+
+      # Bundle-size regression guard — see apps/frontend/scripts/check-bundle-size.ts
+      # for what this measures and why (post-mortem: recharts leaking into the
+      # boot-preload graph via a shared module, undetected until reported).
+      - name: Check bundle size (boot-preload graph + total)
+        run: cd apps/frontend && bun run size:check
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Test (Frontend) — Vitest. Pull requests split the suite over two runners
+  # without coverage; pushes to main run it whole with the v8 coverage ratchet
+  # in apps/frontend/vite.config.ts, so the gate still holds on every main
+  # commit and therefore on every release.
+  # ─────────────────────────────────────────────────────────────────────────────
+  test-frontend:
+    name: Test (Frontend ${{ matrix.shard }})
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"shard":"1/2","coverage":false},{"shard":"2/2","coverage":false}]' || '[{"shard":"1/1","coverage":true}]') }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+
+      - name: Generate locales
+        run: CI=1 bun run generate-locales
+
+      - name: Run frontend tests
+        env:
+          SHARD: ${{ matrix.shard }}
+          COVERAGE: ${{ matrix.coverage }}
+        run: |
+          set -euo pipefail
+          if [ "$COVERAGE" = "true" ]; then
+            bun run test:coverage
+          else
+            cd apps/frontend && bun run test --shard="$SHARD"
+          fi
+
+  # Backend vitest runs in exactly ONE job (this one). The suite uses an
+  # isolated native PostgreSQL 18 cluster so DB-backed cases cannot silently
+  # skip.
+  #
+  # The cluster turns the `tests/setup/db.js` opt-in seam ON: suites gated behind
+  # `describe.skipIf(!hasTestDatabase())` execute for real instead of silently
+  # skipping. TEST_DATABASE_URL and DATABASE_URL point at the SAME database on
+  # purpose — DB-backed suites seed through the test pool (TEST_DATABASE_URL) but
+  # the code under test queries through the app pool (DATABASE_URL), so they
+  # must be the same database or the seed is invisible to the code being tested.
+  #
+  # This database is disposable and exclusive to this job — suites may wipe any
+  # table they touch; nothing here is shared with another job or persisted.
+  #
+  # The same job then builds the production frontend once and runs the native
+  # production stack twice: migrate + /health + latest-migration round trip,
+  # and the live API contracts (MSW fixture schemas against the real backend).
+  # Each wrapper starts and removes its own cluster, so they run in sequence.
+  test-backend:
+    name: Test (Backend)
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+
+      # Migrations are Alembic (Python) even though the backend is Node, so the
+      # bun toolchain alone cannot build the schema.
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Alembic toolchain
+        run: pip install -r config/requirements.txt
+
+      - name: Install native PostgreSQL 18
+        run: bash .github/scripts/install-postgres-18.sh
+
+      - name: Install electron workspace dependencies
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
+
+      - name: Run Electron and native-runtime contract tests
+        run: bun run test:electron
+
+      - name: Run backend tests with coverage
+        env:
+          VISION_RUN_PERFORMANCE_PROBES: "1"
+          VISION_RUN_AUDIT_PERFORMANCE: "1"
+        run: scripts/with-test-db.sh --coverage
+
+      - name: Run database lifecycle and contract tests
+        run: |
+          for task in migration-fidelity legacy-retirements adr090-retirement adr088-contract statement-contract; do
+            VISION_TEST_DB_TASK="$task" scripts/with-test-db.sh
+          done
 
       - name: Build production frontend
         run: CI=1 bun run build
@@ -836,51 +502,25 @@ jobs:
           VISION_NATIVE_VERIFY_MIGRATIONS: "1"
         run: bash .github/scripts/with-native-stack.sh curl -fsS http://127.0.0.1:3002/health
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Live API contracts — run MSW fixture schemas against the real backend.
-  # Catches divergence between MSW stubs and actual backend responses.
-  # Skipped on draft PRs; runs on push to main and non-draft PRs.
-  # ─────────────────────────────────────────────────────────────────────────────
-  test-live-api-contracts:
-    name: Test (Live API Contracts)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    needs: [changes, quality-gate]
-    # Explicit Quality Gate check, as in trivy-scan, so pushes to main run it.
-    if: ${{ !cancelled() && needs.quality-gate.result == 'success' && needs.changes.outputs.code == 'true' && !github.event.pull_request.draft }}
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup toolchain
-        uses: ./.github/actions/setup
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install native runtime dependencies
-        run: |
-          pip install -r config/requirements.txt
-          bash .github/scripts/install-postgres-18.sh
-
-      - name: Build production frontend
-        run: CI=1 bun run build
-
       - name: Run live API contract tests
         env:
           LIVE_API_BASE: http://localhost:3002
           VISION_NATIVE_COMMAND_DIR: apps/frontend
         run: bash .github/scripts/with-native-stack.sh bun run vitest run src/test/live-contracts/live-contracts.test.ts
 
+      - name: Report backend coverage on PR
+        if: always()
+        uses: davelosert/vitest-coverage-report-action@c4bbc33a89b7ace0e63d35f1f7d4bcee31155a73 # v2
+        with:
+          name: backend
+          vite-config-path: apps/node-backend/vitest.config.js
+          json-summary-path: apps/node-backend/coverage/coverage-summary.json
+          json-final-path: apps/node-backend/coverage/coverage-final.json
+
   # ─────────────────────────────────────────────────────────────────────────────
   # CI Complete — aggregates the full pipeline so branch protection has one
-  # required status check.
-  # Set "CI Complete" as the required check in branch protection settings.
+  # required status check. Release (release.yml) also requires this check to
+  # have passed on the tagged commit instead of re-running the suite.
   # ─────────────────────────────────────────────────────────────────────────────
   ci-complete:
     name: CI Complete
@@ -889,16 +529,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    needs:
-      [
-        changes,
-        secrets-scan,
-        quality-gate,
-        verify-branch-protection,
-        trivy-scan,
-        native-runtime-verify,
-        test-live-api-contracts,
-      ]
+    needs: [changes, repo-checks, lint, typecheck, test-frontend, test-backend]
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
@@ -916,45 +547,40 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           CODE_CHANGED: ${{ needs.changes.outputs.code }}
-          ALL_RESULTS: ${{ toJson(needs.*.result) }}
           RESULTS: ${{ toJson(needs.*.result) }}
           EVENT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           CHANGES_RESULT: ${{ needs.changes.result }}
-          SECRETS_SCAN_RESULT: ${{ needs.secrets-scan.result }}
-          QUALITY_GATE_RESULT: ${{ needs.quality-gate.result }}
-          BRANCH_PROTECTION_RESULT: ${{ needs.verify-branch-protection.result }}
-          TRIVY_SCAN_RESULT: ${{ needs.trivy-scan.result }}
-          NATIVE_RUNTIME_RESULT: ${{ needs.native-runtime-verify.result }}
-          LIVE_CONTRACTS_RESULT: ${{ needs.test-live-api-contracts.result }}
+          REPO_CHECKS_RESULT: ${{ needs.repo-checks.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+          TEST_FRONTEND_RESULT: ${{ needs.test-frontend.result }}
+          TEST_BACKEND_RESULT: ${{ needs.test-backend.result }}
         run: |
           set -euo pipefail
 
-          echo "changes(code):           $CHANGES_RESULT (code=$CODE_CHANGED)"
-          echo "secrets-scan:            $SECRETS_SCAN_RESULT"
-          echo "quality-gate:            $QUALITY_GATE_RESULT"
-          echo "branch-protection:       $BRANCH_PROTECTION_RESULT"
+          echo "changes(code):  $CHANGES_RESULT (code=$CODE_CHANGED)"
+          echo "repo-checks:    $REPO_CHECKS_RESULT"
 
+          # A cancelled dependency is tolerated only when the live PR head has
+          # moved away from this run's event SHA. Equal SHA, push events, missing
+          # event identity, dependency failure, and GitHub API failure all fail
+          # closed (scripts/ci-cancellation-policy.ts).
           tolerate_cancelled=false
-          if echo "$ALL_RESULTS" | grep -q '"cancelled"'; then
+          if echo "$RESULTS" | grep -q '"cancelled"'; then
             bun scripts/ci-cancellation-policy.ts
             tolerate_cancelled=true
           fi
 
-          # require <job> <result> [extra allowed results...]
+          # require <job> <result>
           #
-          # 'success' always passes; extra allowed results are per-job (only
-          # test-live-api-contracts gets one, 'skipped', for draft PRs).
-          # 'cancelled' passes only under the tolerance computed above.
-          # Everything else is fatal.
+          # 'success' passes; 'cancelled' passes only under the tolerance
+          # computed above. Everything else, 'skipped' included, is fatal.
           require() {
-            job=$1; result=$2; shift 2
+            job=$1; result=$2
             if [ "$result" = "success" ]; then return 0; fi
-            for allowed in "$@"; do
-              if [ "$result" = "$allowed" ]; then return 0; fi
-            done
             if [ "$result" = "cancelled" ] && [ "$tolerate_cancelled" = "true" ]; then
               echo "::warning title=Superseded run::'$job' was cancelled and nothing failed — treating this as a run superseded by a newer push (see the concurrency block)."
               return 0
@@ -963,12 +589,10 @@ jobs:
             exit 1
           }
 
-          # `changes` and `secrets-scan` run on EVERY diff, docs included — a
+          # `changes` and `repo-checks` run on EVERY diff, docs included — a
           # leaked credential in a markdown file must still fail CI.
           require changes "$CHANGES_RESULT"
-          require secrets-scan "$SECRETS_SCAN_RESULT"
-          require quality-gate "$QUALITY_GATE_RESULT"
-          require verify-branch-protection "$BRANCH_PROTECTION_RESULT"
+          require repo-checks "$REPO_CHECKS_RESULT"
 
           # Reachable only when the tolerance above accepted a cancelled
           # `changes`: the job never published its output, so the diff was never
@@ -980,29 +604,24 @@ jobs:
             exit 0
           fi
 
-          # Documentation-only diff: the code tiers are intentionally
-          # skipped, so there is nothing further to assert — this early exit is
-          # why the Trivy/native-runtime assertions below never see the
-          # 'skipped' they would (correctly) reject on a docs-only run. This job
-          # still runs and reports, which is the whole point — "CI Complete" is
-          # the required check and must never be left pending.
+          # Documentation-only diff: the code tiers are intentionally skipped,
+          # so there is nothing further to assert. This job still runs and
+          # reports, which is the whole point — "CI Complete" is the required
+          # check and must never be left pending.
           if [ "$CODE_CHANGED" != "true" ]; then
             echo "Documentation/instruction diff — code tiers intentionally skipped."
             echo "All CI stages complete (documentation/instructions)."
             exit 0
           fi
 
-          echo "trivy-scan:              $TRIVY_SCAN_RESULT"
-          echo "native-runtime-verify:   $NATIVE_RUNTIME_RESULT"
-          echo "test-live-api-contracts: $LIVE_CONTRACTS_RESULT"
-          # Trivy and native runtime verification MUST run and succeed. A
-          # 'skipped' result means a required tier was bypassed.
-          # A plain failure grep would let a skipped required job slip through
-          # green; `require` allows no extra results for these two, so only
-          # 'success' (or a tolerated supersede-cancel) passes.
-          require trivy-scan "$TRIVY_SCAN_RESULT"
-          require native-runtime-verify "$NATIVE_RUNTIME_RESULT"
-          # test-live-api-contracts is INTENTIONALLY skipped on draft PRs
-          # (if: !github.event.pull_request.draft), so 'skipped' is allowed here.
-          require test-live-api-contracts "$LIVE_CONTRACTS_RESULT" skipped
+          echo "lint:           $LINT_RESULT"
+          echo "typecheck:      $TYPECHECK_RESULT"
+          echo "test-frontend:  $TEST_FRONTEND_RESULT"
+          echo "test-backend:   $TEST_BACKEND_RESULT"
+          # Every code tier MUST run and succeed on a code diff; a 'skipped'
+          # result means a required tier was bypassed.
+          require lint "$LINT_RESULT"
+          require typecheck "$TYPECHECK_RESULT"
+          require test-frontend "$TEST_FRONTEND_RESULT"
+          require test-backend "$TEST_BACKEND_RESULT"
           echo "All CI stages complete."
