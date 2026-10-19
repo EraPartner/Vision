@@ -7,7 +7,11 @@ import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+import {
+    computeTaxYearResults,
+    DEFAULT_BELGIAN_TAX_PROFILE,
+    resolveTaxYearFigures,
+} from "@/stores/belgianTaxStore";
 import {
     parseHouseholdSnapshotsV2,
     parseHouseholdV2,
@@ -105,12 +109,18 @@ describe("BelgianTaxProfileContext", () => {
         expect(result.current.profile.grossAnnualIncome).toBe(0);
     });
 
-    it("calculation is always defined", async () => {
+    it("hydrates the live household with the overview's server figures", async () => {
         const { result } = renderHook(() => useBelgianTaxProfile(), {
             wrapper: makeWrapper(),
         });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(result.current.calculation).toBeDefined();
+        expect(result.current.hydratedComputation?.household).toBe(
+            result.current.household,
+        );
+        expect(
+            result.current.hydratedComputation?.computation.calculation
+                .totalPIT,
+        ).toBe(0);
     });
 
     it("merges preloaded profile data with defaults", async () => {
@@ -259,15 +269,16 @@ describe("BelgianTaxProfileContext", () => {
             expect(result.current.profileForYear(2024).grossAnnualIncome).toBe(
                 47_000,
             );
-            expect(result.current.householdResult?.assessment.mode).toBe(
-                "joint",
-            );
+            expect(
+                result.current.hydratedComputation?.computation.result
+                    .assessment.mode,
+            ).toBe("joint");
             expect(Object.keys(calls)).not.toContain("belgian_tax_profile");
         });
 
         it("does not rewrite v2 keys that are already present", async () => {
             const { upgradeProfileV1ToHousehold, upgradeSnapshotsV1ToV2 } =
-                await import("@/lib/belgianTax/householdRuntime");
+                await import("@/lib/belgianTax/householdMigration");
             const household = upgradeProfileV1ToHousehold({
                 ...DEFAULT_BELGIAN_TAX_PROFILE,
                 grossAnnualIncome: 70_000,
@@ -557,7 +568,7 @@ describe("BelgianTaxProfileContext", () => {
             expect(result.current.snapshots[2019]).toBeUndefined();
         });
 
-        it("calculationForYear recomputes via computeBelgianPIT with the resolved profile", async () => {
+        it("computes each year's figures on the server from the resolved household", async () => {
             const { result } = renderHook(() => useBelgianTaxProfile(), {
                 wrapper: makeWrapper(),
             });
@@ -572,10 +583,13 @@ describe("BelgianTaxProfileContext", () => {
                 }),
             );
             const liveYear = result.current.profile.taxYear;
-            const calc2023 = result.current.calculationForYear(2023);
-            const calcLive = result.current.calculationForYear(liveYear);
-            expect(calc2023.grossIncome).toBe(40000);
-            expect(calcLive.grossIncome).toBe(60000);
+            const calc2023 = await computeTaxYearResults(result.current, 2023);
+            const calcLive = await computeTaxYearResults(
+                result.current,
+                liveYear,
+            );
+            expect(calc2023?.frozenCalculation.grossIncome).toBe(40000);
+            expect(calcLive?.frozenCalculation.grossIncome).toBe(60000);
         });
     });
 
@@ -666,7 +680,7 @@ describe("BelgianTaxProfileContext", () => {
                     grossAnnualIncome: 40000,
                 }),
             );
-            act(() => result.current.freezeCalculation(2023));
+            await act(() => result.current.freezeCalculation(2023));
             const frozen = result.current.getFrozenCalculation(2023);
             expect(frozen).not.toBeNull();
             expect(frozen!.grossIncome).toBe(40000);
@@ -674,7 +688,7 @@ describe("BelgianTaxProfileContext", () => {
             expect(lastEntry.kind).toBe("frozen");
         });
 
-        it("displayCalculationForYear returns the frozen calc when one exists", async () => {
+        it("exports the frozen figures when a year is frozen", async () => {
             const { result } = renderHook(() => useBelgianTaxProfile(), {
                 wrapper: makeWrapper(),
             });
@@ -688,20 +702,22 @@ describe("BelgianTaxProfileContext", () => {
                     grossAnnualIncome: 40000,
                 }),
             );
-            act(() => result.current.freezeCalculation(2023));
-            // Mutate the snapshot AFTER freezing — display calc should keep the frozen value,
-            // live calc should reflect the new input. This is the engine-drift protection.
+            await act(() => result.current.freezeCalculation(2023));
+            // Mutate the snapshot AFTER freezing — the displayed figures keep the frozen value,
+            // a fresh computation reflects the new input. This is the engine-drift protection.
             act(() =>
                 result.current.updateSnapshot(2023, {
                     grossAnnualIncome: 70000,
                 }),
             );
             expect(
-                result.current.displayCalculationForYear(2023).grossIncome,
+                (await resolveTaxYearFigures(result.current, 2023))?.calculation
+                    .grossIncome,
             ).toBe(40000);
-            expect(result.current.calculationForYear(2023).grossIncome).toBe(
-                70000,
-            );
+            expect(
+                (await computeTaxYearResults(result.current, 2023))
+                    ?.frozenCalculation.grossIncome,
+            ).toBe(70000);
         });
 
         it("unfreezeCalculation clears the frozen calc and falls back to live", async () => {
@@ -713,7 +729,7 @@ describe("BelgianTaxProfileContext", () => {
                 result.current.updateProfile({ grossAnnualIncome: 60000 }),
             );
             act(() => result.current.createSnapshotFromLive(2023));
-            act(() => result.current.freezeCalculation(2023));
+            await act(() => result.current.freezeCalculation(2023));
             expect(result.current.getFrozenCalculation(2023)).not.toBeNull();
             act(() => result.current.unfreezeCalculation(2023));
             expect(result.current.getFrozenCalculation(2023)).toBeNull();
@@ -730,7 +746,7 @@ describe("BelgianTaxProfileContext", () => {
                 result.current.updateProfile({ grossAnnualIncome: 60000 }),
             );
             act(() => result.current.createSnapshotFromLive(2023));
-            act(() =>
+            await act(() =>
                 result.current.markYearAsFiled(2023, "Tax-on-Web 2024-XYZ"),
             );
             expect(result.current.isYearFiled(2023)).toBe(true);
@@ -752,7 +768,7 @@ describe("BelgianTaxProfileContext", () => {
             );
             act(() => result.current.createSnapshotFromLive(2023));
             // Freeze with one income value, then change the snapshot, then file.
-            act(() => result.current.freezeCalculation(2023));
+            await act(() => result.current.freezeCalculation(2023));
             const frozenAtFreeze =
                 result.current.getFrozenCalculation(2023)!.grossIncome;
             act(() =>
@@ -760,7 +776,7 @@ describe("BelgianTaxProfileContext", () => {
                     grossAnnualIncome: 99999,
                 }),
             );
-            act(() => result.current.markYearAsFiled(2023));
+            await act(() => result.current.markYearAsFiled(2023));
             expect(result.current.getFrozenCalculation(2023)!.grossIncome).toBe(
                 frozenAtFreeze,
             );
@@ -775,7 +791,7 @@ describe("BelgianTaxProfileContext", () => {
                 result.current.updateProfile({ profileConfigured: true }),
             );
             act(() => result.current.createSnapshotFromLive(2023));
-            act(() => result.current.markYearAsFiled(2023));
+            await act(() => result.current.markYearAsFiled(2023));
             expect(result.current.isYearFiled(2023)).toBe(true);
             act(() => result.current.unmarkYearAsFiled(2023));
             expect(result.current.isYearFiled(2023)).toBe(false);
@@ -793,7 +809,7 @@ describe("BelgianTaxProfileContext", () => {
             act(() =>
                 result.current.updateProfile({ grossAnnualIncome: 55000 }),
             );
-            act(() => result.current.freezeCalculation(2022));
+            await act(() => result.current.freezeCalculation(2022));
             expect(result.current.getFrozenCalculation(2022)).not.toBeNull();
             expect(result.current.getFrozenCalculation(2022)!.grossIncome).toBe(
                 55000,

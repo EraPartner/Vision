@@ -79,9 +79,13 @@ export function householdWithRecordedIncome(
 ): BelgianTaxHouseholdV2 | undefined {
   const b = household.partners.find((p) => p.id === "B");
   if (!b || !grossActivity(b)) return undefined;
-  const next = applyProfileV1PatchToHousehold(household, {
-    grossAnnualIncome: Math.max(0, cents(total - partnerB)),
-  });
+  // A `grossAnnualIncome` patch never reads the filing status, so no joint-filing check is
+  // needed (and the browser bundle, which also uses this module, stays without the assessment).
+  const next = applyProfileV1PatchToHousehold(
+    household,
+    { grossAnnualIncome: Math.max(0, cents(total - partnerB)) },
+    undefined,
+  );
   const target = next.partners.find((p) => p.id === "B");
   const activity = target && grossActivity(target);
   if (activity) activity.grossIncome = Math.max(0, partnerB);

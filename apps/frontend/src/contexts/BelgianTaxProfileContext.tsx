@@ -3,8 +3,11 @@
  *
  * Persisted domain state and actions live in the Belgian-tax slice of settingsStore.
  * This provider only hydrates/persists that slice and keeps the existing provider-scope
- * contract. The household (v2) keys are the stored source of truth; on first load the v1
- * keys are upgraded and the v2 keys written (ADR-200). New consumers should pass a narrow selector to useBelgianTaxProfile.
+ * contract. It hydrates from GET /api/belgian-tax/overview, which runs the v1→v2 upgrade
+ * on the server (ADR-200) and returns the CAS baselines of the stored keys from the same
+ * read; when the upgrade has not been stored yet the provider writes the v2 keys once.
+ * No tax is computed in the browser. New consumers should pass a narrow selector to
+ * useBelgianTaxProfile.
  */
 import {
     createContext,
@@ -16,29 +19,18 @@ import {
 import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
 import { scheduleTaxPersistence } from "@/stores/taxPersistence";
-import {
-    DEFAULT_BELGIAN_TAX_PROFILE,
-    hasMeaningfulBelgianTaxData,
-    type BelgianTaxSlice,
-} from "@/stores/belgianTaxStore";
+import type { BelgianTaxSlice } from "@/stores/belgianTaxStore";
 import { useSettingsStore, type SettingsStore } from "@/stores/settingsStore";
 import { apiClient } from "@/lib/api";
+import { adoptSettingBaselines } from "@/lib/api/settings";
+import { getBelgianTaxOverview } from "@/lib/api/belgianTax";
 import logger from "@/lib/logger";
 import { loadHouseholdRuntime } from "@/lib/belgianTax/loadHouseholdRuntime";
-import type {
-    BelgianTaxProfile,
-    BelgianTaxProfileSnapshotMetas,
-} from "@/lib/belgianTax";
+import type { BelgianTaxProfileSnapshotMetas } from "@/lib/belgianTax";
 
-// v1 keys are read only, as the source of the one-time upgrade (ADR-200). No backend
-// consumer reads them, so they are no longer written.
-const PROFILE_SETTINGS_KEY = "belgian_tax_profile";
-const SNAPSHOTS_SETTINGS_KEY = "belgian_tax_profile_snapshots_v1";
 const HOUSEHOLD_SETTINGS_KEY = "belgian_tax_household_v2";
 const HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY = "belgian_tax_household_snapshots_v2";
-const SNAPSHOT_METAS_SETTINGS_KEY = "belgian_tax_profile_snapshot_meta_v1";
 
 const BelgianTaxProfileScope = createContext(false);
 
@@ -52,9 +44,8 @@ const selectPublicState = (
 ): PublicBelgianTaxProfileState => ({
     household: state.household,
     householdSnapshots: state.householdSnapshots,
-    householdResult: state.householdResult,
+    hydratedComputation: state.hydratedComputation,
     profile: state.profile,
-    calculation: state.calculation,
     snapshots: state.snapshots,
     snapshotMetas: state.snapshotMetas,
     viewedYear: state.viewedYear,
@@ -69,8 +60,6 @@ const selectPublicState = (
     setViewedYear: state.setViewedYear,
     snapshotExistsForYear: state.snapshotExistsForYear,
     profileForYear: state.profileForYear,
-    calculationForYear: state.calculationForYear,
-    displayCalculationForYear: state.displayCalculationForYear,
     createSnapshotFromLive: state.createSnapshotFromLive,
     updateSnapshot: state.updateSnapshot,
     updateHouseholdSnapshot: state.updateHouseholdSnapshot,
@@ -89,20 +78,6 @@ export function BelgianTaxProfileProvider({
 }: {
     children: ReactNode;
 }) {
-    const { value: preloadedProfile, isLoading: preloadProfileLoading } =
-        usePreloadedSetting<BelgianTaxProfile>(PROFILE_SETTINGS_KEY);
-    const { value: preloadedSnapshots, isLoading: preloadSnapshotsLoading } =
-        usePreloadedSetting<unknown>(SNAPSHOTS_SETTINGS_KEY);
-    const { value: preloadedHousehold, isLoading: preloadHouseholdLoading } =
-        usePreloadedSetting<unknown>(HOUSEHOLD_SETTINGS_KEY);
-    const {
-        value: preloadedHouseholdSnapshots,
-        isLoading: preloadHouseholdSnapshotsLoading,
-    } = usePreloadedSetting<unknown>(HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY);
-    const { value: preloadedMetas, isLoading: preloadMetasLoading } =
-        usePreloadedSetting<BelgianTaxProfileSnapshotMetas>(
-            SNAPSHOT_METAS_SETTINGS_KEY,
-        );
     const hydrate = useSettingsStore((state) => state._hydrate);
     const beginHydration = useSettingsStore((state) => state._beginHydration);
     const markSaveError = useSettingsStore((state) => state._markSaveError);
@@ -113,37 +88,19 @@ export function BelgianTaxProfileProvider({
     useEffect(() => beginHydration(), [beginHydration]);
 
     useEffect(() => {
-        if (
-            preloadProfileLoading ||
-            preloadSnapshotsLoading ||
-            preloadHouseholdLoading ||
-            preloadHouseholdSnapshotsLoading ||
-            preloadMetasLoading
-        )
-            return;
         let cancelled = false;
-        // The household engine and its zod schemas load on demand to keep them out of the
+        const controller = new AbortController();
+        // The household helpers and their zod schemas load on demand to keep them out of the
         // boot bundle (ADR-200); the import is retried once.
-        void loadHouseholdRuntime()
-            .then((runtime) => {
+        void Promise.all([
+            loadHouseholdRuntime(),
+            getBelgianTaxOverview(undefined, controller.signal),
+        ])
+            .then(([runtime, overview]) => {
                 if (cancelled) return;
-                const mergedProfile = {
-                    ...DEFAULT_BELGIAN_TAX_PROFILE,
-                    ...(preloadedProfile ?? {}),
-                };
-                const loaded = runtime.loadHouseholdSettings({
-                    defaultsV1: DEFAULT_BELGIAN_TAX_PROFILE,
-                    profileV1: {
-                        ...mergedProfile,
-                        profileConfigured:
-                            hasMeaningfulBelgianTaxData(mergedProfile),
-                    },
-                    hasProfileV1: preloadedProfile != null,
-                    snapshotsV1: preloadedSnapshots,
-                    householdV2: preloadedHousehold,
-                    snapshotsV2: preloadedHouseholdSnapshots,
-                });
-                for (const warning of loaded.warnings) {
+                // Later saves compare against the stored values this tab now shows.
+                adoptSettingBaselines(overview.records);
+                for (const warning of overview.warnings) {
                     logger.warn(
                         warning.kind === "invalid_stored"
                             ? "Invalid Belgian tax household setting; using the v1 upgrade instead"
@@ -151,24 +108,27 @@ export function BelgianTaxProfileProvider({
                         warning,
                     );
                 }
-                let liveHousehold = loaded.household;
-                if (
-                    !liveHousehold.profileConfigured &&
-                    hasMeaningfulBelgianTaxData(
-                        runtime.projectHouseholdToProfileV1(liveHousehold),
-                    )
-                ) {
-                    liveHousehold = {
-                        ...liveHousehold,
-                        profileConfigured: true,
-                    };
-                }
+                const live = overview.liveHousehold;
+                // The overview's figures belong to the live household unless that year is frozen.
+                const liveFiguresComputed =
+                    overview.year === live.taxYear &&
+                    overview.calculationSource === "computed" &&
+                    overview.householdResultSource === "computed";
                 hydrate(
                     runtime,
-                    liveHousehold,
-                    loaded.snapshots,
-                    preloadedMetas ?? {},
-                    loaded.storedValueInvalid,
+                    live,
+                    overview.householdSnapshots,
+                    overview.snapshotMetas as unknown as BelgianTaxProfileSnapshotMetas,
+                    overview.storedValueInvalid,
+                    liveFiguresComputed
+                        ? {
+                              household: live,
+                              computation: {
+                                  calculation: overview.calculation,
+                                  result: overview.result,
+                              },
+                          }
+                        : null,
                 );
                 // First load after the upgrade: persist the v2 keys now (no confirmation, v1 kept).
                 const save = (key: string, value: unknown, message: string) =>
@@ -176,49 +136,34 @@ export function BelgianTaxProfileProvider({
                         logger.error(message, err);
                         markSaveError();
                     });
-                if (loaded.writeHousehold)
+                if (overview.householdMigrationNeeded)
                     void save(
                         HOUSEHOLD_SETTINGS_KEY,
-                        liveHousehold,
+                        live,
                         "Failed to save the upgraded Belgian tax household:",
                     );
-                if (loaded.writeSnapshots)
+                if (overview.snapshotsMigrationNeeded)
                     void save(
                         HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY,
-                        loaded.snapshots,
+                        overview.householdSnapshots,
                         "Failed to save the upgraded Belgian tax household snapshots:",
                     );
             })
             .catch((err: unknown) => {
-                logger.error(
-                    "Failed to load the Belgian tax household engine:",
-                    err,
-                );
-                if (!cancelled) markHydrationFailed();
+                if (cancelled) return;
+                logger.error("Failed to load the Belgian tax household:", err);
+                markHydrationFailed();
             });
         return () => {
             cancelled = true;
+            controller.abort();
         };
-    }, [
-        hydrate,
-        markHydrationFailed,
-        markSaveError,
-        preloadedHousehold,
-        preloadHouseholdLoading,
-        preloadedHouseholdSnapshots,
-        preloadHouseholdSnapshotsLoading,
-        preloadedMetas,
-        preloadMetasLoading,
-        preloadedProfile,
-        preloadProfileLoading,
-        preloadedSnapshots,
-        preloadSnapshotsLoading,
-    ]);
+    }, [hydrate, markHydrationFailed, markSaveError]);
 
     useEffect(
         () =>
             useSettingsStore.subscribe((state, previous) => {
-                // After a failed engine load nothing was hydrated, so nothing may be written back.
+                // After a failed load nothing was hydrated, so nothing may be written back.
                 if (
                     state.isLoading ||
                     previous.isLoading ||

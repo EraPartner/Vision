@@ -5,9 +5,10 @@
  * year the user picks from the available-years list. Surfaces income tax, effective
  * rate, gross taxable income, and net take-home with absolute + percent change.
  *
- * Always sources via `displayCalculationForYear` so filed/frozen years contribute their
- * frozen numbers — same engine-drift protection as the rest of the historical surfaces
- * (ADR-059).
+ * Sources the server dashboard's `yearCalculations`, in which filed/frozen years carry
+ * their frozen numbers — same engine-drift protection as the rest of the historical
+ * surfaces (ADR-059). A viewed year without an entry falls back to the page's
+ * display calculation for that year.
  *
  * The card hides itself when fewer than two years are available, since there's nothing
  * meaningful to compare. The page is responsible for wrapping in widget visibility
@@ -15,8 +16,8 @@
  */
 import { useMemo, useState, useEffect } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
-import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import type { BelgianTaxCalculation } from "@/lib/belgianTax/types";
+import type { BelgianTaxDashboardYear } from "@/lib/api/belgianTax";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
@@ -48,8 +49,28 @@ import {
 } from "@/components/ui/table";
 import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
 
+type ComparedCalculation = Pick<
+    BelgianTaxCalculation,
+    "grossIncome" | "totalPIT" | "effectiveRate" | "netTakeHome"
+>;
+
 interface YearComparisonCardProps {
+    /** Per-year calculations from the tax dashboard, newest first. */
+    years: BelgianTaxDashboardYear[];
+    /** Display calculation of the viewed year, used when `years` has no entry for it. */
+    viewedCalculation: ComparedCalculation;
     className?: string;
+}
+
+function comparedFrom(
+    calculation: BelgianTaxDashboardYear["calculation"],
+): ComparedCalculation {
+    return {
+        grossIncome: calculation.grossIncome ?? 0,
+        totalPIT: calculation.totalPIT ?? 0,
+        effectiveRate: calculation.effectiveRate ?? 0,
+        netTakeHome: calculation.netTakeHome ?? 0,
+    };
 }
 
 interface MetricRow {
@@ -65,24 +86,13 @@ interface MetricRow {
     isCurrency?: boolean;
 }
 
-export function YearComparisonCard({ className }: YearComparisonCardProps) {
+export function YearComparisonCard({
+    years,
+    viewedCalculation,
+    className,
+}: YearComparisonCardProps) {
     const { t } = useLanguage();
-    const {
-        viewedYear,
-        profile,
-        snapshots,
-        household,
-        householdSnapshots,
-        snapshotMetas,
-    } = useBelgianTaxProfile((state) => ({
-        viewedYear: state.viewedYear,
-        profile: state.profile,
-        snapshots: state.snapshots,
-        household: state.household,
-        householdSnapshots: state.householdSnapshots,
-        snapshotMetas: state.snapshotMetas,
-    }));
-    const years = useAvailableTaxYears();
+    const viewedYear = useBelgianTaxProfile((state) => state.viewedYear);
 
     const defaultCompareYear = useMemo(() => {
         // Pick the year immediately preceding viewedYear that's in the available list.
@@ -120,15 +130,13 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
 
     const rows: MetricRow[] | null = useMemo(() => {
         if (compareYear == null) return null;
-        const taxState = {
-            profile,
-            snapshots,
-            household,
-            householdSnapshots,
-            snapshotMetas,
-        };
-        const calcA = resolveBelgianTaxCalculation(taxState, viewedYear);
-        const calcB = resolveBelgianTaxCalculation(taxState, compareYear);
+        const viewedEntry = years.find((y) => y.year === viewedYear);
+        const compareEntry = years.find((y) => y.year === compareYear);
+        if (!compareEntry) return null;
+        const calcA = viewedEntry
+            ? comparedFrom(viewedEntry.calculation)
+            : viewedCalculation;
+        const calcB = comparedFrom(compareEntry.calculation);
         return [
             {
                 key: "grossIncome",
@@ -172,11 +180,8 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
     }, [
         compareYear,
         viewedYear,
-        profile,
-        snapshots,
-        household,
-        householdSnapshots,
-        snapshotMetas,
+        years,
+        viewedCalculation,
         t,
         fmtBase,
     ]);

@@ -69,6 +69,9 @@ export function useUpdateAccount() {
                 queryClient.invalidateQueries({
                     queryKey: taxKeys.deductionCandidatesAll,
                 });
+                queryClient.invalidateQueries({
+                    queryKey: taxKeys.dashboardAll,
+                });
             }
             toast.success(t("accounts.updated"));
         },

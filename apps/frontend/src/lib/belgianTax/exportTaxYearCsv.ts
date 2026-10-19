@@ -140,8 +140,23 @@ function row(
     return cells.map(escapeCsvValue).join(",");
 }
 
+/**
+ * v1 filing status of the export: the server's assessment of the year when its household result
+ * is known, else the projection's (left out for two partners, as the browser does not decide the
+ * assessment, ADR-217).
+ */
+function filingStatus(
+    profile: BelgianTaxProfile,
+    result: HouseholdTaxResult | null | undefined,
+): string {
+    const mode = result?.assessment?.mode;
+    if (mode !== undefined) return mode === "joint" ? "married_joint" : "single";
+    return profile.filingStatus ?? "";
+}
+
 function profileInputRows(
     profile: BelgianTaxProfile,
+    result: HouseholdTaxResult | null | undefined,
 ): Array<[string, string | number | boolean]> {
     return [
         ["Employment type", profile.employmentType],
@@ -151,7 +166,7 @@ function profileInputRows(
         ["Actual professional expenses", profile.actualProfessionalExpenses],
         ["Communal surcharge %", profile.communalSurchargePercent],
         ["Region", profile.region],
-        ["Filing status", profile.filingStatus ?? "single"],
+        ["Filing status", filingStatus(profile, result)],
         ["Dependent children", profile.dependentChildren],
         ["Dependent children under 3", profile.dependentChildrenUnder3 ?? 0],
         ["Dependent children disabled", profile.dependentChildrenDisabled ?? 0],
@@ -257,7 +272,7 @@ export function buildTaxYearCsv(opts: ExportTaxYearCsvOptions): string {
     lines.push("");
     lines.push(row(["# Profile inputs"]));
     lines.push(row(["Field", "Value"]));
-    for (const [key, value] of profileInputRows(profile))
+    for (const [key, value] of profileInputRows(profile, householdResult))
         lines.push(row([key, value]));
     lines.push("");
     lines.push(row(["# Calculation"]));

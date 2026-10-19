@@ -20,6 +20,9 @@
     "./research/*": "./src/research/*.ts",
     "./ai-chat/*": "./src/ai-chat/*.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "files": [
     "src"
   ],
@@ -27,5 +30,9 @@
     "@vision/types": "workspace:*",
     "decimal.js": "^10.6.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "fast-check": "^4.9.0",
+    "vitest": "^4.1.10"
   }
 }

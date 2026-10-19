@@ -187,6 +187,21 @@ export function deriveAssessment(
     );
 }
 
+/**
+ * v1 `filingStatus` check for `projectHouseholdToProfileV1`: a household migrated from a
+ * `married_joint` profile without relationship events stays joint; otherwise the assessment of
+ * its tax year decides.
+ */
+export function filesJointly(household: BelgianTaxHouseholdV2): boolean {
+    if (
+        household.relationship.legacyAssumedJoint === true &&
+        household.relationship.events.length === 0
+    ) {
+        return true;
+    }
+    return deriveAssessment(household, household.taxYear).decision.mode === "joint";
+}
+
 /** Art. 126 §2 al. 1, 4°: treaty-exempt professional income above the threshold. */
 function withTreatyCheck(
     household: BelgianTaxHouseholdV2,

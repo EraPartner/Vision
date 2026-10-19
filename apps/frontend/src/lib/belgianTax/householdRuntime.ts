@@ -1,51 +1,49 @@
 /**
- * Household engine entry point for the Belgian-tax store (ADR-200, phase B2).
+ * Household shape helpers for the Belgian-tax store (ADR-200): the v1 projection, the v1 patch
+ * and the schema check of household edits. No tax is computed and no assessment is decided here;
+ * the server computes every figure (GET /api/belgian-tax/overview, POST /api/belgian-tax/compute).
  *
  * `BelgianTaxProfileProvider` loads this module with a dynamic import and hands it to the
- * store at hydration, so the household engine and the zod schemas of `householdSchema.ts`
- * stay out of the boot preload graph (see apps/frontend/scripts/check-bundle-size.ts).
- * Do not import it statically from boot-path modules; type-only imports are fine.
+ * store at hydration, so the zod schemas of `householdSchema.ts` stay out of the boot preload
+ * graph (see apps/frontend/scripts/check-bundle-size.ts). Do not import it statically from
+ * boot-path modules; type-only imports are fine.
  */
 import { parseHouseholdV2 } from "./householdSchema";
-import { computeHouseholdTax, toBelgianTaxCalculation } from "./household";
-import { projectHouseholdToProfileV1 } from "./householdMigration";
+import {
+    applyProfileV1PatchToHousehold as applyProfileV1Patch,
+    projectHouseholdToProfileV1,
+} from "./householdMigration";
 import type {
     BelgianTaxHouseholdSnapshotsV2,
     BelgianTaxHouseholdV2,
-    HouseholdTaxResult,
 } from "./householdTypes";
-import type {
-    BelgianTaxCalculation,
-    BelgianTaxProfile,
-    BelgianTaxProfileSnapshots,
-} from "./types";
+import type { BelgianTaxProfile, BelgianTaxProfileSnapshots } from "./types";
 import logger from "@/lib/logger";
 
-export { computeHouseholdTax, toBelgianTaxCalculation } from "./household";
-export { deriveAssessment } from "./assessment";
-export {
-    applyProfileV1PatchToHousehold,
-    projectHouseholdToProfileV1,
-    upgradeProfileV1ToHousehold,
-    upgradeSnapshotsV1ToV2,
-} from "./householdMigration";
+export { defaultHousehold } from "@vision/shared-utils/belgian-tax/settings";
 
-export {
-    defaultHousehold,
-    loadHouseholdSettings,
-} from "@vision/shared-utils/belgian-tax/settings";
-export type {
-    StoredBelgianTaxSettings,
-    LoadedHouseholdSettings,
-    HouseholdSettingsWarning,
-} from "@vision/shared-utils/belgian-tax/settings";
-
-/** v1 projection of a household, completed with the v1 defaults for fields it does not set. */
+/**
+ * v1 projection of a household, completed with the v1 defaults for fields it does not set. The
+ * browser does not decide the assessment (ADR-217): with partner B, `filingStatus` is left out,
+ * and the server's `assessment` of the year's figures says how the household files.
+ */
 export function projectProfileV1(
     household: BelgianTaxHouseholdV2,
     defaults: BelgianTaxProfile,
 ): BelgianTaxProfile {
-    return { ...defaults, ...projectHouseholdToProfileV1(household) };
+    const { filingStatus: _defaultFilingStatus, ...rest } = defaults;
+    return { ...rest, ...projectHouseholdToProfileV1(household, undefined) };
+}
+
+/**
+ * Apply a v1 profile patch to a household. The v1 editors never patch the spouse fields without a
+ * filing status, so no joint-filing check is needed.
+ */
+export function applyProfileV1PatchToHousehold(
+    household: BelgianTaxHouseholdV2,
+    patch: Partial<BelgianTaxProfile>,
+): BelgianTaxHouseholdV2 {
+    return applyProfileV1Patch(household, patch, undefined);
 }
 
 /** v1 projection of every household snapshot. */
@@ -58,27 +56,6 @@ export function projectSnapshotsToV1(
         result[Number(year)] = projectProfileV1(household, defaults);
     }
     return result;
-}
-
-export interface LiveHouseholdState {
-    household: BelgianTaxHouseholdV2;
-    householdResult: HouseholdTaxResult;
-    calculation: BelgianTaxCalculation;
-    profile: BelgianTaxProfile;
-}
-
-/** Engine result, v1-shaped calculation and v1 projection of a household. */
-export function liveHouseholdState(
-    household: BelgianTaxHouseholdV2,
-    defaults: BelgianTaxProfile,
-): LiveHouseholdState {
-    const householdResult = computeHouseholdTax(household);
-    return {
-        household,
-        householdResult,
-        calculation: toBelgianTaxCalculation(householdResult, household),
-        profile: projectProfileV1(household, defaults),
-    };
 }
 
 /** Top-level household fields whose value differs, with their new value (`taxYear` excluded). */

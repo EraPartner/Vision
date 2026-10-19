@@ -1,0 +1,8 @@
+{
+  "//": "Strict check for the package tests (tests/**/*.ts) together with the sources they import.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}

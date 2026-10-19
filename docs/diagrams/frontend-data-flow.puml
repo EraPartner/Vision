@@ -110,7 +110,7 @@ BelgianTaxOverview --> Repositories : one settings snapshot; no writes
 BelgianTaxOverview --> SharedBelgianTax : shared hydration; compute only unfrozen values
 TaxApiClient --> BelgianTaxCompute : typed household / Decimal results
 BelgianTaxCompute --> SharedBelgianTax : stateless preview
-Pages --> SharedBelgianTax : existing lazy-loaded web tax store
+Pages --> TaxApiClient : tax store hydration (overview) / debounced compute (ADR-217)
 
 ' Relationships
 Pages --> PortfolioImportSession
@@ -147,7 +147,7 @@ PriceProviderService --> Kinesis
 BelgianInflationService --> Statbel
 
 package "PDF reports" {
-  class "taxReportContext.ts\nfresh five-key snapshot / source engine" as OriginalReportContext
+  class "taxReportContext.ts\nfrozen or server-computed figures" as OriginalReportContext
   class "POST /api/reports/{type}\napplication/pdf" as BinaryReportAPI
 }
 Pages --> OriginalReportContext : ExportDialog tax context

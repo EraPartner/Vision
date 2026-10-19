@@ -328,6 +328,35 @@ export const taxKeys = {
     /** GET /api/info/deduction-candidates?year=… (one entry per year). */
     deductionCandidates: (year: number) =>
         ["tax", "deduction-candidates", year] as const,
+    /** Invalidation prefix for every GET /api/belgian-tax/dashboard entry. */
+    dashboardAll: ["tax", "dashboard"] as const,
+    dashboard: (
+        year: number,
+        currency: string,
+        startDate: string | undefined,
+        endDate: string | undefined,
+        excludedCategoryIds: number[],
+        excludedRecipientIds: number[],
+    ) =>
+        [
+            "tax",
+            "dashboard",
+            year,
+            currency,
+            startDate,
+            endDate,
+            excludedCategoryIds,
+            excludedRecipientIds,
+        ] as const,
+    /** Invalidation prefix for every GET /api/belgian-tax/portfolio-dashboard entry. */
+    portfolioDashboardAll: ["tax", "portfolio-dashboard"] as const,
+    portfolioDashboard: (year: number, currency: string) =>
+        ["tax", "portfolio-dashboard", year, currency] as const,
+    /**
+     * POST /api/belgian-tax/compute for one household (hashed structurally). The result is a
+     * pure function of the household, so an entry never goes stale.
+     */
+    compute: (household: unknown) => ["tax", "compute", household] as const,
 };
 
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────
@@ -531,6 +560,8 @@ export function invalidateTransactionData(queryClient: QueryClient) {
     queryClient.invalidateQueries({
         queryKey: dashboardKeys.recentTransactionsAll,
     });
+    // The tax overview's charts and recorded income derive from transactions.
+    queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
 }
 
 /**
@@ -593,4 +624,7 @@ export function invalidateInvestmentData(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: portfolioKeys.summaryAll });
     queryClient.invalidateQueries({ queryKey: portfolioKeys.performanceAll });
     queryClient.invalidateQueries({ queryKey: netWorthKeys.all });
+    // Recorded portfolio taxes feed both Belgian-tax dashboards.
+    queryClient.invalidateQueries({ queryKey: taxKeys.dashboardAll });
+    queryClient.invalidateQueries({ queryKey: taxKeys.portfolioDashboardAll });
 }

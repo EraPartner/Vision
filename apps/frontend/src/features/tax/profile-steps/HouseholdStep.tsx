@@ -13,8 +13,7 @@ import {
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-// By path: the barrel re-exports the household engine (see belgianTaxStore.ts).
-import { deriveAssessment } from "@/lib/belgianTax/assessment";
+import { useHouseholdComputation } from "@/hooks/useBelgianTaxComputation";
 import {
     RELATIONSHIP_EVENT_KINDS,
     type PartnerId,
@@ -175,7 +174,8 @@ function EventRow({
 }
 
 /**
- * Household step (ADR-200): the derived assessment for the income year, the partner toggle,
+ * Household step (ADR-200): the assessment the server derives for the income year (shown once
+ * computed, following edits after a short pause), the partner toggle,
  * the dated relationship events the assessment rests on, and which partner claims the
  * dependants and the own-home credit.
  */
@@ -186,7 +186,7 @@ export function HouseholdStep({
 }: HouseholdStepProps) {
     const { t } = useLanguage();
     const year = household.taxYear;
-    const { decision } = deriveAssessment(household, year);
+    const decision = useHouseholdComputation(household).data?.result.assessment;
     const hasPartner = household.partners.some((p) => p.id === "B");
     const partnerIds = household.partners.map((p) => p.id);
     // With partner B's share entered, the share decides who claims the own-home credit (0 → A,
@@ -220,16 +220,26 @@ export function HouseholdStep({
                                 year: String(year),
                             })}
                         </h4>
-                        <Badge variant="outline" size="sm">
-                            {t(`tax.household.assessment.mode.${decision.mode}`)}
-                        </Badge>
+                        {decision && (
+                            <Badge variant="outline" size="sm">
+                                {t(
+                                    `tax.household.assessment.mode.${decision.mode}`,
+                                )}
+                            </Badge>
+                        )}
                     </div>
-                    <FieldHint>
-                        {t(`tax.household.assessment.reason.${decision.reason}`)}
-                    </FieldHint>
-                    <p className="type-caption text-label-tertiary">
-                        {decision.legalBasis}
-                    </p>
+                    {decision && (
+                        <>
+                            <FieldHint>
+                                {t(
+                                    `tax.household.assessment.reason.${decision.reason}`,
+                                )}
+                            </FieldHint>
+                            <p className="type-caption text-label-tertiary">
+                                {decision.legalBasis}
+                            </p>
+                        </>
+                    )}
                 </div>
             </section>
 
@@ -245,7 +255,7 @@ export function HouseholdStep({
                         )
                     }
                 />
-                {decision.electable && (
+                {decision?.electable && (
                     <ToggleRow
                         id="household-death-year-joint"
                         label={t("tax.household.field.deathYearJoint")}

@@ -1,105 +1,70 @@
 // @vitest-environment jsdom
-import { act, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
-import type { BelgianTaxProfile } from "@/lib/belgianTax";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import type { BelgianTaxDashboardYear } from "@/lib/api/belgianTax";
 
-const testState = vi.hoisted(() => ({
-    profile: undefined as BelgianTaxProfile | undefined,
-    snapshots: {},
-    snapshotMetas: {},
-    years: [
-        {
-            year: 2026,
-            isCurrent: true,
-            hasSnapshot: false,
-            hasTransactions: true,
-            isFiled: false,
-            hasFrozenCalculation: false,
-        },
-        {
-            year: 2025,
-            isCurrent: false,
-            hasSnapshot: false,
-            hasTransactions: true,
-            isFiled: false,
-            hasFrozenCalculation: false,
-        },
-        {
-            year: 2024,
-            isCurrent: false,
-            hasSnapshot: false,
-            hasTransactions: true,
-            isFiled: false,
-            hasFrozenCalculation: false,
-        },
-    ],
-}));
-const spies = vi.hoisted(() => ({ compute: vi.fn() }));
-
-// Before hydration (no household in the state) the strip falls back to the v1 engine.
-vi.mock("@/lib/belgianTax/pit", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/lib/belgianTax/pit")>();
-    return {
-        ...actual,
-        computeBelgianPIT: (profile: BelgianTaxProfile) => {
-            spies.compute(profile);
-            return actual.computeBelgianPIT(profile);
-        },
-    };
-});
+const setViewedYear = vi.hoisted(() => vi.fn());
 
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
     useBelgianTaxProfile: (selector: (state: object) => unknown) =>
-        selector({
-            viewedYear: 2026,
-            setViewedYear: vi.fn(),
-            profile: testState.profile,
-            snapshots: testState.snapshots,
-            snapshotMetas: testState.snapshotMetas,
-        }),
-}));
-vi.mock("@/hooks/useAvailableTaxYears", () => ({
-    useAvailableTaxYears: () => testState.years,
+        selector({ viewedYear: 2026, setViewedYear }),
 }));
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));
 vi.mock("@/hooks/useCurrencyFormatter", () => ({
-    useCurrencyFormatter: () => (value: number) => String(value),
-    usePercentFormatter: () => (value: number) => String(value),
+    useCurrencyFormatter: () => (value: number) => `EUR ${value}`,
+    usePercentFormatter: () => (value: number) => `${value}%`,
 }));
 
 import { MultiYearTrendStrip } from "@/features/tax/MultiYearTrendStrip";
 
-describe("MultiYearTrendStrip calculation scheduling", () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-        testState.profile = { ...DEFAULT_BELGIAN_TAX_PROFILE };
-        spies.compute.mockClear();
-    });
+function year(
+    value: number,
+    totalPIT: number,
+    effectiveRate: number,
+): BelgianTaxDashboardYear {
+    return {
+        year: value,
+        calculation: { totalPIT, effectiveRate },
+        isCurrent: value === 2026,
+        hasSnapshot: false,
+        hasTransactions: true,
+        isFiled: false,
+        hasFrozenCalculation: false,
+    };
+}
 
-    afterEach(() => {
-        vi.useRealTimers();
-        vi.restoreAllMocks();
-    });
-
-    it("coalesces rapid profile edits before recomputing every displayed year", () => {
-        const { rerender } = render(<MultiYearTrendStrip />);
-        const initialCalls = spies.compute.mock.calls.length;
-
-        testState.profile = {
-            ...testState.profile!,
-            grossAnnualIncome: 10_000,
-        };
-        rerender(<MultiYearTrendStrip />);
-        testState.profile = { ...testState.profile, grossAnnualIncome: 20_000 };
-        rerender(<MultiYearTrendStrip />);
-        expect(spies.compute).toHaveBeenCalledTimes(initialCalls);
-
-        act(() => vi.advanceTimersByTime(300));
-        expect(spies.compute).toHaveBeenCalledTimes(
-            initialCalls + testState.years.length,
+describe("MultiYearTrendStrip", () => {
+    it("renders one tile per dashboard year with its server calculation", () => {
+        render(
+            <MultiYearTrendStrip
+                years={[year(2026, 15_000, 25), year(2025, 13_000, 23.6)]}
+            />,
         );
+        expect(screen.getByText("EUR 15000")).toBeInTheDocument();
+        expect(screen.getByText("EUR 13000")).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: /2026/, pressed: true }),
+        ).toBeInTheDocument();
+    });
+
+    it("switches the viewed year when a tile is clicked", async () => {
+        const user = userEvent.setup();
+        render(
+            <MultiYearTrendStrip
+                years={[year(2026, 15_000, 25), year(2025, 13_000, 23.6)]}
+            />,
+        );
+        await user.click(screen.getByRole("button", { name: /2025/ }));
+        expect(setViewedYear).toHaveBeenCalledWith(2025);
+    });
+
+    it("renders nothing for a single year", () => {
+        const { container } = render(
+            <MultiYearTrendStrip years={[year(2026, 15_000, 25)]} />,
+        );
+        expect(container).toBeEmptyDOMElement();
     });
 });

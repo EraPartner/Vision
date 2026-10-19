@@ -10,7 +10,10 @@ import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
 import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration";
-import { computeHouseholdTax, toBelgianTaxCalculation } from "@/lib/belgianTax/household";
+import {
+    computeHouseholdTax,
+    toBelgianTaxCalculation,
+} from "@vision/shared-utils/belgian-tax/household";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { HouseholdBreakdownCard } from "./HouseholdBreakdownCard";
 

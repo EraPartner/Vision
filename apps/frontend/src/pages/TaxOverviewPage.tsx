@@ -89,12 +89,13 @@ export default function TaxOverviewPage() {
     const { t } = useLanguage();
     // Keeps the viewed income year in `?year=` so reload/share preserves it.
     useTaxYearParam();
-    // All tax math (taxable-income aggregation, portfolio-tax accumulation, chart
-    // series) lives in the hook; the page only composes widgets from its output.
+    // The hook serves the server-computed dashboard (charts, recorded income, per-year
+    // calculations) next to the live profile; the page only composes widgets from it.
     const {
         stats,
         profile,
         calculation,
+        figures,
         isProfileLoading,
         viewedYear,
         hasIncomeSources,
@@ -104,15 +105,18 @@ export default function TaxOverviewPage() {
         yearlyIncome,
         monthlyIncomeTax,
         recordedIncomeByPartner,
+        yearCalculations,
+        suggestions,
         hasProfile,
         isEmpty,
     } = useTaxOverviewData();
     // Household engine notes for the live year (ADR-200); one line per issue code.
-    const householdIssues = useBelgianTaxProfile((state) =>
-        state.isViewingHistorical
-            ? NO_HOUSEHOLD_ISSUES
-            : (state.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES),
+    const isViewingHistorical = useBelgianTaxProfile(
+        (state) => state.isViewingHistorical,
     );
+    const householdIssues = isViewingHistorical
+        ? NO_HOUSEHOLD_ISSUES
+        : (figures.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES);
     const storedHouseholdUnreadable = useBelgianTaxProfile(
         (state) => state.storedHouseholdUnreadable,
     );
@@ -209,11 +213,10 @@ export default function TaxOverviewPage() {
     );
 
     // Same full-page error pattern as StatisticsPage. This must replace the whole
-    // stats-dependent tree, not render as an extra banner: the widget cards below
-    // and the year switcher (via useAvailableTaxYears) also subscribe to
-    // useStatistics, and mounting them on an errored query triggers react-query's
-    // retryOnMount refetch, flipping isError back to false — an infinite
-    // empty-state/content flap plus a refetch storm.
+    // dashboard-dependent tree, not render as an extra banner: the widget cards
+    // below read the dashboard query, and remounting consumers of an errored query
+    // triggers react-query's retryOnMount refetch, flipping isError back to false —
+    // an infinite empty-state/content flap plus a refetch storm.
     if (stats.isError) {
         return (
             <TooltipProvider>
@@ -246,7 +249,9 @@ export default function TaxOverviewPage() {
                     calculation={calculation}
                 />
 
-                {isVisible("trendStrip") && <MultiYearTrendStrip />}
+                {isVisible("trendStrip") && (
+                    <MultiYearTrendStrip years={yearCalculations} />
+                )}
 
                 <TaxDisclaimerBanner
                     title={t("tax.belgianRulesDesc")}
@@ -256,7 +261,15 @@ export default function TaxOverviewPage() {
 
                 {householdLoadFailed ? (
                     <PageError message={t("tax.household.loadFailed")} />
-                ) : isProfileLoading ? (
+                ) : figures.error && figures.isPending ? (
+                    <PageError
+                        message={t("tax.page.computeError", {
+                            msg: figures.error.message,
+                        })}
+                    />
+                ) : isProfileLoading ||
+                  (!hasProfile && stats.isLoading) ||
+                  (hasProfile && figures.isPending) ? (
                     <SectionLoader />
                 ) : isEmpty ? (
                     <TaxNoProfileCard />
@@ -317,11 +330,16 @@ export default function TaxOverviewPage() {
                                 profile={profile}
                                 calculation={calculation}
                             />
-                            <SuggestedDeductionsCard />
+                            <SuggestedDeductionsCard suggestions={suggestions} />
                             <DeductionCandidatesCard />
                         </div>
 
-                        {isVisible("yearComparison") && <YearComparisonCard />}
+                        {isVisible("yearComparison") && (
+                            <YearComparisonCard
+                                years={yearCalculations}
+                                viewedCalculation={calculation}
+                            />
+                        )}
 
                         {isVisible("yearlyOverview") && (
                             <YearlyTaxChartCard

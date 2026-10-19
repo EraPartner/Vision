@@ -10,7 +10,7 @@
  * keep one message per attempt).
  */
 import { z } from 'zod';
-import { forfaitCategoryOf } from '@/lib/belgianTax/household';
+import { forfaitCategoryOf } from '@/lib/belgianTax/forfaitCategory';
 import type { ActivityKind } from '@/lib/belgianTax/householdTypes';
 
 // The household stores plain numbers (parseDecimal output). `.catch(undefined)` makes any
