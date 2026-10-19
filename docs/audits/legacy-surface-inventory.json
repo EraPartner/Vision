@@ -40,8 +40,8 @@
     "total": 53,
     "remove-now": 0,
     "migrate-then-remove": 0,
-    "retain-with-reason": 15,
-    "historical-record-only": 38,
+    "retain-with-reason": 14,
+    "historical-record-only": 39,
     "unknown": 0
   },
   "records": [
@@ -1078,20 +1078,20 @@
       "id": "LEG-ELEC-CBC-V1",
       "title": "AES-256-CBC VISIONBAK1 backup reader",
       "domain": "Electron/backup/security",
-      "classification": "retain-with-reason",
-      "disposition": "ADR-040 promises old encrypted backups remain readable; current code auto-detects VISIONBAK1 and VISIONBAK2.",
+      "classification": "historical-record-only",
+      "disposition": "Retired on 2026-10-19 by ADR-218, which supersedes ADR-040's v1-readable clause. The CBC decoder and v1 key derivation are removed; restore refuses VISIONBAK1 and VISIONENC1 by name before decryption.",
       "paths": [
-        "packaging/electron/backup/bundle.ts",
         "packaging/electron/backup/encrypted-file.ts",
-        "docs/adr/040-backup-format-v2-aead-encryption.md"
+        "packaging/electron/backup/bundle.ts",
+        "docs/adr/218-minimal-electron-shell-hardening.md"
       ],
-      "readers": "Encrypted backup restore path.",
+      "readers": "None. Restore recognises the v1 magic only to refuse the file with the retired-format message.",
       "writers": "New backups write authenticated VISIONBAK2 only.",
-      "persistedData": "Existing user backup archives.",
-      "supportWindow": "Indefinite under current ADR; retirement would require a converter and retained recovery utility.",
+      "persistedData": "Existing user v1 backup archives; recovery requires an older Vision release, then a new v2 backup.",
+      "supportWindow": "Ended 2026-10-19.",
       "replacement": "AES-256-GCM VISIONBAK2 for new output.",
       "deletionDependencies": [],
-      "liveEvidence": "Fixed-byte compatibility fixtures exercise the reader.",
+      "liveEvidence": "Fixed-byte v1 fixtures in encrypted-file.test.ts must be refused without writing plaintext.",
       "todoTitle": null
     },
     {

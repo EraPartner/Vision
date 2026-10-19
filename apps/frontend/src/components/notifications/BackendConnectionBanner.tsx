@@ -12,27 +12,31 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 export function BackendConnectionBanner() {
     const { t } = useLanguage();
     const queryClient = useQueryClient();
-    const [lost, setLost] = useState(false);
+    // The shell's own (already localized) reason, e.g. a backup pausing the
+    // database; undefined while connected.
+    const [lostMessage, setLostMessage] = useState<string | undefined>();
 
     useEffect(() => {
         const recovery = window.electronRecovery;
         if (!recovery) return;
-        const stopLost = recovery.onBackendLost(() => setLost(true));
+        const stopLost = recovery.onBackendLost((payload) =>
+            setLostMessage(payload?.message || t("app.backendLost")),
+        );
         const stopRestored = recovery.onBackendRestored(() => {
-            setLost(false);
+            setLostMessage(undefined);
             void queryClient.invalidateQueries();
         });
         return () => {
             stopLost();
             stopRestored();
         };
-    }, [queryClient]);
+    }, [queryClient, t]);
 
-    if (!lost) return null;
+    if (!lostMessage) return null;
     return (
         <Alert variant="warning" className="mb-4">
             <WifiOff className="h-4 w-4" aria-hidden="true" />
-            <AlertDescription>{t("app.backendLost")}</AlertDescription>
+            <AlertDescription>{lostMessage}</AlertDescription>
         </Alert>
     );
 }

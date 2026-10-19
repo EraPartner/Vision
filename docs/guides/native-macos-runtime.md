@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-13
+date: 2026-10-19
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -142,11 +142,12 @@ application-data directory and disposable PostgreSQL 18 cluster. It verifies exa
 account, transaction, setting, and attachment values plus schema, frontend-state, API-readiness,
 and packaged-frontend restoration without reading or writing the user's Vision instance. The
 focused bundle suite retains an immutable sanitized encrypted bundle written by Vision 1.0.2
-alongside the current AES-256-GCM path and the fixed legacy AES-256-CBC decoder vectors.
+alongside the current AES-256-GCM path, and fixed v1 AES-256-CBC vectors that must be refused.
 
-Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore accepts
-legacy AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) and current AES-256-GCM files (`VISIONENC2`
-and `VISIONBAK2`); new encrypted files use v2. The macOS Keychain-backed `safeStorage` protects the
+Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore reads
+only AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`), the format new encrypted files use. Retired
+AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) are refused by name before decryption
+([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]). The macOS Keychain-backed `safeStorage` protects the
 passphrase at rest, while the backup key itself is derived with scrypt.
 
 ## Updates and reports

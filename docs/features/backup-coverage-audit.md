@@ -2,11 +2,11 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-10-06
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
-description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
+description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-218), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
 related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.ts", "apps/node-backend/src/backup/coverage.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
 ---
@@ -297,19 +297,19 @@ vision_backup_{deviceId}_{timestamp}.visionbak   ← .zip archive (unencrypted)
 │   └── {txn_id}/{uuid}.{ext}
 └── frontend-state.json  # { keys: { vision_theme: "dark", … } }
 
-vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or v2 format)
+vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v2 format)
 ```
 
 ### Encryption Formats
 
-**v1 (Legacy, April 2026):** AES-256-CBC with static salt
+**v1 (Retired):** AES-256-CBC with static salt
 
 - **Magic:** `VISIONENC1` for raw SQL backups or `VISIONBAK1` for bundles (10 bytes)
 - **Salt:** Static `vision-backup-v1` value (hardcoded, same across all v1 backups)
 - **KDF:** Scrypt(passphrase, salt, N=2^14, r=8, p=1)
 - **Mode:** CBC (confidentiality only; no authentication)
 - **Confidentiality:** ✅ Provided | **Authenticity:** ❌ Not provided | **Per-backup Entropy:** ❌ No
-- **Status:** Readable indefinitely; no longer written to (v2 used for new backups as of 2026-04-28)
+- **Status:** Not written since 2026-04-28 and no longer restored since 2026-10-19 ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]], superseding ADR-040's v1-readable clause). Restore refuses the file by its magic before any decryption with "This backup uses the retired v1 encryption format, which Vision no longer restores." Restore such a file with an older Vision release and create a new backup.
 
 **v2 (AEAD, April 2026):** AES-256-GCM with per-backup random salt and IV
 
@@ -323,10 +323,10 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 - **Overhead:** 53 bytes (magic + salt + IV + tag) vs v1's 40 bytes
 - **Status:** Default for new backups as of 2026-04-28; see [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]]
 
-**Backward Compatibility:** Auto-detection via magic header; v1 backups decrypt correctly; old passphrases work unchanged. No user action required. Restore process transparently dispatches to correct decoder.
+**Compatibility:** Restore detects the format from the magic header. v2 backups decrypt with their passphrases unchanged. A v1 file is still recognised as encrypted, so the passphrase prompt appears, and is then refused; no plaintext is written.
 
-**Modules:** `packaging/electron/backup/encrypted-file.ts` owns the parameterized v1/v2 byte
-formats, key derivation, stream cleanup, and authentication-error handling. The adapters preserve
+**Modules:** `packaging/electron/backup/encrypted-file.ts` owns the v2 byte format, the
+retired-v1 refusal, key derivation, stream cleanup, and authentication-error handling. The adapters preserve
 their public interfaces and supply format-specific magic values and messages:
 
 - `packaging/electron/backup/crypto.ts` — raw SQL backup adapter
@@ -334,7 +334,7 @@ their public interfaces and supply format-specific magic values and messages:
 
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
 - `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
-- `decryptToTemp(encPath, passphrase, tmpPath)` — Auto-detect v1 vs v2; dispatch to appropriate decoder
+- `decryptToTemp(encPath, passphrase, tmpPath)` — Decrypt a v2 bundle; refuse a retired `VISIONBAK1` bundle by name
 - `openBundle()` — Extract and decrypt bundle; returns paths to sql, attachments, frontend state
 - `isBundleEncrypted()` — Inspect bundle header without full extraction
 
@@ -373,7 +373,7 @@ and [[docs/architecture/electron|Electron architecture]].
 
 **Helper Functions** (Phase 2 + v2 Upgrade):
 
-- `decryptBackupFileToTemp(filePath, passphrase, tmpPath)` — Auto-detect v1 vs v2 via magic header; dispatch to appropriate decoder (CBC for v1, GCM for v2); takes plaintext `passphrase`, not pre-derived key; throws `Error('INVALID_PASSPHRASE')` on bad decrypt or GCM auth failure
+- `decryptBackupFileToTemp(filePath, passphrase, tmpPath)` — Read the magic header; decrypt v2 (GCM) and refuse retired v1 (`VISIONENC1`) with the retired-format message; takes plaintext `passphrase`, not pre-derived key; throws `Error('INVALID_PASSPHRASE')` on bad decrypt or GCM auth failure
 - Error sentinels: `ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED'`, `ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE'`
 - Path validation (v2 security enhancement): `decryptBackupFileToTemp()` and `backup:restore` IPC handler validate:
   - `filePath` is a string
@@ -390,8 +390,8 @@ and [[docs/architecture/electron|Electron architecture]].
    - Return `{ encrypted: true }` to frontend
    - Frontend opens passphrase modal via `useRestoreBackup` hook
    - User enters passphrase; frontend retries restore with `{ passphrase }` option
-3. **Decryption** (if encrypted) — Call `decryptBackupFileToTemp(filePath, passphrase, tmpPath)`. Auto-detect v1 (CBC) or v2 (GCM):
-   - **v1:** Derive key via Scrypt KDF with static salt; decrypt CBC ciphertext
+3. **Decryption** (if encrypted) — Call `decryptBackupFileToTemp(filePath, passphrase, tmpPath)`. Read the magic header:
+   - **v1 (retired):** Refuse with "This backup uses the retired v1 encryption format, which Vision no longer restores." before any decryption
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
 4. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
@@ -467,8 +467,9 @@ than the last build ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The ar
 written and encrypted by the bundle implementation from Git tag `v1.0.2` and includes synthetic
 SQL, an attachment, metadata, and frontend state. This checks the current reader against encrypted
 bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
-already wrote the authenticated `VISIONBAK2` envelope; legacy AES-256-CBC decoding remains covered
-separately by the fixed encrypted-byte compatibility tests. Newer-schema rejection and restore
+already wrote the authenticated `VISIONBAK2` envelope. The fixed encrypted-byte tests in
+`packaging/electron/backup/encrypted-file.test.ts` decrypt the v2 vectors and check that the v1
+vectors are refused without writing plaintext. Newer-schema rejection and restore
 rollback remain covered by the focused Electron backup tests.
 
 ---

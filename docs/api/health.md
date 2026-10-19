@@ -58,7 +58,7 @@ GET /health
 
 ### Usage
 
-- **Electron runtime watchdog** — polls every 10s; 3 consecutive failures trigger `backend:lost` IPC event
+- **Electron runtime watchdog** — polls every 10s and skips probes while the Mac sleeps (the failure count resets on wake); 3 consecutive failures trigger the `backend:lost` IPC event, and the next healthy probe sends `backend:restored`. The renderer's `BackendConnectionBanner` shows a reconnecting warning between the two and refetches all queries on restore. See [[docs/architecture/electron#Runtime Watchdog|Electron runtime watchdog]] and [[docs/adr/218-minimal-electron-shell-hardening|ADR-218]].
 - **Electron restart/update/dev-rebuild flows** — uses `pollHealth` (shallow liveness) because these flows only need to know when Express is back up
 - **Load balancer / reverse proxy readiness checks**
 - **Kubernetes liveness probes**

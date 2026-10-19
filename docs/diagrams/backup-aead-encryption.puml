@@ -38,11 +38,15 @@ group Restore backup
   User -> UI    : select .visionbak.enc
   UI -> Main    : ipc invoke 'backup:restore'
   Main -> Backup: detect magic header
-  alt v2 encrypted, no passphrase yet
+  alt encrypted, no passphrase yet
     Backup -> Main : PASSPHRASE_REQUIRED
     Main -> UI     : prompt
     User -> UI     : passphrase
     UI -> Main     : retry with passphrase
+  end
+  alt retired v1 magic (VISIONBAK1 / VISIONENC1)
+    Backup -> Main : refuse before decryption (ADR-218)
+    Main -> UI     : "retired v1 encryption format,\nVision no longer restores it"
   end
   Main -> Backup : decryptBundle(file, passphrase)
   Backup -> Backup : AES-256-GCM verify auth tag\n(detects tampering)
@@ -71,8 +75,8 @@ note right of Backup
   - AES-256-GCM AEAD (was CBC + manual mac)
   - per-backup random salt (was static)
   - scrypt N=2^15 (was 2^14)
-  - v1 files still readable via magic-header
-    dispatch.
+  - v1 (CBC) files are refused by magic
+    header since 2026-10-19 (ADR-218).
 end note
 
 note right of Main

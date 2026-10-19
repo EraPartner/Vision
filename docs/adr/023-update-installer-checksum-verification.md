@@ -13,7 +13,7 @@ aliases: [adr-023, installer checksum, update verification, supply-chain securit
 
 ## Status
 > [!warning] Partially superseded
-> [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]] retired the source-launcher
+> [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]] retired the source-launcher
 > update channel on 2026-10-19. The shell-installer path
 > (`prepareShellUpdateInstaller()`) no longer exists; checksum verification of the packaged app
 > ZIP below remains active.

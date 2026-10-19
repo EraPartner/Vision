@@ -18,7 +18,7 @@ related_code:
 # Application Updates
 
 Vision exposes update information from `/api/admin/update/check`. The packaged app is the only
-in-app install path ([[docs/adr/216-retire-source-launcher-update-channel|ADR-216]]):
+in-app install path ([[docs/adr/217-retire-source-launcher-update-channel|ADR-217]]):
 
 | `update_mode` | Use                                                     | Installer                            |
 | ------------- | ------------------------------------------------------- | ------------------------------------ |
@@ -63,7 +63,7 @@ reports update availability with `update_mode: "source"` but never downloads or 
 release. It skips the delayed background prompt, and *Install update* in Settings › About opens the
 GitHub release page instead (`manual_download`). Update the checkout itself and restart. The
 former source-launcher bundle (`vision-source-launcher-*.zip`, `launch.command`) and its generated
-shell installer were removed by [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]].
+shell installer were removed by [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]].
 
 ## Renderer behavior
 
@@ -116,4 +116,4 @@ keeps the previous database until validation succeeds.
 - [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] — update controls move to the sidebar dot and Settings › About
 - [[docs/components/layout|Layout components]]
 - [[docs/adr/168-github-release-trust-boundary|ADR-168]]
-- [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]] — source-launcher channel retired
+- [[docs/adr/217-retire-source-launcher-update-channel|ADR-217]] — source-launcher channel retired

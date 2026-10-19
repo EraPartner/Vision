@@ -3,6 +3,7 @@ title: ADR-040 - Backup Format v2 AEAD Encryption with Per-Backup Salt
 type: adr
 status: Accepted
 date: 2026-04-28
+updated: 2026-10-19
 tags: [adr, backup, encryption, security, electron, phase-2, aead, aes-256-gcm, scrypt]
 description: Upgrade from AES-256-CBC with static salt to AES-256-GCM AEAD with per-backup random salt for defense-in-depth encryption of Vision backup bundles.
 related_code: ["packaging/electron/main.js", "packaging/electron/backup/bundle.js", "packaging/electron/backup/backup-v2-scheme.txt"]
@@ -11,6 +12,11 @@ related_code: ["packaging/electron/main.js", "packaging/electron/backup/bundle.j
 # ADR-040: Backup Format v2 AEAD Encryption with Per-Backup Salt
 
 ## Status
+
+> [!warning] Partially superseded
+> [[docs/adr/218-minimal-electron-shell-hardening|ADR-218]] retired v1 backup encryption on
+> 2026-10-19. Restore now refuses `VISIONENC1` and `VISIONBAK1` files instead of keeping them
+> readable indefinitely; the v2 AES-256-GCM format below remains active.
 
 Accepted
 

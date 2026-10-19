@@ -2,7 +2,7 @@
 // Extracted verbatim from main.js (TODO.md Wave W6). We intentionally avoid
 // electron-updater metadata (latest-mac.yml / blockmaps) and install the
 // packaged Vision.app from the GitHub release ZIP. A development (unpackaged)
-// run has no in-app installer (ADR-216): it reports update_mode "source" and
+// run has no in-app installer (ADR-217): it reports update_mode "source" and
 // sends the user to the release page. Mutable main.js state plus the localized
 // dialog/notification seams (t, notify) are
 // threaded in via init() so the live values are observed at call time, exactly

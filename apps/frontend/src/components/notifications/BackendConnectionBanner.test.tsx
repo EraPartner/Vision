@@ -13,7 +13,8 @@ function installRecoveryBridge() {
         retry: () => Promise.resolve({ success: true }),
         openLogs: () => Promise.resolve({ success: true }),
         onBackendLost: (callback) => {
-            const listener = () => callback({ message: "lost" });
+            const listener = () =>
+                callback({ message: "Reconnecting to Vision…" });
             listeners.lost.add(listener);
             return () => listeners.lost.delete(listener);
         },

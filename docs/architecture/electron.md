@@ -63,11 +63,16 @@ tags:
     did-start-navigation,
     june-2026,
     typescript,
+    electron-fuses,
+    power-monitor,
+    native-theme,
+    file-associations,
+    backend-connection-banner,
   ]
 description: >-
   Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
-  native PostgreSQL 18 and Bun runtime, backup/restore bundle system (Phase 1+2), native and source
-  application updates with checksum verification, Phase 7 backup/restore hardening with
+  native PostgreSQL 18 and Bun runtime, backup/restore bundle system (Phase 1+2),
+  packaged application updates with checksum verification, Phase 7 backup/restore hardening with
   concurrent-backup guard, HTTP timeout, and watchdog pause (May 2026), and June 2026 V12 native macOS
   integration (ADR-072) — hiddenInset chrome, native menu/dock, CSV open-with handoff, system accent
   overlay, under-window vibrancy. June 2026 (startup fixes): bounded native shutdown,
@@ -109,7 +114,11 @@ related_code:
     "packaging/electron/runtime/index.ts",
     "packaging/electron/runtime/renderer-security.ts",
     "packaging/electron/runtime/native.ts",
+    "packaging/electron/scripts/finalize-native-package.ts",
+    "packaging/electron/electron-builder-base.json",
+    "packaging/electron/backup/encrypted-file.ts",
     "apps/frontend/src/lib/api/electron.ts",
+    "apps/frontend/src/components/notifications/BackendConnectionBanner.tsx",
     "apps/frontend/src/components/layout/ElectronBridge.tsx",
     "apps/frontend/src/lib/importHandoff.ts",
     "apps/frontend/src/lib/accentColor.ts",
@@ -264,11 +273,19 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 1. **Electron Main** starts, calls `app.requestSingleInstanceLock()`
    - If lock unavailable (another instance running), quit immediately
    - Otherwise, register `second-instance` handler to focus existing window
+   - At module load, `app.enableSandbox()` sandboxes every renderer and a `web-contents-created`
+     hook cancels `will-attach-webview` ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]])
 
 2. **Security Headers Registration** via `registerSecurityHeaders()`
+   - Installs the fail-closed permission request handler and the origin-scoped permission check
+     handler in every profile, Vision Development included
    - Installs Content-Security-Policy and other security headers via `session.webRequest.onHeadersReceived`
-   - Gated by `app.isPackaged` (dev mode leaves HMR unrestricted)
+   - The headers are gated by `app.isPackaged` (dev mode leaves HMR unrestricted)
    - CSP: `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: https:`, etc.
+   - `registerPowerHandlers()` then subscribes to `powerMonitor` (see
+     [[#Runtime Watchdog]] and [[#Quit and Runtime Lifecycle (June–August 2026)]]), and
+     `nativeTheme.themeSource` is set from the persisted `splashTheme.themeSource`, or `"system"`,
+     before any window loads
 
 3. **Internationalization** loaded asynchronously via `await initI18n()`
    - `loadI18nAsync()` reads locale from `app.getLocale()`, tries resource path then fallback dir
@@ -437,13 +454,13 @@ See [[docs/api/internal-audit|Private Audit Bridge]] and
      application data, or localStorage contents.
 
 9. **Watchdog Loop** starts (10s interval):
-   - Polls `GET /health` continuously
+   - Polls `GET /health` continuously, except while the Mac is suspended
    - 3 consecutive failures → emit `backend:lost` IPC event to renderer
    - Recovery → emit `backend:restored` event
 
 10. **Frontend** connects to backend at `http://localhost:3002`
 
-11. **Preload bridge** exposes `backend:lost` and `backend:restored` callbacks via `window.electronRecovery.onBackendLost/onBackendRestored()`. The current React renderer does not subscribe, so these runtime events are an available bridge contract rather than a visible banner today.
+11. **Preload bridge** exposes `backend:lost` and `backend:restored` callbacks via `window.electronRecovery.onBackendLost/onBackendRestored()`. `BackendConnectionBanner` (`apps/frontend/src/components/notifications/BackendConnectionBanner.tsx`, mounted in `AppLayout`) subscribes to both: it shows the shell's localized reason (the `backend:lost` message, for example `app.backendLost` or a backup pause) while the backend is lost and, on restore, hides it and invalidates every React Query query so the views refetch. It renders nothing outside Electron.
 
 ---
 
@@ -493,7 +510,10 @@ settings). Simplified merged view:
       "target": ["dmg", "zip"],
       "category": "public.app-category.finance",
       "icon": "build/icon.icns"
-    }
+    },
+    "fileAssociations": [
+      { "ext": "csv", "name": "CSV Document", "role": "Viewer", "rank": "Alternate" }
+    ]
   }
 }
 ```
@@ -518,6 +538,32 @@ settings). Simplified merged view:
 - **`demo-seed/`** — Vision Demo only. Contains a PostgreSQL custom-format dump and checksum/count
   manifest produced from a migrated disposable database. The data-only SQL generator remains a
   build input and is not shipped as the active database.
+
+- **`fileAssociations`** — Declares `.csv` with role `Viewer` and rank `Alternate`, so Vision
+  appears in Finder's Open With menu for CSV files without becoming the default application. The
+  file reaches the app through the `open-file` handoff described in
+  [[#CSV Import Handoff — Two Paths]].
+
+#### Electron Fuses (ADR-218)
+
+The `afterPack` hook, `packaging/electron/scripts/finalize-native-package.ts`, verifies the
+native runtime manifest and then flips `ELECTRON_FUSES` through electron-builder's
+`packager.addElectronFuses` before it applies the ad-hoc signature. It must run before the seal:
+electron-builder's own `electronFuses` step runs after `afterPack` and would invalidate the
+signature. The hook fails the build when the packager cannot flip fuses.
+
+| Fuse                                    | Packaged value | Effect                                                     |
+| --------------------------------------- | -------------- | ---------------------------------------------------------- |
+| `RunAsNode`                             | on (default)   | The native update installer runs with `ELECTRON_RUN_AS_NODE` after the app exits |
+| `EnableNodeOptionsEnvironmentVariable`  | off            | `NODE_OPTIONS` cannot inject code into the main process    |
+| `EnableNodeCliInspectArguments`         | off            | `--inspect` arguments cannot attach a debugger to main     |
+| `EnableEmbeddedAsarIntegrityValidation` | on             | `app.asar` must match the integrity recorded in the bundle |
+| `OnlyLoadAppFromAsar`                   | on             | No loose `app/` directory can replace the shell            |
+
+Cookie encryption and `GrantFileProtocolExtraPrivileges` keep Electron's defaults. Development
+runs (`bun run electron:dev`, `bun run electron:prod`) use the unfused Electron binary from
+`packaging/electron/node_modules`. `finalize-native-package.test.ts` checks the hook's order and
+fuse map with a stubbed packager; it does not inspect a packaged binary.
 
 #### Icon
 
@@ -548,10 +594,12 @@ A normal local install runs `packaging/electron/package.json`'s narrow `postinst
 
 The package declares its runtime dependencies directly (`archiver` and `yauzl`), and `bun.lock` pins their complete transitive graph. Do not reintroduce a second package lock for this directory.
 
-### Platforms (Future)
+### Platforms
 
-- **Windows** — `.exe` / `.msi` (not yet implemented)
-- **Linux** — `.AppImage` / `.deb` (not yet implemented)
+The shell supports Apple Silicon macOS only. `main.ts` has no Windows or Linux branches: the
+window always uses macOS chrome, closing the last window keeps the app running until an explicit
+Quit, and the badge, menus, vibrancy and accent color use the macOS APIs directly. Adding another
+platform would need those branches back ([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]).
 
 ### Bundled Components
 
@@ -620,7 +668,6 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 - Receives every real keydown before the renderer processes it.
 - Matches ⌘1–⌘9 on `input.code` (`Digit1`…`Digit9`) — the physical-key code rather than `input.key` — so the shortcuts remain positional on non-QWERTY layouts (AZERTY, Dvorak) without requiring `Shift`.
 - Matches ⌘N, ⇧⌘I, and ⌃⌘S on `input.key` (layout-agnostic for letter keys).
-- ⌃⌘S is macOS-specific; on other platforms the chord is Ctrl+Shift+S.
 - Calls `menuAction()` → `sendToApp('menu:action', …)` on match.
 - Calls `event.preventDefault()` to suppress any duplicate native-menu dispatch, ensuring each chord fires at most once.
 - Auto-repeat events (`input.isAutoRepeat`) are ignored.
@@ -632,9 +679,9 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 > [!info] AZERTY/non-QWERTY confirmation pending
 > End-to-end tests on the real stack confirmed ⌘7 → /portfolio and ⌘1 → / after a client-side navigation. Real-keyboard validation on a built `.app` (including AZERTY layout) is still pending (logged in TODO.md).
 
-#### Window Chrome (darwin-only)
+#### Window Chrome (macOS)
 
-`createWindow()` applies these options only on macOS:
+`createWindow()` always applies these options; the shell is macOS-only:
 
 | Option                 | Value              | Effect                                                           |
 | ---------------------- | ------------------ | ---------------------------------------------------------------- |
@@ -661,12 +708,14 @@ Built via `Menu.setApplicationMenu` after the shell loads the language persisted
 | View   | Toggle Sidebar (⌃⌘S), Appearance › Light / Dark / System / Schedule, Reload (dev-only), Zoom In/Out/Reset, Enter Full Screen, Toggle DevTools (dev-only) |
 | Go     | ⌘1–⌘9 routes from `GO_MENU_ROUTES` (manually mirrors `GO_TO_ROUTES` in `lib/navigation.ts`); the first item is titled Home |
 | Window | System role (minimise, zoom, …)                                                                                |
-| Help   | About Vision (Windows/Linux), Keyboard Shortcuts (opens overlay via `menu:action`), Source Code, Documentation |
+| Help   | Keyboard Shortcuts (opens overlay via `menu:action`), Source Code, Documentation                               |
 
-`setAboutPanelOptions` supplies the application name, running version, copyright,
-and AGPL-3.0 license identity on every supported platform. Electron displays the
-configured project website in Linux's native About panel; macOS and Windows still
-receive the same metadata but do not expose Electron's `website` field there.
+The App menu starts with the standard About item (`role: "about"`), followed by Settings…,
+Services, Hide, Hide Others, Show All and Quit; File ends with Close Window.
+`setAboutPanelOptions` supplies the application name, running version, and the
+copyright and AGPL-3.0 license line for the macOS About panel. The former
+Windows/Linux Help-menu About item and its `menu.about` key were removed by
+[[docs/adr/218-minimal-electron-shell-hardening|ADR-218]].
 The repository and documentation Help items use fixed HTTPS destinations from
 the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
 
@@ -679,7 +728,7 @@ Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBr
 
 The macOS dock menu contains **New Transaction** and **Home** (`nav.home`). Both dispatch the same `menu:action` channel, and their labels rebuild when the in-app language changes.
 
-The desktop badge reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. Main maps that count to the macOS dock badge, Linux launcher badge count, or a generated 32px PNG Windows taskbar overlay. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
+The desktop badge reflects the visible (non-dismissed) count of upcoming planned payments. `UpcomingPaymentsNotification` owns the due-payments query and dismissal state; it calls `setDockBadge(count)` whenever the count changes and clears it on unmount. Main sets it as the macOS dock badge with `app.dock.setBadge` (an empty string clears it). The Windows taskbar overlay (`badge-image.ts`) and Linux launcher count were removed with the other non-macOS branches. The badge is entirely renderer-driven — main has no knowledge of upcoming payments.
 
 #### CSV Import Handoff — Two Paths
 
@@ -689,7 +738,7 @@ The desktop badge reflects the visible (non-dismissed) count of upcoming planned
 
 **Path 2 — Finder "Open With" / dock drop (main handles)**
 
-`app.on('open-file')` in main applies an extension whitelist (`.csv` only) and a 25 MB cap, reads the file content itself, and forwards `{name, content}` over `app:csv-opened`. The renderer reconstructs a `File` object. The OS-chosen filesystem path never crosses into the renderer.
+The `.csv` `fileAssociations` entry (role `Viewer`, rank `Alternate`) lists Vision in Finder's Open With menu without making it the default CSV application. `app.on('open-file')` in main applies an extension whitelist (`.csv` only) and a 25 MB cap, reads the file content itself, and forwards `{name, content}` over `app:csv-opened`. The renderer reconstructs a `File` object. The OS-chosen filesystem path never crosses into the renderer.
 
 **`lib/importHandoff.ts`**: a one-slot, 30-second TTL registry (`registerPendingImportFile` / `consumePendingImportFile`) in the same style as `lib/undo.ts`. `TransactionImportCard` calls `consumePendingImportFile()` on mount; if a slot is waiting it pre-fills the import dropzone. Both paths converge on this slot, then navigate to `/import`.
 
@@ -782,8 +831,12 @@ Vision is ad-hoc unsigned (no Developer ID certificate), so macOS treats the cod
 The byte-level encryption and decryption scheme lives in
 `packaging/electron/backup/encrypted-file.ts`. Both the raw SQL backup adapter in `crypto.ts` and
 the bundle adapter in `bundle.ts` supply their own magic headers and error messages to that shared
-implementation. Restore accepts legacy AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) and
-current AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`); new encrypted files use v2.
+implementation. Restore reads only AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`), which is
+also the format new encrypted files use. A retired v1 AES-256-CBC file (`VISIONENC1` or
+`VISIONBAK1`) is still recognised as encrypted, so the passphrase prompt appears, but
+`decryptFile` then refuses it before decrypting with "This backup uses the retired v1 encryption
+format, which Vision no longer restores." and writes no plaintext
+([[docs/adr/218-minimal-electron-shell-hardening|ADR-218]]).
 
 **Bundle Format:**
 
@@ -829,7 +882,7 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for detailed 
 ### Application Updates (April–August 2026)
 
 Only the packaged app installs updates in-app; the source-launcher channel was retired by
-[[docs/adr/216-retire-source-launcher-update-channel|ADR-216]]. See
+[[docs/adr/217-retire-source-launcher-update-channel|ADR-217]]. See
 [[docs/features/application-updates|Application Updates Feature]] for the current architecture,
 IPC handlers, and frontend behavior.
 
@@ -1004,6 +1057,13 @@ contextBridge.exposeInMainWorld("electronRecovery", electronRecovery);
 - The request and check permission handlers deny renderer capabilities except
   app-origin sanitized clipboard writes and local-network checks required for
   the loopback backend. Native dialogs and notifications are main-process flows.
+  Both handlers are installed in every profile, Vision Development included; only
+  the CSP and security response headers are packaged-only.
+- `app.enableSandbox()` sandboxes every renderer, including any `webContents` a
+  later change creates, and a `web-contents-created` hook cancels
+  `will-attach-webview`, so no `<webview>` can attach.
+- Packaged builds also flip Electron fuses before the ad-hoc seal; see
+  [[#Electron Fuses (ADR-218)]].
 
 ### Error Page (Sandbox-Safe)
 
@@ -1033,7 +1093,7 @@ and the before/after disposable Demo measurements. The current matrix is:
 | ---------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
 | Sandboxed single window, preload, 29 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
 | Native dialogs and `safeStorage`                                                         | Keep in main process                      | Backup and restore selection and optional encrypted passphrase           |
-| Main-process updater and verified downloads                                              | Keep                                      | Explicit native or source update, checksum and rollback                  |
+| Main-process updater and verified downloads                                              | Keep                                      | Explicit native update, checksum and rollback                           |
 | Notifications, menu and dock, Finder CSV, window bounds                                  | Keep                                      | Local reminders, native commands, import handoff, and relaunch state     |
 | macOS accent and tier-gated vibrancy                                                     | Keep                                      | Existing appearance controls; vibrancy is inactive outside enhanced tier |
 | `update:get-mode`, packaged tests/maps/foreign prebuilds, duplicate Demo art             | Remove                                    | No shipped caller or runtime need                                        |
@@ -1074,7 +1134,8 @@ bun run electron:prod
 
 ### Debugging
 
-- **Main process:** `electron --inspect`
+- **Main process:** `electron --inspect` on a development run. Packaged builds have the
+  `EnableNodeCliInspectArguments` fuse off and ignore it.
 - **Renderer process:** Chrome DevTools (Cmd+Option+I)
 - **Backend process:** Standard Node.js debugging
 
@@ -1140,6 +1201,12 @@ operator-owned prerequisite and fails without changing the server when it is abs
 When the user enables `keepServicesOnQuit`, the shutdown call is skipped. This keeps both the
 verified Bun backend and Vision-managed PostgreSQL child alive for the next launch.
 
+`registerPowerHandlers()` listens for the macOS `powerMonitor` `shutdown` event, which macOS posts
+before logout, restart and shut down. The quit that follows skips the optional backup-on-quit so
+Vision never holds up logout, but it still runs the normal runtime shutdown and stops
+PostgreSQL. Closing the last window does not quit; `window-all-closed` is a no-op and the red
+close button hides the window.
+
 ### Window Bounds Persistence (June 2026 — U2 fix)
 
 Window size and position are persisted to `settings.json` under the `windowBounds` key and restored on the next launch.
@@ -1159,7 +1226,11 @@ The boot splash (`setSplashStatus()`) is now:
 
 - **Localized** — uses the `splash.*` i18n keys loaded at startup via `initI18n()` (available before the window opens).
 - **First-frame prioritized** — after localization, the shell creates the window and starts loading the splash before it builds the native application menu, dock menu, and accent subscription. Those integrations remain ready before runtime startup but no longer block the first app-controlled frame.
-- **Theme-aware** — persists the resolved mode, surface, text, and primary colors. Dark mode derives its near-black tinted surface; light mode uses the real light surface and text instead of showing a dark splash before a light first frame. First launch uses the canonical emerald dark fallback.
+- **Theme-aware** — persists the resolved mode, surface, text, and primary colors, plus the
+  user's Appearance choice as `themeSource` (`"system"`, `"light"` or `"dark"`). `ThemeHydration`
+  sends `"system"` in System mode and the resolved theme otherwise (Schedule included) with
+  `theme:persist-splash`; main sets `nativeTheme.themeSource` from it, so native menus, dialogs
+  and vibrancy follow Vision's appearance, and applies the persisted value at the next launch. Dark mode derives its near-black tinted surface; light mode uses the real light surface and text instead of showing a dark splash before a light first frame. First launch uses the canonical emerald dark fallback.
 - **Branded** — the Vision mark appears above the spinner. The backend recovery page uses the same validated palette variables plus the champagne accent, so startup and failure states share one identity without weakening the error page Content Security Policy.
 - **Phase-narrating** — the splash opens on `splash.starting`, then `setSplashStatus(key)` narrates
   two boot checkpoints:
@@ -1238,12 +1309,15 @@ The Demo uses only this isolated native path. See
 After startup succeeds, a watchdog monitors backend health:
 
 - Polls `/health` every 10 seconds
+- Skips probes while `powerMonitor` reports the Mac suspended, and resets the failure count on
+  `resume`, so a slow first probe after wake is not reported as a lost backend
 - 3 consecutive failures → `backend:lost` IPC event
-- Renderer can show user-facing error banner
-- Recovery → `backend:restored` event
+- `BackendConnectionBanner` shows the event's localized message (`app.backendLost` from the watchdog)
+- Recovery → `backend:restored` event; the banner clears and every React Query query is invalidated
 
-The watchdog is observational; it does not perform automatic database recovery. Its
-loss/restoration IPC callbacks are exposed by preload but currently have no React subscriber. On
+The watchdog is observational; it does not perform automatic database recovery. The banner shows
+the event's localized `message`, so the brief backup-maintenance pause, which also emits
+`backend:lost`, explains itself. On
 initial readiness timeout, it captures a redacted tail of `native/vision/logs/backend.log` so a
 repeated migration or startup failure is diagnosable.
 
@@ -1436,4 +1510,5 @@ that writer saves again. See [[docs/adr/173-conditional-settings-replacement|ADR
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
 - [[docs/adr/196-electron-shell-typescript|ADR-196: Electron Shell TypeScript]] — strict TypeScript compiled into `out/`
+- [[docs/adr/218-minimal-electron-shell-hardening|ADR-218: Minimal Electron Shell Hardening]] — macOS-only shell, fuses, permissions in every profile, power events, native theme, CSV Open With, backend banner, v1 backup retirement
 - [[docs/security/index]] — Security documentation

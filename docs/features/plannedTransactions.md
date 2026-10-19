@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
@@ -176,7 +176,7 @@ key = `${pt.id}:${pt.planned_date.slice(0, 10)}`
 
 #### Desktop badge
 
-The badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount. Electron presents it in the macOS Dock, the Linux launcher, or as a generated Windows taskbar overlay.
+The badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount. Electron presents it as the macOS Dock badge; the shell is macOS-only.
 
 The top-level upcoming-planned-payments notification is dismissible with persistence:
 
