@@ -1,8 +1,8 @@
 ---
 title: "ADR-205: Vision Native phase 1 hand-over"
 type: adr
-status: accepted
-date: 2026-10-12
+status: superseded
+date: 2026-10-19
 tags:
   [
     adr,
@@ -28,6 +28,9 @@ aliases: [adr-205, vision native hand-over, phase 1 hand-over]
 
 ## Status
 
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: the Swift port is retired before phase 4, so none of the switch-over steps happen.
+
 Accepted on 2026-10-12 (proposed the same day). As before acceptance,
 [[docs/adr/072-electron-native-desktop-integration|ADR-072]],
 [[docs/adr/113-native-macos-runtime|ADR-113]] and
@@ -44,13 +47,13 @@ ADR-204 lets phase 1 exit with "feature parity with Electron, backup round-trip 
 ways, hand-over ADR". Phase 1 was delivered in five steps on `claude/swift-native-phase-1*`
 branches:
 
-| Step | Delivered                                                                                                                                                                                                                    |
-| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1a   | `apps/native/` target (XcodeGen, Swift 6, Swift Testing), the `native-macos` CI job on `macos-26`, `install-native.sh`                                                                                                       |
-| 1b   | `RuntimeSupervisor` and `NativeRuntime`: own PostgreSQL 18 cluster and backend, payload verification, Demo seed activation, quit and keep-services                                                                           |
-| 1c   | The `WKWebView` shell: preload bridge, navigation and download policy, menus, dock, badge, vibrancy, accent colour, launch and error state                                                                                   |
-| 1d   | Backup and restore: the same `.visionbak` / `.visionbak.enc` bundles, Keychain passphrase, restore allow-list, quit-time backup                                                                                              |
-| 1e   | The audit anchor and Keychain witness (all six `electronAudit` channels, restore continuity), the Demo variant, the [[docs/reference/native-parity/phase-1-exit\|phase 1 exit checklist]] and backup and audit interop in CI |
+| Step | Delivered                                                                                                                                                                     |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1a   | `apps/native/` target (XcodeGen, Swift 6, Swift Testing), the `native-macos` CI job on `macos-26`, `install-native.sh`                                                        |
+| 1b   | `RuntimeSupervisor` and `NativeRuntime`: own PostgreSQL 18 cluster and backend, payload verification, Demo seed activation, quit and keep-services                            |
+| 1c   | The `WKWebView` shell: preload bridge, navigation and download policy, menus, dock, badge, vibrancy, accent colour, launch and error state                                    |
+| 1d   | Backup and restore: the same `.visionbak` / `.visionbak.enc` bundles, Keychain passphrase, restore allow-list, quit-time backup                                               |
+| 1e   | The audit anchor and Keychain witness (all six `electronAudit` channels, restore continuity), the Demo variant, the phase 1 exit checklist and backup and audit interop in CI |
 
 Facts this decision builds on:
 
@@ -193,6 +196,6 @@ Proposed:
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204]]
 - [[docs/adr/158-macos-keychain-audit-witness|ADR-158]]
-- [[docs/reference/native-parity/phase-1-exit|Native parity: phase 1 exit checklist]]
-- [[docs/architecture/native-app|Vision Native App Architecture]]
+- Native parity: phase 1 exit checklist (page removed by ADR-214)
+- Vision Native App Architecture (page removed by ADR-214)
 - [[docs/adr/index|All ADRs]]

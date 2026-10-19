@@ -73,7 +73,7 @@ export const TAX_DASHBOARD_RULES = [
   },
 ];
 
-/** Same chart and recorded-income derivation as useTaxOverviewData; never runs in Swift. */
+/** Same chart and recorded-income derivation as useTaxOverviewData. */
 export function buildTaxDashboard(
   overview: Overview,
   months: Monthly[],

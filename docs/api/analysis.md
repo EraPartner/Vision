@@ -2,8 +2,8 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, bounded execution, saved definitions and read-only shared TypeScript CSV/XLSX interchange under /api/analysis.
 path: /api/analysis
@@ -141,7 +141,7 @@ references, and refresh mode. Restore and AI apply also append versions; neither
 1 MB, 1,000 rows, and 32 columns and records normalized values plus a SHA-256 digest. Joins name one
 result column and one scenario column explicitly. Saved refresh applies deterministic left joins
 before formulas and rejects duplicate scenario keys. Browser CSV export remains a local value export;
-the additive interchange API exposes the same shared implementation to native clients without running
+the additive interchange API exposes the same shared implementation to API clients without running
 a new query or changing the current result window.
 
 ## Read-only CSV and workbook interchange
@@ -150,8 +150,8 @@ a new query or changing the current result window.
 (original bytes/filename) and `format` (`csv` or `xlsx`). Its envelope contains
 `{format,attachment,formulaCells}`. The attachment has `id`, `fileName`, `importedAt`, `sha256`,
 inferred `columns: [{id,label,type}]` and scalar `rows`; types are string/integer/decimal/boolean/date.
-No Analysis execution, scenario save, settings or database mutation occurs. Native clients decode
-numeric values directly as `Decimal` and retain decimal/unsafe-integer strings.
+No Analysis execution, scenario save, settings or database mutation occurs. Clients should retain
+decimal/unsafe-integer strings rather than parsing them as floating-point numbers.
 
 CSV keeps the browser contract: **1,000,000 bytes**, **1,000 rows**, **1–32 columns**, strict record
 width and unique normalized IDs. Empty values become null; safe integer text becomes a number;

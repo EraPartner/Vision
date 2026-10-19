@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     architecture,
@@ -673,7 +673,7 @@ the packaged main process; no renderer-supplied URL reaches `shell.openExternal`
 > [!warning] Manual sync point
 > `GO_MENU_ROUTES` in `packaging/electron/main.ts` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.
 
-Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`, and `set-theme` (View › Appearance; the payload is a theme mode, `light`, `dark`, `system` or `schedule`, applied through the renderer's theme store; any other payload is ignored). The `set-theme` action was added by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] when the topbar theme dropdown was removed. Electron never sends `replace-route`, `open-palette` or `native-sidebar`; only Vision Native's native sidebar does ([[docs/architecture/native-app#Native navigation and screens (phase 2)|Vision Native phase 2]]), and the optional `electronAPI.nativeNavigation` and `routeChanged` members are likewise defined by Vision Native only.
+Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`, and `set-theme` (View › Appearance; the payload is a theme mode, `light`, `dark`, `system` or `schedule`, applied through the renderer's theme store; any other payload is ignored). The `set-theme` action was added by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] when the topbar theme dropdown was removed.
 
 #### Dock Menu and Desktop Badge
 

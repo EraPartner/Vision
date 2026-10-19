@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-18
+date: 2026-10-19
 last_modified: 2026-10-11
-updated: 2026-10-18
+updated: 2026-10-19
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -77,8 +77,10 @@ they never authorize automatic deletion.
 The scoped decision ledger in `scripts/browser-tests/coverage-ledger.json` records keep, replace
 and remove decisions with rationale and replacement links. It is not a claim that every test in
 the repository was reviewed. The responsive suite's exact CSS assertions were removed; the browser
-geometry journeys that replaced them were removed with Playwright on 2026-10-18, because only the
-Swift native app is a supported UI. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
+geometry journeys that replaced them were removed with Playwright on 2026-10-18, when the Swift
+app was planned to replace the React UI. After the Swift port was retired on 2026-10-19
+([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]) the React UI has no browser-journey
+coverage. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
 currency conservation and rollback.
 Precision/property and native restore/journal fault tests remain required. The legacy-inventory checker fixtures run with the current test runtime and disable implicit Bun environment-file loading. Their acceptance and rejection assertions are unchanged; Node and Bun can execute the same fixtures without loading local financial configuration.
 

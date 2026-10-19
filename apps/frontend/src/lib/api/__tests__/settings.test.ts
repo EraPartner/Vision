@@ -8,10 +8,7 @@ beforeEach(async () => {
     vi.resetModules();
     settings = await import("@/lib/api/settings");
 });
-afterEach(() => {
-    server.resetHandlers();
-    vi.unstubAllGlobals();
-});
+afterEach(() => server.resetHandlers());
 /** The `PUT /api/settings/:key` body (`settingsRepository.replace`). */
 const saved = (key: string, value: unknown) => ({
     key,
@@ -148,115 +145,6 @@ describe("settings conditional API client", () => {
             name: "ApiContractError",
             endpoint: "GET /api/settings",
         });
-    });
-
-    it("advances only an explicit native ACK and a later read cannot rewind it", async () => {
-        vi.stubGlobal("window", {
-            __VISION_NATIVE_SETTINGS__: true,
-            location: { origin: API_BASE },
-        });
-        const old = { language: "en", future: null };
-        const acknowledged = { language: "nl", future: null };
-        server.use(
-            http.get(`${API_BASE}/api/settings/:key`, () =>
-                ok(saved("app_settings", old)),
-            ),
-        );
-        await settings.getSetting("app_settings");
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "app_settings",
-                acknowledged,
-                undefined,
-            ),
-        ).toBe(false);
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "app_settings",
-                acknowledged,
-                { exists: false },
-            ),
-        ).toBe(false);
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "app_settings",
-                acknowledged,
-                { exists: true, value: old },
-            ),
-        ).toBe(false);
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "app_settings",
-                acknowledged,
-                { exists: true, value: { future: null, language: "nl" } },
-            ),
-        ).toBe(true);
-        await settings.getSetting("app_settings");
-        let body;
-        server.use(
-            http.put(`${API_BASE}/api/settings/:key`, async ({ request }) => {
-                body = await request.json();
-                return ok(saved("app_settings", old));
-            }),
-        );
-        await settings.saveSetting("app_settings", old);
-        expect(body).toEqual({
-            value: old,
-            expected: { exists: true, value: acknowledged },
-        });
-    });
-
-    it("native ACKs cannot authorize another key or clear a rejected lane", async () => {
-        vi.stubGlobal("window", {
-            __VISION_NATIVE_SETTINGS__: true,
-            location: { origin: API_BASE },
-        });
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "onboarding_complete",
-                true,
-                { exists: true, value: true },
-            ),
-        ).toBe(false);
-        await expect(
-            settings.saveSetting("onboarding_complete", false),
-        ).rejects.toThrow("not loaded");
-        server.use(
-            http.get(`${API_BASE}/api/settings/:key`, () =>
-                ok(saved("app_settings", {})),
-            ),
-        );
-        await settings.getSetting("app_settings");
-        let writes = 0;
-        server.use(
-            http.put(`${API_BASE}/api/settings/:key`, () => {
-                writes++;
-                return HttpResponse.json(
-                    {
-                        ok: false,
-                        error: {
-                            code: "CONFLICT",
-                            message: "Settings changed",
-                        },
-                    },
-                    { status: 409 },
-                );
-            }),
-        );
-        await expect(
-            settings.saveSetting("app_settings", { language: "nl" }),
-        ).rejects.toThrow("Settings changed");
-        expect(
-            settings.acknowledgeNativeSettingReceipt(
-                "app_settings",
-                { language: "en" },
-                { exists: true, value: { language: "en" } },
-            ),
-        ).toBe(true);
-        await expect(
-            settings.saveSetting("app_settings", { language: "nl" }),
-        ).rejects.toThrow("Settings changed");
-        expect(writes).toBe(1);
     });
 });
 

@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, within, waitFor } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useLocation } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -11,66 +10,7 @@ import TaxOverviewPage from "@/pages/TaxOverviewPage";
 
 const API_BASE = "http://localhost:3002";
 
-function LocationProbe() {
-    return (
-        <output data-testid="location-search">{useLocation().search}</output>
-    );
-}
-
 describe("TaxOverviewPage (integration)", () => {
-    it("opens the native PDF handoff and preserves the selected tax year and other parameters on close", async () => {
-        const user = userEvent.setup();
-        renderWithApp(
-            <>
-                <TaxOverviewPage />
-                <LocationProbe />
-            </>,
-            { initialEntries: ["/tax?year=2024&source=native&export=pdf"] },
-        );
-        const dialog = await screen.findByRole("dialog");
-        expect(
-            within(dialog).getByRole("heading", { name: /export pdf report/i }),
-        ).toBeInTheDocument();
-        await user.click(
-            within(dialog).getByRole("button", { name: /^cancel$/i }),
-        );
-        await waitFor(() => {
-            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-            expect(screen.getByTestId("location-search")).toHaveTextContent(
-                "?year=2024&source=native",
-            );
-        });
-        expect(
-            await screen.findByRole("heading", { level: 2, name: "2024" }),
-        ).toBeInTheDocument();
-    });
-
-    it("keeps the native PDF handoff available before profile settings have loaded", async () => {
-        let release!: () => void;
-        const pending = new Promise<void>((resolve) => {
-            release = resolve;
-        });
-        server.use(
-            http.get(`${API_BASE}/api/settings`, async () => {
-                await pending;
-                return ok(settingsWithBaselines({}));
-            }),
-        );
-        try {
-            renderWithApp(<TaxOverviewPage />, {
-                initialEntries: ["/tax?year=2024&export=pdf"],
-            });
-            const dialog = await screen.findByRole("dialog");
-            expect(
-                within(dialog).getByRole("heading", {
-                    name: /export pdf report/i,
-                }),
-            ).toBeInTheDocument();
-        } finally {
-            release();
-        }
-    });
-
     it("renders page heading", async () => {
         renderWithApp(<TaxOverviewPage />);
         expect(

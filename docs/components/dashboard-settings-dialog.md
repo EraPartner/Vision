@@ -2,8 +2,8 @@
 title: DashboardSettingsDialog
 type: component
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     components,
@@ -47,16 +47,6 @@ The Settings window: a macOS-style preferences window for user preferences, appe
 
 > [!info] ADR-084 Rework — June 2026
 > The dialog was a 5-tab (`General`, `Appearance`, `Dashboard`, `App`, `Backup`) Save/Cancel form. ADR-084 made it a **sidebar + scrollable content pane** with **instant-apply**; reset-all moved to the About & maintenance section. The redesign (ADR-183, 2026-10-06) restyled it as a window on the design system and removed the Done button. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for the instant-apply rationale.
-
-## Vision Native handoff
-
-In phase 3o, Vision Native renders the seven panes in `NativeSettingsWindow.swift`. The retained
-React router still owns Settings query parameters and Back/close navigation, while the native
-window uses the same source control semantics. `nativeSettings.ts` mirrors native drafts and
-separate acknowledged receipts into Zustand; it forwards retained page preference edits as
-three-key field deltas to the single native writer. Native mode disables the competing web
-hydration persistence effects. The web/Electron dialog remains the browser surface. See
-[[docs/features/settings|Settings]] and [[docs/architecture/native-app|Native architecture]].
 
 ## Architecture
 

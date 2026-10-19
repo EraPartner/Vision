@@ -85,48 +85,6 @@ async function openMoreMenu(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("StatisticsPage (integration)", () => {
-    it("opens a native report handoff and restores the Insights URL when cancelled", async () => {
-        const user = userEvent.setup();
-        useDataHandlers();
-        renderWithApp(
-            <>
-                <StatisticsPage />
-                <LocationProbe />
-            </>,
-            {
-                initialEntries: [
-                    "/statistics?tab=yearly&window=all&export=pdf",
-                ],
-            },
-        );
-        const dialog = await screen.findByRole("dialog");
-        expect(
-            within(dialog).getByRole("heading", { name: /export pdf report/i }),
-        ).toBeInTheDocument();
-        await user.click(
-            within(dialog).getByRole("button", { name: /^cancel$/i }),
-        );
-        await waitFor(() => {
-            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-            expect(screen.getByTestId("location-search")).toHaveTextContent(
-                "?tab=yearly&window=all",
-            );
-        });
-        expect(
-            await screen.findByRole("tab", { name: /^yearly$/i }),
-        ).toHaveAttribute("aria-selected", "true");
-    });
-
-    it("keeps the native report handoff available while the web statistics cache is empty", async () => {
-        renderWithApp(<StatisticsPage />, {
-            initialEntries: ["/statistics?export=pdf"],
-        });
-        expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        expect(
-            screen.getByRole("heading", { name: /export pdf report/i }),
-        ).toBeInTheDocument();
-    });
-
     it("renders the Insights page heading", async () => {
         renderWithApp(<StatisticsPage />);
         expect(

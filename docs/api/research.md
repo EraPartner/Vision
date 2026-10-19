@@ -2,8 +2,8 @@
 title: Research API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - api
   - research
@@ -102,8 +102,8 @@ the HTTP boundary while proposal fields remain camel-case domain fields.
 
 ### POST /api/research/presentation
 
-Operation `computeResearchPresentation` is an additive read-only bridge for the native Research
-screens. It calls the same pure TypeScript helpers as the web pages, using already-fetched values.
+Operation `computeResearchPresentation` is an additive read-only operation. It calls the same pure
+TypeScript helpers as the web pages, using already-fetched values.
 It does not query providers, the database, settings or FX, spend provider quota, persist history,
 or execute SQL/formula text. The existing `marketRateLimiter` applies through the Research router.
 Source currency and provider metadata stay with the original fetched data; this response does not
@@ -144,7 +144,6 @@ Chart rows union timestamps in ascending order. Rebasing uses the first valid po
 volume remains unscaled. Candlestick open carries the prior row close through gaps. Indicator
 warmups, population Bollinger bands and raw-close RSI/MACD outputs retain existing source behavior.
 Missing numeric leaves can remain absent; non-finite arithmetic serializes as null as in browser JSON.
-No financial calculation moves to Swift.
 
 Watchlist `list` exposes signed/absolute current-to-target percentages, `isAtOrBelowTarget` and
 nullable `sinceAddedPercent`. `chart` additionally requires a finite positive target, and returns
@@ -185,7 +184,7 @@ rejected as a validation error, matching the maintained forecast client's invali
 
 The forecast engine remains unchanged. Its rounded money/bands can serialize as null on numerical
 overflow, even when `available` is true. OpenAPI records that wire possibility; it does not loosen
-the existing `PortfolioForecastSchema` client validity guard. Native available-result DTOs retain
+the existing `PortfolioForecastSchema` client validity guard. Clients should retain
 that required-numeric guard, so overflow produces an error rather than a fabricated projection or
 scenario comparison. Synthetic injected-engine and route fixtures verify this boundary.
 

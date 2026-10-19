@@ -4336,7 +4336,7 @@ components:
       description: >-
         available=false contains a reason and optional historyDays. Computed monetary
         fields can serialize null on numeric overflow. Such an available response is
-        rejected by the maintained PortfolioForecastSchema/native client validity guard;
+        rejected by the maintained PortfolioForecastSchema validity guard;
         nullable wire representation never authorizes invented zero values or a comparison.
       properties:
         available: { type: boolean }
@@ -7027,13 +7027,10 @@ components:
                 type: string
               value:
                 type: number
-                x-swift-type: Decimal
               percent:
                 type: number
-                x-swift-type: Decimal
               labelPercent:
                 type: number
-                x-swift-type: Decimal
               startAngle:
                 type: number
               endAngle:
@@ -8097,7 +8094,7 @@ paths:
                 format: { type: string, enum: [csv, xlsx] }
       responses:
         "200":
-          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination.
+          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx.
           headers:
             Content-Disposition: { schema: { type: string } }
           content:
@@ -14764,7 +14761,7 @@ paths:
             items: { type: integer, minimum: 1, maximum: 2147483647 }
       responses:
         "200":
-          description: Computed charts and widget data. Money is decoded directly as Decimal by the native client.
+          description: Computed charts and widget data.
           content:
             application/json:
               schema:

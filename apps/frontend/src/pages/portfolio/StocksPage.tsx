@@ -58,7 +58,6 @@ import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 import { addAll, subtract, toNumber } from "@vision/shared-utils/money";
@@ -318,7 +317,7 @@ export default function StocksPage({
         />
     );
 
-    const { exportOpen, setExportOpen } = useReportDialogState();
+    const [exportOpen, setExportOpen] = useState(false);
     const exportDialog = (
         <ExportDialog
             defaultType="portfolio"

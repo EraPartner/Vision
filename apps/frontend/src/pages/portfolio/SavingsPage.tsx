@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import {
     Card,
@@ -34,7 +35,6 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { useReportDialogState } from "@/features/reports/useReportDialogState";
 
 const PageIcon = PAGE_ICONS["/portfolio/savings"];
 const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
@@ -86,7 +86,7 @@ export default function SavingsPage() {
               ) / totalBalance
             : 0;
 
-    const { exportOpen, setExportOpen } = useReportDialogState();
+    const [exportOpen, setExportOpen] = useState(false);
     const exportDialog = (
         <ExportDialog
             defaultType="portfolio"

@@ -2,8 +2,8 @@
 title: Exchange Rates Feature
 type: feature
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
 description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability at the canonical /admin/exchange-rates route.
@@ -80,7 +80,7 @@ Returns cached exchange rates from the database:
 The data also carries `source` (`database`, or `fallback` when nothing is stored), `is_stale` and
 `last_fetched_at` (the `ExchangeRates` schema in `openapi.yaml`, inside the ADR-026 envelope).
 
-**Auto-refresh logic**: If stored rates are from a previous day, the endpoint clears the memory cache and triggers a background `warmCache()` call to fetch fresh rates. With `db_only=true` (also `1`) it serves the stored rates without that refresh; the admin page and Vision Native's native Exchange rates screen ([[docs/architecture/native-app|Vision Native]]) ask for it.
+**Auto-refresh logic**: If stored rates are from a previous day, the endpoint clears the memory cache and triggers a background `warmCache()` call to fetch fresh rates. With `db_only=true` (also `1`) it serves the stored rates without that refresh; the admin page asks for it.
 
 **Rate limiting**: 30 requests per minute per IP.
 

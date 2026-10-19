@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
@@ -60,13 +60,6 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 | `/portfolio/tax`                    | `PortfolioTaxPage`          | AppLayout | Portfolio tax calculations                                       | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]               |
 | `/portfolio/rebalance`              | `RebalancePage`             | AppLayout | Portfolio allocation and rebalance plan                          | [[apps/frontend/src/pages/portfolio/RebalancePage.tsx\|RebalancePage.tsx]]                         |
 
-The Swift shell also draws `/portfolio/import`, `/portfolio/import/:batchId/review` and
-`/portfolio/tax` in phase 3j. Import keeps the same reviewed TypeScript operations and shares
-session metadata with the retained web page; a read-only upload probe supplies maintained
-workbook detection and bounded CSV previews. Portfolio Tax reads server-computed fiscal results
-and reuses native profile/year actions. Both tax routes adopt validated historical years and
-replace `year` while preserving unrelated parameters. Full Mac/Demo parity review is pending.
-
 ## Research Pages (Research section)
 
 | Route                 | Component               | Layout    | Description                |
@@ -79,19 +72,6 @@ replace `year` while preserving unrelated parameters. Full Mac/Demo parity revie
 | `/research/forecast`  | `PortfolioForecastPage` | AppLayout | Portfolio forecast         |
 | `/research/charts`    | `ChartBuilderPage`      | AppLayout | Configurable market charts |
 | `/research/dossiers`  | `ResearchDossiersPage`  | AppLayout | Research dossiers          |
-
-The Swift shell draws Research home, Markets, Market lookup, Watchlist and Compare in phase 3l.
-The existing providers, caches and rate limits remain authoritative; native reads retain provider/
-cache metadata and nullable values. Submitted snapshots use shared TypeScript presentation for
-comparison statistics, chart indicators, target/return metrics and trade previews. Lookup's symbol,
-range and tab and Compare's repeated symbols, range, tab and sort preserve unrelated query values.
-Market lookup's Add to portfolio form retains its unsaved-work guard and broker defaults. Phase 3m
-also draws Forecast and Chart Builder natively, including Life scenario comparisons and the existing
-saved-layout/share format. Settings coverage preserves their drafts; actual exits reset Forecast
-and retain Chart Builder metadata. phase 3n also mounts Dossiers and AI chat, including immutable
-dossier versions, JSON exports, app-lifetime Chat streams and the retained Investigation workflow.
-Settings and other global web overlays remain for the shared shell pass. Full Mac/Demo review is pending; see
-[[docs/reference/native-parity/research-and-ai-chat|Research parity]].
 
 ## Admin Routes
 
@@ -113,13 +93,6 @@ Admin routes appear in the sidebar's Admin section, shown only when admin mode i
 | `/analysis`          | `AnalysisWorkspacePage` | AppLayout | Manual visual, SQL, spreadsheet, and saved-analysis tools | [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx\|AnalysisWorkspacePage.tsx]] |
 | `/ai-chat`           | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
 | `/analysis/monitors` | `AnalysisMonitorsPage`  | AppLayout | Saved-analysis monitors with an unread badge              | [[apps/frontend/src/pages/AnalysisMonitorsPage.tsx\|AnalysisMonitorsPage.tsx]]   |
-
-The Swift shell draws both Analysis routes in phase 3k, independently of admin mode. Query,
-pivot, workbench, saved-analysis/proposal and monitor evaluation remain TypeScript-owned.
-CSV/XLSX interchange uses shared server operations; captured exports retain their result window
-and provenance. Page drafts reset on leaving, while the existing ten-entry SQL history is shared
-through `vision.analysis.sqlHistory` localStorage. Full Mac/Demo parity review is pending; see
-[[docs/reference/native-parity/analysis|Analysis parity]].
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
@@ -187,24 +160,6 @@ The three sidebar workspaces and their switcher were replaced by one labelled si
 - Landing on a page inside a hidden section shows that section and persists the choice (`vision.sidebar.hiddenSections`).
 - `G` then a key jumps to a page (Home is `G H`, previously `G D`); `[` and `]` cycle Home (`/`), Portfolio (`/portfolio`) and Research (`/research`).
 - `data-tint` on the canvas is `wealth` under `/portfolio`, otherwise `money`.
-
-## Native Insights, Tax and Portfolio report handoff
-
-Vision Native draws `/statistics`, `/tax`, `/portfolio` and its five asset pages in SwiftUI while keeping the shared React report dialog for
-financial, portfolio, and tax export. `?export=pdf` opens that dialog, preserving other query
-parameters. Closing or completing an export removes only `export` with replace and restores the
-native screen. Browser and Electron report menu actions keep their existing local dialog state.
-Tax retains the selected `year` during the handoff; its menu defaults to the tax report type.
-Portfolio and asset pages retain their current route, `period`, `fx_neutral` and unrelated query
-values. The controlled dialog stays mounted through loading/error/content transitions so report
-configuration is retained during data failures and retries. Rebalance and Net Worth are also
-native. Portfolio Import and Portfolio Tax are native in phase 3j; Portfolio Tax has no PDF action
-in the existing app.
-The tax calculation backend prerequisite is recorded in [[docs/adr/204-vision-native-swift-app-target|ADR-204]];
-see [[docs/architecture/native-app|the native architecture]] and
-[[docs/reference/native-parity/home-and-statistics|Home and Insights parity]] and
-[[docs/reference/native-parity/tax|Tax parity]] and
-[[docs/reference/native-parity/portfolio-holdings|Portfolio parity]].
 
 ## Related
 

@@ -6,7 +6,7 @@ skinparam linetype ortho
 skinparam nodesep 50
 skinparam ranksep 70
 
-package "Belgian Tax (ADR-204)" {
+package "Belgian Tax" {
   class TaxOverviewService {
     +getTaxOverview(year?): live/historical overview
   }
