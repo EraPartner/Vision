@@ -2,7 +2,7 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-11
+date: 2026-10-19
 updated: 2026-10-08
 last_modified: 2026-10-08
 tags:
@@ -91,8 +91,8 @@ related_code:
 
 Fresh PostgreSQL 18 installations load the reviewed `0119` baseline SQL in one transaction.
 Older 0118 installations wait for the guarded bridge to verify the contracted shape and a restored
-logical backup. Existing profiles at the exact registered 0120–0126 revisions can instead advance
-to pinned additive 0126 without replaying that maintenance bridge, retaining financial values,
+logical backup. Existing profiles at the exact registered 0120–0127 revisions can instead advance
+to pinned additive 0128 without replaying that maintenance bridge, retaining financial values,
 legacy objects and old receipt JSON. Unknown successor revisions refuse automatic upgrade.
 The baseline and the historical Alembic graph
 produce the same application objects; one PostgreSQL CHECK-expression rendering differs after dump

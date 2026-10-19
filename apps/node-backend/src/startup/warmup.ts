@@ -341,6 +341,11 @@ export async function runWarmupTasks({
       logger.error("Internal-transfer backfill failed on startup", {
         error: String(error),
       }),
+    // Serve the previous launch's aggregates for the first screen; the
+    // concurrent refresh replaces them without blocking reads.
+    readable: () => {
+      warmupStatus.materializedViews = "ready";
+    },
   })
     .then(() => {
       warmupStatus.materializedViews = "ready";
