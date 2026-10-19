@@ -1,7 +1,6 @@
 import { beforeAll, afterAll, afterEach, describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -528,68 +527,5 @@ describe.skipIf(!hasTestDatabase())(
         ).rows[0].count,
       ).toBe("0");
     });
-    it.skipIf(process.env.VISION_TEST_DB_ISOLATED !== "1")(
-      "guards populated downgrade then performs downgrade and upgrade",
-      async () => {
-        const position = await seed();
-        await transactionService.create({
-          investment_id: position.investment,
-          account_id: position.wallet,
-          type: "buy",
-          date: "2020-01-01",
-          units: 2,
-          amount: 20,
-          price_per_unit: 10,
-          currency: asCurrencyCode("EUR"),
-        });
-        const adjustment = await fee(position);
-        await commitPortfolioAssetAdjustment(adjustment);
-        const root = path.resolve(import.meta.dirname, "../../.."),
-          migrate = (operation: string, target: string) =>
-            spawnSync(
-              process.execPath,
-              [
-                path.join(root, "apps/node-backend/scripts/db-migrate.ts"),
-                operation,
-                target,
-              ],
-              { cwd: root, env: process.env, encoding: "utf8", timeout: 30000 },
-            );
-        const refused = migrate(
-          "downgrade",
-          "0122_portfolio_import_duplicate_repair",
-        );
-        expect(refused.status).not.toBe(0);
-        expect(`${refused.stdout}${refused.stderr}`).toContain(
-          "Roll back their imports before downgrade",
-        );
-        // Alembic commits each preceding downgrade before a guarded older
-        // step, so the refusal at 0123 leaves the shared database without the
-        // 0124/0125 schema. Restore head before touching it again; otherwise
-        // every later DB suite runs against a partially downgraded database.
-        expect(migrate("upgrade", "head").status).toBe(0);
-        await pool.query(
-          "UPDATE portfolio_import_batches SET status='complete' WHERE id=$1",
-          [adjustment.batch.id],
-        );
-        await rollbackBatch(Number(adjustment.batch.id));
-        try {
-          expect(
-            migrate("downgrade", "0122_portfolio_import_duplicate_repair")
-              .status,
-          ).toBe(0);
-          expect(
-            (
-              await pool.query(
-                "SELECT to_regclass('public.portfolio_asset_adjustments') AS name",
-              )
-            ).rows[0].name,
-          ).toBeNull();
-        } finally {
-          expect(migrate("upgrade", "head").status).toBe(0);
-        }
-      },
-      90000,
-    );
   },
 );

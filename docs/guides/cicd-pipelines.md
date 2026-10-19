@@ -36,11 +36,11 @@ jobs run only when the diff is classified as code:
 | --------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Detect Changes`                        | every diff          | path classification (`code` output; fails safe to `true`)                                                                                                                                                                                |
 | `Repo Checks`                           | every diff          | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy (each with its tests), commitlint, branch-protection verifier                                           |
-| `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`, destructive-migration gate, pip-audit, `mypy --strict`, Alembic audit callback test                    |
+| `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`, squawk migration lint (`db:lint`)                                                                     |
 | `Type Check`                            | code diffs          | strict TypeScript for frontend, shared packages, backend, backend tests, backend and repository scripts, and the Electron shell; shared package tests; production frontend build and `size:check`                                        |
 | `Test (Frontend 1/2)`, `(Frontend 2/2)` | code PRs            | Vitest split over two runners with `--shard`, without coverage                                                                                                                                                                           |
 | `Test (Frontend 1/1)`                   | code push to `main` | one unsharded `test:coverage` run that enforces the v8 coverage ratchet in `apps/frontend/vite.config.ts`                                                                                                                                |
-| `Test (Backend)`                        | code diffs          | Electron and native-runtime contract tests, backend tests with coverage on native PostgreSQL 18, database lifecycle tasks, one production frontend build, native production-health and migration-reversibility smoke, live API contracts |
+| `Test (Backend)`                        | code diffs          | Electron and native-runtime contract tests, backend tests with coverage on native PostgreSQL 18 and the Kysely type drift check, one production frontend build, native production-health and migration-reversibility smoke, live API contracts |
 | `CI Complete`                           | every diff          | aggregate result; the only required status check                                                                                                                                                                                         |
 
 `CI Complete` keeps a stable branch-protection name. On a documentation-only diff it passes once
@@ -70,10 +70,10 @@ and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model
 The checker reads the generated `index.html` and assets to catch new eager imports and total
 bundle growth.
 
-Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
-`scripts/`, the packaged Alembic wrapper) in the `Lint` job, which installs the hash-pinned
-`config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic audit
-callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
+The repository has no Python. The pip-audit, `mypy --strict` and destructive-migration steps left
+`Lint` with Alembic ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). `Lint` now
+runs `bun run db:lint`, which lints `db/migrations/*.sql` with squawk and `config/squawk.toml`;
+destructive DDL fails unless a `-- squawk-ignore <rule>` comment marks it as intended.
 
 The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/tsconfig.json` in
 the `Type Check` job; see
@@ -108,15 +108,14 @@ critical severity vulnerabilities in ecosystems GitHub supports. GitHub does not
 format, so this check must not be treated as review of transitive Bun lockfile changes. The shared
 `scripts/audit-js.sh` audits both the root and Electron Bun lockfiles for known high or critical
 advisories. The package boundary check verifies their sources and integrity fields.
-`scripts/check-workflow-supply-chain.py` requires full commit SHA pins for external Actions,
+`scripts/check-workflow-supply-chain.ts` requires full commit SHA pins for external Actions,
 full commit SHA refs for external repository checkouts, `persist-credentials: false` on every
 checkout, and the frozen script-disabled shared install. Agent tooling checks use only the
 checked-in project scripts; no external agent-container repository is fetched.
 Both checks and their adversarial tests run in the `Repo Checks` job. Release verification relies
 on the `CI Complete` result for the tagged commit instead of running them again.
 
-Dependabot checks the root Bun workspace, the Electron npm lockfile, the Python requirements in
-`config/` and GitHub Actions weekly, and delays routine version updates by seven days. Each
+Dependabot checks the root Bun workspace, the Electron npm lockfile and GitHub Actions weekly, and delays routine version updates by seven days. Each
 ecosystem has one group matching every dependency, so routine updates arrive as at most one
 grouped pull request per ecosystem per week. Security updates are not delayed by the cooldown.
 Automatic dependency merging is disabled; every update requires human review. The sole maintainer reports that the
@@ -128,26 +127,26 @@ needs to pass the release checks below before its artifacts are treated as verif
 ### Native database checks
 
 `Test (Backend)` installs PostgreSQL 18 packages on the runner and uses `scripts/with-test-db.sh`
-and the native runtime smoke harness. Each cluster is private, loopback only, migrated to the
-current Alembic head, and removed after its step. The test harness uses a generated password and
-SCRAM authentication so role-bootstrap password rejection is tested. It also enables the
-extensions required by production behavior. This is a real PostgreSQL check, not a mock and not a
-dependency on a pre-existing runner service.
+and the native runtime smoke harness. Each cluster is private, loopback only, migrated with the
+Kysely migrator to the latest `db/migrations/` file, and removed after its step. The test harness
+uses a generated password and SCRAM authentication so role-bootstrap password rejection is tested.
+It also enables the extensions required by production behavior. This is a real PostgreSQL check,
+not a mock and not a dependency on a pre-existing runner service.
 Direct `bun run test:db` runs also create a disposable cluster even if database URLs are exported;
 using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
 
-The backend job enables the audit and transaction performance probes, then runs migration
-fidelity, legacy retirement, ADR-088, ADR-090, and statement-scalar contract lifecycles in separate
-disposable clusters. Contract suites intentionally skip in the ordinary head-schema run because
-their fixtures require the guarded manual schema drop. The same job then builds the production
-frontend once and starts the native production stack twice, in sequence: first migrate, `/health`
-and a latest-migration round trip (`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the live API
-contracts against the real backend.
+The backend job enables the audit and transaction performance probes and sets
+`VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
+`apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
+migrated schema. Migrator and adoption behaviour is covered by the ordinary suite
+(`tests/migrate.db.test.ts`). The same job then builds the production frontend once and starts the
+native production stack twice, in sequence: first migrate, `/health` and, when the latest
+migration ships a `.down.sql`, a down/up round trip (`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the
+live API contracts against the real backend.
 
 ### Security scanning
 
-Repository security scanning is gitleaks, PR dependency review, `bun audit` and pip-audit in
-`ci.yml`, plus CodeQL in `.github/workflows/codeql.yml`. CodeQL is gated by the branch ruleset's
+Repository security scanning is gitleaks, PR dependency review, `bun audit` in `ci.yml`, plus CodeQL in `.github/workflows/codeql.yml`. CodeQL is gated by the branch ruleset's
 `code_scanning` rule rather than by a required status check. Trivy is no longer run in CI or
 release, and `.trivyignore` was removed; see [[docs/adr/221-proportional-ci|ADR-221]], which
 supersedes the Trivy part of [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]].
@@ -161,7 +160,7 @@ supersedes the Trivy part of [[docs/adr/050-ci-supply-chain-security-tooling|ADR
    type checks, tests or native checks again. Instead it requires a successful `CI Complete`
    check run from the GitHub Actions app on the tagged commit, which is the push run on `main`
    that includes the frontend coverage ratchet. It then runs the checks whose answer can change
-   after CI: a full-tree gitleaks scan, `scripts/audit-js.sh` and pip-audit. If CI on that commit
+   after CI: a full-tree gitleaks scan, and `scripts/audit-js.sh`. If CI on that commit
    has not finished or failed, wait for it or re-run it before releasing.
 2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts from the exact
    verified commit with pinned runtime inputs. It scans the packaged app into a CycloneDX software
@@ -221,7 +220,7 @@ bun run lint
 bun run lint:backend
 bun run typecheck
 bun run typecheck:electron
-bun run typecheck:python
+bun run db:lint
 bun run validate-locales
 bun run test:scripts
 bun run test

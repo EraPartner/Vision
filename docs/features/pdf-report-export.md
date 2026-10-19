@@ -110,7 +110,7 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports with
 
 ### Database Schema
 
-Migrations (if needed) are handled via existing alembic; no new tables added. Exclusions are passed as query parameters only, not persisted.
+No schema changes and no new tables. Exclusions are passed as query parameters only, not persisted.
 
 ---
 

@@ -2,8 +2,8 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -487,7 +487,7 @@ and services saves await one IPC writer; browser saves use this API client. See
 
 - [[docs/adr/030-frontend-environment-schema|ADR-030: Frontend Environment Schema Validation]] — Zod env validation on boot
 - [[docs/adr/026-unified-api-response-envelope|ADR-026: Unified API Response Envelope]] — backend envelope contract
-- [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — schema management
+- [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222: TypeScript migrations with Kysely and one squashed baseline]] — schema management (supersedes ADR-027)
 
 **Type-safe utilities:**
 

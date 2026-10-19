@@ -2,9 +2,9 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-08
-last_modified: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
+last_modified: 2026-10-19
 tags:
   [
     feature,
@@ -71,15 +71,10 @@ related_code:
   - "apps/frontend/src/features/portfolio/InvestmentCombobox.tsx"
   - "apps/frontend/src/lib/api/portfolioImports.ts"
   - "apps/frontend/src/hooks/usePortfolioParserConfigs.ts"
-  - "alembic/versions/0120_portfolio_import_reconciliation.py"
-  - "alembic/versions/0121_portfolio_asset_transfers.py"
-  - "alembic/versions/0122_portfolio_import_duplicate_repair.py"
-  - "alembic/versions/0123_portfolio_asset_adjustments.py"
+  - "db/migrations/0001_baseline.sql"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.ts"
   - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts"
-  - "alembic/versions/0040_add_portfolio_import_staging.py"
-  - "alembic/versions/0041_add_parser_config_kind.py"
 ---
 
 # Feature: Portfolio Import
@@ -1100,12 +1095,11 @@ have guarded downgrade conditions; upgrading does not rewrite existing holdings.
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] for recovery limits.
 
 Migration 0124 adds the default `standard` income role and an empty paired-income receipt journal;
-it does not create income history or rewrite prior financial values or receipt JSON. Normal startup
-recognizes the exact registered 0120–0125 profiles and advances only to pinned additive 0125.
-Migration 0125 adds source-owned brokerage cash origin and typed source receipt protection; it
+it does not create income history or rewrite prior financial values or receipt JSON. Migration 0125 adds source-owned brokerage cash origin and typed source receipt protection; it
 creates no cash records or transfer peers during upgrade.
-Older 0118 bridge/conversion maintenance stays deferred, and unknown successor revisions refuse
-automatic upgrade. See [[docs/guides/migrations|Migration target policy]] and
+These historical Alembic migrations (0120–0128) are part of `db/migrations/0001_baseline.sql`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). See
+[[docs/guides/migrations|Database Migration Guide]] and
 [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]].
 
 ---

@@ -65,7 +65,7 @@ related_code:
   - apps/frontend/src/lib/research/indicators.ts
   - apps/frontend/src/types/research.ts
   - apps/frontend/src/lib/api/research.ts
-  - alembic/versions/0042_add_research_provider_mapping_and_quota.py
+  - db/migrations/0001_baseline.sql
 ---
 
 # Research Feature

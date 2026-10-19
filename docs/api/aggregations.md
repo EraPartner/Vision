@@ -40,9 +40,7 @@ related_code:
   - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/components/charts/LineChart.tsx
   - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts
-  - alembic/versions/0012_cashflow_forecast_accuracy.py
-  - alembic/versions/0013_cashflow_forecast_mc.py
-  - alembic/versions/0017_saved_charts_recipients_variants.py
+  - db/migrations/0001_baseline.sql
 ---
 
 # Aggregations API
@@ -1360,7 +1358,7 @@ methodAccuracy.simple_avg.history.forEach((point) => {
 
 **Data Source & Persistence:**
 
-- Table: `cashflow_forecast_accuracy` (created by Alembic migration 0012_cashflow_forecast_accuracy)
+- Table: `cashflow_forecast_accuracy` (created by historical Alembic migration 0012_cashflow_forecast_accuracy; part of the `0001` baseline)
 - UPSERT on (user_id, method_id, as_of_month) — idempotent
 - Populated by nightly batch job (Phase G) or manual updates from `/api/aggregations/cashflow-forecast-methods` backtest
 - **Fallback (April 2026):** If the database is unreachable or the table is missing, backend's `accuracyStore` falls back to an in-memory Map for backward compatibility:

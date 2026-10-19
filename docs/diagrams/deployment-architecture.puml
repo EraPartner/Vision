@@ -15,7 +15,7 @@ package "Native macOS (default)" as NativeMac {
     component "Compiled Bun backend" as NativeBackend
     component "Production frontend (dist)" as NativeFrontend
     component "PostgreSQL 18.6 binaries" as NativePostgresBinaries
-    component "Migration executable" as NativeMigrations
+    component "db/migrations (Kysely, in-process)" as NativeMigrations
     component "Chrome Headless Shell" as NativeChrome
   }
   database "Vision-managed PostgreSQL 18.6\n127.0.0.1:54329" as NativePostgres
@@ -58,7 +58,7 @@ User --> ElectronUI : Desktop UI
 ElectronUI --> NativeProvider : lifecycle / IPC
 NativeProvider --> NativeBackend : spawn / stop / logs
 NativeProvider --> NativePostgresBinaries : verify / spawn / stop
-NativeProvider --> NativeMigrations : schema runner
+NativeBackend --> NativeMigrations : runMigrations() on boot
 NativeBackend --> NativeFrontend : static files
 NativeBackend --> NativePostgres : owner migration / app role
 NativePostgres --> NativePostgresData : durable cluster
@@ -92,7 +92,7 @@ end note
 note right of NativePostgres
   Private data is outside Vision.app.
   Separate admin, owner/migration, and app roles.
-  Required extensions and Alembic schema.
+  Required extensions and the db/migrations schema.
 end note
 
 note right of NativeDemo

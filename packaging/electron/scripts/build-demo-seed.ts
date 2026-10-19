@@ -112,7 +112,6 @@ export async function buildDemoSeed({
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: payloadRoot,
     browserRuntimeRoot: payloadRoot,
-    alembicPath: path.join(payloadRoot, "vision-alembic"),
     runtimeId: `vision_demo_seed_${process.pid}`,
     postgresPort,
     appPort: 0,
@@ -124,8 +123,8 @@ export async function buildDemoSeed({
     if (!sql.trim() || !isRecord(summary)) {
       throw new Error("Synthetic Demo generator returned an invalid result");
     }
-    if (/\balembic_version\b/i.test(sql)) {
-      throw new Error("Synthetic Demo data must not modify Alembic state");
+    if (/\bkysely_migration\b/i.test(sql)) {
+      throw new Error("Synthetic Demo data must not modify migration state");
     }
 
     const sqlPath = path.join(stagingRoot, "demo-seed.sql");

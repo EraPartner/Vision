@@ -58,9 +58,9 @@ const settings = deepFreeze({
 
   database: {
     url: env.DATABASE_URL,
-    // Privileged (DDL) connection string for the least-privilege setup; also
-    // read by alembic/env.py directly from the environment. undefined in the
-    // classic single-role setup.
+    // Privileged (DDL) connection string for the least-privilege setup;
+    // database/migrate.ts reads it directly from the environment. undefined in
+    // the classic single-role setup.
     migrationsUrl: env.DATABASE_URL_MIGRATIONS,
     analysisUrl:
       env.DATABASE_URL_ANALYSIS || defaultAnalysisDatabaseUrl(env.DATABASE_URL),

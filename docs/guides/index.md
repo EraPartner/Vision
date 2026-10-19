@@ -37,7 +37,7 @@ SORT title ASC
 ### Development
 
 - [[docs/guides/contributing|Contributing Guide]] - How to contribute to Vision
-- [[docs/guides/migrations|Database Migration Guide]] - Creating, running, and managing Alembic migrations
+- [[docs/guides/migrations|Database Migration Guide]] - Creating, linting, running, and rolling back `db/migrations/` with the Kysely migrator
 - [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]] - Step-by-step backend API guide
 - [[docs/guides/how-to-add-new-page|How to Add a New Page]] - Step-by-step frontend page guide
 - [[docs/guides/how-to-add-react-component|How to Add a React Component]] - Step-by-step frontend component guide

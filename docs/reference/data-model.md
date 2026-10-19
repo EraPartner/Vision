@@ -3,8 +3,8 @@ title: Data Model Reference
 type: reference
 status: active
 date: 2026-10-19
-updated: 2026-10-08
-last_modified: 2026-10-08
+updated: 2026-10-19
+last_modified: 2026-10-19
 tags:
   [
     reference,
@@ -82,21 +82,23 @@ aliases: [data model, entities, domain model, schema entities]
 related_code:
   [
     "apps/node-backend/src/repositories/",
-    "alembic/versions/",
-    "alembic/baseline/",
+    "db/migrations/",
+    "apps/node-backend/src/database/schema.generated.ts",
   ]
 ---
 
 # Data Model Reference
 
-Fresh PostgreSQL 18 installations load the reviewed `0119` baseline SQL in one transaction.
-Older 0118 installations wait for the guarded bridge to verify the contracted shape and a restored
-logical backup. Existing profiles at the exact registered 0120–0127 revisions can instead advance
-to pinned additive 0128 without replaying that maintenance bridge, retaining financial values,
-legacy objects and old receipt JSON. Unknown successor revisions refuse automatic upgrade.
-The baseline and the historical Alembic graph
-produce the same application objects; one PostgreSQL CHECK-expression rendering differs after dump
-restore. See [[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
+The schema is `db/migrations/0001_baseline.sql` plus later numbered migrations, applied by the
+Kysely migrator. An empty PostgreSQL 18 database loads the baseline in one transaction and must
+match its catalog fingerprint; a database at the final Alembic revision
+`0128_category_path_on_legacy_rename` with the same fingerprint is adopted, and anything else fails
+closed. The baseline is the contracted shape: it has no `bank_account` columns on
+`transactions`/`planned_transactions`, no per-bank `*_raw_transactions` tables, and no
+`legacy_inh_*` copies. Migration numbers below (`0046`, `0062`, …) are historical Alembic revisions
+whose result the baseline contains; the files exist only in Git history. Generated row types live in
+`apps/node-backend/src/database/schema.generated.ts` (`bun run db:codegen`). See
+[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
 [[docs/guides/migrations|Database Migration Guide]].
 
 > [!abstract] Overview
@@ -120,7 +122,7 @@ restore. See [[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
 | `bank_sequence` | NUMERIC(18,0) | NULLABLE, nonnegative | Bank-provided within-day chronology; also retained on import staging rows. See [[docs/adr/206-bank-chronology]]. |
 | `memo`                      | TEXT          | NULLABLE                                                             | Original bank description                                                                                                                                                                                                                                                                                                                                                  |
 | `comment`                   | TEXT          | NULLABLE                                                             | User-added note                                                                                                                                                                                                                                                                                                                                                            |
-| `bank_account`              | TEXT          | OUT-OF-BAND COMPATIBILITY ONLY                                       | Absent from the maintained live database after the 2026-09-08 ADR-088 contract operation. Fresh Alembic `head` retains it until that manual operation; contract-phase application code does not read or write it.                                                                                                                                                          |
+| `bank_account`              | TEXT          | REMOVED (not in the `0001` baseline)                                 | Absent from the maintained live database after the 2026-09-08 ADR-088 contract operation. The `0001` baseline does not contain it; contract-phase application code does not read or write it.                                                                                                                                                          |
 | `account_id`                | INTEGER       | FK → accounts ON DELETE RESTRICT, NULLABLE                           | Canonical owning account (ADR-088, migration 0050). API responses derive their compatibility `bank_account` label from `accounts.name`.                                                                                                                                                                                                                                    |
 | `recipient_id`              | INTEGER       | FK → recipients                                                      | Associated recipient                                                                                                                                                                                                                                                                                                                                                       |
 | `recipient_bank_account_id` | INTEGER       | FK → recipient_bank_accounts                                         | Specific bank account                                                                                                                                                                                                                                                                                                                                                      |
@@ -152,8 +154,8 @@ remaining brokerage-origin rows. See [[docs/adr/189-proved-brokerage-cash-histor
 > - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
 > - **0050** (ADR-088): creates the `accounts` table + nullable `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions, backfilled one account per distinct `bank_account` string.
 > - **0051** (ADR-088): `BEFORE INSERT/UPDATE` trigger that keeps `account_id` in sync with `bank_account` (dual-write phase).
-> - **0062** (ADR-088 addendum, 2026-06-25, AUTHORED NOT YET APPLIED): hardens `sync_account_id_from_bank_account()` to be **lookup-only on UPDATE** (INSERT still resolves-or-creates; UPDATE only resolves against existing accounts, never creates). Also adds `trg_enforce_split_within_amount` — a `BEFORE UPDATE` trigger on `transactions` that raises `check_violation` when `amount` is reduced below the sum of its splits (`SUM(transaction_splits.amount) > ABS(NEW.amount) + 0.005`). Down-revision: `0061_investments_show_in_ticker`. See [[alembic/versions/0062_trigger_lookup_only_on_update.py]] and [[docs/adr/088-account-entity|ADR-088 addendum]].
-> - **ADR-088 manual contract** (APPLIED TO THE MAINTAINED LIVE DATABASE 2026-09-08): `alembic/manual/contract_drop_bank_account/up.sql` removes both canonical-table `bank_account` columns and the dual-write trigger under a race-free parity guard. The coupled source accepts the legacy API field only as account-resolution input and persists `account_id`. Fresh Alembic-only databases retain the compatibility schema until this operation is run. `down.sql` restores it; use both only in the documented stopped-writer maintenance workflow.
+> - **0062** (ADR-088 addendum, 2026-06-25, AUTHORED NOT YET APPLIED): hardens `sync_account_id_from_bank_account()` to be **lookup-only on UPDATE** (INSERT still resolves-or-creates; UPDATE only resolves against existing accounts, never creates). Also adds `trg_enforce_split_within_amount` — a `BEFORE UPDATE` trigger on `transactions` that raises `check_violation` when `amount` is reduced below the sum of its splits (`SUM(transaction_splits.amount) > ABS(NEW.amount) + 0.005`). Down-revision: `0061_investments_show_in_ticker`. See `0062_trigger_lookup_only_on_update` and [[docs/adr/088-account-entity|ADR-088 addendum]].
+> - **ADR-088 manual contract** (APPLIED TO THE MAINTAINED LIVE DATABASE 2026-09-08): the former out-of-band `contract_drop_bank_account` operation removed both canonical-table `bank_account` columns and the dual-write trigger under a race-free parity guard. The coupled source accepts the legacy API field only as account-resolution input and persists `account_id`. The `0001` baseline already has the contracted shape; the manual scripts were deleted with the Alembic tree ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
 
@@ -380,14 +382,14 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 ### Investment
 
 > [!info] Canonical shape is a single flat table (ADR-109)
-> Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Fresh installs get it from the `0001` baseline; legacy installs that carried the ADR-004 table-inheritance shape are converted by the guarded migration `0087_flat_investments_conversion`. Converted installs retain renamed `legacy_inh_*` rollback copies until migration 0087 passes the PostgreSQL 18 fixture gate, that exact installation completes a 30-day incident-free soak, and an operator verifies a restorable logical backup before running `alembic/manual/drop_adr109_legacy_relations/`. Asset-class-specific columns are NULL when not applicable.
+> Every install has **one flat `investments` table** holding every asset class — there is no base/child inheritance and no `stock_investments`/`etf_investments`/… child tables. This flat shape is the **canonical** schema per [[docs/adr/109-flat-investments-schema-canonical|ADR-109]], which **supersedes** [[docs/adr/004-postgresql-table-inheritance|ADR-004]]. Every install gets it from `db/migrations/0001_baseline.sql`; historical Alembic migration `0087_flat_investments_conversion` converted installs that carried the ADR-004 table-inheritance shape, and the baseline contains no `legacy_inh_*` rollback copies. Asset-class-specific columns are NULL when not applicable.
 
 > [!note] Legacy delete-cascade completion
 > The inheritance schema could leave portfolio transactions behind after their investment was
 > deleted because its transaction children had no enforceable foreign key. During conversion,
 > 0087 warns with those transaction IDs and omits them from the flat copy to match the canonical
-> `ON DELETE CASCADE` contract. The original rows remain in `legacy_inh_*` until the guarded
-> operator cleanup; after cleanup, rollback requires restoring the verified logical backup. See
+> `ON DELETE CASCADE` contract. The original rows were kept in `legacy_inh_*` until the operator cleanup; the `0001`
+> baseline has no such copies, so recovery of those rows requires an older verified logical backup. See
 > [[docs/adr/111-complete-legacy-investment-delete-cascades|ADR-111]].
 
 **Purpose:** All investment holdings, one row per holding, discriminated by `asset_class`.
@@ -444,7 +446,7 @@ renormalized by the exposure service.
 | `updated_at`     | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last preference change; maintained by the shared trigger (migration 0092).                                                                     |
 
 > [!info] Migration 0061 creates this table
-> `investment_ticker_prefs` is created by migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. Apply with `bun run db:upgrade`.
+> `investment_ticker_prefs` was created by historical migration `0061_investments_show_in_ticker` (down_revision `0060_brokerage_import_routing`) via a plain `CREATE TABLE IF NOT EXISTS`. Downgrade drops the table. It is part of the `0001` baseline.
 >
 > A side table was chosen because, when 0061 shipped, `investments` was a plain table on fresh installs (0001 schema) but a **VIEW** over `investments_base` on legacy inheritance installs — `ALTER TABLE investments ADD COLUMN` failed on those. The two-shape era ended with the ADR-109 conversion (migration 0087), but the side table remains as-is. There is no `investments.show_in_ticker` column.
 
@@ -542,7 +544,7 @@ role retains literal income separately from ordinary income and gain; see
 > `cash_value` (and by extension `value`) now mirrors `portfolioSummaryService` formulas exactly. The latest snapshot's `value` reconciles with `GET /api/info/portfolio-summary`. See [[docs/adr/061-snapshot-valuation-parity|ADR-061]].
 
 > [!info] FX-neutral series (2026-06-11)
-> `value_fx_neutral` is added by migration `0039_add_value_fx_neutral_to_snapshots`. Until the migration is applied and snapshots are recomputed (next startup after `bun run db:upgrade`), the column is absent and the FX-neutral performance chart toggle shows no data. See [[docs/adr/074-fx-attribution-historical-rates|ADR-074]].
+> `value_fx_neutral` was added by historical migration `0039_add_value_fx_neutral_to_snapshots`. The column is part of the `0001` baseline; snapshots without a value show no FX-neutral data until they are recomputed. See [[docs/adr/074-fx-attribution-historical-rates|ADR-074]].
 
 **Related:** [[docs/performance/caching-strategies|Caching Strategies]], [[docs/adr/043-portfolio-snapshot-atomicity|ADR-043]], [[docs/adr/061-snapshot-valuation-parity|ADR-061]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
@@ -604,7 +606,7 @@ role retains literal income separately from ordinary income and gain; see
 - `ATTACHMENTS_DIR` configurable via environment (default `./data/attachments`)
 - `ATTACHMENT_MAX_SIZE_MB` configurable via environment (default 10)
 
-**Related:** [[docs/api/attachments|Attachments API]], [[docs/features/import|Import Feature (Phase 5A)]], migration [[alembic/versions/0004_attachments.py|0004]]
+**Related:** [[docs/api/attachments|Attachments API]], [[docs/features/import|Import Feature (Phase 5A)]], migration `0004_attachments`
 
 ---
 
@@ -630,7 +632,7 @@ role retains literal income separately from ordinary income and gain; see
 
 **Indexes:** `idx_import_batches_status` (partial, non-terminal only), `idx_import_batches_started_at`
 
-**Related:** [[docs/features/import|Import Feature]], [[docs/api/imports|Imports API]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], [[alembic/versions/0003_import_batch_id_on_transactions.py|0003]]
+**Related:** [[docs/features/import|Import Feature]], [[docs/api/imports|Imports API]], migration `0001_initial_database_schema`, `0003_import_batch_id_on_transactions`
 
 ---
 
@@ -675,7 +677,7 @@ role retains literal income separately from ordinary income and gain; see
 
 Migration 0091 normalizes dangling recipient ids to `NULL` and protects the active recipient-resolution fields. Migration 0104 removes the dormant bank-account resolution column only after a locked preflight proves that every value is null. Non-terminal import batches are preserved because the current resume path does not read or write this field. Its downgrade recreates the nullable foreign key and partial index without reconstructing data.
 
-**Related:** [[docs/features/import|Import Feature]], migrations [[alembic/versions/0091_import_staging_resolved_fks.py|0091]] and [[alembic/versions/0104_drop_dormant_import_bank_resolution.py|0104]]
+**Related:** [[docs/features/import|Import Feature]], migrations `0091_import_staging_resolved_fks` and `0104_drop_dormant_import_bank_resolution`
 
 ---
 
@@ -696,7 +698,7 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 **Indexes:** `idx_splits_transaction`, `idx_splits_recipient`, `idx_splits_unsettled` (partial, `is_settled = false`)
 
-**Related:** [[docs/features/splits|Splits Feature]], migration [[alembic/versions/0019_transaction_splits_and_agg.py|0019]]
+**Related:** [[docs/features/splits|Splits Feature]], migration `0019_transaction_splits_and_agg`
 
 ---
 
@@ -721,7 +723,7 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 > Migration 0088 removes the weaker trigger left by pre-squash databases. Direct SQL can bypass
 > this cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
-**Related:** [[docs/features/splits|Splits Feature]], migrations [[alembic/versions/0019_transaction_splits_and_agg.py|0019]] and [[alembic/versions/0088_money_precision_alignment.py|0088]]
+**Related:** [[docs/features/splits|Splits Feature]], migrations `0019_transaction_splits_and_agg` and `0088_money_precision_alignment`
 
 ---
 
@@ -742,7 +744,7 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL` action changed an audit row when a split was deleted. A retained ID may therefore point to a deleted split. Downgrade re-adds the foreign key only under the narrow 0117 rollback guard (sole matching 0117 upgrade entry and no checkpoint); it also requires every retained non-null split ID to have a matching split, or PostgreSQL rejects the constraint restoration.
 
-**Related:** migration [[alembic/versions/0021_split_audit.py|0021]]
+**Related:** migration `0021_split_audit`
 
 ---
 
@@ -762,7 +764,7 @@ Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL
 
 **Indexes:** `idx_ph_kind`
 
-**Related:** [[docs/architecture/backend-architecture|Backend Architecture]], migration [[alembic/versions/0010_add_provider_health.py|0010]]
+**Related:** [[docs/architecture/backend-architecture|Backend Architecture]], migration `0010_add_provider_health`
 
 ---
 
@@ -785,13 +787,13 @@ Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL
 
 **Note:** The generic Admin data editor returns `403` for schema, rows, and mutations on `db_editor_audit` and the other five protected audit tables. It has no authenticated external receipt and cannot present a verified audit history. Permitted editor mutations write a domain audit row and a linked chain entry in the same transaction.
 
-**Related:** [[docs/features/database-maintenance|Database Maintenance UI]], [[docs/api/admin|Admin API]], [[docs/adr/101-db-data-editor|ADR-101]], migration [[alembic/versions/0059_db_editor_audit.py|0059]]
+**Related:** [[docs/features/database-maintenance|Database Maintenance UI]], [[docs/api/admin|Admin API]], [[docs/adr/101-db-data-editor|ADR-101]], migration `0059_db_editor_audit`
 
 ---
 
 ### Audit chain foundation (migration 0117)
 
-Migration [[alembic/versions/0117_audit_chain.py|0117]] adds three tables and removes `split_audit`'s mutating foreign key. It does not hash or rewrite existing `db_editor_audit`, `split_audit`, or `portfolio_retag_audit` rows. The singleton `audit_chain_head` captures each table's maximum ID at upgrade (`legacy_db_editor_max_id`, `legacy_split_max_id`, `legacy_retag_max_id`) as a forward-only cutover marker.
+Migration `0117_audit_chain` adds three tables and removes `split_audit`'s mutating foreign key. It does not hash or rewrite existing `db_editor_audit`, `split_audit`, or `portfolio_retag_audit` rows. The singleton `audit_chain_head` captures each table's maximum ID at upgrade (`legacy_db_editor_max_id`, `legacy_split_max_id`, `legacy_retag_max_id`) as a forward-only cutover marker.
 
 | Table                     | Key fields                                                                                  | Role                                                                                                                  |
 | ------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
@@ -803,11 +805,11 @@ The migration blocks updates, deletes, and truncation of entries and checkpoint 
 
 Post-cutover editor, split, and broker retag chain entries bind the persisted domain row and its exact UTC microsecond `created_at`. The writers use values returned by PostgreSQL for the chain payload; broker retag also uses the returned, normalized UUID and receipt fields. Verification recomputes editor and split digests and compares the broker retag payload against stored rows, so changing a linked row or its timestamp breaks the domain link. This does not make the pre-cutover rows verified.
 
-For PostgreSQL migrations, `alembic/env.py` appends a `schema_migration` chain entry in the same revision transaction when Alembic applies 0117 or a later revision or stamp while the chain exists. The payload records direction, revision ID, and resulting Alembic heads. The verifier compares the latest chained `heads` with `alembic_version`. Pre-0117 revisions and SQLite/offline migrations do not create these entries. A chained PostgreSQL revision with a missing chain fails rather than silently advancing. This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
+Each migration the Kysely migrator applies appends a `schema_migration` chain entry (`revision_applied`, direction `upgrade`) in the same transaction, and adopting an Alembic database onto the baseline appends a `version_changed`/`stamp` entry; the baseline itself starts the chain with one `baseline_installed` event (`apps/node-backend/src/database/migrate.ts`). The payload records direction, revision ID, and resulting `heads`. The verifier compares the latest chained `heads` with the highest name in `public.kysely_migration` (`auditVerificationService.ts`). This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
 
 ---
 
-Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarded function for one-year retention without changing the three tables. Once Electron signs the boundary into its separate receipt and Keychain witness, `audit_chain_prune_prefix` removes only a contiguous, complete, year-old prefix behind an existing version 3 checkpoint. It preserves the next entry and its `previous_hash`. The signed boundary carries the deleted predecessor hash, linked domain high-water IDs, and migration heads so verification can continue across the missing prefix. Audit domain rows and checkpoint metadata remain; only chain entries are pruned. A downgrade of 0118 is refused after any prefix was removed. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
+Migration `0118_audit_retention_pruner` adds a guarded function for one-year retention without changing the three tables. Once Electron signs the boundary into its separate receipt and Keychain witness, `audit_chain_prune_prefix` removes only a contiguous, complete, year-old prefix behind an existing version 3 checkpoint. It preserves the next entry and its `previous_hash`. The signed boundary carries the deleted predecessor hash, linked domain high-water IDs, and migration heads so verification can continue across the missing prefix. Audit domain rows and checkpoint metadata remain; only chain entries are pruned. A downgrade of 0118 is refused after any prefix was removed. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
 
 ### provider_api_keys (June 2026, ADR-079, migration 0043)
 
@@ -821,7 +823,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.ts`) — user-configured data worth preserving.
 
-**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration [[alembic/versions/0043_add_provider_api_keys.py|0043]]
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration `0043_add_provider_api_keys`
 
 ---
 
@@ -848,7 +850,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** Unique `uq_instrument_provider_map_key_provider` on `(instrument_key, key_type, provider)`; `idx_instrument_provider_map_provider_symbol` on `(provider, provider_symbol)` for reverse lookup / self-audit — renamed from `ix_instrument_provider_map_provider_symbol` by migration 0090.
 
-**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration [[alembic/versions/0042_add_research_provider_mapping_and_quota.py|0042]]
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration `0042_add_research_provider_mapping_and_quota`
 
 ---
 
@@ -865,7 +867,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Constraint:** `PRIMARY KEY (provider, window_date)` is the `ON CONFLICT` upsert target for the governor's `spend()` path. `ck_provider_quota_count_nonneg` renamed `chk_provider_quota_count_nonneg` by migration 0090.
 
-**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration [[alembic/versions/0042_add_research_provider_mapping_and_quota.py|0042]]
+**Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], migration `0042_add_research_provider_mapping_and_quota`
 
 ---
 
@@ -889,7 +891,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** `idx_rmp_active_priority` (partial, `is_active = true`), `idx_rmp_recipient`
 
-**Related:** [[docs/features/import|Import Feature]], migration [[alembic/versions/0015_recipient_match_patterns.py|0015]]
+**Related:** [[docs/features/import|Import Feature]], migration `0015_recipient_match_patterns`
 
 ---
 
@@ -911,7 +913,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** `idx_asset_price_history_investment_date`, `idx_asset_price_history_date`
 
-**Related:** [[docs/features/portfolio|Portfolio Feature]], migration [[alembic/versions/0001_initial_database_schema.py|0001]], FK added [[alembic/versions/0026_asset_price_history_fk.py|0026]]
+**Related:** [[docs/features/portfolio|Portfolio Feature]], migration `0001_initial_database_schema`, FK added `0026_asset_price_history_fk`
 
 ---
 
@@ -935,7 +937,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** `idx_cfa_user_method` on `(user_id, method_id)`, `idx_cfa_as_of_month` on `(as_of_month)`
 
-**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0012_cashflow_forecast_accuracy.py|0012]]
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration `0012_cashflow_forecast_accuracy`
 
 ---
 
@@ -957,7 +959,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** `idx_cfmc_user_month` on `(user_id, month)`
 
-**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0013_cashflow_forecast_mc.py|0013]]
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration `0013_cashflow_forecast_mc`
 
 ---
 
@@ -981,7 +983,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 
 **Indexes:** `idx_cfmcr_user_today` on `(user_id, today_iso)`
 
-**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration [[alembic/versions/0016_cashflow_forecast_mc_rolling.py|0016]]
+**Related:** [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]], migration `0016_cashflow_forecast_mc_rolling`
 
 ---
 
@@ -1116,21 +1118,21 @@ are in `.visionbak` coverage; the 0116 downgrade refuses when monitor data remai
 ## Aggregation Entities (Phase 1)
 
 > [!info] Aggregation Layer
-> These entities are introduced in Alembic migrations 0026 (legacy, archived) and **0035** (consolidated baseline) as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
+> These entities were introduced in historical Alembic migrations 0026 (legacy, archived) and **0035** (consolidated baseline) as part of the Phase 1 aggregation refactor. They serve as the caching tier for dashboard and analytics endpoints, using two strategies:
 >
 > - **Materialized Views** (computed on demand, refreshed after mutations)
 > - **Trigger-maintained Tables** (updated automatically via row-level triggers)
 >
 > Migration 0035 (`add_recipient_aggregations`) added `mv_recipient_monthly` and `agg_recipient_totals`. **Both have since been dropped** — see the two sections below — because the recipient-insight endpoints run live scans instead. The only trigger-maintained aggregate still live is `agg_split_outstanding`.
 >
-> Separately, two **runtime-managed** materialized views — `mv_monthly_summary` and `mv_category_totals` — predate migration 0035 (the `0001` baseline explicitly excludes them: "Materialized views — managed at runtime by `apps/node-backend/src/services/materializedViewService.ts`"). No Alembic migration creates them; migrations 0045/0084/0085 instead **drop** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. Three other runtime projections were removed after their last reader disappeared: `mv_recipient_monthly` in 0038, `mv_bank_balances` in 0082, and `mv_cashflow_daily` in 0094.
+> Separately, two **runtime-managed** materialized views — `mv_monthly_summary` and `mv_category_totals` — predate migration 0035 (neither the historical Alembic chain nor `db/migrations/0001_baseline.sql` creates them; they are managed at runtime by `apps/node-backend/src/services/materializedViewService.ts`). Historical migrations 0045/0084/0085 instead **dropped** them to force a same-boot rebuild whenever their SQL definition changes, because `CREATE MATERIALIZED VIEW IF NOT EXISTS` never redefines an existing view. Three other runtime projections were removed after their last reader disappeared: `mv_recipient_monthly` in 0038, `mv_bank_balances` in 0082, and `mv_cashflow_daily` in 0094.
 >
 > See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]] for the design rationale.
 
 ### mv_recipient_monthly (Materialized View — DROPPED in 0038)
 
 > [!warning] Removed
-> Dropped in migration [[alembic/versions/0038_drop_mv_recipient_monthly.py|0038]]: the MV was refreshed on every mutation but never read (the recipient-insight endpoints run live scans with per-transaction-date FX that its monthly granularity cannot reproduce). `aggregationRefresh.js` no longer refreshes it. The columns below are retained only to describe the historical shape (downgrading past 0038 recreates them).
+> Dropped in migration `0038_drop_mv_recipient_monthly`: the MV was refreshed on every mutation but never read (the recipient-insight endpoints run live scans with per-transaction-date FX that its monthly granularity cannot reproduce). `aggregationRefresh.js` no longer refreshes it. The columns below are retained only to describe the historical shape (downgrading past 0038 recreates them).
 
 **Purpose:** Pre-computed monthly aggregates per recipient per currency, with rollup to primary recipient.
 
@@ -1161,7 +1163,7 @@ are in `.visionbak` coverage; the 0116 downgrade refuses when monitor data remai
 ### agg_recipient_totals (Trigger-Maintained Table — DROPPED in 0080)
 
 > [!warning] Removed
-> Dropped in migration [[alembic/versions/0080_drop_agg_recipient_totals.py|0080]] along with its sync triggers. Recipient totals are now computed on read. The columns below describe the historical shape only.
+> Dropped in migration `0080_drop_agg_recipient_totals` along with its sync triggers. Recipient totals are now computed on read. The columns below describe the historical shape only.
 
 **Purpose:** Running all-time totals per recipient per currency. Maintained automatically via row-level triggers on `transactions`.
 
@@ -1197,7 +1199,7 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 
 ### mv_monthly_summary (Materialized View — live)
 
-**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by an Alembic migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.js` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
+**Purpose:** Monthly income/spending/net totals per currency and effective category, backing the fast path in `getMonthlyFinancialSummary()`. Not created by a migration — created (`CREATE MATERIALIZED VIEW IF NOT EXISTS`) and refreshed by `materializedViewService.js` from the post-`listen` startup warmup; migrations 0045/0084/0085 instead drop it (forcing a same-boot rebuild) whenever its SQL definition changes.
 
 **Scope:** Last 12 months
 
@@ -1250,7 +1252,7 @@ ADR-119 records this as the explicit exception to the shared timestamp-trigger p
 ### mv_cashflow_daily (Materialized View — DROPPED in 0094)
 
 > [!warning] Removed
-> Migration [[alembic/versions/0094_drop_mv_cashflow_daily.py|0094]] drops this seven-month daily projection because it had no application readers while every refresh still scanned and grouped `transactions`. Current cash-flow charts use live repository queries and the forecast cache tables. The downgrade restores the historical shape with no data for rollback only.
+> Migration `0094_drop_mv_cashflow_daily` drops this seven-month daily projection because it had no application readers while every refresh still scanned and grouped `transactions`. Current cash-flow charts use live repository queries and the forecast cache tables. The downgrade restores the historical shape with no data for rollback only.
 
 **Related:** [[docs/performance/materialized-views|Materialized Views]], [[apps/node-backend/src/services/materializedViewService.ts]]
 
@@ -1339,19 +1341,13 @@ these rows back into the existing sorted ID arrays at the API boundary.
 
 ---
 
-### Raw transaction tables (per-bank)
+### Raw transaction tables (per-bank) — removed
 
-**Purpose:** Bank-specific raw transaction rows for audit and deduplication. There is **no single `raw_transactions` table and no `imports` table** — each supported source has its own table with a bank-specific column set, created in the `0001` baseline: `belfius_raw_transactions`, `revolut_raw_transactions`, `kbc_raw_transactions`, `sabb_raw_transactions`, `wise_raw_transactions`, `vision_raw_transactions`, `custom_raw_transactions`, `manual_raw_transactions` (later adapters — e.g. ING, BNP — add their own).
-
-All of them share these anchor columns; the remaining columns are the source's native CSV fields:
-
-| Field                | Type        | Description                                                                                        |
-| -------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
-| `id`                 | SERIAL      | PK                                                                                                 |
-| `deduplication_hash` | VARCHAR(64) | NOT NULL UNIQUE — dedup key (not `hash`)                                                           |
-| `created_at`         | TIMESTAMPTZ | DEFAULT NOW()                                                                                      |
-| `raw_csv_line`       | TEXT        | NOT NULL — the original CSV line verbatim (not a `raw_data` JSONB blob)                            |
-| …                    | —           | plus bank-specific columns (account_number, transaction_date, amount, currency, recipient_*, etc.) |
+The former per-bank `*_raw_transactions` tables (`belfius_`, `revolut_`, `kbc_`, `sabb_`, `wise_`,
+`vision_`, `custom_`, `manual_raw_transactions`) and `transaction_raw_references` are not part of
+the `0001` baseline and are not in `BACKUP_COVERED_TABLES`. Exact source records and their links
+live in `transaction_source_records` and `transaction_source_links`; see
+[[docs/reference/provider-neutral-transaction-provenance|Provider-neutral transaction provenance]].
 
 **Related:** [[docs/features/import|Import Feature]]
 
@@ -1376,8 +1372,8 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 **Migrations:**
 
-- [[alembic/versions/0037_add_custom_parser_configs.py]] — original table (down_revision `0036_add_transactions_tx_hash`)
-- [[alembic/versions/0041_add_parser_config_kind.py]] — adds `kind` column; drops `uq_custom_parser_configs_name`; creates `uq_custom_parser_configs_name_kind`
+- `0037_add_custom_parser_configs` — original table (down_revision `0036_add_transactions_tx_hash`)
+- `0041_add_parser_config_kind` — adds `kind` column; drops `uq_custom_parser_configs_name`; creates `uq_custom_parser_configs_name_kind`
 
 **Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
@@ -1412,7 +1408,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 **Backup:** Included in `BACKUP_COVERED_TABLES`.
 
-**Migrations:** [[alembic/versions/0040_add_portfolio_import_staging.py]] (base); `0057_portfolio_import_batches_account_id` (adds `account_id`)
+**Migrations:** `0040_add_portfolio_import_staging` (base); `0057_portfolio_import_batches_account_id` (adds `account_id`)
 
 **Related:** [[docs/features/portfolio-import|Portfolio Import Feature]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]], [[docs/adr/091-per-account-positioning|ADR-091]]
 
@@ -1461,7 +1457,7 @@ ordinary batch/staging pruning even though the staging-to-batch FK itself cascad
 
 **Related:** [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]],
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
-[[alembic/versions/0121_portfolio_asset_transfers.py]].
+`0121_portfolio_asset_transfers`.
 
 ### PortfolioImportIncomeRecognitionJournal (migration 0124)
 
@@ -1521,7 +1517,7 @@ adoptions; restore them through the application first. Once all are restored, do
 journal and loses its receipts while leaving financial history intact.
 
 **Related:** [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
-[[docs/guides/migrations]], [[alembic/versions/0120_portfolio_import_reconciliation.py]].
+[[docs/guides/migrations]], `0120_portfolio_import_reconciliation`.
 
 ### PortfolioAssetTransfer (migration 0121)
 
@@ -1557,7 +1553,7 @@ rows as errors with null route. See the blast-radius and recovery plan in
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]].
 
 **Related:** [[docs/features/portfolio-import#Dated custody and original basis]],
-[[docs/guides/migrations]], [[alembic/versions/0121_portfolio_asset_transfers.py]].
+[[docs/guides/migrations]], `0121_portfolio_asset_transfers`.
 
 ---
 
@@ -1602,7 +1598,7 @@ restored journal then loses receipts while leaving restored history intact.
 **Related:** [[docs/features/portfolio-import#Repair an already imported duplicate]],
 [[docs/api/portfolio-imports]], [[docs/guides/migrations]],
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
-[[alembic/versions/0122_portfolio_import_duplicate_repair.py]].
+`0122_portfolio_import_duplicate_repair`.
 
 ---
 
@@ -1654,7 +1650,7 @@ as errors with null route.
 **Related:** [[docs/features/portfolio-import#Unit adjustments and consumed basis]],
 [[docs/reference/database-triggers]], [[docs/guides/migrations]],
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
-[[alembic/versions/0123_portfolio_asset_adjustments.py]].
+`0123_portfolio_asset_adjustments`.
 
 ---
 

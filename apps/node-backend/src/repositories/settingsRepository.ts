@@ -2,7 +2,7 @@
  * Settings Repository - data access for user_settings table.
  *
  * Stores per-key settings as JSON values with a single-row-per-key pattern.
- * Table is created by Alembic migration 0030_add_user_settings_table.
+ * Table is defined in db/migrations/0001_baseline.sql.
  */
 
 import { query, withTransaction } from "../database/connection.ts";

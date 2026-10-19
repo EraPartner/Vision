@@ -2,7 +2,7 @@
 title: Tag Taxonomy
 type: reference
 status: active
-date: 2026-03-31
+date: 2026-10-19
 tags: [tags, taxonomy, reference, organization]
 description: Controlled vocabulary of tags used across the Vision knowledge base for consistent filtering and search
 aliases: [tag guide, tagging, categories, labels]
@@ -65,7 +65,8 @@ aliases: [tag guide, tagging, categories, labels]
 | `typescript`      | TypeScript-specific content                                  |
 | `postgresql`      | PostgreSQL-specific content                                  |
 | `plantuml`        | PlantUML diagrams                                            |
-| `alembic`         | Alembic migrations                                           |
+| `alembic`         | Alembic migrations (historical; replaced by ADR-222)         |
+| `kysely`          | Kysely migrator, `db/migrations/` and generated DB types     |
 | `vitest`          | Vitest testing                                               |
 | `react-query`     | React Query data fetching                                    |
 | `tailwind`        | Tailwind CSS styling                                         |

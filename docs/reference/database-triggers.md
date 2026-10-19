@@ -2,8 +2,8 @@
 title: Database Triggers Reference
 type: reference
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     reference,
@@ -53,7 +53,7 @@ flat `investments` table and removes the function and trigger from the supported
 
 ## Migration-Managed Triggers
 
-All triggers are now managed by Alembic migrations (as of Phase 1, 2026-04-21). The legacy `schemaInit.js` was deleted and replaced with Alembic-based schema management ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
+All triggers are managed by `db/migrations/` (the `0001_baseline.sql` schema plus later numbered files) through the Kysely migrator ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). Phase 1 (2026-04-21) had deleted the legacy `schemaInit.js` in favour of Alembic ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); migration numbers on this page are historical Alembic revisions whose result the baseline contains.
 
 Historical note: migration `0016_add_fx_rate_to_portfolio_transactions` guarded its `ALTER TABLE`
 by relation kind because installations could still have the retired compatibility view at that
@@ -75,8 +75,12 @@ $$ language 'plpgsql';
 
 ## Account Dual-Write Triggers (ADR-088, migrations 0051 / 0062)
 
-These triggers maintain `account_id` in sync with the denormalized `bank_account` string during the
-ADR-088 dual-write phase. They fire on `transactions` and `planned_transactions`.
+> [!note] Removed by the ADR-088 contract
+> These dual-write triggers and `sync_account_id_from_bank_account()` are not in the `0001`
+> baseline: the contract removed `bank_account` from both tables. The section below is history.
+
+These triggers maintained `account_id` in sync with the denormalized `bank_account` string during the
+ADR-088 dual-write phase. They fired on `transactions` and `planned_transactions`.
 
 | Trigger Name                       | Table                  | Event                | Function                              | Purpose                                       |
 | ---------------------------------- | ---------------------- | -------------------- | ------------------------------------- | --------------------------------------------- |
@@ -93,7 +97,7 @@ ADR-088 dual-write phase. They fire on `transactions` and `planned_transactions`
 > [!warning] Migration 0062 narrows the UPDATE path
 > Before migration 0062 (`0062_trigger_lookup_only_on_update`), UPDATE also ran a resolve-or-create,
 > meaning editing a row's `bank_account` to a stale or renamed label silently spawned a phantom
-> account. Migration 0062 changes this to lookup-only for UPDATE. Apply with `bun run db:upgrade`.
+> account. Migration 0062 changed this to lookup-only for UPDATE.
 > See [[docs/adr/088-account-entity|ADR-088 addendum (2026-06-25)]].
 
 ## Transaction Split-Guard Trigger (migration 0062)
@@ -113,7 +117,7 @@ total for easy diagnostics.
 **Downgrade:** drops `trg_enforce_split_within_amount` and `enforce_split_within_amount()`;
 restores the prior resolve-or-create-on-update `sync_account_id_from_bank_account()` function.
 
-**Related code:** [[alembic/versions/0062_trigger_lookup_only_on_update.py]]
+**Related code:** `0062_trigger_lookup_only_on_update`
 
 ## Split-Payment Overpayment Enforcement (migration 0088)
 
@@ -165,7 +169,8 @@ source retention, and downgrade limits.
 ## Related
 
 - [[docs/adr/002-database-schema\|Database Schema ADR]] - Table definitions
-- [[docs/adr/027-alembic-single-source-of-schema\|ADR-027: Alembic as Single Source of Schema Truth]] - Migration strategy
+- [[docs/adr/222-typescript-migrations-kysely-baseline\|ADR-222: TypeScript migrations with Kysely]] - Migration strategy
+- [[docs/adr/027-alembic-single-source-of-schema\|ADR-027: Alembic as Single Source of Schema Truth]] - Superseded migration strategy
 - [[docs/adr/088-account-entity\|ADR-088: Account Entity]] - Dual-write trigger rationale
 - [[docs/adr/112-retire-legacy-split-overpayment-trigger\|ADR-112: Retire legacy split-payment overpayment trigger]] - Canonical payment-cap enforcement
 - [[docs/guides/migrations\|Migration Guide]] - How schema changes are managed

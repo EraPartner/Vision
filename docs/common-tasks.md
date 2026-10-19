@@ -153,7 +153,7 @@ aliases:
 ```bash
 # Development
 bun run dev              # Start native Electron development
-bun run db:upgrade       # Run migrations
+bun run db:migrate       # Run migrations
 
 # Testing
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)

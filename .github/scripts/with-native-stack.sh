@@ -110,9 +110,14 @@ export VISION_DIST_DIR=${VISION_DIST_DIR:-$repo_root/dist}
 cd "$repo_root"
 bun run apps/node-backend/scripts/db-migrate.ts
 if [[ ${VISION_NATIVE_VERIFY_MIGRATIONS:-0} == 1 ]]; then
-  bun apps/node-backend/scripts/alembic-command.ts current
-  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
-  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
+  bun run apps/node-backend/scripts/db-migrate.ts status
+  # Round-trip the latest migration only when it ships a *.down.sql rollback.
+  latest_migration=$(find db/migrations -maxdepth 1 -name '[0-9][0-9][0-9][0-9]_*.sql' \
+    ! -name '*.down.sql' | sort | tail -n 1)
+  if [[ -n $latest_migration && -f ${latest_migration%.sql}.down.sql ]]; then
+    bun run apps/node-backend/scripts/db-migrate.ts down
+    bun run apps/node-backend/scripts/db-migrate.ts up
+  fi
 fi
 
 (

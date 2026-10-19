@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-10-11
+date: 2026-10-19
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
@@ -162,8 +162,9 @@ lifecycle remains external to the backend.
 ### Startup Sequence
 
 1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
-2. Runs `runMigrations()` once a DB connection is available. This performs the required
-   `alembic_version VARCHAR(64)` preflight before invoking Alembic.
+2. Runs `runMigrations()` once a DB connection is available. Kysely's migrator applies pending
+   `db/migrations/` files in-process in one transaction (installing or adopting the `0001`
+   baseline first when needed).
 3. Refreshes materialized views (runtime artifacts)
 4. Starts the HTTP server only after DB readiness and schema initialization are confirmed
 
@@ -171,8 +172,8 @@ lifecycle remains external to the backend.
 
 - Database lifecycle is managed by native Electron or by the source-deployment operator.
 - Backend process lifecycle is managed by Electron or the operator's process supervisor.
-- **Schema is managed exclusively by Alembic** ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
-- Alembic migrations are available via `bun run db:*` commands
+- **Schema is managed exclusively by `db/migrations/`** through the Kysely migrator ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]], superseding the Alembic decision in [[docs/adr/027-alembic-single-source-of-schema|ADR-027]]) — the legacy `schemaInit.js` was deleted in Phase 1 (2026-04-21)
+- Migration commands are available via `bun run db:*` (see [[docs/reference/scripts|Scripts Reference]])
 
 ---
 

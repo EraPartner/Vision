@@ -2,14 +2,13 @@
 title: Provider-Neutral Transaction Provenance
 type: reference
 status: active
-date: 2026-10-11
+date: 2026-10-19
 tags: [reference, imports, provenance, migration]
 description: Durable provider-neutral source archives, provenance links, and atomic manual-transaction identity claims.
 aliases: [transaction provenance, neutral import provenance]
 related_code:
-  - alembic/versions/0108_provider_neutral_provenance.py
+  - db/migrations/0001_baseline.sql
   - apps/node-backend/src/services/deduplication.ts
-  - alembic/manual/contract_drop_provider_raw/up.sql
 ---
 
 # Provider-Neutral Transaction Provenance
@@ -40,10 +39,12 @@ Its memo trimming uses the same whitespace set as JavaScript, including tabs, li
 Unicode spaces on historical rows.
 Import fingerprints and their compatibility contract are unchanged.
 
-Migration 0108 performs only expand and backfill. The contract at
-`alembic/manual/contract_drop_provider_raw/` is deliberately out of band. The operator waived an
-elapsed-time soak on 2026-09-13. Do not run it against a maintained database until the
-stopped-writer check, count/payload/link parity, and logical backup restore test are complete.
+Historical migration 0108 performed only expand and backfill; the per-bank raw tables were later
+dropped by the out-of-band `contract_drop_provider_raw` operation. The `0001` baseline
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]) has the contracted shape: it
+contains `transaction_source_records`, `transaction_source_links` and
+`manual_transaction_dedup_claims`, and no per-bank `*_raw_transactions` tables. The manual
+contract scripts were deleted with the Alembic tree.
 
 ## Related
 

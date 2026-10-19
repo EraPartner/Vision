@@ -152,9 +152,9 @@ The Electron shell (`packaging/electron/main.ts`) uses `GET /health/detailed` vi
 
 ## Error Responses
 
-The backend does not listen until PostgreSQL is reachable and Vision's guarded migration runner
-has completed. A migration failure is therefore a startup failure recorded in backend logs, not a
-served health response that asks the operator to run bare Alembic.
+The backend does not listen until PostgreSQL is reachable and Vision's migration runner
+(`runMigrations()`, Kysely) has completed. A migration failure is therefore a startup failure
+recorded in backend logs, not a served health response.
 
 ### Runtime errors
 

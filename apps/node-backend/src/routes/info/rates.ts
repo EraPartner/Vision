@@ -27,7 +27,7 @@ import { booleanQueryFlag } from "../_inputBridges.ts";
 
 // The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns
 // arrive as strings (see toDecimal/toNumber below), DATE as a Date at local
-// midnight (verified against alembic/versions' exchange_rates definition).
+// midnight (verified against the exchange_rates definition in db/migrations).
 interface ExchangeRateRow {
   currency_code: string;
   rate_to_eur: string;

@@ -1,8 +1,8 @@
 ---
 title: "ADR-184: Python is type-checked with mypy --strict in CI"
 type: adr
-status: accepted
-date: 2026-10-07
+status: superseded
+date: 2026-10-19
 tags: [adr, type-safety, python, mypy, alembic, ci]
 description: Every first-party Python file (Alembic env and migrations, repo scripts and their tests, the packaged Alembic wrapper) is checked by mypy --strict from config/mypy.ini, with hash-pinned dev requirements, as a required CI gate. First phase of the type-safety plan; Python stays Python.
 aliases: [adr-184, mypy strict, python type checking, type-safety phase 0]
@@ -11,6 +11,8 @@ aliases: [adr-184, mypy strict, python type checking, type-safety phase 0]
 # ADR-184: Python is type-checked with mypy --strict in CI
 
 ## Status
+
+> [!note] Superseded by [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] on 2026-10-19.
 
 Accepted. Phase 0 of the type-safety plan: reasonable type safety across the whole application,
 keeping Python for Alembic and repository scripts and moving JavaScript to TypeScript in later

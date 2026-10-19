@@ -40,8 +40,8 @@
     "total": 53,
     "remove-now": 0,
     "migrate-then-remove": 0,
-    "retain-with-reason": 14,
-    "historical-record-only": 39,
+    "retain-with-reason": 12,
+    "historical-record-only": 41,
     "unknown": 0
   },
   "records": [
@@ -50,9 +50,9 @@
       "title": "Provider-specific and manual raw transaction relations",
       "domain": "database/imports",
       "classification": "historical-record-only",
-      "disposition": "Migration 0108 preserves all provider rows and links in the ADR-141 neutral model. The guarded maintenance contract removed the provider-specific and manual raw relations from the maintained installation; the contract remains for other installations.",
+      "disposition": "Historical migration 0108 preserved all provider rows and links in the ADR-141 neutral model. The guarded maintenance contract removed the provider-specific and manual raw relations from the maintained installation; the 0001 baseline (ADR-222) contains no raw relations and the contract scripts were deleted with the Alembic tree.",
       "paths": [
-        "alembic/versions/0001_initial_database_schema.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/services/deduplication.ts",
         "apps/node-backend/src/backup/coverage.ts"
       ],
@@ -70,9 +70,9 @@
       "title": "Legacy import tx_hash identity",
       "domain": "database/imports",
       "classification": "historical-record-only",
-      "disposition": "Budgeting and portfolio imports use versioned fingerprints only. The guarded maintenance contract removed legacy tx_hash columns from the maintained installation and remains available for other installations.",
+      "disposition": "Budgeting and portfolio imports use versioned fingerprints only. The guarded maintenance contract removed legacy tx_hash columns from the maintained installation. The manual contract scripts were deleted with the Alembic tree; the 0001 baseline (ADR-222) already has the contracted shape.",
       "paths": [
-        "alembic/versions/0103_import_identity_provenance.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/node-backend/src/services/importPipeline/commit.ts"
       ],
@@ -90,13 +90,11 @@
       "title": "Dormant import_staging_rows.resolved_bank_account_id",
       "domain": "database/imports",
       "classification": "historical-record-only",
-      "disposition": "Removed by guarded migration 0104 after proving the staging column empty. Import batch records and statuses are preserved.",
+      "disposition": "Removed by historical guarded migration 0104 after proving the staging column empty; the 0001 baseline (ADR-222) has no such column. Import batch records and statuses are preserved.",
       "paths": [
-        "alembic/versions/0091_import_staging_resolved_fks.py",
-        "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/types/rows.ts",
-        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.ts",
-        "scripts/test-legacy-retirements.ts"
+        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.ts"
       ],
       "readers": "No production readers.",
       "writers": "No production writers.",
@@ -112,13 +110,11 @@
       "title": "Upgraded-install-only exchange_rate_cache",
       "domain": "database/currency",
       "classification": "historical-record-only",
-      "disposition": "Removed by guarded migration 0105. The current runtime uses exchange_rates; fresh installations remain a no-op.",
+      "disposition": "Removed by historical guarded migration 0105; the 0001 baseline (ADR-222) has no exchange_rate_cache. The current runtime uses exchange_rates.",
       "paths": [
-        "alembic/legacy_versions/0025_exchange_rate_cache.py",
-        "alembic/versions/0105_retire_legacy_exchange_rate_cache.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/backup/coverage.ts",
-        "apps/node-backend/src/services/currency/currencyConversionService.ts",
-        "scripts/test-legacy-retirements.ts"
+        "apps/node-backend/src/services/currency/currencyConversionService.ts"
       ],
       "readers": "No current application readers.",
       "writers": "No current application writers.",
@@ -134,11 +130,10 @@
       "title": "ADR-109 legacy_inh rollback relations",
       "domain": "database/portfolio",
       "classification": "historical-record-only",
-      "disposition": "The maintained installation archived the exact ADR-109 rollback relations with counts and digests, then removed the original views, inheritance tables, and optional snapshots. The guarded contract remains for other installations.",
+      "disposition": "The maintained installation archived the exact ADR-109 rollback relations with counts and digests, then removed the original views, inheritance tables, and optional snapshots. The 0001 baseline (ADR-222) has no legacy_inh_* relations and keeps adr109_legacy_cleanup_marker; the guarded contract was deleted with the Alembic tree.",
       "paths": [
-        "alembic/versions/0087_flat_investments_conversion.py",
-        "alembic/manual/drop_adr109_legacy_relations/up.sql",
-        "apps/node-backend/tests/adr109Cleanup.test.ts"
+        "db/migrations/0001_baseline.sql",
+        "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
       "readers": "Only the retained maintenance and verification history refers to the removed relation names.",
       "writers": "No current writer targets the removed rollback relations.",
@@ -154,11 +149,10 @@
       "title": "Old recurrence_interval enum after canonical text migration",
       "domain": "database/portfolio",
       "classification": "historical-record-only",
-      "disposition": "The guarded maintenance contract dropped the obsolete recurrence_interval enum from the maintained installation after ADR-109 residue removal and a zero-dependency catalog check.",
+      "disposition": "The guarded maintenance contract dropped the obsolete recurrence_interval enum from the maintained installation after ADR-109 residue removal and a zero-dependency catalog check. The manual contract scripts were deleted with the Alembic tree; the 0001 baseline (ADR-222) already has the contracted shape.",
       "paths": [
-        "alembic/versions/0099_canonical_biweekly_recurrence.py",
-        "alembic/versions/0087_flat_investments_conversion.py",
-        "alembic/manual/drop_obsolete_recurrence_enum/up.sql"
+        "db/migrations/0001_baseline.sql",
+        "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
       "readers": "Only historical migration and retained maintenance text refers to the old enum.",
       "writers": "No current canonical writer.",
@@ -176,7 +170,7 @@
       "classification": "retain-with-reason",
       "disposition": "This is a current schema and runtime contract, despite nearby comments that discuss older recurrence behavior.",
       "paths": [
-        "alembic/versions/0001_initial_database_schema.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/services/portfolioImportPipeline/validate.ts",
         "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts"
       ],
@@ -194,16 +188,16 @@
       "title": "Canonical transaction bank_account columns and request labels",
       "domain": "database/API/accounts",
       "classification": "historical-record-only",
-      "disposition": "Canonical APIs and every first-party create, edit, duplicate, undo, and recurrence path use account_id. The maintained schema has retired the compatibility columns; the guarded manual contract remains available for other installations.",
+      "disposition": "Canonical APIs and every first-party create, edit, duplicate, undo, and recurrence path use account_id. The maintained schema has retired the compatibility columns. The manual contract scripts were deleted with the Alembic tree; the 0001 baseline (ADR-222) already has the contracted shape.",
       "paths": [
-        "alembic/manual/contract_drop_bank_account/up.sql",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/repositories/transactionRepository.ts",
         "apps/frontend/src/features/transactions/components/AddTransactionSheet.tsx"
       ],
       "readers": "Responses project the bank_account display label from accounts.name; request schemas reject bank_account.",
       "writers": "Canonical first-party paths write account_id only.",
       "persistedData": "transactions and planned_transactions reference accounts through account_id; staging and manual raw labels are separate valid import fields.",
-      "supportWindow": "First-party cutover and maintained-schema retirement are complete; the manual contract is retained for installations that still need the physical cleanup.",
+      "supportWindow": "First-party cutover and maintained-schema retirement are complete; the 0001 baseline has no compatibility columns.",
       "replacement": "account_id for writes and accounts.name projection for display.",
       "deletionDependencies": [],
       "liveEvidence": "The maintained database reports both compatibility columns absent with zero parity mismatches. The disposable contract passed create, update, import, rename, and repoint behavior through account_id only.",
@@ -214,9 +208,9 @@
       "title": "Account statement scalar projections",
       "domain": "database/API/accounts",
       "classification": "historical-record-only",
-      "disposition": "First-party readers and writers use account_statement_balances only. The guarded maintenance contract removed both redundant scalar columns from the maintained installation and remains available for other installations.",
+      "disposition": "First-party readers and writers use account_statement_balances only. The guarded maintenance contract removed both redundant scalar columns from the maintained installation. The manual contract scripts were deleted with the Alembic tree; the 0001 baseline (ADR-222) already has the contracted shape.",
       "paths": [
-        "alembic/versions/0098_account_statement_balances.py",
+        "db/migrations/0001_baseline.sql",
         "apps/node-backend/src/repositories/accountRepository.ts",
         "apps/frontend/src/lib/api/accounts.ts"
       ],
@@ -233,23 +227,20 @@
       "id": "LEG-MIG-REVISION-BRIDGE",
       "title": "Archived Alembic revision stamp bridge",
       "domain": "database/migrations",
-      "classification": "retain-with-reason",
-      "disposition": "The startup migrator still needs the map to prevent supported old databases from failing with an unknown revision.",
+      "classification": "historical-record-only",
+      "disposition": "The archived Alembic revision stamp bridge was removed with Alembic (ADR-222). The Kysely migrator adopts a database only at 0128_category_path_on_legacy_rename with the baseline fingerprint; every other Alembic revision fails closed.",
       "paths": [
         "apps/node-backend/src/database/migrate.ts",
-        "apps/node-backend/tests/migrationRolePreflight.test.ts"
+        "apps/node-backend/tests/migrate.db.test.ts",
+        "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
-      "readers": "Startup reads alembic_version and the archived revision set.",
-      "writers": "The schema-owner preflight can rewrite an archived stamp to the current baseline.",
-      "persistedData": "Alembic revision metadata only; removal can still brick upgrades.",
-      "supportWindow": "Retain until the minimum supported upgrade origin excludes every mapped revision and live install evidence confirms zero old stamps.",
-      "replacement": "A future explicit minimum-version cutoff.",
-      "deletionDependencies": [
-        "support policy",
-        "install census",
-        "release soak"
-      ],
-      "liveEvidence": "Static startup reachability is active; old-stamp population is unverified.",
+      "readers": "Startup reads alembic_version only to decide adoption at the final Alembic revision.",
+      "writers": "Adoption drops alembic_version and records 0001_baseline in kysely_migration in one transaction.",
+      "persistedData": "Alembic revision metadata only on the single pre-switch database; it is dropped on adoption.",
+      "supportWindow": "Ended on 2026-10-19 with ADR-222; older stamps are no longer supported.",
+      "replacement": "Kysely migrator with the 0001 baseline and fail-closed adoption.",
+      "deletionDependencies": [],
+      "liveEvidence": "tests/migrate.db.test.ts covers adoption at 0128 and refusal of other revisions and schema drift.",
       "todoTitle": null
     },
     {
@@ -257,38 +248,37 @@
       "title": "Archived Alembic revisions",
       "domain": "database/migrations",
       "classification": "historical-record-only",
-      "disposition": "Excluded from the active version path but retained for deployed-schema ancestry, fixtures, incident analysis, and the revision bridge.",
+      "disposition": "The archived Alembic trees (legacy_versions and versions) were deleted with Alembic (ADR-222); Git history keeps them. The migration-history page records the retired numbering.",
       "paths": [
-        "alembic/legacy_versions",
-        "docs/reference/migration-dependencies.md"
+        "docs/reference/migration-dependencies.md",
+        "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
-      "readers": "Human audit and test-fixture construction.",
-      "writers": "None in current migration execution.",
-      "persistedData": "Historical definitions describe database states that may still exist in old installations.",
+      "readers": "Human audit through Git history.",
+      "writers": "None.",
+      "persistedData": "None in the repository; databases are adopted only at the final Alembic revision.",
       "supportWindow": "Historical record; no routine removal window.",
       "replacement": "None.",
       "deletionDependencies": [],
-      "liveEvidence": "config/alembic.ini excludes the directory from active version_locations.",
+      "liveEvidence": "The alembic directory no longer exists; db/migrations/0001_baseline.sql is the first migration.",
       "todoTitle": null
     },
     {
       "id": "LEG-MIG-ROOT-CONFIG",
       "title": "Root Alembic configuration shim",
       "domain": "database/developer tooling",
-      "classification": "retain-with-reason",
-      "disposition": "Deliberately keeps standard root Alembic commands working while runtime commands use config/alembic.ini explicitly.",
+      "classification": "historical-record-only",
+      "disposition": "alembic.ini and config/alembic.ini were deleted with Alembic (ADR-222); migration commands are bun run db:* scripts over the Kysely migrator.",
       "paths": [
-        "alembic.ini",
-        "config/alembic.ini",
-        "docs/guides/migrations.md"
+        "docs/guides/migrations.md",
+        "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
-      "readers": "Human/operator Alembic CLI invocations.",
+      "readers": "None.",
       "writers": "None.",
-      "persistedData": "No data, but deleting it changes documented operator behavior.",
-      "supportWindow": "Retain unless all human workflows standardize on -c config/alembic.ini.",
-      "replacement": "Explicit -c config/alembic.ini commands.",
-      "deletionDependencies": ["documentation and operator workflow decision"],
-      "liveEvidence": "Runtime scripts use the canonical config; direct root CLI compatibility is intentional.",
+      "persistedData": "No data.",
+      "supportWindow": "Ended on 2026-10-19 with ADR-222.",
+      "replacement": "bun run db:migrate, db:status, db:migrate:down and db:new.",
+      "deletionDependencies": [],
+      "liveEvidence": "Neither configuration file exists; package.json db:* scripts call apps/node-backend/scripts/db-migrate.ts.",
       "todoTitle": null
     },
     {
@@ -800,16 +790,16 @@
       "title": "Belgian tax federalPITTotal compatibility field",
       "domain": "frontend/tax",
       "classification": "historical-record-only",
-      "disposition": "Removed from runtime emission and acceptance. Migration 0106 strips equal persisted aliases and refuses alias-only, malformed, or divergent data.",
+      "disposition": "Removed from runtime emission and acceptance. Historical migration 0106 stripped equal persisted aliases and refused alias-only, malformed, or divergent data.",
       "paths": [
         "apps/frontend/src/lib/belgianTax/types.ts",
         "packages/shared-utils/src/belgianTax/pit.ts",
-        "alembic/versions/0106_remove_federal_pit_total_alias.py",
-        "apps/node-backend/src/routes/settings.ts"
+        "apps/node-backend/src/routes/settings.ts",
+        "db/migrations/0001_baseline.sql"
       ],
       "readers": "Current code reads only federalPITBeforeExemption.",
       "writers": "Current calculation output and settings validation accept only the canonical field.",
-      "persistedData": "Frozen calculations in belgian_tax_profile_snapshot_meta_v1 are rewritten by migration 0106; user_settings is backup-covered.",
+      "persistedData": "Frozen calculations in belgian_tax_profile_snapshot_meta_v1 were rewritten by historical migration 0106; user_settings is backup-covered.",
       "supportWindow": "The explicit 2026-09-11 cutoff ended source compatibility; the guarded disposable PostgreSQL 18 lifecycle passed the same day.",
       "replacement": "federalPITBeforeExemption.",
       "deletionDependencies": [],
@@ -1115,18 +1105,18 @@
     },
     {
       "id": "LEG-DOC-HISTORY",
-      "title": "Superseded ADRs and manual rollback contracts",
+      "title": "Superseded ADRs",
       "domain": "documentation/operations",
       "classification": "historical-record-only",
-      "disposition": "Append-only decisions and recovery artifacts are historical evidence, not runtime debris.",
-      "paths": ["docs/adr", "alembic/manual"],
-      "readers": "Operators, maintainers, incident response, and migration tests.",
-      "writers": "ADRs are append-only; manual contracts execute only under their explicit gates.",
-      "persistedData": "Some manual scripts are the only documented rollback or destructive-maintenance boundary.",
+      "disposition": "Append-only decisions are historical evidence, not runtime debris. The manual Alembic-era rollback contracts were deleted with the Alembic tree (ADR-222) and survive in Git history.",
+      "paths": ["docs/adr"],
+      "readers": "Operators, maintainers, and incident response.",
+      "writers": "ADRs are append-only.",
+      "persistedData": "None.",
       "supportWindow": "Retain as project history and operational evidence.",
       "replacement": "Superseding ADRs describe current decisions without erasing history.",
       "deletionDependencies": [],
-      "liveEvidence": "Repository rules explicitly require ADR history and gated rollback artifacts to remain.",
+      "liveEvidence": "Repository rules explicitly require ADR history to remain.",
       "todoTitle": null
     }
   ]

@@ -517,9 +517,9 @@ describe.skipIf(!hasTestDatabase())(
               domainMax: { dbEditor: 0, split: 0, retag: 0 },
               migrationHeads: (
                 await pool.query(
-                  "SELECT version_num FROM alembic_version ORDER BY version_num",
+                  "SELECT name FROM public.kysely_migration ORDER BY name DESC LIMIT 1",
                 )
-              ).rows.map((row: { version_num: string }) => row.version_num),
+              ).rows.map((row: { name: string }) => row.name),
             }
           : undefined;
       expect(

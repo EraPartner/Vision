@@ -7,8 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { installFreshBaseline } from "../src/database/freshBaseline.ts";
 import { hasTestDatabase } from "./setup/db.ts";
+import { migrateDatabase } from "./setup/migratedDatabase.ts";
 import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
 
 const run = promisify(execFile);
@@ -100,23 +100,7 @@ describe.skipIf(
     } finally {
       await admin.end();
     }
-    await installFreshBaseline({
-      repoRoot,
-      connectionString: urlFor(sourceName),
-    });
-    await run(
-      process.env.ALEMBIC_BIN || "alembic",
-      ["-c", path.join(repoRoot, "config/alembic.ini"), "upgrade", "head"],
-      {
-        cwd: repoRoot,
-        env: {
-          ...process.env,
-          DATABASE_URL: urlFor(sourceName),
-          DATABASE_URL_MIGRATIONS: urlFor(sourceName),
-        },
-        timeout: 120000,
-      },
-    );
+    await migrateDatabase(urlFor(sourceName));
     source = new pg.Client({ connectionString: urlFor(sourceName) });
     restored = new pg.Client({ connectionString: urlFor(restoredName) });
     await source.connect();
@@ -348,8 +332,11 @@ describe.skipIf(
       ],
       { timeout: 120000 },
     );
-    const head = (await source.query("SELECT version_num FROM alembic_version"))
-      .rows[0].version_num;
+    const head = (
+      await source.query(
+        "SELECT max(name) AS head FROM public.kysely_migration",
+      )
+    ).rows[0].head;
     const { bundlePath } = await createBundle({
       destDir: directory,
       deviceId: "synthetic",
@@ -379,8 +366,11 @@ describe.skipIf(
     );
     expect(await snapshot(restored)).toEqual(expected);
     expect(
-      (await restored.query("SELECT version_num FROM alembic_version")).rows[0]
-        .version_num,
+      (
+        await restored.query(
+          "SELECT max(name) AS head FROM public.kysely_migration",
+        )
+      ).rows[0].head,
     ).toBe(head);
     await expect(
       restored.query(

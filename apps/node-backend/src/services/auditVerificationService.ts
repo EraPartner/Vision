@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { query } from "../database/connection.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import {
-  alembicVersionRowSchema,
   auditUnlinkedCountsRowSchema,
   dbEditorAuditRowSchema,
+  migrationHeadRowSchema,
   portfolioRetagAuditRowSchema,
   splitAuditRowSchema,
 } from "../database/rows/audit.ts";
@@ -374,13 +374,14 @@ export async function verifyAuditHistory({
     return fail("concurrent_change_or_head_mismatch", sequence);
 
   if (migrationHeads) {
+    // Migrations are linear, so the head is the latest applied migration.
     const currentRevisions = await runQuery(
-      "SELECT version_num FROM alembic_version ORDER BY version_num",
+      "SELECT name FROM public.kysely_migration ORDER BY name DESC LIMIT 1",
     );
     const actualHeads = checkRows(
-      alembicVersionRowSchema,
+      migrationHeadRowSchema,
       currentRevisions.rows,
-    ).map((row) => row.version_num);
+    ).map((row) => row.name);
     if (JSON.stringify(actualHeads) !== JSON.stringify(migrationHeads)) {
       return fail("migration_version_mismatch", sequence);
     }

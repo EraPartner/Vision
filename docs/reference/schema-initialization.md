@@ -2,8 +2,8 @@
 title: Schema Initialization Reference
 type: reference
 status: archived
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     reference,
@@ -15,40 +15,43 @@ tags:
     archived,
     phase-1,
   ]
-description: Legacy schema initialization reference — ARCHIVED. Schema is now initialized by Alembic migrations (ADR-027).
+description: Legacy schema initialization reference — ARCHIVED. Schema is now initialized by the Kysely migrator from db/migrations/0001_baseline.sql (ADR-222).
 aliases: [schema init, database initialization, table creation, startup schema]
 related_code:
-  - alembic/versions/0001_initial_database_schema.py
+  - db/migrations/0001_baseline.sql
   - apps/node-backend/src/database/migrate.ts
   - apps/node-backend/src/main.ts
 ---
 
 # Schema Initialization Reference (ARCHIVED)
 
-> [!warning] Archived — See ADR-027
-> This document describes the legacy `schemaInit.js` system. As of Phase 1 (2026-04-21), schema initialization is managed entirely by Alembic. See [[docs/adr/027-alembic-single-source-of-schema|ADR-027]] for the current approach.
+> [!warning] Archived — See ADR-222
+> This document describes the legacy `schemaInit.js` system. Phase 1 (2026-04-21) moved schema initialization to Alembic ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]). Since 2026-10-19 the Kysely migrator applies `db/migrations/`, starting with the squashed `0001_baseline.sql`. See [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] for the current approach.
 
 ## Overview (Legacy)
 
-Previously, `schemaInit.js` handled idempotent database schema initialization at application startup. **This module was deleted in Phase 1.** It ensured all tables, indexes, triggers, and compatibility views existed before the API began serving requests. This responsibility now belongs to Alembic migrations.
+Previously, `schemaInit.js` handled idempotent database schema initialization at application startup. **This module was deleted in Phase 1.** It ensured all tables, indexes, triggers, and compatibility views existed before the API began serving requests. This responsibility now belongs to `db/migrations/`.
 
 ## Current Architecture (Since Phase 1)
 
-Application startup now flows through Alembic:
+Application startup now flows through the Kysely migrator:
 
 ```
 Application Start → checkConnection() → runMigrations()
                                          ↓
-                              guarded Alembic upgrade to head
+                     Kysely Migrator: 0001_baseline.sql (empty DB, fingerprint check)
+                     or adoption of an Alembic 0128 DB, then pending NNNN_*.sql files
                                          ↓
                                     refreshMaterializedViews()
 ```
 
-All schema objects (tables, indexes, triggers, views) are defined in `alembic/versions/0001_initial_database_schema.py` (baseline) plus subsequent versioned migrations.
+All schema objects (tables, indexes, triggers, views) are defined in `db/migrations/0001_baseline.sql`
+plus later numbered migrations. Runtime materialized views are not in the baseline; the
+`materializedViewService` creates them after the backend listens.
 
 ### Key Design Principles
 
-1. **Versioned**: Alembic revisions define every supported schema transition.
+1. **Versioned**: Numbered `db/migrations/` files define every supported schema transition.
 2. **Guarded**: Destructive or shape-changing revisions validate their preconditions before writing.
 3. **Order-dependent**: Tables are created in dependency order (referenced tables first).
 4. **Canonical at head**: The migration chain converges every supported install on one schema shape.
@@ -76,8 +79,11 @@ Tables are created in this order to respect foreign key dependencies:
 17. **belgian_inflation_rates** — Belgian monthly inflation data
 18. **portfolio_performance_snapshots** — Daily portfolio snapshots
 
-The exact head-schema inventory is authoritative in the Alembic migration chain. Migration 0087
-converts installations that previously used the ADR-004 inheritance shape to these flat tables.
+The exact schema inventory is authoritative in `db/migrations/` (the baseline plus later files).
+Historical Alembic migration 0087 converted installations that used the ADR-004 inheritance shape
+to these flat tables; the baseline contains only the flat shape. The per-bank `*_raw_transactions`
+tables in item 10 and 11 are no longer in the baseline; exact source records live in
+`transaction_source_records`.
 
 ## Trigger Setup
 
@@ -90,10 +96,9 @@ Triggers are created/updated using `CREATE OR REPLACE FUNCTION` and `CREATE OR R
 
 ## Retired compatibility shape
 
-Migrations 0013 through 0022 contain historical support for an `investments` compatibility view
-over inheritance tables. Migration 0087 removes that runtime schema fork. The old relations may
-remain under `legacy_inh_*` names only as rollback copies until the operator runs the guarded
-cleanup in `alembic/manual/drop_adr109_legacy_relations/` after verifying a restorable backup.
+Historical Alembic migrations 0013 through 0022 supported an `investments` compatibility view over
+inheritance tables, and migration 0087 removed that runtime schema fork. The `0001` baseline has no
+`legacy_inh_*` rollback copies; only the `adr109_legacy_cleanup_marker` reference row remains.
 
 ## Index Strategy
 
@@ -106,6 +111,7 @@ Indexes are created for frequently queried columns:
 
 ## Related Documentation
 
-- [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — current migration strategy
+- [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222: TypeScript migrations with Kysely and one squashed baseline]] — current migration strategy
+- [[docs/adr/027-alembic-single-source-of-schema|ADR-027: Alembic as Single Source of Schema Truth]] — superseded Alembic strategy
 - [[docs/adr/002-database-schema|ADR-002: Database Schema]] — schema design decisions
 - [[docs/guides/migrations|Database Migration Guide]] — how to create and run migrations

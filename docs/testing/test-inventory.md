@@ -3,7 +3,7 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-10-19
-last_modified: 2026-10-11
+last_modified: 2026-10-19
 updated: 2026-10-19
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -1104,7 +1104,7 @@ Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/tes
 | [[apps/node-backend/tests/plannedTransactionRepository.test.ts]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries                         |
 
 > [!note] Schema initialization test archived
-> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
+> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); since [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] the schema comes from `db/migrations/` through the Kysely migrator.
 
 Validation runs (passed): `bun vitest run tests/categoryRepository.test.ts tests/plannedTransactionRepository.test.ts`; `npm test -- --coverage`
 

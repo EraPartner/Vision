@@ -2,7 +2,7 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-19
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases:
@@ -156,8 +156,8 @@ bun vitest run tests/deduplication.test.ts
 #### 4. Check PostgreSQL Connection
 
 ```bash
-# Create an isolated migrated database and run the focused database task
-VISION_TEST_DB_TASK=migration-fidelity bun run test:db
+# Create an isolated migrated database and run the migrator suite
+bun run test:db tests/migrate.db.test.ts
 ```
 
 Managed native PostgreSQL runtimes preload and install `pg_stat_statements`. For a query-level
@@ -368,7 +368,7 @@ curl http://localhost:3002/api/info/transaction-count
 
 ```bash
 # Check configured database migration status
-bun run db:current
+bun run db:status
 ```
 
 ### Frontend Health

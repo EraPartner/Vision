@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
 date: 2026-10-19
-last_modified: 2026-10-18
+last_modified: 2026-10-19
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -81,9 +81,11 @@ Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node
 Once DB is ready, initialization respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
 
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
-2. **Database migrations** — Alembic schema upgrade via JS runner. Exact registered 0120–0125
-   profiles advance to pinned additive 0125; older 0118 maintenance stays deferred, and unknown
-   successor revisions fail closed. See [[docs/guides/migrations|Migration target policy]].
+2. **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
+   with Kysely's migrator in one transaction. An empty database receives the `0001` baseline; an
+   Alembic database is adopted only at `0128_category_path_on_legacy_rename` with the baseline
+   fingerprint; anything else fails closed. See [[docs/guides/migrations|Database Migration Guide]]
+   and [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]].
 3. **Materialized-view warmup** — after Express starts listening, create, index, and refresh the two runtime-managed views. Each phase has its own boot trace mark; failures degrade `/health/detailed` and reads fall back to live SQL.
 4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
    - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
@@ -1057,7 +1059,7 @@ Desktop --> PostgresDev
 The application startup is orchestrated to respect critical dependencies between warming caches and backfilling data:
 
 1. **Database connection** — exponential backoff with up to 40 attempts (max 1 second each)
-2. **Alembic migrations** — schema DDL through the guarded target policy above
+2. **Database migrations** — schema DDL through the Kysely migrator described above
 3. **Materialized views** — create, index, and refresh after schema is ready
 4. **Express server listening** — immediately accept connections on configured port/host
 5. **Exchange rate warm (captured promise) + FX backfill (captured promise)** — both run concurrently but promises are captured
@@ -1129,7 +1131,7 @@ Migration compatibility note:
 - Historical migration `0017_investment_custom_provider_history` updated the retired inheritance
   compatibility view for custom-provider fields and metals. Migration 0087 later converged those
   installations on the flat schema ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
-- `0019_asset_price_history_cache` adds persisted historical quote cache (`asset_price_history`) used by read-through provider history fetches and startup backfill for held assets ([[alembic/versions/0019_asset_price_history_cache.py]]).
+- `0019_asset_price_history_cache` adds persisted historical quote cache (`asset_price_history`) used by read-through provider history fetches and startup backfill for held assets (`0019_asset_price_history_cache`).
 
 ```plantuml
 @startuml
@@ -1179,7 +1181,7 @@ Source diagram: [[docs/diagrams/price-provider-flow.puml]]
 
 Database addition note:
 
-- Historical quote persistence table: `asset_price_history` (`investment_id`, `price_date`, `close_price`, `source`, `fetched_at`, `updated_at`) created by schema init and Alembic migration.
+- Historical quote persistence table: `asset_price_history` (`investment_id`, `price_date`, `close_price`, `source`, `fetched_at`, `updated_at`) created by the schema migrations (now part of the `0001` baseline).
 
 ## Recurring Detection Flow
 

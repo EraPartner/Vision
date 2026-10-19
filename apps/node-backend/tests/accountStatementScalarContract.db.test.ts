@@ -11,7 +11,7 @@ import {
 } from "@vision/types/brands";
 
 const describeDb =
-  hasTestDatabase() && process.env.VISION_TEST_DB_TASK === "statement-contract"
+  hasTestDatabase()
     ? describe
     : describe.skip;
 // Only dereferenced inside the database-gated suite.

@@ -25,8 +25,8 @@ Current equivalents are:
   and loopback-only networking;
 - PostgreSQL uses separate administrator, owner/migration, and application roles;
 - packaged payloads and update archives use checksums and fixed path validation;
-- CI scans for secrets with gitleaks, reviews pull-request dependency changes, audits Bun and
-  Python dependencies, and runs CodeQL; the Trivy filesystem scan was removed by
+- CI scans for secrets with gitleaks, reviews pull-request dependency changes, audits Bun
+  dependencies, and runs CodeQL; the Trivy filesystem scan was removed by
   [[docs/adr/221-proportional-ci|ADR-221]]; and
 - custom source deployments must provide their own process, network, and host isolation.
 

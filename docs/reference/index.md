@@ -49,7 +49,7 @@ SORT title ASC
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]]           | File navigation map organized by feature, layer, and task                                                   |
 | [[docs/reference/frontend-api-client\|Frontend API Client Architecture]]   | Transport, types, and facade layers of the HTTP client (Phase 1 refactor)                                   |
 | [[docs/reference/api-client-methods\|API Client Methods Reference]]        | Archived monolithic client reference; use the frontend API client architecture                              |
-| [[docs/reference/schema-initialization\|Schema Initialization (Archived)]] | Legacy schema initialization reference — replaced by Alembic                                                |
+| [[docs/reference/schema-initialization\|Schema Initialization (Archived)]] | Legacy schema initialization reference — replaced by `db/migrations/` (Kysely, ADR-222)                     |
 
 ## Algorithms & Computer Science
 
@@ -64,7 +64,7 @@ SORT title ASC
 | Document                                                | Description                                                                                             |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [[docs/reference/database-triggers\|Database Triggers]] | All PostgreSQL triggers                                                                                 |
-| [[docs/guides/migrations\|Migration Workflow]]          | Create, inspect, apply, and roll back Alembic revisions; use `bun run db:history` for the current chain |
+| [[docs/guides/migrations\|Migration Workflow]]          | Create, lint, apply, and roll back `db/migrations/` files; use `bun run db:status` for the current chain |
 
 ## Configuration
 

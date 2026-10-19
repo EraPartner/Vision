@@ -129,10 +129,10 @@ export const portfolioRetagAuditRowSchema = z
   })
   .describe("portfolio_retag_audit verification row");
 
-/** `alembic_version`. */
-export const alembicVersionRowSchema = z
-  .object({ version_num: z.string() })
-  .describe("alembic_version row");
+/** Latest `kysely_migration` row: the schema head. */
+export const migrationHeadRowSchema = z
+  .object({ name: z.string() })
+  .describe("kysely_migration head row");
 
 /** The unlinked-row counts: bare `count(*)` subqueries are BIGINT strings. */
 export const auditUnlinkedCountsRowSchema = z

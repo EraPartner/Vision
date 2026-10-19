@@ -44,9 +44,9 @@ related_code:
 > [!note] ADR-088 contract phase
 > Transaction and planned-transaction write identity is now `account_id` only. Responses still
 > return `bank_account` as a display label resolved through `accounts.name`.
-> The out-of-band column removal was applied to the maintained live database on 2026-09-08; fresh
-> Alembic-only installations still require the approved stopped-writer operation in the ADR-088
-> manual contract runbook.
+> The out-of-band column removal was applied to the maintained live database on 2026-09-08. The
+> `0001` migration baseline already has the contracted shape, so fresh installations have no
+> `bank_account` columns ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
 
 > [!note] Dormant compatibility field
 > `has_cash_sleeve` remains stored and exposed by the Accounts API. Account-type defaults derive
@@ -61,8 +61,7 @@ related_code:
 > `accounts.name`; the canonical transaction tables no longer need their legacy string columns.
 > Free-text transaction account creation is no longer supported; create the account through the
 > Accounts surface first. The maintained live database completed the out-of-band drop on
-> 2026-09-08; the reusable maintenance workflow remains documented in
-> `alembic/manual/contract_drop_bank_account/README.md`.
+> 2026-09-08; the manual contract scripts were deleted with the Alembic tree.
 
 The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088-accounts-entity|ADR-088]]), its computed balance, and the workflows for keeping those balances trustworthy. Rebuilt under [[docs/adr/107-accounts-budgeting-ux-remake|ADR-107]] around three questions — _what do I have_ (hub), _is it right_ (ledger + provenance), _how do I fix it_ (reconcile).
 
