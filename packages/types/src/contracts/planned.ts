@@ -108,3 +108,21 @@ export const PlannedMatchSuggestionSchema = z.looseObject({
 export const PlannedMatchSuggestionListSchema = wireCollectionOf(
   PlannedMatchSuggestionSchema,
 );
+
+/** `GET /api/planned-transactions/totals`: server-computed planned totals. */
+export const PlannedTotalsSchema = z.looseObject({
+  currency: z.string(),
+  today: WireDateSchema,
+  month_end: WireDateSchema,
+  rest_of_month: z.looseObject({
+    incoming: z.number(),
+    outgoing: z.number(),
+    unconverted_count: z.number().int(),
+  }),
+  monthly_equivalent: z.looseObject({
+    total: z.number(),
+    unconverted_count: z.number().int(),
+  }),
+});
+
+export type PlannedTotals = z.output<typeof PlannedTotalsSchema>;

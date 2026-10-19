@@ -820,6 +820,23 @@ describe("PortfolioPage (integration)", () => {
                     links: [],
                 }),
             ),
+            // Archived holdings come from the all-holdings summary; the
+            // active-only request falls through to useTwoHoldings.
+            http.get(`${API_BASE}/api/info/portfolio-summary`, ({ request }) => {
+                if (new URL(request.url).searchParams.get("active") !== "false")
+                    return undefined;
+                return ok({
+                    ...PORTFOLIO_SUMMARY_STUB,
+                    summaries: [
+                        {
+                            ...CANONICAL_INVESTMENT,
+                            id: 3,
+                            name: "Old Fund",
+                            is_active: false,
+                        },
+                    ],
+                });
+            }),
             http.patch(`${API_BASE}/api/investments/:id`, async ({ params, request }) => {
                 patches.push({ id: String(params.id), body: await request.json() });
                 return ok({ ...INVESTMENT_STUB, id: Number(params.id) });

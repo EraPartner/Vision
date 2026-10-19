@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-10-11
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
-related_code: [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/services/plannedTransactionService.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]], [[apps/node-backend/src/services/plannedMatchService.ts]], [[apps/node-backend/src/services/plannedExecutionService.ts]]
+related_code: [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/services/plannedTransactionService.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]], [[apps/node-backend/src/services/plannedMatchService.ts]], [[apps/node-backend/src/services/plannedExecutionService.ts]], [[apps/node-backend/src/services/plannedTotalsService.ts]]
 ---
 
 # Planned Transactions API
@@ -254,6 +254,51 @@ Implementation:
 Permanently delete a planned transaction.
 
 **Response:** `204 No Content` — empty body, no envelope. `404` if not found.
+
+### GET /api/planned-transactions/totals
+
+> [!info] Added 2026-10-19 (non-breaking). Registered before `/:id` in the router.
+
+Server-computed planned totals in one display currency, read by the Home hero ("planned in" and
+"planned out") and the planned page's "Est. monthly" figure through
+`features/planned/usePlannedTotals.ts`. Implemented by
+[[apps/node-backend/src/services/plannedTotalsService.ts]].
+
+**Query Parameters:**
+
+| Parameter  | Type   | Default | Description                                         |
+| ---------- | ------ | ------- | --------------------------------------------------- |
+| `currency` | string | `EUR`   | 3-letter ISO code; anything else returns `400 VALIDATION_ERROR` |
+
+**Response:** `{ currency, today, month_end, rest_of_month, monthly_equivalent }` (OpenAPI schema
+`PlannedTotals`, contract `PlannedTotalsSchema` in `packages/types/src/contracts/planned.ts`).
+
+```json
+{
+  "currency": "EUR",
+  "today": "2026-10-19",
+  "month_end": "2026-10-31",
+  "rest_of_month": { "incoming": 1200.0, "outgoing": -845.5, "unconverted_count": 0 },
+  "monthly_equivalent": { "total": -312.4, "unconverted_count": 1 }
+}
+```
+
+**Behavior:**
+
+- Source rows are active, unexecuted planned transactions.
+- `rest_of_month` counts every occurrence due from `today` to `month_end`: a recurring row
+  contributes once per occurrence, bounded by `recurrence_end_date` and the occurrences left under
+  `max_occurrences`. Totals are split by sign; `outgoing` is negative or zero.
+- `monthly_equivalent.total` is the signed net monthly amount of recurring rows that still have
+  occurrences left. The factor comes from `monthlyOccurrenceFactor` in
+  `apps/node-backend/src/lib/calculations/recurrence.ts`: month cadences use `1/n` months
+  (monthly 1, quarterly 1/3, yearly 1/12), day cadences use `30.4375/n` days (daily 30.4375,
+  weekly 30.4375/7, biweekly 30.4375/14, `every N days` 30.4375/N). Rows with an unrecognised
+  pattern are skipped.
+- Amounts are converted with the latest stored `exchange_rates` through EUR. A row whose source
+  or target rate is missing is left out and counted in `unconverted_count`.
+
+Covered on real PostgreSQL by [[apps/node-backend/tests/plannedTotals.db.test.ts]].
 
 ### GET /api/planned-transactions/match-suggestions
 

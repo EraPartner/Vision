@@ -2,8 +2,8 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-10-10
-updated: 2026-10-10
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     components,
@@ -83,7 +83,7 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 | CashFlowForecastChart       | Dual-mode forecast: Current Month (8-method ensemble + diagnostics, Phase C + F) + Rolling Window (flexible 30/60/90/180-day view, Phase H) | [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx\|CashFlowForecastChart.tsx]]             |
 | ForecastInner               | Month-view forecast rendering with multi-method chart, toggles, and diagnostics panel                                                       | [[apps/frontend/src/features/dashboard/ForecastInner.tsx\|ForecastInner.tsx]]                             |
 | ForecastInnerRolling        | Rolling-window forecast rendering with preset duration chips and "today" reference line                                                     | [[apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx\|ForecastInnerRolling.tsx]]               |
-| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and ensemble weights (Phase C + F)                                                              | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
+| CashFlowForecastDiagnostics | Diagnostics sheet showing backtest accuracy and the server-applied ensemble weights (Phase C + F)                                                              | [[apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx\|CashFlowForecastDiagnostics.tsx]] |
 | BankBalancesWidget          | Bank account balance cards and history chart with entity display names (hidden by default since ADR-181)                                    | [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx\|BankBalancesWidget.tsx]]                   |
 | MonthToDateHero             | Home hero: month-to-date spending, pace against a typical month, cumulative spend line, income so far and planned in/out                    | [[apps/frontend/src/features/dashboard/MonthToDateHero.tsx\|MonthToDateHero.tsx]]                         |
 | NeedsAttentionList          | Home list of items that need a decision, each linking to where it is settled                                                                | [[apps/frontend/src/features/dashboard/NeedsAttentionList.tsx\|NeedsAttentionList.tsx]]                   |
@@ -104,7 +104,7 @@ Dashboard components follow the [[docs/reference/code-patterns#surface-shell-pat
 
 ### MonthToDateHero
 
-Reads `GET /api/aggregations/average-vs-current` through `useMonthToDate(currency)` (`features/dashboard/useHomeQueries.ts`, key `dashboardKeys.monthToDate`, typed `AverageVsCurrentData`; see [[docs/api/aggregations#Average vs. Current]]) and `useRestOfMonthPlanned()` (active planned rows from today to month end, executed one-time rows dropped, split into incoming and outgoing totals). It shows the spent-so-far amount, a pace sentence (nothing yet, no history, even, under or over a typical month, from `comparison.projected_monthly_total` against the six-month average; `pace` is nullable), income so far, planned in and planned out, and an SVG chart of cumulative spend with a dashed straight "typical month" guide and a dotted projection. The endpoint accepts no exclusion parameters, so settings-level category and recipient exclusions do not apply to the hero.
+Reads `GET /api/aggregations/average-vs-current` through `useMonthToDate(currency)` (`features/dashboard/useHomeQueries.ts`, key `dashboardKeys.monthToDate`, typed `AverageVsCurrentData`; see [[docs/api/aggregations#Average vs. Current]]) and `usePlannedTotals(currency)` (`features/planned/usePlannedTotals.ts`, `GET /api/planned-transactions/totals`; see [[docs/api/plannedTransactions#GET /api/planned-transactions/totals]]). The hero reads its `rest_of_month` block: every planned occurrence due from today to month end, recurring rows counted once per occurrence, converted to the display currency on the server at the latest stored rates. Before 2026-10-19 the hero summed up to 200 raw planned rows in the browser, counting each recurring rule once and adding amounts without FX conversion. It shows the spent-so-far amount, a pace sentence (nothing yet, no history, even, under or over a typical month, from `comparison.projected_monthly_total` against the six-month average; `pace` is nullable), income so far, planned in and planned out, and an SVG chart of cumulative spend with a dashed straight "typical month" guide and a dotted projection. The endpoint accepts no exclusion parameters, so settings-level category and recipient exclusions do not apply to the hero.
 
 ### Lists
 
@@ -364,7 +364,7 @@ interface CashFlowForecastChartProps {
 - **Planned transaction overlay** — Switch to include pending planned transactions in cumulative forecast; triggers API refetch
 - **Per-method toggles** — Pill-button controls to show/hide individual methods on chart
 - **Monte Carlo confidence bands** — Daily view renders marginal P10/P90; cumulative view renders path-wise cumulative P10/P90 supplied by the backend (visible when MC methods are toggled on)
-- **Diagnostics panel** — Right-side sheet with backtest accuracy table, method rank badges, MAE sparklines, ensemble weights visualization
+- **Diagnostics panel** — Right-side sheet with backtest accuracy table, method rank badges, MAE sparklines, ensemble weights visualization (`diagnostics.ensemble_weights` from the server)
 - **Diagnostics button** — Icon button to open/close sheet
 
 #### Rolling Window View (Phase H + v2)
@@ -827,7 +827,7 @@ API (/api/aggregations/monthly-summary) → Hook (useFilteredDashboardStats) →
 - `useUpcomingPlannedPayments()` — Shared hook for "due in next 7 days" payments + module-level dismissed-ID store; AppLayout keeps its native badge effect active on all routes while the visible `UpcomingPaymentsNotification` is dashboard-only — see [[docs/components/hooks#useupcomingplannedpayments-v11|Custom Hooks — useUpcomingPlannedPayments]]
 - `useTransactions()` - Transaction list with filters
 - `useWidgetVisibility()` - Widget visibility state
-- `useMonthToDate()` / `useRestOfMonthPlanned()` — Home hero queries (`features/dashboard/useHomeQueries.ts`)
+- `useMonthToDate()` (`features/dashboard/useHomeQueries.ts`) / `usePlannedTotals(currency)` (`features/planned/usePlannedTotals.ts`) — Home hero queries
 
 ---
 

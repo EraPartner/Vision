@@ -7,9 +7,11 @@ import type {
 } from "@/types/api";
 import {
     PlannedMatchSuggestionListSchema,
+    PlannedTotalsSchema,
     PlannedTransactionListSchema,
     PlannedTransactionSchema,
 } from "@vision/types/contracts";
+import type { PlannedTotals } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
@@ -112,4 +114,18 @@ export async function getPlannedMatchSuggestions(): Promise<
         schema: PlannedMatchSuggestionListSchema,
     });
     return items;
+}
+
+export type { PlannedTotals };
+
+/**
+ * Rest-of-month and monthly-equivalent planned totals, computed and converted
+ * to `currency` on the server.
+ */
+export function getPlannedTotals(currency: string): Promise<PlannedTotals> {
+    return requestWithQuery<PlannedTotals>(
+        "/api/planned-transactions/totals",
+        { currency },
+        { schema: PlannedTotalsSchema },
+    );
 }

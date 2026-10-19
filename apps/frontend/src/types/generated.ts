@@ -1778,6 +1778,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/planned-transactions/totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planned totals in one display currency
+         * @description Server-computed planned totals. `rest_of_month` sums every occurrence due from today to the end of the calendar month (recurring rows counted once per occurrence, bounded by recurrence end date and max occurrences), split into incoming and outgoing. `monthly_equivalent` is the signed net monthly amount of active recurring rows (weekly = 30.4375/7 per month). Amounts are converted at the latest stored exchange rates; rows without a rate are left out and counted in `unconverted_count`.
+         */
+        get: operations["getPlannedTotals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/planned-transactions/match-suggestions": {
         parameters: {
             query?: never;
@@ -7419,6 +7439,23 @@ export interface components {
             execution_date: string;
             /** Format: date-time */
             created_at?: string | null;
+        };
+        PlannedTotals: {
+            currency: string;
+            /** Format: date */
+            today: string;
+            /** Format: date */
+            month_end: string;
+            rest_of_month: {
+                incoming: number;
+                /** @description Negative or zero. */
+                outgoing: number;
+                unconverted_count: number;
+            };
+            monthly_equivalent: {
+                total: number;
+                unconverted_count: number;
+            };
         };
         PlannedTransaction: {
             id: number;
@@ -13454,6 +13491,37 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    getPlannedTotals: {
+        parameters: {
+            query?: {
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planned totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["PlannedTotals"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

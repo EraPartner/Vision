@@ -5,13 +5,6 @@ interface ConvertibleAmount {
     currency?: string;
 }
 
-interface MonthlyConvertibleAmount extends ConvertibleAmount {
-    is_active: boolean;
-    is_recurring: boolean;
-    frequency?: string | null | undefined;
-    custom_interval_days?: number | null | undefined;
-}
-
 type AvailableConverter = (
     amount: number,
     fromCurrency?: string,
@@ -43,33 +36,4 @@ export function sumConvertedAmounts<T extends ConvertibleAmount>(
         total: toNumber(addAll(convertedAmounts)),
         unavailableCount,
     };
-}
-
-function monthlyMultiplier(item: MonthlyConvertibleAmount): number {
-    return item.frequency === "daily"
-        ? 30
-        : item.frequency === "weekly"
-          ? 4.33
-          : item.frequency === "biweekly"
-            ? 2.17
-            : item.frequency === "monthly"
-              ? 1
-              : item.frequency === "quarterly"
-                ? 1 / 3
-                : item.frequency === "yearly"
-                  ? 1 / 12
-                  : item.frequency === "custom" && item.custom_interval_days
-                    ? 30 / item.custom_interval_days
-                    : 1;
-}
-
-export function sumConvertedMonthlyAmounts<T extends MonthlyConvertibleAmount>(
-    items: T[],
-    convertAmount: AvailableConverter,
-): ConvertedTotal {
-    return sumConvertedAmounts(
-        items.filter((item) => item.is_active && item.is_recurring),
-        convertAmount,
-        monthlyMultiplier,
-    );
 }
