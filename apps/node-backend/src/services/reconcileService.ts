@@ -28,7 +28,9 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, db } from "../database/db.ts";
 import { queryOne } from "../database/rowContracts.ts";
 import {
   adjustmentRowSchema,
@@ -100,11 +102,13 @@ export async function reconcileAccount(
   // row FOR UPDATE first so the second request blocks, then re-reads a now-zero
   // drift and falls into the "already reconciled" guard below.
   return withTransaction(async () => {
-    const lockRes = await query(
-      `SELECT id FROM accounts WHERE id = $1 FOR UPDATE`,
-      [accountId],
-    );
-    if (!lockRes.rows[0])
+    const locked = await db
+      .selectFrom("accounts")
+      .select("id")
+      .where("id", "=", asAccountId(accountId))
+      .forUpdate()
+      .executeTakeFirst();
+    if (!locked)
       throw new NotFoundError(`Account ${accountId} not found`);
 
     // Statement figure + the live computed balance, per currency partition (the
@@ -178,15 +182,23 @@ export async function reconcileAccount(
       // outcome: there is no balance in the statement's currency to adopt.
       // (The dialog shows that 0 as the base, so this is no longer a figure the
       // user never saw.)
-      const upd = await queryOne(
+      const upd = await checkedRow(
         statementBalanceAmountRowSchema,
-        `INSERT INTO account_statement_balances
-           (account_id, currency, balance, balance_date)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (account_id, currency) DO UPDATE
-           SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
-         RETURNING balance`,
-        [accountId, reconcileCurrency, computed, today],
+        db
+          .insertInto("account_statement_balances")
+          .values({
+            account_id: asAccountId(accountId),
+            currency: asCurrencyCode(reconcileCurrency),
+            balance: computed,
+            balance_date: today,
+          })
+          .onConflict((oc) =>
+            oc.columns(["account_id", "currency"]).doUpdateSet((eb) => ({
+              balance: eb.ref("excluded.balance"),
+              balance_date: eb.ref("excluded.balance_date"),
+            })),
+          )
+          .returning("balance"),
       );
       // An upsert ... RETURNING yields exactly one row or throws.
       if (!upd) throw new Error("statement balance upsert returned no row");
@@ -212,20 +224,22 @@ export async function reconcileAccount(
     // it is owned by the shared system recipient — resolved inside this
     // transaction, so a rolled-back reconcile leaves no trace of it either.
     const systemRecipientId = await recipientRepository.getOrCreateSystemId();
-    const ins = await queryOne(
+    const ins = await checkedRow(
       adjustmentRowSchema,
-      `INSERT INTO transactions
-         (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
-       RETURNING id, amount, transfer_source`,
-      [
-        today,
-        drift,
-        base.currency,
-        ADJUSTMENT_MEMO,
-        accountId,
-        systemRecipientId,
-      ],
+      db
+        .insertInto("transactions")
+        .values({
+          date: today,
+          amount: drift,
+          currency: asCurrencyCode(base.currency),
+          memo: ADJUSTMENT_MEMO,
+          account_id: asAccountId(accountId),
+          recipient_id: systemRecipientId,
+          is_transfer: true,
+          transfer_source: "adjustment",
+          is_active: true,
+        })
+        .returning(["id", "amount", "transfer_source"]),
     );
     return {
       mode,

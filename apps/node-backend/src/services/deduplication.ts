@@ -4,16 +4,19 @@
 
 import crypto from "crypto";
 import Decimal from "decimal.js";
-import { query, withSavepointIfInTransaction } from "../database/connection.ts";
+import { sql } from "kysely";
+import { withSavepointIfInTransaction } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
-import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { checkedRow, db } from "../database/db.ts";
 import { idRowSchema } from "../database/rowSchemas.ts";
 import { transactionIdRowSchema } from "../database/rows/ledger.ts";
 import { epochMsToUtcYmd, toYmd } from "../lib/dateFormat.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import type { TransactionId } from "@vision/types/brands";
 
 // Match ECMAScript String.trim() exactly, including historical untrimmed rows.
 // PostgreSQL's default TRIM only removes ordinary spaces.
-const manualMemoTrimSql = String.raw`BTRIM(t.memo, U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')`;
+const manualMemoTrimSql = sql.raw(String.raw`BTRIM(t.memo, U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')`);
 
 // NUMERIC(18,4) rounds ties away from zero. Identity must represent the
 // persisted value so equivalent inputs share both the lock and live predicate.
@@ -90,7 +93,7 @@ export async function lockManualTransactionIdentity(
   input: ManualHashInput,
 ): Promise<void> {
   const hash = createManualTransactionHash(input);
-  await query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [hash]);
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${hash}, 0))`.execute(db);
 }
 
 async function isDuplicate(transactionData: FieldHashInput): Promise<boolean> {
@@ -106,22 +109,22 @@ async function isDuplicate(transactionData: FieldHashInput): Promise<boolean> {
   // for an unknown name (so an otherwise-identical `recipient_id IS NULL` row
   // was never flagged) and its LIMIT-without-ORDER-BY was non-deterministic on
   // name collisions. COALESCE handles the no-recipient case symmetrically.
-  const result = await query(
-    `SELECT t.id FROM transactions t
-     LEFT JOIN recipients r ON t.recipient_id = r.id
-     WHERE t.date = $1 AND t.amount = $2
-       AND COALESCE(UPPER(r.name), '') = $3
-       AND COALESCE(TRIM(t.memo), '') = $4
-       AND t.is_active = true
-     LIMIT 1`,
-    [
-      epochMsToUtcYmd(transactionData.date.getTime()),
-      transactionData.amount,
+  const match = await db
+    .selectFrom("transactions as t")
+    .leftJoin("recipients as r", "t.recipient_id", "r.id")
+    .select("t.id")
+    .where(sql<boolean>`t.date = ${epochMsToUtcYmd(transactionData.date.getTime())}`)
+    .where(sql<boolean>`t.amount = ${transactionData.amount}`)
+    .where(
+      sql<string>`COALESCE(UPPER(r.name), '')`,
+      "=",
       (transactionData.recipient || "").toUpperCase(),
-      (transactionData.memo || "").trim(),
-    ],
-  );
-  return result.rows.length > 0;
+    )
+    .where(sql<string>`COALESCE(TRIM(t.memo), '')`, "=", (transactionData.memo || "").trim())
+    .where("t.is_active", "=", true)
+    .limit(1)
+    .executeTakeFirst();
+  return match !== undefined;
 }
 
 async function isDuplicateByFields(
@@ -130,15 +133,18 @@ async function isDuplicateByFields(
   recipientName?: string,
   memo?: string,
 ): Promise<boolean> {
-  const result = await query(
-    `SELECT id FROM transactions t
-     LEFT JOIN recipients r ON t.recipient_id = r.id
-     WHERE t.date = $1 AND t.amount = $2 AND UPPER(r.name) = $3
-       AND COALESCE(TRIM(t.memo), '') = $4 AND t.is_active = true
-     LIMIT 1`,
-    [date, amount, (recipientName || "").toUpperCase(), (memo || "").trim()],
-  );
-  return result.rows.length > 0;
+  const match = await db
+    .selectFrom("transactions as t")
+    .leftJoin("recipients as r", "t.recipient_id", "r.id")
+    .select("t.id")
+    .where(sql<boolean>`t.date = ${date}`)
+    .where(sql<boolean>`t.amount = ${amount}`)
+    .where(sql<string>`UPPER(r.name)`, "=", (recipientName || "").toUpperCase())
+    .where(sql<string>`COALESCE(TRIM(t.memo), '')`, "=", (memo || "").trim())
+    .where("t.is_active", "=", true)
+    .limit(1)
+    .executeTakeFirst();
+  return match !== undefined;
 }
 
 /**
@@ -168,45 +174,37 @@ export async function isManualDuplicate({
 
   // Claims are hints: edits can leave an old hash pointing at a different identity.
   // Validate the live fields even on a hash hit; legacy hashes fall through here too.
-  const predicate = `t.date = $1 AND t.amount = $2
-    AND t.recipient_id IS NOT DISTINCT FROM $3::integer
-    AND UPPER(COALESCE(${manualMemoTrimSql}, '')) = $4
-    AND (($6::integer IS NOT NULL AND t.account_id = $6)
-      OR ($6::integer IS NULL AND COALESCE(UPPER(acct.name), '') = $5))
-    AND UPPER(t.currency) = $7 AND t.is_active = true`;
-  const identityParams = [
-    toYmd(date),
-    manualAmountIdentity(amount),
-    recipientId ?? null,
-    (memo || "").trim().toUpperCase(),
-    (bankAccount || "").toUpperCase(),
-    accountId ?? null,
-    (currency || "EUR").trim().toUpperCase(),
-  ];
+  const account = accountId ?? null;
+  const predicate = sql<boolean>`t.date = ${toYmd(date)} AND t.amount = ${manualAmountIdentity(amount)}
+    AND t.recipient_id IS NOT DISTINCT FROM ${recipientId ?? null}::integer
+    AND UPPER(COALESCE(${manualMemoTrimSql}, '')) = ${(memo || "").trim().toUpperCase()}
+    AND ((${account}::integer IS NOT NULL AND t.account_id = ${account})
+      OR (${account}::integer IS NULL AND COALESCE(UPPER(acct.name), '') = ${(bankAccount || "").toUpperCase()}))
+    AND UPPER(t.currency) = ${(currency || "EUR").trim().toUpperCase()} AND t.is_active = true`;
 
   // Rows are checked after the try: a contract violation must fail loudly,
   // not fall through to field matching like a missing claim table does.
   let claimRows: unknown[] = [];
+  const claimQuery = db
+    .selectFrom("manual_transaction_dedup_claims as m")
+    .innerJoin("transactions as t", (join) =>
+      join.onRef("t.id", "=", "m.transaction_id").on("t.is_active", "=", true),
+    )
+    .leftJoin("accounts as acct", "acct.id", "t.account_id")
+    .select("m.transaction_id")
+    .where("m.deduplication_hash", "=", hash)
+    .where(predicate)
+    .limit(1);
   try {
     // Only a live, active transaction blocks. The FK is ON DELETE SET NULL
     // (migration 0024), so a deleted transaction leaves its hash row behind
     // with transaction_id = NULL — without the join that dangling row would
     // block re-adding the identical transaction forever, with a ConflictError
     // pointing at nothing.
-    const result = await withSavepointIfInTransaction(
+    claimRows = await withSavepointIfInTransaction(
       "sp_manual_dedup_claim_read",
-      () =>
-        query(
-          `SELECT m.transaction_id
-             FROM manual_transaction_dedup_claims m
-             JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
-             LEFT JOIN accounts acct ON acct.id = t.account_id
-            WHERE m.deduplication_hash = $8 AND ${predicate}
-            LIMIT 1`,
-          [...identityParams, hash],
-        ),
+      () => claimQuery.execute(),
     );
-    claimRows = result.rows;
   } catch (err) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr.code !== "42P01") {
@@ -223,13 +221,14 @@ export async function isManualDuplicate({
   }
 
   // Fallback: field-based duplicate check (includes memo for accurate match).
-  const [fieldMatch] = await queryRows(
+  const fieldMatch = await checkedRow(
     idRowSchema,
-    `SELECT t.id FROM transactions t
-     LEFT JOIN accounts acct ON acct.id = t.account_id
-     WHERE ${predicate}
-     LIMIT 1`,
-    identityParams,
+    db
+      .selectFrom("transactions as t")
+      .leftJoin("accounts as acct", "acct.id", "t.account_id")
+      .select("t.id")
+      .where(predicate)
+      .limit(1),
   );
   if (fieldMatch) {
     return { isDuplicate: true, existingTransactionId: fieldMatch.id };
@@ -253,7 +252,7 @@ export async function recordManualTransactionDedupClaim({
 }: ManualHashInput & {
   categoryId?: number | string | null;
   comment?: string | null;
-  transactionId: number | string;
+  transactionId: TransactionId;
 }): Promise<void> {
   const hash = createManualTransactionHash({
     date,
@@ -269,15 +268,20 @@ export async function recordManualTransactionDedupClaim({
     // DO UPDATE (not DO NOTHING): re-adding a previously deleted transaction
     // re-claims its dangling hash row, so the hash points at the live row again.
     await withSavepointIfInTransaction("sp_manual_dedup_claim_write", () =>
-      query(
-        `INSERT INTO manual_transaction_dedup_claims
-           (deduplication_hash, transaction_id, updated_at)
-         VALUES ($1, $2, now())
-         ON CONFLICT (deduplication_hash) DO UPDATE
-           SET transaction_id = EXCLUDED.transaction_id,
-               updated_at = now()`,
-        [hash, transactionId],
-      ),
+      db
+        .insertInto("manual_transaction_dedup_claims")
+        .values({
+          deduplication_hash: hash,
+          transaction_id: transactionId,
+          updated_at: sql<Date>`now()`,
+        })
+        .onConflict((oc) =>
+          oc.column("deduplication_hash").doUpdateSet({
+            transaction_id: (eb) => eb.ref("excluded.transaction_id"),
+            updated_at: sql<Date>`now()`,
+          }),
+        )
+        .execute(),
     );
   } catch (err) {
     const pgErr = err as { code?: string; message?: string };

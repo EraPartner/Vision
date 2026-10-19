@@ -18,6 +18,9 @@ const { query, withTransaction } = connection as unknown as TxConnectionMock<
   Record<never, never>
 >;
 
+/** SQL text without identifier quotes, for case-insensitive matching. */
+const text = (sql: string): string => sql.replaceAll('"', "");
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockClient.query.mockReset();
@@ -48,7 +51,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       /not found/i,
     );
     // First (and only) query is the lock, and it must take FOR UPDATE.
-    expect(query.mock.calls[0]![0]).toMatch(/FOR UPDATE/);
+    expect(query.mock.calls[0]![0]).toMatch(/FOR UPDATE/i);
   });
 
   it("rejects when the account has no statement balance", async () => {
@@ -110,8 +113,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     expect(withTransaction).toHaveBeenCalledTimes(1);
     // First query is the row lock, taken before the drift read.
     const [lockSql, lockParams] = query.mock.calls[0]!;
-    expect(lockSql).toMatch(
-      /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/,
+    expect(text(lockSql)).toMatch(
+      /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/i,
     );
     expect(lockParams).toEqual([5]);
     expect(query.mock.calls[1]![0]).toMatch(/s\.balance AS statement_balance/);
@@ -145,8 +148,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     // Third call atomically upserts the authoritative currency row.
     const [sql, params] = query.mock.calls[2]!;
-    expect(sql).toMatch(/INSERT INTO account_statement_balances/);
-    expect(sql).not.toMatch(/UPDATE accounts/);
+    expect(text(sql)).toMatch(/INSERT INTO account_statement_balances/i);
+    expect(text(sql)).not.toMatch(/UPDATE accounts/i);
     expect(params[0]).toBe(5);
     expect(params[1]).toBe("EUR");
     expect(params[2]).toBe(100);
@@ -187,7 +190,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     // Fourth call is the INSERT (lock, drift read, system-recipient upsert,
     // INSERT); amount is the drift, no `balance` column is written.
     const [sql, params] = query.mock.calls[3]!;
-    expect(sql).toMatch(/INSERT INTO transactions/);
+    expect(text(sql)).toMatch(/INSERT INTO transactions/i);
     expect(sql).toMatch(/transfer_source/);
     expect(sql).not.toMatch(/\bbalance\b/);
     // params: [today, amount, currency, memo, accountId, recipientId]
@@ -198,8 +201,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     // column must actually be in the statement (omitting it raised 23502 live).
     expect(sql).toMatch(/recipient_id/);
     expect(params[5]).toBe(900);
-    expect(query.mock.calls[2]![0]).toMatch(
-      /SELECT id FROM recipients WHERE normalized_name/,
+    expect(text(query.mock.calls[2]![0])).toMatch(
+      /SELECT id FROM recipients WHERE normalized_name/i,
     );
   });
 

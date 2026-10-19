@@ -1,12 +1,12 @@
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
 import {
   idRowSchema,
   requireRow,
   savedChartRowSchema,
 } from "../database/rows/catalog.ts";
-import { buildSetClauses, buildLimitOffset } from "../lib/sqlClauses.ts";
 
 import type { SavedChartRow } from "../types/rows.ts";
 
@@ -31,41 +31,51 @@ export interface SavedChartInput {
   dateRangeEnd?: string | null | undefined;
 }
 
+/** A membership id list, ordered, never NULL. */
+function memberIds(
+  table: "saved_chart_categories" | "saved_chart_recipients" | "saved_chart_tags",
+  column: "category_id" | "recipient_id" | "tag_id",
+  alias: "category_ids" | "recipient_ids" | "tag_ids",
+) {
+  return sql<number[]>`COALESCE(
+    (SELECT array_agg(${sql.ref(column)} ORDER BY ${sql.ref(column)})
+       FROM ${sql.table(table)} WHERE saved_chart_id = sc.id),
+    '{}'::INTEGER[]
+  )`.as(alias);
+}
+
 // date_range_* are DATE columns — emitted via to_char so the wire carries the
 // calendar day, not a pg Date that JSON-serializes to the previous day east of UTC.
-const COLUMNS = `
-  sc.id,
-  sc.name,
-  sc.chart_type,
-  COALESCE(
-    (SELECT array_agg(category_id ORDER BY category_id)
-       FROM saved_chart_categories WHERE saved_chart_id = sc.id),
-    '{}'::INTEGER[]
-  ) AS category_ids,
-  COALESCE(
-    (SELECT array_agg(recipient_id ORDER BY recipient_id)
-       FROM saved_chart_recipients WHERE saved_chart_id = sc.id),
-    '{}'::INTEGER[]
-  ) AS recipient_ids,
-  COALESCE(
-    (SELECT array_agg(tag_id ORDER BY tag_id)
-       FROM saved_chart_tags WHERE saved_chart_id = sc.id),
-    '{}'::INTEGER[]
-  ) AS tag_ids,
-  sc.all_categories,
-  sc.all_recipients,
-  sc.all_tags,
-  sc.chart_variant,
-  sc.time_bucket,
-  to_char(sc.date_range_start, 'YYYY-MM-DD') AS date_range_start,
-  to_char(sc.date_range_end, 'YYYY-MM-DD') AS date_range_end,
-  sc.created_at,
-  sc.updated_at`;
+function selectCharts() {
+  return db
+    .selectFrom("saved_charts as sc")
+    .select([
+      "sc.id",
+      "sc.name",
+      "sc.chart_type",
+      memberIds("saved_chart_categories", "category_id", "category_ids"),
+      memberIds("saved_chart_recipients", "recipient_id", "recipient_ids"),
+      memberIds("saved_chart_tags", "tag_id", "tag_ids"),
+      "sc.all_categories",
+      "sc.all_recipients",
+      "sc.all_tags",
+      "sc.chart_variant",
+      "sc.time_bucket",
+      sql<string | null>`to_char(sc.date_range_start, 'YYYY-MM-DD')`.as(
+        "date_range_start",
+      ),
+      sql<string | null>`to_char(sc.date_range_end, 'YYYY-MM-DD')`.as(
+        "date_range_end",
+      ),
+      "sc.created_at",
+      "sc.updated_at",
+    ]);
+}
 
 const MEMBERSHIP_FIELDS: {
   input: "categoryIds" | "recipientIds" | "tagIds";
-  table: string;
-  column: string;
+  table: "saved_chart_categories" | "saved_chart_recipients" | "saved_chart_tags";
+  column: "category_id" | "recipient_id" | "tag_id";
 }[] = [
   {
     input: "categoryIds",
@@ -92,23 +102,22 @@ async function replaceMemberships(
     const ids = input[membership.input];
     if (ids === undefined) continue;
     const uniqueIds = [...new Set(ids)].sort((a, b) => a - b);
-    await query(`DELETE FROM ${membership.table} WHERE saved_chart_id = $1`, [
-      chartId,
-    ]);
+    await db
+      .deleteFrom(membership.table)
+      .where("saved_chart_id", "=", chartId)
+      .execute();
     if (uniqueIds.length === 0) continue;
-    await query(
-      `INSERT INTO ${membership.table} (saved_chart_id, ${membership.column})
-       SELECT $1, unnest($2::INTEGER[])`,
-      [chartId, uniqueIds],
-    );
+    await sql`
+      INSERT INTO ${sql.table(membership.table)} (saved_chart_id, ${sql.ref(membership.column)})
+      SELECT ${chartId}, unnest(${uniqueIds}::INTEGER[])
+    `.execute(db);
   }
 }
 
 async function readById(id: number): Promise<SavedChartRow | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     savedChartRowSchema,
-    `SELECT ${COLUMNS} FROM saved_charts sc WHERE sc.id = $1`,
-    [id],
+    selectCharts().where("sc.id", "=", id),
   );
   return row ? mapRow(row) : null;
 }
@@ -141,11 +150,9 @@ const savedChartsRepository = {
   }: { limit?: number | null; offset?: number } = {}): Promise<
     SavedChartRow[]
   > {
-    const params: unknown[] = [];
-    const sql =
-      `SELECT ${COLUMNS} FROM saved_charts sc ORDER BY sc.created_at ASC` +
-      buildLimitOffset(params, { limit, offset });
-    const rows = await queryRows(savedChartRowSchema, sql, params);
+    let builder = selectCharts().orderBy("sc.created_at", "asc");
+    if (limit !== null) builder = builder.limit(limit).offset(offset);
+    const rows = await checkedRows(savedChartRowSchema, builder);
     return rows.map(mapRow);
   },
 
@@ -153,9 +160,9 @@ const savedChartsRepository = {
    * Row count — the `total` for a paginated list.
    */
   async getCount(): Promise<number> {
-    const row = await queryOne(
+    const row = await checkedRow(
       countRowSchema,
-      "SELECT COUNT(*) FROM saved_charts",
+      db.selectFrom("saved_charts").select(sql<string>`COUNT(*)`.as("count")),
     );
     return parseInt(requireRow(row, "saved chart count").count, 10);
   },
@@ -178,23 +185,24 @@ const savedChartsRepository = {
     dateRangeStart,
     dateRangeEnd,
   }: SavedChartInput): Promise<SavedChartRow | null> {
+    if (name === undefined) throw new Error("saved chart insert needs a name");
     return withTransaction(async () => {
-      const inserted = await queryOne(
+      const inserted = await checkedRow(
         idRowSchema,
-        `INSERT INTO saved_charts (name, chart_type, all_categories, all_recipients, all_tags, chart_variant, time_bucket, date_range_start, date_range_end)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         RETURNING id`,
-        [
-          name,
-          chartType,
-          allCategories ?? false,
-          allRecipients ?? false,
-          allTags ?? false,
-          chartVariant,
-          timeBucket,
-          dateRangeStart ?? null,
-          dateRangeEnd ?? null,
-        ],
+        db
+          .insertInto("saved_charts")
+          .values({
+            name,
+            chart_type: chartType,
+            all_categories: allCategories ?? false,
+            all_recipients: allRecipients ?? false,
+            all_tags: allTags ?? false,
+            chart_variant: chartVariant,
+            time_bucket: timeBucket,
+            date_range_start: dateRangeStart ?? null,
+            date_range_end: dateRangeEnd ?? null,
+          })
+          .returning("id"),
       );
       const id = requireRow(inserted, "saved chart insert").id;
       await replaceMemberships(id, {
@@ -223,41 +231,34 @@ const savedChartsRepository = {
       dateRangeEnd,
     }: SavedChartInput,
   ): Promise<SavedChartRow | null> {
-    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped,
-    // mapColumn translates the camelCase API bag to the snake_case columns.
-    const {
-      clauses: fields,
-      params: values,
-      nextIdx: idx,
-    } = buildSetClauses(
-      {
-        name,
-        chartType,
-        allCategories,
-        allRecipients,
-        allTags,
-        chartVariant,
-        timeBucket,
-        dateRangeStart,
-        dateRangeEnd,
-      },
-      {
-        mapColumn: (key) => key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`),
-      },
-    );
+    // Undefined fields are left unchanged; null clears a date bound.
+    const fields = {
+      name,
+      chart_type: chartType,
+      all_categories: allCategories,
+      all_recipients: allRecipients,
+      all_tags: allTags,
+      chart_variant: chartVariant,
+      time_bucket: timeBucket,
+      date_range_start: dateRangeStart,
+      date_range_end: dateRangeEnd,
+    };
+    const hasFields = Object.values(fields).some((v) => v !== undefined);
 
     return withTransaction(async () => {
-      const locked = await query(
-        "SELECT id FROM saved_charts WHERE id = $1 FOR UPDATE",
-        [id],
-      );
-      if (!locked.rows[0]) return null;
-      if (fields.length > 0) {
-        values.push(id);
-        await query(
-          `UPDATE saved_charts SET ${fields.join(", ")} WHERE id = $${idx}`,
-          values,
-        );
+      const locked = await db
+        .selectFrom("saved_charts")
+        .select("id")
+        .where("id", "=", id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!locked) return null;
+      if (hasFields) {
+        await db
+          .updateTable("saved_charts")
+          .set(fields)
+          .where("id", "=", id)
+          .execute();
       }
       await replaceMemberships(id, { categoryIds, recipientIds, tagIds });
       return readById(id);
@@ -266,11 +267,12 @@ const savedChartsRepository = {
 
   /** @returns true if a row was removed */
   async delete(id: number): Promise<boolean> {
-    const result = await query(
-      `DELETE FROM saved_charts WHERE id = $1 RETURNING id`,
-      [id],
-    );
-    return result.rows.length > 0;
+    const result = await db
+      .deleteFrom("saved_charts")
+      .where("id", "=", id)
+      .returning("id")
+      .executeTakeFirst();
+    return result !== undefined;
   },
 };
 

@@ -91,11 +91,12 @@ describe("POST /bulk-update — field validation", () => {
     expect(bodyAt(res, "data", "updated")).toBe(1);
     expect(bodyAt(res, "data", "requested")).toBe(1);
     expect(bodyAt(res, "data", "matched")).toBe(1);
-    const updateCall = clientQuery.mock.calls.find(([sql]) =>
-      sql.includes("UPDATE transactions"),
+    const updateCalls = clientQuery.mock.calls.filter(([sql]) =>
+      /update "?transactions"?/i.test(sql),
     );
-    expect(updateCall![0]).toMatch(/category_id = \$2/);
-    expect(updateCall![1]).toEqual([[1], null]);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]![0]).toMatch(/category_id"? = \$\d/);
+    expect(updateCalls[0]![1]).toEqual(expect.arrayContaining([[1], null]));
   });
 
   it("rejects null recipient_id (column is NOT NULL)", async () => {
@@ -171,13 +172,14 @@ describe("POST /bulk-update — success paths", () => {
     expect(bodyAt(res, "data", "updated")).toBe(1);
     expect(bodyAt(res, "data", "requested")).toBe(1);
     expect(bodyAt(res, "data", "matched")).toBe(1);
-    const updateCall = clientQuery.mock.calls.find(([sql]) =>
-      sql.includes("UPDATE transactions"),
+    // One statement carries every field.
+    const updateCalls = clientQuery.mock.calls.filter(([sql]) =>
+      /update "?transactions"?/i.test(sql),
     );
-    expect(updateCall![0]).toMatch(
-      /category_id = \$2.*recipient_id = \$3.*is_active = \$4.*updated_at = NOW\(\)/s,
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]![1]).toEqual(
+      expect.arrayContaining([[5], 7, 99, false]),
     );
-    expect(updateCall![1]).toEqual([[5], 7, 99, false]);
   });
 
   it("does not schedule a refresh when nothing was updated", async () => {

@@ -29,6 +29,7 @@ import { accountRepository } from "../src/repositories/accountRepository.ts";
 import {
   asCurrencyCode,
   asRecipientId,
+  asTransactionId,
 } from "@vision/types/brands";
 import type { RecipientId } from "@vision/types/brands";
 
@@ -129,7 +130,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
             recipientId: -1,
             memo: "savepoint compatibility probe",
             accountId: -1,
-            transactionId: -1,
+            transactionId: asTransactionId(-1),
           }),
         ).resolves.toBeUndefined();
 
@@ -349,4 +350,83 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       expect(rows).toEqual([{ amount: stored }]);
     },
   );
+
+  it("ignores dangling and inactive claims, re-claims on re-add, and matches legacy labels", async () => {
+    const pool = getTestPool()!;
+    const accountId = await accountRepository.resolveOrCreateByName(
+      "Mixed Representation Account",
+    );
+    const recipientId = await fixtureRecipientId();
+    const input = {
+      transaction_date: "1901-01-03",
+      account_id: accountId,
+      recipient_id: recipientId,
+      amount: -42,
+      memo: "mixed representation claim probe",
+      currency: asCurrencyCode("EUR"),
+    };
+    const identity = {
+      date: input.transaction_date,
+      amount: input.amount,
+      recipientId,
+      memo: input.memo,
+      accountId,
+      currency: "EUR",
+    };
+    const first = await transactionService.createManualTransaction(input);
+    const claimFor = async () =>
+      (
+        await pool.query(
+          `SELECT transaction_id FROM manual_transaction_dedup_claims
+            WHERE deduplication_hash = (SELECT deduplication_hash
+              FROM manual_transaction_dedup_claims WHERE transaction_id = $1)`,
+          [first.transaction.id],
+        )
+      ).rows;
+    const [{ deduplication_hash: hash }] = (
+      await pool.query(
+        "SELECT deduplication_hash FROM manual_transaction_dedup_claims WHERE transaction_id = $1",
+        [first.transaction.id],
+      )
+    ).rows;
+    expect(await claimFor()).toEqual([{ transaction_id: first.transaction.id }]);
+
+    // The live claim blocks; a legacy label without an account id matches too.
+    await expect(isManualDuplicate(identity)).resolves.toEqual({
+      isDuplicate: true,
+      existingTransactionId: first.transaction.id,
+    });
+    await expect(
+      isManualDuplicate({
+        ...identity,
+        accountId: undefined,
+        bankAccount: "Mixed Representation Account",
+      }),
+    ).resolves.toMatchObject({ isDuplicate: true });
+
+    // An inactive transaction does not block.
+    await pool.query("UPDATE transactions SET is_active = false WHERE id = $1", [
+      first.transaction.id,
+    ]);
+    await expect(isManualDuplicate(identity)).resolves.toEqual({
+      isDuplicate: false,
+      existingTransactionId: null,
+    });
+
+    // A deleted transaction leaves a dangling claim (ON DELETE SET NULL) that
+    // does not block; re-adding re-claims the same hash row.
+    await pool.query("DELETE FROM transactions WHERE id = $1", [
+      first.transaction.id,
+    ]);
+    await expect(isManualDuplicate(identity)).resolves.toEqual({
+      isDuplicate: false,
+      existingTransactionId: null,
+    });
+    const second = await transactionService.createManualTransaction(input);
+    const { rows } = await pool.query(
+      "SELECT transaction_id FROM manual_transaction_dedup_claims WHERE deduplication_hash = $1",
+      [hash],
+    );
+    expect(rows).toEqual([{ transaction_id: second.transaction.id }]);
+  });
 });

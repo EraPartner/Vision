@@ -5,7 +5,9 @@
  * place so the two entry points cannot drift.
  */
 
+import { sql } from "kysely";
 import { getClient, query as dbQuery } from "../database/connection.ts";
+import { compileQuery, db } from "../database/db.ts";
 import { logger } from "../config/logger.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import {
@@ -403,10 +405,13 @@ export async function streamBulkTransactionExport(
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     const query: ExportQuery = (sql, params) => client.query(sql, params);
     const txIds = await resolveBulkSelection({ ids, filter }, { query });
-    const countResult = await query(
-      "SELECT COUNT(*)::int AS n FROM transactions WHERE id = ANY($1::int[])",
-      [txIds],
+    const count = compileQuery(
+      db
+        .selectFrom("transactions")
+        .select(sql<number>`COUNT(*)::int`.as("n"))
+        .where(sql<boolean>`id = ANY(${txIds}::int[])`),
     );
+    const countResult = await query(count.sql, [...count.parameters]);
     const [countRow] = checkRows(intCountRowSchema, countResult.rows);
     res.setHeader("X-Exported-Count", String(countRow?.n ?? 0));
     const where = buildIdListWhere(txIds);

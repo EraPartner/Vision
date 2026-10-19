@@ -20,6 +20,13 @@ import {
   getTransferSuggestions,
 } from "../../src/services/transferReconciliationService.ts";
 
+/** Issued SQL without identifier quotes, lower-cased, with its params. */
+const issued = () =>
+  mockClient.query.mock.calls.map(([sql, params]) => ({
+    sql: String(sql).replaceAll('"', "").toLowerCase(),
+    params: (params ?? []) as unknown[],
+  }));
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockClient.query.mockReset();
@@ -33,26 +40,26 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
       .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 20 }, { id: 20, transfer_peer_id: 10 }] }); // lock the complete pair, which still points back
     await unmarkTransfer(asTransactionId(10));
 
-    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const sqls = issued();
     // Both the target and its peer are locked FOR UPDATE before any mutation
     // (mirrors markTransfer) so a concurrent re-pair can't strand a third row.
-    const locks = sqls.filter((s) => s.includes("FOR UPDATE"));
+    const locks = sqls.filter((s) => s.sql.includes("for update"));
     expect(locks).toHaveLength(1);
-    expect(locks[0]).toContain("ORDER BY id FOR UPDATE");
+    expect(locks[0]!.sql).toMatch(/order by id.*for update/s);
     // The pairing is persisted in transfer_dismissals (ordered, idempotent)…
     const dismissal = sqls.find((s) =>
-      s.includes("INSERT INTO transfer_dismissals"),
+      s.sql.includes("insert into transfer_dismissals"),
     );
     expect(dismissal).toBeTruthy();
-    expect(dismissal).toContain("LEAST");
-    expect(dismissal).toContain("GREATEST");
-    expect(dismissal).toContain("ON CONFLICT DO NOTHING");
+    expect(dismissal!.sql).toContain("least");
+    expect(dismissal!.sql).toContain("greatest");
+    expect(dismissal!.sql).toContain("on conflict do nothing");
     // …and the ROWS go back to open so each can still pair with OTHER candidates.
-    const updates = sqls.filter((s) => s.includes("UPDATE transactions"));
+    const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(2); // the row + its peer
-    for (const sql of updates) {
-      expect(sql).toContain("transfer_source = NULL");
-      expect(sql).not.toContain("dismissed");
+    for (const update of updates) {
+      expect(update.sql).toMatch(/transfer_source = (null|\$\d)/);
+      expect(update.params).not.toContain("dismissed");
     }
   });
 
@@ -62,16 +69,17 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
       .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 20 }, { id: 20, transfer_peer_id: 99 }] }); // lock known pair: peer 20 now points at 99
     await unmarkTransfer(asTransactionId(10));
 
-    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
+    const sqls = issued();
     // Both rows were locked in one sorted FOR UPDATE query.
-    expect(sqls.filter((s) => s.includes("FOR UPDATE"))).toHaveLength(1);
+    expect(sqls.filter((s) => s.sql.includes("for update"))).toHaveLength(1);
     // The stale pair 10↔20 is no longer reciprocal → no dismissal recorded…
-    expect(sqls.find((s) => s.includes("transfer_dismissals"))).toBeUndefined();
+    expect(sqls.find((s) => s.sql.includes("transfer_dismissals"))).toBeUndefined();
     // …and ONLY the target is reset; the re-paired peer (20→99) is left intact,
     // so row 99 is never stranded as a phantom one-way transfer.
-    const updates = sqls.filter((s) => s.includes("UPDATE transactions"));
+    const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(1);
-    expect(updates[0]).toContain("WHERE id = $1");
+    expect(updates[0]!.params).toContain(10);
+    expect(updates[0]!.params).not.toContain(20);
   });
 
   it("a peerless (single-leg) row is just reset — no pair to dismiss", async () => {
@@ -79,11 +87,11 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
       rows: [{ transfer_peer_id: null }],
     }).mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: null }] });
     await unmarkTransfer(asTransactionId(10));
-    const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
-    expect(sqls.find((s) => s.includes("transfer_dismissals"))).toBeUndefined();
-    const updates = sqls.filter((s) => s.includes("UPDATE transactions"));
+    const sqls = issued();
+    expect(sqls.find((s) => s.sql.includes("transfer_dismissals"))).toBeUndefined();
+    const updates = sqls.filter((s) => s.sql.includes("update transactions"));
     expect(updates).toHaveLength(1);
-    expect(updates[0]).toContain("transfer_source = NULL");
+    expect(updates[0]!.sql).toMatch(/transfer_source = (null|\$\d)/);
   });
 });
 
@@ -91,7 +99,7 @@ it("rejects changed discovery rather than locking a new peer out of order", asyn
   mockClient.query.mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] })
     .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 30 }, { id: 20, transfer_peer_id: null }] });
   await expect(unmarkTransfer(asTransactionId(10))).rejects.toMatchObject({ status: 409 });
-  expect(mockClient.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE transactions"))).toBe(false);
+  expect(issued().some((s) => s.sql.includes("update transactions"))).toBe(false);
 });
 
 describe("releaseInvalidAutoPairs — reciprocity guard", () => {
@@ -176,5 +184,5 @@ it("rejects new inbound peers discovered after sorted graph locking", async () =
   mockClient.query.mockResolvedValueOnce({ rows }).mockResolvedValueOnce({ rows })
     .mockResolvedValueOnce({ rows: [...rows, { id: 30, amount: "10", account_id: 3, is_active: true, transfer_peer_id: 10 }] });
   await expect(markTransfer(asTransactionId(10), asTransactionId(20))).rejects.toMatchObject({ status: 409 });
-  expect(mockClient.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE transactions"))).toBe(false);
+  expect(issued().some((s) => s.sql.includes("update transactions"))).toBe(false);
 });
