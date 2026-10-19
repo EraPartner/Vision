@@ -20,57 +20,6 @@ const baselines = new Map<string, SettingBaseline>();
 const saves = new Map<string, Promise<unknown>>();
 let allSettingsRead = false;
 
-function orderedJSON(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(orderedJSON);
-    if (value !== null && typeof value === "object") {
-        const fields = value as Record<string, unknown>;
-        return Object.fromEntries(
-            Object.keys(fields)
-                .sort()
-                .map((key) => [key, orderedJSON(fields[key])]),
-        );
-    }
-    return value;
-}
-
-/** Only the native writer's acknowledged receipt can advance these owned lanes. */
-export function acknowledgeNativeSettingReceipt(
-    key: string,
-    value: unknown,
-    expected: unknown,
-): boolean {
-    if (
-        typeof window === "undefined" ||
-        (window as Window & { __VISION_NATIVE_SETTINGS__?: boolean })
-            .__VISION_NATIVE_SETTINGS__ !== true ||
-        !["app_settings", "dashboard_settings", "theme_settings"].includes(
-            key,
-        ) ||
-        !expected ||
-        typeof expected !== "object" ||
-        !("exists" in expected) ||
-        expected.exists !== true ||
-        !("value" in expected)
-    )
-        return false;
-    try {
-        const encoded = JSON.stringify(value);
-        const baseline = JSON.stringify(expected.value);
-        if (
-            encoded === undefined ||
-            baseline === undefined ||
-            JSON.stringify(orderedJSON(JSON.parse(baseline))) !==
-                JSON.stringify(orderedJSON(JSON.parse(encoded)))
-        )
-            return false;
-    } catch {
-        return false;
-    }
-    // Do not clear a failed queue or seed unrelated/absent keys from a draft.
-    baselines.set(key, { exists: true, value });
-    return true;
-}
-
 export async function getSettings(): Promise<Record<string, unknown>> {
     const { settings: values, expected } = await apiRequest<{
         settings: Record<string, unknown>;

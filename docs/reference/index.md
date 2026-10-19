@@ -2,8 +2,8 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     reference,
@@ -44,7 +44,6 @@ SORT title ASC
 | [[docs/reference/repository-layer\|Repository Layer Reference]]            | Complete reference for all 21 backend repository domains (+ infoRepository and portfolioTxRepo sub-modules) |
 | [[docs/reference/database-query-patterns\|Database Query Patterns]]        | PostgreSQL query patterns, index strategies, optimization techniques                                        |
 | [[docs/reference/frontend-routes\|Frontend Routes]]                        | Complete manifest-backed route table, including the manual analysis workspace                               |
-| [[docs/reference/native-parity/index\|Native Parity Inventory]]            | Every screen, dialog and action of the web UI, the checklist for the Swift rewrite (ADR-204)                |
 | [[docs/reference/react-query-keys\|React Query Keys]]                      | All frontend query keys for cache invalidation                                                              |
 | [[docs/reference/typescript-types\|TypeScript Types]]                      | All frontend type definitions                                                                               |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]]           | File navigation map organized by feature, layer, and task                                                   |

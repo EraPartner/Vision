@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-15
-updated: 2026-10-15
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -69,36 +69,6 @@ related_code:
 > Phase 7 (April 2026): Filter exclusions with impact comparison view — when categories or recipients are excluded via the ExportDialog, the report now displays a "Filter Impact" comparison table on the cover page showing metrics with and without filters applied, plus delta badges for change visibility.
 >
 > Phase 8 (April 2026): Full portfolio and tax report implementation — replaces "Coming soon" placeholders with 6 portfolio sections and 7 tax sections using real data fetchers, shared SVG chart infrastructure (`svgLineChart`, `svgGenericGroupedBarChart`), and Belgian tax pass-through (`taxProfile` + `precomputedPIT`). Portfolio export button added to PortfolioOverviewPage.
-
-## Native report sheet (phase 3p)
-
-`NativeReportSheet` and `NativeReportModel` own the three export types under the native capability;
-the shared web dialog is suppressed before its hooks run. Source period defaults (rolling twelve
-months), section order, twelve currencies and date validation remain authoritative. Same-page reopen
-retains the draft, while leaving the page resets it. An all-selected section list is sent as `[]`,
-retaining the financial server default that omits planned outlook. Theme and financial exclusions are
-resolved at submission. Native save-panel cancellation keeps the draft and emits no success notice.
-
-The existing PDF endpoints return binary data through a single-attempt 900-second client sharing the
-native data session. Tax context preserves original frozen values; normal-year profile projection and
-extreme custom-year fallback reuse fixed shared TypeScript helpers over current raw data. Fiscal
-formulas remain shared TypeScript. See [[docs/api/reports|the request contract]] and
-[[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native ownership]].
-
-Current-page File → Print is separate from generating an export PDF. It freezes the loaded Tax,
-Statistics or Net worth page without new service reads or financial recomputation: Tax keeps its
-selected year, visible widgets and disclosures; Statistics keeps its active tab, filters, chart
-selections and cached data/errors; Net worth keeps its loaded rows, period, currency and selections.
-The native host paginates ordinary sections and measured table rows through `NSPrintOperation`.
-Tax PIT/household/comparison, Statistics pivot/payee/yearly-summary and Net-worth account/history
-tables repeat headers on continuation pages, reuse columns resolved from the complete frozen table
-per printable width, and emit their optional footer once. Rows fitting below a fresh header stay
-whole; a final row/footer pair stays together when it fits. Oversized single rows/footers can
-continue in clipped slices; a header consuming the usable paper height falls back to ordinary
-blocks without repeated headers. Paper and margin changes rebuild the frozen layout. The new
-focused AppKit/PDF cases await macOS execution; rendered and physical printer parity remain
-unverified. See [[docs/reference/native-parity/tax|Tax parity]],
-[[docs/features/net-worth|Net worth]] and [[docs/architecture/native-app|native architecture]].
 
 ## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 

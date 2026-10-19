@@ -2,8 +2,8 @@
 title: AI Research API
 type: api
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, ai, research, jobs, documents, disclosure, openai, agentcloak]
 description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, scoped reversible references, and optional AgentCloak Desktop protection or MCP preflight.
 aliases: [AI investigation API, research document API, disclosure API]
@@ -185,29 +185,3 @@ operations. Generation is local and read-only; applying the inspected proposal i
 - [[docs/api/analysis|Analysis API]]
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]
-
-## Native Investigation adapter (phase 3n)
-
-`AIInvestigationService` uses these existing JSON operations and a handwritten multipart request
-with the `file` field for document upload. Original document bytes and MIME type reach the same
-5 MiB server limit; no parsing or evidence inference moves to Swift. Custom DTOs retain raw JSON
-and Decimal values, including disclosure history BIGINT strings, reference-scope and capability
-metadata, evidence and saved-analysis links.
-
-The native model retains source question/preferences/access controls, separately authored public
-inputs, exact preview and grant consent, then submits the preview's frozen `outboundRequest` with
-the returned grant ID. Form or resolved-context changes retire an obsolete preview. Polling uses
-the existing 1.2-second interval until completed, failed, cancelled, partial or waiting, including
-while the Investigation mode is hidden on the mounted AI page. Slow GETs can overlap at interval
-ticks; current snapshots restart the interval and obsolete replies lose publication authority.
-This is the source manual timer,
-which continues across offline/background intervals with silent failures. Status alone follows
-the source 60-second TanStack mount/reconnect freshness. The global QueryClient disables ordinary
-focus refetch; focus only continues a paused status read. Explicit query invalidation refreshes an
-active observer, and Settings shares successful status receipts. Document reads remain mount-only.
-Real route exit clears local form,
-job and polling state; it does not delete the remote job or introduce a recovery browser. Existing
-resume, cancel, grant revoke, disclosure deletion and document actions remain available with their
-source confirmations; only document deletion requires confirmation. Late reads cannot restore a
-deleted job, disclosure history or a departed visit. macOS package and Vision Demo review remain
-pending.

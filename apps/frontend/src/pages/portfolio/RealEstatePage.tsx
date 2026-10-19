@@ -1,6 +1,6 @@
 import { monthlyRentInTarget } from "@/hooks/portfolio/monthlyRent";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
     Card,
     CardContent,
@@ -34,7 +34,6 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { useReportDialogState } from "@/features/reports/useReportDialogState";
 
 const PageIcon = PAGE_ICONS["/portfolio/real-estate"];
 
@@ -126,7 +125,7 @@ export default function RealEstatePage() {
         totalAppreciation + totalRentIncome - totalFees - totalTaxes;
     const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
-    const { exportOpen, setExportOpen } = useReportDialogState();
+    const [exportOpen, setExportOpen] = useState(false);
     const exportDialog = (
         <ExportDialog
             defaultType="portfolio"

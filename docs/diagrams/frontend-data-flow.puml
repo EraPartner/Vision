@@ -95,7 +95,7 @@ package "Backend (Node.js)" {
 package "Shared TypeScript" {
   class "PIT / household engine" as SharedBelgianTax
 }
-class "Native TaxComputationService" as NativeTax
+class "API client" as TaxApiClient
 
 package "External Services" {
   class "ECB (Exchange Rates)" as ECB
@@ -105,10 +105,10 @@ package "External Services" {
   class "Statbel (Belgian Inflation)" as Statbel
 }
 
-NativeTax --> BelgianTaxOverview : selected year / frozen sources
+TaxApiClient --> BelgianTaxOverview : selected year / frozen sources
 BelgianTaxOverview --> Repositories : one settings snapshot; no writes
 BelgianTaxOverview --> SharedBelgianTax : shared hydration; compute only unfrozen values
-NativeTax --> BelgianTaxCompute : typed household / Decimal results
+TaxApiClient --> BelgianTaxCompute : typed household / Decimal results
 BelgianTaxCompute --> SharedBelgianTax : stateless preview
 Pages --> SharedBelgianTax : existing lazy-loaded web tax store
 
@@ -146,71 +146,13 @@ PriceProviderService --> YahooFinance
 PriceProviderService --> Kinesis
 BelgianInflationService --> Statbel
 
-package "Native Settings single writer (phase 3o)" {
-  class NativeSettingsWindow
-  class NativeSettingsModel
-  class NativeSettingsPersistence
-  class NativeSessionAPITransport
-  class NativeDataSession
-  class "nativeSettings.ts" as NativeSettingsMirror
-  class "shell:settings-change" as NativeSettingsDelta
-  class "GET /api/settings\nPUT /api/settings/:key {value, expected}" as NativeSettingsAPI
-}
-NativeSettingsWindow --> NativeSettingsModel : source control edit
-NativeSettingsModel --> NativeSettingsPersistence : 500 ms / per-key serialized write
-NativeSettingsPersistence --> NativeSessionAPITransport : shared APIClient request
-NativeSessionAPITransport --> NativeDataSession : mutation admission / completion / delivery guard
-NativeSessionAPITransport --> NativeSettingsAPI : original raw CAS expected token
-NativeSettingsAPI --> Repositories : existing validation / conditional replacement
-NativeSettingsModel --> NativeSettingsMirror : draft then acknowledged receipt
-NativeSettingsMirror --> Pages : retained route / immediate display mirror
-Pages --> NativeSettingsDelta : supported app / dashboard / theme field deltas
-NativeSettingsDelta --> NativeSettingsModel : restricted native-only bridge
-note right of NativeSettingsMirror
-  Native mode disables three competing web hydration writers.
-  Drafts do not advance server baselines.
-  Existing widget/other-key writers are unchanged.
-end note
-
-note right of NativeDataSession
-  Confirmed restore pauses new mutations and drains accepted transports.
-  Paused reads refuse admission; earlier read epochs stay invalid on failure.
-  Failure resumes the same session; success retires old delivery.
-  Main pending drafts/baselines have a separate lifecycle fence.
-  UUID-owned SDK restore serves Settings and retained onboarding.
-  Fresh graph rebuild is shared by native reload and renderer-ready.
-  Portable transport cases pass; SDK/macOS verification remains pending.
-end note
-
-
-package "Native reports and loaded-page print (phase 3p)" {
-  class NativeReportSheet
-  class NativeReportModel
-  class NativeTaxReportContextService
+package "PDF reports" {
   class "taxReportContext.ts\nfresh five-key snapshot / source engine" as OriginalReportContext
   class "POST /api/reports/{type}\napplication/pdf" as BinaryReportAPI
-  class "Loaded Tax / Statistics / Net worth snapshots" as NativePagePrintSnapshots
-  class "Inert Tax / Statistics / Net worth documents" as NativePagePrintDocuments
-  class "ShellController current-page print" as NativePagePrintDispatch
-  class NativePagePrintPagesView
-  class NativePagePrintTableBlock
 }
-NativeReportSheet --> NativeReportModel : source form / same-page draft
-NativeReportModel --> NativeTaxReportContextService : requested fiscal year
-NativeTaxReportContextService --> OriginalReportContext : fixed callback / extreme-year fallback
-NativeReportModel --> NativeDataSession : one attempt / 900s binary client
-NativeDataSession --> BinaryReportAPI : existing route / raw Decimal body
+Pages --> OriginalReportContext : ExportDialog tax context
+Pages --> BinaryReportAPI : ExportDialog submission
 BinaryReportAPI --> Repositories : existing PDF source data
-NativePagePrintDispatch --> NativePagePrintSnapshots : capture active route / loaded figures / visible state
-NativeTax --> NativePagePrintSnapshots : selected year / visible widgets / disclosures
-NativePagePrintSnapshots --> NativePagePrintDocuments : immutable presentation / no reads or fiscal math
-NativePagePrintDocuments --> NativePagePrintPagesView : ordinary frozen sections / actual content width
-NativePagePrintDocuments --> NativePagePrintTableBlock : header / ordered rows / final footer / stable columns
-NativePagePrintTableBlock --> NativePagePrintPagesView : measured rows / repeated continuation headers
-NativePagePrintPagesView --> NativePagePrintDispatch : remeasured paper bounds / NSPrintOperation
-
-class NativeRendererReadiness
-NativeSettingsWindow --> NativeRendererReadiness : await actual document commit before ready startup
 
 Pages --> DashboardVisibleQueries : hydrated visible widgets only
 DashboardVisibleQueries --> ApiClient : selected filtered / unfiltered inputs

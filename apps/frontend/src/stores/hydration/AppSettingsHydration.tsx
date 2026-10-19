@@ -19,7 +19,6 @@ import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
 import { useSettingsStore, migrateAppSettings } from "@/stores/settingsStore";
 import type { AppSettings } from "@/stores/settingsStore";
 import { setSkinV2 } from "@/lib/skin";
-import { isNativeSettings } from "@/lib/api/electron";
 
 // Re-export the app-settings types alongside the hydration bridge.
 export type { AppSettings };
@@ -74,7 +73,6 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
-        if (isNativeSettings()) return;
         if (!hasHydrated.current) return;
         if (isFirstPersistRun.current) {
             isFirstPersistRun.current = false;

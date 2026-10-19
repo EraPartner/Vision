@@ -2,8 +2,8 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     endpoint,
@@ -88,7 +88,7 @@ those returns as investment returns and separately shows broker account fees and
 account fees. It does not allocate account fees to individual securities or reconstruct cash FX
 principal. See [[docs/features/portfolio]] and [[docs/adr/095-brokerage-account-import|ADR-095]].
 
-## Scope and archived presentation (phase 3i)
+## Scope and archived presentation
 
 The optional `active` query is additive and defaults to `true`: existing active-only totals,
 canonical summaries, dated FX, cache-warmer entries, and invalidation behavior are unchanged.
@@ -106,7 +106,7 @@ than being introduced into the retained ordinary archive display. `totalInKindIn
 continues to use the canonical transaction-date bridge. `transactionCount` records the archive
 history count; `summarySource` is `local`. Converted ordinary values retain web precision.
 
-Native archive views must use `archivedPresentation` for those ordinary figures, keeping the
+Archive views must use `archivedPresentation` for those ordinary figures, keeping the
 active response for current totals. They must not replace these display values with canonical
 all-investment P&L: a historical purchase rate and today's quote rate can produce different
 costs, and this frontend migration preserves that distinction. Canonical `byAccount` remains a
@@ -363,14 +363,14 @@ gainLoss === assetGain + fxGain   (per-investment AND in totals)
 Optional top-level `firstInvestmentDate` is the earliest ordinary transaction date on active
 investments, independent of selected performance periods and record creation timestamps. It
 excludes inactive holdings and custody/adjustment event dates; absence means no qualifying
-transaction is known. Native all-time annualized hints can use this date without relabeling a
+transaction is known. All-time annualized hints can use this date without relabeling a
 period-scoped chart start as the investment start.
 
 Summary items expose `nativeCurrentPrice` and `nativeAvgCostBasis` in the investment quote
 currency, plus server-computed `unrealizedGainPercent` against the held basis. `estimatedMonthlyRent`
 preserves the existing RealEstatePage's latest ordinary rent amount interpretation, including
 its raw-amount display behavior; this port does not apply an additional FX conversion to that
-number. Fields, totals and nullability are declared in `openapi.yaml`; generated/native readers
+number. Fields, totals and nullability are declared in `openapi.yaml`; generated readers
 can decode money and unit/rate quantities directly as Decimal. Metadata that is null in storage
 remains nullable. `totals.usedFallbackRate` is boolean, rather than a numeric dynamic-map entry.
 

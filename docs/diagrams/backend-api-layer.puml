@@ -328,7 +328,7 @@ package "Routes" {
     +GET /sankey : income flow diagram (Phase 7)
   }
 
-  class BelgianTaxRouter <<ADR-204>> {
+  class BelgianTaxRouter {
     +GET /overview : live/historical frozen figures + CAS baselines
     +GET /dashboard : server-computed charts + recorded taxes/shares
     +POST /compute : stateless household preview

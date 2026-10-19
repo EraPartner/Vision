@@ -86,7 +86,9 @@ acceptance or confirmed reproduction of the original native warning.
   `scripts/browser-tests/coverage-ledger.json` for the exact retained/replaced/removed decisions.
   The exact CSS source-count suite was retired. Its authored browser geometry replacements and the
   controlled Yahoo provider fixture were removed with Playwright on 2026-10-18, because only the
-  Swift native app is a supported UI; React web layout has no browser coverage.
+  Swift native app is a supported UI; React web layout has no browser coverage. The Swift app was
+  retired on 2026-10-19 ([[docs/adr/214-retire-vision-native-swift-port|ADR-214]]); the React UI
+  is the only UI again and still has no browser coverage.
 
 ## Checks already performed
 

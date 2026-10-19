@@ -4,11 +4,6 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { clearOnboardingDraft } from "./onboardingDraft";
-import {
-    hasNativeShellCapability,
-    readNativeOnboardingState,
-    subscribeNativeOnboarding,
-} from "@/lib/nativeShell";
 
 const ONBOARDING_KEY = "onboarding_complete";
 
@@ -21,21 +16,10 @@ export interface UseOnboardingResult {
 
 export function useOnboarding(): UseOnboardingResult {
     const { t } = useLanguage();
-    const [nativeOnboarding] = useState(() => hasNativeShellCapability("onboarding"));
-    const [isComplete, setIsComplete] = useState(() =>
-        nativeOnboarding ? readNativeOnboardingState().complete === true : true,
-    );
-    const [isLoading, setIsLoading] = useState(() =>
-        nativeOnboarding ? readNativeOnboardingState().complete === null : true,
-    );
+    const [isComplete, setIsComplete] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (nativeOnboarding) {
-            return subscribeNativeOnboarding((state) => {
-                setIsComplete(state.complete === true);
-                setIsLoading(state.complete === null);
-            });
-        }
         let cancelled = false;
         apiClient
             .getSetting(ONBOARDING_KEY)
@@ -51,10 +35,9 @@ export function useOnboarding(): UseOnboardingResult {
         return () => {
             cancelled = true;
         };
-    }, [nativeOnboarding]);
+    }, []);
 
     const complete = useCallback(() => {
-        if (nativeOnboarding) return;
         setIsComplete(true);
         apiClient
             .saveSetting(ONBOARDING_KEY, true)
@@ -63,17 +46,16 @@ export function useOnboarding(): UseOnboardingResult {
                 logger.error("Failed to persist onboarding completion", err);
                 toast.error(t("onboarding.persist.failed"));
             });
-    }, [t, nativeOnboarding]);
+    }, [t]);
 
     const reset = useCallback(() => {
-        if (nativeOnboarding) return;
         clearOnboardingDraft();
         setIsComplete(false);
         apiClient.saveSetting(ONBOARDING_KEY, false).catch((err) => {
             logger.error("Failed to persist onboarding reset", err);
             toast.error(t("onboarding.persist.failed"));
         });
-    }, [t, nativeOnboarding]);
+    }, [t]);
 
     return { isComplete, isLoading, complete, reset };
 }

@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-18
-updated: 2026-10-18
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     architecture,
@@ -115,7 +115,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-Open [the interactive visualizer](../flow-visualizer.html#api-request) for 106 components and 82 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
+Open [the interactive visualizer](../flow-visualizer.html#api-request) for 84 components and 49 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
 
 The system and backend service diagrams include the optional AgentCloak dependency. Desktop mode
 detects selected-text spans before Vision creates encrypted reference tokens; MCP mode keeps the
@@ -163,7 +163,6 @@ Detailed architectural analysis:
 - [[docs/architecture/frontend-architecture|Frontend Architecture]] - Frontend-specific diagrams
 - [[docs/architecture/deep-dive|Architecture Deep Dive]] - Design patterns, data flow, system organization
 - [[docs/architecture/electron|Electron Desktop Architecture]] - Electron packaging, IPC, security
-- [[docs/architecture/native-app|Vision Native App Architecture]] - Swift macOS app, backend location, macOS CI job
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - PostgreSQL 18 lifecycle, cutover, backup, and rollback
 - [[docs/architecture/trade-offs|System Design Trade-offs]] - Analysis of key architectural trade-offs and alternatives
 

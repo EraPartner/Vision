@@ -19,7 +19,6 @@ import {
     DEFAULT_DASHBOARD_SETTINGS,
 } from "@/stores/settingsStore";
 import type { ExclusionScope, DashboardSettings } from "@/stores/settingsStore";
-import { isNativeSettings } from "@/lib/api/electron";
 
 // Re-export the dashboard-settings types alongside the hydration bridge.
 export type { ExclusionScope, DashboardSettings };
@@ -76,7 +75,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     // Debounced persist to API when settings change (only after hydration)
     useEffect(() => {
-        if (isNativeSettings()) return;
         if (!hasHydrated.current) return;
         if (isFirstPersistRun.current) {
             isFirstPersistRun.current = false;

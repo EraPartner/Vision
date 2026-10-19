@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-13
+date: 2026-10-19
 last_modified: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-19
 tags:
   [
     api,
@@ -427,7 +427,7 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 - Final result is globally ordered by `date DESC, id DESC`.
 - `total` is computed with the same `investment_ids` + `type` filter before **both** per-investment and global limits. A total greater than the returned count does not imply that offset paging can access rows beyond the per-investment cap.
 - The response uses `PortfolioTransactionList`: `items`, `total`, `limit`, `offset`, and `links`. `limit` is numeric, never null: it is the explicit global cap or `items.length` when no cap was requested; an empty unbounded result therefore has `limit: 0`.
-- This is the ordinary CRUD transaction table, excluding separate custody and asset-adjustment events. Native editing requests `per_investment_limit=1000`, matching the web loader, and decodes monetary fields directly as Decimal.
+- This is the ordinary CRUD transaction table, excluding separate custody and asset-adjustment events. The web loader requests `per_investment_limit=1000`.
 - The route also accepts repeated `investment_ids` occurrences; generated clients keep the existing comma-joined string form.
 - The route cache key includes investment IDs, type, per-investment limit, global limit, and offset, so differently capped requests do not share a cached page.
 
@@ -784,6 +784,6 @@ The named OpenAPI investment history response matches the existing runtime:
 `{investment_id,provider,points:[{timestampMs,price}]}`. `from_ms`/`to_ms` are inclusive epoch
 millisecond bounds; unparseable/non-finite values leave a bound absent. `db_only` defaults true.
 The former documented `start_date`/`end_date` parameters remain accepted but ignored and are
-deprecated in favor of the actual bounds. Native Research maps timestamp/price fields structurally
+deprecated in favor of the actual bounds. Clients can map timestamp/price fields structurally
 to submitted chart points for [[docs/api/research#POST /api/research/presentation|the stateless
 presentation API]], retaining existing historical source/provider behavior.

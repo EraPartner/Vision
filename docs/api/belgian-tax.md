@@ -2,12 +2,12 @@
 title: Belgian Tax Computation API
 type: endpoint
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-19
+updated: 2026-10-19
 method: GET, POST
 path: /api/belgian-tax
-tags: [api, tax, belgian, native, adr-204]
-description: Stateless access to the shared TypeScript household tax engine for native clients.
+tags: [api, tax, belgian]
+description: Stateless access to the shared TypeScript household tax engine for API clients.
 related_code:
   - apps/node-backend/src/routes/belgianTax.ts
   - apps/node-backend/src/routes/belgianPortfolioTax.ts
@@ -16,7 +16,6 @@ related_code:
   - apps/node-backend/src/routes/belgianTaxDashboard.ts
   - apps/node-backend/src/services/tax/dashboardService.ts
   - packages/shared-utils/src/belgianTax/household.ts
-  - apps/native/Sources/VisionNativeCore/Screens/Tax/TaxComputationService.swift
 ---
 
 # Belgian Tax Computation API
@@ -54,12 +53,7 @@ keys. Baselines preserve absent rows versus JSON null and legacy JSON-string sto
 be sent unchanged on a later save. This operation performs no writes or filing actions and does
 not overwrite malformed records. It uses the global and aggregation rate limits.
 
-`TaxOverviewModel` guards the requested year, coalesces requests, refreshes on invalidation,
-and rejects late responses from another year. A failed year change clears old amounts; a failed
-refresh of the same year keeps the prior snapshot and exposes the error. The native `/tax` view now renders those results; profile edits and snapshot/freeze/filing
-changes use existing atomic settings CAS writes. CSV is native, while PDF remains the shared
-web report dialog. macOS build and Demo parity review remain pending. See
-[[docs/reference/native-parity/tax|the action mapping]].
+Profile edits and snapshot/freeze/filing changes use the existing atomic settings CAS writes.
 
 ## Read Portfolio Tax widget data
 
@@ -78,8 +72,7 @@ percent badges. `isEmpty` reflects holdings; `hasProfile` reflects the live prof
 ordinary dividend conventions leave gross dividend base, reclaim, and net cost null; included-in-
 units dividends do not enter dividend income/WHT estimates.
 
-Source scope preserves `usePortfolioTaxData` rather than introducing fiscal changes during the
-native migration: first 500 name-ordered investment metadata rows, newest 1000 ordinary transactions
+Source scope preserves `usePortfolioTaxData` rather than introducing fiscal changes: first 500 name-ordered investment metadata rows, newest 1000 ordinary transactions
 per investment, active canonical summaries, and inactive `archivedPresentation` summaries from
 [[docs/api/portfolio-summary|Portfolio Summary]]. Ordinary recorded costs use latest stored rates
 over fallbacks and retain the existing original-amount display fallback when a currency rate is
@@ -98,9 +91,8 @@ are null with `exists: false`; unknown fields, other-year adjustments, JSON null
 JSON-string baselines remain intact. Edits use the existing atomic [[docs/api/settings|Settings API]];
 this endpoint never writes settings. `summaries` supplies the investment identity/currency/asset
 class rows needed by those editors. Fiscal formulas and cost bucket logic stay in shared TypeScript,
-including the frontend compatibility exports. Native clients decode money and rates directly as
-`Decimal`; no fiscal or FX formula moves to Swift. See [[docs/features/portfolio-tax|Portfolio Tax]]
-and [[docs/reference/native-parity/portfolio-wealth-tools|the wealth-tool action inventory]].
+including the frontend compatibility exports. Clients must not recalculate fiscal or FX values. See
+[[docs/features/portfolio-tax|Portfolio Tax]].
 
 ## Read Tax charts and widget data
 
@@ -109,7 +101,7 @@ optional four-digit `year`, a three-letter `currency` (default EUR), `start_date
 `end_date` calendar dates, and repeatable `excluded_category_ids` / `excluded_recipient_ids`.
 Malformed dates (including impossible days), IDs, repeated scalar inputs, and retired
 `start`/`end` aliases return `400`. If bounds are omitted, the operation uses the first day
-23 calendar months before today through today in the application timezone. Native callers
+23 calendar months before today through today in the application timezone. Callers
 send their explicit calendar window and resolve the Statistics settings/hidden-category
 exclusions before requesting the data. The server does not invent exclusion defaults.
 
@@ -138,8 +130,7 @@ helpers now live in the shared TypeScript package with frontend compatibility ex
 The operation uses the existing global and aggregation rate limits. Settings, aggregation,
 portfolio, or rate-read failures return an error, never an empty setup prompt. It performs no
 settings, migration, or filing writes. Targeted synthetic route tests cover category ancestry,
-frozen scaling, partner attribution, recorded FX, exclusions, and read failures; macOS rendering
-remains a separate native parity gate.
+frozen scaling, partner attribution, recorded FX, exclusions, and read failures.
 
 ## Compute an unsaved household
 
@@ -163,8 +154,8 @@ Success uses the standard `{ ok: true, data: { result, calculation } }` envelope
 breakdowns, marital quotient, special social security contribution (CSSS), property estimate,
 household totals, and issue codes. `calculation` is the existing legacy-compatible PIT
 presentation, including breakdown rows and monthly reserve. Monetary values use EUR and retain
-the engine's precision. Rates keep their existing engine units. Generated Swift models use
-`Decimal`, including rates; clients must not recalculate taxes.
+the engine's precision. Rates keep their existing engine units. Clients must not recalculate
+taxes.
 
 Unsupported years retain the engine's table approximation and issue behavior. Engine limitations
 and `needs_source` issues remain visible; this endpoint does not make estimates authoritative.
@@ -180,7 +171,4 @@ Invalid input returns `400 VALIDATION_ERROR` in the standard error envelope. The
 returns `403` for cross-site requests, and the global and aggregation rate limiters return `429`
 when exceeded. Request bodies use the API's existing 1 MB JSON limit.
 
-Native Tax UI, write-through profile editing, snapshot/freeze/filing actions and CSV export
-are implemented in phase 3h. The PDF dialog remains web; the full macOS build and the owner's
-Demo visual/keyboard pass are pending in [[docs/reference/native-parity/tax|the parity inventory]].
-The web app still calculates through the same shared engine locally.
+The web app calculates through the same shared engine locally.

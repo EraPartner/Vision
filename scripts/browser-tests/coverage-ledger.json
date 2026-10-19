@@ -1,12 +1,12 @@
 {
   "reviewedOn": "2026-10-18",
-  "policy": "Preserve independently justified behavior. Protected financial, database and recovery tests and coverage thresholds remain unchanged. On 2026-10-18 the owner removed the Playwright browser journeys: only the Swift native app is a supported UI, so React web layout has no browser coverage.",
+  "policy": "Preserve independently justified behavior. Protected financial, database and recovery tests and coverage thresholds remain unchanged. On 2026-10-18 the owner removed the Playwright browser journeys while the Swift native app was the intended UI. That app was retired on 2026-10-19 and the journeys were not restored, so React web layout has no browser coverage.",
   "reviewedTests": [
     {
       "path": "apps/frontend/src/pages/__tests__/responsiveLayout.contract.test.ts",
       "decision": "remove; React web layout coverage dropped by owner decision",
       "boundary": "source text",
-      "reason": "Counts and exact CSS spellings prevent valid refactors and cannot prove fit. The browser geometry journeys that replaced it were removed on 2026-10-18 with Playwright, because only the Swift native app is a supported UI; no React layout coverage remains."
+      "reason": "Counts and exact CSS spellings prevent valid refactors and cannot prove fit. The browser geometry journeys that replaced it were removed on 2026-10-18 with Playwright, while the Swift native app (retired 2026-10-19) was the intended UI; no React layout coverage remains."
     },
     {
       "path": "apps/node-backend/tests/accountCloseService.test.ts",

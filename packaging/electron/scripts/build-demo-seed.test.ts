@@ -50,7 +50,7 @@ test("the synthetic generator is deterministic data-only SQL", async () => {
 });
 
 test("demo planned loans use a loan type the API contract accepts", async () => {
-  // openapi PlannedLoanType; Vision Native rejects the whole planned list on any other.
+  // openapi PlannedLoanType; a strict client rejects the whole planned list on any other.
   const demoSeedSql = await loadSql("2026-09-03");
   const loanTypes = demoSeedSql
     .split("\n")

@@ -1,8 +1,8 @@
 ---
 title: "ADR-211: Finish phase 4 without web content"
 type: adr
-status: accepted
-date: 2026-10-17
+status: superseded
+date: 2026-10-19
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript, storage]
 description: "Accepted on 2026-10-17 by Tor. Phase 4 ends with no web content at all: the helper document's calculations (command-palette answers, tax report profile and context) and its scoped storage move to Swift, and a default-off native-only mode stops creating the WKWebView until CI parity and the macOS smoke prove it. Amends ADR-210's 'TypeScript calculations stay' decision."
 aliases: [adr-211, native without web content]
@@ -11,6 +11,9 @@ aliases: [adr-211, native without web content]
 # ADR-211: Finish phase 4 without web content
 
 ## Status
+
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: the Swift port is retired; phase 4 is not finished.
 
 Accepted on 2026-10-17 by Tor. It amends [[docs/adr/210-vision-native-helper-document|ADR-210]]:
 the helper document becomes a transition step, not the end state. New authorities stay
@@ -81,7 +84,7 @@ UI".
   `VISION_NATIVE_WEB_FREE=1`, waits for `/health` and "native-only document ready", and records
   bundle size and memory beside the retained, helper and Electron numbers. It first passed on run
   39065530611 (2026-10-17); the numbers are in
-  [[docs/reference/native-parity/agent-handoff|the agent handoff]].
+  the agent handoff.
 - **Default (2026-10-17):** with the native suites green (run 39067544787) and the smoke passing, the
   native-only mode is the eligible Debug Demo default, as decision 3 provides. `VISION_NATIVE_WEB_FREE=0`
   opts out; an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` still selects the helper. The smoke's
@@ -101,4 +104,4 @@ UI".
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
 - [[docs/adr/209-vision-native-staged-web-retirement|ADR-209: Staged web retirement]]
 - [[docs/adr/210-vision-native-helper-document|ADR-210: Helper document]]
-- [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]
+- Vision Native agent handoff (page removed by ADR-214)

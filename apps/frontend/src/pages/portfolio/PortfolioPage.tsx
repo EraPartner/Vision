@@ -101,7 +101,6 @@ import { Money } from "@/components/shared/Money";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { ExportDialog } from "@/features/reports/ExportDialog";
-import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
@@ -267,7 +266,7 @@ export default function PortfolioPage() {
 
     const [brokerFilter, setBrokerFilter] = useState("all");
     const [sortBy, setSortBy] = useState<HoldingsSort>("value");
-    const { exportOpen, setExportOpen } = useReportDialogState();
+    const [exportOpen, setExportOpen] = useState(false);
     const [customizeOpen, setCustomizeOpen] = useState(false);
     const [detailId, setDetailId] = useState<number>();
     const [detailOpen, setDetailOpen] = useState(false);
