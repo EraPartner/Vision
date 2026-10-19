@@ -53,7 +53,6 @@ bun run check
 bun run db:migrate            # apply pending migrations through the app's migration runner
 bun run db:status             # list applied and pending migrations
 bun run db:lint               # squawk lint of migration SQL for destructive DDL
-bun run db:drift-check        # compare a database's schema with the 0001 baseline (read-only)
 bun run db:codegen            # regenerate the Kysely database types from a migrated database
 # from apps/node-backend:
 bun vitest run src/path/to/x.test.js

@@ -91,8 +91,7 @@ related_code:
 
 The schema is `db/migrations/0001_baseline.sql` plus later numbered migrations, applied by the
 Kysely migrator. An empty PostgreSQL 18 database loads the baseline in one transaction and must
-match its catalog fingerprint; a database at Alembic `0126`, `0127` or `0128` is adopted after the missing
-`db/alembic-bridge/` steps when it then has the same fingerprint, and anything else fails closed. The baseline is the contracted shape: it has no `bank_account` columns on
+match its catalog fingerprint; a database still on Alembic is refused. The baseline is the contracted shape: it has no `bank_account` columns on
 `transactions`/`planned_transactions`, no per-bank `*_raw_transactions` tables, and no
 `legacy_inh_*` copies. Migration numbers below (`0046`, `0062`, …) are historical Alembic revisions
 whose result the baseline contains; the files exist only in Git history. Generated row types live in
@@ -804,7 +803,7 @@ The migration blocks updates, deletes, and truncation of entries and checkpoint 
 
 Post-cutover editor, split, and broker retag chain entries bind the persisted domain row and its exact UTC microsecond `created_at`. The writers use values returned by PostgreSQL for the chain payload; broker retag also uses the returned, normalized UUID and receipt fields. Verification recomputes editor and split digests and compares the broker retag payload against stored rows, so changing a linked row or its timestamp breaks the domain link. This does not make the pre-cutover rows verified.
 
-Each migration the Kysely migrator applies appends a `schema_migration` chain entry (`revision_applied`, direction `upgrade`) in the same transaction, and adopting an Alembic database onto the baseline appends a `version_changed`/`stamp` entry; the baseline itself starts the chain with one `baseline_installed` event (`apps/node-backend/src/database/migrate.ts`). The payload records direction, revision ID, and resulting `heads`. The verifier compares the latest chained `heads` with the highest name in `public.kysely_migration` (`auditVerificationService.ts`). This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
+Each migration the Kysely migrator applies appends a `schema_migration` chain entry (`revision_applied`, direction `upgrade`) in the same transaction (databases adopted from Alembic before ADR-224 also carry one `version_changed`/`stamp` entry); the baseline itself starts the chain with one `baseline_installed` event (`apps/node-backend/src/database/migrate.ts`). The payload records direction, revision ID, and resulting `heads`. The verifier compares the latest chained `heads` with the highest name in `public.kysely_migration` (`auditVerificationService.ts`). This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
 
 ---
 

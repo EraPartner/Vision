@@ -281,7 +281,13 @@ imports, packages importing apps, or frontend imports of the Belgian tax engine)
 Intended exports without a static importer carry the `@public` JSDoc tag; knip's duplicate-export
 rule is off.
 
-### 2026-10-19: Adopt Alembic 0126 and 0127 through a bridge (accepted)
+### 2026-10-19: Remove Alembic adoption (accepted)
+
+[[docs/adr/224-remove-alembic-adoption|ADR-224]] removes the Alembic bridge, the takeover and
+the drift check now that the only database is on the Kysely baseline. A database still on Alembic
+is refused unchanged.
+
+### 2026-10-19: Adopt Alembic 0126 and 0127 through a bridge (superseded by ADR-224)
 
 [[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]] amends ADR-222: a database stopped at
 Alembic `0126` or `0127` gets the frozen `0127`/`0128` SQL from `db/alembic-bridge/` before the

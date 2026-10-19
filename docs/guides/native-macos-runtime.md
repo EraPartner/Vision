@@ -80,12 +80,10 @@ partially switched database cannot become the writer by accident.
 
 The backend applies migrations in-process with Kysely's migrator; no separate migration executable
 is spawned. An empty PostgreSQL 18 cluster installs `db/migrations/0001_baseline.sql` atomically
-and verifies its catalog fingerprint, then applies later numbered files. A cluster still at
-Alembic `0126`, `0127` or `0128` is adopted in one transaction: missing steps run from
-`db/alembic-bridge/`, then the catalog fingerprint must equal the baseline's. Any other Alembic
-revision or schema drift fails closed and changes nothing. If the backend exits during startup,
+and verifies its catalog fingerprint, then applies later numbered files. A cluster still on
+Alembic is refused and left unchanged. If the backend exits during startup,
 Electron stops waiting and shows the error from `backend.log`. The package ships the whole `db/`
-folder (`migrations/`, `alembic-bridge/` and `schema-inventory.sql`). See
+folder (`migrations/` and `schema-inventory.sql`). See
 [[docs/guides/migrations|Database Migration Guide]] and
 [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]].
 

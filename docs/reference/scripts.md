@@ -32,7 +32,6 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 
 | Script             | Purpose                                                      |
 | ------------------ | ------------------------------------------------------------ |
-| `install:all`      | Install root workspaces                                      |
 | `install:electron` | Install the Electron workspace with its frozen lockfile      |
 | `dev`              | Launch native Electron development                           |
 | `backend`          | Start the backend against the configured database            |
@@ -133,7 +132,6 @@ All database scripts use the Kysely migrator in `apps/node-backend/src/database/
 | `db:status`       | List migrations and when each was applied                                                            |
 | `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |
 | `db:lint`         | Squawk lint of migration SQL with `config/squawk.toml`                                               |
-| `db:drift-check`  | Read-only baseline fingerprint comparison; reads Vision's `runtime.env` (`--env-file`, `--from-env`) |
 | `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` with `kysely-codegen`               |
 | `db:index-stats`  | Inspect index statistics                                                                             |
 

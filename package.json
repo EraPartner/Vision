@@ -10,7 +10,6 @@
     "packages/*"
   ],
   "scripts": {
-    "install:all": "bun install",
     "prepare": "bun scripts/setup-git-hooks.ts && sh -c 'if [ -n \"$CI\" ]; then echo \"[prepare] CI -- skipping packaging/electron install (workflows install it explicitly).\"; elif [ ! -d packaging/electron ]; then echo \"[prepare] no packaging/electron directory -- skipping (container build context or partial checkout).\"; elif command -v bun >/dev/null 2>&1; then echo \"[prepare] installing packaging/electron deps (needed by the backend backup tests)...\"; bun install --frozen-lockfile --cwd packaging/electron; else echo \"[prepare] bun not found -- skipping. Backend backup tests will fail until you run: bun install --cwd packaging/electron\"; fi'",
     "hooks:setup": "bun scripts/setup-git-hooks.ts",
     "install:electron": "bun install --frozen-lockfile --cwd packaging/electron",
@@ -47,7 +46,6 @@
     "db:migrate:down": "bun run apps/node-backend/scripts/db-migrate.ts down",
     "db:status": "bun run apps/node-backend/scripts/db-migrate.ts status",
     "db:new": "bun run apps/node-backend/scripts/db-migrate.ts new",
-    "db:drift-check": "bun run apps/node-backend/scripts/db-drift-check.ts",
     "db:codegen": "cd apps/node-backend && bun run kysely-codegen --dialect postgres --default-schema public --default-schema vision_analysis --exclude-pattern \"public.kysely_migration*\" --out-file src/database/schema.generated.ts",
     "db:lint": "squawk --config config/squawk.toml --no-error-on-unmatched-pattern \"db/migrations/*.sql\"",
     "db:index-stats": "bun run apps/node-backend/scripts/index-stats.ts",
@@ -65,7 +63,6 @@
     "native:db-smoke": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-db-smoke.js",
     "native:isolated-smoke": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-isolated-smoke.js",
     "demo:reset-native": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-demo-cli.js reset --execute",
-    "update": "bun update",
     "version:bump": "bun scripts/version-bump.ts",
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",
     "check-endpoint-matrix": "bun scripts/check-endpoint-matrix.ts",
