@@ -21,10 +21,9 @@ export async function getPortfolioTaxDashboard(
   const [overview, holdings, metadata, rates, { settings, expected }] =
     await Promise.all([
       getTaxOverview(year),
-      getPortfolioSummary(target, {
-        activeInvestmentsOnly: false,
-        includeArchivedPresentation: true,
-      }),
+      // Archived holdings use the same dated-FX canonical summaries as the
+      // web portfolio (ADR-216), not the current-rate archive presentation.
+      getPortfolioSummary(target, { activeInvestmentsOnly: false }),
       investmentRepository.getAllWithCount({
         limit: 500,
         offset: 0,
@@ -40,10 +39,7 @@ export async function getPortfolioTaxDashboard(
       investmentIds: metadata.rows.map((inv) => inv.id),
       perInvestmentLimit: 1000,
     });
-  const active = new Map(holdings.summaries.map((inv) => [inv.id, inv]));
-  const archived = new Map(
-    (holdings.archivedPresentation ?? []).map((inv) => [inv.id, inv]),
-  );
+  const canonical = new Map(holdings.summaries.map((inv) => [inv.id, inv]));
   const byInvestment = new Map<number, typeof transactions>();
   for (const txn of transactions) {
     const bucket = byInvestment.get(txn.investment_id) ?? [];
@@ -51,7 +47,7 @@ export async function getPortfolioTaxDashboard(
     byInvestment.set(txn.investment_id, bucket);
   }
   const summaries = metadata.rows.flatMap((inv) => {
-    const summary = (inv.is_active ? active : archived).get(inv.id);
+    const summary = canonical.get(inv.id);
     if (!summary)
       throw new Error("Portfolio tax summary missing for listed investment");
     return [
