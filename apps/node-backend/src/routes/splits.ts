@@ -33,7 +33,9 @@ import {
   SplitIdSchema,
   TransactionIdSchema,
 } from "@vision/types/brands";
+import { EUR } from "../lib/currencyCode.ts";
 import type {
+  CurrencyCode,
   RecipientId,
   SplitId,
   TransactionId,
@@ -268,8 +270,8 @@ function resolveActor(req: {
 }
 
 /** `?currency=` for the converted owed figures; EUR when absent. */
-function owedCurrency(query: Record<string, unknown>): string {
-  return assertCurrency(optionalQueryString(query, "currency")) ?? "EUR";
+function owedCurrency(query: Record<string, unknown>): CurrencyCode {
+  return assertCurrency(optionalQueryString(query, "currency")) ?? EUR;
 }
 
 // The owed summary is derived in JS after the aggregate (see the repository),

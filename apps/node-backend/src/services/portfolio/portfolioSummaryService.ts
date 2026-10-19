@@ -40,6 +40,7 @@ import {
   buildAssetClassTotals,
   buildAssetGroupTotals,
 } from "./portfolioAssetClassTotals.ts";
+import { isCurrencyCode } from "@vision/types/brands";
 import {
   convertAtLatestRates,
   loadLatestRatesToEur,
@@ -47,6 +48,7 @@ import {
 import type { LatestRatesToEur } from "../currency/latestRateConversion.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
+  money,
   toDecimal,
   toNumber,
   addAll,
@@ -802,14 +804,20 @@ function buildInvestmentSummary(
   const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
   // Rows arrive ordered by (date, id): the last rent row is the latest one.
   const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
-  const monthlyRent = latestRent
-    ? convertAtLatestRates(
-        latestRent.amount ?? 0,
-        (latestRent.currency || invCurrency).toUpperCase(),
-        targetCurrency,
-        latestRates,
-      )
-    : toDecimal(0);
+  const rentCurrency = (latestRent?.currency || invCurrency).toUpperCase();
+  const target = targetCurrency.toUpperCase();
+  // Rates exist only for ISO codes, so a non-ISO code here has no rate.
+  const monthlyRent = !latestRent
+    ? toDecimal(0)
+    : rentCurrency === target
+      ? toDecimal(latestRent.amount ?? 0)
+      : isCurrencyCode(rentCurrency) && isCurrencyCode(target)
+      ? convertAtLatestRates(
+          money(latestRent.amount ?? 0, rentCurrency),
+          target,
+          latestRates,
+        )?.amount
+      : undefined;
   const roundedFees = round2(convertedTotalFees);
   const roundedTaxes = round2(convertedTotalTaxes);
   const roundedIncome = round2(convertedTotalIncome);

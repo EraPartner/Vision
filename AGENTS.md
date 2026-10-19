@@ -95,6 +95,10 @@ replace these rules.
 - Frontend: strict TypeScript; interfaces for props and state; Zod input validation; `@/*` maps to
   `apps/frontend/src/*`; functional components and hooks; React Query for server state; Tailwind
   and `class-variance-authority` for variants. Prefix intentionally unused values with `_`.
+- Ids and currency codes are branded (ADR-220, `@vision/types/brands`): type entity ids as
+  `AccountId`, `CategoryId` and so on, and currencies as `CurrencyCode`, not `number` or `string`.
+  Brand at boundaries (row schemas, route params, contracts) and use the `as*` constructors only
+  for unchecked input. Totals that may span currencies sum `Money` with `sumMoney`.
 - Never commit or print secrets or personal financial information. Use `.env.local` only.
 - Validate inputs with Zod on the frontend and server-side validation on the backend. Use
   least-privilege database users, rate-limit public endpoints, and audit new dependencies.

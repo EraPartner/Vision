@@ -3787,10 +3787,7 @@ export async function applyPortfolioImportReconciliation({
         policy: policy as AdoptPolicy,
         // History mixes custody events in; a repaired duplicate is a
         // portfolio transaction.
-        imported: {
-          id: asPortfolioTransactionId(imported.id),
-          import_batch_id: imported.import_batch_id,
-        },
+        imported: { ...imported, id: asPortfolioTransactionId(imported.id) },
       });
       repairedByBatch.set(
         Number(row.batch_id),

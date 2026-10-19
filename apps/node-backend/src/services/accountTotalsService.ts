@@ -20,7 +20,17 @@
 
 import accountRepository from "../repositories/accountRepository.ts";
 import type { AccountBalanceQueryRow } from "../types/rows.ts";
-import { addAll, roundMoney, toDecimal, type Decimal } from "../lib/money.ts";
+import type { CurrencyCode } from "@vision/types/brands";
+import {
+  addMoney,
+  money,
+  roundMoney,
+  sumMoney,
+  toDecimal,
+  type Decimal,
+  type Money,
+} from "../lib/money.ts";
+import { EUR } from "../lib/currencyCode.ts";
 import { logger } from "../config/logger.ts";
 import {
   convertAtLatestRates,
@@ -56,22 +66,21 @@ function groupOf(row: AccountBalanceQueryRow): AccountGroupId {
 interface ConvertedAccount {
   row: AccountBalanceQueryRow;
   group: AccountGroupId;
-  balance: Decimal;
-  unconvertedCurrencies: string[];
+  balance: Money;
+  unconvertedCurrencies: CurrencyCode[];
 }
 
 function convertAccount(
   row: AccountBalanceQueryRow,
-  target: string,
+  target: CurrencyCode,
   rates: LatestRatesToEur,
 ): ConvertedAccount {
-  const amounts: Decimal[] = [];
-  const unconvertedCurrencies: string[] = [];
+  const amounts: Money[] = [];
+  const unconvertedCurrencies: CurrencyCode[] = [];
   for (const part of row.balance_parts ?? []) {
     const from = currencyCode(part.currency);
     const converted = convertAtLatestRates(
-      toDecimal(part.balance),
-      from,
+      money(part.balance, from),
       target,
       rates,
     );
@@ -82,16 +91,19 @@ function convertAccount(
   return {
     row,
     group: groupOf(row),
-    balance: addAll(amounts),
+    balance: sumMoney(amounts, target),
     unconvertedCurrencies,
   };
 }
 
 /** Sum of converted balances plus the accounts that had a part left out. */
-function total(accounts: ConvertedAccount[]) {
+function total(accounts: ConvertedAccount[], target: CurrencyCode) {
   const incomplete = accounts.filter((a) => a.unconvertedCurrencies.length);
   return {
-    total: addAll(accounts.map((a) => a.balance)),
+    total: sumMoney(
+      accounts.map((a) => a.balance),
+      target,
+    ).amount,
     unconverted_count: incomplete.length,
     unconverted_currencies: [
       ...new Set(incomplete.flatMap((a) => a.unconvertedCurrencies)),
@@ -105,8 +117,8 @@ function total(accounts: ConvertedAccount[]) {
  * cannot be computed.
  */
 async function holdingsByAccount(
-  target: string,
-): Promise<Map<number, Decimal> | undefined> {
+  target: CurrencyCode,
+): Promise<Map<number, Money> | undefined> {
   try {
     const summary = await resolveCacheWithInflight(
       portfolioSummaryCache,
@@ -116,12 +128,14 @@ async function holdingsByAccount(
         loader: () => getPortfolioSummary(target),
       },
     );
-    const values = new Map<number, Decimal>();
+    const values = new Map<number, Money>();
     for (const row of summary.byAccount) {
       if (row.account_id == null || row.contribution_kind !== "position")
         continue;
-      const previous = values.get(row.account_id) ?? toDecimal(0);
-      values.set(row.account_id, previous.plus(row.currentValue));
+      // The summary is computed in `target`, so its values are already Money in it.
+      const value = money(row.currentValue, target);
+      const previous = values.get(row.account_id);
+      values.set(row.account_id, previous ? addMoney(previous, value) : value);
     }
     return values;
   } catch (err) {
@@ -133,9 +147,9 @@ async function holdingsByAccount(
 }
 
 export async function computeAccountTotals({
-  currency = "EUR",
-}: { currency?: string } = {}) {
-  const target = currency.toUpperCase();
+  currency = EUR,
+}: { currency?: CurrencyCode } = {}) {
+  const target = currency;
   const [rows, rates] = await Promise.all([
     accountRepository.getAll({ active: null }),
     loadLatestRatesToEur(),
@@ -149,17 +163,19 @@ export async function computeAccountTotals({
       const members = accounts.filter((a) => a.group === id);
       const cash = total(
         members.filter((a) => !HOLDINGS_ONLY_TYPES.has(a.row.type)),
+        target,
       );
       const portfolioMembers = members.filter((a) =>
         PORTFOLIO_TYPES.has(a.row.type),
       );
       const holdingsUnavailable =
         portfolioMembers.length > 0 && holdings === undefined;
-      const holdingsTotal = addAll(
+      const holdingsTotal = sumMoney(
         portfolioMembers.map(
-          (a) => holdings?.get(Number(a.row.id)) ?? toDecimal(0),
+          (a) => holdings?.get(a.row.id) ?? money(0, target),
         ),
-      );
+        target,
+      ).amount;
       return [
         id,
         {
@@ -180,7 +196,7 @@ export async function computeAccountTotals({
       holdings: number;
       holdings_unavailable: boolean;
       unconverted_count: number;
-      unconverted_currencies: string[];
+      unconverted_currencies: CurrencyCode[];
     }
   >;
 
@@ -191,6 +207,7 @@ export async function computeAccountTotals({
         a.row.in_net_worth &&
         !PORTFOLIO_TYPES.has(a.row.type),
     ),
+    target,
   );
 
   return {
@@ -204,7 +221,7 @@ export async function computeAccountTotals({
     accounts: accounts.map((a) => ({
       id: Number(a.row.id),
       group: a.group,
-      converted_balance: roundMoney(a.balance),
+      converted_balance: roundMoney(a.balance.amount),
       unconverted_currencies: a.unconvertedCurrencies,
     })),
   };

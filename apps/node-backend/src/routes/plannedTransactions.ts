@@ -30,6 +30,7 @@ import {
   asRecipientId,
   asTransactionId,
 } from "@vision/types/brands";
+import { EUR } from "../lib/currencyCode.ts";
 import type { PlannedTransactionId } from "@vision/types/brands";
 import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
@@ -639,7 +640,7 @@ router.get("/due-soon", async (req, res) => {
  */
 router.get("/totals", async (req, res) => {
   const currency =
-    assertCurrency(optionalQueryString(req.query, "currency")) ?? "EUR";
+    assertCurrency(optionalQueryString(req.query, "currency")) ?? EUR;
   res.ok(await computePlannedTotals({ currency }));
 });
 

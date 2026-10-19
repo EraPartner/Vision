@@ -50,6 +50,7 @@ export async function applyDuplicatePortfolioRepair({
   row: Pick<ReconciliationSourceRow, "id" | "batch_id">;
   before: PortfolioTransactionSnapshot;
   after: PortfolioTransactionSnapshot;
+  /** Pass the whole imported row: `same()` compares every field with the stored copy. */
   imported: Pick<PortfolioTransactionSnapshot, "id" | "import_batch_id">;
   policy: DuplicateRepairJournalRow["policy"];
 }): Promise<void> {

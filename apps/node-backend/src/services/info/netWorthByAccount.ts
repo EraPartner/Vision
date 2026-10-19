@@ -15,7 +15,9 @@ import {
   convertAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
-import { addAll, roundMoney } from "../../lib/money.ts";
+import type { CurrencyCode } from "@vision/types/brands";
+import { addAll, money, roundMoney } from "../../lib/money.ts";
+import { storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 const HOLDINGS_ONLY_ACCOUNT_TYPES = new Set(["crypto_exchange", "wallet"]);
 
@@ -35,8 +37,8 @@ export interface NetWorthAccountRow {
   unconverted: boolean;
 }
 
-export async function getNetWorthByAccount(targetCurrency: string) {
-  const target = (targetCurrency || "EUR").toUpperCase();
+export async function getNetWorthByAccount(targetCurrency: CurrencyCode) {
+  const target = storedCurrencyCode(targetCurrency);
   const [{ items: accounts }, summary, rates] = await Promise.all([
     accountService.list({ active: null }),
     resolveLiveSummary(target),
@@ -54,14 +56,13 @@ export async function getNetWorthByAccount(targetCurrency: string) {
       continue;
     }
     const converted = convertAtLatestRates(
-      account.computed_balance ?? 0,
-      account.currency || "EUR",
+      money(account.computed_balance ?? 0, storedCurrencyCode(account.currency)),
       target,
       rates,
     );
     cashById.set(
       Number(account.id),
-      converted === undefined ? null : roundMoney(converted),
+      converted === undefined ? null : roundMoney(converted.amount),
     );
   }
 

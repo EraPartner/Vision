@@ -8,6 +8,8 @@
  * every id-bearing route — every test here already used a valid numeric id,
  * so nothing was fake-passing under the old bypass.
  */
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -72,10 +74,10 @@ const BASE = "/api/splits";
 const api = routeAgent(splitsRouter, { mountPath: BASE });
 
 const OWED_SUMMARY = {
-  currency: "EUR",
+  currency: asCurrencyCode("EUR"),
   remaining: 0,
   unconverted_count: 0,
-  unconverted_currencies: [],
+  unconverted_currencies: [] as CurrencyCode[],
 };
 
 describe("Splits Routes", () => {
