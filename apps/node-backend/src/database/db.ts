@@ -29,7 +29,7 @@ import type { QueryRunner } from "../types/rows.ts";
 const connection: DatabaseConnection = {
   async executeQuery<R>(compiled: CompiledQuery): Promise<QueryResult<R>> {
     const result = await query<R>(compiled.sql, compiled.parameters);
-    return result.rowCount === null || compiled.query.kind === "SelectQueryNode"
+    return result.rowCount == null || compiled.query.kind === "SelectQueryNode"
       ? { rows: result.rows }
       : { rows: result.rows, numAffectedRows: BigInt(result.rowCount) };
   },
