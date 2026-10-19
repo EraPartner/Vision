@@ -544,7 +544,10 @@ function validateNetworkPort(value: unknown, label = "network port"): number {
 }
 
 export type DatabaseSwitchState =
-  "activated" | "between-renames" | "before-renames" | "unsafe";
+  | "activated"
+  | "between-renames"
+  | "before-renames"
+  | "unsafe";
 
 export function classifyDatabaseSwitchState({
   liveExists,
@@ -1209,7 +1212,8 @@ export async function rollbackDirectorySwitch(
 }
 
 export type DirectoryFinalizeResult =
-  { status: "nothing-to-finalize" } | { status: "finalized" };
+  | { status: "nothing-to-finalize" }
+  | { status: "finalized" };
 
 /** Accepts a token from atomicReplaceDirectory or one persisted in state. */
 export async function finalizeDirectorySwitch(
@@ -1922,7 +1926,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     }
     if (!ready && startService && requireTools().managed) {
       await startManagedPostgres(config);
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      // A clean cluster accepts connections ~0.1 s after spawn, so poll finely
+      // instead of losing most of a coarse interval on every launch.
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
         if (
           postgresChild?.exitCode !== undefined &&
           postgresChild?.exitCode !== null
@@ -1932,7 +1939,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
           .then(() => true)
           .catch(() => false);
         if (ready) break;
-        await sleep(500);
+        await sleep(50);
       }
     }
     if (!ready) {
@@ -1996,6 +2003,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   async function runSecretAdminSql(
     config: NativeDatabaseConfig,
     sql: string,
+    timeout = 10_000,
   ): Promise<RunFileResult> {
     const tempDir = await fs.promises.mkdtemp(
       path.join(os.tmpdir(), "vision-pg-admin-"),
@@ -2021,7 +2029,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
             "--file",
             sqlFile,
           ],
-          { timeout: 10_000 },
+          { timeout },
         );
       } catch {
         const error: NativeRuntimeError = new Error(
@@ -2071,120 +2079,48 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       startupRestoreRecovery ??= recoverInterruptedRestore();
       await startupRestoreRecovery;
     }
-    const psql = path.join(requireTools().binDir, "psql");
-    const adminArgs = [
-      "-h",
-      LOOPBACK_HOST,
-      "-p",
-      String(postgresPort),
-      ...clusterAdminArgs(config),
-      "--dbname",
-      "postgres",
-      "--set",
-      "ON_ERROR_STOP=1",
-      "--no-psqlrc",
-    ];
-
-    const roleExists = async (role: string): Promise<boolean> => {
-      const escaped = role.replace(/'/g, "''");
-      const result = await runAsClusterAdmin(
-        config,
-        psql,
-        [
-          ...adminArgs,
-          "--tuples-only",
-          "--no-align",
-          "--command",
-          `SELECT 1 FROM pg_roles WHERE rolname = '${escaped}';`,
-        ],
-        { timeout: 10_000 },
-      );
-      return result.stdout.trim() === "1";
+    // One psql session re-asserts every role, the database and (for the
+    // managed cluster) its extensions; a process per statement cost ~0.4 s
+    // on every launch.
+    const ensureRole = (role: string): string => {
+      const name = validateIdentifier(role, "PostgreSQL role");
+      return `SELECT 'CREATE ROLE ${name} NOLOGIN' WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${name}') \\gexec`;
     };
-
-    if (!(await roleExists(config.ownerRole))) {
-      await runSecretAdminSql(
-        config,
-        `CREATE ROLE ${quoteIdentifier(config.ownerRole)} LOGIN PASSWORD ${quoteHexSecret(config.ownerPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-      );
-    }
-    await runSecretAdminSql(
-      config,
-      `ALTER ROLE ${quoteIdentifier(config.ownerRole)} WITH LOGIN PASSWORD ${quoteHexSecret(config.ownerPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-    );
-    if (!(await roleExists(config.appRole))) {
-      await runSecretAdminSql(
-        config,
-        `CREATE ROLE ${quoteIdentifier(config.appRole)} LOGIN PASSWORD ${quoteHexSecret(config.appPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-      );
-    }
-    await runSecretAdminSql(
-      config,
-      `ALTER ROLE ${quoteIdentifier(config.appRole)} WITH LOGIN PASSWORD ${quoteHexSecret(config.appPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
-    );
-
+    const owner = quoteIdentifier(config.ownerRole);
+    const app = quoteIdentifier(config.appRole);
+    const database = validateIdentifier(config.database, "database name");
     // Role administration stays in the desktop runtime; the migration owner
     // only grants access to the approved views after migrations have finished.
     const analysisRole = "vision_analysis_executor";
     const analysisPassword = `E'${config.analysisPassword.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
-    if (!(await roleExists(analysisRole))) {
-      await runSecretAdminSql(config, `CREATE ROLE ${analysisRole} NOLOGIN;`);
-    }
-    await runSecretAdminSql(
-      config,
-      [
-        `ALTER ROLE ${analysisRole} WITH LOGIN PASSWORD ${analysisPassword} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;`,
-        `ALTER ROLE ${analysisRole} SET default_transaction_read_only = on;`,
-        `ALTER ROLE ${analysisRole} SET statement_timeout = '5000ms';`,
-        `ALTER ROLE ${analysisRole} SET lock_timeout = '1000ms';`,
-        `ALTER ROLE ${analysisRole} SET idle_in_transaction_session_timeout = '5000ms';`,
-        `ALTER ROLE ${analysisRole} SET search_path = vision_analysis, pg_catalog;`,
-      ].join("\n"),
-    );
-
-    const dbExists = await runAsClusterAdmin(
-      config,
-      psql,
-      [
-        ...adminArgs,
-        "--tuples-only",
-        "--no-align",
-        "--command",
-        `SELECT 1 FROM pg_database WHERE datname = '${config.database}';`,
-      ],
-      { timeout: 10_000 },
-    );
-    if (dbExists.stdout.trim() !== "1") {
-      await runAsClusterAdmin(
-        config,
-        path.join(requireTools().binDir, "createdb"),
-        [
-          "-h",
-          LOOPBACK_HOST,
-          "-p",
-          String(postgresPort),
-          ...clusterAdminArgs(config),
-          "--template",
-          "template0",
-          "--owner",
-          config.ownerRole,
-          config.database,
-        ],
-        { timeout: 30_000 },
+    const statements = [
+      ensureRole(config.ownerRole),
+      `ALTER ROLE ${owner} WITH LOGIN PASSWORD ${quoteHexSecret(config.ownerPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
+      ensureRole(config.appRole),
+      `ALTER ROLE ${app} WITH LOGIN PASSWORD ${quoteHexSecret(config.appPassword)} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;`,
+      ensureRole(analysisRole),
+      `ALTER ROLE ${analysisRole} WITH LOGIN PASSWORD ${analysisPassword} NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;`,
+      `ALTER ROLE ${analysisRole} SET default_transaction_read_only = on;`,
+      `ALTER ROLE ${analysisRole} SET statement_timeout = '5000ms';`,
+      `ALTER ROLE ${analysisRole} SET lock_timeout = '1000ms';`,
+      `ALTER ROLE ${analysisRole} SET idle_in_transaction_session_timeout = '5000ms';`,
+      `ALTER ROLE ${analysisRole} SET search_path = vision_analysis, pg_catalog;`,
+      `SELECT 'CREATE DATABASE ${database} OWNER ${owner} TEMPLATE template0' WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = '${database}') \\gexec`,
+      `ALTER DATABASE ${quoteIdentifier(database)} OWNER TO ${owner};`,
+    ];
+    if (requireTools().managed) {
+      // pg_stat_statements is not trusted, so only the private cluster
+      // administrator can install it. The migration owner stays non-superuser.
+      statements.push(
+        `\\connect ${database}`,
+        ...REQUIRED_POSTGRES_EXTENSIONS.map(
+          (extension) => `CREATE EXTENSION IF NOT EXISTS ${extension};`,
+        ),
       );
     }
-    await runAsClusterAdmin(
-      config,
-      psql,
-      [
-        ...adminArgs,
-        "--command",
-        `ALTER DATABASE ${quoteIdentifier(config.database)} OWNER TO ${quoteIdentifier(config.ownerRole)};`,
-      ],
-      { timeout: 10_000 },
-    );
-
-    await installRequiredExtensions(config.database, config);
+    await runSecretAdminSql(config, statements.join("\n"), 60_000);
+    if (!requireTools().managed)
+      await installRequiredExtensions(config.database, config);
     return config;
   }
 
