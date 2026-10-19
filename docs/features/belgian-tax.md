@@ -111,8 +111,16 @@ The `year` query accepts any four-digit year; a year outside the storable 1900�
 gets the year-pinned live estimate, for example for a custom report period.
 
 `GET /api/belgian-tax/dashboard` derives the chart, attribution, frozen scaling and fiscal display
-values on the server for API clients; the web `/tax` page computes them in the frontend with the
-same shared modules. See [[docs/api/belgian-tax|the API contract]].
+values on the server. The web `/tax` page reads its yearly and monthly charts, recorded portfolio
+taxes, recorded income per partner, per-year calculations (trend strip and year comparison) and
+deduction suggestions from it through `useTaxOverviewData`. The viewed year's profile and
+calculation (masthead, computation flow, PIT breakdown, current inputs, household breakdown) stay
+on the household store, which the profile dialog edits live. The dashboard reads the stored
+household, so `stores/taxPersistence.ts` notifies `onTaxSettingsSaved` listeners after each
+acknowledged save and the page refetches; transaction and investment mutations invalidate it
+through `invalidateTransactionData` / `invalidateInvestmentData`. `/portfolio/tax` likewise reads
+`GET /api/belgian-tax/portfolio-dashboard` through `usePortfolioTaxData`; saving manual
+adjustments or classifications refetches it. See [[docs/api/belgian-tax|the API contract]].
 
 Modules are split by concern:
 
@@ -706,6 +714,9 @@ Sorted descending union of:
 - years with transactions in user-configured taxable-income categories.
 
 Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the switcher chips.
+`TaxYearSwitcher` still derives this list in the browser. `MultiYearTrendStrip` and
+`YearComparisonCard` on `/tax` use the server dashboard's `yearCalculations`, which apply the same
+union and carry each year's frozen-first calculation.
 
 ### UI surfaces
 
@@ -789,7 +800,7 @@ and are included in the next grouped save. The filed year retains its confirmati
 
 ### UI surfaces
 
-- **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
+- **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar from the dashboard's `yearCalculations`. Clicking switches `viewedYear`.
 - **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
 - **`YearActionsMenu`** — visible Mark as filed (or Filed) and Export CSV buttons next to `TaxYearSwitcher`, plus the ••• menu for freeze/unfreeze, unmark filed and history. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
 - **`MarkAsFiledDialog`** — records an optional filing reference after confirmation. This records a filing in Vision; it does not submit a declaration to a tax authority. The household must be loaded and prepared for the selected year; otherwise the dialog explains the prerequisite and disables confirmation. Eligible years are the live year, a year with its own household snapshot, and a year with an explicitly frozen calculation. A past year that would only use a live estimate is not eligible. Filing the live year pins its household as that year's snapshot, so later edits do not change the filed inputs. A year that already has a `frozenCalculation` is not pinned, because the live household would disagree with the frozen figures. Filing stores `frozenHouseholdResult` next to `frozenCalculation` unless the year was already frozen. The household, household snapshots and snapshot metadata are saved in one settings request (`stores/taxPersistence.ts`) before the year shows as filed.

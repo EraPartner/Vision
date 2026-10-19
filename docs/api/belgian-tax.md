@@ -171,4 +171,9 @@ Invalid input returns `400 VALIDATION_ERROR` in the standard error envelope. The
 returns `403` for cross-site requests, and the global and aggregation rate limiters return `429`
 when exceeded. Request bodies use the API's existing 1 MB JSON limit.
 
-The web app calculates through the same shared engine locally.
+The web app calculates live household previews through the same shared engine locally. Its
+`/tax` and `/portfolio/tax` pages read their charts, recorded figures, per-year calculations,
+suggestions and portfolio costs from `GET /api/belgian-tax/dashboard` and
+`GET /api/belgian-tax/portfolio-dashboard` (`apps/frontend/src/lib/api/belgianTax.ts`), validated
+at runtime against `BelgianTaxDashboardSchema` and `BelgianPortfolioTaxDashboardSchema` in
+`@vision/types/contracts`.

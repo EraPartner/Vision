@@ -18,6 +18,10 @@ import { http, HttpResponse } from "msw";
 import { z } from "zod";
 import { server } from "./server";
 import {
+    BelgianPortfolioTaxDashboardSchema,
+    BelgianTaxDashboardSchema,
+} from "@vision/types/contracts";
+import {
     CategoryItemSchema,
     collectionSchema,
     InvestmentItemSchema,
@@ -984,6 +988,18 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "/api/planned-transactions/due-soon",
             "GET /api/planned-transactions/due-soon",
             collectionSchema().extend({ days: z.number().int().positive() }),
+        ],
+        [
+            "GET /api/belgian-tax/dashboard returns the tax dashboard",
+            "/api/belgian-tax/dashboard?year=2026&currency=EUR",
+            "GET /api/belgian-tax/dashboard",
+            BelgianTaxDashboardSchema,
+        ],
+        [
+            "GET /api/belgian-tax/portfolio-dashboard returns the portfolio tax dashboard",
+            "/api/belgian-tax/portfolio-dashboard?year=2026&currency=EUR",
+            "GET /api/belgian-tax/portfolio-dashboard",
+            BelgianPortfolioTaxDashboardSchema,
         ],
     ])("%s", async (_name, path, label, schema) => {
         validate(schema, await getEnvelope(path), label);

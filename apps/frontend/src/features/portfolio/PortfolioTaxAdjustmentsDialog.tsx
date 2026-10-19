@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { taxKeys } from "@/lib/queryKeys";
 import { parseDecimal } from "@/lib/decimal";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
@@ -66,7 +68,9 @@ const EMPTY_AMOUNTS: AmountDraftRow = { taxes: "", fees: "" };
 const EMPTY_CLASS: ClassDraftRow = { reynders: "auto", interestPortion: "" };
 
 interface Props {
-    investments: InvestmentSummary[];
+    investments: Array<
+        Pick<InvestmentSummary, "id" | "name" | "symbol" | "assetClass">
+    >;
     /** Controlled open state; leave undefined to render the dialog's own trigger. */
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -78,6 +82,7 @@ export function PortfolioTaxAdjustmentsDialog({
     onOpenChange,
 }: Props) {
     const { t } = useLanguage();
+    const queryClient = useQueryClient();
     const { appSettings } = useAppSettings();
     const zeroPlaceholder = formatNumberPlaceholder(appSettings.numberFormat);
     const profile = useBelgianTaxProfile((state) => state.profile);
@@ -215,6 +220,10 @@ export function PortfolioTaxAdjustmentsDialog({
                 saveManyForYear(profile.taxYear, payload),
                 setClassifications(classPayload),
             ]);
+            // The portfolio dashboard reads the stored adjustments and classifications.
+            void queryClient.invalidateQueries({
+                queryKey: taxKeys.portfolioDashboardAll,
+            });
             toast.success(t("tax.manualAdjustmentsSaved"));
             setOpen(false);
         } catch {

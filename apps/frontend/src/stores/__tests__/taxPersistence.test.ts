@@ -3,7 +3,11 @@ import { apiClient } from "@/lib/api";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "../belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
 import { useSettingsStore } from "../settingsStore";
-import { persistTaxFiling, scheduleTaxPersistence } from "../taxPersistence";
+import {
+    onTaxSettingsSaved,
+    persistTaxFiling,
+    scheduleTaxPersistence,
+} from "../taxPersistence";
 
 afterEach(() => {
     vi.useRealTimers();
@@ -60,4 +64,51 @@ it("preserves other-year and live-household edits made during filing, including 
         belgian_tax_household_snapshots_v2: state.householdSnapshots,
         belgian_tax_profile_snapshot_meta_v1: state.snapshotMetas,
     });
+});
+
+it("notifies saved-listeners only after the debounced save is acknowledged", async () => {
+    vi.useFakeTimers();
+    let acknowledge!: () => void;
+    vi.spyOn(apiClient, "saveSettings").mockImplementationOnce(
+        () =>
+            new Promise<void>((resolve) => {
+                acknowledge = resolve;
+            }),
+    );
+    useSettingsStore
+        .getState()
+        ._hydrate(
+            runtime,
+            runtime.upgradeProfileV1ToHousehold({
+                ...DEFAULT_BELGIAN_TAX_PROFILE,
+                profileConfigured: true,
+                grossAnnualIncome: 40000,
+            }),
+            {},
+            {},
+        );
+    const saved = vi.fn();
+    const unsubscribe = onTaxSettingsSaved(saved);
+    useSettingsStore.getState().updateProfile({ grossAnnualIncome: 45000 });
+    scheduleTaxPersistence(useSettingsStore.getState());
+    await vi.advanceTimersByTimeAsync(500);
+    expect(saved).not.toHaveBeenCalled();
+    acknowledge();
+    await vi.waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
+    unsubscribe();
+});
+
+it("does not notify saved-listeners when the save fails", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(apiClient, "saveSettings").mockRejectedValueOnce(
+        new Error("conflict"),
+    );
+    const saved = vi.fn();
+    const unsubscribe = onTaxSettingsSaved(saved);
+    useSettingsStore.getState().updateProfile({ grossAnnualIncome: 47000 });
+    scheduleTaxPersistence(useSettingsStore.getState());
+    await vi.advanceTimersByTimeAsync(500);
+    await Promise.resolve();
+    expect(saved).not.toHaveBeenCalled();
+    unsubscribe();
 });

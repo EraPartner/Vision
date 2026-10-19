@@ -6,7 +6,6 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePortfolioTaxData } from "@/hooks/usePortfolioTaxData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
-import { type InvestmentSummary } from "@/types/portfolio";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -97,50 +96,23 @@ function SectionHeading({ title, description, action }: SectionHeadingProps) {
     );
 }
 
+/** The server already expresses every investment amount in the response currency. */
+const amountInResponseCurrency = (amount: number) => amount;
+
 export default function PortfolioTaxPage() {
     const { t } = useLanguage();
     // Keeps the viewed income year in `?year=` so reload/share preserves it.
     useTaxYearParam();
-    // All tax math (cost enrichment, breakdowns, TOB/TACR/Reynders/CGT/WHT
-    // estimates) lives in the hook; the page only composes widgets from its output.
+    // Costs, breakdowns and estimates come from the server portfolio dashboard; the
+    // hook localizes them and keeps the profile-inputs card on the live profile.
     const {
+        dashboardQuery,
+        view,
         profile,
         calculation,
-        summaries,
-        convertToTarget,
-        taxTable,
-        dividendExemption,
         txYear,
         viewedYear,
-        totalTaxes,
-        totalFees,
-        totalTaxesAndFees,
-        totalRecordedTaxes,
-        totalRecordedFees,
-        totalManualTaxes,
-        totalManualFees,
-        totalRealizedGain,
-        totalUnrealizedGain,
-        effectiveTaxRate,
-        portfolioTaxesPlusPIT,
-        taxBreakdown,
-        feeBreakdown,
-        taxByAssetClass,
-        investmentBreakdown,
-        yearlyCostTrend,
-        totalDividendIncome,
-        grossDividendWht,
-        dividendWhtReclaim,
-        dividendWhtNetCost,
-        unknownDividendConventionCount,
-        tobRecorded,
-        tobAutoEstimate,
-        tacrEstimate,
-        reyndersEstimate,
-        cgtEstimate,
-        isEmpty,
         hasProfile,
-        portfolioQuery,
     } = usePortfolioTaxData();
     const fmt = useCurrencyFormatter();
 
@@ -160,22 +132,56 @@ export default function PortfolioTaxPage() {
         ? t("tax.profile.edit")
         : t("tax.profile.setup");
 
-    if (portfolioQuery.isLoading)
+    if (dashboardQuery.isError)
+        return (
+            <PageShell>
+                <PageError
+                    title={t("common.error")}
+                    message={dashboardQuery.error?.message ?? t("common.error")}
+                    onRetry={() => dashboardQuery.refetch()}
+                />
+            </PageShell>
+        );
+    if (!view)
         return (
             <PageShell>
                 <p role="status">{t("common.loading")}</p>
             </PageShell>
         );
-    if (portfolioQuery.isError)
-        return (
-            <PageShell>
-                <PageError
-                    title={t("common.error")}
-                    message={portfolioQuery.error?.message ?? t("common.error")}
-                    onRetry={() => portfolioQuery.refetch()}
-                />
-            </PageShell>
-        );
+    const {
+        summaries,
+        dividendExemption,
+        totalTaxes,
+        totalFees,
+        totalTaxesAndFees,
+        totalRecordedTaxes,
+        totalRecordedFees,
+        totalManualTaxes,
+        totalManualFees,
+        totalRealizedGain,
+        totalUnrealizedGain,
+        effectiveTaxRate,
+        totalPIT,
+        portfolioTaxesPlusPIT,
+        taxBreakdown,
+        feeBreakdown,
+        taxByAssetClass,
+        investmentBreakdown,
+        yearlyCostTrend,
+        totalDividendIncome,
+        grossDividendWht,
+        dividendWhtReclaim,
+        dividendWhtNetCost,
+        unknownDividendConventionCount,
+        tobRecorded,
+        tobAutoEstimate,
+        tacrEstimate,
+        reyndersEstimate,
+        cgtEstimate,
+        taxTable,
+        isEmpty,
+        hasInKindIncomeUnclassified,
+    } = view;
 
     return (
         <PageShell className="">
@@ -218,7 +224,7 @@ export default function PortfolioTaxPage() {
                             onOpenChange={setProfileOpen}
                         />
                         <PortfolioTaxAdjustmentsDialog
-                            investments={summaries as InvestmentSummary[]}
+                            investments={summaries}
                             open={adjustmentsOpen}
                             onOpenChange={setAdjustmentsOpen}
                         />
@@ -316,7 +322,7 @@ export default function PortfolioTaxPage() {
                         investmentBreakdown.length > 0 && (
                             <InvestmentTaxBreakdownTable
                                 investments={investmentBreakdown}
-                                convertToTarget={convertToTarget}
+                                convertToTarget={amountInResponseCurrency}
                                 t={t}
                             />
                         )}
@@ -340,7 +346,7 @@ export default function PortfolioTaxPage() {
                     </div>
                     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         <PortfolioBudgetCard
-                            totalPIT={calculation.totalPIT}
+                            totalPIT={totalPIT}
                             totalTaxes={totalTaxes}
                             portfolioTaxesPlusPIT={portfolioTaxesPlusPIT}
                         />
@@ -351,14 +357,7 @@ export default function PortfolioTaxPage() {
                             />
                         )}
                     </div>
-                    {summaries.some((investment) =>
-                        investment.transactions.some(
-                            (transaction) =>
-                                transaction.income_recognition_role ===
-                                    "included_in_units" &&
-                                transaction.date?.startsWith(`${txYear}-`),
-                        ),
-                    ) && (
+                    {hasInKindIncomeUnclassified && (
                         <p className="type-footnote text-label-secondary">
                             {t("tax.inKindIncomeUnclassified")}
                         </p>

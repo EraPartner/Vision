@@ -23,6 +23,21 @@ function payload(
         belgian_tax_profile_snapshot_meta_v1: state.snapshotMetas,
     };
 }
+const savedListeners = new Set<() => void>();
+/**
+ * Subscribe to acknowledged Belgian-tax settings saves, so server-computed views
+ * (the tax dashboards) refetch once the household they read has been stored.
+ * Returns the unsubscribe function.
+ */
+export function onTaxSettingsSaved(listener: () => void): () => void {
+    savedListeners.add(listener);
+    return () => {
+        savedListeners.delete(listener);
+    };
+}
+function notifySaved() {
+    for (const listener of savedListeners) listener();
+}
 function reportFailure(error: unknown) {
     logger.error("Failed to save Belgian tax settings:", error);
     useSettingsStore.getState()._markSaveError();
@@ -39,7 +54,9 @@ export function scheduleTaxPersistence(state: BelgianTaxSlice) {
         const values = pending;
         pending = undefined;
         if (!values) return;
-        void apiClient.saveSettings(values).catch(reportFailure);
+        void apiClient
+            .saveSettings(values)
+            .then(notifySaved, reportFailure);
     }, 500);
 }
 
@@ -64,6 +81,7 @@ export async function persistTaxFiling(year: number, reference?: string) {
         useSettingsStore.setState((current) =>
             publishFiledYear(current, year, filedHousehold, filedMeta),
         );
+        notifySaved();
     } catch (error) {
         reportFailure(error);
         throw error;

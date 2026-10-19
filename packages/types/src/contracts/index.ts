@@ -29,3 +29,4 @@ export * from "./research.ts";
 export * from "./researchAi.ts";
 export * from "./researchDossiers.ts";
 export * from "./charts.ts";
+export * from "./belgianTax.ts";

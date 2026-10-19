@@ -5,7 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok, settingsWithBaselines } from "@/test/msw/handlers";
+import {
+    err,
+    ok,
+    settingsWithBaselines,
+    taxDashboardStub,
+} from "@/test/msw/handlers";
 import TaxOverviewPage from "@/pages/TaxOverviewPage";
 
 const API_BASE = "http://localhost:3002";
@@ -248,12 +253,12 @@ describe("TaxOverviewPage (integration)", () => {
         consoleSpy.mockRestore();
     });
 
-    it("shows an error banner instead of the setup prompt when the stats fetch fails", async () => {
+    it("shows an error banner instead of the setup prompt when the dashboard fetch fails", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
+            http.get(`${API_BASE}/api/belgian-tax/dashboard`, () =>
                 err(500, "aggregation failed"),
             ),
         );
@@ -272,6 +277,95 @@ describe("TaxOverviewPage (integration)", () => {
         ).not.toBeInTheDocument();
         consoleSpy.mockRestore();
     }, 15000);
+
+    // ─── Server-computed dashboard ─────────────────────────────────────────
+
+    it("requests the dashboard for the viewed year with the statistics window", async () => {
+        const requests: URL[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/belgian-tax/dashboard`, ({ request }) => {
+                const url = new URL(request.url);
+                requests.push(url);
+                return ok(taxDashboardStub(Number(url.searchParams.get("year"))));
+            }),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        await screen.findByText(/no tax profile yet/i);
+        const url = requests.at(-1)!;
+        expect(url.searchParams.get("year")).toMatch(/^\d{4}$/);
+        expect(url.searchParams.get("currency")).toBe("EUR");
+        expect(url.searchParams.get("start_date")).toMatch(
+            /^\d{4}-\d{2}-01$/,
+        );
+        expect(url.searchParams.get("end_date")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it("renders the trend strip and suggestions from the dashboard response", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                        },
+                    }),
+                ),
+            ),
+            http.get(`${API_BASE}/api/belgian-tax/dashboard`, ({ request }) => {
+                const year = Number(
+                    new URL(request.url).searchParams.get("year"),
+                );
+                const entry = (y: number, totalPIT: number) => ({
+                    year: y,
+                    calculation: {
+                        grossIncome: 50000,
+                        totalPIT,
+                        effectiveRate: 20,
+                        netTakeHome: 30000,
+                    },
+                    isFiled: false,
+                    hasFrozenCalculation: false,
+                    isCurrent: y === 2026,
+                    hasSnapshot: false,
+                    hasTransactions: true,
+                });
+                return ok(
+                    taxDashboardStub(year, {
+                        isEmpty: false,
+                        hasStatsData: true,
+                        yearCalculations: [
+                            entry(2026, 12345),
+                            entry(2025, 11111),
+                        ],
+                        suggestions: [
+                            {
+                                id: "pension.suggest",
+                                titleKey: "tax.suggestions.item.pension",
+                                descriptionKey:
+                                    "tax.suggestions.pension.suggest",
+                                estimate: 300,
+                            },
+                        ],
+                    }),
+                );
+            }),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        expect(
+            await screen.findByText(/multi-year trend/i),
+        ).toBeInTheDocument();
+        expect(screen.getAllByText(/12,345|12\.345/).length).toBeGreaterThan(
+            0,
+        );
+        expect(screen.getAllByText(/11,111|11\.111/).length).toBeGreaterThan(
+            0,
+        );
+        expect(
+            await screen.findByText(/pension savings may provide/i),
+        ).toBeInTheDocument();
+    });
 
     // ─── Historical year viewer ────────────────────────────────────────────
 
