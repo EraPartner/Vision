@@ -1335,6 +1335,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/net-worth/by-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current net worth by account
+         * @description One row per account that counts toward net worth (its cash balance converted at the latest stored rate) and per account or unassigned bucket holding live portfolio positions. Holdings-only crypto_exchange and wallet accounts contribute holdings but no cash. Not cached.
+         */
+        get: operations["getNetWorthByAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/saved-charts": {
         parameters: {
             query?: never;
@@ -6317,8 +6337,14 @@ export interface components {
             nativeCurrentPrice?: number;
             nativeAvgCostBasis?: number;
             unrealizedGainPercent?: number;
-            /** @description Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion. */
+            /** @description Latest ordinary rent amount in its booking currency, without FX conversion. The Real Estate page reads monthlyRent instead. */
             estimatedMonthlyRent?: number;
+            /** @description Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate (fallback constants fill currencies without a stored rate). 0 without rent; null when no rate exists. */
+            monthlyRent?: number | null;
+            /** @description totalFees + totalTaxes, from the rounded fields. */
+            feesAndTaxes?: number;
+            /** @description Real Estate return shown per property, totalAppreciation + totalIncome − totalFees − totalTaxes, from the rounded fields. */
+            propertyReturn?: number;
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -6356,6 +6382,48 @@ export interface components {
             unrealizedGain: number;
             gainLoss: number;
         };
+        /** @description Totals of a set of holdings, each the exact sum of the rounded per-investment figures in `summaries`, in the response currency. */
+        PortfolioHoldingTotals: {
+            holdingCount: number;
+            /** @description Σ currentValue. */
+            totalPortfolioValue: number;
+            /** @description Σ totalBuyCost */
+            totalInvested: number;
+            totalGainLoss: number;
+            totalRealizedGain: number;
+            totalUnrealizedGain: number;
+            totalIncome: number;
+            totalDividends: number;
+            totalInKindIncome: number;
+            totalFees: number;
+            totalTaxes: number;
+            /** @description Σ feesAndTaxes. */
+            totalFeesAndTaxes: number;
+            /** @description Σ (gainLoss − totalIncome). */
+            netReturnExcludingIncome: number;
+            /** @description Σ (gainLoss − totalIncome + totalDividends). */
+            netReturnWithDividends: number;
+            totalAppreciation: number;
+            /** @description Σ propertyReturn. */
+            totalPropertyReturn: number;
+            totalAccruedInterest: number;
+            totalProjectedAnnualInterest: number;
+            /** @description Σ (interestRate × currentValue) / Σ currentValue, in percent; 0 without value. */
+            valueWeightedInterestRate: number;
+            /** @description Σ monthlyRent of the holdings that have a rate. */
+            estimatedMonthlyRent: number;
+            /** @description Some holding's monthlyRent is null. */
+            monthlyRentRateMissing: boolean;
+            usedFallbackRate: boolean;
+        };
+        PortfolioAssetClassTotals: {
+            assetClass: string;
+        } & components["schemas"]["PortfolioHoldingTotals"];
+        PortfolioAssetGroupTotals: {
+            /** @enum {string} */
+            group: "stocks_etfs" | "crypto" | "metals" | "real_estate" | "savings_bonds";
+            assetClasses: string[];
+        } & components["schemas"]["PortfolioHoldingTotals"];
         PortfolioSummaryTotals: {
             totalPortfolioValue: number;
             totalInvested: number;
@@ -6387,6 +6455,10 @@ export interface components {
             archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order. */
+            byAssetClass: components["schemas"]["PortfolioAssetClassTotals"][];
+            /** @description Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty. */
+            byAssetGroup: components["schemas"]["PortfolioAssetGroupTotals"][];
             /** @description Imported, source-owned account fees without an instrument, converted at transaction-date rates and counted once per canonical cash transaction. Separate from investment totals, cost basis and return series. Optional for compatibility with older responses; absence means unavailable. */
             brokerageCashFees?: {
                 total: number;
@@ -7930,6 +8002,29 @@ export interface components {
             snapshotsTotal?: number;
             snapshotsLimit?: number;
             snapshotsOffset?: number;
+        };
+        NetWorthByAccountRow: {
+            /** @description null for holdings not assigned to an account. */
+            accountId: number | null;
+            /** @description Account display_name or name; null for the unassigned row or an unknown account. */
+            name: string | null;
+            type: string | null;
+            cashCurrency: string | null;
+            /** @description Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency has no rate. */
+            cash: number | null;
+            /** @description Σ live portfolio-summary byAccount currentValue. */
+            holdings: number;
+            /** @description cash + holdings; null when cash is null. */
+            total: number | null;
+            unconverted: boolean;
+        };
+        NetWorthByAccountResponse: {
+            currency: string;
+            /** @description Ordered by account id, the unassigned row last. */
+            rows: components["schemas"]["NetWorthByAccountRow"][];
+            /** @description Σ row totals; null while any cash balance is unconverted. */
+            total: number | null;
+            unconvertedAccountIds: number[];
         };
         SavedChart: {
             id: number;
@@ -12354,6 +12449,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["NetWorthResponse"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR: currency must be a single value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getNetWorthByAccount: {
+        parameters: {
+            query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Net worth rows by account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["NetWorthByAccountResponse"];
                     };
                 };
             };

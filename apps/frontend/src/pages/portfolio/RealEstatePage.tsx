@@ -1,4 +1,3 @@
-import { monthlyRentInTarget } from "@/hooks/portfolio/monthlyRent";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
 import {
@@ -11,6 +10,8 @@ import {
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { Banknote, Building2, MapPin } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { findHoldingTotals } from "@/hooks/portfolio/assetGroupTotals";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import {
     AssetPageActions,
@@ -24,7 +25,6 @@ import {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,7 @@ import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 
 const PageIcon = PAGE_ICONS["/portfolio/real-estate"];
+const REAL_ESTATE_CLASSES = ["real_estate"] as const;
 
 export default function RealEstatePage() {
     const formatPercent = usePercentFormatter();
@@ -53,21 +54,18 @@ export default function RealEstatePage() {
     });
     const properties = byAssetClass("real_estate");
 
+    // Page totals and each property's rent (converted at the latest stored
+    // rate) come from the server summary; every figure is in targetCurrency.
+    const { data: summary } = usePortfolioSummaryQuery(targetCurrency);
     const {
-        convertToTarget,
-        convertToTargetIfAvailable,
-        isLoading: fxLoading,
-        refetch: refetchRates,
-    } = useCurrencyConverter(targetCurrency);
-    const rentById = new Map(
-        properties.map((p) => [
-            p.id,
-            monthlyRentInTarget(p, convertToTargetIfAvailable),
-        ]),
-    );
-    const missingRentRate = [...rentById.values()].some(
-        (value) => value === undefined,
-    );
+        totalPortfolioValue: totalValue,
+        totalInvested: totalCost,
+        totalAppreciation,
+        totalIncome: totalRentIncome,
+        totalPropertyReturn: totalReturn,
+        estimatedMonthlyRent,
+        monthlyRentRateMissing: missingRentRate,
+    } = findHoldingTotals(summary, REAL_ESTATE_CLASSES);
 
     // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
     // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
@@ -88,41 +86,8 @@ export default function RealEstatePage() {
         };
     }, [locale]);
 
-    const totalValue = properties.reduce(
-        (s, p) => s + convertToTarget(p.currentValue, p.currency),
-        0,
-    );
-    const totalCost = properties.reduce(
-        (s, p) => s + convertToTarget(p.totalBuyCost, p.currency),
-        0,
-    );
-    const totalAppreciation = properties.reduce(
-        (s, p) => s + convertToTarget(p.totalAppreciation, p.currency),
-        0,
-    );
-    const totalRentIncome = properties.reduce(
-        (s, p) => s + convertToTarget(p.totalIncome, p.currency),
-        0,
-    );
-    const totalFees = properties.reduce(
-        (s, p) => s + convertToTarget(p.totalFees, p.currency),
-        0,
-    );
-    const totalTaxes = properties.reduce(
-        (s, p) => s + convertToTarget(p.totalTaxes, p.currency),
-        0,
-    );
-
-    // Estimate monthly rent from most recent rent_income transactions
-    const estimatedMonthlyRent = [...rentById.values()].reduce<number>(
-        (sum, rent) => sum + (rent ?? 0),
-        0,
-    );
-
     const annualYield =
         totalValue > 0 ? ((estimatedMonthlyRent * 12) / totalValue) * 100 : 0;
-    const totalReturn =
-        totalAppreciation + totalRentIncome - totalFees - totalTaxes;
     const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
     const [exportOpen, setExportOpen] = useState(false);
@@ -142,7 +107,7 @@ export default function RealEstatePage() {
         />
     );
 
-    if (isLoading || (missingRentRate && fxLoading)) {
+    if (isLoading) {
         return (
             <>
                 {exportDialog}
@@ -169,7 +134,6 @@ export default function RealEstatePage() {
                         }
                         onRetry={() => {
                             void refetch();
-                            if (missingRentRate) void refetchRates();
                         }}
                     />
                 </PageShell>
@@ -309,35 +273,20 @@ export default function RealEstatePage() {
 
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     {properties.map((p) => {
-                        const propertyCost = convertToTarget(
-                            p.totalBuyCost,
-                            p.currency,
-                        );
-                        const propertyReturn = convertToTarget(
-                            p.totalAppreciation +
-                                p.totalIncome -
-                                p.totalFees -
-                                p.totalTaxes,
-                            p.currency,
-                        );
+                        const propertyCost = p.totalBuyCost;
+                        const propertyReturn = p.propertyReturn ?? 0;
                         const propertyROI =
                             propertyCost > 0
                                 ? (propertyReturn / propertyCost) * 100
                                 : 0;
-                        const monthlyRent = rentById.get(p.id) ?? 0;
-                        const currentValueInTarget = convertToTarget(
-                            p.currentValue,
-                            p.currency,
-                        );
+                        const monthlyRent = p.monthlyRent ?? 0;
+                        const currentValueInTarget = p.currentValue;
                         const propertyYield =
                             currentValueInTarget > 0
                                 ? ((monthlyRent * 12) / currentValueInTarget) *
                                   100
                                 : 0;
-                        const appreciation = convertToTarget(
-                            p.totalAppreciation,
-                            p.currency,
-                        );
+                        const appreciation = p.totalAppreciation;
                         const hasCadastral =
                             p.cadastral_income !== undefined &&
                             p.cadastral_income !== null;
@@ -424,10 +373,7 @@ export default function RealEstatePage() {
                                             tone={toneClass(p.totalIncome)}
                                             value={
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        p.totalIncome,
-                                                        p.currency,
-                                                    )}
+                                                    amount={p.totalIncome}
                                                     currency={targetCurrency}
                                                     signed
                                                 />
@@ -466,11 +412,10 @@ export default function RealEstatePage() {
                                                 )}
                                                 value={
                                                     <Money
-                                                        amount={convertToTarget(
+                                                        amount={
                                                             p.cadastral_income ||
-                                                                0,
-                                                            p.currency,
-                                                        )}
+                                                            0
+                                                        }
                                                         currency={
                                                             targetCurrency
                                                         }
@@ -521,11 +466,7 @@ export default function RealEstatePage() {
                                                 value={
                                                     <Money
                                                         amount={
-                                                            -convertToTarget(
-                                                                p.totalFees +
-                                                                    p.totalTaxes,
-                                                                p.currency,
-                                                            )
+                                                            -(p.feesAndTaxes ?? 0)
                                                         }
                                                         currency={
                                                             targetCurrency

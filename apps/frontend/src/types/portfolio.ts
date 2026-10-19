@@ -134,6 +134,13 @@ export interface InvestmentSummary {
     accruedInterest: number; // Interest earned since last payout
     projectedAnnualInterest: number; // Expected annual interest
     totalAppreciation: number; // For real estate
+    /** Server display figures (portfolio summary); optional for local fixtures. */
+    feesAndTaxes?: number; // totalFees + totalTaxes
+    propertyReturn?: number; // appreciation + income − fees − taxes
+    /** Latest rent at the latest stored rate; null when no rate is stored. */
+    monthlyRent?: number | null;
+    /** unrealizedGain / cost of the units held, in percent. */
+    unrealizedGainPercent?: number;
 
     // Cost tracking
     totalBuyCost: number; // Total spent on buys (including fees)

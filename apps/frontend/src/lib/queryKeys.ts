@@ -391,6 +391,8 @@ export const cashflowKeys = {
 export const netWorthKeys = {
     all: ["net-worth"] as const,
     byCurrency: (currency: string) => ["net-worth", currency] as const,
+    byAccount: (currency: string) =>
+        ["net-worth", "by-account", currency] as const,
     table: (params: object) => ["net-worth", "table", params] as const,
 };
 

@@ -308,10 +308,55 @@ export const PortfolioSummaryItemSchema = z.looseObject({
   accruedInterest: z.number(),
   projectedAnnualInterest: z.number(),
   totalAppreciation: z.number(),
+  feesAndTaxes: z.number(),
+  propertyReturn: z.number(),
+  monthlyRent: z.number().nullable(),
+  unrealizedGainPercent: z.number(),
   fullyAssigned: z.boolean(),
   oversold: z.boolean(),
   byAccount: z.array(PortfolioSummaryByAccountSchema),
 });
+
+/** portfolioAssetClassTotals.buildHoldingTotals — totals of a set of holdings. */
+export const PortfolioHoldingTotalsSchema = z.looseObject({
+  holdingCount: z.number().int().nonnegative(),
+  totalPortfolioValue: z.number(),
+  totalInvested: z.number(),
+  totalGainLoss: z.number(),
+  totalRealizedGain: z.number(),
+  totalUnrealizedGain: z.number(),
+  totalIncome: z.number(),
+  totalDividends: z.number(),
+  totalInKindIncome: z.number(),
+  totalFees: z.number(),
+  totalTaxes: z.number(),
+  totalFeesAndTaxes: z.number(),
+  netReturnExcludingIncome: z.number(),
+  netReturnWithDividends: z.number(),
+  totalAppreciation: z.number(),
+  totalPropertyReturn: z.number(),
+  totalAccruedInterest: z.number(),
+  totalProjectedAnnualInterest: z.number(),
+  valueWeightedInterestRate: z.number(),
+  estimatedMonthlyRent: z.number(),
+  monthlyRentRateMissing: z.boolean(),
+  usedFallbackRate: z.boolean(),
+});
+
+export const PortfolioAssetClassTotalsSchema =
+  PortfolioHoldingTotalsSchema.extend({ assetClass: z.string() });
+
+export const PortfolioAssetGroupTotalsSchema =
+  PortfolioHoldingTotalsSchema.extend({
+    group: z.enum([
+      "stocks_etfs",
+      "crypto",
+      "metals",
+      "real_estate",
+      "savings_bonds",
+    ]),
+    assetClasses: z.array(z.string()),
+  });
 
 /** `GET /api/info/portfolio-summary` — portfolioSummaryService.getPortfolioSummary. */
 export const PortfolioSummarySchema = z.looseObject({
@@ -320,6 +365,8 @@ export const PortfolioSummarySchema = z.looseObject({
   totals: PortfolioSummaryTotalsSchema,
   summaries: z.array(PortfolioSummaryItemSchema),
   byAccount: z.array(PortfolioSummaryByAccountSchema),
+  byAssetClass: z.array(PortfolioAssetClassTotalsSchema),
+  byAssetGroup: z.array(PortfolioAssetGroupTotalsSchema),
   archivedInKindIncome: z.array(
     z.looseObject({ id: IdSchema, totalInKindIncome: z.number() }),
   ),

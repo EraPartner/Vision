@@ -11,6 +11,7 @@ import {
     InfoTransactionCountSchema,
     InsightsCountSchema,
     InsightsDigestSchema,
+    NetWorthByAccountSchema,
     NetWorthSchema,
     PortfolioPerformanceSchema,
     PortfolioSummarySchema,
@@ -420,9 +421,59 @@ export interface PortfolioSummaryItem {
     accruedInterest: number;
     projectedAnnualInterest: number;
     totalAppreciation: number;
+    /** totalFees + totalTaxes. */
+    feesAndTaxes: number;
+    /** Real Estate return: totalAppreciation + totalIncome − totalFees − totalTaxes. */
+    propertyReturn: number;
+    /** Latest rent at the latest stored rate; 0 without rent, null without a rate. */
+    monthlyRent: number | null;
+    /** unrealizedGain / cost of the units held, in percent. */
+    unrealizedGainPercent: number;
     fullyAssigned: boolean;
     oversold: boolean;
     byAccount: PortfolioSummaryByAccountItem[];
+}
+
+/** Server totals of a set of holdings (sums of the rounded summary figures). */
+export interface PortfolioHoldingTotals {
+    holdingCount: number;
+    totalPortfolioValue: number;
+    /** Σ totalBuyCost, as `totals.totalInvested`. */
+    totalInvested: number;
+    totalGainLoss: number;
+    totalRealizedGain: number;
+    totalUnrealizedGain: number;
+    totalIncome: number;
+    totalDividends: number;
+    totalInKindIncome: number;
+    totalFees: number;
+    totalTaxes: number;
+    totalFeesAndTaxes: number;
+    /** Σ (gainLoss − totalIncome). */
+    netReturnExcludingIncome: number;
+    /** Σ (gainLoss − totalIncome + totalDividends). */
+    netReturnWithDividends: number;
+    totalAppreciation: number;
+    totalPropertyReturn: number;
+    totalAccruedInterest: number;
+    totalProjectedAnnualInterest: number;
+    /** Value-weighted interest rate, in percent. */
+    valueWeightedInterestRate: number;
+    estimatedMonthlyRent: number;
+    monthlyRentRateMissing: boolean;
+    usedFallbackRate: boolean;
+}
+
+export interface PortfolioAssetClassTotals extends PortfolioHoldingTotals {
+    assetClass: string;
+}
+
+export type PortfolioAssetGroup =
+    "stocks_etfs" | "crypto" | "metals" | "real_estate" | "savings_bonds";
+
+export interface PortfolioAssetGroupTotals extends PortfolioHoldingTotals {
+    group: PortfolioAssetGroup;
+    assetClasses: string[];
 }
 
 export interface PortfolioSummaryByAccountItem {
@@ -445,6 +496,10 @@ export interface PortfolioSummaryResponse {
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
     byAccount: PortfolioSummaryByAccountItem[];
+    /** Totals per asset class present in `summaries`. */
+    byAssetClass: PortfolioAssetClassTotals[];
+    /** Totals per asset page group, all five groups always present. */
+    byAssetGroup: PortfolioAssetGroupTotals[];
     /** Source-owned account fees, separate from security fees and investment returns. */
     brokerageCashFees?: {
         total: number;
@@ -473,6 +528,36 @@ export function getNetWorth(params?: {
 }): Promise<NetWorthResponse> {
     return requestWithQuery("/api/info/net-worth", params, {
         schema: NetWorthSchema,
+    });
+}
+
+export interface NetWorthByAccountRow {
+    /** null for holdings not assigned to an account. */
+    accountId: number | null;
+    /** display_name or name; null for the unassigned row or an unknown account. */
+    name: string | null;
+    type: string | null;
+    cashCurrency: string | null;
+    /** Cash at the latest stored rate; null when the currency has no rate. */
+    cash: number | null;
+    holdings: number;
+    total: number | null;
+    unconverted: boolean;
+}
+
+export interface NetWorthByAccountResponse {
+    currency: string;
+    rows: NetWorthByAccountRow[];
+    /** Σ row totals; null while any cash balance is unconverted. */
+    total: number | null;
+    unconvertedAccountIds: number[];
+}
+
+export function getNetWorthByAccount(params?: {
+    currency?: string | undefined;
+}): Promise<NetWorthByAccountResponse> {
+    return requestWithQuery("/api/info/net-worth/by-account", params, {
+        schema: NetWorthByAccountSchema,
     });
 }
 

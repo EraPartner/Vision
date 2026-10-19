@@ -8,7 +8,7 @@ last_modified: 2026-10-19
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 310
+api_operation_count: 311
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 310 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 311 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **310 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **311 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -680,6 +680,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/deduction-candidates`            | Transaction-derived Belgian deduction candidates for one year; each type carries an additive `byOwner` split by account owner (ADR-201)                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
 | PUT    | `/api/info/insight-dismissals`              | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                                                  | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/net-worth`                       | Net worth; excludes holdings-only wallet/exchange ledger cash (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/net-worth/by-account`            | Current net worth per account: cash at the latest stored rate (unconverted accounts flagged), live holdings partitions, unassigned row and total (ADR-216)                                                                                                                                            | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/exchange-rates`                  | Exchange rates                                                                                                                                                                                                                                                                                        | 30 req/min | [[docs/api/info\|Info]]                           |
 | POST   | `/api/info/exchange-rates/refresh`          | Refresh exchange rates                                                                                                                                                                                                                                                                                | admin      | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/inflation-rates`                 | Inflation rates                                                                                                                                                                                                                                                                                       | 30 req/min | [[docs/api/info\|Info]]                           |

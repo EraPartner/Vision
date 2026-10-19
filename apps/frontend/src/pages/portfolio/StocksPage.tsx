@@ -20,8 +20,7 @@ import { Banknote, Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { holdingPnl } from "@/hooks/portfolio/holdingPnl";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { findHoldingTotals } from "@/hooks/portfolio/assetGroupTotals";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AssetPageActions, Figure } from "@/features/portfolio/assetPageParts";
@@ -60,7 +59,6 @@ import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
-import { addAll, subtract, toNumber } from "@vision/shared-utils/money";
 
 interface StocksPageProps {
     assetClasses?: AssetClass[];
@@ -98,11 +96,6 @@ interface StocksPageProps {
     /** Render the units column in a monospace font (Crypto). */
     unitsMonospace?: boolean;
     /**
-     * Show avg-cost/price/value converted to the display currency instead of the
-     * holding's native currency (Crypto converts, Stocks/Metals stay native).
-     */
-    priceColumnsInTargetCurrency?: boolean;
-    /**
      * Percentage shown in the unrealized pill when enableFxAwarePnl is false:
      * 'costBasis' = unrealizedGain / cost-of-held-units; 'totalReturn' = the
      * legacy gainLossPercent figure (incl. dividends + realized) that CryptoPage
@@ -133,7 +126,6 @@ export default function StocksPage({
     assetCellVariant = "combined",
     unitsDecimals = 4,
     unitsMonospace = false,
-    priceColumnsInTargetCurrency = false,
     simplePnlPercentSource = "costBasis",
 }: StocksPageProps = {}) {
     const [visibleColumns, setVisibleColumns] = useState({
@@ -166,10 +158,8 @@ export default function StocksPage({
     const priceFreshnessLabel = usePriceFreshnessLabel(holdings);
     const targetCurrency = appSettings.defaultCurrency || "EUR";
 
-    const { convertToTarget } = useCurrencyConverter(targetCurrency);
-
-    // Per-investment FX attribution comes from the backend summary (it has the
-    // historical-rate machinery); only shown when a holding is in a foreign currency.
+    // Per-investment FX attribution and the page totals come from the backend
+    // summary; every holding figure is already in the display currency.
     const { data: apiSummary } = usePortfolioSummaryQuery(targetCurrency);
     const fxInfoById = useMemo(
         () => new Map((apiSummary?.summaries ?? []).map((s) => [s.id, s])),
@@ -187,131 +177,36 @@ export default function StocksPage({
             ),
         [holdings, targetCurrency],
     );
-
-    const displayedPnlByHoldingId = useMemo(() => {
-        const map: Record<
-            number,
-            {
-                realizedTarget: number;
-                unrealizedTarget: number;
-                unrealizedPercent: number;
-            }
-        > = {};
-        for (const holding of holdings) {
-            if (enableFxAwarePnl) {
-                map[holding.id] = holdingPnl(holding);
-                continue;
-            }
-
-            // True unrealized % = unrealizedGain / cost-of-held-units (a currency-free
-            // ratio). gainLossPercent is total-return (incl. dividends + realized) —
-            // the wrong label for an "unrealized %" column — but CryptoPage has always
-            // displayed it, so the 'totalReturn' source preserves that page's pill
-            // verbatim while 'costBasis' stays the correct default.
-            const heldCost =
-                (Number(holding.avgCostBasis) || 0) *
-                (Number(holding.totalUnits) || 0);
-            map[holding.id] = {
-                realizedTarget: convertToTarget(
-                    holding.realizedGain,
-                    holding.currency,
-                ),
-                unrealizedTarget: convertToTarget(
-                    holding.unrealizedGain,
-                    holding.currency,
-                ),
-                unrealizedPercent:
-                    simplePnlPercentSource === "totalReturn"
-                        ? holding.gainLossPercent
-                        : heldCost > 0
-                          ? ((Number(holding.unrealizedGain) || 0) / heldCost) *
-                            100
-                          : 0,
-            };
-        }
-        return map;
-    }, [
-        holdings,
-        enableFxAwarePnl,
-        convertToTarget,
-        simplePnlPercentSource,
-    ]);
-
-    const totals = useMemo(() => {
-        return holdings.reduce(
-            (acc, holding) => {
-                acc.totalValue += convertToTarget(
-                    holding.currentValue,
-                    holding.currency,
-                );
-                acc.totalRealizedGain +=
-                    displayedPnlByHoldingId[holding.id]?.realizedTarget || 0;
-                acc.totalUnrealizedGain +=
-                    displayedPnlByHoldingId[holding.id]?.unrealizedTarget || 0;
-                acc.totalDividends += convertToTarget(
-                    holding.totalDividends,
-                    holding.currency,
-                );
-                acc.totalInKindIncome += convertToTarget(
-                    holding.totalInKindIncome ?? 0,
-                    holding.currency,
-                );
-                acc.totalFees += convertToTarget(
-                    holding.totalFees,
-                    holding.currency,
-                );
-                acc.totalTaxes += convertToTarget(
-                    holding.totalTaxes,
-                    holding.currency,
-                );
-                return acc;
-            },
-            {
-                totalValue: 0,
-                totalRealizedGain: 0,
-                totalUnrealizedGain: 0,
-                totalDividends: 0,
-                totalInKindIncome: 0,
-                totalFees: 0,
-                totalTaxes: 0,
-            },
-        );
-    }, [holdings, displayedPnlByHoldingId, convertToTarget]);
-
     const {
-        totalValue,
+        totalPortfolioValue: totalValue,
         totalRealizedGain,
         totalUnrealizedGain,
         totalDividends,
-        totalFees,
-        totalTaxes,
-    } = totals;
+        totalFeesAndTaxes,
+        netReturnWithDividends,
+        netReturnExcludingIncome,
+    } = useMemo(
+        () => findHoldingTotals(apiSummary, assetClasses),
+        [apiSummary, assetClasses],
+    );
     // Canonical gainLoss includes custody fees and standalone deductions.
     // These pages include only the income they surface in their hero figures.
-    const netGain = toNumber(
-        addAll(
-            holdings.map((holding) =>
-                addAll([
-                    subtract(holding.gainLoss, holding.totalIncome),
-                    showDividends ? holding.totalDividends : 0,
-                ]),
-            ),
-        ),
-    );
+    const netGain = showDividends
+        ? netReturnWithDividends
+        : netReturnExcludingIncome;
 
-    // Stocks/Metals show avg-cost/price/value in the holding's native currency;
-    // Crypto shows them converted to the display currency.
+    // True unrealized % = unrealizedGain / cost-of-held-units (a currency-free
+    // ratio). gainLossPercent is total-return (incl. dividends + realized) —
+    // the wrong label for an "unrealized %" column — but CryptoPage has always
+    // displayed it, so the 'totalReturn' source preserves that page's pill
+    // verbatim while 'costBasis' stays the correct default.
+    const unrealizedPercentOf = (holding: (typeof holdings)[number]) =>
+        !enableFxAwarePnl && simplePnlPercentSource === "totalReturn"
+            ? holding.gainLossPercent
+            : (holding.unrealizedGainPercent ?? 0);
+
     const moneyPriceCol = (value: number, holdingCurrency?: string) => (
-        <Money
-            amount={
-                priceColumnsInTargetCurrency
-                    ? convertToTarget(value, holdingCurrency)
-                    : value
-            }
-            currency={
-                priceColumnsInTargetCurrency ? targetCurrency : holdingCurrency
-            }
-        />
+        <Money amount={value} currency={holdingCurrency} />
     );
 
     const [exportOpen, setExportOpen] = useState(false);
@@ -391,7 +286,7 @@ export default function StocksPage({
         );
     }
 
-    const feesAndTaxes = -(totalFees + totalTaxes);
+    const feesAndTaxes = -totalFeesAndTaxes;
     const unrealizedIcon =
         dynamicUnrealizedIcon && totalUnrealizedGain < 0
             ? TrendingDown
@@ -650,10 +545,10 @@ export default function StocksPage({
                             </TableHeader>
                             <TableBody>
                                 {holdings.map((h) => {
-                                    const pnl = displayedPnlByHoldingId[h.id];
-                                    const unrealized =
-                                        pnl?.unrealizedTarget || 0;
-                                    const realized = pnl?.realizedTarget || 0;
+                                    const unrealized = h.unrealizedGain;
+                                    const realized = h.realizedGain;
+                                    const unrealizedPercent =
+                                        unrealizedPercentOf(h);
                                     const researchHref = h.symbol
                                         ? `/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`
                                         : undefined;
@@ -804,13 +699,9 @@ export default function StocksPage({
                                                     signed
                                                 />
                                                 <DeltaPill
-                                                    value={
-                                                        pnl?.unrealizedPercent ||
-                                                        0
-                                                    }
+                                                    value={unrealizedPercent}
                                                     label={formatPercent(
-                                                        pnl?.unrealizedPercent ||
-                                                            0,
+                                                        unrealizedPercent,
                                                         {
                                                             digits: 2,
                                                             signed: true,
@@ -869,10 +760,9 @@ export default function StocksPage({
                                                         {h.totalDividends >
                                                         0 ? (
                                                             <Money
-                                                                amount={convertToTarget(
-                                                                    h.totalDividends,
-                                                                    h.currency,
-                                                                )}
+                                                                amount={
+                                                                    h.totalDividends
+                                                                }
                                                                 currency={
                                                                     targetCurrency
                                                                 }

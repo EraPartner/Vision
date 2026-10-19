@@ -3304,7 +3304,17 @@ components:
         unrealizedGainPercent: { type: number }
         estimatedMonthlyRent:
           type: number
-          description: Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion.
+          description: Latest ordinary rent amount in its booking currency, without FX conversion. The Real Estate page reads monthlyRent instead.
+        monthlyRent:
+          type: number
+          nullable: true
+          description: Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate (fallback constants fill currencies without a stored rate). 0 without rent; null when no rate exists.
+        feesAndTaxes:
+          type: number
+          description: totalFees + totalTaxes, from the rounded fields.
+        propertyReturn:
+          type: number
+          description: Real Estate return shown per property, totalAppreciation + totalIncome − totalFees − totalTaxes, from the rounded fields.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         totalUnits:
@@ -3355,6 +3365,83 @@ components:
         unrealizedGain: { type: number }
         gainLoss: { type: number }
 
+    PortfolioHoldingTotals:
+      type: object
+      description: >-
+        Totals of a set of holdings, each the exact sum of the rounded
+        per-investment figures in `summaries`, in the response currency.
+      required:
+        [
+          holdingCount,
+          totalPortfolioValue,
+          totalInvested,
+          totalGainLoss,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          totalIncome,
+          totalDividends,
+          totalInKindIncome,
+          totalFees,
+          totalTaxes,
+          totalFeesAndTaxes,
+          netReturnExcludingIncome,
+          netReturnWithDividends,
+          totalAppreciation,
+          totalPropertyReturn,
+          totalAccruedInterest,
+          totalProjectedAnnualInterest,
+          valueWeightedInterestRate,
+          estimatedMonthlyRent,
+          monthlyRentRateMissing,
+          usedFallbackRate,
+        ]
+      properties:
+        holdingCount: { type: integer, minimum: 0 }
+        totalPortfolioValue: { type: number, description: Σ currentValue. }
+        totalInvested: { type: number, description: Σ totalBuyCost, as totals.totalInvested. }
+        totalGainLoss: { type: number }
+        totalRealizedGain: { type: number }
+        totalUnrealizedGain: { type: number }
+        totalIncome: { type: number }
+        totalDividends: { type: number }
+        totalInKindIncome: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalFeesAndTaxes: { type: number, description: Σ feesAndTaxes. }
+        netReturnExcludingIncome: { type: number, description: Σ (gainLoss − totalIncome). }
+        netReturnWithDividends: { type: number, description: Σ (gainLoss − totalIncome + totalDividends). }
+        totalAppreciation: { type: number }
+        totalPropertyReturn: { type: number, description: Σ propertyReturn. }
+        totalAccruedInterest: { type: number }
+        totalProjectedAnnualInterest: { type: number }
+        valueWeightedInterestRate:
+          type: number
+          description: Σ (interestRate × currentValue) / Σ currentValue, in percent; 0 without value.
+        estimatedMonthlyRent: { type: number, description: Σ monthlyRent of the holdings that have a rate. }
+        monthlyRentRateMissing: { type: boolean, description: Some holding's monthlyRent is null. }
+        usedFallbackRate: { type: boolean }
+
+    PortfolioAssetClassTotals:
+      allOf:
+        - type: object
+          required: [assetClass]
+          properties:
+            assetClass: { type: string }
+        - $ref: "#/components/schemas/PortfolioHoldingTotals"
+
+    PortfolioAssetGroupTotals:
+      allOf:
+        - type: object
+          required: [group, assetClasses]
+          properties:
+            group:
+              type: string
+              enum: [stocks_etfs, crypto, metals, real_estate, savings_bonds]
+            assetClasses:
+              type: array
+              items: { type: string }
+        - $ref: "#/components/schemas/PortfolioHoldingTotals"
+
     PortfolioSummaryTotals:
       type: object
       required:
@@ -3394,7 +3481,8 @@ components:
 
     PortfolioSummaryData:
       type: object
-      required: [currency, computed_at, totals, summaries, byAccount]
+      required:
+        [currency, computed_at, totals, summaries, byAccount, byAssetClass, byAssetGroup]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
@@ -3414,6 +3502,14 @@ components:
         byAccount:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        byAssetClass:
+          type: array
+          description: Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order.
+          items: { $ref: "#/components/schemas/PortfolioAssetClassTotals" }
+        byAssetGroup:
+          type: array
+          description: Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty.
+          items: { $ref: "#/components/schemas/PortfolioAssetGroupTotals" }
 
         brokerageCashFees:
           type: object
@@ -6610,6 +6706,45 @@ components:
           type: integer
         snapshotsOffset:
           type: integer
+
+    NetWorthByAccountRow:
+      type: object
+      required: [accountId, name, type, cashCurrency, cash, holdings, total, unconverted]
+      properties:
+        accountId:
+          type: integer
+          nullable: true
+          description: null for holdings not assigned to an account.
+        name:
+          type: string
+          nullable: true
+          description: Account display_name or name; null for the unassigned row or an unknown account.
+        type: { type: string, nullable: true }
+        cashCurrency: { type: string, nullable: true }
+        cash:
+          type: number
+          nullable: true
+          description: Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency has no rate.
+        holdings: { type: number, description: Σ live portfolio-summary byAccount currentValue. }
+        total: { type: number, nullable: true, description: cash + holdings; null when cash is null. }
+        unconverted: { type: boolean }
+
+    NetWorthByAccountResponse:
+      type: object
+      required: [currency, rows, total, unconvertedAccountIds]
+      properties:
+        currency: { type: string }
+        rows:
+          type: array
+          description: Ordered by account id, the unassigned row last.
+          items: { $ref: "#/components/schemas/NetWorthByAccountRow" }
+        total:
+          type: number
+          nullable: true
+          description: Σ row totals; null while any cash balance is unconverted.
+        unconvertedAccountIds:
+          type: array
+          items: { type: integer }
 
     # ─── Saved Charts ────────────────────────────────────────────────────────
     SavedChart:
@@ -10954,6 +11089,37 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
+
+  /api/info/net-worth/by-account:
+    get:
+      summary: Get current net worth by account
+      description: >-
+        One row per account that counts toward net worth (its cash balance
+        converted at the latest stored rate) and per account or unassigned
+        bucket holding live portfolio positions. Holdings-only crypto_exchange
+        and wallet accounts contribute holdings but no cash. Not cached.
+      operationId: getNetWorthByAccount
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
+          schema:
+            type: string
+      responses:
+        "400":
+          description: "VALIDATION_ERROR: currency must be a single value"
+        "200":
+          description: Net worth rows by account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/NetWorthByAccountResponse"
 
   /api/saved-charts:
     get:

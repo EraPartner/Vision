@@ -10,11 +10,25 @@ import { List, ListRow } from "@/components/ui/list";
 import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
-import type { NetWorthAccountRow } from "./netWorthByAccount";
-import { sumNetWorthAccountRows } from "./netWorthByAccount";
+import type { AccountType } from "@/types/api";
+import { roundMoney, subtract } from "@vision/shared-utils/money";
+
+/** One displayed row: server figures plus its localized label. */
+export interface NetWorthAccountRow {
+    key: string;
+    accountId: number | null;
+    label: string;
+    /** Account type for the row subtitle; undefined for the unassigned row. */
+    type?: AccountType | undefined;
+    cash: number;
+    holdings: number;
+    total: number;
+}
 
 interface Props {
     rows: readonly NetWorthAccountRow[];
+    /** Server sum of the row totals. */
+    total: number;
     currency: string;
     headline: number;
 }
@@ -27,10 +41,14 @@ const ASSIGN_HOLDINGS_ROUTE = "/portfolio";
  * account that counts toward net worth, the unassigned holdings, and a closing
  * row that reconciles the displayed sum with the headline.
  */
-export function NetWorthByAccountList({ rows, currency, headline }: Props) {
+export function NetWorthByAccountList({
+    rows,
+    total: displayedTotal,
+    currency,
+    headline,
+}: Props) {
     const { t } = useLanguage();
-    const displayedTotal = sumNetWorthAccountRows(rows);
-    const difference = Math.round((displayedTotal - headline) * 100) / 100;
+    const difference = roundMoney(subtract(displayedTotal, headline));
     const matches = Math.abs(difference) < 0.005;
 
     return (

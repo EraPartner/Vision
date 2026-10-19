@@ -23,7 +23,7 @@ import {
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useAccounts } from "@/hooks/useAccounts";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { findHoldingTotals } from "@/hooks/portfolio/assetGroupTotals";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import {
@@ -251,7 +251,6 @@ export default function PortfolioPage() {
     const portfolioSummary = portfolioSummaryQuery.data;
     const totals = portfolioSummary?.totals;
     const { data: accountsData } = useAccounts({ active: "all" });
-    const { convertToTarget } = useCurrencyConverter(targetCurrency);
     const priceLabel = usePriceFreshnessLabel(summaries);
 
     const [period, setPeriod] = useSearchParamState("period", PERIOD_CODEC);
@@ -435,27 +434,18 @@ export default function PortfolioPage() {
 
     // ── Allocation and news symbols ─────────────────────────────────────────
     const { allocation, newsSymbols } = useMemo(() => {
-        const classToGroup = new Map<string, string>();
-        for (const [group, classes] of Object.entries(assetClassGroups)) {
-            for (const cls of classes) classToGroup.set(cls, group);
-        }
-        const byGroup = new Map<string, number>();
         const symbols: string[] = [];
         for (const summary of summaries) {
-            const value = convertToTarget(
-                summary.currentValue,
-                summary.currency,
-            );
-            const group = classToGroup.get(summary.assetClass);
-            if (group) byGroup.set(group, (byGroup.get(group) ?? 0) + value);
             if (summary.symbol && symbols.length < 10)
                 symbols.push(summary.symbol);
         }
-        const groups = Object.keys(assetClassGroups);
-        const slices = groups
-            .map((name, index) => ({
+        // Group values are server totals (ADR-216); only the shares are
+        // derived here.
+        const slices = Object.entries(assetClassGroups)
+            .map(([name, classes], index) => ({
                 name,
-                value: byGroup.get(name) ?? 0,
+                value: findHoldingTotals(portfolioSummary, classes)
+                    .totalPortfolioValue,
                 color: getChartColor(index),
             }))
             .filter((slice) => slice.value > 0);
@@ -467,7 +457,7 @@ export default function PortfolioPage() {
             })),
             newsSymbols: symbols,
         };
-    }, [summaries, convertToTarget, assetClassGroups]);
+    }, [summaries, portfolioSummary, assetClassGroups]);
 
     // ── Holdings: broker filter, per-row figures, sort, subtotals ───────────
     const brokerFilterOptions = useMemo(() => {
@@ -555,11 +545,9 @@ export default function PortfolioPage() {
                 const value =
                     selected?.currentValue ??
                     server?.currentValue ??
-                    convertToTarget(inv.currentValue, inv.currency);
+                    inv.currentValue;
                 const gain =
-                    selected?.gainLoss ??
-                    server?.gainLoss ??
-                    convertToTarget(inv.gainLoss, inv.currency);
+                    selected?.gainLoss ?? server?.gainLoss ?? inv.gainLoss;
                 const gainPct = selected
                     ? selected.totalInvested !== 0
                         ? (selected.gainLoss /
@@ -575,13 +563,7 @@ export default function PortfolioPage() {
             sortBy === "value" ? b.value - a.value : b.gainPct - a.gainPct,
         );
         return rows;
-    }, [
-        summaries,
-        filteredBrokerMetrics,
-        serverSummariesById,
-        convertToTarget,
-        sortBy,
-    ]);
+    }, [summaries, filteredBrokerMetrics, serverSummariesById, sortBy]);
 
     const brokerSubtotal = useMemo(() => {
         if (!filteredBrokerMetrics) {
