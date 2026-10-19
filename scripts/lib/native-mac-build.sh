@@ -47,7 +47,7 @@ prepare_native_macos_build() {
     return 1
   fi
 
-  if ! "$python_bin" -c 'import alembic, dotenv, psycopg2, sqlalchemy, PyInstaller; assert alembic.__version__ == "1.19.1"; assert PyInstaller.__version__ == "6.22.2"' >/dev/null 2>&1; then
+  if ! "$python_bin" -c 'import alembic, dotenv, psycopg2, sqlalchemy, PyInstaller; assert alembic.__version__ == "1.20.0"; assert PyInstaller.__version__ == "6.22.2"' >/dev/null 2>&1; then
     cat <<EOF
 ERROR: the pinned migration build dependencies are missing from:
   $python_bin

@@ -600,8 +600,7 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("ExchangeRatesPage renders populated live and fallback rate tables", async () => {
-        const user = userEvent.setup();
+    it("ExchangeRatesPage renders the stored rate table without built-in rates", async () => {
         server.use(
             http.get(`${API_BASE}/api/info/exchange-rates`, () =>
                 ok({
@@ -614,7 +613,6 @@ describe("Portfolio pages (integration)", () => {
                             fetched_at: "2026-08-26T09:00:00Z",
                         },
                     ],
-                    fallback_rates: { EUR: 1, GBP: 1.17 },
                     source: "database",
                     is_stale: false,
                     last_fetched_at: "2026-08-26T09:00:00Z",
@@ -638,14 +636,11 @@ describe("Portfolio pages (integration)", () => {
         expect(within(liveTable).getByText("0,920000")).toBeInTheDocument();
         expect(within(liveTable).getByText("1,0870")).toBeInTheDocument();
         expect(within(liveTable).getByText(/92[.,]00/)).toBeInTheDocument();
-
-        await user.click(
-            screen.getByRole("radio", { name: /fallback rates/i }),
-        );
-        const fallbackTable = await screen.findByRole("table", {
-            name: /fallback rates are updated in-memory/i,
-        });
-        expect(within(fallbackTable).getByText("GBP")).toBeInTheDocument();
+        // Conversions use stored rates only; no built-in rate view remains.
+        expect(screen.getAllByRole("table")).toHaveLength(1);
+        expect(
+            screen.queryByRole("radio", { name: /fallback rates/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("ExchangeRatesPage shows error state when API fails", async () => {
@@ -961,18 +956,16 @@ describe("Portfolio pages (integration)", () => {
     // ─── ExchangeRatesPage additional ─────────────────────────────────────────
     it("ExchangeRatesPage shows subtitle text", async () => {
         renderWithApp(<ExchangeRatesPage />);
-        // exchangeRates.subtitle = "Latest ECB rates -- fallback updated automatically on each successful fetch"
+        // exchangeRates.subtitle = "Latest stored ECB rates. Conversions use only these rates."
         expect(
-            await screen.findByText(/latest ecb rates/i),
+            await screen.findByText(/latest stored ecb rates/i),
         ).toBeInTheDocument();
     });
 
-    it("ExchangeRatesPage shows Fallback Currencies card heading", async () => {
+    it("ExchangeRatesPage shows the Stored rates card heading", async () => {
         renderWithApp(<ExchangeRatesPage />);
-        // exchangeRates.fallbackCurrencies = "Fallback Currencies" — always in summary Card
-        expect(
-            await screen.findByText(/fallback currencies/i),
-        ).toBeInTheDocument();
+        // exchangeRates.storedRates = "Stored rates" — always in summary Card
+        expect(await screen.findByText(/^stored rates$/i)).toBeInTheDocument();
     });
 
     // ─── WatchlistPage additional ─────────────────────────────────────────────

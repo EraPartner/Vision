@@ -1500,7 +1500,6 @@ const ROWS: Row[] = [
                     fetched_at: TS,
                 },
             ],
-            fallback_rates: { USD: 0.9 },
             source: "database",
             is_stale: false,
             last_fetched_at: TS,

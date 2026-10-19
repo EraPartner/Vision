@@ -13,13 +13,22 @@ import { loose } from "./helpers/partial.ts";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
-// Real conversion arithmetic, fixed rate table: 1 USD = 0.5 EUR (the canonical
-// fixture from the cross-currency finding).
+// Real conversion arithmetic, fixed latest stored rates: 1 USD = 0.5 EUR (the
+// canonical fixture from the cross-currency finding).
 vi.mock(
   "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
+    listLatestStoredRates: vi.fn(async () => ({
+      rows: [
+        {
+          currency_code: "USD",
+          rate_to_eur: "0.5",
+          rate_date: "2026-06-01",
+          fetched_at: "2026-06-01T10:00:00Z",
+        },
+      ],
+    })),
   }),
 );
 
@@ -475,7 +484,10 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     openingAnchors = [],
   }: {
     accounts?: { id: number; currency: string }[];
-    counts?: Record<"transactions" | "planned" | "portfolio" | "funding", string>;
+    counts?: Record<
+      "transactions" | "planned" | "portfolio" | "funding",
+      string
+    >;
     parts?: { currency: string; balance: string }[] | null;
     stampRanges?: StampRange[];
     openingAnchors?: OpeningAnchor[];

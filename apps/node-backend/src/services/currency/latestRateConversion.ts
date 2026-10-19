@@ -10,7 +10,7 @@
 import { isCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
 import { divide, money, multiply, toDecimal } from "../../lib/money.ts";
-import type { Decimal, Money } from "../../lib/money.ts";
+import type { Decimal, DecimalInput, Money } from "../../lib/money.ts";
 import { listLatestStoredRates } from "./currencyConversionService.ts";
 import { EUR, storedCurrencyCode } from "../../lib/currencyCode.ts";
 
@@ -49,3 +49,21 @@ export function convertAtLatestRates(
 
 /** Upper-cased ISO code of a stored currency column; empty means EUR. */
 export const currencyCode = storedCurrencyCode;
+
+/**
+ * {@link convertAtLatestRates} for codes not yet checked as ISO (provider
+ * quotes, stored investment currencies). Same code converts 1:1; any other
+ * non-ISO code has no stored rate, so the result is undefined.
+ */
+export function convertCodeAtLatestRates(
+  amount: DecimalInput,
+  from: string,
+  to: string,
+  rates: LatestRatesToEur,
+): Decimal | undefined {
+  const source = from.toUpperCase();
+  const target = to.toUpperCase();
+  if (source === target) return toDecimal(amount);
+  if (!isCurrencyCode(source) || !isCurrencyCode(target)) return undefined;
+  return convertAtLatestRates(money(amount, source), target, rates)?.amount;
+}

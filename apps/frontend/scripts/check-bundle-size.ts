@@ -89,7 +89,9 @@ const BUDGETS_KB = {
   // Lowered from 475 when the Belgian tax engine and its tax tables left the browser
   // (ADR-217): 461.15 -> 456.52 (server figures) -> 454.44 (engine removed) -> 448.84 measured
   // (with ADR-216 merged).
-  preload: 450,
+  // Raised from 450 for React 19.3 (react-vendor 54.79 -> 63.07) and the aligned Radix
+  // family update (radix-ui 46.44 -> 47.37): 449.26 -> 458.57 measured.
+  preload: 460,
   // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
   // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
   // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
@@ -119,7 +121,9 @@ const BUDGETS_KB = {
   // Lowered from 1390 when the Belgian tax engine left the browser (ADR-217):
   // 1379.95 -> 1369.83 (server figures) -> 1367.28 (engine removed) -> 1360.48 measured
   // (with ADR-216 merged).
-  total: 1362,
+  // Raised from 1362 for React 19.3 and the aligned Radix family update (boot-preload
+  // chunks only): 1360.09 -> 1370.39 measured.
+  total: 1372,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

@@ -17,6 +17,10 @@ import {
 } from "./providerHealthService.ts";
 import { convertRowsToEur } from "./currency/currencyConversionService.ts";
 import {
+  convertCodeAtLatestRates,
+  loadLatestRatesToEur,
+} from "./currency/latestRateConversion.ts";
+import {
   cacheGet,
   cacheSet,
   loadHistoricalPointsFromDatabase,
@@ -626,6 +630,15 @@ export async function fetchHistoricalPrices(
       Array.isArray(points) &&
       points.length > 0
     ) {
+      // Without stored USD and target rates the series cannot be converted:
+      // keep the stored history rather than persist USD prices 1:1.
+      const latest = await loadLatestRatesToEur();
+      if (convertCodeAtLatestRates(1, "USD", invCurrency, latest) === undefined) {
+        logger.warn(
+          `Kinesis history: no stored USD/${invCurrency} rate, keeping stored points for ${symbol}`,
+        );
+        return _filterHistoricalPoints(cachedDbPoints, from, to);
+      }
       const rows = points.map((p) => ({
         amount: p.price,
         currency: "USD",

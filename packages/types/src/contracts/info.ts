@@ -207,7 +207,6 @@ export const ExchangeRatesSchema = z.looseObject({
       fetched_at: z.string(),
     }),
   ),
-  fallback_rates: z.record(z.string(), z.number()),
   source: z.enum(["database", "fallback"]),
   is_stale: z.boolean(),
   last_fetched_at: z.string().nullable(),

@@ -111,6 +111,7 @@ const canonical: PortfolioSummaryItem = {
     fullyAssigned: true,
     oversold: false,
     byAccount: [],
+    accountTotals: [],
 };
 const response = (summaries = [canonical]) => ({
     ...PORTFOLIO_SUMMARY_STUB,
@@ -123,6 +124,7 @@ const response = (summaries = [canonical]) => ({
         ...summary,
     })),
     byAccount: [],
+    accountTotals: [],
 });
 function serveMetadata() {
     server.use(

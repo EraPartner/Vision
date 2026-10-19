@@ -13,26 +13,26 @@ import {
   asCurrencyCode,
 } from "@vision/types/brands";
 
-const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
-  mockConvertWithRates: vi.fn((amount, from, to) => {
-    if (from === to) return amount;
-    return new Map([
-      [100, 50],
-      [50, 25],
-    ]).get(Number(amount));
-  }),
-  mockLoadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
+// Latest stored rates: 1 USD = 0.5 EUR; any other currency has no rate.
+const { mockListLatestStoredRates } = vi.hoisted(() => ({
+  mockListLatestStoredRates: vi.fn(async () => ({
+    rows: [
+      {
+        currency_code: "USD",
+        rate_to_eur: "0.5",
+        rate_date: "2026-06-01",
+        fetched_at: "2026-06-01T10:00:00Z",
+      },
+    ],
+  })),
 }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 // accountService.list folds the repository's per-currency partitions into
-// `accounts.currency`. Stub its rate table so these SQL + shaping tests do not
-// reach the database or ECB.
+// `accounts.currency` at the latest stored rates. Stub that table so these SQL
+// + shaping tests do not reach the database or ECB.
 vi.mock("../src/services/currency/currencyConversionService.ts", () =>
-  mockCurrencyConversion({
-    loadCurrentRates: mockLoadCurrentRates,
-    convertWithRates: mockConvertWithRates,
-  }),
+  mockCurrencyConversion({ listLatestStoredRates: mockListLatestStoredRates }),
 );
 
 import { query as rawQuery } from "../src/database/connection.ts";
@@ -191,12 +191,6 @@ describe("accountRepository", () => {
         currency: "ZZZ",
         balance: 40,
       });
-      expect(mockConvertWithRates).not.toHaveBeenCalledWith(
-        expect.anything(),
-        "ZZZ",
-        expect.anything(),
-        expect.anything(),
-      );
     });
 
     it("holds drift = statement − reconcilable_balance even on a sub-cent partition tail", async () => {

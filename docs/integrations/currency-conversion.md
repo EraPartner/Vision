@@ -65,11 +65,18 @@ Invalid rates are silently skipped during parsing; only valid rates are included
 
 ## Fallback Strategy
 
-The service implements a multi-layer fallback:
+The service reads rates through two layers:
 
 1. **In-memory cache** - 24-hour TTL
-2. **Database rates** - Stored in `exchange_rates` table
-3. **Hardcoded constants** - Last resort fallback
+2. **Database rates** - The latest stored row per currency in the `exchange_rates` table
+
+Since 2026-10-19 there is no hard-coded tier
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). With nothing stored, the rate table
+holds only EUR. A currency without a stored rate is unavailable: server totals leave it out and flag
+it, for example `unconverted_currencies` on account balances or `usedFallbackRate` on portfolio
+holdings. Generic helpers that cannot flag an amount (`convertToCurrency`, `convertWithRates`,
+`convertRowsToEur` without a historical date) still return it unconverted, as they always did for
+unknown currencies.
 
 Date-aware row conversion first uses stored quotes on or before each requested day. Missing prior
 quotes are resolved in batches from the 90-day and full ECB feeds, even when that currency already
@@ -78,7 +85,8 @@ prior quote exists, row conversion uses the current-rate fallback and marks it e
 
 Partial refreshes retain known rates for currencies omitted by either provider. Fresh quotes
 overwrite the retained baseline, with ECB taking precedence on overlap. Only fresh provider quotes
-are persisted with today's date; retained and static fallback rates are not stamped as new history.
+are persisted with today's date; retained rates are not stamped as new history. A refresh never
+adds a built-in rate for a currency that neither provider nor the database knows.
 
 ```
 ┌─────────────────────────────────────┐
@@ -95,8 +103,8 @@ are persisted with today's date; retained and static fallback rates are not stam
           └───────┬─────────┘
                   │ miss
           ┌───────▼────────┐
-          │ Hardcoded      │
-          │ Fallback       │
+          │ EUR only:      │
+          │ rate missing   │
           └────────────────┘
 ```
 
@@ -109,10 +117,18 @@ the fallback chain above. `apps/node-backend/src/services/currency/latestRateCon
 without a stored rate is unavailable: callers leave the amount out of the total and count or flag
 it, never convert at a `FALLBACK_RATES` constant or 1:1. Consumers:
 `GET /api/planned-transactions/totals`, `GET /api/accounts/totals`, the converted owed figures of
-`GET /api/splits/owed` and `/owed/:id`, `GET /api/info/net-worth/by-account`, and per-holding
-`monthlyRent` in `GET /api/info/portfolio-summary`. Other server paths (for example
-`computed_balance` on account lists and archived portfolio views) still use the chain above,
-including `FALLBACK_RATES`.
+`GET /api/splits/owed` and `/owed/:id`, `GET /api/info/net-worth/by-account`, `computed_balance`
+on `GET /api/accounts` and `projectedBalance` on the merge preview (missing currencies in
+`unconverted_currencies` / `unconvertedCurrencies`), and in `GET /api/info/portfolio-summary` the
+current-value multipliers, per-holding `monthlyRent` and the archived presentation (a holding whose
+currency has no stored rate keeps its unconverted figures and sets `usedFallbackRate`). The
+Kinesis USD-to-EUR price conversion also uses stored rates and skips a quote, or keeps the stored
+history, when no rate is stored.
+
+`FALLBACK_RATES` remains only in the Belgian tax dashboards
+(`services/tax/dashboardService.ts`, `services/tax/portfolioDashboardService.ts`), whose `convert`
+callbacks cannot report a missing rate yet. `GET /api/info/exchange-rates` no longer returns
+`fallback_rates`.
 
 The web `useCurrencyConverter` hook likewise builds its rate map from stored rates only and no
 longer merges the response's `fallback_rates`; the unused `useExchangeRates` rate-map hook was
@@ -214,7 +230,6 @@ import {
   warmCache,
   clearMemoryCache,
   backfillPortfolioHistoricalRates,
-  FALLBACK_RATES,
 } from "./services/currency/currencyConversionService.ts";
 ```
 
@@ -386,10 +401,11 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 
 ## Error Handling
 
-- **API failures**: Falls back to database, then hardcoded rates
-- **Invalid source currencies**: Returns 1:1 passthrough amount
+- **API failures**: Uses the stored database rates
+- **Currency without a stored rate**: Unavailable. Server-owned totals leave it out and flag it;
+  the generic helpers return the amount unconverted
 - **Invalid target currencies**: Falls back to EUR conversion behavior
-- **Stale data**: Uses hardcoded fallback if all sources fail
+- **No stored rates at all**: Only EUR amounts convert; the FX status banner reports it
 
 **Startup Behavior When Offline (May 2026):**
 During server startup, a network reachability probe determines if the host has internet connectivity. When offline is detected:
@@ -397,7 +413,7 @@ During server startup, a network reachability probe determines if the host has i
 - **Exchange rate cache warmup skipped**: `warmExchangeRateCache()` is not called
 - **Portfolio historical FX backfill skipped**: `backfillPortfolioHistoricalRates()` is not called
 - **No API timeouts**: Avoids 5–15s hang on ECB/Open Exchange Rates APIs
-- **Cached/DB fallback**: In-memory cache (24h TTL) + database → hardcoded rates
+- **Cached/DB rates**: In-memory cache (24h TTL) + database; no built-in rates
 - **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner
 
 Scheduled 12h exchange rate refreshes also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
@@ -426,7 +442,7 @@ Key differences from `currencyConversionService`:
 | ------------------ | ------------------------------------------------ | --------------------------------------------------- |
 | Data source        | ECB + Open Exchange Rates → DB + in-memory cache | `exchange_rates` table only (bulk preload)          |
 | Lookup granularity | Per-conversion call                              | Binary-search in pre-sorted per-currency day arrays |
-| Fallback           | In-memory cache → hardcoded constants            | Latest `is_latest` rate                             |
+| Fallback           | In-memory cache → stored rates only              | Latest `is_latest` rate                             |
 | Scope              | All backend services                             | Snapshot day-walk only                              |
 
 The `is_latest` rows in `exchange_rates` are the same rows consumed by `currencyConversionService`'s `warmCache()`, so the latest-day snapshot always uses the same rate as the live portfolio summary endpoint, ensuring the headline portfolio value reconciles between Net Worth and Portfolio Overview.

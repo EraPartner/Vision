@@ -987,9 +987,12 @@ Two ADR-108 semantic edges on fully-assigned multi-broker instruments matter: un
 Callers resolve names from the accounts list. See [[docs/api/portfolio-summary|Portfolio Summary API]] for the response shape and [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]] for the model.
 
 The Portfolio page **Holdings** card exposes an All brokers, named-account, and
-Unassigned filter. Named and Unassigned views select investments from each summary's nested
-`byAccount` rows and show that selection's holdings, gross invested cost, profit/loss, and subtotal
-directly from the server partitions. Units and global income labels are hidden in a filtered view
+Unassigned filter. Since 2026-10-19 ([[docs/adr/216-server-owned-domain-calculations|ADR-216]])
+named and Unassigned views read server totals: each summary's `accountTotals` row for the selected
+account gives that holding's value, gross invested cost and profit/loss, and the response's
+top-level `accountTotals` row gives the holdings and profit/loss subtotal. The server sums the
+partition kinds with Decimal; the page only derives the return percentage and no longer adds
+`byAccount` rows. The filter's account list also comes from the top-level `accountTotals`. Units and global income labels are hidden in a filtered view
 because the current response does not claim per-broker units or a separate income subtotal. While
 the summary is loading or unavailable, the filter is disabled and no zero subtotal is presented.
 

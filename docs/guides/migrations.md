@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     guide,
@@ -271,7 +271,7 @@ A destructive change whose safety depends on code being deployed first goes in `
 ### What is flagged
 
 The checker is `scripts/check-destructive-migrations.py`, enforced by the
-`verify-destructive-migrations` CI job and runnable locally with `bun run db:check-destructive`.
+`Lint` CI job (which also runs its `--self-test`) and runnable locally with `bun run db:check-destructive`.
 
 | Flagged                                                                                                                                                                                 | Not flagged                                                                     |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

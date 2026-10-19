@@ -4,6 +4,9 @@
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
+# One grouped PR per ecosystem per week instead of one PR per dependency:
+# ten single-bump PRs landing together each ran the full CI and queued
+# behind each other.
 updates:
   - package-ecosystem: "bun"
     directory: "/"
@@ -11,6 +14,9 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      bun:
+        patterns: ["*"]
 
   - package-ecosystem: "npm"
     directory: "/packaging/electron"
@@ -18,6 +24,9 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      electron:
+        patterns: ["*"]
 
   - package-ecosystem: "pip"
     directory: "/config"
@@ -25,6 +34,9 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      pip:
+        patterns: ["*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -32,3 +44,6 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]

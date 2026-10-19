@@ -271,6 +271,15 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Proportional CI (accepted)
+
+[[docs/adr/221-proportional-ci|ADR-221]] cuts `ci.yml` from about 22 jobs to seven and removes
+the Quality Gate job. Pull requests run the frontend suite in two shards without coverage; pushes
+to `main` keep the coverage ratchet. Native runtime verification and the live API contracts run
+inside `Test (Backend)`, also on drafts. Trivy is removed from CI and release, Dependabot groups
+updates per ecosystem, and release verification requires a passing `CI Complete` on the tagged
+commit instead of re-running the suites. It supersedes the Trivy part of ADR-050.
+
 ### 2026-10-19: Branded ids, currency codes and Money values (accepted)
 
 [[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]] brands entity ids and ISO currency

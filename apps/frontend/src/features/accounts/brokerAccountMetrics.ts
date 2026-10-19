@@ -1,8 +1,4 @@
-import { addAll, toNumber } from "@vision/shared-utils/money";
-import type {
-    PortfolioSummaryByAccountItem,
-    PortfolioSummaryResponse,
-} from "@/lib/api/info";
+import type { PortfolioSummaryResponse } from "@/lib/api/info";
 import type { AccountId } from "@vision/types/brands";
 
 export interface BrokerAccountMetrics {
@@ -12,25 +8,28 @@ export interface BrokerAccountMetrics {
     hasPosition: boolean;
 }
 
+/**
+ * A broker account's figures, read from the server totals (ADR-216): the
+ * position row of `byAccount` carries the holdings value and `accountTotals`
+ * the profit and loss of every contribution kind.
+ */
 export function getBrokerAccountMetrics(
     summary: PortfolioSummaryResponse | undefined,
     accountId: AccountId,
 ): BrokerAccountMetrics | undefined {
     if (!summary) return undefined;
-    const rows = summary.byAccount.filter(
+    const position = summary.byAccount.find(
+        (row) =>
+            row.account_id === accountId &&
+            row.contribution_kind === "position",
+    );
+    const totals = summary.accountTotals?.find(
         (row) => row.account_id === accountId,
     );
-    const positions = rows.filter(
-        (row) => row.contribution_kind === "position",
-    );
-    const sum = (
-        values: PortfolioSummaryByAccountItem[],
-        field: "currentValue" | "gainLoss",
-    ) => toNumber(addAll(values.map((row) => row[field])));
     return {
-        holdingsValue: sum(positions, "currentValue"),
-        gainLoss: sum(rows, "gainLoss"),
-        oversold: rows.some((row) => row.oversold),
-        hasPosition: positions.length > 0,
+        holdingsValue: position?.currentValue ?? 0,
+        gainLoss: totals?.gainLoss ?? 0,
+        oversold: totals?.oversold ?? false,
+        hasPosition: position !== undefined,
     };
 }

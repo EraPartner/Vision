@@ -35,6 +35,17 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
     if (from === "EUR" && to === "USD") return amount / 0.9;
     throw new Error(`Unexpected synthetic currency pair: ${from}/${to}`);
   }),
+  // Latest stored rates for current values: the same 1 USD = 0.9 EUR.
+  listLatestStoredRates: vi.fn(async () => ({
+    rows: [
+      {
+        currency_code: "USD",
+        rate_to_eur: "0.9",
+        rate_date: new Date("2026-01-01T00:00:00"),
+        fetched_at: new Date("2026-01-01T00:00:00Z"),
+      },
+    ],
+  })),
 }));
 
 const pool = getTestPool()!;

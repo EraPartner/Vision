@@ -265,6 +265,21 @@ export const PortfolioSummaryByAccountSchema = z.looseObject({
 });
 
 /**
+ * portfolioSummaryService.aggregateAccountTotals — one broker account's
+ * figures, every contribution kind summed with Decimal and rounded once.
+ */
+export const PortfolioSummaryAccountTotalsSchema = z.looseObject({
+  account_id: IdSchema.nullable(),
+  assignment: z.enum(["account", "unassigned"]),
+  oversold: z.boolean(),
+  currentValue: z.number(),
+  totalInvested: z.number(),
+  realizedGain: z.number(),
+  unrealizedGain: z.number(),
+  gainLoss: z.number(),
+});
+
+/**
  * One `summaries[]` entry (portfolioSummaryService.buildInvestmentSummary).
  * The identity passthrough fields come from a raw `SELECT i.*`, NOT through
  * mapInvestmentRow: `cadastral_income` / `municipality_tax_rate` are NUMERIC
@@ -325,6 +340,7 @@ export const PortfolioSummaryItemSchema = z.looseObject({
   fullyAssigned: z.boolean(),
   oversold: z.boolean(),
   byAccount: z.array(PortfolioSummaryByAccountSchema),
+  accountTotals: z.array(PortfolioSummaryAccountTotalsSchema),
 });
 
 /** portfolioAssetClassTotals.buildHoldingTotals — totals of a set of holdings. */
@@ -375,6 +391,7 @@ export const PortfolioSummarySchema = z.looseObject({
   totals: PortfolioSummaryTotalsSchema,
   summaries: z.array(PortfolioSummaryItemSchema),
   byAccount: z.array(PortfolioSummaryByAccountSchema),
+  accountTotals: z.array(PortfolioSummaryAccountTotalsSchema),
   byAssetClass: z.array(PortfolioAssetClassTotalsSchema),
   byAssetGroup: z.array(PortfolioAssetGroupTotalsSchema),
   archivedInKindIncome: z.array(
