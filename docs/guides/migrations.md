@@ -10,14 +10,11 @@ aliases: [migration-guide, database-schema, schema-changes]
 related_code:
   [
     "db/migrations/",
-    "db/alembic-bridge/",
-    "db/baseline-inventory.json",
     "db/schema-inventory.sql",
     "apps/node-backend/src/database/migrate.ts",
     "apps/node-backend/src/database/schemaInventory.ts",
     "apps/node-backend/src/database/schema.generated.ts",
     "apps/node-backend/scripts/db-migrate.ts",
-    "apps/node-backend/scripts/db-drift-check.ts",
   ]
 ---
 
@@ -37,7 +34,6 @@ There is no Python toolchain.
 | Create a migration file                | `bun run db:new -- describe_the_change` |
 | Lint migration SQL (squawk)            | `bun run db:lint`                      |
 | Regenerate the Kysely database types   | `bun run db:codegen`                   |
-| Compare a database with the baseline   | `bun run db:drift-check`               |
 
 All commands use `DATABASE_URL` (falling back to `config/.env.local`); `DATABASE_URL_MIGRATIONS`,
 when set, is the owner role that runs DDL.
@@ -58,7 +54,7 @@ when set, is the owner role that runs DDL.
   `asset_price_history`. `VISION_MIGRATE_TIMEOUT_MS` (default 10 minutes, `0` disables) is the
   statement timeout of the migration connection.
 
-### Fresh install and adoption
+### Fresh install
 
 An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fingerprint
 (`db/schema-inventory.sql` through `schemaInventory.ts`, ignoring bookkeeping tables, the
@@ -66,22 +62,10 @@ An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fi
 migrating, column order and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
 back. A database with application objects but no migration marker is refused.
 
-A database still carrying `alembic_version` is adopted when it is at
-`0126_income_recognition_check_name`, `0127_bank_chronology` or
-`0128_category_path_on_legacy_rename`. Below `0128`, the missing steps run first from the frozen
-SQL in `db/alembic-bridge/`, each with a `revision_applied` audit event
-([[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]]). The catalog fingerprint must then
-equal the baseline's. Adoption drops `alembic_version`, records `0001_baseline` and appends a
-`version_changed`/`stamp` audit event, all in one transaction. Anything else fails closed.
-
-Run `bun run db:drift-check` first. It reads the database URL from Vision's `runtime.env`
-(default `~/Library/Application Support/Vision/native/vision/runtime.env`, or `--env-file <path>`),
-so Vision must be running; `--from-env` uses `DATABASE_URL_MIGRATIONS`/`DATABASE_URL` instead
-(Bun loads a checkout's `.env` automatically, so this is opt-in). It runs any bridge steps in a
-transaction it rolls back, prints the revision and both fingerprints, and on a mismatch lists the
-names of the differing objects against `db/baseline-inventory.json`, the baseline's hashed
-catalog inventory (no `CREATEDB` privilege needed; a DB test keeps it equal to a fresh baseline
-install). The checked database does not change.
+A database still carrying `alembic_version` is refused and left unchanged
+([[docs/adr/224-remove-alembic-adoption|ADR-224]]): the one existing database was adopted on
+2026-10-19. Restore a backup taken after the switch, or reset the Demo with
+`bun run demo:reset-native`.
 
 ## Creating a migration
 

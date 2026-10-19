@@ -15,12 +15,6 @@ export type SchemaInventoryEntry = [
   definition: unknown[],
 ];
 
-export interface SchemaInventoryDiff {
-  missing: string[];
-  unexpected: string[];
-  changed: string[];
-}
-
 type RunQuery = (
   text: string,
 ) => Promise<{ rows: SchemaInventoryObject[] } | { rows: unknown[] }>;
@@ -73,56 +67,4 @@ export async function readSchemaInventory(
 ): Promise<SchemaInventoryEntry[]> {
   const result = await runQuery(readSchemaInventorySql(repoRoot));
   return normalizeSchemaInventory(result.rows as SchemaInventoryObject[]);
-}
-
-/** One object with its definition reduced to a short hash: `[kind, name, hash]`. */
-export type HashedInventoryEntry = [kind: string, name: string, hash: string];
-
-/** db/baseline-inventory.json: the 0001 baseline's inventory, hashed. */
-export const BASELINE_INVENTORY_FILE = path.join("db", "baseline-inventory.json");
-
-export function hashSchemaInventory(
-  entries: SchemaInventoryEntry[],
-): HashedInventoryEntry[] {
-  return entries.map(([kind, name, definition]) => [
-    kind,
-    name,
-    createHash("sha256").update(JSON.stringify(definition)).digest("hex").slice(0, 16),
-  ]);
-}
-
-/** One entry per line, so a regenerated file diffs readably. */
-export function formatHashedInventory(entries: HashedInventoryEntry[]): string {
-  return `[\n${entries.map((entry) => JSON.stringify(entry)).join(",\n")}\n]\n`;
-}
-
-export function readBaselineInventory(repoRoot: string): HashedInventoryEntry[] {
-  return JSON.parse(
-    readFileSync(path.join(repoRoot, BASELINE_INVENTORY_FILE), "utf8"),
-  ) as HashedInventoryEntry[];
-}
-
-/** Object names only, so a report never carries definitions or data. */
-export function diffSchemaInventory(
-  expected: HashedInventoryEntry[],
-  actual: HashedInventoryEntry[],
-): SchemaInventoryDiff {
-  const key = ([kind, name]: HashedInventoryEntry) => `${kind} ${name}`;
-  const expectedByKey = new Map(expected.map((e) => [key(e), e]));
-  const actualByKey = new Map(actual.map((e) => [key(e), e]));
-  const missing: string[] = [];
-  const changed: string[] = [];
-  for (const [k, entry] of expectedByKey) {
-    const other = actualByKey.get(k);
-    if (!other) missing.push(k);
-    else if (JSON.stringify(other) !== JSON.stringify(entry)) changed.push(k);
-  }
-  const unexpected = [...actualByKey.keys()].filter(
-    (k) => !expectedByKey.has(k),
-  );
-  return {
-    missing: missing.sort(),
-    unexpected: unexpected.sort(),
-    changed: changed.sort(),
-  };
 }

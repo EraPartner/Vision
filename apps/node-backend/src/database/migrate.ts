@@ -19,32 +19,9 @@ const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
 
 export const MIGRATIONS_DIR = path.join(REPO_ROOT, "db", "migrations");
 export const BASELINE_MIGRATION = "0001_baseline";
-/** The Alembic revision the baseline schema equals (ADR-222). */
-export const FINAL_ALEMBIC_REVISION = "0128_category_path_on_legacy_rename";
-/**
- * Alembic revisions a database can be adopted from, oldest first. A database
- * behind the final one first gets the remaining steps from db/alembic-bridge/,
- * in the adoption transaction; an install built before 0127 shipped stopped at 0126.
- */
-export const ADOPTABLE_ALEMBIC_REVISIONS = [
-  "0126_income_recognition_check_name",
-  "0127_bank_chronology",
-  FINAL_ALEMBIC_REVISION,
-] as const;
-const ALEMBIC_BRIDGE_DIR = path.join(REPO_ROOT, "db", "alembic-bridge");
-
-/** Bridge steps that bring `revision` to the final Alembic revision, or undefined if it cannot be adopted. */
-export function alembicBridgeSteps(revision: string): string[] | undefined {
-  const index = (ADOPTABLE_ALEMBIC_REVISIONS as readonly string[]).indexOf(revision);
-  return index === -1 ? undefined : ADOPTABLE_ALEMBIC_REVISIONS.slice(index + 1);
-}
-
-export function readAlembicBridgeStep(step: string): string {
-  return readFileSync(path.join(ALEMBIC_BRIDGE_DIR, `${step}.sql`), "utf8");
-}
 /**
  * Normalized catalog fingerprint of `0001_baseline.sql` on PostgreSQL 18,
- * excluding migration bookkeeping. Adoption and fresh installs both require it.
+ * excluding migration bookkeeping. A fresh install must match it.
  */
 export const BASELINE_SCHEMA_FINGERPRINT =
   "c79fae80e075e13fa995db08eda282bc4ede1a96791181457859f445bc075615";
@@ -80,7 +57,6 @@ export interface RunMigrationsResult {
   /** Latest applied migration after the run. */
   revision: string | undefined;
   applied: string[];
-  adopted: boolean;
 }
 
 function migrationConnectionString(): string {
@@ -162,9 +138,8 @@ async function appendMigrationAudit(
 }
 
 /**
- * Install the baseline into an empty database, or adopt a database at the
- * final Alembic revision whose schema matches the baseline exactly. Both
- * paths run inside the migrator's transaction and lock.
+ * Install the baseline into an empty database inside the migrator's
+ * transaction and lock. A database still on Alembic is refused.
  */
 async function baselineUp(db: Db, baselineSql: string) {
   const [state] = await rows<{
@@ -192,39 +167,10 @@ async function baselineUp(db: Db, baselineSql: string) {
   }
 
   if (state.alembic) {
-    const versions = await rows<{ version_num: string }>(
-      db,
-      "SELECT version_num FROM public.alembic_version",
+    throw new Error(
+      "Database still uses Alembic migrations. Restore a backup taken after the " +
+        "switch to TypeScript migrations, or reset the Demo with bun run demo:reset-native.",
     );
-    const revision = (versions.length === 1 ? versions[0]?.version_num : "") ?? "";
-    const bridge = alembicBridgeSteps(revision);
-    if (!bridge) {
-      throw new Error(
-        `Database is at Alembic revision ${revision || "(none or several)"}; ` +
-          `only ${ADOPTABLE_ALEMBIC_REVISIONS.join(", ")} can be adopted. Upgrade it ` +
-          "with the last Alembic-based Vision release first.",
-      );
-    }
-    for (const step of bridge) {
-      await sql.raw(readAlembicBridgeStep(step)).execute(db);
-      await appendMigrationAudit(db, "revision_applied", "upgrade", step, [step]);
-      logger.info({ step }, "applied Alembic bridge step before adoption");
-    }
-    if ((await currentFingerprint(db)) !== BASELINE_SCHEMA_FINGERPRINT) {
-      throw new Error(
-        "Database schema differs from the baseline; refusing adoption. " +
-          "Run `bun run db:drift-check` for the differing objects.",
-      );
-    }
-    await sql`DROP TABLE public.alembic_version`.execute(db);
-    await appendMigrationAudit(db, "version_changed", "stamp", BASELINE_MIGRATION, [
-      BASELINE_MIGRATION,
-    ]);
-    logger.warn(
-      { from: revision, to: BASELINE_MIGRATION },
-      "existing database adopted onto the TypeScript migration baseline",
-    );
-    return;
   }
 
   if (state.has_objects) {
@@ -359,10 +305,6 @@ export async function runDatabaseAnalyze(): Promise<void> {
 export async function runMigrations(): Promise<RunMigrationsResult> {
   const db = createMigrationDb();
   try {
-    const [before] = await rows<{ alembic: boolean }>(
-      db,
-      "SELECT to_regclass('public.alembic_version') IS NOT NULL AS alembic",
-    );
     const migrator = createMigrator(db);
     const { error, results } = await migrator.migrateToLatest();
     const applied = assertSucceeded(error, results);
@@ -373,7 +315,6 @@ export async function runMigrations(): Promise<RunMigrationsResult> {
     return {
       revision: await latestApplied(migrator),
       applied,
-      adopted: Boolean(before?.alembic) && applied.includes(BASELINE_MIGRATION),
     };
   } finally {
     await db.destroy();

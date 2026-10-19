@@ -1,7 +1,7 @@
 ---
 title: "ADR-223: Adopt databases stopped at Alembic 0126 or 0127 through a bridge"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-19
 tags: [adr, database, migrations, kysely, alembic, baseline, electron, startup]
 description: "Accepted on 2026-10-19. Amends ADR-222. The installed database was at Alembic 0126, not 0128, so the first Kysely build refused it and the app waited at Almost ready. Adoption now applies the frozen 0127 and 0128 SQL from db/alembic-bridge/ in the migrator's transaction, then requires the baseline fingerprint. Electron shows a backend startup failure instead of polling for minutes."
@@ -40,6 +40,9 @@ three minutes behind the "Almost ready…" splash. Separately, `bun run db:drift
 - **Startup failure.** When the native backend exits before it is ready, Electron stops polling,
   shows the error page and a dialog with the last `Failed to start application` message from
   `backend.log`.
+
+> [!note] Superseded by [[docs/adr/224-remove-alembic-adoption|ADR-224]] (2026-10-19)
+> Adoption, the bridge and the drift check are removed.
 
 ## Consequences
 

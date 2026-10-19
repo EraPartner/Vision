@@ -1,9 +1,8 @@
 /**
  * The production migrator (src/database/migrate.ts) against real, disposable
- * PostgreSQL 18 databases: fresh install, idempotent re-run, adoption of a
- * database left at the final Alembic revision or at 0126 (through the
- * db/alembic-bridge steps), fail-closed refusals, and a
- * later reversible migration with its audit events.
+ * PostgreSQL 18 databases: fresh install, idempotent re-run, fail-closed
+ * refusals (unversioned objects, a database still on Alembic), and a later
+ * reversible migration with its audit events.
  */
 
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -11,11 +10,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pg from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import {
-  hashSchemaInventory,
-  readBaselineInventory,
-  readSchemaInventory,
-} from "../src/database/schemaInventory.ts";
 import { hasTestDatabase } from "./setup/db.ts";
 import {
   createEmptyDatabase,
@@ -102,9 +96,9 @@ async function regclass(client: pg.Client, name: string) {
     .rows[0].name as string | null;
 }
 
-/** A baseline database that looks exactly like one left at Alembic head. */
-async function alembicHeadDatabase(revision: string) {
-  const db = await track(createMigratedDatabase("c_adopt"));
+/** A baseline database that still carries Alembic's version table. */
+async function alembicDatabase(revision: string) {
+  const db = await track(createMigratedDatabase("c_alembic"));
   await withClient(db.url, async (client) => {
     await client.query(
       "DROP TABLE public.kysely_migration, public.kysely_migration_lock",
@@ -140,7 +134,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       expect(first).toEqual({
         revision: migrator.BASELINE_MIGRATION,
         applied: [migrator.BASELINE_MIGRATION],
-        adopted: false,
       });
 
       await withClient(db.url, async (client) => {
@@ -154,14 +147,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
             heads: ["0001_baseline"],
           },
         ]);
-        // db:drift-check lists differences against this committed snapshot.
-        const inventory = await readSchemaInventory(
-          (text) => client.query(text),
-          repoRoot,
-        );
-        expect(hashSchemaInventory(inventory)).toEqual(
-          readBaselineInventory(repoRoot),
-        );
       });
 
       const second = await withMigrationTarget(db.url, () =>
@@ -170,7 +155,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       expect(second).toEqual({
         revision: "0001_baseline",
         applied: [],
-        adopted: false,
       });
       const status = await withMigrationTarget(db.url, () =>
         migrator.readMigrationStatus(),
@@ -206,133 +190,19 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       });
     }, 180_000);
 
-    it("adopts a database at the final Alembic revision and stamps the audit chain", async () => {
+    it("refuses a database still on Alembic without changing anything", async () => {
       const migrator = await loadMigrator();
-      const db = await alembicHeadDatabase(migrator.FINAL_ALEMBIC_REVISION);
-      const result = await withMigrationTarget(db.url, () =>
-        migrator.runMigrations(),
-      );
-      expect(result).toEqual({
-        revision: "0001_baseline",
-        applied: ["0001_baseline"],
-        adopted: true,
-      });
-      await withClient(db.url, async (client) => {
-        expect(await regclass(client, "public.alembic_version")).toBeNull();
-        expect(await appliedNames(client)).toEqual(["0001_baseline"]);
-        const events = await auditEvents(client);
-        expect(events).toHaveLength(2);
-        expect(events.at(-1)).toEqual({
-          stream: "schema_migration",
-          event: "version_changed",
-          direction: "stamp",
-          revision: "0001_baseline",
-          heads: ["0001_baseline"],
-        });
-      });
-    }, 180_000);
-
-    it("adopts a database stopped at Alembic 0126 by applying the bridge steps first", async () => {
-      const migrator = await loadMigrator();
-      const db = await alembicHeadDatabase("0126_income_recognition_check_name");
-      // Undo 0128 and 0127 with the SQL their Alembic downgrades ran.
-      await withClient(db.url, (client) =>
-        client.query(`
-          DROP TRIGGER trg_categories_refresh_path_names ON categories;
-          CREATE TRIGGER trg_categories_refresh_path_names
-            AFTER INSERT OR UPDATE OF name, parent_id ON categories
-            FOR EACH ROW EXECUTE FUNCTION category_refresh_path_names();
-          DROP INDEX idx_transactions_bank_chronology;
-          ALTER TABLE import_staging_rows DROP COLUMN bank_sequence;
-          ALTER TABLE transactions DROP COLUMN bank_sequence;
-          -- A database that ever booted carries the backend's materialized views.
-          CREATE MATERIALIZED VIEW mv_monthly_summary AS
-            SELECT date_trunc('month', date)::date AS month_start, currency, count(*)
-              FROM transactions GROUP BY 1, 2;
-          CREATE UNIQUE INDEX idx_mv_monthly_summary
-            ON mv_monthly_summary (month_start, currency);
-          CREATE MATERIALIZED VIEW mv_category_totals AS
-            SELECT category_id, currency, count(*) FROM transactions GROUP BY 1, 2;
-          CREATE UNIQUE INDEX idx_mv_category_totals
-            ON mv_category_totals (category_id, currency);
-        `),
-      );
-      const result = await withMigrationTarget(db.url, () =>
-        migrator.runMigrations(),
-      );
-      expect(result).toEqual({
-        revision: "0001_baseline",
-        applied: ["0001_baseline"],
-        adopted: true,
-      });
-      await withClient(db.url, async (client) => {
-        expect(await regclass(client, "public.alembic_version")).toBeNull();
-        expect(await regclass(client, "public.idx_transactions_bank_chronology")).toBe(
-          "idx_transactions_bank_chronology",
-        );
-        const events = await auditEvents(client);
-        expect(events.slice(-3)).toEqual([
-          {
-            stream: "schema_migration",
-            event: "revision_applied",
-            direction: "upgrade",
-            revision: "0127_bank_chronology",
-            heads: ["0127_bank_chronology"],
-          },
-          {
-            stream: "schema_migration",
-            event: "revision_applied",
-            direction: "upgrade",
-            revision: "0128_category_path_on_legacy_rename",
-            heads: ["0128_category_path_on_legacy_rename"],
-          },
-          {
-            stream: "schema_migration",
-            event: "version_changed",
-            direction: "stamp",
-            revision: "0001_baseline",
-            heads: ["0001_baseline"],
-          },
-        ]);
-      });
-    }, 180_000);
-
-    it("refuses adoption from another Alembic revision without changing anything", async () => {
-      const migrator = await loadMigrator();
-      const db = await alembicHeadDatabase("0127_previous_revision");
+      const db = await alembicDatabase("0128_category_path_on_legacy_rename");
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),
-      ).rejects.toThrow("can be adopted");
+      ).rejects.toThrow("still uses Alembic");
       await withClient(db.url, async (client) => {
         expect(
           (await client.query("SELECT version_num FROM public.alembic_version"))
             .rows,
-        ).toEqual([{ version_num: "0127_previous_revision" }]);
+        ).toEqual([{ version_num: "0128_category_path_on_legacy_rename" }]);
         expect(await appliedNames(client)).toEqual([]);
         expect(await auditEvents(client)).toHaveLength(1);
-      });
-    }, 180_000);
-
-    it("refuses adoption of a drifted schema without changing anything", async () => {
-      const migrator = await loadMigrator();
-      const db = await alembicHeadDatabase(migrator.FINAL_ALEMBIC_REVISION);
-      await withClient(db.url, (client) =>
-        client.query("ALTER TABLE public.accounts ADD COLUMN drift_probe int"),
-      );
-      await expect(
-        withMigrationTarget(db.url, () => migrator.runMigrations()),
-      ).rejects.toThrow("differs from the baseline");
-      await withClient(db.url, async (client) => {
-        expect(await regclass(client, "public.alembic_version")).toBe(
-          "alembic_version",
-        );
-        expect(await appliedNames(client)).toEqual([]);
-        expect(await auditEvents(client)).toHaveLength(1);
-        const column = await client.query(
-          `SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'accounts' AND column_name = 'drift_probe'`,
-        );
-        expect(column.rows).toHaveLength(1);
       });
     }, 180_000);
 
@@ -367,7 +237,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       expect(up).toEqual({
         revision: "0002_migrator_probe",
         applied: ["0001_baseline", "0002_migrator_probe"],
-        adopted: false,
       });
       await withClient(db.url, async (client) => {
         expect(await regclass(client, "public.migrator_probe")).toBe(
