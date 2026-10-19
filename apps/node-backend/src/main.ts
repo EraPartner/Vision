@@ -493,8 +493,7 @@ async function start() {
         dbReady = true;
         endDbPoll();
         logger.info("Database connection verified successfully");
-        // Run alembic migrations (fail-fast on non-zero exit).
-        // Alembic is the single source of schema DDL (ADR-027).
+        // Apply pending migrations from db/migrations (fail-fast, ADR-221).
         const endMig = bootMark("run_migrations");
         await runMigrations();
         // Approved views may be created or replaced by this migration pass.

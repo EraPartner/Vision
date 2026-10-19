@@ -1,110 +1,65 @@
 #!/usr/bin/env bun
 /**
- * Standalone migration CLI for the DATABASE_URL database.
- *
- * This deliberately delegates to `src/database/migrate.ts` (the exact code the
- * app runs on boot) rather than shelling out to bare alembic, because a plain
- * alembic invocation CANNOT safely write the version table in this repo:
- * alembic auto-creates `alembic_version.version_num` as VARCHAR(32), and the
- * chain's revision identifiers are longer than that (e.g.
- * `0003_import_batch_id_on_transactions` is 36 chars), so a fresh database
- * dies on the third revision with `value too long for type character
- * varying(32)`. `runMigrations()` preflights that table at VARCHAR(64) via
- * `stampBaselineIfLegacy()` first, which is why the app boots fine and a bare
- * `alembic upgrade head` does not. `downgrade`/`stamp`/`reset` run the same
- * preflight before their alembic command for the same reason.
- *
- * Used by CI ("Test (Backend)" migrates its Postgres service with this), by
- * scripts/with-test-db.sh for local real-DB runs, and by the root/back-end
- * `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` npm scripts.
- * Requires the Python alembic toolchain (config/requirements.txt): resolution
- * order is $ALEMBIC_BIN, an Alembic beside $VISION_PYTHON_BIN, the native-build
- * venv, the prepared standalone native runtime, a usable repo venv, then PATH.
+ * Migration CLI for the DATABASE_URL database. Delegates to
+ * `src/database/migrate.ts`, the exact code the app runs on boot (ADR-221).
  *
  * Usage: DATABASE_URL=postgres://... bun run apps/node-backend/scripts/db-migrate.ts [command]
- *   (no command)         upgrade to head
- *   upgrade [target]     alembic upgrade (default target: head)
- *   downgrade [target]   alembic downgrade (default target: -1)
- *   stamp [target]       alembic stamp (default target: head)
- *   reset                alembic downgrade base, then upgrade to head
+ *   (no command) | up   apply every pending migration
+ *   down                revert the latest migration (needs its .down.sql)
+ *   status              list migrations and when each was applied
+ *   new <name>          create db/migrations/NNNN_<name>.sql
  *
  * DATABASE_URL is read from the environment; when unset, config/.env.local is
- * consulted (mirrors alembic/env.py, and covers workspace cwds where bun's own
- * .env.local auto-load does not see the repo-root file).
+ * consulted. DATABASE_URL_MIGRATIONS, when set, is the owner role used.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const MIGRATIONS_DIR = path.join(REPO_ROOT, "db", "migrations");
 
-const USAGE = `Usage: db-migrate.ts [upgrade [target] | downgrade [target] | stamp [target] | reset]
-  (no command)         upgrade to head
-  upgrade [target]     alembic upgrade (default target: head)
-  downgrade [target]   alembic downgrade (default target: -1)
-  stamp [target]       alembic stamp (default target: head)
-  reset                alembic downgrade base, then upgrade to head
-All commands run the boot-path VARCHAR(64) preflight on alembic_version first.
-Env: DATABASE_URL (required; falls back to config/.env.local), ALEMBIC_BIN, ALEMBIC_CONFIG.`;
+const USAGE = `Usage: db-migrate.ts [up | down | status | new <name>]
+  (no command) | up   apply every pending migration
+  down                revert the latest migration (needs its .down.sql)
+  status              list migrations and when each was applied
+  new <name>          create db/migrations/NNNN_<name>.sql
+Env: DATABASE_URL (falls back to config/.env.local), DATABASE_URL_MIGRATIONS.`;
 
-const rawArgs = process.argv.slice(2).filter((a) => a !== "--");
-
-if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+const args = process.argv.slice(2).filter((a) => a !== "--");
+if (args.includes("--help") || args.includes("-h")) {
   console.log(USAGE);
   process.exit(0);
 }
+const command = args[0] ?? "up";
 
-const command = rawArgs[0] ?? "upgrade";
-const target = rawArgs[1];
-
-if (!["upgrade", "downgrade", "stamp", "reset"].includes(command)) {
-  console.error(`[db-migrate] unknown command: ${command}\n${USAGE}`);
-  process.exit(1);
-}
-if (command === "reset" && target !== undefined) {
-  console.error(`[db-migrate] reset takes no target\n${USAGE}`);
-  process.exit(1);
-}
-
-// Resolve only a runnable Alembic. A repository venv can have an executable
-// script whose shebang points into an old container; existsSync() alone then
-// selects it and fails later with ENOENT. Must happen before migrate.ts is
-// imported because it captures ALEMBIC_BIN at module load.
-if (!process.env.ALEMBIC_BIN) {
-  const candidates: string[] = [];
-  if (process.env.VISION_PYTHON_BIN) {
-    candidates.push(
-      path.join(path.dirname(process.env.VISION_PYTHON_BIN), "alembic"),
-    );
+if (command === "new") {
+  const name = args[1];
+  if (!name || !/^[a-z0-9_]+$/.test(name) || args.length !== 2) {
+    console.error(`[db-migrate] new needs one snake_case name\n${USAGE}`);
+    process.exit(1);
   }
-  candidates.push(
-    path.join(REPO_ROOT, ".venv-native-build", "bin", "alembic"),
-    path.join(
-      REPO_ROOT,
-      "packaging",
-      "electron",
-      "native-runtime",
-      "vision-alembic",
-    ),
-    path.join(REPO_ROOT, "venv", "bin", "alembic"),
+  const numbers = readdirSync(MIGRATIONS_DIR)
+    .map((file) => Number.parseInt(file.slice(0, 4), 10))
+    .filter(Number.isFinite);
+  const next = String(Math.max(0, ...numbers) + 1).padStart(4, "0");
+  const file = path.join(MIGRATIONS_DIR, `${next}_${name}.sql`);
+  writeFileSync(
+    file,
+    `-- ${next}_${name}\n-- Runs inside the migrator's transaction. Add ${next}_${name}.down.sql to make it reversible.\n`,
+    { flag: "wx" },
   );
-
-  for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue;
-    const result = spawnSync(candidate, ["--version"], { stdio: "ignore" });
-    if (!result.error && result.status === 0) {
-      process.env.ALEMBIC_BIN = candidate;
-      break;
-    }
-  }
+  console.log(`[db-migrate] created ${path.relative(REPO_ROOT, file)}`);
+  process.exit(0);
 }
 
-// Parity with alembic/env.py, which loads config/.env.local when present, so
-// `bun run db:upgrade` keeps working for operators who only configured that
-// file. Only fills variables that are not already set; never overrides the
-// environment. Must happen before connection.ts is imported — the pg pool
-// captures DATABASE_URL at module load.
+if (!["up", "down", "status"].includes(command) || args.length > 1) {
+  console.error(`[db-migrate] unknown command: ${args.join(" ")}\n${USAGE}`);
+  process.exit(1);
+}
+
+// Only fills variables that are not already set. Must happen before
+// connection.ts is imported: the pg pool captures DATABASE_URL at module load.
 function loadConfigEnvLocal(): void {
   const envLocalPath = path.join(REPO_ROOT, "config", ".env.local");
   if (!existsSync(envLocalPath)) return;
@@ -115,23 +70,15 @@ function loadConfigEnvLocal(): void {
     const [, key, rawValue] = match;
     if (key === undefined || rawValue === undefined) continue;
     if (process.env[key] !== undefined) continue;
-    const value =
-      (rawValue.startsWith('"') &&
-        rawValue.endsWith('"') &&
-        rawValue.length >= 2) ||
-      (rawValue.startsWith("'") &&
-        rawValue.endsWith("'") &&
-        rawValue.length >= 2)
-        ? rawValue.slice(1, -1)
-        : rawValue;
-    process.env[key] = value;
+    const quoted =
+      rawValue.length >= 2 &&
+      ((rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+        (rawValue.startsWith("'") && rawValue.endsWith("'")));
+    process.env[key] = quoted ? rawValue.slice(1, -1) : rawValue;
   }
 }
 
-if (!process.env.DATABASE_URL) {
-  loadConfigEnvLocal();
-}
-
+if (!process.env.DATABASE_URL) loadConfigEnvLocal();
 if (!process.env.DATABASE_URL) {
   console.error(
     "[db-migrate] DATABASE_URL is not set — refusing to guess a target database.",
@@ -139,38 +86,36 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const { runMigrations, runAlembicCommand } =
+const { runMigrations, revertLatestMigration, readMigrationStatus } =
   await import("../src/database/migrate.ts");
 const { closePool } = await import("../src/database/connection.ts");
 
+let exitCode = 0;
 try {
-  if (command === "upgrade") {
-    const result = await runMigrations(target === undefined ? {} : { target });
+  if (command === "up") {
+    const result = await runMigrations();
+    if (result.adopted) {
+      console.log("[db-migrate] adopted the Alembic database onto the baseline");
+    }
     console.log(
-      result?.deferred
-        ? `[db-migrate] schema is at ${result.revision}; 0119 bridge awaits approved maintenance`
-        : `[db-migrate] schema is at ${target ?? "head"}`,
+      `[db-migrate] schema is at ${result.revision}` +
+        (result.applied.length ? ` (applied ${result.applied.join(", ")})` : ""),
     );
-  } else if (command === "downgrade") {
-    await runAlembicCommand(["downgrade", target ?? "-1"]);
-    console.log(`[db-migrate] downgraded to ${target ?? "-1"}`);
-  } else if (command === "stamp") {
-    await runAlembicCommand(["stamp", target ?? "head"]);
-    console.log(`[db-migrate] stamped at ${target ?? "head"}`);
+  } else if (command === "down") {
+    const revision = await revertLatestMigration();
+    console.log(`[db-migrate] reverted; schema is at ${revision}`);
   } else {
-    await runAlembicCommand(["downgrade", "base"]);
-    await runMigrations();
-    console.log("[db-migrate] reset: schema rebuilt to head");
+    for (const { name, executedAt } of await readMigrationStatus()) {
+      console.log(
+        `${executedAt ? executedAt.toISOString() : "pending".padEnd(24)}  ${name}`,
+      );
+    }
   }
 } catch (error) {
-  const message =
-    typeof error === "object" && error !== null && "message" in error
-      ? String(error.message)
-      : undefined;
-  console.error(`[db-migrate] ${command} failed: ${message}`);
-  await closePool().catch(() => {});
-  process.exit(1);
+  console.error(
+    `[db-migrate] ${command} failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  exitCode = 1;
 }
-
 await closePool().catch(() => {});
-process.exit(0);
+process.exit(exitCode);
