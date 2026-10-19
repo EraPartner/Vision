@@ -46,7 +46,7 @@
     "db:migrate:down": "bun run apps/node-backend/scripts/db-migrate.ts down",
     "db:status": "bun run apps/node-backend/scripts/db-migrate.ts status",
     "db:new": "bun run apps/node-backend/scripts/db-migrate.ts new",
-    "db:codegen": "cd apps/node-backend && bun run kysely-codegen --dialect postgres --default-schema public --default-schema vision_analysis --exclude-pattern \"public.kysely_migration*\" --out-file src/database/schema.generated.ts",
+    "db:codegen": "cd apps/node-backend && bun run kysely-codegen --config-file .kysely-codegenrc.json",
     "db:lint": "squawk --config config/squawk.toml --no-error-on-unmatched-pattern \"db/migrations/*.sql\"",
     "db:index-stats": "bun run apps/node-backend/scripts/index-stats.ts",
     "quotes:densify": "bun run apps/node-backend/scripts/densify-asset-history.ts",

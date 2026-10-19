@@ -21,6 +21,14 @@ export type Brand<T, B extends string> = T & z.$brand<B>;
 /** ISO-4217 code, upper-case, three letters (DB `CHECK (~ '^[A-Z]{3}$')`). */
 export type CurrencyCode = Brand<string, "CurrencyCode">;
 
+/**
+ * A money amount exactly as node-postgres returns a NUMERIC column: a decimal
+ * string. Generated database types use it for amount columns that are money
+ * (not units, prices or rates); pair it with the row's currency through
+ * `money()` from `@vision/shared-utils/money`.
+ */
+export type MoneyAmount = Brand<string, "MoneyAmount">;
+
 export type AccountId = Brand<number, "AccountId">;
 export type TransactionId = Brand<number, "TransactionId">;
 export type CategoryId = Brand<number, "CategoryId">;
