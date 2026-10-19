@@ -34,7 +34,9 @@ import {
   getActiveDuplicateRepairReceipts,
   restoreDuplicatePortfolioRepairs,
 } from "./portfolioImportDuplicateRepairService.ts";
-import { query, withTransaction } from "../database/connection.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { db } from "../database/db.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 import {
   restorePortfolioImportAdoptions,
@@ -62,7 +64,7 @@ import {
   asTransactionId,
   isCurrencyCode,
 } from "@vision/types/brands";
-import type { InvestmentId } from "@vision/types/brands";
+import type { InvestmentId, TransactionId } from "@vision/types/brands";
 import {
   getRowForInvestmentCreation,
   getPreviewRows,
@@ -742,12 +744,12 @@ export async function rollbackBatch(batchId: number) {
     if (cashIds.length > 0) {
       await lockAccountsForLedgerMutation(client, cashIds);
       await protectPlannedExecutions(cashIds);
-      const r = await query(
-        "DELETE FROM transactions WHERE id = ANY($1::int[])",
-        [cashIds],
-      );
-      deleted += r.rowCount ?? 0;
-      deletedCash += r.rowCount ?? 0;
+      const r = await db
+        .deleteFrom("transactions")
+        .where("id", "=", sql<TransactionId>`ANY(${cashIds}::int[])`)
+        .executeTakeFirst();
+      deleted += Number(r.numDeletedRows);
+      deletedCash += Number(r.numDeletedRows);
     }
 
     // 3. Pre-0086 trades the stamp cannot reach. On a non-brokerage batch this

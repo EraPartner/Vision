@@ -1,6 +1,9 @@
 /** Explicit history reads, compare-and-set adoption, and immutable receipts. */
-import { query } from "../database/connection.ts";
-import { checkRows, queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { ExpressionBuilder } from "kysely";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { DB, Json } from "../database/schema.generated.ts";
 import {
   batchAccountIdRowSchema,
   batchConfigFields,
@@ -62,37 +65,72 @@ export type ReconciliationHistoryEvent =
 
 // Numeric strings preserve the database's exact stored precision in receipts.
 export const PORTFOLIO_TRANSACTION_SNAPSHOT_SQL = `portfolio_income_transaction_snapshot(pt)`;
-const SNAPSHOT = PORTFOLIO_TRANSACTION_SNAPSHOT_SQL;
+const snapshot = sql.raw<PortfolioTransactionSnapshot>(
+  PORTFOLIO_TRANSACTION_SNAPSHOT_SQL,
+);
+const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
+const json = (value: unknown) => sql<Json>`${JSON.stringify(value)}::json`;
+const anyBigint = (ids: readonly Id[]) => sql<string>`ANY(${ids}::bigint[])`;
+const anyInteger = <T>(ids: readonly number[]) =>
+  sql<T>`ANY(${ids}::integer[])`;
+
+/** Journal entry `a` has not been superseded by a later restore. */
+function activeJournalEntry(
+  eb: ExpressionBuilder<DB & { a: DB["portfolio_import_reconciliation_journal"] }, "a">,
+) {
+  return eb.not(
+    eb.exists(
+      eb
+        .selectFrom("portfolio_import_reconciliation_journal as r")
+        .select(sql`1`.as("one"))
+        .whereRef("r.previous_entry_id", "=", "a.id"),
+    ),
+  );
+}
 
 export async function lockReconciliationAccountsAndHistory(
   accountIds: readonly number[],
 ): Promise<void> {
   if (accountIds.length > 0)
-    await query(
-      "SELECT id FROM accounts WHERE id = ANY($1::integer[]) ORDER BY id FOR UPDATE",
-      [accountIds],
-    );
-  await query(
-    "LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE",
+    await db
+      .selectFrom("accounts")
+      .select("id")
+      .where("id", "=", anyInteger<AccountId>(accountIds))
+      .orderBy("id")
+      .forUpdate()
+      .execute();
+  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
+    db,
   );
 }
 
 export async function readReconciliationSources(
   batchIds: readonly Id[],
 ): Promise<ReconciliationSourceRow[]> {
-  return queryRows(
+  const investmentId = sql<InvestmentId | null>`COALESCE(s.user_override_investment_id, s.resolved_investment_id)`;
+  return checkedRows(
     reconciliationSourceRowSchema,
-    `SELECT s.*, to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date,
-            COALESCE(s.user_override_investment_id, s.resolved_investment_id) AS investment_id,
-            i.asset_class, i.currency AS investment_currency,
-            b.account_id, b.custom_config, b.adapter_name, b.status AS batch_status
-       FROM portfolio_import_staging_rows s
-       JOIN portfolio_import_batches b ON b.id = s.batch_id
-       LEFT JOIN investments i
-         ON i.id = COALESCE(s.user_override_investment_id, s.resolved_investment_id)
-      WHERE s.batch_id = ANY($1::bigint[])
-      ORDER BY s.batch_id, s.row_index, s.id`,
-    [batchIds],
+    db
+      .selectFrom("portfolio_import_staging_rows as s")
+      .innerJoin("portfolio_import_batches as b", "b.id", "s.batch_id")
+      .leftJoin("investments as i", (join) =>
+        join.on(sql<boolean>`i.id = ${investmentId}`),
+      )
+      .selectAll("s")
+      .select([
+        sql<string | null>`to_char(s.tx_date, 'YYYY-MM-DD')`.as("tx_date"),
+        investmentId.as("investment_id"),
+        "i.asset_class",
+        "i.currency as investment_currency",
+        "b.account_id",
+        "b.custom_config",
+        "b.adapter_name",
+        "b.status as batch_status",
+      ])
+      .where("s.batch_id", "=", anyBigint(batchIds))
+      .orderBy("s.batch_id")
+      .orderBy("s.row_index")
+      .orderBy("s.id"),
   );
 }
 
@@ -100,24 +138,38 @@ export async function readReconciliationHistory(
   investmentIds: readonly number[],
 ): Promise<ReconciliationHistoryEvent[]> {
   if (investmentIds.length === 0) return [];
-  const rows = await queryRows(
+  const investments = anyInteger<InvestmentId>(investmentIds);
+  const rows = await checkedRows(
     reconciliationSnapshotRowSchema,
-    `SELECT ${SNAPSHOT} AS snapshot
-       FROM portfolio_transactions pt
-      WHERE pt.investment_id = ANY($1::int[])
-      ORDER BY pt.investment_id, pt.date, pt.id`,
-    [investmentIds],
+    db
+      .selectFrom("portfolio_transactions as pt")
+      .select(snapshot.as("snapshot"))
+      .where("pt.investment_id", "=", investments)
+      .orderBy("pt.investment_id")
+      .orderBy("pt.date")
+      .orderBy("pt.id"),
   );
-  const transfers = await queryRows(
+  const transfers = await checkedRows(
     reconciliationTransferRowSchema,
-    `SELECT t.*, to_char(t.date, 'YYYY-MM-DD') AS date
-    FROM portfolio_asset_transfers t WHERE t.investment_id = ANY($1::integer[]) ORDER BY t.investment_id, t.date, t.id`,
-    [investmentIds],
+    db
+      .selectFrom("portfolio_asset_transfers as t")
+      .selectAll("t")
+      .select(sql<string>`to_char(t.date, 'YYYY-MM-DD')`.as("date"))
+      .where("t.investment_id", "=", investments)
+      .orderBy("t.investment_id")
+      .orderBy("t.date")
+      .orderBy("t.id"),
   );
-  const adjustments = await queryRows(
+  const adjustments = await checkedRows(
     reconciliationAdjustmentRowSchema,
-    "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE investment_id=ANY($1::integer[]) ORDER BY a.investment_id,a.date,a.id",
-    [investmentIds],
+    db
+      .selectFrom("portfolio_asset_adjustments as a")
+      .selectAll("a")
+      .select(sql<string>`to_char(a.date,'YYYY-MM-DD')`.as("date"))
+      .where("a.investment_id", "=", investments)
+      .orderBy("a.investment_id")
+      .orderBy("a.date")
+      .orderBy("a.id"),
   );
   return [
     ...rows.map((row) => row.snapshot),
@@ -145,12 +197,20 @@ export async function readReconciliationHistory(
 export async function readReconciliationBatchScope(
   batchIds: readonly Id[],
 ): Promise<ReconciliationBatchScopeRow[]> {
-  return queryRows(
+  return checkedRows(
     reconciliationBatchScopeRowSchema,
-    `SELECT id, account_id, status, custom_config, adapter_name, rows_total
-       FROM portfolio_import_batches
-      WHERE id = ANY($1::bigint[]) ORDER BY id`,
-    [batchIds],
+    db
+      .selectFrom("portfolio_import_batches")
+      .select([
+        "id",
+        "account_id",
+        "status",
+        "custom_config",
+        "adapter_name",
+        "rows_total",
+      ])
+      .where("id", "=", anyBigint(batchIds))
+      .orderBy("id"),
   );
 }
 
@@ -206,15 +266,18 @@ export async function readKinesisNativeGiftContext(
     .filter((row) => row.type === "gift" && Boolean(row.dedup_fingerprint))
     .map((row) => Number(row.id));
   if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await queryRows(
+  const receipts = await checkedRows(
     reconciliationJournalRowSchema,
-    `SELECT a.* FROM portfolio_import_reconciliation_journal a
-     JOIN portfolio_import_staging_rows s ON s.id=a.staging_row_id
-     WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
-       AND s.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt'
-       AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
-     ORDER BY a.batch_id,a.id`,
-    [ids],
+    db
+      .selectFrom("portfolio_import_reconciliation_journal as a")
+      .innerJoin("portfolio_import_staging_rows as s", "s.id", "a.staging_row_id")
+      .selectAll("a")
+      .where("a.transaction_id", "=", anyInteger<number>(ids))
+      .where("a.action", "=", "adopt")
+      .where(sql<boolean>`s.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt'`)
+      .where(activeJournalEntry)
+      .orderBy("a.batch_id")
+      .orderBy("a.id"),
   );
   const batchIds = [
     ...new Set([
@@ -248,36 +311,40 @@ export async function retainKinesisNetworkBinding({
   before: ReconciliationSourceRow;
   after: Pick<ReconciliationSourceRow, "units" | "asset_transfer_details">;
 }): Promise<boolean> {
-  return (
-    (
-      await query(
-        `UPDATE portfolio_import_staging_rows SET route='asset_transfer',type=NULL,type_raw='AssetTransfer',units=$2,asset_transfer_details=$3
-     WHERE id=$1 AND status='matched' AND route=$4 AND units=$5 AND raw_data=$6 AND source_record_hash=$7 AND dedup_fingerprint=$8 RETURNING id`,
-        [
-          before.id,
-          after.units,
-          JSON.stringify(after.asset_transfer_details),
-          before.route,
-          before.units,
-          before.raw_data,
-          before.source_record_hash,
-          before.dedup_fingerprint,
-        ],
-      )
-    ).rows.length === 1
-  );
+  const changed = await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({
+      route: "asset_transfer",
+      type: null,
+      type_raw: "AssetTransfer",
+      units: after.units,
+      asset_transfer_details: json(after.asset_transfer_details),
+    })
+    .where("id", "=", String(before.id))
+    .where("status", "=", "matched")
+    .where("route", "=", before.route)
+    .where("units", "=", before.units)
+    .where("raw_data", "=", before.raw_data)
+    .where("source_record_hash", "=", before.source_record_hash)
+    .where("dedup_fingerprint", "=", before.dedup_fingerprint)
+    .returning("id")
+    .execute();
+  return changed.length === 1;
 }
 
 export async function assertNoActiveKinesisNetworkConsumers(
   batchId: Id,
 ): Promise<void> {
-  const result = await query(
-    `SELECT t.id FROM portfolio_asset_transfers t
-     JOIN portfolio_import_staging_rows s ON s.id=t.staging_row_id
-     WHERE s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=$1::text LIMIT 1`,
-    [batchId],
-  );
-  if (result.rows.length > 0)
+  const consumers = await db
+    .selectFrom("portfolio_asset_transfers as t")
+    .innerJoin("portfolio_import_staging_rows as s", "s.id", "t.staging_row_id")
+    .select("t.id")
+    .where(
+      sql<boolean>`s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=${batchId}::text`,
+    )
+    .limit(1)
+    .execute();
+  if (consumers.length > 0)
     throw new Error(
       "Native wallet evidence is still used by an active broker transfer. Undo that transfer first.",
     );
@@ -291,15 +358,18 @@ export async function readKinesisAdoptionContext(
     .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
     .map((row) => Number(row.id));
   if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await queryRows(
+  const receipts = await checkedRows(
     reconciliationJournalRowSchema,
-    `SELECT a.* FROM portfolio_import_reconciliation_journal a
-     JOIN portfolio_import_batches b ON b.id=a.batch_id
-     WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
-       AND b.custom_config->>'format'='kinesis_transaction_history'
-       AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
-     ORDER BY a.batch_id,a.id`,
-    [ids],
+    db
+      .selectFrom("portfolio_import_reconciliation_journal as a")
+      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
+      .selectAll("a")
+      .where("a.transaction_id", "=", anyInteger<number>(ids))
+      .where("a.action", "=", "adopt")
+      .where(sql<boolean>`b.custom_config->>'format'='kinesis_transaction_history'`)
+      .where(activeJournalEntry)
+      .orderBy("a.batch_id")
+      .orderBy("a.id"),
   );
   const batchIds = [
     ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
@@ -333,17 +403,21 @@ export async function readSaxoAdoptionContext(
     .map((row) => Number(row.id));
   if (transactionIds.length === 0)
     return { receipts: [], sources: [], batches: [] };
-  const receipts = await queryRows(
+  const receipts = await checkedRows(
     reconciliationJournalRowSchema,
-    `SELECT a.* FROM portfolio_import_reconciliation_journal a
-       JOIN portfolio_import_batches b ON b.id = a.batch_id
-      WHERE a.transaction_id = ANY($1::integer[]) AND a.action = 'adopt'
-        AND (b.adapter_name = 'saxo_transaction_history'
-          OR b.custom_config->>'format' = 'saxo_transaction_history')
-        AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal r
-          WHERE r.previous_entry_id = a.id)
-      ORDER BY a.batch_id, a.id`,
-    [transactionIds],
+    db
+      .selectFrom("portfolio_import_reconciliation_journal as a")
+      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
+      .selectAll("a")
+      .where("a.transaction_id", "=", anyInteger<number>(transactionIds))
+      .where("a.action", "=", "adopt")
+      .where(
+        sql<boolean>`(b.adapter_name = 'saxo_transaction_history'
+          OR b.custom_config->>'format' = 'saxo_transaction_history')`,
+      )
+      .where(activeJournalEntry)
+      .orderBy("a.batch_id")
+      .orderBy("a.id"),
   );
   const batchIds = [
     ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
@@ -360,15 +434,14 @@ export async function readReconciledProImportAccounts(
   accountIds: readonly number[],
 ): Promise<number[]> {
   if (accountIds.length === 0) return [];
-  const rows = await queryRows(
+  const rows = await checkedRows(
     batchAccountIdRowSchema,
-    `SELECT DISTINCT b.account_id FROM portfolio_import_batches b
-    WHERE b.account_id = ANY($1::integer[]) AND b.status = 'complete'
+    sql`SELECT DISTINCT b.account_id FROM portfolio_import_batches b
+    WHERE b.account_id = ANY(${accountIds}::integer[]) AND b.status = 'complete'
       AND (b.adapter_name = 'nexo_pro_spot_history' OR b.custom_config->>'format' = 'nexo_pro_spot_history')
       AND EXISTS (SELECT 1 FROM portfolio_import_staging_rows s WHERE s.batch_id = b.id
         AND s.route = 'portfolio' AND s.type IN ('buy','sell') AND s.status IN ('committed','duplicate'))
     ORDER BY b.account_id`,
-    [accountIds],
   );
   return rows.map((row) => Number(row.account_id));
 }
@@ -379,32 +452,28 @@ export async function compareAndSetReconciledTransaction(
   after: PortfolioTransactionSnapshot,
   expectedUpdatedAt: Date | string | null | undefined = undefined,
 ): Promise<PortfolioTransactionSnapshot | undefined> {
-  const row = await queryOne(
+  const image = jsonb(after);
+  const updatedAt = expectedUpdatedAt ?? null;
+  const row = await checkedRow(
     reconciliationSnapshotRowSchema,
-    `UPDATE portfolio_transactions pt SET
-       date = ($2::jsonb->>'date')::date,
-       amount = ($2::jsonb->>'amount')::numeric,
-       units = ($2::jsonb->>'units')::numeric,
-       price_per_unit = ($2::jsonb->>'price_per_unit')::numeric,
-       fees = ($2::jsonb->>'fees')::numeric,
-       taxes = ($2::jsonb->>'taxes')::numeric,
-       currency = $2::jsonb->>'currency',
-       dividend_amount_convention = $2::jsonb->>'dividend_amount_convention',
-       income_recognition_role = COALESCE($2::jsonb->>'income_recognition_role','standard'),
-       fx_rate_to_eur = ($2::jsonb->>'fx_rate_to_eur')::numeric,
-       account_id = ($2::jsonb->>'account_id')::integer,
-       source_record_hash = $2::jsonb->>'source_record_hash',
-       dedup_fingerprint = $2::jsonb->>'dedup_fingerprint',
-       dedup_fingerprint_version = ($2::jsonb->>'dedup_fingerprint_version')::smallint
-     WHERE pt.id = $1 AND ${SNAPSHOT} = normalize_portfolio_income_snapshot($3::jsonb)
-       AND ($4::timestamptz IS NULL OR pt.updated_at = $4::timestamptz)
-     RETURNING ${SNAPSHOT} AS snapshot`,
-    [
-      before.id,
-      JSON.stringify(after),
-      JSON.stringify(before),
-      expectedUpdatedAt ?? null,
-    ],
+    sql`UPDATE portfolio_transactions pt SET
+       date = (${image}->>'date')::date,
+       amount = (${image}->>'amount')::numeric,
+       units = (${image}->>'units')::numeric,
+       price_per_unit = (${image}->>'price_per_unit')::numeric,
+       fees = (${image}->>'fees')::numeric,
+       taxes = (${image}->>'taxes')::numeric,
+       currency = ${image}->>'currency',
+       dividend_amount_convention = ${image}->>'dividend_amount_convention',
+       income_recognition_role = COALESCE(${image}->>'income_recognition_role','standard'),
+       fx_rate_to_eur = (${image}->>'fx_rate_to_eur')::numeric,
+       account_id = (${image}->>'account_id')::integer,
+       source_record_hash = ${image}->>'source_record_hash',
+       dedup_fingerprint = ${image}->>'dedup_fingerprint',
+       dedup_fingerprint_version = (${image}->>'dedup_fingerprint_version')::smallint
+     WHERE pt.id = ${before.id} AND ${snapshot} = normalize_portfolio_income_snapshot(${jsonb(before)})
+       AND (${updatedAt}::timestamptz IS NULL OR pt.updated_at = ${updatedAt}::timestamptz)
+     RETURNING ${snapshot} AS snapshot`,
   );
   return row?.snapshot;
 }
@@ -428,22 +497,22 @@ export async function insertReconciliationReceipt({
   after: PortfolioTransactionSnapshot;
   previousEntryId?: Id | null;
 }): Promise<number> {
-  const result = await query(
-    `INSERT INTO portfolio_import_reconciliation_journal
-       (batch_id, staging_row_id, transaction_id, action, policy, before_data, after_data, previous_entry_id)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8) RETURNING id`,
-    [
-      batchId,
-      stagingRowId,
-      transactionId,
-      action,
-      policy,
-      JSON.stringify(before),
-      JSON.stringify(after),
-      previousEntryId ?? null,
-    ],
+  const [inserted] = await checkedRows(
+    bigintIdRowSchema,
+    db
+      .insertInto("portfolio_import_reconciliation_journal")
+      .values({
+        batch_id: batchId,
+        staging_row_id: stagingRowId,
+        transaction_id: transactionId,
+        action,
+        policy,
+        before_data: jsonb(before),
+        after_data: jsonb(after),
+        previous_entry_id: previousEntryId ?? null,
+      })
+      .returning("id"),
   );
-  const [inserted] = checkRows(bigintIdRowSchema, result.rows);
   // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
   return Number(inserted!.id);
 }
@@ -452,47 +521,47 @@ export async function markAdoptedSourceDuplicate(
   stagingRowId: Id,
   batchId: Id,
 ): Promise<void> {
-  await query(
-    `UPDATE portfolio_import_staging_rows SET status = 'duplicate'
-      WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-    [stagingRowId, batchId],
-  );
-  await query(
-    `UPDATE portfolio_import_batches SET rows_duplicate = rows_duplicate + 1 WHERE id = $1`,
-    [batchId],
-  );
+  await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({ status: "duplicate" })
+    .where("id", "=", String(stagingRowId))
+    .where("batch_id", "=", String(batchId))
+    .where("status", "=", "matched")
+    .execute();
+  await db
+    .updateTable("portfolio_import_batches")
+    .set((eb) => ({ rows_duplicate: eb("rows_duplicate", "+", 1) }))
+    .where("id", "=", String(batchId))
+    .execute();
 }
 
 export async function markSaxoCompanionSourceDuplicate(
   row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
 ): Promise<boolean> {
-  const result = await query(
-    `WITH previous AS (
+  const result = await sql`WITH previous AS (
        SELECT id,status FROM portfolio_import_staging_rows
-        WHERE id=$1 AND batch_id=$2 AND status=$3 AND status IN ('matched','error')
+        WHERE id=${row.id} AND batch_id=${row.batch_id} AND status=${row.status} AND status IN ('matched','error')
      ), changed AS (
        UPDATE portfolio_import_staging_rows source SET status='duplicate',error_message=NULL
         FROM previous WHERE source.id=previous.id RETURNING previous.status
      ) UPDATE portfolio_import_batches SET rows_duplicate=rows_duplicate+(SELECT count(*) FROM changed),
        rows_error=rows_error-(SELECT count(*) FROM changed WHERE status='error')
-       WHERE id=$2 AND EXISTS(SELECT 1 FROM changed) RETURNING id`,
-    [row.id, row.batch_id, row.status],
-  );
+       WHERE id=${row.batch_id} AND EXISTS(SELECT 1 FROM changed) RETURNING id`.execute(db);
   return result.rows.length === 1;
 }
 
 export async function getActiveAdoptionReceipts(
   batchId: Id,
 ): Promise<ReconciliationJournalRow[]> {
-  return queryRows(
+  return checkedRows(
     reconciliationJournalRowSchema,
-    `SELECT a.* FROM portfolio_import_reconciliation_journal a
-      WHERE a.batch_id = $1 AND a.action = 'adopt'
-        AND NOT EXISTS (
-          SELECT 1 FROM portfolio_import_reconciliation_journal r
-           WHERE r.previous_entry_id = a.id
-        ) ORDER BY a.id`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_reconciliation_journal as a")
+      .selectAll("a")
+      .where("a.batch_id", "=", String(batchId))
+      .where("a.action", "=", "adopt")
+      .where(activeJournalEntry)
+      .orderBy("a.id"),
   );
 }
 
@@ -500,22 +569,13 @@ export async function retainKinesisNativeGiftReceipt(
   row: ReconciliationSourceRow,
   receipt: unknown,
 ): Promise<boolean> {
-  return (
-    (
-      await query(
-        `UPDATE portfolio_import_staging_rows SET asset_transfer_details=jsonb_build_object('nativeGiftGroupReceipt',$2::jsonb)
-    WHERE id=$1 AND route='portfolio' AND type='gift' AND status IN ('committed','duplicate') AND raw_data=$3 AND source_record_hash=$4 AND dedup_fingerprint=$5 AND asset_transfer_details::jsonb IS NOT DISTINCT FROM $6::jsonb RETURNING id`,
-        [
-          row.id,
-          JSON.stringify(receipt),
-          row.raw_data,
-          row.source_record_hash,
-          row.dedup_fingerprint,
-          row.asset_transfer_details == null
-            ? null
-            : JSON.stringify(row.asset_transfer_details),
-        ],
-      )
-    ).rows.length === 1
+  const previousDetails =
+    row.asset_transfer_details == null
+      ? null
+      : JSON.stringify(row.asset_transfer_details);
+  const result = await sql`UPDATE portfolio_import_staging_rows SET asset_transfer_details=jsonb_build_object('nativeGiftGroupReceipt',${jsonb(receipt)})
+    WHERE id=${row.id} AND route='portfolio' AND type='gift' AND status IN ('committed','duplicate') AND raw_data=${row.raw_data} AND source_record_hash=${row.source_record_hash} AND dedup_fingerprint=${row.dedup_fingerprint} AND asset_transfer_details::jsonb IS NOT DISTINCT FROM ${previousDetails}::jsonb RETURNING id`.execute(
+    db,
   );
+  return result.rows.length === 1;
 }

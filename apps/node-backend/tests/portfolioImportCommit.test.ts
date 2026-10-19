@@ -83,7 +83,7 @@ let fingerprintDuplicate: boolean;
 let batchFormat: string | undefined;
 
 function dispatch(sql: string, params: unknown[]) {
-  if (/SELECT b\.account_id, b\.is_brokerage/.test(sql)) {
+  if (/select "b"\."account_id", "b"\."is_brokerage"/.test(sql)) {
     return {
       rows: [
         {
@@ -101,10 +101,10 @@ function dispatch(sql: string, params: unknown[]) {
       ],
     };
   }
-  if (/FROM portfolio_import_staging_rows isr/.test(sql))
+  if (/from "portfolio_import_staging_rows" as "isr"/.test(sql))
     return { rows: matchedRows.map(matchedWireRow) };
   if (
-    /WHERE dedup_fingerprint_version = \$1 AND dedup_fingerprint = \$2/.test(
+    /where "dedup_fingerprint_version" = \$1 and "dedup_fingerprint" = \$2/.test(
       sql,
     )
   )
@@ -112,12 +112,12 @@ function dispatch(sql: string, params: unknown[]) {
   if (/FROM portfolio_transactions\s+WHERE investment_id/.test(sql)) {
     return { rows: [{ n: Number(fieldDuplicate) || 0 }] };
   }
-  if (/SELECT COUNT\(\*\)::int AS n FROM transactions/.test(sql)) {
+  if (/select COUNT\(\*\)::int as "n" from "transactions"/.test(sql)) {
     return { rows: [{ n: Number(cashDuplicate) || 0 }] };
   }
   if (/INSERT INTO transactions/.test(sql)) return { rows: [{ id: 777 }] };
-  if (/SET status = \$2, error_message/.test(sql)) {
-    marked.push({ id: params[0], status: params[1], message: params[2] });
+  if (/set "status" = \$1, "error_message" = \$2/.test(sql)) {
+    marked.push({ id: params[2], status: params[0], message: params[1] });
     return { rows: [] };
   }
   return { rows: [] };
@@ -266,15 +266,18 @@ describe("commitBatch (portfolio)", () => {
       amount: 1855,
       preloaded_asset_class: "stock",
     });
-    const committedRow = query.mock.calls.find(([sql]) =>
-      /SET status = 'committed'/.test(sql),
+    const committedRow = query.mock.calls.find(
+      ([sql, params]) =>
+        /update "portfolio_import_staging_rows"/.test(sql) &&
+        params?.[0] === "committed",
     )!;
-    // The staging id is BIGINT text as pg returns it.
-    expect(committedRow[1]).toEqual(["1", 100]);
+    // [status, committed_txn_id, staging id as BIGINT text].
+    expect(committedRow[1]).toEqual(["committed", 100, "1"]);
     const checkpoint = query.mock.calls.find(([sql]) =>
-      /SET rows_imported = COALESCE/.test(sql),
+      /set "rows_imported" = COALESCE/.test(sql),
     )!;
-    expect(checkpoint[1]).toEqual([5, 1, 0, 0]);
+    // [imported, duplicates, errors, batch id].
+    expect(checkpoint[1]).toEqual([1, 0, 0, "5"]);
   });
 
   it("persists versioned identity metadata on a portfolio trade", async () => {
@@ -606,7 +609,7 @@ describe("commitBatch (portfolio)", () => {
     // Exact column list — a regression that drops recipient_id (or reorders it
     // away from its parameter) must fail here, not only on a real database.
     expect(sql).toMatch(
-      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, category_id, is_active\)\s*VALUES \(\$1, \$2, \$3, \$4, \$5, \$6, \$7, true\)/,
+      /INSERT INTO transactions \(date, amount, currency, memo, account_id, recipient_id, category_id, is_active\)\s*VALUES \(\$1,\s*\$2,\s*\$3,\s*\$4,\s*\$5,\s*\$6,\s*\$7,\s*true\)/,
     );
     // [date, signed amount, currency, memo, account_id, recipient_id,
     //  category_id] — external deposits stay uncategorized (transfers).
@@ -892,7 +895,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
 
     const dedupCall = query.mock.calls.find(([s]) =>
-      /AS n FROM transactions/.test(s),
+      /as "n" from "transactions"/.test(s),
     )!;
     // Predicate accepts either the post-fix signed value or the legacy magnitude.
     expect(dedupCall[0]).toMatch(/amount = \$3 OR amount = \$4/);
@@ -923,12 +926,12 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
 
     const dedupCall = query.mock.calls.find(([s]) =>
-      /AS n FROM transactions/.test(s),
+      /as "n" from "transactions"/.test(s),
     )!;
     expect(dedupCall[0]).toMatch(/amount = \$3/);
     expect(dedupCall[0]).not.toMatch(/amount = \$4|OR amount/); // no magnitude branch at all
-    // params: [accountId, tx_date, signed(-10), currency, memo] — magnitude never sent.
-    expect(dedupCall[1]).toEqual([7, "2026-01-05", -10, "EUR", "FEE"]);
+    // params: [accountId, tx_date, signed(-10), currency, memo, is_active] — magnitude never sent.
+    expect(dedupCall[1]).toEqual([7, "2026-01-05", -10, "EUR", "FEE", true]);
   });
 
   it("cash dedup does not conflate opposite directions: a deposit only matches positive amounts", async () => {
@@ -949,7 +952,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
 
     const dedupCall = query.mock.calls.find(([s]) =>
-      /AS n FROM transactions/.test(s),
+      /as "n" from "transactions"/.test(s),
     )!;
     expect(dedupCall[1][2]).toBe(500); // signed
     expect(dedupCall[1][3]).toBe(500); // magnitude — same, so no negative branch
@@ -1147,7 +1150,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
 
     const dedupCall = query.mock.calls.find(([sql]) =>
-      /AS n FROM transactions/.test(sql),
+      /as "n" from "transactions"/.test(sql),
     )!;
     expect(dedupCall[0]).toContain("COALESCE(currency, 'EUR')");
     expect(dedupCall[1]).toContain("USD");

@@ -125,7 +125,7 @@ function projection(row: WireRow) {
   };
 }
 function dispatch(sql: string, params?: readonly unknown[]) {
-  if (/SELECT b\.account_id, b\.is_brokerage/.test(sql))
+  if (/select "b"\."account_id", "b"\."is_brokerage"/.test(sql))
     return {
       rows: [
         {
@@ -142,19 +142,19 @@ function dispatch(sql: string, params?: readonly unknown[]) {
         },
       ],
     };
-  if (/FROM portfolio_import_staging_rows isr/.test(sql))
+  if (/from "portfolio_import_staging_rows" as "isr"/.test(sql))
     return { rows: [projection(selected)] };
   if (
-    /WHERE dedup_fingerprint_version = \$1 AND dedup_fingerprint = \$2/.test(
+    /where "dedup_fingerprint_version" = \$1 and "dedup_fingerprint" = \$2/.test(
       sql,
     )
   )
     return { rows: fingerprintDuplicate ? [{ "?column?": 1 }] : [] };
-  if (/SELECT COUNT\(\*\)::int AS n FROM transactions/.test(sql))
+  if (/select COUNT\(\*\)::int as "n" from "transactions"/.test(sql))
     return { rows: [{ n: 0 }] };
   if (/INSERT INTO transactions/.test(sql)) return { rows: [{ id: 999 }] };
-  if (/SET status = \$2, error_message/.test(sql))
-    marks.push({ id: params![0], status: params![1] });
+  if (/set "status" = \$1, "error_message" = \$2/.test(sql))
+    marks.push({ id: params![2], status: params![0] });
   return { rows: [] };
 }
 beforeEach(() => {

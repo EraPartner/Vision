@@ -1,5 +1,7 @@
-import { query } from "../database/connection.ts";
-import { checkRows, queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { PortfolioTransactionId } from "@vision/types/brands";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   bigintIdRowSchema,
   duplicateRepairJournalRowSchema,
@@ -28,11 +30,13 @@ export type {
 
 type Id = number | string;
 
-const FULL_TRANSACTION = `${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} || jsonb_build_object('created_at',pt.created_at::text,'updated_at',pt.updated_at::text)`;
-const STAGING = `to_jsonb(s) || jsonb_build_object('id',s.id::text,'batch_id',s.batch_id::text,
+const FULL_TRANSACTION = sql<RepairTransactionSnapshot>`${sql.raw(PORTFOLIO_TRANSACTION_SNAPSHOT_SQL)} || jsonb_build_object('created_at',pt.created_at::text,'updated_at',pt.updated_at::text)`;
+const STAGING = sql<RepairStagingSnapshot>`to_jsonb(s) || jsonb_build_object('id',s.id::text,'batch_id',s.batch_id::text,
   'units',s.units::text,'price_per_unit',s.price_per_unit::text,'amount',s.amount::text,
   'fees',s.fees::text,'taxes',s.taxes::text,'fx_rate_to_eur',s.fx_rate_to_eur::text)`;
-const BATCH = `to_jsonb(b) || jsonb_build_object('id',b.id::text,'source_size_bytes',b.source_size_bytes::text)`;
+const BATCH = sql<RepairBatchSnapshot>`to_jsonb(b) || jsonb_build_object('id',b.id::text,'source_size_bytes',b.source_size_bytes::text)`;
+const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
+const anyBigint = (ids: readonly Id[]) => sql<string>`ANY(${ids}::bigint[])`;
 
 export async function readDuplicateRepairContext(
   history: readonly ReconciliationHistoryEvent[],
@@ -52,38 +56,50 @@ export async function readDuplicateRepairContext(
   ];
   const transactions = transactionIds.length > 0
     ? (
-        await queryRows(
+        await checkedRows(
           repairTransactionSnapshotRowSchema,
-          `SELECT ${FULL_TRANSACTION} AS snapshot FROM portfolio_transactions pt WHERE pt.id=ANY($1::integer[]) ORDER BY pt.id`,
-          [transactionIds],
+          db
+            .selectFrom("portfolio_transactions as pt")
+            .select(FULL_TRANSACTION.as("snapshot"))
+            .where(
+              "pt.id",
+              "=",
+              sql<PortfolioTransactionId>`ANY(${transactionIds}::integer[])`,
+            )
+            .orderBy("pt.id"),
         )
       ).map((row) => row.snapshot)
     : [];
   const batches = batchIds.length > 0
     ? (
-        await queryRows(
+        await checkedRows(
           repairBatchSnapshotRowSchema,
-          `SELECT ${BATCH} AS snapshot FROM portfolio_import_batches b WHERE b.id=ANY($1::bigint[]) ORDER BY b.id`,
-          [batchIds],
+          db
+            .selectFrom("portfolio_import_batches as b")
+            .select(BATCH.as("snapshot"))
+            .where("b.id", "=", anyBigint(batchIds))
+            .orderBy("b.id"),
         )
       ).map((row) => row.snapshot)
     : [];
   const staging = batchIds.length > 0
     ? (
-        await queryRows(
+        await checkedRows(
           repairStagingSnapshotRowSchema,
-          `SELECT ${STAGING} AS snapshot FROM portfolio_import_staging_rows s WHERE s.batch_id=ANY($1::bigint[]) ORDER BY s.id`,
-          [batchIds],
+          db
+            .selectFrom("portfolio_import_staging_rows as s")
+            .select(STAGING.as("snapshot"))
+            .where("s.batch_id", "=", anyBigint(batchIds))
+            .orderBy("s.id"),
         )
       ).map((row) => row.snapshot)
     : [];
   const known = transactionIds.length > 0
     ? (
-        await queryRows(
+        await checkedRows(
           intIdRowSchema,
-          `SELECT a.transaction_id AS id FROM portfolio_import_reconciliation_journal a WHERE a.action='adopt' AND a.transaction_id=ANY($1::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
-    UNION SELECT a.legacy_transaction_id AS id FROM portfolio_import_duplicate_repair_journal a WHERE a.action='repair' AND a.legacy_transaction_id=ANY($1::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_duplicate_repair_journal r WHERE r.previous_entry_id=a.id)`,
-          [transactionIds],
+          sql`SELECT a.transaction_id AS id FROM portfolio_import_reconciliation_journal a WHERE a.action='adopt' AND a.transaction_id=ANY(${transactionIds}::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
+    UNION SELECT a.legacy_transaction_id AS id FROM portfolio_import_duplicate_repair_journal a WHERE a.action='repair' AND a.legacy_transaction_id=ANY(${transactionIds}::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_duplicate_repair_journal r WHERE r.previous_entry_id=a.id)`,
         )
       ).map((row) => Number(row.id))
     : [];
@@ -99,10 +115,9 @@ export async function readFullRepairTransaction(
   id: Id,
 ): Promise<RepairTransactionSnapshot | undefined> {
   return (
-    await queryOne(
+    await checkedRow(
       repairTransactionSnapshotRowSchema,
-      `SELECT ${FULL_TRANSACTION} AS snapshot FROM portfolio_transactions pt WHERE pt.id=$1`,
-      [id],
+      sql`SELECT ${FULL_TRANSACTION} AS snapshot FROM portfolio_transactions pt WHERE pt.id=${id}`,
     )
   )?.snapshot;
 }
@@ -115,17 +130,18 @@ export async function readOriginalRepairState(
   originalStaging: RepairStagingSnapshot[];
 }> {
   const originalBatch = (
-    await queryOne(
+    await checkedRow(
       repairBatchSnapshotRowSchema,
-      `SELECT ${BATCH} AS snapshot FROM portfolio_import_batches b WHERE b.id=$1`,
-      [originalBatchId],
+      db
+        .selectFrom("portfolio_import_batches as b")
+        .select(BATCH.as("snapshot"))
+        .where("b.id", "=", String(originalBatchId)),
     )
   )?.snapshot;
   const originalStaging = (
-    await queryRows(
+    await checkedRows(
       repairStagingSnapshotRowSchema,
-      `SELECT ${STAGING} AS snapshot FROM portfolio_import_staging_rows s WHERE s.batch_id=$1 AND s.committed_txn_id=$2 AND s.route IS DISTINCT FROM 'cash' ORDER BY s.id`,
-      [originalBatchId, importedId],
+      sql`SELECT ${STAGING} AS snapshot FROM portfolio_import_staging_rows s WHERE s.batch_id=${originalBatchId} AND s.committed_txn_id=${importedId} AND s.route IS DISTINCT FROM 'cash' ORDER BY s.id`,
     )
   ).map((row) => row.snapshot);
   return { originalBatch, originalStaging };
@@ -135,10 +151,13 @@ export async function readRepairStagingByIds(
   snapshots: readonly { id: Id }[],
 ): Promise<RepairStagingSnapshot[]> {
   return (
-    await queryRows(
+    await checkedRows(
       repairStagingSnapshotRowSchema,
-      `SELECT ${STAGING} AS snapshot FROM portfolio_import_staging_rows s WHERE s.id=ANY($1::bigint[]) ORDER BY s.id`,
-      [snapshots.map((row) => row.id)],
+      db
+        .selectFrom("portfolio_import_staging_rows as s")
+        .select(STAGING.as("snapshot"))
+        .where("s.id", "=", anyBigint(snapshots.map((row) => row.id)))
+        .orderBy("s.id"),
     )
   ).map((row) => row.snapshot);
 }
@@ -146,14 +165,10 @@ export async function readRepairStagingByIds(
 export async function deleteExactImportedCopy(
   imported: RepairTransactionSnapshot,
 ): Promise<boolean> {
-  return (
-    (
-      await query(
-        `DELETE FROM portfolio_transactions pt WHERE pt.id=$1 AND ${FULL_TRANSACTION}=normalize_portfolio_income_snapshot($2::jsonb) RETURNING pt.id`,
-        [imported.id, JSON.stringify(imported)],
-      )
-    ).rows.length === 1
+  const result = await sql`DELETE FROM portfolio_transactions pt WHERE pt.id=${imported.id} AND ${FULL_TRANSACTION}=normalize_portfolio_income_snapshot(${jsonb(imported)}) RETURNING pt.id`.execute(
+    db,
   );
+  return result.rows.length === 1;
 }
 
 export async function replaceRepairStaging(
@@ -161,11 +176,10 @@ export async function replaceRepairStaging(
   after: RepairStagingSnapshot,
 ): Promise<RepairStagingSnapshot | undefined> {
   return (
-    await queryOne(
+    await checkedRow(
       repairStagingSnapshotRowSchema,
-      `UPDATE portfolio_import_staging_rows s SET status=$2::jsonb->>'status',committed_txn_id=($2::jsonb->>'committed_txn_id')::integer
-    WHERE s.id=$1 AND (${STAGING}) - 'updated_at' = $3::jsonb - 'updated_at' RETURNING ${STAGING} AS snapshot`,
-      [before.id, JSON.stringify(after), JSON.stringify(before)],
+      sql`UPDATE portfolio_import_staging_rows s SET status=${jsonb(after)}->>'status',committed_txn_id=(${jsonb(after)}->>'committed_txn_id')::integer
+    WHERE s.id=${before.id} AND (${STAGING}) - 'updated_at' = ${jsonb(before)} - 'updated_at' RETURNING ${STAGING} AS snapshot`,
     )
   )?.snapshot;
 }
@@ -175,11 +189,10 @@ export async function replaceRepairBatch(
   after: RepairBatchSnapshot,
 ): Promise<RepairBatchSnapshot | undefined> {
   return (
-    await queryOne(
+    await checkedRow(
       repairBatchSnapshotRowSchema,
-      `UPDATE portfolio_import_batches b SET rows_imported=($2::jsonb->>'rows_imported')::integer,rows_duplicate=($2::jsonb->>'rows_duplicate')::integer
-    WHERE b.id=$1 AND ${BATCH}=$3::jsonb RETURNING ${BATCH} AS snapshot`,
-      [before.id, JSON.stringify(after), JSON.stringify(before)],
+      sql`UPDATE portfolio_import_batches b SET rows_imported=(${jsonb(after)}->>'rows_imported')::integer,rows_duplicate=(${jsonb(after)}->>'rows_duplicate')::integer
+    WHERE b.id=${before.id} AND ${BATCH}=${jsonb(before)} RETURNING ${BATCH} AS snapshot`,
     )
   )?.snapshot;
 }
@@ -187,14 +200,11 @@ export async function replaceRepairBatch(
 export async function restoreExactImportedCopy(
   imported: RepairTransactionSnapshot | null,
 ): Promise<boolean> {
-  return (
-    (
-      await query(
-        `INSERT INTO portfolio_transactions SELECT restored.* FROM jsonb_populate_record(NULL::portfolio_transactions,$1::jsonb || jsonb_build_object('income_recognition_role',COALESCE($1::jsonb->>'income_recognition_role','standard'))) restored ON CONFLICT DO NOTHING RETURNING id`,
-        [JSON.stringify(imported)],
-      )
-    ).rows.length === 1
+  const image = jsonb(imported);
+  const result = await sql`INSERT INTO portfolio_transactions SELECT restored.* FROM jsonb_populate_record(NULL::portfolio_transactions,${image} || jsonb_build_object('income_recognition_role',COALESCE(${image}->>'income_recognition_role','standard'))) restored ON CONFLICT DO NOTHING RETURNING id`.execute(
+    db,
   );
+  return result.rows.length === 1;
 }
 
 export async function insertDuplicateRepairReceipt({
@@ -220,23 +230,24 @@ export async function insertDuplicateRepairReceipt({
   after: DuplicateRepairState;
   previousEntryId?: Id | null;
 }): Promise<number> {
-  const result = await query(
-    `INSERT INTO portfolio_import_duplicate_repair_journal(batch_id,staging_row_id,original_import_batch_id,legacy_transaction_id,imported_transaction_id,action,policy,before_data,after_data,previous_entry_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10) RETURNING id`,
-    [
-      batchId,
-      stagingRowId,
-      originalBatchId,
-      legacyId,
-      importedId,
-      action,
-      policy,
-      JSON.stringify(before),
-      JSON.stringify(after),
-      previousEntryId ?? null,
-    ],
+  const [inserted] = await checkedRows(
+    bigintIdRowSchema,
+    db
+      .insertInto("portfolio_import_duplicate_repair_journal")
+      .values({
+        batch_id: batchId,
+        staging_row_id: stagingRowId,
+        original_import_batch_id: originalBatchId,
+        legacy_transaction_id: legacyId,
+        imported_transaction_id: importedId,
+        action,
+        policy,
+        before_data: jsonb(before),
+        after_data: jsonb(after),
+        previous_entry_id: previousEntryId ?? null,
+      })
+      .returning("id"),
   );
-  const [inserted] = checkRows(bigintIdRowSchema, result.rows);
   // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
   return Number(inserted!.id);
 }
@@ -244,9 +255,22 @@ export async function insertDuplicateRepairReceipt({
 export async function getActiveDuplicateRepairReceipts(
   batchId: Id,
 ): Promise<DuplicateRepairJournalRow[]> {
-  return queryRows(
+  return checkedRows(
     duplicateRepairJournalRowSchema,
-    `SELECT a.* FROM portfolio_import_duplicate_repair_journal a WHERE a.batch_id=$1 AND a.action='repair' AND NOT EXISTS(SELECT 1 FROM portfolio_import_duplicate_repair_journal r WHERE r.previous_entry_id=a.id) ORDER BY a.id DESC`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_duplicate_repair_journal as a")
+      .selectAll("a")
+      .where("a.batch_id", "=", String(batchId))
+      .where("a.action", "=", "repair")
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom("portfolio_import_duplicate_repair_journal as r")
+              .select(sql`1`.as("one"))
+              .whereRef("r.previous_entry_id", "=", "a.id"),
+          ),
+        ),
+      )
+      .orderBy("a.id", "desc"),
   );
 }

@@ -45,7 +45,7 @@ describe("commitPortfolioImport — status reflects remaining error rows", () =>
     await commitPortfolioImport({ batchId: 5 });
 
     const statusUpdate = query.mock.calls.find(([sql]) =>
-      /UPDATE portfolio_import_batches[\s\S]*SET status/.test(sql),
+      /update "?portfolio_import_batches"?[\s\S]*set "?status"?/i.test(sql),
     );
     expect(statusUpdate).toBeTruthy();
     const [sql, params] = statusUpdate!;
@@ -54,7 +54,8 @@ describe("commitPortfolioImport — status reflects remaining error rows", () =>
     expect(sql).toContain("'complete_with_errors'");
     expect(sql).toMatch(/status = 'error'/);
     expect(sql).not.toMatch(/SET status = 'complete'\s*,/); // no unconditional literal
-    expect(params).toEqual([5]);
+    // [batch id in the EXISTS probe, batch id in WHERE].
+    expect(params).toEqual([5, "5"]);
   });
 
   it("still returns the commit counts to the caller", async () => {
@@ -86,9 +87,9 @@ describe("overrideInvestment — repair path for errored rows", () => {
     // Second call decrements the batch counter (never below zero).
     const decrement = query.mock.calls[1]!;
     expect(decrement[0]).toMatch(
-      /rows_error = GREATEST\(COALESCE\(rows_error, 0\) - 1, 0\)/,
+      /"?rows_error"? = GREATEST\(COALESCE\(rows_error, 0\) - 1, 0\)/,
     );
-    expect(decrement[1]).toEqual([5]);
+    expect(decrement[1]).toEqual(["5"]);
   });
 
   it("does not decrement when the row was already matched (plain re-point)", async () => {
@@ -144,7 +145,7 @@ describe("cash-row review guards and repair", () => {
     );
     expect(sql).toMatch(/SET status = 'matched', error_message = NULL/);
     expect(sql).toMatch(/rows_error = GREATEST/);
-    expect(params).toEqual([5, 77]);
+    expect(params).toEqual([5, 77, 77, 5]);
   });
 
   it("keeps bulk investment overrides away from cash rows", async () => {
@@ -201,8 +202,9 @@ describe("overrideInvestments — atomic row-set guard", () => {
     );
     expect(sql).toMatch(/ORDER BY r\.id\s+FOR UPDATE OF r/);
     expect(sql).toMatch(/FOR UPDATE OF r/);
-    expect(params).toEqual([5, [10, 11, 12], 88]);
-    expect(query.mock.calls[1]![1]).toEqual([5, 2]);
+    expect(params).toEqual([[10, 11, 12], 5, 88]);
+    // [reset error count, batch id].
+    expect(query.mock.calls[1]![1]).toEqual([2, "5"]);
   });
 
   it("performs no update and no counter write when one requested row is ineligible", async () => {
@@ -273,10 +275,10 @@ describe("lockInvestmentResolutionRows — batch-first serialization", () => {
 
     expect(result.batchStatus).toBe("awaiting_review");
     expect(query.mock.calls[0]![0]).toMatch(
-      /portfolio_import_batches[\s\S]*FOR UPDATE/,
+      /portfolio_import_batches[\s\S]*FOR UPDATE/i,
     );
-    expect(query.mock.calls[1]![0]).toMatch(/ORDER BY id\s+FOR UPDATE/);
-    expect(query.mock.calls[1]![1]).toEqual([5, [11, 10]]);
+    expect(query.mock.calls[1]![0]).toMatch(/ORDER BY "?id"?\s+FOR UPDATE/i);
+    expect(query.mock.calls[1]![1]).toEqual(["5", [11, 10]]);
   });
 
   it("does not try to lock rows when the batch does not exist", async () => {

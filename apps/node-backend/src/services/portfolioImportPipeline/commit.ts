@@ -14,10 +14,11 @@
  */
 
 import { ConflictError } from "../../middleware/errorHandler.ts";
-import { query, withTransaction } from "../../database/connection.ts";
-import { checkRows, queryOne, queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../../database/db.ts";
 import { EUR } from "../../lib/currencyCode.ts";
-import { asCategoryId } from "@vision/types/brands";
+import { asAccountId, asCategoryId } from "@vision/types/brands";
 import type { CategoryId } from "@vision/types/brands";
 import {
   batchConfigFields,
@@ -158,16 +159,23 @@ export async function commitBatch({
   // In brokerage mode the batch ALSO routes external cash rows into the ledger.
   // The account's institution/name ride along as the broker label for the cash
   // rows' recipient (see cashRecipientId below).
-  const batchRows = await queryRows(
+  const batchRows = await checkedRows(
     commitBatchRowSchema,
-    `SELECT b.account_id, b.is_brokerage, b.id, b.rows_total, b.custom_config,
-            b.status, b.adapter_name,
-            a.institution AS account_institution,
-            a.name AS account_name
-       FROM portfolio_import_batches b
-       LEFT JOIN accounts a ON a.id = b.account_id
-      WHERE b.id = $1`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_batches as b")
+      .leftJoin("accounts as a", "a.id", "b.account_id")
+      .select([
+        "b.account_id",
+        "b.is_brokerage",
+        "b.id",
+        "b.rows_total",
+        "b.custom_config",
+        "b.status",
+        "b.adapter_name",
+        "a.institution as account_institution",
+        "a.name as account_name",
+      ])
+      .where("b.id", "=", String(batchId)),
   );
   const batchAccountId = batchRows[0]?.account_id ?? undefined;
   const isBrokerage = batchRows[0]?.is_brokerage === true;
@@ -175,39 +183,44 @@ export async function commitBatch({
   // Exports can list newest trades first. Commit older dates first so a sale
   // sees its funding buys; retain source order within a date because staging
   // does not provide an intraday timestamp. Provenance and identity stay intact.
-  const relevantRows = await queryRows(
+  const investmentId = sql<number | null>`COALESCE(isr.user_override_investment_id, isr.resolved_investment_id)`;
+  const relevantRows = await checkedRows(
     matchedPortfolioStagingRowSchema,
-    `SELECT isr.id,
-            isr.status,
-            to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
-            isr.type,
-            isr.route,
-            isr.type_raw,
-            isr.units,
-            isr.price_per_unit,
-            isr.amount,
-            isr.fees,
-            isr.taxes,
-            isr.currency,
-            isr.fx_rate_to_eur,
-            isr.note,
-            isr.source_record_hash,
-            isr.source_transaction_id,
-            isr.dedup_fingerprint,
-            isr.dedup_fingerprint_version,
-            isr.dedup_occurrence,
-            isr.asset_transfer_details,
-            isr.asset_adjustment_details,
-            COALESCE(isr.user_override_investment_id, isr.resolved_investment_id) AS investment_id,
-            inv.asset_class,
-            inv.currency AS investment_currency
-       FROM portfolio_import_staging_rows isr
-       LEFT JOIN investments inv
-         ON inv.id = COALESCE(isr.user_override_investment_id, isr.resolved_investment_id)
-      WHERE isr.batch_id = $1
-        AND isr.status IN ('matched', 'committed', 'duplicate')
-      ORDER BY isr.tx_date ASC, isr.row_index ASC`,
-    [batchId],
+    db
+      .selectFrom("portfolio_import_staging_rows as isr")
+      .leftJoin("investments as inv", (join) =>
+        join.on(sql<boolean>`inv.id = ${investmentId}`),
+      )
+      .select([
+        "isr.id",
+        "isr.status",
+        sql<string | null>`to_char(isr.tx_date, 'YYYY-MM-DD')`.as("tx_date"),
+        "isr.type",
+        "isr.route",
+        "isr.type_raw",
+        "isr.units",
+        "isr.price_per_unit",
+        "isr.amount",
+        "isr.fees",
+        "isr.taxes",
+        "isr.currency",
+        "isr.fx_rate_to_eur",
+        "isr.note",
+        "isr.source_record_hash",
+        "isr.source_transaction_id",
+        "isr.dedup_fingerprint",
+        "isr.dedup_fingerprint_version",
+        "isr.dedup_occurrence",
+        "isr.asset_transfer_details",
+        "isr.asset_adjustment_details",
+        investmentId.as("investment_id"),
+        "inv.asset_class",
+        "inv.currency as investment_currency",
+      ])
+      .where("isr.batch_id", "=", String(batchId))
+      .where("isr.status", "in", ["matched", "committed", "duplicate"])
+      .orderBy("isr.tx_date", "asc")
+      .orderBy("isr.row_index", "asc"),
   );
   const selectedRowIds =
     rowIds === undefined ? undefined : new Set(rowIds.map(Number));
@@ -336,10 +349,11 @@ export async function commitBatch({
     for (const action of cashPlan.selected)
       kinesisCash.set(action.rowId, action);
   }
-  await query(
-    "UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1",
-    [batchId],
-  );
+  await db
+    .updateTable("portfolio_import_batches")
+    .set({ status: "committing" })
+    .where("id", "=", String(batchId))
+    .execute();
   const total = matched.length;
   let imported = 0;
   let duplicates = 0;
@@ -598,8 +612,8 @@ export async function commitBatch({
             );
           if (originalIbkrFunding) {
             if (!ibkrCashAliasContext) {
-              await client.query(
-                "LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE",
+              await sql`LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
+                db,
               );
               ibkrCashAliasContext = await readIbkrCashCorrectionContext();
             }
@@ -673,47 +687,35 @@ export async function commitBatch({
               (row.type_raw
                 ? String(row.type_raw).toUpperCase()
                 : "BROKERAGE CASH");
-            const baseParams = [
-              row.tx_date,
-              signedCashAmount(row),
-              row.currency || "EUR",
-              memo,
-              batchAccountId,
-              cashRecipientId,
-              (row.type != null ? cashCategoryIds.get(String(row.type)) : undefined) ??
-                null,
-            ];
-            const result = row.dedup_fingerprint
-              ? await query(
-                  `INSERT INTO transactions
+            const categoryId =
+              (row.type != null
+                ? cashCategoryIds.get(String(row.type))
+                : undefined) ?? null;
+            // A template, not the builder: currency and recipient are not
+            // checked here, so a bad value fails on the table's constraints
+            // and is recorded as this row's error.
+            const baseValues = sql`${row.tx_date}, ${signedCashAmount(row)}, ${row.currency || "EUR"},
+                      ${memo}, ${batchAccountId}, ${cashRecipientId}, ${categoryId}`;
+            const [inserted] = await checkedRows(
+              intIdRowSchema,
+              row.dedup_fingerprint
+                ? sql`INSERT INTO transactions
                      (date, amount, currency, memo, account_id, recipient_id, category_id,
                       source_record_hash, dedup_fingerprint,
                       dedup_fingerprint_version, is_active)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
-                   ON CONFLICT DO NOTHING RETURNING id`,
-                  [
-                    ...baseParams,
-                    row.source_record_hash || null,
-                    row.dedup_fingerprint,
-                    row.dedup_fingerprint_version,
-                  ],
-                )
-              : await query(
-                  `INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
-                  baseParams,
-                );
-            const [inserted] = checkRows(intIdRowSchema, result.rows);
+                   VALUES (${baseValues}, ${row.source_record_hash || null},
+                      ${row.dedup_fingerprint}, ${row.dedup_fingerprint_version}, true)
+                   ON CONFLICT DO NOTHING RETURNING id`
+                : sql`INSERT INTO transactions (date, amount, currency, memo, account_id, recipient_id, category_id, is_active)
+                   VALUES (${baseValues}, true) RETURNING id`,
+            );
             if (!inserted) {
               await client.query(`RELEASE SAVEPOINT ${sp}`);
               chunkDuplicates++;
               await markRow(row.id, "duplicate");
               continue;
             }
-            await query(
-              `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
-              [row.id, inserted.id],
-            );
+            await markCommitted(row.id, inserted.id);
             await client.query(`RELEASE SAVEPOINT ${sp}`);
             chunkImported++;
             cashInsertedByIdentity.set(identity, insertedThisRun + 1);
@@ -855,10 +857,7 @@ export async function commitBatch({
             continue;
           }
 
-          await query(
-            `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
-            [row.id, created?.id ?? null],
-          );
+          await markCommitted(row.id, created?.id ?? null);
           await client.query(`RELEASE SAVEPOINT ${sp}`);
           chunkImported++;
           tradeInsertedByIdentity.set(identity, insertedThisRun + 1);
@@ -895,14 +894,15 @@ export async function commitBatch({
     // Checkpoint per chunk (increment by chunk-local delta, preserving any
     // rows_error already set by earlier pipeline phases) so a crash mid-import
     // leaves recoverable state in portfolio_import_batches.
-    await query(
-      `UPDATE portfolio_import_batches
-          SET rows_imported = COALESCE(rows_imported, 0) + $2,
-              rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
-              rows_error = COALESCE(rows_error, 0) + $4
-        WHERE id = $1`,
-      [batchId, chunkImported, chunkDuplicates, chunkErrors],
-    );
+    await db
+      .updateTable("portfolio_import_batches")
+      .set({
+        rows_imported: sql<number>`COALESCE(rows_imported, 0) + ${chunkImported}`,
+        rows_duplicate: sql<number>`COALESCE(rows_duplicate, 0) + ${chunkDuplicates}`,
+        rows_error: sql<number>`COALESCE(rows_error, 0) + ${chunkErrors}`,
+      })
+      .where("id", "=", String(batchId))
+      .execute();
 
     if (onProgress) {
       onProgress({
@@ -943,10 +943,22 @@ async function markRow(
   status: "committed" | "duplicate" | "error",
   message?: string | null,
 ): Promise<void> {
-  await query(
-    `UPDATE portfolio_import_staging_rows SET status = $2, error_message = $3 WHERE id = $1`,
-    [id, status, message ?? null],
-  );
+  await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({ status, error_message: message ?? null })
+    .where("id", "=", String(id))
+    .execute();
+}
+
+async function markCommitted(
+  id: string | number,
+  committedTxnId: number | null,
+): Promise<void> {
+  await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({ status: "committed", committed_txn_id: committedTxnId })
+    .where("id", "=", String(id))
+    .execute();
 }
 
 /**
@@ -980,7 +992,7 @@ async function countCashFieldMatches(
     row.note ||
     (row.type_raw ? String(row.type_raw).toUpperCase() : "BROKERAGE CASH");
   const signed = signedCashAmount(row);
-  // The legacy magnitude leg (`amount = $4`) exists ONLY for untyped external
+  // The legacy magnitude leg (`Math.abs(signed)`) exists ONLY for untyped external
   // cash rows (deposit/withdrawal): brokerage withdrawals committed before the
   // cash-sign fix are stored positive (+500) while the post-fix insert stores
   // −500, and a re-import must recognize both. Direction is still respected
@@ -991,25 +1003,22 @@ async function countCashFieldMatches(
   // must not dedup against an unrelated +10 row sharing date and memo), so
   // they match the signed amount only.
   const legacyLeg = row.type == null;
-  const params: (string | number | null)[] = [accountId, row.tx_date, signed];
-  let amountPredicate = "amount = $3";
-  if (legacyLeg) {
-    params.push(Math.abs(signed));
-    amountPredicate = "(amount = $3 OR amount = $4)";
-  }
-  params.push(row.currency || "EUR", memo);
-  const currencyParam = `$${params.length - 1}`;
-  const memoParam = `$${params.length}`;
-  const r = await queryOne(
+  const r = await checkedRow(
     intCountNRowSchema,
-    `SELECT COUNT(*)::int AS n FROM transactions
-      WHERE account_id = $1 AND date = $2::date
-        AND ${amountPredicate}
-        AND COALESCE(currency, 'EUR') = ${currencyParam}
-        AND COALESCE(memo, '') = COALESCE(${memoParam}, '')
-        ${legacyOnly ? "AND dedup_fingerprint IS NULL" : ""}
-        AND is_active = true`,
-    params,
+    db
+      .selectFrom("transactions")
+      .select(sql<number>`COUNT(*)::int`.as("n"))
+      .where("account_id", "=", asAccountId(accountId))
+      .where(sql<boolean>`date = ${row.tx_date}::date`)
+      .where(
+        legacyLeg
+          ? sql<boolean>`(amount = ${signed} OR amount = ${Math.abs(signed)})`
+          : sql<boolean>`amount = ${signed}`,
+      )
+      .where(sql<boolean>`COALESCE(currency, 'EUR') = ${row.currency || "EUR"}`)
+      .where(sql<boolean>`COALESCE(memo, '') = COALESCE(${memo}, '')`)
+      .$if(legacyOnly, (qb) => qb.where("dedup_fingerprint", "is", null))
+      .where("is_active", "=", true),
   );
   return nanToZero(Number(r?.n));
 }
@@ -1074,27 +1083,18 @@ async function countTradeFieldMatches(
   // a different account (or in a different currency) is a distinct trade, not
   // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
   // for account-less (non-brokerage) batches.
-  const matches = await queryOne(
+  const matches = await checkedRow(
     intCountNRowSchema,
-    `SELECT COUNT(*)::int AS n
+    sql`SELECT COUNT(*)::int AS n
        FROM portfolio_transactions
-      WHERE investment_id = $1
-        AND date = $2::date
-        AND type = $3::portfolio_txn_type
-        AND amount = $4
-        AND COALESCE(units, 0) = COALESCE($5::numeric, 0::numeric)
-        AND account_id IS NOT DISTINCT FROM $6
-        AND COALESCE(currency, 'EUR') = $7
-        ${legacyOnly ? "AND dedup_fingerprint IS NULL" : ""}`,
-    [
-      row.investment_id,
-      row.tx_date,
-      row.type,
-      canonical.amount ?? 0,
-      canonical.units ?? null,
-      batchAccountId ?? null,
-      row.currency || row.investment_currency || "EUR",
-    ],
+      WHERE investment_id = ${row.investment_id}
+        AND date = ${row.tx_date}::date
+        AND type = ${row.type}::portfolio_txn_type
+        AND amount = ${canonical.amount ?? 0}
+        AND COALESCE(units, 0) = COALESCE(${canonical.units ?? null}::numeric, 0::numeric)
+        AND account_id IS NOT DISTINCT FROM ${batchAccountId ?? null}
+        AND COALESCE(currency, 'EUR') = ${row.currency || row.investment_currency || "EUR"}
+        ${legacyOnly ? sql`AND dedup_fingerprint IS NULL` : sql``}`,
   );
   return nanToZero(Number(matches?.n));
 }
@@ -1106,13 +1106,14 @@ async function hasCanonicalFingerprint(
   if (!row.dedup_fingerprint || row.dedup_fingerprint_version == null) {
     return false;
   }
-  const result = await query(
-    `SELECT 1 FROM ${table}
-      WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
-      LIMIT 1`,
-    [row.dedup_fingerprint_version, row.dedup_fingerprint],
-  );
-  return result.rows.length > 0;
+  const result = await db
+    .selectFrom(table)
+    .select(sql`1`.as("one"))
+    .where("dedup_fingerprint_version", "=", row.dedup_fingerprint_version)
+    .where("dedup_fingerprint", "=", row.dedup_fingerprint)
+    .limit(1)
+    .execute();
+  return result.length > 0;
 }
 
 /** `err?.message?.slice(0, 500)` for a caught value of unknown shape. */

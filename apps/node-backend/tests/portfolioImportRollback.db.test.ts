@@ -338,13 +338,13 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     await rollbackBatch(batchId);
 
     // Cash leaves through `transactions` only…
-    const ledgerDeletes = statementsMatching(/DELETE FROM transactions\b/);
+    const ledgerDeletes = statementsMatching(/DELETE FROM "?transactions\b/i);
     expect(ledgerDeletes).toHaveLength(1);
     expect(ledgerDeletes[0]).toContain('ANY($1::int[])');
     // …and the portfolio DELETE is keyed on the batch, never on an id list.
-    const lotDeletes = statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/);
+    const lotDeletes = statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i);
     expect(lotDeletes).toHaveLength(1);
-    expect(lotDeletes[0]).toContain('import_batch_id = $1');
+    expect(lotDeletes[0]).toMatch(/import_batch_id"? = \$1/);
   });
 
   // ── One statement, not N ────────────────────────────────────────────────
@@ -360,10 +360,10 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     const res = await rollbackBatch(batchId);
 
     expect(res).toEqual({ deleted: 25 });
-    expect(statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/)).toHaveLength(1);
+    expect(statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i)).toHaveLength(1);
     // No per-row DELETE survives anywhere in the rollback path (the marker of
     // the old loop; the surviving `WHERE id = $1` is markBatchAborted's UPDATE).
-    expect(statementsMatching(/DELETE FROM \w+ WHERE id = \$1/)).toHaveLength(0);
+    expect(statementsMatching(/DELETE FROM "?\w+"? WHERE "?id"? = \$1/i)).toHaveLength(0);
     expect(await allLotIds()).toEqual([]);
   });
 
@@ -381,7 +381,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     expect(res).toEqual({ deleted: 5 });
     // 1 bulk (matches nothing) + 5 fallback deletes — the pre-migration cost,
     // paid only by pre-migration rows.
-    expect(statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/)).toHaveLength(6);
+    expect(statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i)).toHaveLength(6);
   });
 
   // ── Atomicity ───────────────────────────────────────────────────────────
@@ -398,7 +398,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     // bulk DELETE has already executed inside the transaction.
     const passthrough = query.getMockImplementation();
     query.mockImplementation((...args) => {
-      if (/DELETE FROM transactions\b/.test(String(args[0]))) {
+      if (/DELETE FROM "?transactions\b/i.test(String(args[0]))) {
         return Promise.reject(new Error('injected cash-pass failure'));
       }
       return passthrough!(...args);
@@ -411,7 +411,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     }
     // The trade DELETE really was issued before the failure — what follows is
     // the transaction rolling it back, not the pass never running.
-    expect(statementsMatching(/DELETE FROM portfolio_transactions(_base)?\b/)).toHaveLength(1);
+    expect(statementsMatching(/DELETE FROM "?portfolio_transactions(_base)?\b/i)).toHaveLength(1);
 
     // No partial rollback escaped: lots, ledger row, staging rows and batch
     // status are all exactly as they were before the attempt.
@@ -463,7 +463,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     expect(res).toEqual({ deleted: 1 });                            // the lot, once
     expect(await allLotIds()).toEqual([]);
     expect(await allLedgerIds()).toEqual([lotId]);                  // bystander survives
-    expect(statementsMatching(/DELETE FROM transactions\b/)).toHaveLength(0);
+    expect(statementsMatching(/DELETE FROM "?transactions\b/i)).toHaveLength(0);
   });
 
   it("rolls a non-brokerage route='cash' row back through the PORTFOLIO fallback when its lot predates 0086", async () => {
@@ -490,7 +490,7 @@ describeDb('portfolio import rollback — exact scope (real Postgres)', () => {
     expect(res).toEqual({ deleted: 1 });
     expect(await allLotIds()).toEqual([]);
     expect(await allLedgerIds()).toEqual([lotId]);
-    expect(statementsMatching(/DELETE FROM transactions\b/)).toHaveLength(0);
+    expect(statementsMatching(/DELETE FROM "?transactions\b/i)).toHaveLength(0);
   });
 
   // ── Staging-row state after rollback ────────────────────────────────────
