@@ -2,7 +2,8 @@ name: Release
 
 # Triggered when a version tag is pushed, e.g. v1.2.3
 # Workflow:
-#   0. Verify: version tag matches root, frontend, and Electron package manifests; run release checks
+#   0. Verify: version tag matches root, frontend, and Electron package manifests; the tagged
+#      commit passed CI ("CI Complete"); secrets and dependency audits on the shipped tree
 #   1. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
 #   2. Create a GitHub Release with all artifacts + SHA256 checksums
 
@@ -28,16 +29,23 @@ concurrency:
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # 0. Verify: version tag == package.json version + release checks
+  #
+  # The test suites are NOT re-run here. A release commit must be on main, and
+  # every main commit already ran the full CI workflow on push (never
+  # cancelled; see ci.yml's concurrency block), so this job requires that
+  # run's "CI Complete" check to have passed. Only the checks whose answer can
+  # change after CI ran stay: the full-tree secrets scan and the dependency
+  # audits (new advisories are published every day).
   # ─────────────────────────────────────────────────────────────────────────────
   verify:
     name: Verify Release
     runs-on: ubuntu-24.04
     outputs:
       release_commit: ${{ steps.release_commit.outputs.sha }}
-    # Allow time for native migration checks and all release test suites.
-    timeout-minutes: 50
+    timeout-minutes: 15
     permissions:
       contents: read
+      checks: read # read the tagged commit's "CI Complete" check run
     steps:
       # Fail fast on a malformed release tag. Map the (possibly workflow_dispatch
       # user-supplied) value through env: rather than interpolating ${{ }} inline
@@ -70,16 +78,23 @@ jobs:
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.2"
-
-      - name: Enforce private internal package boundaries
-        run: bun scripts/check-package-boundaries.ts
-
-      - name: Enforce workflow supply-chain policy
-        run: python3 scripts/check-workflow-supply-chain.py
+      # The check run must come from GitHub Actions (this repo's ci.yml); no
+      # other workflow may name a job "CI Complete" (see ci.yml's trigger note).
+      - name: Require a passing CI run on the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.release_commit.outputs.sha }}
+        run: |
+          set -euo pipefail
+          PASSED=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=CI%20Complete&filter=latest" \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions" and .conclusion == "success")] | length')
+          if [ "$PASSED" -lt 1 ]; then
+            echo "ERROR: commit ${SHA} has no successful 'CI Complete' check run."
+            echo "Wait for CI on main to finish (or re-run it) before releasing."
+            exit 1
+          fi
+          echo "CI Complete passed on ${SHA}."
 
       # ci.yml's Secrets Scan job cannot stand in for this one: gitleaks-action
       # scans the push event's commit RANGE, and a tag push carries no commits,
@@ -133,7 +148,7 @@ jobs:
           echo "Version check passed."
 
       - name: Audit JS dependencies
-        # Shared with ci.yml's Deps Audit (JS) job via scripts/audit-js.sh so the
+        # Shared with ci.yml's Lint job via scripts/audit-js.sh so the
         # audit command + accepted-risk ignore list can't drift between the two.
         run: sh scripts/audit-js.sh
 
@@ -144,102 +159,6 @@ jobs:
 
       - name: Audit Python dependencies
         run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt
-
-      - name: Install native runtime dependencies
-        run: |
-          pip install -r config/requirements.txt
-          bash .github/scripts/install-postgres-18.sh
-
-      - name: Scan release filesystem with Trivy
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-          trivyignores: .trivyignore
-
-      - name: Lint frontend
-        run: bun run lint
-
-      - name: Lint backend
-        run: bun run lint:backend
-
-      - name: Generate locales
-        run: CI=1 bun run generate-locales
-
-      # The four assertions of ci.yml's verify-generated job, which this gate
-      # omitted entirely: a tag cut from a commit that edited openapi.yaml or
-      # i18n/source without regenerating shipped the stale committed artifacts.
-      # `Generate locales` above already regenerated them, so the locale drift
-      # check here is a plain git diff.
-      - name: Validate locales (en/nl key parity, generated TS integrity)
-        run: bun run validate-locales
-
-      - name: Check generated locales for drift
-        run: |
-          if ! git diff --exit-code -- apps/frontend/src/locales/; then
-            echo "ERROR: apps/frontend/src/locales/*.ts are out of sync with i18n/source."
-            echo "Run 'bun run generate-locales' locally and commit the regenerated files."
-            exit 1
-          fi
-          echo "Frontend locales in sync."
-
-      - name: Regenerate OpenAPI types and check for drift
-        run: |
-          bun run generate:types
-          if ! git diff --exit-code -- apps/frontend/src/types/generated.ts; then
-            echo "ERROR: apps/frontend/src/types/generated.ts is out of sync with openapi.yaml."
-            echo "Run 'bun run generate:types' locally and commit the regenerated file."
-            exit 1
-          fi
-          echo "OpenAPI types in sync."
-
-      - name: Verify endpoint matrix count matches openapi.yaml
-        run: bun run check-endpoint-matrix
-
-      - name: Type-check frontend
-        run: cd apps/frontend && bun run typecheck
-
-      # ci.yml's typecheck-backend job — a required gate there, absent here.
-      - name: Type-check backend (strict TypeScript)
-        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.json
-
-      - name: Build frontend
-        run: CI=1 bun run build
-
-      - name: Check frontend bundle size
-        run: cd apps/frontend && bun run size:check
-
-      - name: Verify production health and migration reversibility
-        env:
-          VISION_NATIVE_VERIFY_MIGRATIONS: "1"
-        run: bash .github/scripts/with-native-stack.sh curl -fsS http://127.0.0.1:3002/health
-
-      - name: Install electron workspace dependencies (required for backend tests)
-        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
-
-      - name: Run Electron and native-runtime contract tests
-        run: bun run test:electron
-
-      - name: Run repository script tests
-        run: bun run test:scripts
-
-      - name: Run shared package tests
-        run: bun run test:packages
-
-      - name: Run backend tests with disposable PostgreSQL
-        run: scripts/with-test-db.sh --coverage
-
-      - name: Run frontend tests with coverage
-        run: bun run test:coverage
-
-      - name: Run live API contract tests
-        env:
-          LIVE_API_BASE: http://localhost:3002
-          VISION_NATIVE_COMMAND_DIR: apps/frontend
-        run: bash .github/scripts/with-native-stack.sh bun run vitest run src/test/live-contracts/live-contracts.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 1. Build mac .app + .dmg via electron-builder (arm64 — Apple Silicon only)
