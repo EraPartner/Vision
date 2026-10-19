@@ -68,14 +68,31 @@ export function checkAgentRole(
   return undefined;
 }
 
+// Opening with O_NOFOLLOW makes the symlink check and the read one operation.
+function readWithoutFollowing(file: string): string | undefined {
+  let fd: number;
+  try {
+    fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") return undefined;
+    throw error;
+  }
+  try {
+    return fs.readFileSync(fd, "utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 export function checkRepository(root: string): string | undefined {
   for (const directory of [".agents", ".codex"]) {
     for (const file of walkMarkdown(path.join(root, directory)).sort()) {
       const name = path.relative(root, file);
-      if (fs.lstatSync(file).isSymbolicLink()) {
+      const text = readWithoutFollowing(file);
+      if (text === undefined) {
         return `${name}: instruction symlinks require explicit review`;
       }
-      const error = checkMarkdown(name, fs.readFileSync(file, "utf8"));
+      const error = checkMarkdown(name, text);
       if (error) return error;
     }
   }
