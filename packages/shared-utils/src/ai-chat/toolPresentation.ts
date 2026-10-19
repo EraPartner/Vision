@@ -49,7 +49,7 @@ export interface ToolPresentation {
   pieRenderable: boolean;
   pieRows: ToolPieRow[];
 }
-/** Called on wire-normalized JSON, before Swift loses object member order. Never modifies the result. */
+/** Called on wire-normalized JSON. Never modifies the result. */
 export function toolResultPresentation(
   result: unknown,
 ): ToolPresentation | null {

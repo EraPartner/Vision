@@ -4,7 +4,6 @@ import {
     resolveBelgianTaxHouseholdResult,
     resolveBelgianTaxProfile,
     type BelgianTaxSlice,
-    type HouseholdRuntime,
 } from "@/stores/belgianTaxStore";
 import type { ReportOptions, TaxReportPIT } from "@/lib/api/reports";
 import { toTaxReportHousehold } from "@/features/reports/taxReportHousehold";
@@ -14,22 +13,17 @@ export type TaxReportContextState = Pick<BelgianTaxSlice,
 export type TaxReportContext = Pick<ReportOptions,
     "taxProfile" | "precomputedPIT" | "household" | "precomputedHousehold">;
 
-/** Original export composition, shared by the web dialog and native extreme-year fallback.
- * Annual figures need a full calendar year that is the live year, has its own saved snapshot,
+/** The export dialog's tax report options. Annual figures need a full calendar year that is the live year, has its own saved snapshot,
  * or has a frozen calculation (the same years that can be filed). */
 export function taxReportContext(
     state: TaxReportContextState,
     year: number,
     translate: (key: string) => string,
-    runtime?: HouseholdRuntime,
     annual = true,
-    /** The retained extreme-year bridge predates the filing rule; Vision Native no longer calls it. */
-    anyYear = false,
 ): TaxReportContext {
     const hasYearProfile =
         annual &&
-        (anyYear ||
-            year === state.profile.taxYear ||
+        (year === state.profile.taxYear ||
             Object.hasOwn(state.householdSnapshots, year) ||
             Boolean(state.snapshotMetas[year]?.frozenCalculation));
     const configured = hasYearProfile && state.profile.profileConfigured === true;
@@ -42,7 +36,7 @@ export function taxReportContext(
     let precomputedPIT: TaxReportPIT | undefined;
     let householdBlock: Pick<ReportOptions, "household" | "precomputedHousehold"> = {};
     if (configured) {
-        const calculation = resolveBelgianTaxCalculation(state, year, runtime);
+        const calculation = resolveBelgianTaxCalculation(state, year);
         precomputedPIT = {
             taxableIncome: calculation.taxableIncome,
             totalTax: calculation.totalPIT,
@@ -56,7 +50,7 @@ export function taxReportContext(
         if (household && household.partners.length === 2) {
             const meta = state.snapshotMetas[year];
             const result = meta?.frozenCalculation && !meta.frozenHouseholdResult
-                ? null : resolveBelgianTaxHouseholdResult(state, year, runtime);
+                ? null : resolveBelgianTaxHouseholdResult(state, year);
             householdBlock = { household, precomputedHousehold: toTaxReportHousehold(result) };
         }
     }
