@@ -60,9 +60,11 @@ bun run db:lint
 
 All pending migrations run in one transaction, so a failure rolls the whole run back. Read the
 first failing migration and database error and fix it in a new or corrected unapplied file. A
-database still carrying `alembic_version` is adopted only at
-`0128_category_path_on_legacy_rename` with the baseline fingerprint; `db:drift-check` names the
-differing objects. A destructive `db:migrate:down` requires a verified backup and explicit review.
+database still carrying `alembic_version` is adopted at `0126`, `0127` or
+`0128` when its schema then matches the baseline fingerprint; `db:drift-check` (Vision running, or
+`--from-env`) names the differing objects. If the app stays on "Almost ready…" or shows "Failed to
+start Vision.", read `~/Library/Application Support/Vision/native/vision/logs/backend.log`. A
+destructive `db:migrate:down` requires a verified backup and explicit review.
 See [[docs/guides/migrations|Database Migration Guide]].
 
 ### Target database is not up to date
