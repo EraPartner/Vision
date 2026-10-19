@@ -206,7 +206,6 @@ bun run db:migrate:down      # revert the latest migration (needs its .down.sql)
 bun run db:status            # list applied and pending migrations
 bun run db:new -- <name>     # create db/migrations/NNNN_<name>.sql
 bun run db:lint              # squawk lint of migration SQL
-bun run db:drift-check       # compare a database with the 0001 baseline (read-only)
 bun run db:codegen           # regenerate the Kysely database types
 bun run db:index-stats       # report index usage stats
 bun run quotes:densify       # backfill/densify asset price history

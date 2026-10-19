@@ -54,15 +54,13 @@ database or attachments; they may be the only recoverable copy. See
 
 ```bash
 bun run db:status
-bun run db:drift-check
 bun run db:lint
 ```
 
 All pending migrations run in one transaction, so a failure rolls the whole run back. Read the
 first failing migration and database error and fix it in a new or corrected unapplied file. A
 database still carrying `alembic_version` is adopted at `0126`, `0127` or
-`0128` when its schema then matches the baseline fingerprint; `db:drift-check` (Vision running, or
-`--from-env`) names the differing objects. If the app stays on "Almost ready…" or shows "Failed to
+`0128` when its schema then matches the baseline fingerprint. If the app stays on "Almost ready…" or shows "Failed to
 start Vision.", read `~/Library/Application Support/Vision/native/vision/logs/backend.log`. A
 destructive `db:migrate:down` requires a verified backup and explicit review.
 See [[docs/guides/migrations|Database Migration Guide]].

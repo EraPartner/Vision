@@ -212,8 +212,7 @@ async function baselineUp(db: Db, baselineSql: string) {
     }
     if ((await currentFingerprint(db)) !== BASELINE_SCHEMA_FINGERPRINT) {
       throw new Error(
-        "Database schema differs from the baseline; refusing adoption. " +
-          "Run `bun run db:drift-check` for the differing objects.",
+        "Database schema differs from the baseline; refusing adoption.",
       );
     }
     await sql`DROP TABLE public.alembic_version`.execute(db);

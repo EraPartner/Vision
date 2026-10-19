@@ -11,11 +11,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pg from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import {
-  hashSchemaInventory,
-  readBaselineInventory,
-  readSchemaInventory,
-} from "../src/database/schemaInventory.ts";
 import { hasTestDatabase } from "./setup/db.ts";
 import {
   createEmptyDatabase,
@@ -154,14 +149,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
             heads: ["0001_baseline"],
           },
         ]);
-        // db:drift-check lists differences against this committed snapshot.
-        const inventory = await readSchemaInventory(
-          (text) => client.query(text),
-          repoRoot,
-        );
-        expect(hashSchemaInventory(inventory)).toEqual(
-          readBaselineInventory(repoRoot),
-        );
       });
 
       const second = await withMigrationTarget(db.url, () =>

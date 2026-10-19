@@ -1381,8 +1381,7 @@ startup error page and a "Failed to start Vision." dialog with the error from `b
 or it has application objects but no migration marker. Adoption and fresh install fail closed and
 change nothing.
 
-**Fix:** Run `bun run db:drift-check` against that database to see the revision and the differing
-objects; do not wipe the database to make it boot. See
+**Fix:** Read the error in `backend.log`; do not wipe the database to make it boot. See
 [[docs/guides/migrations|Database Migration Guide]].
 
 The former Alembic-era "fresh database fails on migration 0003" problem (`alembic_version`
