@@ -8,10 +8,11 @@ import logger from "@/lib/logger";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { transactionKeys } from "@/lib/queryKeys";
 import type { Transaction } from "@/types/api";
+import type { RecipientId } from "@vision/types/brands";
 
 const RECIPIENT_TRANSACTION_PAGE_SIZE = 10;
 
-export function useRecentRecipientTransactions(recipientId: number) {
+export function useRecentRecipientTransactions(recipientId: RecipientId) {
     const { t } = useLanguage();
     const [items, setItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);

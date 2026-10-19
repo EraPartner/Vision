@@ -4,11 +4,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import type { RecipientId } from "@vision/types/brands";
 
 interface Props {
-    recipients: { id: number; name: string; is_active: boolean }[];
+    recipients: { id: RecipientId; name: string; is_active: boolean }[];
     excluded: ReadonlySet<number>;
-    onToggle: (id: number) => void;
+    onToggle: (id: RecipientId) => void;
     label: string;
     hiddenLabel: string;
 }

@@ -4,6 +4,7 @@ import { screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { NextSevenDaysStrip } from "@/features/planned/NextSevenDaysStrip";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import { asCurrencyCode, asPlannedTransactionId } from "@vision/types/brands";
 
 function todayYmd(): string {
   const today = new Date();
@@ -15,10 +16,10 @@ function todayYmd(): string {
 
 function payment(id: number, amount: number, currency: string): PlannedPayment {
   return {
-    id,
+    id: asPlannedTransactionId(id),
     name: `Payment ${id}`,
     amount,
-    currency,
+    currency: asCurrencyCode(currency),
     due_date: todayYmd(),
     bank_account: "Main",
     is_recurring: true,

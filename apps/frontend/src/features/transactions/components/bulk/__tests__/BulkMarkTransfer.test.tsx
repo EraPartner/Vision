@@ -10,6 +10,11 @@ import en from "@/locales/en";
 import { BulkActionsBar, type BulkSelectionMode } from "../BulkActionsBar";
 import type { ExistingTransferLeg } from "@/features/transactions/hooks/useMarkTransfer";
 import { recipientCreated, transactionCreated } from "@/test/msw/rowFixtures";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asTransactionId,
+} from "@vision/types/brands";
 
 const labels = en;
 function label(key: string): string {
@@ -19,21 +24,21 @@ function label(key: string): string {
 }
 const API_BASE = "http://localhost:3002";
 const outflow: ExistingTransferLeg = {
-    id: 1,
-    accountId: 10,
+    id: asTransactionId(1),
+    accountId: asAccountId(10),
     bank: "Synthetic bank",
     date: "2025-01-02",
     amount: -10,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     is_active: true,
 };
 const inflow: ExistingTransferLeg = {
-    id: 2,
-    accountId: 11,
+    id: asTransactionId(2),
+    accountId: asAccountId(11),
     bank: "Synthetic broker",
     date: "2025-01-03",
     amount: 9.8,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     is_active: true,
 };
 
@@ -70,7 +75,7 @@ describe("pairing existing transfer records", () => {
         async (crossCurrency) => {
             const selectedInflow = {
                 ...inflow,
-                currency: crossCurrency ? "USD" : "EUR",
+                currency: asCurrencyCode(crossCurrency ? "USD" : "EUR"),
             };
             const requests: unknown[] = [];
             const createRecord = vi.fn();
@@ -153,13 +158,13 @@ describe("pairing existing transfer records", () => {
         let mode: BulkSelectionMode = "ids";
         if (defect === "filter") mode = "filter";
         if (defect === "one") rows = [out];
-        if (defect === "three") rows.push({ ...inflow, id: 3 });
+        if (defect === "three") rows.push({ ...inflow, id: asTransactionId(3) });
         if (defect === "same_account") into.accountId = out.accountId;
         if (defect === "missing_account") into.accountId = undefined;
         if (defect === "same_sign") into.amount = -9.8;
         if (defect === "inactive") into.is_active = false;
         if (defect === "zero") into.amount = 0;
-        if (defect === "paired") into.transferPeerId = 99;
+        if (defect === "paired") into.transferPeerId = asTransactionId(99);
         if (["opening", "adjustment", "brokerage"].includes(defect)) into.transferSource = defect;
         const ids = rows.map((row) => row.id);
         if (defect === "missing") rows.pop();

@@ -7,14 +7,20 @@ import { todayYmd } from "@/lib/timezone";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 type ExportFormat = 'csv' | 'json';
 
 interface TransactionsExportButtonsProps {
-    transactionIdFilter?: number | undefined;
-    recipientIdFilter?: number | undefined;
-    categoryIdFilter?: number | undefined;
-    categoryIdsFilter?: number[] | undefined;
+    transactionIdFilter?: TransactionId | undefined;
+    recipientIdFilter?: RecipientId | undefined;
+    categoryIdFilter?: CategoryId | undefined;
+    categoryIdsFilter?: CategoryId[] | undefined;
     startDateFilter?: string | undefined;
     endDateFilter?: string | undefined;
     transactionTypeFilter?: 'income' | 'expense' | undefined;
@@ -24,7 +30,7 @@ interface TransactionsExportButtonsProps {
     searchFilter?: string | undefined;
     filterLabel?: string | undefined;
     /** Preferred account filter (exact FK match, ADR-088). */
-    accountIdFilter?: number | undefined;
+    accountIdFilter?: AccountId | undefined;
     bankAccountFilter?: string | undefined;
 }
 

@@ -22,6 +22,10 @@ import recipientRepository from "../src/repositories/recipientRepository.ts";
 import savedChartsRepository from "../src/repositories/savedChartsRepository.ts";
 import tagRepository from "../src/repositories/tagRepository.ts";
 import watchlistRepository from "../src/repositories/watchlistRepository.ts";
+import {
+  asRecipientId,
+  asTagId,
+} from "@vision/types/brands";
 
 const SUFFIX = `CRB${process.pid}`;
 const created = {
@@ -138,10 +142,10 @@ describe.skipIf(!hasTestDatabase())(
 
       it("returns no rows for an empty slug list and null for a missing tag", async () => {
         expect(await tagRepository.getManyBySlugs([])).toEqual([]);
-        expect(await tagRepository.update(2_000_000_000, { color: null })).toBe(
+        expect(await tagRepository.update(asTagId(2_000_000_000), { color: null })).toBe(
           null,
         );
-        expect(await tagRepository.softDelete(2_000_000_000)).toBeNull();
+        expect(await tagRepository.softDelete(asTagId(2_000_000_000))).toBeNull();
       });
     });
 
@@ -283,7 +287,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("update writes the upper-cased name and keeps lookups by name working", async () => {
         const id = await insertRecipient(`Old ${SUFFIX}`);
-        const updated = await recipientRepository.update(id, {
+        const updated = await recipientRepository.update(asRecipientId(id), {
           name: `new ${SUFFIX}`,
           notes: "hi",
           is_active: false,
@@ -297,7 +301,7 @@ describe.skipIf(!hasTestDatabase())(
         expect((await recipientRepository.getByName(`New ${SUFFIX}`))?.id).toBe(
           id,
         );
-        expect(await recipientRepository.update(id, {})).toMatchObject({ id });
+        expect(await recipientRepository.update(asRecipientId(id), {})).toMatchObject({ id });
       });
 
       it("filters by category subtree and by the uncategorised-with-activity queue", async () => {

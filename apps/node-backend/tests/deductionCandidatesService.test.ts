@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 vi.mock("../src/repositories/transactionRepository.ts", () => ({
   transactionRepository: {
@@ -184,9 +187,9 @@ describe("computeDeductionCandidates", () => {
       ]),
     );
     accountRepository.listOwners.mockResolvedValueOnce([
-      { id: 1, owner: "me" },
-      { id: 2, owner: "partner" },
-      { id: 3, owner: "joint" },
+      { id: asAccountId(1), owner: "me" },
+      { id: asAccountId(2), owner: "partner" },
+      { id: asAccountId(3), owner: "joint" },
     ]);
 
     const result = await computeDeductionCandidates({ year: 2025 });

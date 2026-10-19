@@ -12,6 +12,7 @@ import {
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, RECIPIENT_STUB } from "@/test/msw/handlers";
+import { asRecipientId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 const selectedRecipient = {
@@ -72,7 +73,7 @@ describe("RecipientCombobox", () => {
         renderWithApp(
             <RecipientCombobox
                 aria-label="Recipient"
-                value={999}
+                value={asRecipientId(999)}
                 onSelect={onSelect}
             />,
         );
@@ -122,14 +123,14 @@ describe("RecipientCombobox", () => {
                 <>
                     <DeferredRecipientCombobox
                         aria-label="First deferred recipient"
-                        value={RECIPIENT_STUB.id}
-                        label={labelFor(RECIPIENT_STUB.id)}
+                        value={asRecipientId(RECIPIENT_STUB.id)}
+                        label={labelFor(asRecipientId(RECIPIENT_STUB.id))}
                         onSelect={() => undefined}
                     />
                     <DeferredRecipientCombobox
                         aria-label="Second deferred recipient"
-                        value={999}
-                        label={labelFor(999)}
+                        value={asRecipientId(999)}
+                        label={labelFor(asRecipientId(999))}
                         onSelect={() => undefined}
                     />
                 </>

@@ -18,14 +18,15 @@ import {
 } from "@/test/msw/handlers";
 import type { PortfolioSummaryItem } from "@/lib/api/info";
 import type { Investment, PortfolioTransaction } from "@/types/api";
+import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 const investment: Investment = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "Synthetic wallet asset",
     symbol: "SYNTH",
     asset_class: "crypto",
-    currency: "USD",
+    currency: asCurrencyCode("USD"),
     current_price: 1000,
     is_active: true,
     show_in_ticker: true,
@@ -62,7 +63,7 @@ const transactions = [
     },
 ] as PortfolioTransaction[];
 const canonical: PortfolioSummaryItem = {
-    id: 1,
+    id: asInvestmentId(1),
     name: investment.name,
     symbol: "SYNTH",
     asset_class: "crypto",
@@ -74,8 +75,8 @@ const canonical: PortfolioSummaryItem = {
     municipality_tax_rate: null,
     maturity_date: null,
     maturityDate: null,
-    currency: "EUR",
-    originalCurrency: "USD",
+    currency: asCurrencyCode("EUR"),
+    originalCurrency: asCurrencyCode("USD"),
     currentPrice: 800,
     current_price: 800,
     interestRate: 0,
@@ -212,10 +213,10 @@ describe("canonical portfolio holdings", () => {
         (currency) => {
             const summary = {
                 ...canonical,
-                currency,
+                currency: asCurrencyCode(currency),
                 currentPrice: currency === "EUR" ? 800 : 1000,
             };
-            const archived = { ...investment, id: 2, is_active: false };
+            const archived = { ...investment, id: asInvestmentId(2), is_active: false };
             const { result } = renderHook(
                 () => {
                     const portfolio = usePortfolioSummaries({
@@ -223,7 +224,7 @@ describe("canonical portfolio holdings", () => {
                         transactions,
                         canonicalSummaries: [summary],
                         canonicalArchivedSummaries: [
-                            { ...summary, id: 2, is_active: false },
+                            { ...summary, id: asInvestmentId(2), is_active: false },
                         ],
                     });
                     const [holding] = portfolio.summaries;

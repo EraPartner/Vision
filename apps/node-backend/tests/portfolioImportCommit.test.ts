@@ -11,6 +11,9 @@ import type {
   EnrichedRecipientRow,
   PortfolioTransactionRow,
 } from "../src/types/rows.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
@@ -204,7 +207,7 @@ beforeEach(() => {
     created: false,
   });
   recipientRepository.getOrCreateSystemId.mockReset();
-  recipientRepository.getOrCreateSystemId.mockResolvedValue(99);
+  recipientRepository.getOrCreateSystemId.mockResolvedValue(asRecipientId(99));
   categoryRepository.getActiveByIds.mockReset();
   categoryRepository.getActiveByIds.mockResolvedValue([]);
   settingsRepository.get.mockReset();

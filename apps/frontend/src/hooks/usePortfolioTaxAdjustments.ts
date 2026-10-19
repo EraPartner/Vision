@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import logger from '@/lib/logger';
+import { asInvestmentId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
 
 const SETTINGS_KEY = 'portfolio_tax_adjustments_v1';
 
@@ -18,7 +20,7 @@ function toAmount(value: unknown): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-function keyFor(taxYear: number, investmentId: number): string {
+function keyFor(taxYear: number, investmentId: InvestmentId): string {
   return `${taxYear}:${investmentId}`;
 }
 
@@ -32,7 +34,7 @@ export function usePortfolioTaxAdjustments() {
   }, [preloaded, isLoading]);
 
   const getAdjustment = useCallback(
-    (taxYear: number, investmentId: number): AdjustmentEntry => {
+    (taxYear: number, investmentId: InvestmentId): AdjustmentEntry => {
       const existing = adjustments[keyFor(taxYear, investmentId)];
       return {
         taxes: toAmount(existing?.taxes),
@@ -42,7 +44,7 @@ export function usePortfolioTaxAdjustments() {
     [adjustments],
   );
 
-  const setAdjustment = useCallback((taxYear: number, investmentId: number, entry: AdjustmentEntry) => {
+  const setAdjustment = useCallback((taxYear: number, investmentId: InvestmentId, entry: AdjustmentEntry) => {
     setAdjustments((prev) => ({
       ...prev,
       [keyFor(taxYear, investmentId)]: {
@@ -55,7 +57,7 @@ export function usePortfolioTaxAdjustments() {
   const mergeForYear = useCallback((base: PortfolioTaxAdjustmentMap, taxYear: number, values: Record<number, AdjustmentEntry>) => {
     const next = { ...base };
     Object.entries(values).forEach(([investmentId, value]) => {
-      next[keyFor(taxYear, Number(investmentId))] = {
+      next[keyFor(taxYear, asInvestmentId(Number(investmentId)))] = {
         taxes: toAmount(value.taxes),
         fees: toAmount(value.fees),
       };

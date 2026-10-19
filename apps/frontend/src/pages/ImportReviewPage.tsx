@@ -43,6 +43,7 @@ import { formatPercent } from "@/utils/currency";
 import { numberFormatToLocale } from "@/utils/currency";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/shared/PageShell";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 type MatchSource = "exact" | "fuzzy" | "pattern" | "new" | null;
 
@@ -51,9 +52,9 @@ const MATCH_KINDS = ["exact", "fuzzy", "pattern", "new", "unresolved"] as const;
 type MatchKind = (typeof MATCH_KINDS)[number];
 
 interface GroupState {
-    recipientId: number | null;
+    recipientId: RecipientId | null;
     recipientName: string | null;
-    categoryId: number | null;
+    categoryId: CategoryId | null;
     categoryLabel: string | null;
     persistAsDefault: boolean;
     recipientSaving: boolean;
@@ -257,7 +258,7 @@ export default function ImportReviewPage() {
         groupKey: string,
         fallback: GroupState,
         rows: ImportStagingRow[],
-        recipientId: number | null,
+        recipientId: RecipientId | null,
         recipientName: string | null,
     ) => {
         updateGroupState(
@@ -288,7 +289,7 @@ export default function ImportReviewPage() {
         groupKey: string,
         fallback: GroupState,
         rows: ImportStagingRow[],
-        categoryId: number | null,
+        categoryId: CategoryId | null,
         categoryLabel: string | null,
     ) => {
         updateGroupState(

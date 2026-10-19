@@ -20,6 +20,11 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.ts";
+import {
+  asRecipientId,
+  asSplitId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const splitRepository = { ...splitPersistence, ...splitService };
 const MARK = `split_boundary_${process.pid}`;
@@ -76,8 +81,8 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
   it("returns one numeric payment shape from addPayment and getPayments", async () => {
     const txId = await insertTx("-60.0000");
     const split = await splitRepository.createSplitAtomic({
-      transaction_id: txId,
-      recipient_id: recipientId,
+      transaction_id: asTransactionId(txId),
+      recipient_id: asRecipientId(recipientId),
       amount: 30,
       note: null,
     });
@@ -97,13 +102,13 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
     const [fetched] = await splitRepository.getPayments(split.id);
     expect(posted).toEqual(fetched);
 
-    const [owed] = (await splitRepository.getOwedByRecipient(recipientId)).filter(
+    const [owed] = (await splitRepository.getOwedByRecipient(asRecipientId(recipientId))).filter(
       (row) => row.id === split.id,
     );
     expect(owed).toMatchObject({ amount: 30, amount_paid: 12.5, remaining: 17.5 });
 
     const exportRows = await splitRepository.getOwedExportRowsByRecipient(
-      recipientId,
+      asRecipientId(recipientId),
     );
     expect(exportRows.map((row) => row.amount)).toContain(17.5);
   });
@@ -111,8 +116,8 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
   it("settle and getById report the real paid total and recipient name", async () => {
     const txId = await insertTx("-30.0000");
     const split = await splitRepository.createSplitAtomic({
-      transaction_id: txId,
-      recipient_id: recipientId,
+      transaction_id: asTransactionId(txId),
+      recipient_id: asRecipientId(recipientId),
       amount: 30,
       note: "dinner",
     });
@@ -132,16 +137,16 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
       recipient_name: `${MARK}_alice`,
       is_settled: true,
     });
-    expect(await splitPersistence.settleSplit(2_000_000_000)).toBeNull();
+    expect(await splitPersistence.settleSplit(asSplitId(2_000_000_000))).toBeNull();
   });
 
   it("returns formatted rows for every split a batch creates", async () => {
     const txId = await insertTx("-30.0000");
     const created = await splitRepository.createSplitsBatchAtomic({
-      transaction_id: txId,
+      transaction_id: asTransactionId(txId),
       splits: [
-        { recipient_id: recipientId, amount: 20 },
-        { recipient_id: payeeId, amount: 10, note: "half" },
+        { recipient_id: asRecipientId(recipientId), amount: 20 },
+        { recipient_id: asRecipientId(payeeId), amount: 10, note: "half" },
       ],
     });
     expect(created.map((s) => s.amount)).toEqual([20, 10]);
@@ -156,30 +161,30 @@ describe.skipIf(!hasTestDatabase())("split reads and writes (real DB)", () => {
     const txId = await insertTx("-90.0000", "2026-03-02");
     for (const amount of [10, 20, 30]) {
       await splitRepository.createSplitAtomic({
-        transaction_id: txId,
-        recipient_id: recipientId,
+        transaction_id: asTransactionId(txId),
+        recipient_id: asRecipientId(recipientId),
         amount,
         note: null,
       });
     }
-    const all = await splitRepository.getSplitsByTransaction(txId);
+    const all = await splitRepository.getSplitsByTransaction(asTransactionId(txId));
     expect(all.map((s) => s.amount)).toEqual([10, 20, 30]);
     expect(
       (
-        await splitRepository.getSplitsByTransaction(txId, {
+        await splitRepository.getSplitsByTransaction(asTransactionId(txId), {
           limit: 1,
           offset: 1,
         })
       ).map((s) => s.amount),
     ).toEqual([20]);
-    expect(await splitRepository.countSplitsByTransaction(txId)).toBe(3);
+    expect(await splitRepository.countSplitsByTransaction(asTransactionId(txId))).toBe(3);
 
-    const owedTotal = await splitRepository.countOwedByRecipient(recipientId);
+    const owedTotal = await splitRepository.countOwedByRecipient(asRecipientId(recipientId));
     expect(typeof owedTotal).toBe("number");
     expect(
-      await splitRepository.getOwedByRecipient(recipientId, { limit: 2 }),
+      await splitRepository.getOwedByRecipient(asRecipientId(recipientId), { limit: 2 }),
     ).toHaveLength(Math.min(2, owedTotal));
-    expect(await splitRepository.getOwedByRecipient(recipientId)).toHaveLength(
+    expect(await splitRepository.getOwedByRecipient(asRecipientId(recipientId))).toHaveLength(
       owedTotal,
     );
 

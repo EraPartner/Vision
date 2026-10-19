@@ -14,6 +14,9 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 const SUFFIX = `ARB${process.pid}`;
 const createdIds: number[] = [];
@@ -108,7 +111,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
     expect((await accountRepository.getById(created.id))?.name).toBe(
       created.name,
     );
-    expect(await accountRepository.getById(-1)).toBeUndefined();
+    expect(await accountRepository.getById(asAccountId(-1))).toBeUndefined();
     expect(
       (await accountRepository.getByName(`  ${created.name.toUpperCase()} `))
         ?.id,
@@ -140,7 +143,7 @@ describe.skipIf(!hasTestDatabase())("account repository (real DB)", () => {
       (await accountRepository.update(created.id, { nope: 1 }))?.name,
     ).toBe(`Renamed ${SUFFIX}`);
     expect(
-      await accountRepository.update(-1, { currency: "USD" }),
+      await accountRepository.update(asAccountId(-1), { currency: "USD" }),
     ).toBeUndefined();
   });
 

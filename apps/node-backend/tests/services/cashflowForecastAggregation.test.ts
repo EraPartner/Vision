@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  asCurrencyCode,
+  asPlannedTransactionId,
+} from "@vision/types/brands";
 
 vi.mock('../../src/repositories/plannedTransactionRepository.ts', () => ({
   default: { getForForecast: vi.fn() },
@@ -26,10 +30,10 @@ describe('computeCashflowForecast — pg DATE handling', () => {
     // appDateStringToUtc parser — a 500 whenever any planned transaction existed.
     getForForecast.mockResolvedValue([
       {
-        id: 1,
+        id: asPlannedTransactionId(1),
         planned_date: new Date(2026, 5, 15), // 2026-06-15 local midnight
         amount: '-100.00',
-        currency: 'EUR',
+        currency: asCurrencyCode('EUR'),
         memo: null,
         is_recurring: false,
         recurrence_pattern: null,

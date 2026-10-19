@@ -10,6 +10,7 @@ import type {
     DetectedPortfolioImport,
     PortfolioImportSource,
 } from "@vision/shared-utils/portfolio-import-detection";
+import type { AccountId } from "@vision/types/brands";
 export { detectPortfolioImportRecords } from "@vision/shared-utils/portfolio-import-detection";
 export type { DetectedPortfolioImport } from "@vision/shared-utils/portfolio-import-detection";
 const MAX_STATEMENT_BYTES = 50 * 1024 * 1024;
@@ -18,7 +19,7 @@ const IBKR_FUNDING_SHEETS = new Set(["Deposit", "Withdrawal"]);
 export function resolveDetectedPortfolioAccount(
     detected: DetectedPortfolioImport,
     accounts: readonly Account[],
-): number | undefined {
+): AccountId | undefined {
     const eligible = activeBrokerAccounts(accounts);
     if (detected.source === "native_receipts") {
         // Native receipt addresses can belong to several wallets in one logical

@@ -6,6 +6,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import type { ConnectionMockSurface } from "./helpers/repoMocks.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/lib/textNormalization.ts", () => ({
@@ -73,14 +76,14 @@ describe("recipientRepository", () => {
 
   describe("getById / getByName", () => {
     it("getById returns the row", async () => {
-      const row = enrichedRow({ id: 3, name: "X" });
+      const row = enrichedRow({ id: asRecipientId(3), name: "X" });
       query.mockResolvedValueOnce({ rows: [row] });
-      expect(await recipientRepository.getById(3)).toEqual(row);
+      expect(await recipientRepository.getById(asRecipientId(3))).toEqual(row);
     });
 
     it("getById returns null when absent", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      expect(await recipientRepository.getById(3)).toBeNull();
+      expect(await recipientRepository.getById(asRecipientId(3))).toBeNull();
     });
 
   });
@@ -92,11 +95,11 @@ describe("recipientRepository", () => {
         .mockResolvedValueOnce({ rows: [] }) // concurrent miss
         .mockResolvedValueOnce({ rows: [{ id: 8, created: false }] })
         .mockResolvedValueOnce({
-          rows: [enrichedRow({ id: 8, name: "ALDI" })],
+          rows: [enrichedRow({ id: asRecipientId(8), name: "ALDI" })],
         });
       const result = await recipientRepository.createOrGet({ name: "Aldi" });
       expect(result).toEqual({
-        recipient: enrichedRow({ id: 8, name: "ALDI" }),
+        recipient: enrichedRow({ id: asRecipientId(8), name: "ALDI" }),
         created: false,
       });
     });
@@ -116,7 +119,7 @@ describe("recipientRepository", () => {
 
     it("does not allow a public recipient to be renamed to SYSTEM", async () => {
       await expect(
-        recipientRepository.update(1, { name: " system " }),
+        recipientRepository.update(asRecipientId(1), { name: " system " }),
       ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
       expect(query).not.toHaveBeenCalled();
     });
@@ -125,22 +128,22 @@ describe("recipientRepository", () => {
   describe("mutations", () => {
     it("hardDelete reflects rowCount", async () => {
       query.mockResolvedValueOnce({ rowCount: 1 });
-      expect(await recipientRepository.hardDelete(2)).toBe(true);
+      expect(await recipientRepository.hardDelete(asRecipientId(2))).toBe(true);
       query.mockResolvedValueOnce({ rowCount: 0 });
-      expect(await recipientRepository.hardDelete(2)).toBe(false);
+      expect(await recipientRepository.hardDelete(asRecipientId(2))).toBe(false);
     });
 
     it("unmergeRecipient returns boolean", async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 5 }] });
-      expect(await recipientRepository.unmergeRecipient(5)).toBe(true);
+      expect(await recipientRepository.unmergeRecipient(asRecipientId(5))).toBe(true);
       query.mockResolvedValueOnce({ rows: [] });
-      expect(await recipientRepository.unmergeRecipient(5)).toBe(false);
+      expect(await recipientRepository.unmergeRecipient(asRecipientId(5))).toBe(false);
     });
 
     it("getAliases returns rows", async () => {
-      const alias = { ...recipientRow({ id: 8 }), default_category_name: null };
+      const alias = { ...recipientRow({ id: asRecipientId(8) }), default_category_name: null };
       query.mockResolvedValueOnce({ rows: [alias] });
-      expect(await recipientRepository.getAliases(1)).toEqual([alias]);
+      expect(await recipientRepository.getAliases(asRecipientId(1))).toEqual([alias]);
     });
   });
 
@@ -162,9 +165,9 @@ describe("recipientRepository", () => {
           { id: 2, cluster_root: 1 },
         ],
       });
-      const map = await recipientRepository.getClusterRootMap([1, 2, 2, null]);
-      expect(map.get(1)).toBe(1);
-      expect(map.get(2)).toBe(1);
+      const map = await recipientRepository.getClusterRootMap([asRecipientId(1), asRecipientId(2), asRecipientId(2), null]);
+      expect(map.get(asRecipientId(1))).toBe(1);
+      expect(map.get(asRecipientId(2))).toBe(1);
       expect(query.mock.calls[0]![1]).toEqual([[1, 2]]);
     });
   });

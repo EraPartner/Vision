@@ -18,6 +18,7 @@ import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
 import { invalidateStatisticsCaches } from "./info/cache.ts";
 import { logger } from "../config/logger.ts";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
+import type { TransactionId } from "@vision/types/brands";
 
 const DEFAULT_WINDOW_DAYS = 3;
 
@@ -113,7 +114,7 @@ export async function getTransferSuggestions({
     ? await transactionRepository.listTransferSuggestionRows(ids)
     : [];
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const grouped = new Map<number, number[]>();
+  const grouped = new Map<TransactionId, TransactionId[]>();
   for (const pair of page) {
     const candidates = grouped.get(pair.outId) ?? [];
     candidates.push(pair.inId);
@@ -144,8 +145,8 @@ export async function getTransferSuggestions({
  *   - opposite signs (one outflow, one inflow)
  */
 export async function markTransfer(
-  aId: number,
-  bId: number,
+  aId: TransactionId,
+  bId: TransactionId,
 ): Promise<{ ok: boolean }> {
   await withTransaction(async () => {
     const rows = await transactionRepository.lockTransferGraphForMark([aId, bId]);
@@ -212,7 +213,9 @@ export async function markTransfer(
  * never comes back on its own, A↔C still can. A manual markTransfer of a
  * dismissed pair still works — dismissals only gate auto-detection.
  */
-export async function unmarkTransfer(id: number): Promise<{ ok: boolean }> {
+export async function unmarkTransfer(
+  id: TransactionId,
+): Promise<{ ok: boolean }> {
   await withTransaction(async () => {
     const { peer, peerPointsBack } = await transactionRepository.lockTransferPairForUnmark(id);
 

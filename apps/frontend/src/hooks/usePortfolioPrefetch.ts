@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 
@@ -16,7 +17,7 @@ const PREFETCH_STALE_TIME = 300_000; // 5min – match backend cache TTL
 export function usePortfolioPrefetch(_workspace?: string) {
   const queryClient = useQueryClient();
   const { appSettings } = useAppSettings();
-  const currency = appSettings.defaultCurrency || "EUR";
+  const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
   const prefetchNetWorth = useCallback(() => {
     void queryClient.prefetchQuery({

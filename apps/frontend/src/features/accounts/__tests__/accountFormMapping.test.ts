@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { toAccountEditPayload } from "../accountFormMapping";
 import type { AccountFormValues } from "../AddAccountDialog";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const values: AccountFormValues = {
     name: "Main",
     display_name: "Main",
     institution: "Bank",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     type: "checking",
     owner: "me",
     liquidity_class: "liquid",
@@ -27,7 +28,7 @@ describe("toAccountEditPayload", () => {
 
     it("does not relabel the original statement reading when currency changes", () => {
         const payload = toAccountEditPayload(
-            { ...values, currency: "USD" },
+            { ...values, currency: asCurrencyCode("USD") },
             "EUR",
             "eu",
         );

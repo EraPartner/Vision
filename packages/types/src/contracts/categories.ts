@@ -1,7 +1,7 @@
 import { z } from "zod";
 
+import { CategoryIdSchema } from "../brands.ts";
 import {
-  IdSchema,
   WireLinkSchema,
   WireTimestampSchema,
   wireCollectionOf,
@@ -15,14 +15,14 @@ import {
  * `legacy_compatible`, `path_name`) arrive because of the `SELECT *`.
  */
 const categoryFields = {
-  id: IdSchema,
+  id: CategoryIdSchema,
   general: z.string(),
   detail: z.string(),
   description: z.string().nullable(),
   is_active: z.boolean(),
   created_at: WireTimestampSchema.nullable(),
   updated_at: WireTimestampSchema,
-  parent_id: IdSchema.nullable(),
+  parent_id: CategoryIdSchema.nullable(),
   name: z.string(),
   hierarchy_only: z.boolean(),
   legacy_compatible: z.boolean(),
@@ -50,10 +50,10 @@ export const CategoryListSchema = wireListOf(CategorySchema).extend({
  * `categories` joined to the `category_paths` view. Every key is always set.
  */
 export const CategoryNodeSchema = z.looseObject({
-  id: IdSchema,
+  id: CategoryIdSchema,
   name: z.string(),
-  parentId: IdSchema.nullable(),
-  pathIds: z.array(IdSchema),
+  parentId: CategoryIdSchema.nullable(),
+  pathIds: z.array(CategoryIdSchema),
   path: z.array(z.string()),
   category_name: z.string(),
   depth: z.number().int().positive(),

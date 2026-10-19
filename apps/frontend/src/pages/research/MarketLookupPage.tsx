@@ -48,6 +48,7 @@ import { LOOKUP_RANGES as RANGES } from "@/lib/research/ranges";
 import { PageShell } from "@/components/shared/PageShell";
 import { formatMarketChartTick } from "@/features/research/marketChartTicks";
 import { useMarketLookupData } from "@/features/research/useMarketLookupData";
+import { asInvestmentId } from "@vision/types/brands";
 
 const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
 // 1M default: index 2 of the static LOOKUP_RANGES ladder (1D, 5D, 1M, ...).
@@ -179,7 +180,9 @@ export default function MarketLookupPage() {
     const investmentId = searchParams.get("investmentId");
     const mappingInvestmentId = useMemo(() => {
         const n = Number(investmentId);
-        return investmentId && Number.isInteger(n) && n > 0 ? n : undefined;
+        return investmentId && Number.isInteger(n) && n > 0
+            ? asInvestmentId(n)
+            : undefined;
     }, [investmentId]);
     const providerInvestment = useMemo(
         () =>

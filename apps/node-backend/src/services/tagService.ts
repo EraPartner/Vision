@@ -8,6 +8,7 @@
 import tagRepository from "../repositories/tagRepository.ts";
 import { slugify } from "../lib/slugify.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import type { TagId } from "@vision/types/brands";
 
 const tagService = {
   /**
@@ -69,11 +70,10 @@ const tagService = {
   /**
    * Update a tag's color and/or active status.
    *
-   * The route parses `:id` with `parseInt` before calling in, so this really is
-   * a number by the time it reaches the repository.
+   * The route parses `:id` into a `TagId` before calling in.
    */
   async update(
-    id: number,
+    id: TagId,
     {
       color,
       is_active,
@@ -101,7 +101,7 @@ const tagService = {
   /**
    * Soft-delete (deactivate) a tag.
    */
-  async softDelete(id: number) {
+  async softDelete(id: TagId) {
     const deleted = await tagRepository.softDelete(id);
     if (!deleted) throw new NotFoundError(`Tag ${id} not found`);
     return deleted;

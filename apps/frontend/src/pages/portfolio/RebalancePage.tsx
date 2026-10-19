@@ -68,7 +68,12 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useRebalanceInputs } from "@/features/portfolio/usePortfolioQueries";
 import { Figure } from "@/features/portfolio/assetPageParts";
 import { parseDecimal } from "@/lib/decimal";
-import { formatEditableNumber, type NumberFormat } from "@/utils/currency";
+import {
+    formatEditableNumber,
+    type NumberFormat,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 
 const MODELS: ModelPortfolio[] = [
     "sixty_forty",
@@ -158,7 +163,7 @@ export default function RebalancePage() {
     const { t } = useLanguage();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const { appSettings } = useAppSettings();
-    const currency = appSettings.defaultCurrency || "EUR";
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
     const {
         plans,

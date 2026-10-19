@@ -19,6 +19,7 @@ import type {
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { CategoryId } from "@vision/types/brands";
 
 /**
  * The whole category list, as one cache entry shared by every consumer that
@@ -82,7 +83,7 @@ export function useUpdateCategoryNode() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: CategoryNodeUpdate }) =>
+        mutationFn: ({ id, data }: { id: CategoryId; data: CategoryNodeUpdate }) =>
             apiClient.updateCategoryNode(id, data),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
@@ -99,7 +100,7 @@ export function useDeleteCategoryNode() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteCategoryNode(id),
+        mutationFn: (id: CategoryId) => apiClient.deleteCategoryNode(id),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.deleted"));
@@ -119,8 +120,8 @@ export function useMergeCategoryNode() {
             sourceId,
             targetId,
         }: {
-            sourceId: number;
-            targetId: number;
+            sourceId: CategoryId;
+            targetId: CategoryId;
         }) => apiClient.mergeCategoryNode(sourceId, targetId),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
@@ -166,7 +167,7 @@ export function useUpdateCategory() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: CategoryUpdate }) =>
+        mutationFn: ({ id, data }: { id: CategoryId; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: categoryKeys.all });

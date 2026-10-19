@@ -4,9 +4,10 @@ import { apiClient } from "@/lib/api";
 import { netWorthKeys } from "@/lib/queryKeys";
 import type { NetWorthSnapshot } from "@/lib/api";
 import logger from "@/lib/logger";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export interface UseNetWorthTableDataOptions {
-    currency: string;
+    currency: CurrencyCode;
     pageSize: number;
 }
 

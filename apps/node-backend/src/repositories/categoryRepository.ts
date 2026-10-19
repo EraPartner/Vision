@@ -5,16 +5,19 @@
 
 import { query, withTransaction } from "../database/connection.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
-import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  categoryKeyRowSchema,
+  countRowSchema,
+} from "../database/rowSchemas.ts";
 import {
   categoryRowSchema,
-  idRowSchema,
   requireRow,
 } from "../database/rows/catalog.ts";
 import { buildLimitOffset, buildSetClauses } from "../lib/sqlClauses.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 
 import type { CategoryRow, EnrichedCategoryRow } from "../types/rows.ts";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export type { EnrichedCategoryRow };
 
@@ -98,7 +101,7 @@ export const categoryRepository = {
     return parseInt(requireRow(row, "category count").count, 10);
   },
 
-  async getById(id: number): Promise<EnrichedCategoryRow | null> {
+  async getById(id: CategoryId): Promise<EnrichedCategoryRow | null> {
     const row = await queryOne(
       categoryRowSchema,
       "SELECT * FROM categories WHERE id = $1",
@@ -110,7 +113,7 @@ export const categoryRepository = {
   /**
    * Resolve only active categories from a reviewed set of IDs.
    */
-  async getActiveByIds(ids: number[]): Promise<EnrichedCategoryRow[]> {
+  async getActiveByIds(ids: CategoryId[]): Promise<EnrichedCategoryRow[]> {
     const uniqueIds = [...new Set(ids.filter(Number.isInteger))];
     if (uniqueIds.length === 0) return [];
     const rows = await queryRows(
@@ -149,7 +152,7 @@ export const categoryRepository = {
     return withTransaction(async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
       const alias = await queryOne(
-        idRowSchema,
+        categoryKeyRowSchema,
         `SELECT target_category_id AS id FROM category_merge_aliases
        WHERE general=$1 AND detail=$2`,
         [g, d],
@@ -160,7 +163,7 @@ export const categoryRepository = {
           created: false,
         };
       const inserted = await queryOne(
-        idRowSchema,
+        categoryKeyRowSchema,
         `INSERT INTO categories (general, detail, description, is_active)
        VALUES ($1, $2, $3, true)
        ON CONFLICT (general, detail) DO NOTHING
@@ -183,7 +186,7 @@ export const categoryRepository = {
   },
 
   async update(
-    id: number,
+    id: CategoryId,
     {
       general,
       detail,
@@ -219,7 +222,7 @@ export const categoryRepository = {
     return result.rows[0] ? this.getById(id) : null;
   },
 
-  async hardDelete(id: number): Promise<boolean> {
+  async hardDelete(id: CategoryId): Promise<boolean> {
     try {
       const result = await query(
         "DELETE FROM categories WHERE id = $1 AND legacy_compatible = true",
@@ -237,8 +240,8 @@ export const categoryRepository = {
 
   /** @returns rows updated (pg `rowCount`) */
   async assignToRecipients(
-    categoryId: number,
-    recipientIds: number[],
+    categoryId: CategoryId,
+    recipientIds: RecipientId[],
   ): Promise<number | null> {
     const sql = `UPDATE recipients SET default_category_id = $1, updated_at = NOW() WHERE id = ANY($2::int[])`;
     const result = await query(sql, [categoryId, recipientIds]);

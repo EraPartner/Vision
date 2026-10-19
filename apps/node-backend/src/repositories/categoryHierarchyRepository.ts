@@ -11,12 +11,13 @@ import {
 } from "../database/rows/catalog.ts";
 import type { CategoryNodeRow } from "../database/rows/catalog.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import type { CategoryId } from "@vision/types/brands";
 
 export interface CategoryNode {
-  id: number;
+  id: CategoryId;
   name: string;
-  parentId: number | null;
-  pathIds: number[];
+  parentId: CategoryId | null;
+  pathIds: CategoryId[];
   path: string[];
   category_name: string;
   depth: number;
@@ -28,13 +29,13 @@ export interface CategoryNode {
 
 export interface CategoryNodeInput {
   name: string;
-  parentId?: number | null | undefined;
+  parentId?: CategoryId | null | undefined;
   description?: string | null | undefined;
 }
 
 export interface CategoryNodePatch {
   name?: string | undefined;
-  parentId?: number | null | undefined;
+  parentId?: CategoryId | null | undefined;
   description?: string | null | undefined;
   is_active?: boolean | undefined;
 }
@@ -84,7 +85,7 @@ export async function listCategoryNodes(): Promise<CategoryNode[]> {
 }
 
 export async function getCategoryNode(
-  id: number,
+  id: CategoryId,
 ): Promise<CategoryNode | null> {
   const row = await queryOne(
     categoryNodeRowSchema,
@@ -167,7 +168,7 @@ export async function createCategoryNode({
 }
 
 export async function updateCategoryNode(
-  id: number,
+  id: CategoryId,
   { name, parentId, description, is_active: isActive }: CategoryNodePatch,
 ): Promise<CategoryNode | null> {
   return withTransaction(async (client) => {
@@ -267,7 +268,7 @@ export async function updateCategoryNode(
   });
 }
 
-export async function deleteCategoryNode(id: number): Promise<boolean> {
+export async function deleteCategoryNode(id: CategoryId): Promise<boolean> {
   return withTransaction(async (client) => {
     const existing = (
       await client.query(`SELECT id FROM categories WHERE id=$1 FOR UPDATE`, [
@@ -300,8 +301,8 @@ export async function deleteCategoryNode(id: number): Promise<boolean> {
  * Unique membership conflicts fail closed; callers can resolve them explicitly.
  */
 export async function mergeCategoryNodes(
-  sourceId: number,
-  targetId: number,
+  sourceId: CategoryId,
+  targetId: CategoryId,
 ): Promise<CategoryNode | null> {
   if (sourceId === targetId) throw invalid("Source and target must differ");
   return withTransaction(async (client) => {

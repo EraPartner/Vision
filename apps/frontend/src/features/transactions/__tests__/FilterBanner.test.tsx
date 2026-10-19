@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { FilterBanner } from "../components/FilterBanner";
+import { asAccountId, asCategoryId, asRecipientId } from "@vision/types/brands";
 
 vi.mock("../components/TransactionsExportButtons", () => ({
     TransactionsExportButtons: () => null,
@@ -24,9 +25,9 @@ describe("FilterBanner", () => {
     it("summarizes every scope when a label accompanies combined filters", async () => {
         renderWithApp(
             <FilterBanner
-                recipientIdFilter={7}
-                accountIdFilter={3}
-                categoryIdsFilter={[4, 5]}
+                recipientIdFilter={asRecipientId(7)}
+                accountIdFilter={asAccountId(3)}
+                categoryIdsFilter={[asCategoryId(4), asCategoryId(5)]}
                 filterLabel="Main account"
                 onClear={vi.fn()}
             />,
@@ -41,7 +42,7 @@ describe("FilterBanner", () => {
     it("uses a supplied label once for a single scope", async () => {
         renderWithApp(
             <FilterBanner
-                accountIdFilter={3}
+                accountIdFilter={asAccountId(3)}
                 filterLabel="Main account"
                 onClear={vi.fn()}
             />,
@@ -53,7 +54,7 @@ describe("FilterBanner", () => {
     it("describes category filters and formats signed bounds locally", async () => {
         renderWithApp(
             <FilterBanner
-                categoryIdsFilter={[4, 5]}
+                categoryIdsFilter={[asCategoryId(4), asCategoryId(5)]}
                 amountMinFilter={1234.56}
                 amountMaxFilter={1234.56}
                 amountSignedFilter

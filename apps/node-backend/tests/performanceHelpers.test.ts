@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PerformanceSnapshot } from "../src/services/info/performanceHelpers.ts";
 import { loose } from "./helpers/partial.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const mockComputeMetrics = vi.fn<(snapshots: PerformanceSnapshot[]) => null>(
   () => null,
@@ -64,7 +67,7 @@ function snapshot({
     inflation_adjusted_value: String(value),
     gain_loss: String(gainLoss),
     return_pct: String(invested > 0 ? (gainLoss / invested) * 100 : 0),
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
   };
 }
 

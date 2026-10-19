@@ -24,6 +24,9 @@ import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfo
 import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 import { asPartitionedTxns } from "../src/services/portfolio/portfolioTransactionRules.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!,
   owned: { accounts: number[]; investments: number[]; batches: number[] } = {
@@ -54,7 +57,7 @@ async function seed() {
     units: 10,
     amount: 100,
     price_per_unit: 10,
-    currency: "USD",
+    currency: asCurrencyCode("USD"),
     fx_rate_to_eur: 2,
   }))!;
   return { account: accounts[0], wallet: accounts[1], investment, buy };
@@ -200,7 +203,7 @@ describe.skipIf(!hasTestDatabase())(
           units: Number(quantity),
           amount: toDecimal(quantity).times(1000).toNumber(),
           price_per_unit: 1000,
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
         });
       const transfer = async (
         account: number,
@@ -293,7 +296,7 @@ describe.skipIf(!hasTestDatabase())(
         units: 5,
         amount: 0,
         price_per_unit: 0,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         note: "Original synthetic yield",
       }))!;
       const input = await source(position);
@@ -474,7 +477,7 @@ describe.skipIf(!hasTestDatabase())(
         date: "2020-01-01",
         units: 100,
         amount: 0,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       });
       const input = await source(position, { negative: 6, withdrawal: false });
       const plan = await previewPortfolioImportReconciliation({
@@ -506,7 +509,7 @@ describe.skipIf(!hasTestDatabase())(
         units: 2,
         amount: 20,
         price_per_unit: 10,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       });
       const adjustment = await fee(position);
       await expect(

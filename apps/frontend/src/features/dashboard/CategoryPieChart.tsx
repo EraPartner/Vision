@@ -9,7 +9,12 @@ import {
 import { DonutChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrency,
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import { useNavigate } from "react-router";
 
@@ -28,7 +33,10 @@ export function CategoryPieChart({
     const navigate = useNavigate();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     // Color by category identity, not list position — matches the statistics
     // donut, the Sankey, and the transaction chips (utils/categoryColors).

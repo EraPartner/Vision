@@ -17,12 +17,13 @@ import { apiClient } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import type { TransactionId } from "@vision/types/brands";
 
 type ExecutionHistoryItem = {
     plannedPaymentId: number;
     plannedPaymentName: string;
     executionDate: string;
-    transactionId: number;
+    transactionId: TransactionId;
     transactionDate: string;
     recipientName?: string | undefined;
     categoryName?: string | undefined;

@@ -16,6 +16,9 @@
 import { ConflictError } from "../../middleware/errorHandler.ts";
 import { query, withTransaction } from "../../database/connection.ts";
 import { checkRows, queryOne, queryRows } from "../../database/rowContracts.ts";
+import { EUR } from "../../lib/currencyCode.ts";
+import { asCategoryId } from "@vision/types/brands";
+import type { CategoryId } from "@vision/types/brands";
 import {
   batchConfigFields,
   commitBatchRowSchema,
@@ -425,7 +428,7 @@ export async function commitBatch({
   // Resolve the configured IDs once per drain so all chunks use one coherent
   // mapping. Missing, malformed, deleted, or inactive IDs deliberately leave
   // the row uncategorized. Imports never create or reactivate categories.
-  const cashCategoryIds = new Map<string, number>();
+  const cashCategoryIds = new Map<string, CategoryId>();
   if (isBrokerage && batchAccountId !== undefined) {
     const stored = await settingsRepository.get(CASH_CATEGORY_SETTING_KEY);
     // A user setting's JSON value: an object of kind → category id when set.
@@ -435,10 +438,12 @@ export async function commitBatch({
         : {};
     const requestedIds = CASH_CATEGORY_KINDS.map(
       (kind) => configured[kind],
-    ).filter(
-      (id): id is number =>
-        typeof id === "number" && Number.isInteger(id) && id > 0,
-    );
+    )
+      .filter(
+        (id): id is number =>
+          typeof id === "number" && Number.isInteger(id) && id > 0,
+      )
+      .map(asCategoryId);
     const activeIds = new Set(
       (await categoryRepository.getActiveByIds(requestedIds)).map((row) =>
         Number(row.id),
@@ -447,7 +452,7 @@ export async function commitBatch({
     for (const kind of CASH_CATEGORY_KINDS) {
       const id = configured[kind];
       if (typeof id === "number" && Number.isInteger(id) && activeIds.has(id)) {
-        cashCategoryIds.set(kind, id);
+        cashCategoryIds.set(kind, asCategoryId(id));
       }
     }
   }
@@ -790,7 +795,7 @@ export async function commitBatch({
         }
         await client.query(`SAVEPOINT ${sp}`);
         try {
-          const currency = row.currency || row.investment_currency || "EUR";
+          const currency = row.currency || row.investment_currency || EUR;
           let fxRate =
             row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
           const primaryZeroYield =

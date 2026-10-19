@@ -9,6 +9,9 @@ import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 
 // The route imports its repository through services/recipientBankAccountService.js,
 // which re-exports the default from this module — mocking the repository here
@@ -54,7 +57,7 @@ describe("Recipient Bank Account Routes", () => {
       bankAccountRepo.getByRecipientId.mockResolvedValue([
         bankAccount({
           id: 1,
-          recipient_id: 1,
+          recipient_id: asRecipientId(1),
           account_number: "BE61734041478017",
           bank_name: "BELFIUS",
           is_primary: true,
@@ -289,7 +292,7 @@ describe("Recipient Bank Account Routes", () => {
       bankAccountRepo.getById.mockResolvedValue(
         bankAccount({
           id: 2,
-          recipient_id: 1,
+          recipient_id: asRecipientId(1),
           is_primary: true,
         }),
       );

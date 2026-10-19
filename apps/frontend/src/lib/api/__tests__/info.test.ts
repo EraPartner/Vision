@@ -18,6 +18,7 @@ import {
     getExchangeRates,
     refreshExchangeRates,
 } from "@/lib/api/info";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -253,7 +254,7 @@ describe("info API client", () => {
                 },
             ),
         );
-        await getPortfolioPerformance({ currency: "EUR", period: "1y" });
+        await getPortfolioPerformance({ currency: asCurrencyCode("EUR"), period: "1y" });
         expect(url).toContain("currency=EUR");
         expect(url).toContain("period=1y");
     });
@@ -264,7 +265,7 @@ describe("info API client", () => {
                 ok(PORTFOLIO_SUMMARY_STUB),
             ),
         );
-        expect((await getPortfolioSummary({ currency: "EUR" })).currency).toBe(
+        expect((await getPortfolioSummary({ currency: asCurrencyCode("EUR") })).currency).toBe(
             "EUR",
         );
     });
@@ -291,7 +292,7 @@ describe("info API client", () => {
                 });
             }),
         );
-        await getNetWorth({ currency: "EUR", limit: 10, offset: 5 });
+        await getNetWorth({ currency: asCurrencyCode("EUR"), limit: 10, offset: 5 });
         expect(url).toContain("limit=10");
         expect(url).toContain("offset=5");
     });

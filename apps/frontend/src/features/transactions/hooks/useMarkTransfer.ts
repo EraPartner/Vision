@@ -4,16 +4,21 @@ import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { invalidateTransactionData } from "@/lib/queryKeys";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type {
+    AccountId,
+    CurrencyCode,
+    TransactionId,
+} from "@vision/types/brands";
 
 export interface ExistingTransferLeg {
-    id: number;
-    accountId?: number | undefined;
+    id: TransactionId;
+    accountId?: AccountId | undefined;
     bank: string;
     date: string;
     amount: number;
-    currency: string;
+    currency: CurrencyCode;
     is_active: boolean;
-    transferPeerId?: number | null | undefined;
+    transferPeerId?: TransactionId | null | undefined;
     transferSource?: string | null | undefined;
 }
 

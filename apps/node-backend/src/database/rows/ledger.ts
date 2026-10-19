@@ -11,11 +11,18 @@ import { z } from "zod";
 import {
   accountRowSchema,
   balancePartsSchema,
+  pgAccountId,
   pgBigint,
+  pgCategoryId,
+  pgCurrency,
   pgDate,
   pgDayString,
   pgInt,
   pgNumeric,
+  pgPortfolioTransactionId,
+  pgRecipientId,
+  pgTagId,
+  pgTransactionId,
   transactionSplitRowSchema,
 } from "../rowSchemas.ts";
 
@@ -35,12 +42,12 @@ export const bigintCountRowSchema = z
 
 /** A `SELECT id, slug FROM tags` row. */
 export const tagSlugRowSchema = z
-  .object({ id: pgInt, slug: z.string() })
+  .object({ id: pgTagId, slug: z.string() })
   .describe("tag slug row");
 
 /** A `RETURNING transaction_id` / `SELECT transaction_id` row. */
 export const transactionIdRowSchema = z
-  .object({ transaction_id: pgInt })
+  .object({ transaction_id: pgTransactionId })
   .describe("transaction id row");
 
 /** A row carrying only the `balance_parts` lateral (accountBalanceSql). */
@@ -60,7 +67,7 @@ export const transactionTotalRowSchema = z
 /** STAMP_RANGES_SQL: `to_char` day strings per account. */
 export const stampedDateRangeRowSchema = z
   .object({
-    account_id: pgInt,
+    account_id: pgAccountId,
     min_date: pgDayString,
     max_date: pgDayString,
   })
@@ -69,13 +76,13 @@ export type StampedDateRangeRow = z.output<typeof stampedDateRangeRowSchema>;
 
 /** OPENING_ANCHORS_SQL row. */
 export const openingAnchorRowSchema = z
-  .object({ account_id: pgInt, currency: z.string() })
+  .object({ account_id: pgAccountId, currency: pgCurrency })
   .describe("opening anchor row");
 export type OpeningAnchorRow = z.output<typeof openingAnchorRowSchema>;
 
 /** `listTransferCandidatePairs` row (quoted camelCase aliases). */
 export const transferCandidatePairRowSchema = z
-  .object({ outId: pgInt, inId: pgInt })
+  .object({ outId: pgTransactionId, inId: pgTransactionId })
   .describe("transfer candidate pair row");
 export type TransferCandidatePairRow = z.output<
   typeof transferCandidatePairRowSchema
@@ -83,23 +90,23 @@ export type TransferCandidatePairRow = z.output<
 
 /** `lockTransferPeerPointer` row. */
 export const transferPeerPointerRowSchema = z
-  .object({ transfer_peer_id: pgInt.nullable(), transfer_source: z.string().nullable().optional() })
+  .object({ transfer_peer_id: pgTransactionId.nullable(), transfer_source: z.string().nullable().optional() })
   .describe("transfer peer pointer row");
 
 /** `detectRecurringPatterns`' bespoke projection. */
 export const recurringCandidateRowSchema = z
   .object({
-    id: pgInt,
+    id: pgTransactionId,
     date: pgDate,
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     memo: z.string().nullable(),
-    account_id: pgInt.nullable(),
+    account_id: pgAccountId.nullable(),
     bank_account: z.string().nullable(),
     /** COALESCE(primary, own); the WHERE requires a recipient. */
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     recipient_name: z.string().nullable(),
-    effective_category_id: pgInt.nullable(),
+    effective_category_id: pgCategoryId.nullable(),
     category_name: z.string().nullable(),
   })
   .describe("recurring candidate row");
@@ -109,7 +116,7 @@ export type RecurringCandidateRow = z.output<
 
 /** The recurring detector's planned-recipient probe. */
 export const plannedRecipientIdRowSchema = z
-  .object({ recipient_id: pgInt })
+  .object({ recipient_id: pgRecipientId })
   .describe("planned recipient id row");
 
 /** A `to_regclass(...) IS NOT NULL AS exists` probe. */
@@ -120,15 +127,15 @@ export const tableExistsRowSchema = z
 /** A `buildExportChunkSql` row. */
 export const exportTransactionRowSchema = z
   .object({
-    id: pgInt,
+    id: pgTransactionId,
     /** DATE: read via `toYmd`, never `String()`/`toISOString()`. */
     date: pgDate,
     bank_account: z.string().nullable(),
-    account_id: pgInt.nullable(),
+    account_id: pgAccountId.nullable(),
     recipient_name: z.string().nullable(),
     memo: z.string().nullable(),
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     /** NULL on manual rows. */
     balance: pgNumeric.nullable(),
     /** CASE ... ELSE '': '' when the transaction has no resolved category. */
@@ -148,7 +155,7 @@ export const earliestDateRowSchema = z
 /** A system adjustment row `RETURNING id, amount, transfer_source`. */
 export const adjustmentRowSchema = z
   .object({
-    id: pgInt,
+    id: pgTransactionId,
     amount: pgNumeric,
     /** Always the literal the INSERT wrote ('adjustment'). */
     transfer_source: z.string(),
@@ -157,7 +164,7 @@ export const adjustmentRowSchema = z
 
 /** `closeAccount`'s per-currency adjustment `RETURNING` row. */
 export const closeAdjustmentRowSchema = adjustmentRowSchema
-  .extend({ currency: z.string() })
+  .extend({ currency: pgCurrency })
   .describe("close adjustment transaction row");
 
 // ---------------------------------------------------------------------------
@@ -188,8 +195,8 @@ export const accountActiveRowSchema = accountRowSchema
 export const reconcileDriftRowSchema = z
   .object({
     /** accounts.currency is NOT NULL. */
-    account_currency: z.string(),
-    reconcile_currency: z.string(),
+    account_currency: pgCurrency,
+    reconcile_currency: pgCurrency,
     /** LEFT JOIN: NULL when the account has no statement figure. */
     statement_balance: pgNumeric.nullable(),
     balance_parts: balancePartsSchema,
@@ -203,7 +210,7 @@ export const statementBalanceAmountRowSchema = z
 
 /** `previewAccountPortfolioLots` row: `COUNT(*) OVER()` is BIGINT. */
 export const portfolioLotRowSchema = z
-  .object({ id: pgInt, eligible_count: pgBigint })
+  .object({ id: pgPortfolioTransactionId, eligible_count: pgBigint })
   .describe("portfolio lot row");
 
 // ---------------------------------------------------------------------------

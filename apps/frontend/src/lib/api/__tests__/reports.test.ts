@@ -19,6 +19,11 @@ vi.mock("@/lib/themeTokens", () => ({
 vi.mock("@/lib/timezone", () => ({ todayYmd: () => "2026-06-22" }));
 
 import { downloadBlob } from "@/lib/downloadBlob";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 function mockFetchOk() {
   const blob = new Blob(["%PDF-1.4"], { type: "application/pdf" });
@@ -65,12 +70,12 @@ describe("report download helpers", () => {
     const fetchMock = mockFetchOk();
 
     await downloadPortfolioReport({
-      currency: "USD",
+      currency: asCurrencyCode("USD"),
       period: { kind: "year", year: 2025 },
       sections: ["holdings"],
       theme: { custom: 1 } as never,
-      excludedCategoryIds: [1],
-      excludedRecipientIds: [2],
+      excludedCategoryIds: [asCategoryId(1)],
+      excludedRecipientIds: [asRecipientId(2)],
       taxProfile: { region: "BE" },
       precomputedPIT: { totalTax: 100 },
     });

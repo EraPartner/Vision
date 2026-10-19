@@ -12,6 +12,7 @@
  */
 
 import type { DecimalInput } from "../money.ts";
+import type { RecipientId } from "@vision/types/brands";
 import {
   addAll,
   toNumber,
@@ -63,7 +64,7 @@ export type ValidationResult =
  * on the wire).
  */
 export interface SplitOutstandingRow {
-  recipient_id: number;
+  recipient_id: RecipientId;
   recipient_name: string;
   total_owed: string;
   total_paid: string;
@@ -71,7 +72,7 @@ export interface SplitOutstandingRow {
 }
 
 export interface OwedSummaryRow {
-  recipient_id: number;
+  recipient_id: RecipientId;
   recipient_name: string;
   total_owed: number;
   total_paid: number;

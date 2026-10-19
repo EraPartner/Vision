@@ -40,6 +40,11 @@ import type { Column } from "@/types/dataTable";
 import type { RawApiTransaction, TableTransaction } from "../types";
 import { amountClass } from "../amountClass";
 import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
+import type {
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 interface TransactionsTableProps {
     transactions: TableTransaction[];
@@ -49,20 +54,20 @@ interface TransactionsTableProps {
     onRowUpdate: (sourceIndex: number, updated: TableTransaction) => void;
     /** Selects the row the inspector shows (click, Enter, arrow keys). */
     onSelectRow: (row: TableTransaction | null) => void;
-    selectedRowId: number | null;
+    selectedRowId: TransactionId | null;
     onQuickLook: (row: TableTransaction) => void;
     onDuplicate: (row: TableTransaction) => void;
     onFilterByRecipient: (row: TableTransaction) => void;
-    onToggleActive: (id: number, currentActive: boolean) => void;
-    onDelete: (id: number, description?: string) => void;
+    onToggleActive: (id: TransactionId, currentActive: boolean) => void;
+    onDelete: (id: TransactionId, description?: string) => void;
     onSelectCategory: (
-        transactionId: number,
-        catId: number | null,
+        transactionId: TransactionId,
+        catId: CategoryId | null,
         categoryName: string | null,
     ) => void;
     onSelectRecipient: (
-        transactionId: number,
-        recipientId: number | null,
+        transactionId: TransactionId,
+        recipientId: RecipientId | null,
         recipientName: string | null,
     ) => void;
     cancelEditingRef: React.MutableRefObject<(() => void) | null>;
@@ -70,8 +75,8 @@ interface TransactionsTableProps {
     actions?: React.ReactNode;
     updatePending: boolean;
     deletePending: boolean;
-    selectedIds: Set<number>;
-    onSelectionChange: (next: Set<number>) => void;
+    selectedIds: Set<TransactionId>;
+    onSelectionChange: (next: Set<TransactionId>) => void;
     /** Optional columns the View menu turned on (ids from transactionColumns.ts). */
     isColumnVisible: (id: string) => boolean;
 }
@@ -133,7 +138,7 @@ export function TransactionsTable({
     const search = serverMode.search?.value ?? "";
 
     const toggleSelect = useCallback(
-        (id: number) => {
+        (id: TransactionId) => {
             const next = new Set(selectedIds);
             if (next.has(id)) next.delete(id);
             else next.add(id);

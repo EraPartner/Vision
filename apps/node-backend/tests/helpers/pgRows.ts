@@ -12,6 +12,14 @@ import type {
   PlannedExecutionRow,
   PlannedTransactionListRow,
 } from "../../src/types/rows.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asPlannedTransactionId,
+  asRecipientId,
+  asSplitId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const CREATED = new Date("2026-01-01T00:00:00.000Z");
 
@@ -20,10 +28,10 @@ export function txRow(
   overrides: Partial<Omit<EnrichedTransactionRow, "tags">> = {},
 ): Omit<EnrichedTransactionRow, "tags"> {
   return {
-    id: 1,
+    id: asTransactionId(1),
     date: new Date(2026, 0, 15),
     amount: "-10.0000",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     balance: null,
     memo: null,
     comment: null,
@@ -42,11 +50,11 @@ export function txRow(
 /** An `accounts` row as `accountRepository`'s COLUMNS list projects it. */
 export function accountRow(overrides: Partial<AccountRow> = {}): AccountRow {
   return {
-    id: 1,
+    id: asAccountId(1),
     name: "Account",
     display_name: null,
     institution: null,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     type: "checking",
     liquidity_class: "liquid",
     spendable: true,
@@ -84,10 +92,10 @@ export function plannedRow(
   overrides: Partial<PlannedTransactionListRow> = {},
 ): PlannedTransactionListRow {
   return {
-    id: 1,
+    id: asPlannedTransactionId(1),
     planned_date: new Date(2026, 0, 15),
     amount: "-10.0000",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     memo: null,
     comment: null,
     url: null,
@@ -119,8 +127,8 @@ export function plannedExecutionRow(
 ): PlannedExecutionRow {
   return {
     id: 1,
-    planned_transaction_id: 1,
-    executed_transaction_id: 1,
+    planned_transaction_id: asPlannedTransactionId(1),
+    executed_transaction_id: asTransactionId(1),
     execution_date: new Date(2026, 0, 15),
     created_at: CREATED,
     ...overrides,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import PerformanceBreakdown from "../PerformanceBreakdown";
+import { asInvestmentId } from "@vision/types/brands";
 
 describe("PerformanceBreakdown", () => {
     it("uses readable asset labels when a holding has no ticker", async () => {
@@ -11,7 +12,7 @@ describe("PerformanceBreakdown", () => {
                 heatmapData={{ years: [], data: {}, maxAbsPct: 0 }}
                 breakdownSummary={[
                     {
-                        id: 1,
+                        id: asInvestmentId(1),
                         name: "Apartment",
                         symbol: "",
                         assetClass: "real_estate",
@@ -22,7 +23,7 @@ describe("PerformanceBreakdown", () => {
                         gainLossPercent: 11,
                     },
                     {
-                        id: 2,
+                        id: asInvestmentId(2),
                         name: "Savings account",
                         symbol: "",
                         assetClass: "savings",
@@ -33,7 +34,7 @@ describe("PerformanceBreakdown", () => {
                         gainLossPercent: 0,
                     },
                     {
-                        id: 3,
+                        id: asInvestmentId(3),
                         name: "Fund",
                         symbol: "IWDA",
                         assetClass: "etf",

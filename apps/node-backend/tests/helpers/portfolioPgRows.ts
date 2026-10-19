@@ -15,6 +15,11 @@ import type {
   ProviderHealthDbRow,
   SummaryInvestmentDbRow,
 } from "../../src/database/rows/portfolio.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const CREATED = new Date("2026-01-01T00:00:00.000Z");
 
@@ -23,11 +28,11 @@ export function investmentDbRow(
   overrides: Partial<InvestmentDbRow> = {},
 ): InvestmentDbRow {
   return {
-    id: 1,
+    id: asInvestmentId(1),
     name: "Investment",
     symbol: null,
     asset_class: "stocks_etfs",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: null,
     interest_rate: null,
     maturity_date: null,
@@ -70,8 +75,8 @@ export function portfolioTransactionDbRow(
   overrides: Partial<PortfolioTransactionDbRow> = {},
 ): PortfolioTransactionDbRow {
   return {
-    id: 1,
-    investment_id: 1,
+    id: asPortfolioTransactionId(1),
+    investment_id: asInvestmentId(1),
     type: "buy",
     date: new Date(2026, 0, 15),
     amount: "0.0000",
@@ -79,7 +84,7 @@ export function portfolioTransactionDbRow(
     price_per_unit: null,
     fees: null,
     taxes: null,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     fx_rate_to_eur: null,
     note: null,
     is_recurring: false,
@@ -115,7 +120,7 @@ export function portfolioUnitEventDbRow(
     destination_account_id: null,
     fee_units: "0",
     transfer_id: null,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     source_record_hash: null,
     adjustment_kind: null,
     basis_policy: null,
@@ -133,7 +138,7 @@ export function portfolioMathTxDbRow(
   const date = overrides.date ?? "2026-01-15";
   return {
     id: "1",
-    investment_id: 1,
+    investment_id: asInvestmentId(1),
     type: "buy",
     amount: "0",
     units: "0",
@@ -141,7 +146,7 @@ export function portfolioMathTxDbRow(
     taxes: "0",
     date,
     day: date,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     fx_rate_to_eur: null,
     account_id: null,
     source_account_id: null,
@@ -193,7 +198,7 @@ export function portfolioPerformanceSnapshotDbRow(
     stocks_etfs_invested: "0.0000",
     crypto_invested: "0.0000",
     metals_invested: "0.0000",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     computed_at: CREATED,
     ...overrides,
   };

@@ -30,6 +30,12 @@ import { toDecimal, toNumber } from "../lib/money.ts";
 import type { SplitOutstandingRow } from "../lib/calculations/splits.ts";
 import type { z } from "zod";
 import type {
+  CurrencyCode,
+  RecipientId,
+  SplitId,
+  TransactionId,
+} from "@vision/types/brands";
+import type {
   FormattedSplit,
   FormattedSplitPayment,
   QueryRunner,
@@ -53,7 +59,7 @@ export interface OwedExportRow {
   recipient_name: string | null;
   memo: string | null;
   amount: number;
-  currency: string | null;
+  currency: CurrencyCode | null;
   balance: string | null;
   category_name: string;
   comment: string | null;
@@ -119,7 +125,7 @@ function mapSplitTotals(row: SplitTotalsRow): SplitTotals {
  */
 export async function lockAndGetTotals(
   client: QueryRunner,
-  transactionId: number,
+  transactionId: TransactionId,
 ): Promise<SplitTotals | null> {
   const lockResult = await client.query(
     `SELECT id FROM transactions WHERE id = $1 FOR UPDATE`,
@@ -145,7 +151,7 @@ export async function lockAndGetTotals(
  */
 export async function recipientExistsInTransaction(
   client: QueryRunner,
-  recipientId: number,
+  recipientId: RecipientId,
 ): Promise<boolean> {
   const result = await client.query("SELECT 1 FROM recipients WHERE id = $1", [
     recipientId,
@@ -161,8 +167,8 @@ export async function insertSplitInTransaction(
     amount,
     note,
   }: {
-    transaction_id: number;
-    recipient_id: number;
+    transaction_id: TransactionId;
+    recipient_id: RecipientId;
     amount: number;
     note?: string | null | undefined;
   },
@@ -188,9 +194,9 @@ export async function insertSplitInTransaction(
 
 export async function insertSplitsBatchInTransaction(
   client: QueryRunner,
-  transactionId: number,
+  transactionId: TransactionId,
   splits: Array<{
-    recipient_id: number;
+    recipient_id: RecipientId;
     amount: number;
     note?: string | null | undefined;
   }>,
@@ -218,8 +224,8 @@ export async function insertSplitsBatchInTransaction(
 
 export async function lockSplitForPayment(
   client: QueryRunner,
-  splitId: number,
-): Promise<{ id: number; amount: string; is_settled: boolean } | null> {
+  splitId: SplitId,
+): Promise<{ id: SplitId; amount: string; is_settled: boolean } | null> {
   const [row] = await queryRows(
     splitPaymentLockRowSchema,
     "SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE",
@@ -232,7 +238,7 @@ export async function lockSplitForPayment(
 /** @returns NUMERIC sum — a pg string. */
 export async function getPaidAmountInTransaction(
   client: QueryRunner,
-  splitId: number,
+  splitId: SplitId,
 ): Promise<string> {
   const [row] = await queryRows(
     splitPaidRowSchema,
@@ -253,7 +259,7 @@ export async function insertPaymentInTransaction(
     note,
     paid_at,
   }: {
-    split_id: number;
+    split_id: SplitId;
     amount: number;
     note?: string | null | undefined;
     paid_at: string;
@@ -274,7 +280,7 @@ export async function insertPaymentInTransaction(
 
 export async function markSettledIfCovered(
   client: QueryRunner,
-  splitId: number,
+  splitId: SplitId,
 ): Promise<boolean> {
   const result = await client.query(
     `UPDATE transaction_splits ts
@@ -299,7 +305,7 @@ export const splitRepository = {
    * @returns null when the transaction does not exist
    */
   async getTransactionSplitTotals(
-    transactionId: number,
+    transactionId: TransactionId,
   ): Promise<SplitTotals | null> {
     const rows = await queryRows(splitTotalsRowSchema, SPLIT_TOTALS_SQL, [
       transactionId,
@@ -315,7 +321,7 @@ export const splitRepository = {
    * editing, so only an explicit limit/offset narrows the result.
    */
   async getSplitsByTransaction(
-    transactionId: number,
+    transactionId: TransactionId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<FormattedSplit[]> {
     const params: unknown[] = [transactionId];
@@ -337,7 +343,7 @@ export const splitRepository = {
   /**
    * Split count for a transaction — the `total` for a paginated list.
    */
-  async countSplitsByTransaction(transactionId: number): Promise<number> {
+  async countSplitsByTransaction(transactionId: TransactionId): Promise<number> {
     const [row] = await queryRows(
       countRowSchema,
       "SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1",
@@ -371,7 +377,7 @@ export const splitRepository = {
    * currency before it adds them up.
    */
   async getOwedSummaryRows(): Promise<
-    Array<SplitOutstandingRow & { currency: string | null }>
+    Array<SplitOutstandingRow & { currency: CurrencyCode | null }>
   > {
     // Collapse alias recipients into their primary so linked recipients show
     // as a single row. recipient_id returned is the primary's id (or self
@@ -401,7 +407,7 @@ export const splitRepository = {
    * alias-group + settled filter as getOwedByRecipientRows, never paged), for
    * the server-converted detail total.
    */
-  async getOwedRemainingByCurrency(recipientId: number) {
+  async getOwedRemainingByCurrency(recipientId: RecipientId) {
     const sql = `
       ${RECIPIENT_GROUP_CTE}
       SELECT t.currency,
@@ -425,7 +431,7 @@ export const splitRepository = {
    * The rows are raw; the split service shapes them into `OwedSplitDetailRow`s.
    */
   async getOwedByRecipientRows(
-    recipientId: number,
+    recipientId: RecipientId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<OwedSplitRawRow[]> {
     const params: unknown[] = [recipientId];
@@ -458,7 +464,7 @@ export const splitRepository = {
    * Count a recipient's unsettled splits (same alias-group + settled filter as
    * getOwedByRecipient) — the `total` for a paginated list.
    */
-  async countOwedByRecipient(recipientId: number): Promise<number> {
+  async countOwedByRecipient(recipientId: RecipientId): Promise<number> {
     const sql = `
       ${RECIPIENT_GROUP_CTE}
       SELECT COUNT(*)
@@ -478,7 +484,7 @@ export const splitRepository = {
    * `amount` is coerced, because only that one is recomputed here.
    */
   async getOwedExportRowsByRecipient(
-    recipientId: number,
+    recipientId: RecipientId,
   ): Promise<OwedExportRow[]> {
     const sql = `
       ${RECIPIENT_GROUP_CTE}
@@ -536,7 +542,7 @@ export const splitRepository = {
    * narrows the result.
    */
   async getPayments(
-    splitId: number,
+    splitId: SplitId,
     { limit = null, offset = 0 }: PageOptions = {},
   ): Promise<FormattedSplitPayment[]> {
     const params: unknown[] = [splitId];
@@ -550,7 +556,7 @@ export const splitRepository = {
   /**
    * Payment count for a split — the `total` for a paginated list.
    */
-  async countPayments(splitId: number): Promise<number> {
+  async countPayments(splitId: SplitId): Promise<number> {
     const [row] = await queryRows(
       countRowSchema,
       "SELECT COUNT(*) FROM split_payments WHERE split_id = $1",
@@ -571,7 +577,7 @@ export const splitRepository = {
    * `FormattedSplit` carries the real values.
    */
   async settleSplit(
-    splitId: number,
+    splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<FormattedSplit | null> {
     const sql = `
@@ -596,7 +602,7 @@ export const splitRepository = {
   },
 
   async settleAllByRecipient(
-    recipientId: number,
+    recipientId: RecipientId,
     client: QueryRunner | null = null,
   ): Promise<{ settled_count: number }> {
     const sql = `
@@ -614,7 +620,7 @@ export const splitRepository = {
    * Delete a split.
    */
   async deleteSplit(
-    splitId: number,
+    splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<boolean> {
     const runner: QueryRunner = client ?? { query };
@@ -633,7 +639,7 @@ export const splitRepository = {
    * `amount_paid` instead of the fabricated null/0 a bare `SELECT *` produced.
    */
   async getSplitById(
-    splitId: number,
+    splitId: SplitId,
     client: QueryRunner | null = null,
   ): Promise<FormattedSplit | null> {
     const sql = `
@@ -661,7 +667,7 @@ export const splitRepository = {
    * removes the legacy-only DB trigger so upgraded and fresh databases share
    * the same canonical enforcement path.
    */
-  async getAlreadyPaid(splitId: number): Promise<number> {
+  async getAlreadyPaid(splitId: SplitId): Promise<number> {
     const sql = `
       SELECT COALESCE(SUM(amount), 0) AS paid
       FROM split_payments
@@ -686,7 +692,7 @@ export const splitRepository = {
     payload = null,
     client = null,
   }: {
-    split_id: number | null;
+    split_id: SplitId | null;
     action: string;
     actor?: string | null;
     payload?: object | null;
@@ -721,8 +727,8 @@ export const splitRepository = {
    * @returns rows repointed
    */
   async repointRecipient(
-    primaryId: number,
-    aliasIds: number[],
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await query(
       `UPDATE transaction_splits

@@ -20,6 +20,11 @@ import {
     ResearchDocumentListSchema,
     ResearchDocumentSchema,
 } from "@vision/types/contracts";
+import type {
+    AccountId,
+    CurrencyCode,
+    InvestmentId,
+} from "@vision/types/brands";
 
 export interface ResearchDocument {
     id: string;
@@ -114,11 +119,11 @@ export interface InvestigationInput {
     language: "en" | "nl";
     scope: {
         workspaces: string[];
-        accountIds: number[];
-        investmentIds: number[];
+        accountIds: AccountId[];
+        investmentIds: InvestmentId[];
         dateFrom: string | null;
         dateTo: string | null;
-        currency: string;
+        currency: CurrencyCode;
         constraints: string[];
     };
     grantId: string | null;

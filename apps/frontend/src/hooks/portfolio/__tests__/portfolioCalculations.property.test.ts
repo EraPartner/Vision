@@ -12,6 +12,11 @@ import {
 } from '@vision/shared-utils/portfolio';
 import { todayYmd } from '@/lib/timezone';
 import type { PortfolioTransaction } from '@/types/api';
+import {
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,9 +32,9 @@ function makeTxn(
   overrides: Partial<PortfolioTransaction> & Pick<PortfolioTransaction, 'type' | 'date' | 'amount'>
 ): PortfolioTransaction {
   return {
-    id: ++idSeq,
-    investment_id: 1,
-    currency: 'EUR',
+    id: asPortfolioTransactionId(++idSeq),
+    investment_id: asInvestmentId(1),
+    currency: asCurrencyCode('EUR'),
     is_recurring: false,
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z',

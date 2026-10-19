@@ -43,6 +43,8 @@ import {
     booleanSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
+import type { PlannedTransactionId, TransactionId } from "@vision/types/brands";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /**
  * Planned (ADR-183): the next seven days, likely matches and detected
@@ -92,7 +94,7 @@ export default function PlannedPaymentsPage() {
     }, []);
 
     const handleReviewSuggestion = useCallback(
-        (plannedId: number) => {
+        (plannedId: PlannedTransactionId) => {
             const payment = payments.find(
                 (candidate) => candidate.id === plannedId,
             );
@@ -104,7 +106,7 @@ export default function PlannedPaymentsPage() {
     );
 
     const handleExecute = useCallback(
-        async (id: number, transactionId: number, executionDate?: string) => {
+        async (id: PlannedTransactionId, transactionId: TransactionId, executionDate?: string) => {
             await executePayment(id, transactionId, executionDate);
             await queryClient.invalidateQueries({
                 queryKey: plannedKeys.matchSuggestions,
@@ -124,7 +126,7 @@ export default function PlannedPaymentsPage() {
     // Net monthly impact of active recurring rows and the money due in the
     // next-days strip, computed on the server.
     const { data: plannedTotals } = usePlannedTotals(
-        appSettings.defaultCurrency || "EUR",
+        currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
     );
     const monthlyTotal = plannedTotals?.monthly_equivalent;
 

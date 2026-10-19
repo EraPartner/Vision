@@ -8,15 +8,16 @@ import {
     isHoldingsOnlyPortfolioType,
     isPortfolioType,
 } from "@/features/accounts/groupAccounts";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 
 let nextId = 1;
 
 function makeAccount(overrides: Partial<Account> = {}): Account {
     const id = overrides.id ?? nextId++;
     return {
-        id,
+        id: asAccountId(id),
         name: `Account ${id}`,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         type: "checking",
         liquidity_class: "liquid",
         spendable: true,
@@ -138,9 +139,9 @@ describe("groupAccounts", () => {
 
     it("sorts within a group by display label (display_name over name), locale-aware", () => {
         const groups = groupAccounts([
-            makeAccount({ id: 1, name: "zzz-internal", display_name: "Bunq" }),
-            makeAccount({ id: 2, name: "argenta savings", type: "savings" }),
-            makeAccount({ id: 3, name: "KBC Checking" }),
+            makeAccount({ id: asAccountId(1), name: "zzz-internal", display_name: "Bunq" }),
+            makeAccount({ id: asAccountId(2), name: "argenta savings", type: "savings" }),
+            makeAccount({ id: asAccountId(3), name: "KBC Checking" }),
         ]);
         expect(groups).toHaveLength(1);
         expect(groups[0]?.accounts.map(accountLabel)).toEqual([
@@ -152,8 +153,8 @@ describe("groupAccounts", () => {
 
     it("breaks label ties deterministically by id", () => {
         const groups = groupAccounts([
-            makeAccount({ id: 9, name: "Twin" }),
-            makeAccount({ id: 2, name: "Twin" }),
+            makeAccount({ id: asAccountId(9), name: "Twin" }),
+            makeAccount({ id: asAccountId(2), name: "Twin" }),
         ]);
         expect(groups[0]?.accounts.map((a) => a.id)).toEqual([2, 9]);
     });
@@ -161,18 +162,18 @@ describe("groupAccounts", () => {
     it("routes every inactive account to archived regardless of type, sorted by label", () => {
         const groups = groupAccounts([
             makeAccount({
-                id: 1,
+                id: asAccountId(1),
                 name: "B liability",
                 type: "liability",
                 is_active: false,
             }),
             makeAccount({
-                id: 2,
+                id: asAccountId(2),
                 name: "A broker",
                 type: "brokerage",
                 is_active: false,
             }),
-            makeAccount({ id: 3, name: "C checking", is_active: false }),
+            makeAccount({ id: asAccountId(3), name: "C checking", is_active: false }),
         ]);
         expect(groups.map((g) => g.id)).toEqual(["archived"]);
         expect(groups[0]?.accounts.map((a) => a.name)).toEqual([

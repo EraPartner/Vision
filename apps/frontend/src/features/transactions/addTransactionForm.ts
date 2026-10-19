@@ -2,10 +2,14 @@ import { z } from "zod";
 import { todayYmd } from "@/lib/timezone";
 import {
     moneyAmount,
+    optionalCurrencyCode,
     requiredString,
     ymdDateString,
 } from "@/lib/forms/schemas";
 import type { NumberFormat } from "@/utils/currency";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 /** What the sheet records: the sign of the amount follows from this. */
 export type TransactionKind = "expense" | "income" | "transfer";
@@ -14,10 +18,10 @@ export type AddTransactionFormState = {
     kind: TransactionKind;
     transaction_date: string;
     bank_account: string;
-    account_id: number | null;
+    account_id: AccountId | null;
     /** Transfer only: the receiving account. */
     to_bank_account: string;
-    to_account_id: number | null;
+    to_account_id: AccountId | null;
     recipient_id: string;
     category_id: string;
     memo: string;
@@ -42,7 +46,7 @@ export function createAddTransactionFormState(
         category_id: "",
         memo: "",
         amount: "",
-        currency: defaultCurrency || "EUR",
+        currency: defaultCurrency || DEFAULT_CURRENCY,
         comment: "",
     };
 }
@@ -54,11 +58,13 @@ export const ADD_TRANSACTION_FIELD_IDS: Record<string, string> = {
     account_id: "tx_bank",
     to_account_id: "tx_to_bank",
     recipient_id: "tx_recipient",
+    currency: "tx_currency",
 };
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 export const ADD_TRANSACTION_FIELD_ORDER = [
     "tx_amount",
+    "tx_currency",
     "tx_recipient",
     "tx_bank",
     "tx_to_bank",
@@ -75,7 +81,8 @@ const accountId = (messageKey: string) =>
     z
         .number({ error: messageKey })
         .int(messageKey)
-        .positive(messageKey);
+        .positive(messageKey)
+        .transform(asAccountId);
 
 /**
  * Submit-time validation for AddTransactionSheet. Issue messages are i18n
@@ -87,7 +94,9 @@ const accountId = (messageKey: string) =>
  * - amount required, locale-parseable and non-zero. It is a magnitude: the
  *   kind supplies the sign, so a typed minus is ignored rather than flipping
  *   an expense into income.
- * Currency, category, memo, and comment pass through unvalidated.
+ * - currency, when typed, must be an ISO-4217 code; blank falls back to the
+ *   default currency on submit.
+ * Category, memo, and comment pass through unvalidated.
  *
  * A discriminated union (not a refinement) carries the per-kind required
  * fields, so every missing field is reported in one pass: Zod skips
@@ -110,12 +119,17 @@ export const createAddTransactionSchema = (numberFormat: NumberFormat) => {
         to_bank_account: z.string(),
         category_id: z.string(),
         memo: z.string(),
-        currency: z.string(),
+        currency: optionalCurrencyCode("validation.currencyCode"),
         comment: z.string(),
     };
     const withRecipient = {
         ...shared,
-        to_account_id: z.number().int().positive().nullable(),
+        to_account_id: z
+            .number()
+            .int()
+            .positive()
+            .transform(asAccountId)
+            .nullable(),
         recipient_id: requiredString("validation.required"),
     };
     return z.discriminatedUnion("kind", [

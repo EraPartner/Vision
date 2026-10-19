@@ -28,6 +28,8 @@ import {
 import { overrideIdField, parserConfigBody } from "./_importInput.ts";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
 import { cleanup } from "../lib/csvUpload.ts";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
 import {
   portfolioUpload,
   portfolioUploadErrorTranslator,
@@ -140,7 +142,7 @@ function parseBrokerageParams(data: unknown) {
  */
 function assertPortfolioFormatBrokerage(
   customConfig: { format?: string },
-  brokerage: { isBrokerage: boolean; accountId?: number | undefined },
+  brokerage: { isBrokerage: boolean; accountId?: AccountId | undefined },
 ) {
   const formatNames: Record<string, string> = {
     ibkr_transaction_history: "IBKR",
@@ -177,10 +179,10 @@ const defaultedTextField = (fallback: string) =>
 
 async function assertTransferDestination(
   config: {
-    transfer_destination_account_id?: number;
-    transfer_origin_account_id?: number;
+    transfer_destination_account_id?: AccountId;
+    transfer_origin_account_id?: AccountId;
   },
-  brokerage: { accountId?: number | undefined },
+  brokerage: { accountId?: AccountId | undefined },
 ) {
   for (const accountId of [
     config.transfer_destination_account_id,
@@ -646,7 +648,7 @@ const bulkInvestmentOverrideSchema = bareMessages(
       return {
         rowIds: body.row_ids,
         createNew: false,
-        investmentId: parsed.value,
+        investmentId: asInvestmentId(parsed.value),
       };
     }),
 );
@@ -825,7 +827,7 @@ const commitBodySchema = bareMessages(
           });
           return z.NEVER;
         }
-        return parsed.value;
+        return asAccountId(parsed.value);
       }),
   }),
 );

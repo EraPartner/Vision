@@ -15,6 +15,7 @@ import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /** URL-param patch applied by a quick filter. `undefined` clears the key. */
 export type QuickFilterParams = Record<string, string | undefined>;
@@ -55,7 +56,7 @@ function SuggestionRow({
 export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const currency = appSettings.defaultCurrency || "EUR";
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     const amountErrorId = useId();
     const dateErrorId = useId();
     const thisYear = new Date().getFullYear();

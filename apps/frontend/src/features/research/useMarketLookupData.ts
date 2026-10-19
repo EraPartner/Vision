@@ -5,6 +5,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiClient } from "@/lib/api";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { marketKeys } from "@/lib/queryKeys";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,9 +33,9 @@ export function rangeToFromMs(range: string, now = Date.now()): number {
 }
 
 interface ProviderInvestment {
-    id: number;
+    id: InvestmentId;
     symbol?: string | undefined;
-    currency: string;
+    currency: CurrencyCode;
 }
 
 export interface MarketChartPoint {

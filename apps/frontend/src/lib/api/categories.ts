@@ -13,6 +13,7 @@ import {
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery, createWithStatus } from "@/lib/api/helpers";
+import type { CategoryId } from "@vision/types/brands";
 
 export function getCategories(params?: {
     limit?: number | undefined;
@@ -38,7 +39,7 @@ export async function createCategory(
 }
 
 export function updateCategory(
-    id: number,
+    id: CategoryId,
     category: CategoryUpdate,
 ): Promise<Category> {
     return apiRequest<Category>(`/api/categories/${id}`, {
@@ -47,7 +48,7 @@ export function updateCategory(
     });
 }
 
-export async function deleteCategory(id: number): Promise<void> {
+export async function deleteCategory(id: CategoryId): Promise<void> {
     await apiRequest<void>(`/api/categories/${id}`, { method: "DELETE" });
 }
 
@@ -71,7 +72,7 @@ export function createCategoryNode(
 }
 
 export function updateCategoryNode(
-    id: number,
+    id: CategoryId,
     input: CategoryNodeUpdate,
 ): Promise<CategoryNode> {
     return apiRequest<CategoryNode>(`/api/categories/tree/${id}`, {
@@ -80,13 +81,13 @@ export function updateCategoryNode(
     });
 }
 
-export async function deleteCategoryNode(id: number): Promise<void> {
+export async function deleteCategoryNode(id: CategoryId): Promise<void> {
     await apiRequest<void>(`/api/categories/tree/${id}`, { method: "DELETE" });
 }
 
 export function mergeCategoryNode(
-    sourceId: number,
-    targetId: number,
+    sourceId: CategoryId,
+    targetId: CategoryId,
 ): Promise<CategoryNode> {
     return apiRequest<CategoryNode>(`/api/categories/tree/${sourceId}/merge`, {
         method: "POST",

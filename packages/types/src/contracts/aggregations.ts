@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { IdSchema } from "./common.ts";
+import {
+  AccountIdSchema,
+  CategoryIdSchema,
+  RecipientIdSchema,
+  TagIdSchema,
+} from "../brands.ts";
+import { WireCurrencySchema } from "./common.ts";
 
 /*
  * Wire contracts for /api/aggregations/*. Each route answers
@@ -66,7 +72,7 @@ export const RecipientInsightsSchema = aggregationEnvelopeOf(
   z.looseObject({
     topMerchants: z.array(
       z.looseObject({
-        recipientId: IdSchema,
+        recipientId: RecipientIdSchema,
         name: z.string(),
         totalSpend: z.number(),
         transactionCount: CountSchema,
@@ -77,7 +83,7 @@ export const RecipientInsightsSchema = aggregationEnvelopeOf(
     ),
     monthOverMonth: z.array(
       z.looseObject({
-        recipientId: IdSchema,
+        recipientId: RecipientIdSchema,
         name: z.string(),
         currentSpend: z.number(),
         previousSpend: z.number(),
@@ -132,7 +138,7 @@ export const BankBalancesSchema = aggregationEnvelopeOf(
   z.looseObject({
     accounts: z.array(
       z.looseObject({
-        account_id: IdSchema,
+        account_id: AccountIdSchema,
         bank_account: z.string(),
         display_name: z.string(),
         balance: z.number(),
@@ -161,9 +167,9 @@ export const CategoryPivotSchema = aggregationEnvelopeOf(
       z.string(),
       z.array(
         z.looseObject({
-          categoryId: IdSchema.nullable(),
+          categoryId: CategoryIdSchema.nullable(),
           categoryName: z.string(),
-          categoryPathIds: z.array(IdSchema),
+          categoryPathIds: z.array(CategoryIdSchema),
           categoryPathSegments: z.array(z.string()),
           total: z.number(),
           income: z.number(),
@@ -183,7 +189,7 @@ export const RecipientByYearSchema = aggregationEnvelopeOf(
       z.string(),
       z.array(
         z.looseObject({
-          recipientId: IdSchema,
+          recipientId: RecipientIdSchema,
           name: z.string(),
           totalSpend: z.number(),
           transactionCount: CountSchema,
@@ -214,15 +220,18 @@ const periodPivotOf = <S extends z.ZodRawShape>(identity: S) =>
  */
 export const PeriodPivotConversionSchema = z.looseObject({
   usedHistoricalFallback: z.boolean(),
-  affectedCurrencies: z.array(z.string()),
+  affectedCurrencies: z.array(WireCurrencySchema),
   unconvertedCount: CountSchema,
-  unconvertedCurrencies: z.array(z.string()),
+  unconvertedCurrencies: z.array(WireCurrencySchema),
 });
 
 /** `GET /api/aggregations/recipient-pivot`. */
 export const RecipientPivotSchema = aggregationEnvelopeOf(
   z.looseObject({
-    recipientPivot: periodPivotOf({ recipientId: IdSchema, name: z.string() }),
+    recipientPivot: periodPivotOf({
+      recipientId: RecipientIdSchema,
+      name: z.string(),
+    }),
     conversion: PeriodPivotConversionSchema,
   }),
 );
@@ -230,7 +239,7 @@ export const RecipientPivotSchema = aggregationEnvelopeOf(
 /** `GET /api/aggregations/tag-pivot`. */
 export const TagPivotSchema = aggregationEnvelopeOf(
   z.looseObject({
-    tagPivot: periodPivotOf({ tagId: IdSchema, slug: z.string() }),
+    tagPivot: periodPivotOf({ tagId: TagIdSchema, slug: z.string() }),
     conversion: PeriodPivotConversionSchema,
   }),
 );
@@ -299,7 +308,7 @@ const ForecastDiagnosticsSchema = z.looseObject({
 });
 
 const forecastPayloadShape = {
-  currency: z.string(),
+  currency: WireCurrencySchema,
   actual: z.array(
     z.looseObject({
       date: z.string(),

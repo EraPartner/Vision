@@ -5,6 +5,7 @@ import type { PortfolioTransaction } from "./api";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType as CanonicalPortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import type { RecurrenceInterval } from "@vision/types/recurrence";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 // Derived from the canonical runtime array in @vision/types/assetClasses, so
 // this union can no longer drift from the shared ASSET_CLASSES list.
@@ -69,15 +70,15 @@ export type { RecurrenceInterval };
 
 // Computed view model returned by usePortfolio
 export interface InvestmentSummary {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol?: string | undefined;
     assetClass: AssetClass;
     asset_class: AssetClass;
     /** Display currency of every monetary field below (the app's target currency). */
-    currency: string;
+    currency: CurrencyCode;
     /** The investment's native currency, preserved for labelling (mirrors backend). */
-    originalCurrency?: string;
+    originalCurrency?: CurrencyCode;
     currentPrice?: number;
     current_price?: number | undefined;
     interestRate?: number;

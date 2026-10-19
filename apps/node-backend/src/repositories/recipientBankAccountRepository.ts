@@ -14,6 +14,7 @@ import {
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { RecipientBankAccountRow } from '../types/rows.ts';
+import type { RecipientId } from '@vision/types/brands';
 
 export type { RecipientBankAccountRow };
 
@@ -40,7 +41,7 @@ export const recipientBankAccountRepository = {
   },
 
   async getByRecipientId(
-    recipientId: number,
+    recipientId: RecipientId,
     activeOnly = true,
   ): Promise<RecipientBankAccountRow[]> {
     let sql = `
@@ -54,7 +55,7 @@ export const recipientBankAccountRepository = {
   },
 
   async getPrimaryAccount(
-    recipientId: number,
+    recipientId: RecipientId,
   ): Promise<RecipientBankAccountRow | null> {
     const row = await queryOne(
       recipientBankAccountRowSchema,
@@ -77,7 +78,7 @@ export const recipientBankAccountRepository = {
     accountLabel = null,
     setAsPrimary = false,
   }: {
-    recipientId: number;
+    recipientId: RecipientId;
     accountNumber: string;
     bankName?: string | null;
     address?: string | null;
@@ -190,8 +191,8 @@ export const recipientBankAccountRepository = {
    * @returns rows deleted
    */
   async deleteMergeDuplicates(
-    primaryId: number,
-    aliasIds: number[],
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await query(
       `DELETE FROM recipient_bank_accounts rba
@@ -208,7 +209,7 @@ export const recipientBankAccountRepository = {
    * Repoint surviving alias bank accounts onto the merge primary.
    * @returns rows repointed
    */
-  async repointRecipient(primaryId: number, aliasIds: number[]): Promise<number> {
+  async repointRecipient(primaryId: RecipientId, aliasIds: RecipientId[]): Promise<number> {
     const result = await query(
       `UPDATE recipient_bank_accounts
           SET recipient_id = $1
@@ -221,7 +222,7 @@ export const recipientBankAccountRepository = {
   /** @returns true if the account was made primary */
   async setPrimary(
     bankAccountId: number,
-    recipientId: number | null,
+    recipientId: RecipientId | null,
   ): Promise<boolean> {
     return withTransaction(async (client) => {
       await client.query(

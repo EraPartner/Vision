@@ -22,6 +22,7 @@ import type { ResolvedTaxYearTable } from "./belgianTaxTables.ts";
 import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
 import { addAll, toNumber } from "../../lib/money.ts";
+import { currencyOrEur } from "../../lib/currencyCode.ts";
 
 const addMoney = (...values: Array<number | string>) =>
   toNumber(addAll(values));
@@ -353,9 +354,7 @@ async function fetchTaxTransactions(
   const relevantCurrencies = [
     ...new Set([
       ...taxRows.map((r) =>
-        String(r.currency || "EUR")
-          .toUpperCase()
-          .trim(),
+        String(currencyOrEur(r.currency)).toUpperCase().trim(),
       ),
       toCur,
     ]),
@@ -383,9 +382,7 @@ async function fetchTaxTransactions(
   for (const row of taxRows) {
     // Normalize the source currency ONCE so the skip-guard and the rowRates keys
     // can't disagree for mixed-case/whitespace currency strings.
-    const cur = String(row.currency || "EUR")
-      .toUpperCase()
-      .trim();
+    const cur = String(currencyOrEur(row.currency)).toUpperCase().trim();
     const rowDate = row.rate_date;
     // Per-row rate table built from the transaction-date rates, so convertWithRates
     // applies the same conversion math and unsupported-currency handling as the live

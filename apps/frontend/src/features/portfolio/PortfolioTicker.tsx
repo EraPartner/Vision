@@ -23,6 +23,7 @@ import type { InvestmentsListResponse } from "@/types/api";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { usePortfolioTickerQuotes } from "./usePortfolioQueries";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface PortfolioTickerProps {
     /** Holdings to surface — only those with a ticker symbol Yahoo can quote appear. */
@@ -276,7 +277,7 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
     const queryClient = useQueryClient();
 
     const toggle = useMutation({
-        mutationFn: ({ id, show }: { id: number; show: boolean }) =>
+        mutationFn: ({ id, show }: { id: InvestmentId; show: boolean }) =>
             apiClient.updateInvestment(id, { show_in_ticker: show }),
         // Optimistic: flip the cached investment so the switch and tape react
         // instantly; reconcile (or roll back) once the server responds.

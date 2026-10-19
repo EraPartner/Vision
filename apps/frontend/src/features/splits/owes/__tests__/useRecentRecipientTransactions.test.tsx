@@ -9,6 +9,7 @@ import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import type { Transaction, TransactionsListResponse } from "@/types/api";
+import { asRecipientId } from "@vision/types/brands";
 
 const transaction = (id: number): Transaction => ({
     id,
@@ -34,7 +35,7 @@ describe("useRecentRecipientTransactions", () => {
             .mockResolvedValue(response([1, 2], 5));
 
         const { result } = renderHook(
-            () => useRecentRecipientTransactions(42),
+            () => useRecentRecipientTransactions(asRecipientId(42)),
             { wrapper: createQueryWrapper() },
         );
 
@@ -57,7 +58,7 @@ describe("useRecentRecipientTransactions", () => {
             .mockResolvedValueOnce(response([10, 11, 12], 12));
 
         const { result } = renderHook(
-            () => useRecentRecipientTransactions(7),
+            () => useRecentRecipientTransactions(asRecipientId(7)),
             { wrapper: createQueryWrapper() },
         );
 
@@ -93,7 +94,7 @@ describe("useRecentRecipientTransactions", () => {
             .mockReturnValueOnce(nextPage);
 
         const { result } = renderHook(
-            () => useRecentRecipientTransactions(9),
+            () => useRecentRecipientTransactions(asRecipientId(9)),
             { wrapper: createQueryWrapper() },
         );
 
@@ -119,7 +120,7 @@ describe("useRecentRecipientTransactions", () => {
             .mockRejectedValueOnce(new Error("offline"));
 
         const { result } = renderHook(
-            () => useRecentRecipientTransactions(3),
+            () => useRecentRecipientTransactions(asRecipientId(3)),
             { wrapper: createQueryWrapper() },
         );
 
@@ -137,7 +138,7 @@ describe("useRecentRecipientTransactions", () => {
         vi.spyOn(apiClient, "getTransactions").mockResolvedValue(response([1]));
 
         const { result } = renderHook(
-            () => useRecentRecipientTransactions(5),
+            () => useRecentRecipientTransactions(asRecipientId(5)),
             { wrapper: createQueryWrapper() },
         );
 

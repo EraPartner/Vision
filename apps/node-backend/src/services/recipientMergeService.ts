@@ -27,6 +27,7 @@ import { splitRepository } from "../repositories/splitRepository.ts";
 import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.ts";
 import { recipientBankAccountRepository } from "../repositories/recipientBankAccountRepository.ts";
 import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
+import type { RecipientId } from "@vision/types/brands";
 
 /**
  * Merge a set of alias recipients into a primary recipient.
@@ -37,10 +38,10 @@ import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
  *   PostgreSQL ANY predicates make duplicates behaviorally inert.
  */
 export async function mergeRecipients(
-  primaryId: number,
-  aliasIds: number[],
+  primaryId: RecipientId,
+  aliasIds: RecipientId[],
 ): Promise<{
-  mergedAliasIds: number[];
+  mergedAliasIds: RecipientId[];
   reassigned: {
     transactions: number;
     splits: number;

@@ -16,20 +16,27 @@ import {
     categoryTreeBody,
     recipientRow,
 } from "@/test/msw/rowFixtures";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+    asTagId,
+    asTransactionId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 const TX: TableTransaction = {
-    id: 42,
+    id: asTransactionId(42),
     date: "2025-01-15",
     memo: "Test purchase",
     category: "FOOD:GROCERIES",
-    categoryId: 1,
+    categoryId: asCategoryId(1),
     recipient: "Alice",
-    recipientId: 1,
+    recipientId: asRecipientId(1),
     bank: "IBAN001",
     amount: -25.5,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     balance: 100,
     comment: "Test comment",
     is_active: true,
@@ -649,7 +656,7 @@ describe("TransactionInspector", () => {
             ...TX,
             tags: [
                 {
-                    id: 1,
+                    id: asTagId(1),
                     slug: "travel",
                     color: null,
                     is_active: true,

@@ -6,6 +6,12 @@ import { SPLIT_STUB } from "@/test/msw/handlers";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { getOwedSummary, getOwedByRecipient, getSplitsByTransaction, createSplitsBatch, recordSplitPayment, settleSplit, settleAllSplitsByRecipient, deleteSplit } from "@/lib/api/splits";
+import {
+    asCurrencyCode,
+    asRecipientId,
+    asSplitId,
+    asTransactionId,
+} from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -36,7 +42,7 @@ describe("splits API client", () => {
         return ok({ items: [], total: 0, summary: OWED_TOTALS });
       }),
     );
-    const res = await getOwedSummary("EUR");
+    const res = await getOwedSummary(asCurrencyCode("EUR"));
     expect(res.items).toEqual([]);
     expect(res.summary).toEqual(OWED_TOTALS);
     expect(currency).toBe("EUR");
@@ -48,14 +54,14 @@ describe("splits API client", () => {
         ok({ items: [OWED_DETAIL], total: 1, summary: OWED_TOTALS }),
       ),
     );
-    const res = await getOwedByRecipient(4, "EUR");
+    const res = await getOwedByRecipient(asRecipientId(4), asCurrencyCode("EUR"));
     expect(res.items).toHaveLength(1);
     expect(res.summary.remaining).toBe(20);
   });
 
   it("getSplitsByTransaction fetches by transaction id", async () => {
     server.use(http.get(`${API_BASE}/api/splits/transaction/8`, () => ok({ items: [], total: 0 })));
-    expect((await getSplitsByTransaction(8)).items).toEqual([]);
+    expect((await getSplitsByTransaction(asTransactionId(8))).items).toEqual([]);
   });
 
   it("createSplitsBatch posts transaction_id + splits", async () => {
@@ -66,7 +72,7 @@ describe("splits API client", () => {
         return ok({ items: [{ id: 1 }] });
       }),
     );
-    await createSplitsBatch(8, [{ recipient_id: 2, amount: 5 }]);
+    await createSplitsBatch(asTransactionId(8), [{ recipient_id: asRecipientId(2), amount: 5 }]);
     expect(body).toMatchObject({ transaction_id: 8, splits: [{ recipient_id: 2, amount: 5 }] });
   });
 
@@ -78,25 +84,25 @@ describe("splits API client", () => {
         return ok({ id: 1, split_id: 3, amount: 5, paid_at: "2026-06-01", created_at: "" });
       }),
     );
-    await recordSplitPayment(3, 5, "note", "2026-06-01");
+    await recordSplitPayment(asSplitId(3), 5, "note", "2026-06-01");
     expect(body).toMatchObject({ amount: 5, note: "note", paid_at: "2026-06-01" });
   });
 
   it("settleSplit POSTs to the settle route", async () => {
     server.use(http.post(`${API_BASE}/api/splits/3/settle`, () => ok({ id: 3 })));
-    expect((await settleSplit(3)).id).toBe(3);
+    expect((await settleSplit(asSplitId(3))).id).toBe(3);
   });
 
   it("settleAllSplitsByRecipient POSTs and returns the settled count", async () => {
     server.use(
       http.post(`${API_BASE}/api/splits/owed/4/settle-all`, () => ok({ settled_count: 6 })),
     );
-    expect((await settleAllSplitsByRecipient(4)).settled_count).toBe(6);
+    expect((await settleAllSplitsByRecipient(asRecipientId(4))).settled_count).toBe(6);
   });
 
   it("deleteSplit resolves on void", async () => {
     server.use(http.delete(`${API_BASE}/api/splits/3`, () => new HttpResponse(null, { status: 204 })));
-    await expect(deleteSplit(3)).resolves.toBeUndefined();
+    await expect(deleteSplit(asSplitId(3))).resolves.toBeUndefined();
   });
 
   it("rejects an owed detail row whose NUMERIC remaining arrives as a string", async () => {
@@ -105,7 +111,7 @@ describe("splits API client", () => {
         ok({ items: [{ ...OWED_DETAIL, remaining: "20.0000" }], total: 1, summary: OWED_TOTALS }),
       ),
     );
-    await expect(getOwedByRecipient(4, "EUR")).rejects.toMatchObject({
+    await expect(getOwedByRecipient(asRecipientId(4), asCurrencyCode("EUR"))).rejects.toMatchObject({
       name: "ApiContractError",
       endpoint: "GET /api/splits/owed/4",
     });

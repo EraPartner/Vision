@@ -26,6 +26,8 @@ import {
   getAssetAdjustmentsForBatch,
   deleteAssetAdjustmentsForBatch,
 } from "../../repositories/portfolioAssetAdjustmentRepository.ts";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 /** `asset_adjustment_details` JSONB as staged by the importer. */
 export type AssetAdjustmentDetails = {
@@ -62,8 +64,8 @@ export type AdjustmentBasisAllocation = {
 export type AssetAdjustmentEvent = {
   id: number;
   type: "asset_adjustment";
-  account_id: number;
-  investment_id: number;
+  account_id: AccountId;
+  investment_id: InvestmentId;
   units: string;
   amount: "0";
   fees: "0";
@@ -167,8 +169,8 @@ export function previewPortfolioAssetAdjustment(
     event: {
       id: Number.MAX_SAFE_INTEGER,
       type: "asset_adjustment",
-      account_id: account,
-      investment_id: investment,
+      account_id: asAccountId(account),
+      investment_id: asInvestmentId(investment),
       units: String(row.units),
       amount: "0",
       fees: "0",
@@ -314,13 +316,15 @@ export async function rollbackPortfolioAssetAdjustmentsForBatch(
     const omitted = new Set(omitTransactionIds.map(Number));
     if (!skipHistoryValidation)
       for (const investmentId of new Set(
-        removed.map((row) => Number(row.investment_id)),
+        removed.map((row) => row.investment_id),
       )) {
         const history = await getUnitEventsForInvestment(investmentId);
         validatePortfolioAssetTransferHistory(
-          history.filter(
-            (row) =>
-              !removedIds.has(Number(row.id)) && !omitted.has(Number(row.id)),
+          // Each id set names rows of one table only (see the UNION).
+          history.filter((row) =>
+            row.type === "asset_adjustment"
+              ? !removedIds.has(Number(row.id))
+              : row.type === "asset_transfer" || !omitted.has(Number(row.id)),
           ),
         );
       }

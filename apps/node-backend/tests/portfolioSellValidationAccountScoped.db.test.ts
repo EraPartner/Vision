@@ -30,6 +30,11 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import type { PortfolioTransactionInput } from "../src/services/portfolio/portfolioTransactionRules.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
@@ -61,13 +66,13 @@ const trade = (
   units: number,
   accountId: number | null,
 ): PortfolioTransactionInput => ({
-  investment_id: investmentId,
+  investment_id: asInvestmentId(investmentId),
   type,
   date,
   units,
   price_per_unit: 10,
-  currency: "EUR",
-  account_id: accountId,
+  currency: asCurrencyCode("EUR"),
+  account_id: accountId == null ? null : asAccountId(accountId),
 });
 
 async function wipe() {

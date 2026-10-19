@@ -3,13 +3,14 @@ import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type { RecipientId } from "@vision/types/brands";
 
 export interface LinkTransactionFilters {
     start_date: string;
     end_date: string;
     bank_account: string;
     recipient_name: string;
-    recipient_id: number | null;
+    recipient_id: RecipientId | null;
     uncategorised: boolean;
     active: boolean;
     matchAmount: boolean;

@@ -8,6 +8,7 @@ import { useSavedCharts, useCreateSavedChart, useUpdateSavedChart, useDeleteSave
 import { useOllamaStatus, useOllamaModels, nextOllamaPollInterval } from "@/hooks/useOllamaStatus";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import type { SavedChart } from "@/lib/api";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const makeQueryWrapper = createQueryWrapper;
 
@@ -182,7 +183,7 @@ describe("useCurrencyConverter", () => {
     it("returns convertToTarget and ratesToEur", async () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
-            rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
+            rates: [{ currency: asCurrencyCode("USD"), rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -192,7 +193,7 @@ describe("useCurrencyConverter", () => {
     it("converts USD to EUR correctly", async () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
-            rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
+            rates: [{ currency: asCurrencyCode("USD"), rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -227,7 +228,7 @@ describe("useCurrencyConverter", () => {
     it("reports a missing target rate through the optional conversion API", async () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
-            rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
+            rates: [{ currency: asCurrencyCode("USD"), rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
         });
         const { result } = renderHook(() => useCurrencyConverter("GBP"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));

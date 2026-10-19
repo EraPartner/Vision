@@ -17,6 +17,7 @@ vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn() },
 }));
 import { toast } from "sonner";
+import { asAccountId } from "@vision/types/brands";
 
 const makeFullWrapper = createLanguageQueryWrapper;
 
@@ -89,7 +90,7 @@ describe("useUpdateAccount", () => {
         });
         await act(async () => {
             await result.current.mutateAsync({
-                id: 3,
+                id: asAccountId(3),
                 data: { name: "Y" },
             });
         });
@@ -113,7 +114,7 @@ describe("useUpdateAccount", () => {
 
         await act(async () => {
             await result.current.mutateAsync({
-                id: 3,
+                id: asAccountId(3),
                 data: { name: "Y" },
             });
         });
@@ -127,7 +128,7 @@ describe("useUpdateAccount", () => {
         invalidateSpy.mockClear();
         await act(async () => {
             await result.current.mutateAsync({
-                id: 3,
+                id: asAccountId(3),
                 data: { owner: "partner" },
             });
         });
@@ -148,7 +149,7 @@ describe("useUpdateAccount", () => {
         });
         await act(async () => {
             await result.current
-                .mutateAsync({ id: 3, data: {} })
+                .mutateAsync({ id: asAccountId(3), data: {} })
                 .catch(() => {});
         });
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -168,7 +169,7 @@ describe("useMergeAccounts", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync({ targetId: 1, sourceIds: [2] });
+            await result.current.mutateAsync({ targetId: asAccountId(1), sourceIds: [asAccountId(2)] });
         });
         expect(spy).toHaveBeenCalledWith(1, [2]);
         expect(toast.success).toHaveBeenCalled();
@@ -183,7 +184,7 @@ describe("useMergeAccounts", () => {
         });
         await act(async () => {
             await result.current
-                .mutateAsync({ targetId: 1, sourceIds: [2] })
+                .mutateAsync({ targetId: asAccountId(1), sourceIds: [asAccountId(2)] })
                 .catch(() => {});
         });
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
@@ -203,7 +204,7 @@ describe("useMergeAccounts", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync({ targetId: 1, sourceIds: [2] });
+            await result.current.mutateAsync({ targetId: asAccountId(1), sourceIds: [asAccountId(2)] });
         });
         // A merge must NOT fall back to the whole-cache blanket form invalidateQueries()
         // (called with no filter) — every call carries an explicit queryKey.
@@ -237,7 +238,7 @@ describe("useDeleteAccount", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync(9);
+            await result.current.mutateAsync(asAccountId(9));
         });
         expect(spy).toHaveBeenCalledWith(9);
         expect(toast.success).toHaveBeenCalled();
@@ -251,7 +252,7 @@ describe("useDeleteAccount", () => {
             wrapper: makeFullWrapper(),
         });
         await act(async () => {
-            await result.current.mutateAsync(9).catch(() => {});
+            await result.current.mutateAsync(asAccountId(9)).catch(() => {});
         });
         await waitFor(() => expect(toast.error).toHaveBeenCalled());
     });

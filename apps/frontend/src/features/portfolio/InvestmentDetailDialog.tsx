@@ -46,7 +46,11 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { numberFormatToLocale } from "@/utils/currency";
+import {
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+    currencyOr,
+} from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
 import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
@@ -189,7 +193,10 @@ const TransactionRow = memo(function TransactionRow({
                                       ? txn.amount / txn.units
                                       : 0,
                                 {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                     decimals: 2,
                                 },
                             ),
@@ -226,7 +233,7 @@ const TransactionRow = memo(function TransactionRow({
                                 ? -Math.abs(txn.amount)
                                 : Math.abs(txn.amount)
                         }
-                        currency={txn.currency || nativeCurrency}
+                        currency={currencyOr(txn.currency, nativeCurrency)}
                         signed
                     />
                 </p>
@@ -236,14 +243,20 @@ const TransactionRow = memo(function TransactionRow({
                         {(txn.fees ?? 0) > 0 &&
                             t("invDetail.fee", {
                                 amount: fmt(txn.fees ?? 0, {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                 }),
                             })}
                         {(txn.fees ?? 0) > 0 && (txn.taxes ?? 0) > 0 && " · "}
                         {(txn.taxes ?? 0) > 0 &&
                             t("invDetail.tax", {
                                 amount: fmt(txn.taxes ?? 0, {
-                                    currency: txn.currency || nativeCurrency,
+                                    currency: currencyOr(
+                                        txn.currency,
+                                        nativeCurrency,
+                                    ),
                                 }),
                             })}
                     </p>
@@ -480,11 +493,13 @@ export function InvestmentDetailDialog({
     // is the display/target currency (all amounts are converted to it) — the
     // holding's NATIVE currency lives in `originalCurrency`, which is what decides
     // foreign-ness.
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const nativeCurrency = (
         investment.originalCurrency ||
-        investment.currency ||
-        "EUR"
+        currencyOr(investment.currency, DEFAULT_CURRENCY)
     ).toUpperCase();
     const isForeignCurrency = nativeCurrency !== targetCurrency.toUpperCase();
 

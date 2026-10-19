@@ -9,6 +9,7 @@ import { ok, err, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import type { Account } from "@/types/api";
 import type { AccountMergePreview } from "@/lib/api/accounts";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -40,8 +41,8 @@ const PREVIEW: AccountMergePreview = {
     source: 1,
     reassigned: { transactions: 1002, planned: 3, portfolio: 0, funding: 0 },
     projectedBalance: 1234.56,
-    projectedBalanceCurrency: "EUR",
-    balanceParts: [{ currency: "EUR", balance: 1234.56 }],
+    projectedBalanceCurrency: asCurrencyCode("EUR"),
+    balanceParts: [{ currency: asCurrencyCode("EUR"), balance: 1234.56 }],
     projectedBalanceIncomplete: false,
     unconvertedCurrencies: [],
     stampsInterleaved: true,
@@ -170,11 +171,11 @@ describe("MergeAccountDialog (integration, WP-B5 §3 F9 preview)", () => {
                 ...PREVIEW,
                 projectedBalance: 100,
                 balanceParts: [
-                    { currency: "EUR", balance: 100 },
-                    { currency: "USD", balance: 40 },
+                    { currency: asCurrencyCode("EUR"), balance: 100 },
+                    { currency: asCurrencyCode("USD"), balance: 40 },
                 ],
                 projectedBalanceIncomplete: true,
-                unconvertedCurrencies: ["USD"],
+                unconvertedCurrencies: [asCurrencyCode("USD")],
             },
         });
         const user = userEvent.setup();

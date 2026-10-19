@@ -1,6 +1,7 @@
 import accountService from "./accountService.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import type { AccountRow } from "../types/rows.ts";
+import type { AccountId } from "@vision/types/brands";
 
 const PORTFOLIO_ACCOUNT_TYPES = new Set([
   "brokerage",
@@ -18,7 +19,7 @@ export function isValidPortfolioImportAccount(
 
 /** Validate routing before staging or changing a reviewed batch. */
 export async function assertPortfolioImportAccount(
-  accountId: number | null | undefined,
+  accountId: AccountId | null | undefined,
 ): Promise<AccountRow | undefined> {
   if (accountId == null) return undefined;
   const account = await accountService.get(accountId);
@@ -32,7 +33,7 @@ export async function assertPortfolioImportAccount(
 
 /** Missing accounts are repairable review state; infrastructure failures are not. */
 export async function getPortfolioImportAccountForPreview(
-  accountId: number | null | undefined,
+  accountId: AccountId | null | undefined,
 ): Promise<AccountRow | undefined> {
   if (accountId == null) return undefined;
   try {

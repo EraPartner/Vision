@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import { useImportReviewMutations } from "../useImportReviewData";
+import { asCategoryId } from "@vision/types/brands";
 vi.mock("react-router", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
@@ -35,7 +36,7 @@ describe("import review write ordering", () => {
         });
         let edit!: Promise<void>;
         act(() => {
-            edit = result.current.overrideCategories(["1"], 2);
+            edit = result.current.overrideCategories(["1"], asCategoryId(2));
             result.current.commit();
         });
         expect(order).toEqual([]);
@@ -68,7 +69,7 @@ describe("import review write ordering", () => {
         });
         await act(async () => {
             await expect(
-                result.current.overrideCategories(["1", "2"], 3),
+                result.current.overrideCategories(["1", "2"], asCategoryId(3)),
             ).rejects.toThrow("failed row");
         });
         expect(result.current.hasEditErrors).toBe(true);

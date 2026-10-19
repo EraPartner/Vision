@@ -26,6 +26,11 @@ import { toDecimal, toNumber } from "../lib/money.ts";
 import { normalizeDateLikeToYmd } from "../lib/dateFormat.ts";
 import { logger } from "../config/logger.ts";
 import type { PlannedMatchCandidateRow } from "../types/rows.ts";
+import type {
+  PlannedTransactionId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 import { matchesTolerance, DATE_WINDOW_DAYS } from "../lib/plannedMatching.ts";
 const SUGGESTION_LOOKBACK_DAYS = 45;
@@ -41,9 +46,9 @@ function calendarDayOrdinal(value: unknown): number | undefined {
 
 /** An ingested transaction offered to `autoLinkTransactions`. */
 export type AutoLinkTxRow = {
-  id: number;
+  id: TransactionId;
   currency?: string | null;
-  recipient_id?: number | null;
+  recipient_id?: RecipientId | null;
   amount: number | string;
   transaction_date?: Date | string | null;
   date?: Date | string | null;
@@ -51,7 +56,10 @@ export type AutoLinkTxRow = {
 
 export interface AutoLinkResult {
   autoLinkedCount: number;
-  links: Array<{ plannedTransactionId: number; transactionId: number }>;
+  links: Array<{
+    plannedTransactionId: PlannedTransactionId;
+    transactionId: TransactionId;
+  }>;
 }
 
 export interface PlannedMatchSuggestion {
@@ -119,7 +127,7 @@ export async function autoLinkTransactions(
 
   const txs = txRows
     .filter(
-      (t): t is AutoLinkTxRow & { recipient_id: number } =>
+      (t): t is AutoLinkTxRow & { recipient_id: RecipientId } =>
         Boolean(t) && t.id != null && t.recipient_id != null,
     )
     .map((t) => ({
@@ -132,8 +140,8 @@ export async function autoLinkTransactions(
 
   // Build both match directions so a pair only auto-links when it is mutually
   // unambiguous (see the safety rule at the top of this file).
-  const candidatesByTx = new Map<number, PlannedMatchCandidateRow[]>();
-  const txIdsByPlanned = new Map<number, number[]>();
+  const candidatesByTx = new Map<TransactionId, PlannedMatchCandidateRow[]>();
+  const txIdsByPlanned = new Map<PlannedTransactionId, TransactionId[]>();
   const buckets = new Map<string, PlannedMatchCandidateRow[]>();
   for (const planned of activePlanned) {
     const day = calendarDayOrdinal(planned.planned_date);

@@ -2,22 +2,25 @@
  * Query-string helpers shared by /api/info sub-routers.
  */
 
+import { isCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
+import { EUR } from "../../lib/currencyCode.ts";
 import { z } from "zod";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { bareMessages } from "../../lib/zodInput.ts";
 import { singleQueryValue } from "../_inputBridges.ts";
 
-function normalizeTargetCurrency(raw: unknown): string {
-  if (raw == null || raw === "") return "EUR";
+function normalizeTargetCurrency(raw: unknown): CurrencyCode {
+  if (raw == null || raw === "") return EUR;
 
   const value = String(raw).toUpperCase().trim();
-  return /^[A-Z]{3}$/.test(value) ? value : "EUR";
+  return isCurrencyCode(value) ? value : EUR;
 }
 
 // Still read directly by routes/aggregations.ts.
 export function getTargetCurrency(req: {
   query: Record<string, unknown>;
-}): string {
+}): CurrencyCode {
   return normalizeTargetCurrency(
     req.query.currency ?? req.query.target_currency,
   );

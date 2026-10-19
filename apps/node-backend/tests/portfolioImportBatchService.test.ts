@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { loose, partial } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import {
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
+import type { PortfolioTransactionId } from "@vision/types/brands";
 
 const portfolioRemovalMocks = vi.hoisted(() => ({
   remove: vi.fn().mockResolvedValue(true),
@@ -332,8 +337,8 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
 
   it("runs inside one transaction and resets committed staging rows before aborting", async () => {
     getCommittedRows.mockResolvedValue([
-      { id: 42, route: "portfolio", investment_id: 8 },
-      { id: 43, route: "portfolio", investment_id: 8 },
+      { id: 42, route: "portfolio", investment_id: asInvestmentId(8) },
+      { id: 43, route: "portfolio", investment_id: asInvestmentId(8) },
     ]);
 
     await rollbackBatch(5);
@@ -449,7 +454,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
     const result = await resolveInvestmentRows({
       batchId: 5,
       rowIds: [10, 11, 12],
-      investmentId: 88,
+      investmentId: asInvestmentId(88),
     });
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
@@ -629,7 +634,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       resolveInvestmentRows({
         batchId: 5,
         rowIds: [10, 11, 999],
-        investmentId: 88,
+        investmentId: asInvestmentId(88),
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
@@ -682,7 +687,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       resolveInvestmentRows({
         batchId: 5,
         rowIds: [10],
-        investmentId: 88,
+        investmentId: asInvestmentId(88),
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
@@ -719,7 +724,7 @@ describe("resolveInvestmentRows — atomic group resolution", () => {
       resolveInvestmentRows({
         batchId: 5,
         rowIds: [10],
-        investmentId: 88,
+        investmentId: asInvestmentId(88),
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
@@ -761,7 +766,7 @@ describe("rollbackBatch — bulk delete on the 0086 import_batch_id stamp", () =
       ]),
     );
     portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue([
-      42, 43, 44,
+      asPortfolioTransactionId(42), asPortfolioTransactionId(43), asPortfolioTransactionId(44),
     ]);
 
     const res = await rollbackBatch(9);
@@ -803,7 +808,7 @@ describe("rollbackBatch — bulk delete on the 0086 import_batch_id stamp", () =
       ]),
     );
     portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue([
-      42,
+      asPortfolioTransactionId(42),
     ]);
 
     const res = await rollbackBatch(9);
@@ -817,9 +822,10 @@ describe("rollbackBatch — bulk delete on the 0086 import_batch_id stamp", () =
     getCommittedRows.mockResolvedValue(
       partial([{ id: 42, route: "portfolio" }]),
     );
-    portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue([
-      "42",
-    ]);
+    // A BIGINT-as-string id, deliberately not the declared type.
+    portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue(
+      loose<PortfolioTransactionId[]>(["42"]),
+    );
 
     const res = await rollbackBatch(9);
 
@@ -832,7 +838,7 @@ describe("rollbackBatch — bulk delete on the 0086 import_batch_id stamp", () =
     // be missing (staging row edited/cleared) without the lot ceasing to be ours.
     getCommittedRows.mockResolvedValue([]);
     portfolioTransactionRepository.hardDeleteByImportBatch.mockResolvedValue([
-      42, 43,
+      asPortfolioTransactionId(42), asPortfolioTransactionId(43),
     ]);
 
     const res = await rollbackBatch(9);

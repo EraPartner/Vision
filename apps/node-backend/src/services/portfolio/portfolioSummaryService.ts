@@ -36,13 +36,16 @@ import {
   buildAssetClassTotals,
   buildAssetGroupTotals,
 } from "./portfolioAssetClassTotals.ts";
+import { isCurrencyCode } from "@vision/types/brands";
 import {
   convertAtLatestRates,
+  convertCodeAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import type { LatestRatesToEur } from "../currency/latestRateConversion.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
+  money,
   toDecimal,
   toNumber,
   addAll,
@@ -56,6 +59,7 @@ import type {
   PortfolioMathTxRow,
 } from "../../types/rows.ts";
 import { nanToZero } from "../../lib/math.ts";
+import { currencyOrEur, storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 export type DecimalInput = import("@vision/shared-utils/money").DecimalInput;
 export type Decimal = import("decimal.js").default;
@@ -219,8 +223,8 @@ export async function getPortfolioSummary(
   // currencies (per-txn fallback) are needed.
   const distinctCurrencies = [
     ...new Set([
-      ...investmentRows.map((inv) => (inv.currency || "EUR").toUpperCase()),
-      ...includedTxnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
+      ...investmentRows.map((inv) => storedCurrencyCode(inv.currency)),
+      ...includedTxnRows.map((txn) => storedCurrencyCode(txn.currency)),
     ]),
   ];
   // Current multipliers come from the latest STORED rates (ADR-216). A
@@ -247,7 +251,7 @@ export async function getPortfolioSummary(
     new Map(
       investmentRows.map((inv) => [
         Number(inv.id),
-        (inv.currency || "EUR").toUpperCase(),
+        storedCurrencyCode(inv.currency),
       ]),
     ),
   );
@@ -292,7 +296,7 @@ export async function getPortfolioSummary(
       throughDate ? [throughDate] : [],
     );
     const archiveCurrencies = [
-      ...new Set(archivedRows.map((row) => row.currency || "EUR")),
+      ...new Set(archivedRows.map((row) => currencyOrEur(row.currency))),
     ];
     const { multipliers: archiveMultipliers } = latestMultipliers(
       archiveCurrencies,
@@ -764,7 +768,7 @@ function latestMultipliers(
   const multipliers = new Map<string, number>();
   const unavailable = new Set<string>();
   for (const currency of currencies) {
-    const multiplier = convertAtLatestRates(1, currency, target, rates);
+    const multiplier = convertCodeAtLatestRates(1, currency, target, rates);
     if (multiplier === undefined) unavailable.add(currency.toUpperCase());
     multipliers.set(
       currency,
@@ -814,7 +818,7 @@ function buildInvestmentSummary(
     currenciesWithoutRate: ReadonlySet<string>;
   },
 ) {
-  const invCurrency = (inv.currency || "EUR").toUpperCase();
+  const invCurrency = storedCurrencyCode(inv.currency);
   // Multiplier was resolved once per distinct currency by the caller.
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
 
@@ -850,14 +854,20 @@ function buildInvestmentSummary(
     txns.some((t) => t._fxFellBack === true);
   // Rows arrive ordered by (date, id): the last rent row is the latest one.
   const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
-  const monthlyRent = latestRent
-    ? convertAtLatestRates(
-        latestRent.amount ?? 0,
-        (latestRent.currency || invCurrency).toUpperCase(),
-        targetCurrency,
-        latestRates,
-      )
-    : toDecimal(0);
+  const rentCurrency = (latestRent?.currency || invCurrency).toUpperCase();
+  const target = targetCurrency.toUpperCase();
+  // Rates exist only for ISO codes, so a non-ISO code here has no rate.
+  const monthlyRent = !latestRent
+    ? toDecimal(0)
+    : rentCurrency === target
+      ? toDecimal(latestRent.amount ?? 0)
+      : isCurrencyCode(rentCurrency) && isCurrencyCode(target)
+      ? convertAtLatestRates(
+          money(latestRent.amount ?? 0, rentCurrency),
+          target,
+          latestRates,
+        )?.amount
+      : undefined;
   const roundedFees = round2(convertedTotalFees);
   const roundedTaxes = round2(convertedTotalTaxes);
   const roundedIncome = round2(convertedTotalIncome);

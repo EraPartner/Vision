@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import { asCurrencyCode, asPlannedTransactionId, asTransactionId } from "@vision/types/brands";
 
 const translations = vi.hoisted<Record<string, string>>(() => ({
     "common.delete": "Delete",
@@ -89,10 +90,10 @@ vi.mock("@/components/shared/VirtualDataTable", () => ({
 
 function payment(overrides: Partial<PlannedPayment> = {}): PlannedPayment {
     return {
-        id: 1,
+        id: asPlannedTransactionId(1),
         name: "Rent",
         amount: -1000,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         due_date: "2026-09-01",
         is_recurring: true,
         frequency: "monthly",
@@ -176,7 +177,7 @@ describe("PlannedPaymentsTable", () => {
         const user = userEvent.setup();
         const callbacks = renderTable([
             payment(),
-            payment({ id: 2, name: "Internet", is_active: false }),
+            payment({ id: asPlannedTransactionId(2), name: "Internet", is_active: false }),
         ]);
 
         expect(screen.getByText("Paused")).toBeInTheDocument();
@@ -199,12 +200,12 @@ describe("PlannedPaymentsTable", () => {
     it("links a paid row to its transaction and disables Mark as paid for a paused one", () => {
         renderTable([
             payment({
-                id: 1,
+                id: asPlannedTransactionId(1),
                 name: "Executed",
                 is_executed: true,
-                executed_transaction_id: 99,
+                executed_transaction_id: asTransactionId(99),
             }),
-            payment({ id: 2, name: "Paused", is_active: false }),
+            payment({ id: asPlannedTransactionId(2), name: "Paused", is_active: false }),
         ]);
 
         expect(
@@ -222,20 +223,20 @@ describe("PlannedPaymentsTable", () => {
     it("renders safe links and the loan, custom, and one-time recurrence variants", () => {
         renderTable([
             payment({
-                id: 1,
+                id: asPlannedTransactionId(1),
                 name: "Custom",
                 frequency: "custom",
                 custom_interval_days: 9,
                 url: "https://example.com/bill",
             }),
             payment({
-                id: 2,
+                id: asPlannedTransactionId(2),
                 name: "One time",
                 is_recurring: false,
                 url: "javascript:alert(1)",
             }),
             payment({
-                id: 3,
+                id: asPlannedTransactionId(3),
                 name: "Loan",
                 is_loan: true,
                 loan_term_months: 24,

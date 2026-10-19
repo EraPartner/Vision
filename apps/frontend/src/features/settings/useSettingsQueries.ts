@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { getResearchProviderKeys } from "@/lib/api/research";
 import { recipientKeys, researchKeys, settingKeys } from "@/lib/queryKeys";
+import type { CategoryId } from "@vision/types/brands";
 
 export function useResearchProviderKeys() {
     return useQuery({
@@ -30,10 +31,10 @@ export function useSetting(key: string) {
 }
 
 export interface BrokerageCashCategoryIds {
-    dividend: number | null;
-    interest: number | null;
-    fee: number | null;
-    tax: number | null;
+    dividend: CategoryId | null;
+    interest: CategoryId | null;
+    fee: CategoryId | null;
+    tax: CategoryId | null;
 }
 
 export const EMPTY_BROKERAGE_CASH_CATEGORY_IDS: BrokerageCashCategoryIds = {

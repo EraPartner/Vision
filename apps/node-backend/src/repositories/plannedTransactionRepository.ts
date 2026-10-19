@@ -7,7 +7,6 @@ import { query } from "../database/connection.ts";
 import { queryRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
-  idRowSchema,
   keyedLoanScheduleRowSchema,
   loanScheduleRowSchema,
   plannedCommitmentRowSchema,
@@ -16,9 +15,20 @@ import {
   plannedMatchCandidateRowSchema,
   plannedTagRowSchema,
   plannedTransactionListRowSchema,
+  plannedTransactionKeyRowSchema,
   plannedTransactionPageRowSchema,
+  pgRecipientId,
+  tagKeyRowSchema,
   transactionTagRefSchema,
 } from "../database/rowSchemas.ts";
+import type {
+  AccountId,
+  CategoryId,
+  PlannedTransactionId,
+  RecipientId,
+  TagId,
+  TransactionId,
+} from "@vision/types/brands";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 
@@ -63,9 +73,9 @@ export interface PlannedTransactionFilters {
   /** 'YYYY-MM-DD' */
   endDate?: string | null | undefined;
   bankAccount?: string | null | undefined;
-  accountId?: number | null | undefined;
-  categoryId?: number | null | undefined;
-  recipientId?: number | null | undefined;
+  accountId?: AccountId | null | undefined;
+  categoryId?: CategoryId | null | undefined;
+  recipientId?: RecipientId | null | undefined;
   isRecurring?: boolean | null | undefined;
   isExecuted?: boolean | null | undefined;
   search?: string | null | undefined;
@@ -125,7 +135,7 @@ const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
  */
 async function hydratePlannedRow(
   row: PlannedRowInHydration,
-  id: number,
+  id: PlannedTransactionId,
 ): Promise<HydratedPlannedTransactionRow> {
   const executions = await queryRows(
     plannedExecutionRowSchema,
@@ -246,7 +256,7 @@ export type LoanScheduleEntryInput = {
 /** @param scheduleEntries `LoanScheduleRow`s or freshly computed installments. */
 export async function insertLoanScheduleBatch(
   client: QueryRunner,
-  plannedTransactionId: number,
+  plannedTransactionId: PlannedTransactionId,
   scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ): Promise<void> {
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
@@ -281,7 +291,7 @@ export async function insertLoanScheduleBatch(
 
 export async function setPlannedTransactionTags(
   client: QueryRunner,
-  plannedTransactionId: number,
+  plannedTransactionId: PlannedTransactionId,
   slugs: string[] | null | undefined,
 ): Promise<void> {
   await client.query(
@@ -290,7 +300,7 @@ export async function setPlannedTransactionTags(
   );
   if (!slugs || slugs.length === 0) return;
   const resolved = await queryRows(
-    idRowSchema,
+    tagKeyRowSchema,
     "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
     client,
@@ -316,7 +326,7 @@ export async function setPlannedTransactionTags(
  */
 export async function applyPlannedFieldUpdate(
   client: QueryRunner,
-  id: number,
+  id: PlannedTransactionId,
   sanitized: Record<string, unknown>,
 ): Promise<boolean> {
   const {
@@ -345,7 +355,7 @@ export async function applyPlannedFieldUpdate(
  */
 export async function replaceLoanScheduleInTransaction(
   client: QueryRunner,
-  plannedTransactionId: number,
+  plannedTransactionId: PlannedTransactionId,
   scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ): Promise<void> {
   await client.query(
@@ -359,9 +369,9 @@ export async function replaceLoanScheduleInTransaction(
 export async function insertPlannedTransactionInTransaction(
   client: QueryRunner,
   input: Record<string, unknown>,
-): Promise<number> {
+): Promise<PlannedTransactionId> {
   const [inserted] = await queryRows(
-    idRowSchema,
+    plannedTransactionKeyRowSchema,
     `INSERT INTO planned_transactions (
        planned_date, account_id, recipient_id, amount, memo, currency, category_id, comment, url,
        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
@@ -409,8 +419,8 @@ export async function insertPlannedTransactionInTransaction(
 /** @returns false when the execution was already recorded */
 export async function insertExecutionInTransaction(
   client: QueryRunner,
-  plannedTransactionId: number,
-  executedTransactionId: number,
+  plannedTransactionId: PlannedTransactionId,
+  executedTransactionId: TransactionId,
   executionDate: string,
 ): Promise<boolean> {
   const result = await client.query(
@@ -426,8 +436,8 @@ export async function insertExecutionInTransaction(
 
 export async function inheritTransactionTagsInTransaction(
   client: QueryRunner,
-  transactionId: number,
-  tagIds: number[],
+  transactionId: TransactionId,
+  tagIds: TagId[],
 ): Promise<void> {
   await client.query(
     `INSERT INTO transaction_tags (transaction_id, tag_id)
@@ -439,19 +449,22 @@ export async function inheritTransactionTagsInTransaction(
 
 export const plannedTransactionRepository = {
   /** Lock the parent before reading recurrence state on the ambient transaction. */
-  async lockForExecution(id: number): Promise<void> {
+  async lockForExecution(id: PlannedTransactionId): Promise<void> {
     await query(
       "SELECT id FROM planned_transactions WHERE id = $1 FOR UPDATE",
       [id],
     );
   },
   /** Execution needs scalar state and tag IDs, not full history or loan schedules. */
-  async getExecutionState(id: number, transactionId: number) {
+  async getExecutionState(
+    id: PlannedTransactionId,
+    transactionId: TransactionId,
+  ) {
     const [row] = await queryRows(
       plannedTransactionListRowSchema.extend({
         execution_count: z.number(),
         duplicate: z.boolean(),
-        recipient_cluster_id: z.number().nullable(),
+        recipient_cluster_id: pgRecipientId.nullable(),
       }),
       `SELECT ${PLANNED_SELECT_FIELDS},
         COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
@@ -462,7 +475,7 @@ export const plannedTransactionRepository = {
     );
     if (!row) return null;
     const tags = await queryRows(
-      idRowSchema,
+      tagKeyRowSchema,
       "SELECT tag_id AS id FROM planned_transaction_tags WHERE planned_transaction_id = $1",
       [id],
     );
@@ -535,7 +548,7 @@ export const plannedTransactionRepository = {
 
     const plannedTransactionIds = rows.map((row) => row.id);
     const executionsByPlannedTransactionId = new Map<
-      number,
+      PlannedTransactionId,
       PlannedExecutionRow[]
     >();
     if (plannedTransactionIds.length > 0) {
@@ -570,7 +583,7 @@ export const plannedTransactionRepository = {
       .map((row) => row.id);
 
     const schedulesByPlannedTransactionId = new Map<
-      number,
+      PlannedTransactionId,
       LoanScheduleRow[]
     >();
     if (loanPlannedTransactionIds.length > 0) {
@@ -601,7 +614,7 @@ export const plannedTransactionRepository = {
       }
     }
 
-    const tagsByPlannedTransactionId = new Map<number, TransactionTagRef[]>();
+    const tagsByPlannedTransactionId = new Map<PlannedTransactionId, TransactionTagRef[]>();
     if (plannedTransactionIds.length > 0) {
       const tagRows = await queryRows(
         plannedTagRowSchema,
@@ -666,7 +679,7 @@ export const plannedTransactionRepository = {
     );
   },
 
-  async getById(id: number): Promise<HydratedPlannedTransactionRow | null> {
+  async getById(id: PlannedTransactionId): Promise<HydratedPlannedTransactionRow | null> {
     const sql = `
       SELECT ${PLANNED_SELECT_FIELDS}
       FROM planned_transactions pt
@@ -762,7 +775,7 @@ export const plannedTransactionRepository = {
     );
   },
 
-  async hardDelete(id: number): Promise<boolean> {
+  async hardDelete(id: PlannedTransactionId): Promise<boolean> {
     const result = await query(
       "DELETE FROM planned_transactions WHERE id = $1",
       [id],
@@ -772,8 +785,8 @@ export const plannedTransactionRepository = {
 
   /** @param executionDate 'YYYY-MM-DD'; defaults to app-timezone today */
   async addExecution(
-    plannedTransactionId: number,
-    executedTransactionId: number,
+    plannedTransactionId: PlannedTransactionId,
+    executedTransactionId: TransactionId,
     executionDate?: string | null,
   ): Promise<void> {
     await query(
@@ -795,7 +808,10 @@ export const plannedTransactionRepository = {
    *
    * @returns rows repointed
    */
-  async repointAccount(targetId: number, sourceIds: number[]): Promise<number> {
+  async repointAccount(
+    targetId: AccountId,
+    sourceIds: AccountId[],
+  ): Promise<number> {
     const result = await query(
       `UPDATE planned_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
       [targetId, sourceIds],
@@ -822,8 +838,8 @@ export const plannedTransactionRepository = {
    * @returns rows repointed
    */
   async repointRecipient(
-    primaryId: number,
-    aliasIds: number[],
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await query(
       `UPDATE planned_transactions

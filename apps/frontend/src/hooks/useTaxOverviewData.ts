@@ -9,6 +9,7 @@ import type {
     BelgianTaxDashboardYear,
 } from "@/lib/api/belgianTax";
 import { useTaxDashboardQuery } from "@/hooks/useBelgianTaxDashboards";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /** One bar of the yearly income-vs-PIT chart. */
 export interface YearlyIncomeDatum {
@@ -73,7 +74,7 @@ export function useTaxOverviewData() {
 
     const dashboardQuery = useTaxDashboardQuery({
         year: viewedYear,
-        currency: appSettings.defaultCurrency || "EUR",
+        currency: currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
         enabled: !isProfileLoading,
     });
     const dashboard = dashboardQuery.data;

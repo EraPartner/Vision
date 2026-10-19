@@ -8,6 +8,7 @@ import {
     waitFor,
 } from "@testing-library/react";
 import { VirtualRecipientExclusions } from "../VirtualRecipientExclusions";
+import { asRecipientId } from "@vision/types/brands";
 
 describe("virtual recipient exclusions", () => {
     afterEach(() => vi.restoreAllMocks());
@@ -40,7 +41,7 @@ describe("virtual recipient exclusions", () => {
                 : 40;
         });
         const recipients = Array.from({ length: 1000 }, (_, i) => ({
-            id: i + 1,
+            id: asRecipientId(i + 1),
             name: `Recipient ${i + 1}`,
             is_active: true,
         }));

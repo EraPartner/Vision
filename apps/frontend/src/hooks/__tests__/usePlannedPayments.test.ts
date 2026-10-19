@@ -6,6 +6,11 @@ import { usePlannedPayments } from "@/hooks/usePlannedPayments";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import type { PlannedTransaction } from "@/types/api";
 import { DEFAULT_APP_SETTINGS, useSettingsStore } from "@/stores/settingsStore";
+import {
+    asCurrencyCode,
+    asPlannedTransactionId,
+    asRecipientId,
+} from "@vision/types/brands";
 
 // The hook now backs its list with React Query (queryKey ['plannedTransactions',
 // showInactive]) and busts ['upcomingPlannedPayments'] on mutations, so it must
@@ -22,14 +27,14 @@ beforeEach(() => {
 });
 
 const STUB: PlannedTransaction = {
-    id: 1,
+    id: asPlannedTransactionId(1),
     planned_date: "2025-02-01",
     bank_account: "BE12345678901234",
-    recipient_id: 1,
+    recipient_id: asRecipientId(1),
     recipient_name: "Landlord",
     memo: "Monthly rent",
     amount: 1200.0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     category_id: undefined,
     category_name: undefined,
     comment: undefined,
@@ -113,7 +118,7 @@ describe("usePlannedPayments", () => {
             useSettingsStore.setState({
                 appSettings: {
                     ...DEFAULT_APP_SETTINGS,
-                    defaultCurrency: "CHF",
+                    defaultCurrency: asCurrencyCode("CHF"),
                 },
             });
         });
@@ -144,7 +149,7 @@ describe("usePlannedPayments", () => {
             await result.current.addPayment({
                 name: "Monthly rent",
                 amount: 1200,
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 due_date: "2025-02-01",
                 is_recurring: true,
                 is_active: true,
@@ -167,7 +172,7 @@ describe("usePlannedPayments", () => {
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
         await act(async () => {
-            await result.current.deletePayment(1);
+            await result.current.deletePayment(asPlannedTransactionId(1));
         });
         await waitFor(() => expect(result.current.payments).toHaveLength(0));
     });
@@ -183,7 +188,7 @@ describe("usePlannedPayments", () => {
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
-            await result.current.updatePayment(1, { amount: 1500 });
+            await result.current.updatePayment(asPlannedTransactionId(1), { amount: 1500 });
         });
         await waitFor(() =>
             expect(result.current.payments[0]?.amount).toBe(1500),
@@ -201,7 +206,7 @@ describe("usePlannedPayments", () => {
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         await act(async () => {
-            await result.current.updatePayment(1, {
+            await result.current.updatePayment(asPlannedTransactionId(1), {
                 end_date: null,
                 max_occurrences: null,
             });

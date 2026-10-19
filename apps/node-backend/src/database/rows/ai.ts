@@ -9,7 +9,11 @@
  */
 import { z } from "zod";
 import type { AiInvestigationPlan } from "@vision/types/aiResearch";
-import { pgBigint, pgInt, pgTimestamptz } from "../rowSchemas.ts";
+import {
+  pgBigint,
+  pgInt,
+  pgTimestamptz,
+} from "../rowSchemas.ts";
 
 /** A UUID column. */
 const pgUuid = z.string();

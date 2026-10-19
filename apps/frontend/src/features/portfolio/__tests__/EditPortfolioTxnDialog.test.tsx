@@ -16,6 +16,12 @@ import { EditPortfolioTxnDialog } from "@/features/portfolio/EditPortfolioTxnDia
 import type { InvestmentSummary } from "@/types/portfolio";
 import type { PortfolioTransaction } from "@/types/api";
 import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -50,12 +56,12 @@ function txnRow(txn: PortfolioTransaction) {
 }
 
 const INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     is_active: true,
@@ -83,8 +89,8 @@ const INVESTMENT: InvestmentSummary = {
 };
 
 const TRANSACTION: PortfolioTransaction = {
-    id: 101,
-    investment_id: 1,
+    id: asPortfolioTransactionId(101),
+    investment_id: asInvestmentId(1),
     type: "buy",
     date: "2025-01-10T00:00:00.000Z",
     amount: 900,
@@ -92,7 +98,7 @@ const TRANSACTION: PortfolioTransaction = {
     price_per_unit: 90,
     fees: 2.5,
     taxes: 0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     note: "Initial purchase",
     is_recurring: false,
     created_at: "2025-01-10T10:00:00Z",
@@ -132,7 +138,7 @@ describe("EditPortfolioTxnDialog", () => {
         renderWithApp(
             <EditPortfolioTxnDialog
                 investment={INVESTMENT}
-                transaction={{ ...TRANSACTION, currency: "USD" }}
+                transaction={{ ...TRANSACTION, currency: asCurrencyCode("USD") }}
             />,
         );
         await user.click(
@@ -454,7 +460,7 @@ describe("EditPortfolioTxnDialog", () => {
         const toastSpy = vi.spyOn(toast, "error");
         const dividendTxn: PortfolioTransaction = {
             ...withoutUnitFieldsOrNote(TRANSACTION),
-            id: 103,
+            id: asPortfolioTransactionId(103),
             type: "dividend",
             amount: 25,
             fees: 0,
@@ -604,7 +610,7 @@ describe("EditPortfolioTxnDialog", () => {
         // Arrange
         const dividendTxn: PortfolioTransaction = {
             ...withoutUnitFieldsOrNote(TRANSACTION),
-            id: 102,
+            id: asPortfolioTransactionId(102),
             type: "dividend",
             amount: 25,
             fees: 0,
@@ -645,7 +651,7 @@ describe("EditPortfolioTxnDialog", () => {
         // Arrange — a lot already assigned to account 5, surfaced by the picker.
         const assignedTxn: PortfolioTransaction = {
             ...TRANSACTION,
-            account_id: 5,
+            account_id: asAccountId(5),
         };
         let capturedBody: Record<string, unknown> | undefined;
         server.use(
@@ -800,7 +806,7 @@ describe("EditPortfolioTxnDialog", () => {
 
         const otherTxn = {
             ...TRANSACTION,
-            id: 202,
+            id: asPortfolioTransactionId(202),
             units: 7,
             price_per_unit: 30,
             amount: 210,

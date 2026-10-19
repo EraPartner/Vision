@@ -5,6 +5,7 @@ import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { listAttachments, deleteAttachment, getAttachmentDownloadUrl } from "@/lib/api/attachments";
+import { asTransactionId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -26,7 +27,7 @@ describe("attachments API client", () => {
         ok({ items: [ATTACHMENT], total: 1 }),
       ),
     );
-    const res = await listAttachments(8);
+    const res = await listAttachments(asTransactionId(8));
     expect(res.items[0]?.filename).toBe("r.pdf");
   });
 
@@ -36,7 +37,7 @@ describe("attachments API client", () => {
         ok({ items: [{ id: "1", transaction_id: 8, filename: "r.pdf" }], total: 1 }),
       ),
     );
-    await expect(listAttachments(8)).rejects.toMatchObject({
+    await expect(listAttachments(asTransactionId(8))).rejects.toMatchObject({
       name: "ApiContractError",
       endpoint: "GET /api/attachments/transaction/8",
     });

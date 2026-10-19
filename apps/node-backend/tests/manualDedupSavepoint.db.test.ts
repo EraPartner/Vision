@@ -26,6 +26,11 @@ import {
   recordManualTransactionDedupClaim,
 } from "../src/services/deduplication.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
+import {
+  asCurrencyCode,
+  asRecipientId,
+} from "@vision/types/brands";
+import type { RecipientId } from "@vision/types/brands";
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({
@@ -48,18 +53,18 @@ const originalTable = "manual_transaction_dedup_claims";
 const hiddenTable = "manual_transaction_dedup_claims_savepoint_test";
 
 /** The synthetic recipient every persisted fixture row needs (NOT NULL). */
-async function fixtureRecipientId(): Promise<number> {
+async function fixtureRecipientId(): Promise<RecipientId> {
   const pool = getTestPool()!;
   const existing = await pool.query(
     "SELECT id FROM recipients WHERE normalized_name = 'mixed representation recipient'",
   );
-  if (existing.rows[0]) return existing.rows[0].id as number;
+  if (existing.rows[0]) return asRecipientId(existing.rows[0].id);
   const { rows } = await pool.query(
     `INSERT INTO recipients (name, normalized_name)
      VALUES ('Mixed Representation Recipient', 'mixed representation recipient')
      RETURNING id`,
   );
-  return rows[0].id as number;
+  return asRecipientId(rows[0].id);
 }
 
 describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
@@ -153,10 +158,10 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     );
     const common = {
       transaction_date: "1901-01-02",
-      recipient_id: recipientRows[0].id,
+      recipient_id: asRecipientId(recipientRows[0].id),
       amount: -987653.21,
       memo: "mixed representation lock probe",
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     };
 
     const results = await Promise.allSettled([
@@ -196,7 +201,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     };
     const first = await transactionService.createManualTransaction(input);
     await transactionService.update(first.transaction.id, { amount: -60 });
@@ -204,14 +209,14 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     expect(second.transaction.id).not.toBe(first.transaction.id);
     const foreign = await transactionService.createManualTransaction({
       ...input,
-      currency: "USD",
+      currency: asCurrencyCode("USD"),
     });
     expect(foreign.transaction.currency).toBe("USD");
     await expect(
       transactionService.createManualTransaction(input),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      transactionService.createManualTransaction({ ...input, currency: "USD" }),
+      transactionService.createManualTransaction({ ...input, currency: asCurrencyCode("USD") }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
   });
 
@@ -225,7 +230,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
-      currency: "USD",
+      currency: asCurrencyCode("USD"),
     };
     const first = await transactionService.createManualTransaction(input);
     await getTestPool()!.query(
@@ -237,7 +242,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       transactionService.createManualTransaction(input),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(
-      transactionService.createManualTransaction({ ...input, currency: "EUR" }),
+      transactionService.createManualTransaction({ ...input, currency: asCurrencyCode("EUR") }),
     ).resolves.toHaveProperty("transaction.currency", "EUR");
   });
 
@@ -251,7 +256,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     };
     const results = await Promise.allSettled([
       transactionService.createManualTransaction(input),
@@ -281,7 +286,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
         recipient_id: await fixtureRecipientId(),
         amount: -50,
         memo: `${padding}mixed representation lock probe${padding}`,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       };
       const first = await transactionService.createManualTransaction(input);
       await expect(
@@ -319,7 +324,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
         account_id: accountId,
         recipient_id: await fixtureRecipientId(),
         memo: "mixed representation lock probe",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       };
       const results = await Promise.allSettled([
         transactionService.createManualTransaction({

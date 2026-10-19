@@ -6,6 +6,7 @@ import { PLANNED_TRANSACTION_STUB } from "@/test/msw/handlers";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { getPlannedTransactions, createPlannedTransaction, updatePlannedTransaction, deletePlannedTransaction, executePlannedTransaction, getPlannedMatchSuggestions } from "@/lib/api/planned";
+import { asCategoryId, asPlannedTransactionId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -42,7 +43,7 @@ describe("planned-transactions API client", () => {
       }),
     );
 
-    await getPlannedTransactions({ is_recurring: true, category_id: 4, search: "rent" });
+    await getPlannedTransactions({ is_recurring: true, category_id: asCategoryId(4), search: "rent" });
 
     expect(url).toContain("is_recurring=true");
     expect(url).toContain("category_id=4");
@@ -56,12 +57,12 @@ describe("planned-transactions API client", () => {
 
   it("updatePlannedTransaction PATCHes", async () => {
     server.use(http.patch(`${API_BASE}/api/planned-transactions/11`, () => ok({ ...PLANNED_TRANSACTION_STUB, id: 11 })));
-    expect((await updatePlannedTransaction(11, {})).id).toBe(11);
+    expect((await updatePlannedTransaction(asPlannedTransactionId(11), {})).id).toBe(11);
   });
 
   it("deletePlannedTransaction resolves on void", async () => {
     server.use(http.delete(`${API_BASE}/api/planned-transactions/11`, () => new HttpResponse(null, { status: 204 })));
-    await expect(deletePlannedTransaction(11)).resolves.toBeUndefined();
+    await expect(deletePlannedTransaction(asPlannedTransactionId(11))).resolves.toBeUndefined();
   });
 
   it("executePlannedTransaction POSTs to the execute sub-route", async () => {
@@ -72,7 +73,7 @@ describe("planned-transactions API client", () => {
         return ok({ ...PLANNED_TRANSACTION_STUB, id: 11, is_executed: true });
       }),
     );
-    const res = await executePlannedTransaction(11, { transaction_date: "2026-06-01" } as never);
+    const res = await executePlannedTransaction(asPlannedTransactionId(11), { transaction_date: "2026-06-01" } as never);
     expect(body).toMatchObject({ transaction_date: "2026-06-01" });
     expect(res.is_executed).toBe(true);
   });

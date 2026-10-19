@@ -9,6 +9,8 @@ import { ok } from "@/test/msw/handlers";
 import { RecipientPatternsDialog } from "@/features/recipients/RecipientPatternsDialog";
 import { apiClient } from "@/lib/api";
 import type { RecipientPattern } from "@/lib/api";
+import { asRecipientId } from "@vision/types/brands";
+import type { RecipientId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -33,7 +35,7 @@ function renderDialog(open = true, onOpenChange = vi.fn()) {
         <RecipientPatternsDialog
             open={open}
             onOpenChange={onOpenChange}
-            recipientId={RECIPIENT_ID}
+            recipientId={asRecipientId(RECIPIENT_ID)}
             recipientName={RECIPIENT_NAME}
         />,
     );
@@ -48,7 +50,7 @@ describe("RecipientPatternsDialog", () => {
         );
         let finish!: (value: {
             matchCount: number;
-            recipientIds: number[];
+            recipientIds: RecipientId[];
         }) => void;
         const preview = vi
             .spyOn(apiClient, "previewRecipientPattern")
@@ -58,7 +60,7 @@ describe("RecipientPatternsDialog", () => {
                         finish = resolve;
                     }),
             )
-            .mockResolvedValue({ matchCount: 2, recipientIds: [1, 2] });
+            .mockResolvedValue({ matchCount: 2, recipientIds: [asRecipientId(1), asRecipientId(2)] });
         const user = userEvent.setup();
         renderDialog();
         await user.click(

@@ -4,6 +4,7 @@
 
 export * from "./api.ts";
 export * from "./errors.ts";
+export * from "./brands.ts";
 export * from "./assetClasses.ts";
 export * from "./portfolioTxnTypes.ts";
 export * from "./recurrence.ts";

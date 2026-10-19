@@ -4864,6 +4864,7 @@ const en: Record<string, string> = {
   'update.restartNow': 'Restart now',
   'update.versionAvailable': 'Version {version} is available',
   'update.versionDownloaded': 'Version {version} has been downloaded.',
+  'validation.currencyCode': 'Enter a three-letter currency code, such as EUR.',
   'validation.required': 'This field is required',
   'watchlist.aboveTarget': 'above target',
   'watchlist.addButton': 'Add to watchlist',

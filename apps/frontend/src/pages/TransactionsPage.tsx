@@ -51,10 +51,24 @@ import type {
 } from "@/features/transactions/types";
 import type { BulkTransactionFilter } from "@/types/api";
 import { PageShell } from "@/components/shared/PageShell";
+import {
+    asAccountId,
+    asCategoryId,
+    asRecipientId,
+    asTransactionId,
+    isCurrencyCode,
+} from "@vision/types/brands";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 /** Router state Home passes to land on one row (`navigate("/transactions", { state })`). */
 export interface TransactionsLocationState {
-    selectTransactionId?: number;
+    selectTransactionId?: TransactionId;
 }
 
 export default function TransactionsPage() {
@@ -108,7 +122,7 @@ export default function TransactionsPage() {
     }, [debouncedSearch, search, searchParam, setSearchParams]);
     // The selected row drives the inspector; it is derived from the list on
     // every render, so local patches and refetches flow into it.
-    const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const [selectedId, setSelectedId] = useState<TransactionId | null>(() => {
         const state = location.state as TransactionsLocationState | null;
         return state?.selectTransactionId ?? null;
     });
@@ -167,15 +181,15 @@ export default function TransactionsPage() {
     }, []);
 
     const recipientIdFilter = searchParams.get("recipient_id")
-        ? Number(searchParams.get("recipient_id"))
+        ? asRecipientId(Number(searchParams.get("recipient_id")))
         : undefined;
     const categoryIdFilter = searchParams.get("category_id")
-        ? Number(searchParams.get("category_id"))
+        ? asCategoryId(Number(searchParams.get("category_id")))
         : undefined;
     const uncategorisedFilter =
         searchParams.get("uncategorised") === "true" || undefined;
     const transactionIdFilter = searchParams.get("transaction_id")
-        ? Number(searchParams.get("transaction_id"))
+        ? asTransactionId(Number(searchParams.get("transaction_id")))
         : undefined;
     const filterLabel = searchParams.get("filter_label") || undefined;
     const startDateFilter = searchParams.get("start_date") || undefined;
@@ -184,7 +198,7 @@ export default function TransactionsPage() {
     // bank_account stays as a substring escape hatch (e.g. the string-keyed
     // bank-balances widget until its Phase C re-grain).
     const accountIdFilter = searchParams.get("account_id")
-        ? Number(searchParams.get("account_id"))
+        ? asAccountId(Number(searchParams.get("account_id")))
         : undefined;
     const bankAccountFilter = searchParams.get("bank_account") || undefined;
     const transactionTypeRaw = searchParams.get("transaction_type");
@@ -215,6 +229,7 @@ export default function TransactionsPage() {
                       .split(",")
                       .map(Number)
                       .filter((n) => Number.isFinite(n) && n > 0)
+                      .map(asCategoryId)
                 : undefined,
         [categoryIdsRaw],
     );
@@ -264,7 +279,9 @@ export default function TransactionsPage() {
     const deleteMutation = useDeleteTransaction();
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+    const [selectedIds, setSelectedIds] = useState<Set<TransactionId>>(
+        new Set(),
+    );
     const [selectionMode, setSelectionMode] =
         useState<BulkSelectionMode>("ids");
 
@@ -316,7 +333,7 @@ export default function TransactionsPage() {
     }, [currentFilter]);
 
     const applyTransactionLocalPatch = useCallback(
-        (transactionId: number, patch: Record<string, unknown>) => {
+        (transactionId: TransactionId, patch: Record<string, unknown>) => {
             setAllItems((prev) =>
                 prev.map((item) => {
                     if (item.id !== transactionId) return item;
@@ -329,10 +346,10 @@ export default function TransactionsPage() {
 
     const applyInfoFieldLocally = useCallback(
         (
-            transactionId: number,
+            transactionId: TransactionId,
             field: InfoEditableField,
             value: string | number | undefined,
-            accountId?: number | null,
+            accountId?: AccountId | null,
         ) => {
             setAllItems((prev) =>
                 prev.map((item) => {
@@ -365,7 +382,9 @@ export default function TransactionsPage() {
                                 currency:
                                     value === undefined
                                         ? undefined
-                                        : String(value),
+                                        : isCurrencyCode(value)
+                                          ? value
+                                          : item.currency,
                             };
                         case "bank":
                             return {
@@ -393,7 +412,7 @@ export default function TransactionsPage() {
         [setAllItems],
     );
 
-    const handleDelete = async (id: number, description?: string) => {
+    const handleDelete = async (id: TransactionId, description?: string) => {
         const ok = await confirm({
             title: t("txPage.delete.title"),
             description: t("txPage.delete.desc", { desc: description ?? "" }),
@@ -405,7 +424,7 @@ export default function TransactionsPage() {
         deleteMutation.mutate(id);
     };
 
-    const toggleActive = (id: number, currentActive: boolean) => {
+    const toggleActive = (id: TransactionId, currentActive: boolean) => {
         updateMutation.mutate({ id, data: { is_active: !currentActive } });
     };
 
@@ -589,8 +608,8 @@ export default function TransactionsPage() {
     };
 
     const handleSelectCategory = (
-        transactionId: number,
-        catId: number | null,
+        transactionId: TransactionId,
+        catId: CategoryId | null,
         categoryName: string | null,
     ) => {
         applyTransactionLocalPatch(transactionId, {
@@ -618,8 +637,8 @@ export default function TransactionsPage() {
     };
 
     const handleSelectRecipient = (
-        transactionId: number,
-        recipientId: number | null,
+        transactionId: TransactionId,
+        recipientId: RecipientId | null,
         recipientName: string | null,
     ) => {
         applyTransactionLocalPatch(transactionId, {
@@ -670,7 +689,7 @@ export default function TransactionsPage() {
                 recipient:
                     (tx.recipient_name as string | undefined) ||
                     t("txPage.field.unknown"),
-                recipientId: tx.recipient_id ?? 0,
+                recipientId: tx.recipient_id ?? undefined,
                 bank: (tx.bank_account as string | undefined) || tx.bank || "",
                 bankLabel: tx.account_id != null
                     ? accountLabels.get(tx.account_id)
@@ -678,7 +697,7 @@ export default function TransactionsPage() {
                 accountId: tx.account_id ?? undefined,
                 amount: tx.amount ?? 0,
                 // Matches the backend window's COALESCE(currency, 'EUR').
-                currency: tx.currency ?? "EUR",
+                currency: tx.currency ?? DEFAULT_CURRENCY,
                 runningBalance: tx.running_balance ?? undefined,
                 balance: tx.balance ?? undefined,
                 comment: tx.comment || "",
@@ -943,7 +962,7 @@ export default function TransactionsPage() {
                                                             : typeof peer ===
                                                                 "number"
                                                               ? peer
-                                                              : -1,
+                                                              : asTransactionId(-1),
                                                 };
                                             })}
                                         selectionMode={selectionMode}

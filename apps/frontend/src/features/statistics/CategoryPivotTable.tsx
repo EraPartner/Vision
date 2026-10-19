@@ -31,6 +31,8 @@ import {
     type PivotValueMode,
 } from "./statisticsUtils";
 import type { StatisticsData } from "@/hooks/useStatistics";
+import { asCategoryId } from "@vision/types/brands";
+import type { CategoryId } from "@vision/types/brands";
 
 interface CategoryPivotTableProps {
     data: StatisticsData;
@@ -155,7 +157,7 @@ export function CategoryPivotTable({
         type PivotItem = (typeof filteredCategories)[number];
         type DetailRow = PivotItem & {
             detailName: string;
-            categoryIds: number[];
+            categoryIds: CategoryId[];
             depth: number;
         };
         const grouped = new Map<
@@ -164,7 +166,7 @@ export function CategoryPivotTable({
                 general: string;
                 total: number;
                 months: Record<string, number>;
-                categoryIds: number[];
+                categoryIds: CategoryId[];
                 children: DetailRow[];
             }
         >();
@@ -189,7 +191,7 @@ export function CategoryPivotTable({
                     ];
             const ids = (cat.categoryPathIds != null && cat.categoryPathIds.length > 0)
                 ? cat.categoryPathIds
-                : [cat.categoryId ?? -1];
+                : [cat.categoryId ?? asCategoryId(-1)];
             const general =
                 segments[0]?.trim() || t("txPage.field.uncategorized");
 

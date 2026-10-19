@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MockInstance } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { mockLogger } from "./helpers/mockLogger.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 
 const { chart, loadHistory, saveHistory } = vi.hoisted(() => ({
   chart: vi.fn(),
@@ -44,7 +48,7 @@ const coveredHistory = [
 
 function investment(provider: string) {
   return {
-    id: 42,
+    id: asInvestmentId(42),
     price_provider: provider,
     price_provider_id:
       provider === "binance"
@@ -52,7 +56,7 @@ function investment(provider: string) {
         : provider === "kinesis"
           ? "XAU_USD"
           : "AAPL",
-    currency: "USD",
+    currency: asCurrencyCode("USD"),
     price_provider_history_url: "https://example.com/history",
   };
 }

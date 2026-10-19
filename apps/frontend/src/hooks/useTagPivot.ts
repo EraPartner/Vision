@@ -5,9 +5,10 @@ import {
 } from "@/lib/api/aggregations";
 import type { SavedChart } from "@/types/apiClient";
 import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
+import type { TagId } from "@vision/types/brands";
 
 export interface TagPeriodData {
-    tagId: number;
+    tagId: TagId;
     slug: string;
     months: Record<string, number>;
 }
@@ -15,7 +16,8 @@ export interface TagPeriodData {
 const config: PivotConfig<
     TagPivotItem,
     TagPeriodData,
-    RecipientPivotConversion
+    RecipientPivotConversion,
+    TagId
 > = {
     kind: "tag-pivot",
     fetchPivot: async ({ currency, bucket, start, end, all, ids }) => {

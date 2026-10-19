@@ -25,6 +25,7 @@ import { getDayKeyUtc } from "../lib/dateKeys.ts";
 import { madReturnStats, isRobustNeedle, nanToZero } from "../lib/math.ts";
 import { forEachConcurrent } from "../lib/concurrency.ts";
 import { differenceInCalendarDaysYmd } from "../lib/timezone.ts";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
@@ -37,9 +38,9 @@ import {
  * `fetchHistoricalPrices`'s own `investment` param shape (priceProviderService.js).
  */
 export interface HoldingWindowInvestment {
-  id: number;
+  id: InvestmentId;
   asset_class: string;
-  currency: string;
+  currency: CurrencyCode;
   price_provider: string;
   price_provider_id: string | null;
   symbol: string | null;
@@ -289,7 +290,7 @@ const HOLDING_ASSET_CLASS_FILTER = `i.asset_class IN ('stock', 'etf', 'crypto', 
  */
 function mapRowToInvestment(row: HoldingWindowRow): HoldingWindowInvestment {
   return {
-    id: Number(row.id),
+    id: row.id,
     asset_class: row.asset_class,
     currency: row.currency,
     price_provider: row.price_provider,

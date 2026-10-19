@@ -34,6 +34,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const PageIcon = PAGE_ICONS["/portfolio/savings"];
 const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
@@ -48,7 +49,10 @@ export default function SavingsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
     const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio();
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "savings.deleteAccount",

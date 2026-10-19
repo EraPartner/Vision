@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
+import type { AccountId } from "@vision/types/brands";
 
 /** Active, unexecuted plans for the account forecast section. */
 export function useAccountPlannedTransactions(
-    accountId: number | undefined,
+    accountId: AccountId | undefined,
     enabled: boolean,
 ) {
     return useQuery({

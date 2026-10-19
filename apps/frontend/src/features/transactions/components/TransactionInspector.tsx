@@ -59,6 +59,13 @@ import type { TransactionUpdate } from "@/types/api";
 import type { InfoEditableField, TableTransaction } from "../types";
 import { amountClass } from "../amountClass";
 import { useUncategorisedCountForRecipient } from "../hooks/useUncategorisedCountForRecipient";
+import { isCurrencyCode } from "@vision/types/brands";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 const editDateSchema = ymdDateString("validation.required");
 
@@ -68,25 +75,25 @@ export interface TransactionInspectorProps {
     presentation: "docked" | "sheet";
     onClose: () => void;
     onApplyLocal: (
-        transactionId: number,
+        transactionId: TransactionId,
         field: InfoEditableField,
         value: string | number | undefined,
-        accountId?: number | null,
+        accountId?: AccountId | null,
     ) => void;
     onSelectCategory: (
-        transactionId: number,
-        categoryId: number | null,
+        transactionId: TransactionId,
+        categoryId: CategoryId | null,
         categoryName: string | null,
     ) => void;
     onSelectRecipient: (
-        transactionId: number,
-        recipientId: number | null,
+        transactionId: TransactionId,
+        recipientId: RecipientId | null,
         recipientName: string | null,
     ) => void;
     onDuplicate: (row: TableTransaction) => void;
     onFilterByRecipient: (row: TableTransaction) => void;
-    onToggleActive: (id: number, currentActive: boolean) => void;
-    onDelete: (id: number, description?: string) => void;
+    onToggleActive: (id: TransactionId, currentActive: boolean) => void;
+    onDelete: (id: TransactionId, description?: string) => void;
     updatePending: boolean;
     deletePending: boolean;
 }
@@ -236,7 +243,7 @@ function InspectorContent({
         const trimmed = editingValue.trim();
         const payload: TransactionUpdate = {};
         let localValue: string | number | undefined = trimmed;
-        let localAccountId: number | null | undefined;
+        let localAccountId: AccountId | null | undefined;
 
         if (editingField === "amount") {
             const parsed = moneyAmount(
@@ -263,7 +270,12 @@ function InspectorContent({
             localValue = trimmed || "";
         } else if (editingField === "currency") {
             // currency is NOT NULL: a blank input means no change.
-            payload.currency = trimmed || undefined;
+            if (trimmed) {
+                const code = trimmed.toUpperCase();
+                if (!isCurrencyCode(code)) return;
+                payload.currency = code;
+                localValue = code;
+            }
         } else if (editingField === "bank") {
             if (!trimmed) {
                 payload.account_id = null;
@@ -338,7 +350,7 @@ function InspectorContent({
             value: txn.currency,
             editable: true,
             editField: "currency",
-            editValue: txn.currency || "",
+            editValue: txn.currency ?? "",
             editType: "text",
         },
         {

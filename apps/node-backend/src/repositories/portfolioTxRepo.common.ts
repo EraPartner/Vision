@@ -2,6 +2,7 @@
 
 import { queryOne } from "../database/rowContracts.ts";
 import { presentRowSchema } from "../database/rows/portfolio.ts";
+import type { InvestmentId } from "@vision/types/brands";
 
 let _hasPortfolioTransactionImportBatchIdColumn: boolean | undefined;
 
@@ -30,7 +31,7 @@ export function __resetPortfolioTransactionSchemaCache(): void {
 export function buildListWhereClause({
   investmentId = null,
   type = null,
-}: { investmentId?: number | null; type?: string | null } = {}): {
+}: { investmentId?: InvestmentId | null; type?: string | null } = {}): {
   where: string;
   params: (number | string)[];
   nextParam: number;

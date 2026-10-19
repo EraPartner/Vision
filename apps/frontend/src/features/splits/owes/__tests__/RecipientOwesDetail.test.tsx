@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, OWED_TOTALS_STUB, SPLIT_STUB } from "@/test/msw/handlers";
 import { RecipientOwesDetail } from "../RecipientOwesDetail";
+import { asRecipientId } from "@vision/types/brands";
 
 it.each(["0", "-1", "12,,3"])(
     "rejects repayment %s with a field error and no request",
@@ -39,7 +40,7 @@ it.each(["0", "-1", "12,,3"])(
         const user = userEvent.setup();
         renderWithApp(
             <RecipientOwesDetail
-                recipient={{ id: 1, name: "Alice" }}
+                recipient={{ id: asRecipientId(1), name: "Alice" }}
                 onBack={vi.fn()}
             />,
         );

@@ -4,9 +4,12 @@ import {
     formatCurrency,
     formatCurrencyParts,
     formatPercent,
+    DEFAULT_CURRENCY,
     numberFormatToLocale,
     type PercentFormatOptions,
+    currencyOr,
 } from "@/utils/currency";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export interface CurrencyFormatterOptions {
     currency?: string | undefined;
@@ -20,19 +23,31 @@ export type CurrencyFormatter = (
     options?: CurrencyFormatterOptions,
 ) => string;
 
-export interface ResolvedCurrencyFormatSettings {
-    currency: string;
+/**
+ * `currency` is the settings currency, a `CurrencyCode`, unless the caller
+ * passed its own display currency, which may be any label Intl accepts.
+ */
+export interface ResolvedCurrencyFormatSettings<
+    TCurrency extends string = CurrencyCode,
+> {
+    currency: TCurrency;
     locale: string;
     decimals: number;
 }
 
+export function useCurrencyFormatSettings(): ResolvedCurrencyFormatSettings;
+export function useCurrencyFormatSettings(
+    defaultCurrency: string | undefined,
+): ResolvedCurrencyFormatSettings<string>;
 export function useCurrencyFormatSettings(
     defaultCurrency?: string,
-): ResolvedCurrencyFormatSettings {
+): ResolvedCurrencyFormatSettings<string> {
     const { appSettings } = useAppSettings();
     return useMemo(
         () => ({
-            currency: defaultCurrency || appSettings.defaultCurrency || "EUR",
+            currency:
+                defaultCurrency ||
+                currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
             locale: numberFormatToLocale(appSettings.numberFormat),
             decimals: appSettings.showDecimalPlaces ?? 2,
         }),

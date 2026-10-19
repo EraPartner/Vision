@@ -31,6 +31,44 @@ export const pgTimestamptz = z.date();
 /** A `to_char(..., 'YYYY-MM-DD')` projection. */
 export const pgDayString = z.string();
 
+// ---------------------------------------------------------------------------
+// Branded keys and currency codes (ADR-220)
+// ---------------------------------------------------------------------------
+
+/*
+ * `.brand<B, "inout">()` tags input and output alike and is a no-op at
+ * runtime: the check is still the plain primitive's and the row passes through
+ * untouched, so these satisfy `RowSchema<T>` (input = output) while a real
+ * transform still fails to compile. The tag matches `@vision/types/brands`.
+ */
+const pgKey = <B extends string>() => z.int().brand<B, "inout">();
+
+/** `accounts.id` and every column referencing it. */
+export const pgAccountId = pgKey<"AccountId">();
+/** `transactions.id` and every column referencing it. */
+export const pgTransactionId = pgKey<"TransactionId">();
+/** `categories.id` and every column referencing it. */
+export const pgCategoryId = pgKey<"CategoryId">();
+/** `recipients.id` and every column referencing it. */
+export const pgRecipientId = pgKey<"RecipientId">();
+/** `tags.id` and every column referencing it. */
+export const pgTagId = pgKey<"TagId">();
+/** `transaction_splits.id` and every column referencing it. */
+export const pgSplitId = pgKey<"SplitId">();
+/** `planned_transactions.id` and every column referencing it. */
+export const pgPlannedTransactionId = pgKey<"PlannedTransactionId">();
+/** `investments.id` and every column referencing it. */
+export const pgInvestmentId = pgKey<"InvestmentId">();
+/** `portfolio_transactions.id` and every column referencing it. */
+export const pgPortfolioTransactionId = pgKey<"PortfolioTransactionId">();
+
+/**
+ * A currency column. The ISO shape is enforced by the tables' CHECK
+ * constraints, not here: some are NOT VALID on long-lived databases, and a
+ * legacy row must not turn every read of it into a contract failure.
+ */
+export const pgCurrency = z.string().brand<"CurrencyCode", "inout">();
+
 /** A bare `SELECT COUNT(*)` row. */
 export const countRowSchema = z
   .object({ count: pgBigint })
@@ -39,12 +77,42 @@ export const countRowSchema = z
 /** A `SELECT id` / `RETURNING id` row over an INTEGER/SERIAL key. */
 export const idRowSchema = z.object({ id: pgInt }).describe("id row");
 
+/** `SELECT id` / `RETURNING id` over `accounts`. */
+export const accountKeyRowSchema = z
+  .object({ id: pgAccountId })
+  .describe("account id row");
+/** `SELECT id` / `RETURNING id` over `transactions`. */
+export const transactionKeyRowSchema = z
+  .object({ id: pgTransactionId })
+  .describe("transaction id row");
+/** `SELECT id` / `RETURNING id` over `categories`. */
+export const categoryKeyRowSchema = z
+  .object({ id: pgCategoryId })
+  .describe("category id row");
+/** `SELECT id` / `RETURNING id` over `recipients`. */
+export const recipientKeyRowSchema = z
+  .object({ id: pgRecipientId })
+  .describe("recipient id row");
+/** `SELECT id` / `RETURNING id` over `planned_transactions`. */
+export const plannedTransactionKeyRowSchema = z
+  .object({ id: pgPlannedTransactionId })
+  .describe("planned transaction id row");
+/** `SELECT id` / `RETURNING id` over `tags`. */
+export const tagKeyRowSchema = z.object({ id: pgTagId }).describe("tag id row");
+/**
+ * `SELECT id` / `RETURNING id` over `transaction_splits`.
+ * @public
+ */
+export const splitKeyRowSchema = z
+  .object({ id: pgSplitId })
+  .describe("split id row");
+
 /**
  * `computedBalanceByCurrencyAggLateral`'s jsonb partitions: `balance` is cast
  * `::text` in SQL, so a string; NULL when the account has no rows.
  */
 export const balancePartsSchema = z
-  .array(z.object({ currency: z.string(), balance: pgNumeric }))
+  .array(z.object({ currency: pgCurrency, balance: pgNumeric }))
   .nullable();
 
 // ---------------------------------------------------------------------------
@@ -54,7 +122,7 @@ export const balancePartsSchema = z
 /** A tag as attached to a transaction / planned transaction sub-collection. */
 export const transactionTagRefSchema = z
   .object({
-    id: pgInt,
+    id: pgTagId,
     slug: z.string(),
     color: z.string().nullable(),
     is_active: z.boolean(),
@@ -63,18 +131,18 @@ export const transactionTagRefSchema = z
 
 /** `attachTagsToRows`' junction read. */
 export const transactionTagRowSchema = transactionTagRefSchema
-  .extend({ transaction_id: pgInt })
+  .extend({ transaction_id: pgTransactionId })
   .describe("transaction tag row");
 
 /** A row of `transactions` as returned by `SELECT t.*`. */
 export const transactionRowSchema = z
   .object({
-    id: pgInt,
+    id: pgTransactionId,
     date: pgDate,
     /** NUMERIC(18,4) */
     amount: pgNumeric,
     /** VARCHAR(3); NOT NULL + DEFAULT 'EUR' from migration 0046, nullable on older rows. */
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094). */
     balance: pgNumeric.nullable(),
     /** Internal bank chronology; omitted from API rows. */
@@ -84,10 +152,10 @@ export const transactionRowSchema = z
     /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
     bank_account: z.string().nullable().optional(),
     /** FK → accounts (migration 0050). */
-    account_id: pgInt.nullable().optional(),
-    recipient_id: pgInt.nullable(),
+    account_id: pgAccountId.nullable().optional(),
+    recipient_id: pgRecipientId.nullable(),
     recipient_bank_account_id: pgInt.nullable(),
-    category_id: pgInt.nullable(),
+    category_id: pgCategoryId.nullable(),
     is_active: z.boolean(),
     /** BIGINT FK → import_batches. */
     import_batch_id: pgBigint.nullable().optional(),
@@ -98,7 +166,7 @@ export const transactionRowSchema = z
     dedup_fingerprint: z.string().nullable().optional(),
     dedup_fingerprint_version: pgInt.nullable().optional(),
     is_transfer: z.boolean().optional(),
-    transfer_peer_id: pgInt.nullable().optional(),
+    transfer_peer_id: pgTransactionId.nullable().optional(),
     transfer_source: z
       .enum(["auto", "manual", "opening", "adjustment", "brokerage"])
       .nullable()
@@ -116,7 +184,7 @@ export const enrichedTransactionDbRowSchema = transactionRowSchema
   .extend({
     recipient_name: z.string().nullable(),
     category_name: z.string().nullable(),
-    effective_category_id: pgInt.nullable().optional(),
+    effective_category_id: pgCategoryId.nullable().optional(),
     /** NUMERIC window sum, only with `includeBalance`. */
     running_balance: pgNumeric.optional(),
   })
@@ -140,12 +208,12 @@ export const uncategorisedTotalRowSchema = z
 /** Projection of `listRecentUnlinked`; `transaction_date` is `t.date` aliased. */
 export const unlinkedTransactionRowSchema = z
   .object({
-    id: pgInt,
-    recipient_id: pgInt.nullable(),
-    recipient_cluster_id: pgInt.nullable(),
+    id: pgTransactionId,
+    recipient_id: pgRecipientId.nullable(),
+    recipient_cluster_id: pgRecipientId.nullable(),
     amount: pgNumeric,
     transaction_date: pgDate,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     memo: z.string().nullable(),
     recipient_name: z.string().nullable(),
   })
@@ -176,19 +244,19 @@ export const transferLegRowSchema = transactionRowSchema
 /** A row of `planned_transactions` as returned by `SELECT pt.*`. */
 export const plannedTransactionRowSchema = z
   .object({
-    id: pgInt,
+    id: pgPlannedTransactionId,
     planned_date: pgDate,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     memo: z.string().nullable(),
     comment: z.string().nullable(),
     url: z.string().nullable(),
     /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
     bank_account: z.string().nullable().optional(),
-    account_id: pgInt.nullable().optional(),
-    recipient_id: pgInt.nullable(),
-    category_id: pgInt.nullable(),
+    account_id: pgAccountId.nullable().optional(),
+    recipient_id: pgRecipientId.nullable(),
+    category_id: pgCategoryId.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
     recurrence_end_date: pgDate.nullable().optional(),
@@ -228,8 +296,8 @@ export const plannedTransactionPageRowSchema = plannedTransactionListRowSchema
 export const plannedExecutionRowSchema = z
   .object({
     id: pgInt,
-    planned_transaction_id: pgInt,
-    executed_transaction_id: pgInt,
+    planned_transaction_id: pgPlannedTransactionId,
+    executed_transaction_id: pgTransactionId,
     execution_date: pgDate,
     created_at: pgTimestamptz.nullable().optional(),
   })
@@ -249,23 +317,23 @@ export const loanScheduleRowSchema = z
 
 /** The list-path installment projection, keyed by its planned transaction. */
 export const keyedLoanScheduleRowSchema = loanScheduleRowSchema
-  .extend({ planned_transaction_id: pgInt })
+  .extend({ planned_transaction_id: pgPlannedTransactionId })
   .describe("keyed loan schedule row");
 
 /** The list-path tag projection, keyed by its planned transaction. */
 export const plannedTagRowSchema = transactionTagRefSchema
-  .extend({ planned_transaction_id: pgInt })
+  .extend({ planned_transaction_id: pgPlannedTransactionId })
   .describe("planned transaction tag row");
 
 /** Narrow projection of `listActiveUnexecuted`. */
 export const plannedMatchCandidateRowSchema = z
   .object({
-    id: pgInt,
-    recipient_id: pgInt.nullable(),
-    recipient_cluster_id: pgInt.nullable(),
+    id: pgPlannedTransactionId,
+    recipient_id: pgRecipientId.nullable(),
+    recipient_cluster_id: pgRecipientId.nullable(),
     amount: pgNumeric,
     planned_date: pgDate,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
     memo: z.string().nullable(),
@@ -276,10 +344,10 @@ export const plannedMatchCandidateRowSchema = z
 /** Narrow projection of `getForForecast`. */
 export const plannedForecastRowSchema = z
   .object({
-    id: pgInt,
+    id: pgPlannedTransactionId,
     planned_date: pgDate,
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     memo: z.string().nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
@@ -291,10 +359,10 @@ export const plannedForecastRowSchema = z
 /** Narrow projection of `getForCommitmentProjection`. */
 export const plannedCommitmentRowSchema = z
   .object({
-    id: pgInt,
+    id: pgPlannedTransactionId,
     planned_date: pgDate,
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     is_recurring: z.boolean(),
     recurrence_pattern: z.string().nullable(),
     recurrence_end_date: pgDate.nullable(),
@@ -311,12 +379,12 @@ export const plannedCommitmentRowSchema = z
 /** A row of `accounts` as projected by `accountRepository`'s `COLUMNS` list. */
 export const accountRowSchema = z
   .object({
-    id: pgInt,
+    id: pgAccountId,
     /** Canonical name; unique on `lower(btrim(name))` (migration 0066). */
     name: z.string(),
     display_name: z.string().nullable(),
     institution: z.string().nullable(),
-    currency: z.string(),
+    currency: pgCurrency,
     /** `account_type` enum: checking|savings|brokerage|crypto_exchange|wallet|pension|liability. */
     type: z.string(),
     /** `account_liquidity_class` enum. */
@@ -329,7 +397,7 @@ export const accountRowSchema = z
     owner: z.string(),
     multi_currency_cash: z.boolean(),
     has_cash_sleeve: z.boolean(),
-    funding_account_id: pgInt.nullable(),
+    funding_account_id: pgAccountId.nullable(),
     is_active: z.boolean(),
     closed_at: pgTimestamptz.nullable(),
     created_at: pgTimestamptz,
@@ -353,7 +421,7 @@ export const accountBalanceQueryRowSchema = accountRowSchema
     statement_balances: z
       .array(
         z.object({
-          currency: z.string(),
+          currency: pgCurrency,
           balance: z.number(),
           balance_date: pgDayString,
         }),
@@ -365,8 +433,8 @@ export const accountBalanceQueryRowSchema = accountRowSchema
 /** An `account_statement_balances` row as `upsertStatementBalance` returns it. */
 export const statementBalanceRowSchema = z
   .object({
-    account_id: pgInt,
-    currency: z.string(),
+    account_id: pgAccountId,
+    currency: pgCurrency,
     balance: pgNumeric,
     balance_date: pgDayString,
   })
@@ -379,9 +447,9 @@ export const statementBalanceRowSchema = z
 /** A raw `transaction_splits` row (`SELECT *` / `RETURNING *`). */
 export const transactionSplitRowSchema = z
   .object({
-    id: pgInt,
-    transaction_id: pgInt,
-    recipient_id: pgInt,
+    id: pgSplitId,
+    transaction_id: pgTransactionId,
+    recipient_id: pgRecipientId,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
     amount: pgNumeric,
     note: z.string().nullable(),
@@ -401,7 +469,7 @@ export const owedSplitRawRowSchema = transactionSplitRowSchema
     transaction_date: pgDate,
     transaction_memo: z.string().nullable(),
     transaction_amount: pgNumeric,
-    transaction_currency: z.string().nullable(),
+    transaction_currency: pgCurrency.nullable(),
     bank_account: z.string().nullable(),
     transaction_recipient_name: z.string().nullable(),
     amount_paid: pgNumeric,
@@ -417,7 +485,7 @@ export const owedExportRawRowSchema = z
     memo: z.string().nullable(),
     /** NUMERIC remaining amount */
     amount: pgNumeric,
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     balance: pgNumeric.nullable(),
     category_name: z.string(),
     comment: z.string().nullable(),
@@ -427,7 +495,7 @@ export const owedExportRawRowSchema = z
 /** An `agg_split_outstanding` summary row (`getOwedSummaryRows`). */
 export const splitOutstandingRowSchema = z
   .object({
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     recipient_name: z.string(),
     total_owed: pgNumeric,
     total_paid: pgNumeric,
@@ -438,13 +506,13 @@ export const splitOutstandingRowSchema = z
 
 /** `getOwedSummaryRows`: one row per (recipient group, transaction currency). */
 export const splitOutstandingCurrencyRowSchema = splitOutstandingRowSchema
-  .extend({ currency: z.string().nullable() })
+  .extend({ currency: pgCurrency.nullable() })
   .describe("split outstanding currency row");
 
 /** `getOwedRemainingByCurrency`: a recipient group's unsettled remainder per currency. */
 export const owedRemainingCurrencyRowSchema = z
   .object({
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     remaining: pgNumeric,
     /** Bare COUNT() */
     split_count: pgBigint,
@@ -463,7 +531,7 @@ export const splitTotalsRowSchema = z
 export const splitPaymentRowSchema = z
   .object({
     id: pgInt,
-    split_id: pgInt,
+    split_id: pgSplitId,
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
     amount: pgNumeric,
     paid_at: pgDate,

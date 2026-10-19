@@ -18,6 +18,11 @@ import plannedTransactionRepository from "../src/repositories/plannedTransaction
 import * as plannedTransactionService from "../src/services/plannedTransactionService.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { isManualDuplicate } from "../src/services/deduplication.ts";
+import {
+  asCurrencyCode,
+  type CurrencyCode,
+} from "@vision/types/brands";
+import { loose } from "./helpers/partial.ts";
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
@@ -73,7 +78,7 @@ describeDb("ADR-088 contract schema", () => {
       recipient_id: recipientId,
       amount: -12.34,
       memo: "contract create",
-      currency: "eur",
+      currency: loose<CurrencyCode>("eur"),
     }))!;
     expect(transaction.bank_account).toBe("Contract Cash");
     expect(transaction.account_id).toEqual(expect.any(Number));
@@ -103,7 +108,7 @@ describeDb("ADR-088 contract schema", () => {
       account_id: detachId,
       recipient_id: recipientId,
       amount: -1,
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     }))!;
     expect(
       await transactionRepository.update(detached.id, { account_id: null }),

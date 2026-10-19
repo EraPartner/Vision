@@ -9,6 +9,7 @@ import { useTags, useCreateTag } from '@/hooks/useTags';
 import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { slugify } from '@/lib/slugify';
 import type { Tag } from '@/types/api';
+import { asTagId } from "@vision/types/brands";
 
 // Jewel-tone palette spanning the hue wheel (matches the app's jewel accent).
 const PALETTE = [
@@ -177,7 +178,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
 
     const selectedTags = useMemo(
         () => value.map((slug): Tag =>
-            tagsBySlug.get(slug) ?? { id: -1, slug, color: null, is_active: true, created_at: '', updated_at: '' },
+            tagsBySlug.get(slug) ?? { id: asTagId(-1), slug, color: null, is_active: true, created_at: '', updated_at: '' },
         ),
         [value, tagsBySlug],
     );

@@ -43,6 +43,7 @@ import {
   decodeCsvBuffer,
   normalizeCsvEncoding,
 } from "./importPipeline/adapters/_shared.ts";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /** One `columns: true` csv-parse record; `relax_column_count` leaves short rows' cells absent. */
@@ -114,11 +115,11 @@ export type CategoryCsvRow = z.output<typeof categoryCsvRowSchema>;
  * earlier one claimed — the per-row loop got that from re-reading the row.
  */
 export interface ResolvedRecipient {
-  id: number;
+  id: RecipientId;
   /** true when THIS import inserted the row */
   created: boolean;
   notes: string | null;
-  defaultCategoryId: number | null;
+  defaultCategoryId: CategoryId | null;
 }
 
 export type RowOutcome = "imported" | "skipped" | "error";
@@ -233,8 +234,8 @@ async function selectCategories(
  */
 async function resolveCategories(
   pairs: CategoryPair[],
-): Promise<Map<string, { id: number; created: boolean }>> {
-  const resolved = new Map<string, { id: number; created: boolean }>();
+): Promise<Map<string, { id: CategoryId; created: boolean }>> {
+  const resolved = new Map<string, { id: CategoryId; created: boolean }>();
   if (pairs.length === 0) return resolved;
   // Both batch call sites run inside withTransaction. Serialize with merges so
   // a pair cannot be reinserted between alias lookup and insertion.
@@ -432,19 +433,19 @@ async function importRecipientRowsBatched(
   const notesUpdates: {
     rowIndex: number;
     name: string;
-    id: number;
+    id: RecipientId;
     notes: string;
   }[] = [];
   const categoryUpdates: {
     rowIndex: number;
     name: string;
-    id: number;
-    categoryId: number;
+    id: RecipientId;
+    categoryId: CategoryId;
   }[] = [];
   const bankAccounts: {
     rowIndex: number;
     name: string;
-    id: number;
+    id: RecipientId;
     accountNumber: string;
   }[] = [];
   const counted = new Set<number>();

@@ -19,6 +19,9 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { createCategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
 import { getSankeyAggregates } from "../src/repositories/infoRepositorySankey.ts";
+import {
+  asCategoryId,
+} from "@vision/types/brands";
 
 const MARK = `sankey_${process.pid}`;
 const RANGE = { yearStart: "1903-01-01", yearEnd: "1903-12-31" };
@@ -88,7 +91,7 @@ describe.skipIf(!hasTestDatabase())("getSankeyAggregates (real DB)", () => {
     cat.food = (await createCategoryNode({ name: `FOOD${MARK}` }))!.id;
     cat.groceries = (await createCategoryNode({
       name: "GROCERIES",
-      parentId: cat.food,
+      parentId: asCategoryId(cat.food),
     }))!.id;
     cat.salary = (await createCategoryNode({ name: `SALARY${MARK}` }))!.id;
     created.categoryIds.push(cat.food, cat.groceries, cat.salary);

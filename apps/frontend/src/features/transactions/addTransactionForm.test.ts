@@ -114,15 +114,40 @@ describe("addTransactionSchema", () => {
         );
     });
 
-    test("currency, category, memo, and comment pass through unvalidated", () => {
+    test("category, memo, and comment pass through unvalidated", () => {
         const result = addTransactionSchema.safeParse({
             ...validForm(),
-            currency: "not a currency",
+            currency: "",
             category_id: "",
             memo: "",
             comment: "",
         });
         expect(result.success).toBe(true);
+        if (!result.success) return;
+        expect(result.data.currency).toBeUndefined();
+    });
+
+    test("currency is uppercased and must be an ISO-4217 code", () => {
+        const lower = addTransactionSchema.safeParse({
+            ...validForm(),
+            currency: " usd ",
+        });
+        expect(lower.success).toBe(true);
+        if (lower.success) expect(lower.data.currency).toBe("USD");
+
+        const invalid = addTransactionSchema.safeParse({
+            ...validForm(),
+            currency: "not a currency",
+        });
+        expect(invalid.success).toBe(false);
+        if (invalid.success) return;
+        expect(
+            fieldErrorsFromZod(
+                invalid.error,
+                ADD_TRANSACTION_FIELD_IDS,
+                (k) => k,
+            ),
+        ).toEqual({ tx_currency: "validation.currencyCode" });
     });
 
     test("maps onto the dialog's field ids through fieldErrorsFromZod", () => {

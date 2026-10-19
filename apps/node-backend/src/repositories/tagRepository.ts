@@ -15,6 +15,7 @@ import {
 import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { TagRow } from '../types/rows.ts';
+import type { TagId } from '@vision/types/brands';
 
 export type { TagRow };
 
@@ -69,7 +70,7 @@ const tagRepository = {
     return parseInt(requireRow(row, 'tag count').count, 10);
   },
 
-  async getById(id: number): Promise<TagRow | null> {
+  async getById(id: TagId): Promise<TagRow | null> {
     const row = await queryOne(tagRowSchema, 'SELECT * FROM tags WHERE id = $1', [id]);
     return row ?? null;
   },
@@ -124,7 +125,7 @@ const tagRepository = {
    * Slug is immutable.
    */
   async update(
-    id: number,
+    id: TagId,
     {
       color,
       is_active,
@@ -155,7 +156,7 @@ const tagRepository = {
   /**
    * Soft delete: set is_active = false.
    */
-  async softDelete(id: number): Promise<TagRow | null> {
+  async softDelete(id: TagId): Promise<TagRow | null> {
     const row = await queryOne(
       tagRowSchema,
       `UPDATE tags SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
@@ -167,7 +168,7 @@ const tagRepository = {
   /**
    * Count how many transactions reference a given tag (for reactivation toast).
    */
-  async countTransactionReferences(tagId: number): Promise<number> {
+  async countTransactionReferences(tagId: TagId): Promise<number> {
     const row = await queryOne(
       countRowSchema,
       'SELECT COUNT(*) FROM transaction_tags WHERE tag_id = $1',

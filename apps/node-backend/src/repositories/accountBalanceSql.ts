@@ -1,5 +1,7 @@
 import { bankChronologySql } from "./bankChronologySql.ts";
 import { roundToCents } from "../lib/money.ts";
+import { storedCurrencyCode } from "../lib/currencyCode.ts";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /**
  * Shared SQL for an account's computed balance (ADR-094).
@@ -272,12 +274,12 @@ export function computedBalanceByCurrencyAggLateral({
  *   NUMERIC column).
  */
 export function statementPartition(
-  parts: Array<{ currency: string; balance: string }> | null | undefined,
-  accountCurrency: string | null | undefined,
-): { currency: string; balance: string } {
-  const want = (accountCurrency || "EUR").toUpperCase();
+  parts: Array<{ currency: CurrencyCode; balance: string }> | null | undefined,
+  accountCurrency: CurrencyCode | null | undefined,
+): { currency: CurrencyCode; balance: string } {
+  const want = storedCurrencyCode(accountCurrency);
   const list = (parts ?? []).map((p) => ({
-    currency: (p.currency || "EUR").toUpperCase(),
+    currency: storedCurrencyCode(p.currency),
     balance: String(p.balance),
   }));
 

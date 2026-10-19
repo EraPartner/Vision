@@ -1,6 +1,7 @@
+import type { CategoryId } from "@vision/types/brands";
 /** Match a direct category observation against one or more selected ancestors. */
 export function matchesCategorySelection(
-    category: { categoryId: number | null; categoryPathIds?: number[] },
+    category: { categoryId: CategoryId | null; categoryPathIds?: CategoryId[] },
     selectedIds: ReadonlySet<number>,
 ): boolean {
     if (category.categoryId == null) return false;

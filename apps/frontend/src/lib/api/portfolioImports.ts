@@ -9,6 +9,12 @@ import {
 import { postMultipartImport } from "@/lib/api/helpers";
 import { importProgressSchema, type CsvNumberFormat } from "@/lib/api/imports";
 import { readSseStream } from "@/lib/api/sse";
+import {
+    CurrencyCodeSchema,
+    asAccountId,
+    asInvestmentId,
+} from "@vision/types/brands";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
 import type { ImportProgress } from "@/types/apiClient";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
@@ -54,11 +60,11 @@ const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
 
 export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
-    accountId?: number | undefined;
+    accountId?: AccountId | undefined;
     /** Destination of dated asset withdrawals, when the statement contains them. */
-    transferDestinationAccountId?: number | undefined;
+    transferDestinationAccountId?: AccountId | undefined;
     /** Origin of dated asset returns, when source evidence identifies prior custody. */
-    transferOriginAccountId?: number | undefined;
+    transferOriginAccountId?: AccountId | undefined;
     /** Explicit zero basis for proved existing yield-unit receipts in a bounded scope. */
     yieldBasisPolicy?: "zero";
     /** Explicit comma-separated asset symbols for a partial statement import. */
@@ -129,13 +135,13 @@ export interface PortfolioPreviewRow {
     note: string | null;
     match_source: string | null;
     error_message: string | null;
-    user_override_investment_id: number | null;
+    user_override_investment_id: InvestmentId | null;
 }
 
 export interface PortfolioPreviewGroup {
     /** Brokerage cash group (ADR-095): deposits/withdrawals, no instrument to resolve. */
     is_cash?: boolean;
-    investment_id: number | null;
+    investment_id: InvestmentId | null;
     investment_name: string | null;
     investment_symbol: string | null;
     investment_asset_class: string | null;
@@ -147,7 +153,7 @@ export interface PortfolioPreviewGroup {
 
 export interface PortfolioPreviewResponse {
     batch_id: number;
-    account_id: number | null;
+    account_id: AccountId | null;
     account_name: string | null;
     account_valid: boolean;
     groups: PortfolioPreviewGroup[];
@@ -225,7 +231,7 @@ function configToParams(
 /** Brokerage fan-out (ADR-095): mark the import and the sleeve account its rows land on. */
 export interface BrokerageImportOptions {
     isBrokerage: boolean;
-    accountId?: number | undefined;
+    accountId?: AccountId | undefined;
 }
 
 function appendBrokerage(
@@ -419,12 +425,12 @@ export function getPortfolioImportPreview(
 export function overridePortfolioImportRow(
     batchId: number,
     rowId: number,
-    payload: { investmentId?: number | null; createNew?: boolean },
+    payload: { investmentId?: InvestmentId | null; createNew?: boolean },
 ): Promise<{
     row_id: number;
-    investment_id?: number;
+    investment_id?: InvestmentId;
     created?: boolean;
-    user_override_investment_id?: number | null;
+    user_override_investment_id?: InvestmentId | null;
 }> {
     const body = payload.createNew
         ? { create_new: true }
@@ -443,9 +449,9 @@ export function overridePortfolioImportRows(
     batchId: number,
     /** Preview row ids; the route also accepts the BIGINT digit strings. */
     rowIds: ReadonlyArray<number | string>,
-    payload: { investmentId?: number; createNew?: boolean },
+    payload: { investmentId?: InvestmentId; createNew?: boolean },
 ): Promise<{
-    investment_id: number;
+    investment_id: InvestmentId;
     created: boolean;
     resolved: number;
     investment?: unknown;
@@ -465,7 +471,7 @@ export function overridePortfolioImportRows(
 
 export function commitPortfolioImportBatch(
     batchId: number,
-    accountId?: number | null,
+    accountId?: AccountId | null,
 ): Promise<{
     batch_id: number;
     imported: number;
@@ -536,7 +542,10 @@ const portfolioImportBatchPageSchema = z.object({
                 id: portfolioBatchIdSchema,
                 adapter_name: z.string(),
                 source_filename: z.string().nullable().optional(),
-                account_id: portfolioBatchIdSchema.nullable().optional(),
+                account_id: portfolioBatchIdSchema
+                    .transform(asAccountId)
+                    .nullable()
+                    .optional(),
                 status: z.enum([
                     "pending",
                     "staging",
@@ -625,8 +634,13 @@ const reconciliationBlockerSchema = z.object({
 const cashValuesSchema = z.strictObject({
     date: z.iso.date(),
     amount: z.string().regex(/^-?\d+(?:\.\d+)?$/),
-    currency: z.string().regex(/^[A-Z]{3}$/),
-    accountId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    currency: CurrencyCodeSchema,
+    accountId: z
+        .number()
+        .int()
+        .positive()
+        .max(Number.MAX_SAFE_INTEGER)
+        .transform(asAccountId),
     isTransfer: z.boolean(),
     transferSource: z.literal("brokerage"),
     transferPeerId: z.null(),
@@ -660,6 +674,7 @@ const reconciliationPlanSchema = z.looseObject({
                     .int()
                     .positive()
                     .max(Number.MAX_SAFE_INTEGER)
+                    .transform(asInvestmentId)
                     .nullable()
                     .optional(),
                 isCash: z.boolean().optional(),
@@ -697,7 +712,8 @@ const reconciliationPlanSchema = z.looseObject({
                             .number()
                             .int()
                             .positive()
-                            .max(Number.MAX_SAFE_INTEGER),
+                            .max(Number.MAX_SAFE_INTEGER)
+                            .transform(asAccountId),
                     })
                     .optional(),
                 corrections: z.array(z.string()).optional(),
@@ -743,8 +759,16 @@ const reconciliationPlanSchema = z.looseObject({
                         units: z.string(),
                         feeUnits: z.string(),
                         receivedUnits: z.string(),
-                        sourceAccountId: z.number().int().positive(),
-                        destinationAccountId: z.number().int().positive(),
+                        sourceAccountId: z
+                            .number()
+                            .int()
+                            .positive()
+                            .transform(asAccountId),
+                        destinationAccountId: z
+                            .number()
+                            .int()
+                            .positive()
+                            .transform(asAccountId),
                     })
                     .optional(),
             })

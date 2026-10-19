@@ -20,6 +20,7 @@ import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import type { RateTable } from "../types/rows.ts";
+import { storedCurrencyCode } from "../lib/currencyCode.ts";
 
 interface CashAccountEntry {
   id: number;
@@ -113,12 +114,12 @@ export async function assembleRebalanceInputs({
   const unconvertedCurrencies = new Set<string>();
   let availableCash = toDecimal(0);
   for (const r of rows) {
-    const acctCurrency = (r.currency || "EUR").toUpperCase();
+    const acctCurrency = storedCurrencyCode(r.currency);
     const partitions = r.balance_parts ?? [];
     let accountTotal = toDecimal(0);
     const accountUnconverted: string[] = [];
     for (const part of partitions) {
-      const partCurrency = (part.currency || "EUR").toUpperCase();
+      const partCurrency = storedCurrencyCode(part.currency);
       cashCurrencies.add(partCurrency);
       const native = toNumber(toDecimal(part.balance));
       const converted =

@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 // Domain tests isolate the writer boundary; disposable PG tests verify locks.
 vi.mock("../src/services/portfolio/portfolioHistoryWriteService.ts", () => ({
@@ -64,7 +70,7 @@ describe("portfolioTransactionService.create", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 30,
+            id: asPortfolioTransactionId(30),
             amount: "1000.0000",
             units: "5.00000000",
             price_per_unit: "200.000000",
@@ -73,12 +79,12 @@ describe("portfolioTransactionService.create", () => {
       });
 
     const result = await portfolioTransactionRepository.create({
-      investment_id: 1,
+      investment_id: asInvestmentId(1),
       type: "buy",
       date: "2026-03-24",
       units: 5,
       price_per_unit: 200,
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     });
 
     expect(query).toHaveBeenNthCalledWith(
@@ -117,11 +123,11 @@ describe("portfolioTransactionService.create", () => {
 
     await expect(
       portfolioTransactionRepository.create({
-        investment_id: 1,
+        investment_id: asInvestmentId(1),
         type: "buy",
         date: "2026-03-24",
         amount: 1000,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
@@ -132,7 +138,7 @@ describe("portfolioTransactionService.create", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 40,
+            id: asPortfolioTransactionId(40),
             type: "gift",
             amount: "0.0000",
             units: "2.00000000",
@@ -141,11 +147,11 @@ describe("portfolioTransactionService.create", () => {
       });
 
     const result = await portfolioTransactionRepository.create({
-      investment_id: 1,
+      investment_id: asInvestmentId(1),
       type: "gift",
       date: "2026-03-24",
       units: 2,
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
     });
 
     expect(query).toHaveBeenNthCalledWith(
@@ -188,13 +194,13 @@ describe("portfolioTransactionService.create", () => {
 
     await expect(
       portfolioTransactionRepository.create({
-        investment_id: 1,
+        investment_id: asInvestmentId(1),
         type: "sell",
         date: "2026-03-24",
         amount: 1000,
         units: 2,
         price_per_unit: 500,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
@@ -212,7 +218,7 @@ describe("portfolioTransactionRepository.hardDelete", () => {
   it("returns false when delete affects no rows", async () => {
     query.mockResolvedValueOnce({ rowCount: 0 });
 
-    const deleted = await portfolioTransactionRepository.hardDelete(99);
+    const deleted = await portfolioTransactionRepository.hardDelete(asPortfolioTransactionId(99));
 
     expect(deleted).toBe(false);
   });
@@ -229,8 +235,8 @@ describe("portfolioTransactionService.remove", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 44,
-            investment_id: 1,
+            id: asPortfolioTransactionId(44),
+            investment_id: asInvestmentId(1),
             type: "buy",
             date: pgLocalDate("2025-01-01"),
             units: "5",
@@ -245,21 +251,21 @@ describe("portfolioTransactionService.remove", () => {
             type: "buy",
             date: "2025-01-01",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "45",
             type: "buy",
             date: "2025-01-02",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "46",
             type: "sell",
             date: "2025-02-01",
             units: "7",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
         ],
       })
@@ -268,7 +274,7 @@ describe("portfolioTransactionService.remove", () => {
       });
 
     await expect(
-      portfolioTransactionRepository.remove(44),
+      portfolioTransactionRepository.remove(asPortfolioTransactionId(44)),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message:
@@ -284,8 +290,8 @@ describe("portfolioTransactionService.remove", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 46,
-            investment_id: 1,
+            id: asPortfolioTransactionId(46),
+            investment_id: asInvestmentId(1),
             type: "sell",
             date: pgLocalDate("2025-02-01"),
             units: "7",
@@ -300,20 +306,20 @@ describe("portfolioTransactionService.remove", () => {
             type: "buy",
             date: "2025-01-01",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "46",
             type: "sell",
             date: "2025-02-01",
             units: "7",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
         ],
       })
       .mockResolvedValueOnce({ rowCount: 1 });
 
-    await expect(portfolioTransactionRepository.remove(46)).resolves.toBe(true);
+    await expect(portfolioTransactionRepository.remove(asPortfolioTransactionId(46))).resolves.toBe(true);
     expect(query).toHaveBeenLastCalledWith(
       "DELETE FROM portfolio_transactions WHERE id = $1",
       [46],
@@ -334,21 +340,21 @@ describe("portfolioTransactionService.remove", () => {
             type: "buy",
             date: "2025-01-01",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "45",
             type: "buy",
             date: "2025-01-02",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "46",
             type: "sell",
             date: "2025-02-01",
             units: "7",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
         ],
       })
@@ -381,22 +387,22 @@ describe("portfolioTransactionService.remove", () => {
             type: "buy",
             date: "2025-01-01",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "46",
             type: "sell",
             date: "2025-02-01",
             units: "5",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
         ],
       });
 
     await expect(
       portfolioTransactionRepository.validateImportBatchRemoval(7, [
-        { id: 44, investment_id: 1 },
-        { id: 46, investment_id: 1 },
+        { id: asPortfolioTransactionId(44), investment_id: asInvestmentId(1) },
+        { id: asPortfolioTransactionId(46), investment_id: asInvestmentId(1) },
       ]),
     ).resolves.toBeUndefined();
 
@@ -419,8 +425,8 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 8,
-            investment_id: 1,
+            id: asPortfolioTransactionId(8),
+            investment_id: asInvestmentId(1),
             type: "buy",
             amount: "1000",
             units: "5",
@@ -440,7 +446,7 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 8,
+            id: asPortfolioTransactionId(8),
             amount: "1200.0000",
             units: "6.00000000",
             price_per_unit: "200.000000",
@@ -448,7 +454,7 @@ describe("portfolioTransactionRepository.update", () => {
         ],
       });
 
-    const result = await portfolioTransactionRepository.update(8, {
+    const result = await portfolioTransactionRepository.update(asPortfolioTransactionId(8), {
       units: 6,
       price_per_unit: 200,
     });
@@ -472,8 +478,8 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 10,
-            investment_id: 1,
+            id: asPortfolioTransactionId(10),
+            investment_id: asInvestmentId(1),
             type: "buy",
             amount: "1000",
             units: "5",
@@ -486,7 +492,7 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({ rows: [{ asset_class: "stock" }] });
 
     await expect(
-      portfolioTransactionRepository.update(10, { amount: 1200 }),
+      portfolioTransactionRepository.update(asPortfolioTransactionId(10), { amount: 1200 }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
@@ -495,8 +501,8 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 9,
-            investment_id: 2,
+            id: asPortfolioTransactionId(9),
+            investment_id: asInvestmentId(2),
             type: "buy",
             amount: "1000",
             fees: "0",
@@ -506,10 +512,10 @@ describe("portfolioTransactionRepository.update", () => {
       })
       .mockResolvedValueOnce({ rows: [{ asset_class: "bond" }] })
       .mockResolvedValueOnce({
-        rows: [portfolioTransactionDbRow({ id: 9, amount: "1200.00" })],
+        rows: [portfolioTransactionDbRow({ id: asPortfolioTransactionId(9), amount: "1200.00" })],
       });
 
-    const result = await portfolioTransactionRepository.update(9, {
+    const result = await portfolioTransactionRepository.update(asPortfolioTransactionId(9), {
       amount: 1200,
     });
 
@@ -530,11 +536,11 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 11,
-            investment_id: 2,
+            id: asPortfolioTransactionId(11),
+            investment_id: asInvestmentId(2),
             type: "dividend",
             amount: "100",
-            currency: "USD",
+            currency: asCurrencyCode("USD"),
             fx_rate_to_eur: "0.92",
           }),
         ],
@@ -543,17 +549,17 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 11,
-            investment_id: 2,
+            id: asPortfolioTransactionId(11),
+            investment_id: asInvestmentId(2),
             type: "dividend",
             amount: "100",
-            currency: "USD",
+            currency: asCurrencyCode("USD"),
             fx_rate_to_eur: null,
           }),
         ],
       });
 
-    const result = await portfolioTransactionRepository.update(11, {
+    const result = await portfolioTransactionRepository.update(asPortfolioTransactionId(11), {
       fx_rate_to_eur: null,
     });
 
@@ -577,8 +583,8 @@ describe("portfolioTransactionRepository.update", () => {
     query.mockResolvedValueOnce({
       rows: [
         portfolioTransactionDbRow({
-          id: 12,
-          investment_id: 1,
+          id: asPortfolioTransactionId(12),
+          investment_id: asInvestmentId(1),
           type: "buy",
           amount: "1000",
           units: "5",
@@ -590,7 +596,7 @@ describe("portfolioTransactionRepository.update", () => {
     });
 
     await expect(
-      portfolioTransactionRepository.update(12, { type: "sell" }),
+      portfolioTransactionRepository.update(asPortfolioTransactionId(12), { type: "sell" }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message: "type cannot be changed",
@@ -600,7 +606,7 @@ describe("portfolioTransactionRepository.update", () => {
   it("returns null when update target does not exist", async () => {
     query.mockResolvedValueOnce({ rows: [] });
 
-    const result = await portfolioTransactionRepository.update(404, {
+    const result = await portfolioTransactionRepository.update(asPortfolioTransactionId(404), {
       note: "x",
     });
 
@@ -611,8 +617,8 @@ describe("portfolioTransactionRepository.update", () => {
     query.mockResolvedValueOnce({
       rows: [
         portfolioTransactionDbRow({
-          id: 21,
-          investment_id: 1,
+          id: asPortfolioTransactionId(21),
+          investment_id: asInvestmentId(1),
           type: "dividend",
           amount: "100",
         }),
@@ -620,7 +626,7 @@ describe("portfolioTransactionRepository.update", () => {
     });
     query.mockResolvedValueOnce({ rows: [{ asset_class: "stock" }] });
 
-    const result = await portfolioTransactionRepository.update(21, {
+    const result = await portfolioTransactionRepository.update(asPortfolioTransactionId(21), {
       unsupported: "field",
     });
 
@@ -640,8 +646,8 @@ describe("portfolioTransactionRepository.update", () => {
       .mockResolvedValueOnce({
         rows: [
           portfolioTransactionDbRow({
-            id: 13,
-            investment_id: 1,
+            id: asPortfolioTransactionId(13),
+            investment_id: asInvestmentId(1),
             type: "sell",
             date: pgLocalDate("2026-03-24"),
             amount: "1000",
@@ -658,7 +664,7 @@ describe("portfolioTransactionRepository.update", () => {
       });
 
     await expect(
-      portfolioTransactionRepository.update(13, {
+      portfolioTransactionRepository.update(asPortfolioTransactionId(13), {
         units: 1,
         price_per_unit: 1000,
       }),
@@ -704,7 +710,7 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
     query.mockResolvedValueOnce({ rows: [] });
 
     await portfolioTransactionRepository.getAllByInvestmentIds({
-      investmentIds: [5, "12abc"],
+      investmentIds: [asInvestmentId(5), "12abc"],
     });
 
     expect(query.mock.calls[0]![1]![0]).toEqual([5]);
@@ -733,7 +739,7 @@ describe("portfolioTransactionRepository.getSummary", () => {
       ],
     });
 
-    const rows = await portfolioTransactionRepository.getSummary(77);
+    const rows = await portfolioTransactionRepository.getSummary(asInvestmentId(77));
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("FROM portfolio_transactions"),

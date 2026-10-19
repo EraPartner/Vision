@@ -14,6 +14,7 @@ import {
     DEFAULT_DASHBOARD_SETTINGS,
     useSettingsStore,
 } from "@/stores/settingsStore";
+import { asCategoryId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -39,7 +40,7 @@ async function renderWithCustomisedSettings() {
         appSettings: { ...DEFAULT_APP_SETTINGS, dateFormat: "YYYY-MM-DD" },
         dashboardSettings: {
             ...DEFAULT_DASHBOARD_SETTINGS,
-            excludedCategoryIds: [5],
+            excludedCategoryIds: [asCategoryId(5)],
         },
     });
     return { user, resetButton, saveSetting };

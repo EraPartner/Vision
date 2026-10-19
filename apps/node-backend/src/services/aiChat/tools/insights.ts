@@ -18,6 +18,8 @@ import type { ToolContext } from "./_validate.ts";
 import { getQuotes } from "../../marketLookupService.ts";
 import { detectRecurringPatterns } from "../../recurringDetectionService.ts";
 import { getInsightsDigest } from "../../insightsDigestService.ts";
+import { asRecipientId } from "@vision/types/brands";
+import { currencyOrEur } from "../../../lib/currencyCode.ts";
 
 type AverageVsCurrentSpending = Awaited<
   ReturnType<typeof infoRepository.getAverageVsCurrentSpending>
@@ -179,13 +181,14 @@ export const getRecipientInsights = {
       max: 100,
       defaultValue: 20,
     });
-    const recipientId =
+    const recipientIdArg =
       args.recipientId != null
         ? parsePositiveInt(args.recipientId, "recipientId", {
             min: 1,
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
+    const recipientId = recipientIdArg == null ? null : asRecipientId(recipientIdArg);
 
     const SCAN_LIMIT = 50_000;
     const allRows = await transactionRepository.getAll({
@@ -335,7 +338,7 @@ export const getWatchlist = {
           livePrice != null
             ? roundToCents(toDecimal(livePrice)).toNumber()
             : null,
-        currency: item.currency || "EUR",
+        currency: currencyOrEur(item.currency),
         notes: item.notes || null,
       };
     });

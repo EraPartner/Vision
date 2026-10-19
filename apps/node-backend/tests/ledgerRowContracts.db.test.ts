@@ -31,6 +31,10 @@ import {
 } from "../src/services/accountCloseService.ts";
 import { loose } from "./helpers/partial.ts";
 import type { ExpressResponse } from "../src/types/express.ts";
+import {
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const MEMO = "LEDGER ROW CONTRACT FIXTURE";
 
@@ -183,10 +187,10 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
   it("creates a split batch through the checked totals, insert and audit rows", async () => {
     await seed();
     const splits = await splitService.createSplitsBatchAtomic({
-      transaction_id: txIds[0]!,
+      transaction_id: asTransactionId(txIds[0]!),
       splits: [
-        { recipient_id: otherRecipientId, amount: 20 },
-        { recipient_id: recipientId, amount: "10.25", note: "half" },
+        { recipient_id: asRecipientId(otherRecipientId), amount: 20 },
+        { recipient_id: asRecipientId(recipientId), amount: "10.25", note: "half" },
       ],
     });
     expect(splits.map((split) => [split.amount, split.amount_paid])).toEqual([

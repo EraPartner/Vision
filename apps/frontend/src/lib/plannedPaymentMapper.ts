@@ -10,12 +10,20 @@ import type {
     PlannedLoanType,
     PlannedLoanScheduleEntry,
 } from "@/types/api";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    PlannedTransactionId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 export interface PlannedPayment {
-    id: number;
+    id: PlannedTransactionId;
     name: string;
     amount: number;
-    currency: string;
+    currency: CurrencyCode;
     due_date: string; // ISO date
     is_recurring: boolean;
     // The planned-transaction recurrence vocabulary (canonical list in
@@ -39,16 +47,16 @@ export interface PlannedPayment {
     end_date?: string | null | undefined;
     max_occurrences?: number | null | undefined;
     recipient?: string | undefined;
-    recipient_id?: number | undefined;
+    recipient_id?: RecipientId | undefined;
     category?: string | undefined;
-    category_id?: number | undefined;
+    category_id?: CategoryId | undefined;
     bank_account?: string | undefined;
-    account_id?: number | undefined;
+    account_id?: AccountId | undefined;
     notes?: string | undefined;
     url?: string | undefined;
     is_executed?: boolean | undefined;
     last_executed_date?: string | undefined;
-    executed_transaction_id?: number | undefined;
+    executed_transaction_id?: TransactionId | undefined;
     execution_count?: number | undefined;
     executions?: PlannedTransactionExecution[] | undefined;
     tags?: string[] | undefined;
@@ -59,7 +67,7 @@ export interface PlannedPayment {
 // Map backend PlannedTransaction to frontend PlannedPayment format
 export function mapFromAPI(
     pt: PlannedTransaction,
-    defaultCurrency: string,
+    defaultCurrency: CurrencyCode,
 ): PlannedPayment {
     // Parse recurrence_pattern to extract frequency
     let frequency: PlannedPayment["frequency"] = "monthly";

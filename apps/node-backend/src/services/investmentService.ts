@@ -34,7 +34,19 @@ import {
   validateId,
   validateIntArray,
 } from "../lib/validation.ts";
-import { assertIdParam } from "../middleware/validation.ts";
+import { assertEntityIdParam } from "../middleware/validation.ts";
+import {
+  AccountIdSchema,
+  InvestmentIdSchema,
+  PortfolioTransactionIdSchema,
+  asAccountId,
+  asInvestmentId,
+} from "@vision/types/brands";
+import type {
+  AccountId,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 import { invalidatePortfolioCaches } from "./info/cache.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import { autoResolveFxRateToEur } from "./portfolio/fxResolve.ts";
@@ -172,16 +184,43 @@ const investmentBodySchema = z.looseObject({
 
 const brokerRetagBodySchema = z.strictObject({
   transaction_ids: z
-    .array(z.number().int().positive().max(2_147_483_647))
+    .array(
+      z
+        .number()
+        .int()
+        .positive()
+        .max(2_147_483_647)
+        .pipe(PortfolioTransactionIdSchema),
+    )
     .min(1)
     .max(500)
     .refine((ids) => new Set(ids).size === ids.length, {
       message: "transaction_ids must be distinct",
     }),
-  from_account_id: z.number().int().positive().max(2_147_483_647).nullable(),
-  to_account_id: z.number().int().positive().max(2_147_483_647).nullable(),
+  from_account_id: z
+    .number()
+    .int()
+    .positive()
+    .max(2_147_483_647)
+    .pipe(AccountIdSchema)
+    .nullable(),
+  to_account_id: z
+    .number()
+    .int()
+    .positive()
+    .max(2_147_483_647)
+    .pipe(AccountIdSchema)
+    .nullable(),
   idempotency_key: z.string().uuid(),
 });
+
+/** A validated broker re-tag body. */
+type BrokerRetagBody = {
+  transaction_ids: PortfolioTransactionId[];
+  from_account_id: AccountId | null;
+  to_account_id: AccountId | null;
+  idempotency_key: string;
+};
 
 /** A validated investment write body; unknown keys pass through as `unknown`. */
 type InvestmentBody = z.output<typeof investmentBodySchema>;
@@ -208,12 +247,7 @@ function parseInvestmentBody(body: unknown): InvestmentBody {
   return result.data;
 }
 
-function parseBrokerRetagBody(body: unknown): {
-  transaction_ids: number[];
-  from_account_id: number | null;
-  to_account_id: number | null;
-  idempotency_key: string;
-} {
+function parseBrokerRetagBody(body: unknown): BrokerRetagBody {
   const result = brokerRetagBodySchema.safeParse(body);
   if (!result.success) {
     const message = result.error.issues
@@ -410,8 +444,8 @@ export function clearInvestmentsCaches() {
 
 // ── Request parsers ──────────────────────────────────────────────────────────
 
-export function parseRequestId(req: ExpressRequest): number {
-  return assertIdParam(req);
+export function parseRequestId(req: ExpressRequest): InvestmentId {
+  return assertEntityIdParam(req, InvestmentIdSchema);
 }
 
 /**
@@ -428,11 +462,13 @@ export function parseRequestId(req: ExpressRequest): number {
  * hard-deleted transaction 12**, and `1e3` deleted transaction 1. PATCH on the
  * same path retargeted identically.
  */
-export function parseTxnRequestId(req: ExpressRequest): number {
-  return assertIdParam(req, "txnId");
+export function parseTxnRequestId(
+  req: ExpressRequest,
+): PortfolioTransactionId {
+  return assertEntityIdParam(req, PortfolioTransactionIdSchema, "txnId");
 }
 
-export function requireTxnId(req: ExpressRequest): number {
+export function requireTxnId(req: ExpressRequest): PortfolioTransactionId {
   return parseTxnRequestId(req);
 }
 
@@ -451,11 +487,11 @@ export function requireTxnId(req: ExpressRequest): number {
  * Postgres as NaN for a 500. Zero, negatives and the empty string now reject
  * as 400 instead of 500ing at the FK.
  */
-function parseAccountId(value: unknown): number {
+function parseAccountId(value: unknown): AccountId {
   const result = validateId(value, "account_id");
   if (!result.valid)
     throw new ValidationError("account_id must be a positive integer");
-  return result.value;
+  return asAccountId(result.value);
 }
 
 /**
@@ -493,13 +529,13 @@ function translateRepoError(err: unknown): never {
  * runs), so unlike `assertOptionalId` there is no "absent means no filter"
  * case to preserve.
  */
-function parseInvestmentIdsQuery(rawInvestmentIds: unknown): number[] {
+function parseInvestmentIdsQuery(rawInvestmentIds: unknown): InvestmentId[] {
   const result = validateIntArray(
     String(rawInvestmentIds).split(","),
     "investment_ids",
   );
   if (!result.valid) throw new ValidationError(result.error);
-  return result.value;
+  return result.value.map(asInvestmentId);
 }
 
 // Route limit/offset through the canonical parsePagination clamp (used by the
@@ -534,9 +570,9 @@ const INVESTMENT_TRANSACTIONS_MAX_LIMIT = 1000;
 
 function parseBulkTransactionsOptions(
   query: ExpressRequest["query"],
-  investmentIds: number[],
+  investmentIds: InvestmentId[],
 ): {
-  investmentIds: number[];
+  investmentIds: InvestmentId[];
   type: string | null;
   perInvestmentLimit: number;
   limit: number | null;
@@ -565,9 +601,9 @@ function parseBulkTransactionsOptions(
 
 function parseInvestmentTransactionsOptions(
   query: ExpressRequest["query"],
-  investmentId: number,
+  investmentId: InvestmentId,
 ): {
-  investmentId: number;
+  investmentId: InvestmentId;
   type: string | null;
   limit: number;
   offset: number;
@@ -709,7 +745,7 @@ export async function refreshPrices(
   // round trips per refresh.
   const refreshedAt = new Date().toISOString();
   const priceUpdates: {
-    id: number;
+    id: InvestmentId;
     current_price: number;
     price_updated_at: string;
   }[] = [];
@@ -719,7 +755,7 @@ export async function refreshPrices(
     priceSources[investmentId] = source || "live";
     if (source === "cached" || source === "historical_fallback") continue;
     priceUpdates.push({
-      id: parseInt(investmentId, 10),
+      id: asInvestmentId(parseInt(investmentId, 10)),
       current_price: price,
       price_updated_at: refreshedAt,
     });

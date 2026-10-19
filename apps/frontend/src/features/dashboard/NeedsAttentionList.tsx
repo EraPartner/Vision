@@ -11,6 +11,7 @@ import { useNeedsCategoryCount } from "@/hooks/useNeedsCategoryCount";
 import { usePlannedMatchSuggestions } from "@/hooks/usePlannedMatchSuggestions";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { useBankBalances } from "./useDashboardQueries";
+import type { CurrencyCode } from "@vision/types/brands";
 
 const STALE_AFTER_DAYS = 30;
 
@@ -38,7 +39,7 @@ function readDismissedAccounts(): DismissedAccounts {
 }
 
 interface NeedsAttentionListProps {
-    currency: string;
+    currency: CurrencyCode;
 }
 
 /**

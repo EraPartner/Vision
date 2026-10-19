@@ -5,6 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { useHoldingActions } from "../useHoldingActions";
 import type { InvestmentSummary } from "@/types/portfolio";
+import {
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const portfolio = vi.hoisted(() => ({ holdings: [] as InvestmentSummary[] }));
 vi.mock("@/hooks/usePortfolio", () => ({
@@ -66,8 +71,8 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 const TXN = {
-    id: 101,
-    investment_id: 1,
+    id: asPortfolioTransactionId(101),
+    investment_id: asInvestmentId(1),
     type: "buy" as const,
     date: "2025-01-10",
     amount: 900,
@@ -75,7 +80,7 @@ const TXN = {
     price_per_unit: 90,
     fees: 2.5,
     taxes: 0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     fx_rate_to_eur: 1,
     note: "Initial buy",
     is_recurring: false,
@@ -84,12 +89,12 @@ const TXN = {
 };
 
 const INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     is_active: true,
@@ -185,7 +190,7 @@ describe("holding detail refresh", () => {
                 ...updated,
                 transactions: [
                     ...updated.transactions,
-                    { ...TXN, id: 102, note: "Added buy" },
+                    { ...TXN, id: asPortfolioTransactionId(102), note: "Added buy" },
                 ],
             },
         ];
@@ -196,7 +201,7 @@ describe("holding detail refresh", () => {
         portfolio.holdings = [
             {
                 ...firstHolding(),
-                transactions: [{ ...TXN, id: 102, note: "Added buy" }],
+                transactions: [{ ...TXN, id: asPortfolioTransactionId(102), note: "Added buy" }],
             },
         ];
         view.rerender(<Harness />);
@@ -211,7 +216,7 @@ describe("holding detail refresh", () => {
         const view = renderWithApp(<Harness />);
         await openDetails(user);
         portfolio.holdings = [
-            { ...INVESTMENT, id: 2, name: "Other holding" },
+            { ...INVESTMENT, id: asInvestmentId(2), name: "Other holding" },
             { ...INVESTMENT, name: "Renamed holding", is_active: false },
         ];
         view.rerender(<Harness />);

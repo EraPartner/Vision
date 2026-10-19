@@ -27,6 +27,8 @@ import {
   getAssetTransfersForBatch,
   insertAssetTransfer,
 } from "../../repositories/portfolioAssetTransferRepository.ts";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 /**
  * The staging-row columns a custody preview reads (asset transfers and asset
@@ -87,9 +89,9 @@ export type FeeBasisAllocation = {
 export type AssetTransferEvent = {
   id: number;
   type: "asset_transfer";
-  investment_id: number;
-  source_account_id: number;
-  destination_account_id: number;
+  investment_id: InvestmentId;
+  source_account_id: AccountId;
+  destination_account_id: AccountId;
   /** 'YYYY-MM-DD' */
   date: string;
   units: string;
@@ -197,9 +199,9 @@ export function previewPortfolioAssetTransfer(
     event: {
       id: Number.MAX_SAFE_INTEGER,
       type: "asset_transfer",
-      investment_id: investment,
-      source_account_id: source,
-      destination_account_id: destination,
+      investment_id: asInvestmentId(investment),
+      source_account_id: asAccountId(source),
+      destination_account_id: asAccountId(destination),
       date:
         row.tx_date instanceof Date
           ? toYmd(row.tx_date)
@@ -364,14 +366,14 @@ export async function rollbackPortfolioAssetTransfersForBatch(
     const transferIds = new Set(removed.map((event) => String(event.id)));
     const omitted = new Set(omitTransactionIds.map(Number));
     for (const investmentId of new Set(
-      removed.map((event) => Number(event.investment_id)),
+      removed.map((event) => event.investment_id),
     )) {
       if (skipHistoryValidation) continue;
       const before = await getUnitEventsForInvestment(investmentId);
       const after = before.filter((row) =>
         row.type === "asset_transfer"
           ? !transferIds.has(String(row.transfer_id))
-          : !omitted.has(Number(row.id)),
+          : row.type === "asset_adjustment" || !omitted.has(Number(row.id)),
       );
       validatePortfolioAssetTransferHistory(after);
       const prior = partitionOversellDeficits(asPartitionedTxns(before));

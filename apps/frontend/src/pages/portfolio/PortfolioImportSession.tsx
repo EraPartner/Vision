@@ -51,6 +51,8 @@ import {
 } from "./portfolioImportDetection";
 import { portfolioImportPresetConfig } from "./portfolioImportPresets";
 import { PortfolioImportHistory } from "./PortfolioImportHistory";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
 
 const STORAGE_KEY = "vision.portfolio-import.latest-session.v1";
 const SETTINGS_STORAGE_KEY =
@@ -72,7 +74,7 @@ const storedSessionSchema = z
             kind: z.enum(["reference", "existing"]).optional(),
             originalBatchId: z.number().int().positive().optional(),
             originalSourceName: z.string().optional(),
-            accountId: z.number().int().positive(),
+            accountId: z.number().int().positive().transform(asAccountId),
             adoptPolicy: z
                 .enum(["preserve_existing", "prefer_source"])
                 .optional(),
@@ -95,8 +97,14 @@ const storedSessionSchema = z
                 .number()
                 .int()
                 .positive()
+                .transform(asAccountId)
                 .optional(),
-            transferOriginAccountId: z.number().int().positive().optional(),
+            transferOriginAccountId: z
+                .number()
+                .int()
+                .positive()
+                .transform(asAccountId)
+                .optional(),
             includedSymbols: z.string().optional(),
             status: z.literal("staged"),
             rows: z.number().int().nonnegative().optional(),
@@ -115,11 +123,11 @@ interface Statement {
     originalSourceName?: string | undefined;
     file?: File | undefined;
     detected?: DetectedPortfolioImport | undefined;
-    accountId?: number | undefined;
+    accountId?: AccountId | undefined;
     accountChosenManually?: boolean | undefined;
     adoptPolicy?: PortfolioReconciliationPolicy | undefined;
-    transferDestinationAccountId?: number | undefined;
-    transferOriginAccountId?: number | undefined;
+    transferDestinationAccountId?: AccountId | undefined;
+    transferOriginAccountId?: AccountId | undefined;
     includedSymbols?: string | undefined;
     batchId?: number | undefined;
     previousBatchIds?: number[] | undefined;
@@ -585,7 +593,9 @@ export function PortfolioImportSession({ accounts }: Props) {
                 item.id === id
                     ? {
                           ...item,
-                          accountId: value ? Number(value) : undefined,
+                          accountId: value
+                              ? asAccountId(Number(value))
+                              : undefined,
                           accountChosenManually: true,
                           batchId: undefined,
                           status: "ready",
@@ -646,12 +656,12 @@ export function PortfolioImportSession({ accounts }: Props) {
                     ? {
                           ...item,
                           transferDestinationAccountId: value
-                              ? Number(value)
+                              ? asAccountId(Number(value))
                               : undefined,
                           ...(item.detected?.source === "nexo"
                               ? {
                                     transferOriginAccountId: value
-                                        ? Number(value)
+                                        ? asAccountId(Number(value))
                                         : undefined,
                                 }
                               : {}),
@@ -904,7 +914,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     const statementName = (batchId: number) =>
         statements.find((item) => item.batchId === batchId)?.name ??
         String(batchId);
-    const accountName = (id: number) =>
+    const accountName = (id: AccountId) =>
         accounts.find((account) => account.id === id)?.display_name ||
         accounts.find((account) => account.id === id)?.name ||
         t("portfolioImport.session.accountId", { id });

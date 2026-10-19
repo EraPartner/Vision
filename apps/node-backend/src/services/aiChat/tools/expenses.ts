@@ -24,6 +24,8 @@ import {
   ToolValidationError,
 } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export type EnrichedTransactionRow =
   import("../../../types/rows.ts").EnrichedTransactionRow;
@@ -59,8 +61,8 @@ function fetchTransactionsInRange(
     from?: string;
     to?: string;
     limit?: number;
-    categoryId?: number | null;
-    recipientId?: number | null;
+    categoryId?: CategoryId | null;
+    recipientId?: RecipientId | null;
   },
 ): Promise<EnrichedTransactionRow[]> {
   const key = `expenses:txn:${from ?? ""}:${to ?? ""}:${limit}:${categoryId ?? "*"}:${recipientId ?? "*"}`;
@@ -439,20 +441,22 @@ export const getTransactionsInRange = {
       max: 500,
       defaultValue: 100,
     });
-    const categoryId =
+    const categoryIdArg =
       args.categoryId != null
         ? parsePositiveInt(args.categoryId, "categoryId", {
             min: 1,
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
-    const recipientId =
+    const categoryId = categoryIdArg == null ? null : asCategoryId(categoryIdArg);
+    const recipientIdArg =
       args.recipientId != null
         ? parsePositiveInt(args.recipientId, "recipientId", {
             min: 1,
             max: Number.MAX_SAFE_INTEGER,
           })
         : null;
+    const recipientId = recipientIdArg == null ? null : asRecipientId(recipientIdArg);
 
     const rows = await fetchTransactionsInRange(cache, {
       from,
@@ -775,10 +779,12 @@ export const getSpendTrendForCategory = {
       cache = undefined,
     }: ToolContext = {},
   ) {
-    const categoryId = requirePositiveInt(args.categoryId, "categoryId", {
-      min: 1,
-      max: Number.MAX_SAFE_INTEGER,
-    });
+    const categoryId = asCategoryId(
+      requirePositiveInt(args.categoryId, "categoryId", {
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+    );
     const months = parsePositiveInt(args.months, "months", {
       min: 1,
       max: 36,

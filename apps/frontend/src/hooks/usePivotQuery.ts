@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { SavedChart } from "@/types/apiClient";
 import { aggregationKeys } from "@/lib/queryKeys";
+import type { CurrencyCode } from "@vision/types/brands";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /**
  * Static (module-level) part of a pivot-hook configuration. Keeping it out of
@@ -13,6 +15,7 @@ export interface PivotConfig<
     Item extends { total: number },
     Row extends { months: Record<string, number> },
     Metadata = unknown,
+    Id extends number = number,
 > {
     /** Cache-key segment naming the pivot, e.g. 'recipient-pivot'. */
     kind: string;
@@ -22,28 +25,29 @@ export interface PivotConfig<
      * variants that just omit the id list (recipients) both fit.
      */
     fetchPivot: (params: {
-        currency: string;
+        currency: CurrencyCode;
         bucket: SavedChart["time_bucket"];
         start?: string | undefined;
         end?: string | undefined;
         all: boolean;
-        ids: number[];
+        ids: Id[];
     }) => Promise<{
         pivot: Record<string, Item[]>;
         metadata?: Metadata;
     }>;
-    getItemId: (item: Item) => number;
+    getItemId: (item: Item) => Id;
     /** Build an output row for an item; `months` is filled by the shared reshape. */
     initRow: (item: Item) => Row;
-    getRowId: (row: Row) => number;
+    getRowId: (row: Row) => Id;
 }
 
 function buildPeriodData<
     Item extends { total: number },
     Row extends { months: Record<string, number> },
+    Id extends number,
 >(
     pivot: Record<string, Item[]>,
-    { getItemId, initRow }: PivotConfig<Item, Row>,
+    { getItemId, initRow }: PivotConfig<Item, Row, unknown, Id>,
 ): Row[] {
     const map: Record<number, Row> = {};
 
@@ -67,16 +71,20 @@ export function usePivotQuery<
     Item extends { total: number },
     Row extends { months: Record<string, number> },
     Metadata = unknown,
+    Id extends number = number,
 >(
     chart: SavedChart | null | undefined,
     /** Whether the chart selects every entity of this dimension. */
     all: boolean,
     /** The chart's explicitly selected entity ids for this dimension. */
-    ids: number[] | undefined,
-    config: PivotConfig<Item, Row, Metadata>,
+    ids: Id[] | undefined,
+    config: PivotConfig<Item, Row, Metadata, Id>,
 ) {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = currencyOr(
+        appSettings.defaultCurrency,
+        DEFAULT_CURRENCY,
+    );
 
     const enabled = !!(chart && (all || (ids?.length ?? 0) > 0));
 

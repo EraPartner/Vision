@@ -4,12 +4,18 @@ import {
     activeBrokerAccounts,
     resolveManualTradeBrokerId,
 } from "@/features/portfolio/manualTradeBroker";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 function account(id: number, overrides: Partial<Account> = {}): Account {
     return {
-        id,
+        id: asAccountId(id),
         name: `Broker ${id}`,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         type: "brokerage",
         liquidity_class: "liquid",
         spendable: false,
@@ -31,13 +37,13 @@ function transaction(
     overrides: Partial<PortfolioTransaction> = {},
 ): PortfolioTransaction {
     return {
-        id,
-        investment_id: investmentId,
+        id: asPortfolioTransactionId(id),
+        investment_id: asInvestmentId(investmentId),
         type: "buy",
         date: `2026-01-${String(id).padStart(2, "0")}`,
         amount: 100,
-        currency: "EUR",
-        ...(accountId === undefined ? {} : { account_id: accountId }),
+        currency: asCurrencyCode("EUR"),
+        ...(accountId === undefined ? {} : { account_id: asAccountId(accountId) }),
         import_batch_id: null,
         is_recurring: false,
         created_at: `2026-01-${String(id).padStart(2, "0")}T12:00:00Z`,
@@ -52,7 +58,7 @@ describe("manual trade broker defaults", () => {
     it("prefers the instrument's most recent assigned broker", () => {
         expect(
             resolveManualTradeBrokerId({
-                investmentId: 10,
+                investmentId: asInvestmentId(10),
                 accounts,
                 transactions: [
                     transaction(1, 10, 1),
@@ -66,7 +72,7 @@ describe("manual trade broker defaults", () => {
     it("falls back to the latest manually entered broker", () => {
         expect(
             resolveManualTradeBrokerId({
-                investmentId: 99,
+                investmentId: asInvestmentId(99),
                 accounts,
                 transactions: [
                     transaction(1, 10, 1),
@@ -85,7 +91,7 @@ describe("manual trade broker defaults", () => {
         expect(activeBrokerAccounts(available)).toEqual([]);
         expect(
             resolveManualTradeBrokerId({
-                investmentId: 10,
+                investmentId: asInvestmentId(10),
                 accounts: available,
                 transactions: [transaction(2, 10, 1), transaction(3, 20, 2)],
             }),

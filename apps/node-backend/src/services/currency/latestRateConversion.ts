@@ -7,26 +7,55 @@
  * or count it.
  */
 
-import { divide, multiply, toDecimal } from "../../lib/money.ts";
-import type { Decimal, DecimalInput } from "../../lib/money.ts";
+import { isCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
+import { divide, money, multiply, toDecimal } from "../../lib/money.ts";
+import type { Decimal, DecimalInput, Money } from "../../lib/money.ts";
 import { listLatestStoredRates } from "./currencyConversionService.ts";
+import { EUR, storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 /** rate_to_eur per upper-cased currency code; EUR is always 1. */
-export type LatestRatesToEur = ReadonlyMap<string, Decimal>;
+export type LatestRatesToEur = ReadonlyMap<CurrencyCode, Decimal>;
 
 export async function loadLatestRatesToEur(): Promise<LatestRatesToEur> {
   const { rows } = await listLatestStoredRates();
-  const rates = new Map<string, Decimal>([["EUR", toDecimal(1)]]);
+  const rates = new Map<CurrencyCode, Decimal>([[EUR, toDecimal(1)]]);
   for (const row of rows) {
+    const code = row.currency_code.toUpperCase();
     const rate = toDecimal(row.rate_to_eur);
-    if (rate.isFinite() && rate.gt(0))
-      rates.set(row.currency_code.toUpperCase(), rate);
+    if (isCurrencyCode(code) && rate.isFinite() && rate.gt(0))
+      rates.set(code, rate);
   }
   return rates;
 }
 
-/** Convert `amount` from `from` to `to`; undefined when either rate is missing. */
+/**
+ * `value` converted to `to` (ADR-220: the result is Money in `to`, ready for
+ * `sumMoney`); undefined when either rate is missing.
+ */
 export function convertAtLatestRates(
+  value: Money,
+  to: CurrencyCode,
+  rates: LatestRatesToEur,
+): Money | undefined {
+  const source = storedCurrencyCode(value.currency);
+  const target = storedCurrencyCode(to);
+  if (source === target) return money(value.amount, target);
+  const fromRate = rates.get(source);
+  const toRate = rates.get(target);
+  if (!fromRate || !toRate) return undefined;
+  return money(divide(multiply(value.amount, fromRate), toRate), target);
+}
+
+/** Upper-cased ISO code of a stored currency column; empty means EUR. */
+export const currencyCode = storedCurrencyCode;
+
+/**
+ * {@link convertAtLatestRates} for codes not yet checked as ISO (provider
+ * quotes, stored investment currencies). Same code converts 1:1; any other
+ * non-ISO code has no stored rate, so the result is undefined.
+ */
+export function convertCodeAtLatestRates(
   amount: DecimalInput,
   from: string,
   to: string,
@@ -35,13 +64,6 @@ export function convertAtLatestRates(
   const source = from.toUpperCase();
   const target = to.toUpperCase();
   if (source === target) return toDecimal(amount);
-  const fromRate = rates.get(source);
-  const toRate = rates.get(target);
-  if (!fromRate || !toRate) return undefined;
-  return divide(multiply(amount, fromRate), toRate);
-}
-
-/** Upper-cased ISO code of a stored currency column; empty means EUR. */
-export function currencyCode(value: string | null | undefined): string {
-  return (value || "EUR").toUpperCase();
+  if (!isCurrencyCode(source) || !isCurrencyCode(target)) return undefined;
+  return convertAtLatestRates(money(amount, source), target, rates)?.amount;
 }

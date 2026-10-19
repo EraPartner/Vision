@@ -25,6 +25,7 @@ import type {
 } from "@/types/apiClient";
 import type { components } from "@/types/generated";
 import { ImportCancelledError } from "@/lib/api/importCancelled";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 /**
  * Runtime guards for the import SSE streams (ZOD-10). Loose objects so the
@@ -387,8 +388,8 @@ export function getImportPreview(
 export function overrideImportRow(
     batchId: number,
     rowId: number | string,
-    recipientId: number | null,
-): Promise<{ row_id: number; user_override_recipient_id: number | null }> {
+    recipientId: RecipientId | null,
+): Promise<{ row_id: number; user_override_recipient_id: RecipientId | null }> {
     return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
         method: "POST",
         body: JSON.stringify({ recipient_id: recipientId }),
@@ -398,8 +399,8 @@ export function overrideImportRow(
 export function overrideImportRowCategory(
     batchId: number,
     rowId: number | string,
-    categoryId: number | null,
-): Promise<{ row_id: number; override_category_id: number | null }> {
+    categoryId: CategoryId | null,
+): Promise<{ row_id: number; override_category_id: CategoryId | null }> {
     return apiRequest(
         `/api/import/batches/${batchId}/rows/${rowId}/category-override`,
         {

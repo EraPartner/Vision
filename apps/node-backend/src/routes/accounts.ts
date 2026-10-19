@@ -38,11 +38,14 @@ import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { parseInput } from "../lib/zodInput.ts";
 import {
   activeOrAllQuery,
-  idParams,
-  idSchema,
+  accountIdParams,
+  accountIdSchema,
   optionalValue,
   pageFields,
 } from "./_requestSchemas.ts";
+import { EUR } from "../lib/currencyCode.ts";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
 
 const router = Router();
 
@@ -60,7 +63,10 @@ const listQuery = z
   }));
 
 // accountService.setStatementBalance owns the ISO-code check and its message.
-const statementParams = z.object({ id: idSchema(), currency: z.string() });
+const statementParams = z.object({
+  id: accountIdSchema(),
+  currency: z.string(),
+});
 
 // Strict id parse, not `Number(...)`: previewMerge only checks that what it
 // receives is a positive integer, so `?into=1e3` arrived as a well-formed
@@ -70,7 +76,7 @@ const mergePreviewQuery = z
   .object({ into: optionalValue })
   .transform((query, ctx) => {
     const into = validateId(query.into, "into");
-    if (into.valid) return { into: into.value };
+    if (into.valid) return { into: asAccountId(into.value) };
     ctx.addIssue({
       code: "custom",
       message: "into must be a positive integer account id",
@@ -103,11 +109,11 @@ const mergeBody = z
       });
       return z.NEVER;
     }
-    const sourceIds: number[] = [];
+    const sourceIds: AccountId[] = [];
     const rejected: string[] = [];
     rawSourceIds.forEach((raw: unknown, index: number) => {
       const result = validateId(raw, "source_ids");
-      if (result.valid) sourceIds.push(result.value);
+      if (result.valid) sourceIds.push(asAccountId(result.value));
       else rejected.push(`source_ids[${index}] (${JSON.stringify(raw)})`);
     });
     if (rejected.length > 0) {
@@ -135,12 +141,12 @@ router.get("/", async (req, res) => {
 // stored rates. Registered before /:id.
 router.get("/totals", async (req, res) => {
   const currency =
-    assertCurrency(optionalQueryString(req.query, "currency")) ?? "EUR";
+    assertCurrency(optionalQueryString(req.query, "currency")) ?? EUR;
   res.ok(await computeAccountTotals({ currency }));
 });
 
 router.get("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const account = await accountService.get(id);
   res.ok({ ...account, links: [] });
 });
@@ -156,13 +162,13 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id/portfolio-lot-retag-preview", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const result = await previewAccountPortfolioLots(id);
   res.ok({ ...result, links: [] });
 });
 
 router.patch("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const updated = await accountService.update(id, req.body);
   // rename / in_net_worth / is_active changes shift the
   // net-worth + bank-balances response caches; bust them (shared seam).
@@ -171,7 +177,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   await accountService.remove(id);
   invalidatePortfolioCaches();
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
@@ -179,7 +185,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 router.post("/:id/close", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const result = await closeAccount(id, req.body);
   scheduleAggregationRefresh();
   invalidatePortfolioCaches();
@@ -193,7 +199,7 @@ router.post("/:id/close", async (req, res) => {
 // balance histories (§1 F2 — the guard that clears the survivor's statement
 // anchor). No mutation, so no cache invalidation.
 router.get("/:id/merge-preview", async (req, res) => {
-  const { id: sourceId } = parseInput(idParams, req.params);
+  const { id: sourceId } = parseInput(accountIdParams, req.params);
   const { into: targetId } = parseInput(mergePreviewQuery, req.query);
   const result = await previewMerge(sourceId, targetId);
   res.ok({ ...result, links: [] });
@@ -202,7 +208,7 @@ router.get("/:id/merge-preview", async (req, res) => {
 // Merge one or more source accounts into this (survivor) account: all references repoint to :id
 // and the sources are deleted (ADR-088). Body: { source_ids: number[] } — see mergeBody.
 router.post("/:id/merge", async (req, res) => {
-  const { id: targetId } = parseInput(idParams, req.params);
+  const { id: targetId } = parseInput(accountIdParams, req.params);
   const { sourceIds } = parseInput(mergeBody, req.body);
   if (sourceIds.includes(targetId)) {
     throw new ValidationError(
@@ -221,7 +227,7 @@ router.post("/:id/merge", async (req, res) => {
 // The single sanctioned exception to the balance write-protection: it stamps one
 // system anchor row (amount=0, transfer_source='opening') per account+currency.
 router.post("/:id/opening-balance", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const result = await setOpeningBalance(id, req.body);
   // The anchor row feeds the aggregation MVs + the forecast MC caches; refresh
   // them like every transaction mutation route does, else dashboards serve stale
@@ -259,7 +265,7 @@ router.delete("/:id/statement-balances/:currency", async (req, res) => {
 // 'adjustment' stamps one server-side 'adjustment' ledger row so the computed
 // balance rises to meet the statement (balance-free — descriptive-only preserved).
 router.post("/:id/reconcile", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(accountIdParams, req.params);
   const result = await reconcileAccount(id, req.body);
   // 'accept' rewrites the statement figure and 'adjustment' inserts a ledger row;
   // both change the aggregation MVs + forecast caches, so refresh like the mutation

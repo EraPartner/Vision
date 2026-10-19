@@ -17,11 +17,12 @@ import {
 } from "@/components/ui/popover";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface InvestmentComboboxProps {
-    value?: number | null;
+    value?: InvestmentId | null;
     onSelect: (
-        investmentId: number | null,
+        investmentId: InvestmentId | null,
         investmentName: string | null,
     ) => void;
     disabled?: boolean;

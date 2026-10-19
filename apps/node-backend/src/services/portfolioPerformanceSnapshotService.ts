@@ -27,6 +27,8 @@ import {
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
 import { nanToZero } from "../lib/math.ts";
+import type { CurrencyCode } from "@vision/types/brands";
+
 /** One `getSnapshots` row, as served to the performance chart. */
 export type PortfolioPerformanceSnapshot = {
   snapshot_date: Date;
@@ -42,7 +44,7 @@ export type PortfolioPerformanceSnapshot = {
   stocks_etfs_invested: string;
   crypto_invested: string;
   metals_invested: string;
-  currency: string;
+  currency: CurrencyCode;
   value_fx_neutral: string | undefined;
 };
 interface BrokerSnapshotPartition {
@@ -87,15 +89,16 @@ export async function __storeCurrentBrokerSnapshot(
     ),
   ];
   return withTransaction(async (client) => {
-    const nameRows = accountIds.length > 0
-      ? await queryRows(
-          accountDisplayNameRowSchema,
-          `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
+    const nameRows =
+      accountIds.length > 0
+        ? await queryRows(
+            accountDisplayNameRowSchema,
+            `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
            FROM accounts WHERE id = ANY($1::int[])`,
-          [accountIds],
-          client,
-        )
-      : [];
+            [accountIds],
+            client,
+          )
+        : [];
     const names = new Map<number, string>(
       nameRows.map((row) => [Number(row.id), row.display_name]),
     );
@@ -116,11 +119,15 @@ export async function __storeCurrentBrokerSnapshot(
         invested: toDecimal(0),
         gainLoss: toDecimal(0),
       };
-      current.value = current.value.plus(toDecimal(nanToZero(row.currentValue)));
+      current.value = current.value.plus(
+        toDecimal(nanToZero(row.currentValue)),
+      );
       current.invested = current.invested.plus(
         toDecimal(nanToZero(row.totalInvested)),
       );
-      current.gainLoss = current.gainLoss.plus(toDecimal(nanToZero(row.gainLoss)));
+      current.gainLoss = current.gainLoss.plus(
+        toDecimal(nanToZero(row.gainLoss)),
+      );
       byKey.set(key, current);
     }
 

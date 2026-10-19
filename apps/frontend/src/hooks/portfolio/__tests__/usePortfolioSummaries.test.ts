@@ -5,6 +5,7 @@ import { createQueryWrapper } from "@/test/queryWrapper";
 import { usePortfolioSummaries } from "@/hooks/portfolio/usePortfolioSummaries";
 import type { Investment, PortfolioTransaction } from "@/types/api";
 import type { PortfolioSummaryItem } from "@/lib/api/info";
+import { asInvestmentId, asPortfolioTransactionId } from "@vision/types/brands";
 
 const makeWrapper = createQueryWrapper;
 
@@ -52,7 +53,7 @@ describe("usePortfolioSummaries — canonical identity columns", () => {
                 usePortfolioSummaries({
                     investments: [
                         inv({
-                            id: 1,
+                            id: asInvestmentId(1),
                             asset_class: "savings",
                             cadastral_income: 1250,
                             municipality_tax_rate: 7.5,
@@ -88,20 +89,20 @@ describe("usePortfolioSummaries — server summaries only", () => {
             () =>
                 usePortfolioSummaries({
                     investments: [
-                        inv({ id: 1, current_price: 20 }),
-                        inv({ id: 2, current_price: 50, is_active: false }),
+                        inv({ id: asInvestmentId(1), current_price: 20 }),
+                        inv({ id: asInvestmentId(2), current_price: 50, is_active: false }),
                     ],
                     transactions: [
-                        txn({ id: 1, investment_id: 1, amount: 10, units: 1 }),
-                        txn({ id: 2, investment_id: 2, amount: 25, units: 1 }),
+                        txn({ id: asPortfolioTransactionId(1), investment_id: asInvestmentId(1), amount: 10, units: 1 }),
+                        txn({ id: asPortfolioTransactionId(2), investment_id: asInvestmentId(2), amount: 25, units: 1 }),
                     ],
                     canonicalSummaries: [
-                        summary({ id: 1, currentValue: 20, gainLoss: 10 }),
+                        summary({ id: asInvestmentId(1), currentValue: 20, gainLoss: 10 }),
                     ],
                     canonicalArchivedSummaries: [
-                        summary({ id: 1, currentValue: 999 }),
+                        summary({ id: asInvestmentId(1), currentValue: 999 }),
                         summary({
-                            id: 2,
+                            id: asInvestmentId(2),
                             is_active: false,
                             realizedGain: 7,
                             gainLoss: 7,
@@ -129,8 +130,8 @@ describe("usePortfolioSummaries — server summaries only", () => {
             () =>
                 usePortfolioSummaries({
                     investments: [
-                        inv({ id: 1, current_price: 20 }),
-                        inv({ id: 2, is_active: false }),
+                        inv({ id: asInvestmentId(1), current_price: 20 }),
+                        inv({ id: asInvestmentId(2), is_active: false }),
                     ],
                     transactions: [txn({ amount: 10, units: 1 })],
                 }),

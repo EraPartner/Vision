@@ -18,6 +18,7 @@ import {
     usePortfolioSummaryQuery,
 } from "./portfolio/usePortfolioSummary";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const EMPTY_INVESTMENTS: never[] = [];
 const EMPTY_TRANSACTIONS: never[] = [];
@@ -27,7 +28,7 @@ export function usePortfolio({
     completeAssetClass,
 }: { completeHistory?: boolean; completeAssetClass?: string } = {}) {
     const { appSettings } = useAppSettings();
-    const currency = appSettings.defaultCurrency || "EUR";
+    const currency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
     const canonicalQuery = usePortfolioSummaryQuery(currency);
     const investmentsQuery = useInvestmentsQuery();
     const allInvestments = investmentsQuery.data?.items ?? EMPTY_INVESTMENTS;

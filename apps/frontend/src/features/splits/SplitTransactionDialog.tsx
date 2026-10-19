@@ -36,12 +36,13 @@ import {
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { SplitCreateInput } from "@/lib/api/splits";
 import { allocateEvenly } from "./splitShares";
+import type { RecipientId, TransactionId } from "@vision/types/brands";
 
 type SplitType = "equal" | "full" | "custom";
 
 interface SplitEntry {
     uid: string;
-    recipient_id: number | null;
+    recipient_id: RecipientId | null;
     amount: string;
     note: string;
 }
@@ -52,7 +53,7 @@ interface SplitTransactionDialogProps {
     trigger?: ReactElement | null;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
-    transactionId: number;
+    transactionId: TransactionId;
     transactionAmount: number;
     transactionCurrency: string;
 }

@@ -22,6 +22,12 @@ import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { createCategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
 import recipientRepository from "../src/repositories/recipientRepository.ts";
 import { resolveBulkSelection } from "../src/services/bulkSelection.ts";
+import {
+  asAccountId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
+import type { AccountId, RecipientId } from "@vision/types/brands";
 
 vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({
@@ -58,8 +64,8 @@ async function insertRecipient(
 }
 
 describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
-  let accountId: number;
-  let shopId: number;
+  let accountId: AccountId;
+  let shopId: RecipientId;
   let categoryId: number;
 
   beforeAll(async () => {
@@ -73,7 +79,7 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     });
     created.categoryIds.push(root!.id, leaf!.id);
     categoryId = leaf!.id;
-    shopId = await insertRecipient(`shop ${MARK}`);
+    shopId = asRecipientId(await insertRecipient(`shop ${MARK}`));
   }, 180_000);
 
   afterAll(async () => {
@@ -135,8 +141,8 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
   it("resolves PATCH recipient and category names and keeps explicit ids", async () => {
     const { transaction } = await transactionService.createManualTransaction({
       transaction_date: "1902-03-05",
-      account_id: accountId,
-      recipient_id: shopId,
+      account_id: asAccountId(accountId),
+      recipient_id: asRecipientId(shopId),
       amount: -3,
       memo: `${MARK} patch probe`,
     });
@@ -159,7 +165,7 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
     });
 
     const explicit = await transactionService.update(transaction.id, {
-      recipient_id: shopId,
+      recipient_id: asRecipientId(shopId),
       recipient_name: `Other ${MARK}`,
       category_id: null,
     });
@@ -171,7 +177,7 @@ describe.skipIf(!hasTestDatabase())("transaction service (real DB)", () => {
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(
-      await transactionService.update(2_000_000_000, { memo: "missing" }),
+      await transactionService.update(asTransactionId(2_000_000_000), { memo: "missing" }),
     ).toBeNull();
   });
 

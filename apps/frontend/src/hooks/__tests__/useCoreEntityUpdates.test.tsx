@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api";
 import { useUpdateCategory } from "@/hooks/useCategories";
 import { useUpdateRecipient } from "@/hooks/useRecipients";
 import { createLanguageQueryWrapper } from "@/test/queryWrapper";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
 
 vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -32,7 +33,7 @@ describe("core entity update receipts", () => {
 
         await act(async () => {
             await result.current.mutateAsync({
-                id: 3,
+                id: asCategoryId(3),
                 data: { detail: "Food" },
             });
         });
@@ -57,7 +58,7 @@ describe("core entity update receipts", () => {
 
         await act(async () => {
             await result.current.mutateAsync({
-                id: 4,
+                id: asRecipientId(4),
                 data: { name: "Bakery" },
             });
         });

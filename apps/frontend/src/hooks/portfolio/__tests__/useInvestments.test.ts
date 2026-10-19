@@ -11,6 +11,12 @@ import {
     useInvestmentMutations,
 } from "@/hooks/portfolio/useInvestments";
 import { INVESTMENT_STUB } from "@/test/msw/handlers";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
@@ -37,8 +43,8 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
 });
 
 const PORTFOLIO_TXN_STUB = {
-    id: 1,
-    investment_id: 1,
+    id: asPortfolioTransactionId(1),
+    investment_id: asInvestmentId(1),
     type: "buy" as const,
     date: "2025-01-15",
     amount: 1000,
@@ -46,7 +52,7 @@ const PORTFOLIO_TXN_STUB = {
     price_per_unit: 100,
     fees: 5,
     taxes: 0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     is_recurring: false,
     created_at: "2025-01-15T10:00:00.000Z",
     updated_at: "2025-01-15T10:00:00.000Z",
@@ -145,7 +151,7 @@ describe("useAllPortfolioTransactionsQuery", () => {
             .mockResolvedValueOnce({
                 items: Array.from({ length: 1000 }, (_, index) => ({
                     ...PORTFOLIO_TXN_STUB,
-                    id: index + 1,
+                    id: asPortfolioTransactionId(index + 1),
                 })),
                 total: 1001,
                 limit: 1000,
@@ -153,14 +159,14 @@ describe("useAllPortfolioTransactionsQuery", () => {
                 links: [],
             })
             .mockResolvedValueOnce({
-                items: [{ ...PORTFOLIO_TXN_STUB, id: 1001 }],
+                items: [{ ...PORTFOLIO_TXN_STUB, id: asPortfolioTransactionId(1001) }],
                 total: 1001,
                 limit: 1000,
                 offset: 1000,
                 links: [],
             });
         const { result } = renderHook(
-            () => useAllPortfolioTransactionsQuery(4),
+            () => useAllPortfolioTransactionsQuery(asInvestmentId(4)),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -217,7 +223,7 @@ describe("usePortfolioTransactionsQuery", () => {
             links: [],
         });
         const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1, 2]),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2)]),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -235,7 +241,7 @@ describe("usePortfolioTransactionsQuery", () => {
                 links: [],
             });
         const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1, 2, 3]),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2), asInvestmentId(3)]),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -257,7 +263,7 @@ describe("usePortfolioTransactionsQuery", () => {
             ).mockRejectedValue(error);
             const individual = vi.spyOn(apiClient, "getPortfolioTransactions");
             const { result } = renderHook(
-                () => usePortfolioTransactionsQuery([1, 2]),
+                () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2)]),
                 { wrapper: makeWrapper() },
             );
             await waitFor(() => expect(result.current.isError).toBe(true));
@@ -285,7 +291,7 @@ describe("usePortfolioTransactionsQuery", () => {
             },
         );
         const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1, 2, 3, 4, 5, 6, 7], true),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2), asInvestmentId(3), asInvestmentId(4), asInvestmentId(5), asInvestmentId(6), asInvestmentId(7)], true),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -329,7 +335,7 @@ describe("usePortfolioTransactionsQuery", () => {
                 }
             });
         const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1, 2, 3, 4, 5, 6, 7], true),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2), asInvestmentId(3), asInvestmentId(4), asInvestmentId(5), asInvestmentId(6), asInvestmentId(7)], true),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(requests).toHaveBeenCalledTimes(4));
@@ -369,7 +375,7 @@ describe("usePortfolioTransactionsQuery", () => {
                 links: [],
             });
         const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1]),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1)]),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -436,7 +442,7 @@ describe("useInvestmentMutations — updateInvestment", () => {
             wrapper: makeWrapper(),
         });
         await act(async () => {
-            await result.current.updateInvestment(1, { name: "Updated ETF" });
+            await result.current.updateInvestment(asInvestmentId(1), { name: "Updated ETF" });
         });
         expect(spy).toHaveBeenCalledWith(1, { name: "Updated ETF" });
     });
@@ -451,7 +457,7 @@ describe("useInvestmentMutations — updateInvestment", () => {
         });
         await act(async () => {
             await result.current
-                .updateInvestment(1, { name: "Updated" })
+                .updateInvestment(asInvestmentId(1), { name: "Updated" })
                 .catch(() => {});
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
@@ -467,7 +473,7 @@ describe("useInvestmentMutations — deleteInvestment", () => {
             wrapper: makeWrapper(),
         });
         act(() => {
-            result.current.deleteInvestment(1);
+            result.current.deleteInvestment(asInvestmentId(1));
         });
         await waitFor(() => expect(spy).toHaveBeenCalledWith(1));
     });
@@ -481,7 +487,7 @@ describe("useInvestmentMutations — deleteInvestment", () => {
             wrapper: makeWrapper(),
         });
         act(() => {
-            result.current.deleteInvestment(1);
+            result.current.deleteInvestment(asInvestmentId(1));
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
@@ -500,13 +506,13 @@ describe("useInvestmentMutations — addTransaction", () => {
             wrapper: makeWrapper(),
         });
         const payload = {
-            investmentId: 1,
+            investmentId: asInvestmentId(1),
             type: "buy" as const,
             date: "2025-01-15",
             amount: 1000,
             units: 10,
             price_per_unit: 100,
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
         };
         await act(async () => {
             await result.current.addTransaction(payload);
@@ -526,7 +532,7 @@ describe("useInvestmentMutations — addTransaction", () => {
         await act(async () => {
             await result.current
                 .addTransaction({
-                    investmentId: 1,
+                    investmentId: asInvestmentId(1),
                     type: "buy",
                     date: "2025-01-15",
                 })
@@ -545,7 +551,7 @@ describe("useInvestmentMutations — deleteTransaction", () => {
             wrapper: makeWrapper(),
         });
         act(() => {
-            result.current.deleteTransaction(5);
+            result.current.deleteTransaction(asPortfolioTransactionId(5));
         });
         await waitFor(() => expect(spy).toHaveBeenCalledWith(5));
     });
@@ -559,7 +565,7 @@ describe("useInvestmentMutations — deleteTransaction", () => {
             wrapper: makeWrapper(),
         });
         act(() => {
-            result.current.deleteTransaction(5);
+            result.current.deleteTransaction(asPortfolioTransactionId(5));
         });
         await waitFor(() => expect(toastSpy).toHaveBeenCalled());
     });
@@ -574,7 +580,7 @@ describe("useInvestmentMutations — updateTransaction", () => {
             wrapper: makeWrapper(),
         });
         await act(async () => {
-            await result.current.updateTransaction(5, {
+            await result.current.updateTransaction(asPortfolioTransactionId(5), {
                 amount: 2000,
                 fx_rate_to_eur: null,
                 account_id: null,
@@ -599,9 +605,9 @@ describe("useInvestmentMutations — bulk broker re-tag", () => {
         const client = createTestQueryClient();
         const invalidate = vi.spyOn(client, "invalidateQueries");
         const payload = {
-            transaction_ids: [1, 2],
+            transaction_ids: [asPortfolioTransactionId(1), asPortfolioTransactionId(2)],
             from_account_id: null,
-            to_account_id: 7,
+            to_account_id: asAccountId(7),
             idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
         };
         const spy = vi

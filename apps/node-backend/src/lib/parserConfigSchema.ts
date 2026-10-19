@@ -17,6 +17,7 @@ import {
   normalizeCsvEncoding,
   CSV_NUMBER_FORMATS,
 } from "./csvFormatOptions.ts";
+import { asAccountId } from "@vision/types/brands";
 
 function normalizeEncodingOrIssue(value: unknown, ctx: z.RefinementCtx) {
   try {
@@ -61,7 +62,7 @@ export function optionalAccountIdField(field: string) {
         });
         return z.NEVER;
       }
-      return parsed.value;
+      return asAccountId(parsed.value);
     });
 }
 

@@ -14,12 +14,15 @@ import {
 } from "../lib/calculations/splits.ts";
 import {
   addAll,
+  money,
   roundMoney,
   subtract,
+  sumMoney,
   toDecimal,
   toNumber,
-  type Decimal,
+  type Money,
 } from "../lib/money.ts";
+import { EUR } from "../lib/currencyCode.ts";
 import {
   convertAtLatestRates,
   currencyCode,
@@ -40,6 +43,12 @@ import splitRepository, {
 } from "../repositories/splitRepository.ts";
 import type { FormattedSplit } from "../types/rows.ts";
 import { nanToZero } from "../lib/math.ts";
+import type {
+  CurrencyCode,
+  RecipientId,
+  SplitId,
+  TransactionId,
+} from "@vision/types/brands";
 
 type SplitAuditInput = Parameters<typeof splitRepository.writeAudit>[0];
 
@@ -71,8 +80,8 @@ async function writeSplitAudit(input: SplitAuditInput) {
 }
 
 export async function createSplitAtomic(input: {
-  transaction_id: number;
-  recipient_id: number;
+  transaction_id: TransactionId;
+  recipient_id: RecipientId;
   amount: number | string;
   note?: string | null | undefined;
   actor?: string | null | undefined;
@@ -115,9 +124,9 @@ export async function createSplitsBatchAtomic({
   splits,
   actor = null,
 }: {
-  transaction_id: number;
+  transaction_id: TransactionId;
   splits: Array<{
-    recipient_id: number;
+    recipient_id: RecipientId;
     amount: number | string;
     note?: string | null;
   }>;
@@ -181,8 +190,8 @@ export async function createBulkSplitsAtomic({
   note,
   actor = null,
 }: {
-  transaction_ids: number[];
-  recipient_id: number;
+  transaction_ids: TransactionId[];
+  recipient_id: RecipientId;
   mode: BulkSplitMode;
   note?: string | null | undefined;
   actor?: string | null | undefined;
@@ -257,7 +266,7 @@ export async function createBulkSplitsAtomic({
 /** Unsettled money left out of a converted owed figure for want of a rate. */
 interface UnconvertedOwed {
   count: number;
-  currencies: Set<string>;
+  currencies: Set<CurrencyCode>;
 }
 
 function unconvertedFields(unconverted: UnconvertedOwed) {
@@ -276,19 +285,19 @@ function unconvertedFields(unconverted: UnconvertedOwed) {
  * outstanding across recipients.
  */
 export async function getOwedSummary({
-  currency = "EUR",
-}: { currency?: string } = {}) {
-  const target = currency.toUpperCase();
+  currency = EUR,
+}: { currency?: CurrencyCode } = {}) {
+  const target = currency;
   const [rows, rates] = await Promise.all([
     splitRepository.getOwedSummaryRows(),
     loadLatestRatesToEur(),
   ]);
   const recipients = new Map<
-    number,
+    RecipientId,
     {
       name: string;
-      owed: Decimal[];
-      paid: Decimal[];
+      owed: Money[];
+      paid: Money[];
       splitCount: number;
       unconverted: UnconvertedOwed;
     }
@@ -308,14 +317,12 @@ export async function getOwedSummary({
     entry.splitCount += nanToZero(parseInt(row.split_count, 10));
     const from = currencyCode(row.currency);
     const owed = convertAtLatestRates(
-      toDecimal(row.total_owed),
-      from,
+      money(row.total_owed, from),
       target,
       rates,
     );
     const paid = convertAtLatestRates(
-      toDecimal(row.total_paid),
-      from,
+      money(row.total_paid, from),
       target,
       rates,
     );
@@ -331,16 +338,16 @@ export async function getOwedSummary({
     [...recipients].map(([recipientId, entry]) => ({
       recipient_id: recipientId,
       recipient_name: entry.name,
-      total_owed: addAll(entry.owed).toString(),
-      total_paid: addAll(entry.paid).toString(),
+      total_owed: sumMoney(entry.owed, target).amount.toString(),
+      total_paid: sumMoney(entry.paid, target).amount.toString(),
       split_count: String(entry.splitCount),
     })),
   );
   const listed = new Set(converted.map((row) => row.recipient_id));
-  const unconvertedOf = (recipientId: number) =>
+  const unconvertedOf = (recipientId: RecipientId) =>
     recipients.get(recipientId)?.unconverted ?? {
       count: 0,
-      currencies: new Set<string>(),
+      currencies: new Set<CurrencyCode>(),
     };
   // A recipient whose only open splits lack a rate still owes money: keep the
   // row (with zero converted figures) after the convertible ones.
@@ -380,20 +387,24 @@ export async function getOwedSummary({
  * currency at the latest stored rates; open splits without a rate are counted.
  */
 export async function getOwedRecipientSummary(
-  recipientId: number,
-  { currency = "EUR" }: { currency?: string } = {},
+  recipientId: RecipientId,
+  { currency = EUR }: { currency?: CurrencyCode } = {},
 ) {
-  const target = currency.toUpperCase();
+  const target = currency;
   const [rows, rates] = await Promise.all([
     splitRepository.getOwedRemainingByCurrency(recipientId),
     loadLatestRatesToEur(),
   ]);
-  const amounts: Decimal[] = [];
+  const amounts: Money[] = [];
   const unconverted: UnconvertedOwed = { count: 0, currencies: new Set() };
   for (const row of rows) {
     const from = currencyCode(row.currency);
     const remaining = toDecimal(row.remaining);
-    const converted = convertAtLatestRates(remaining, from, target, rates);
+    const converted = convertAtLatestRates(
+      money(remaining, from),
+      target,
+      rates,
+    );
     if (converted) amounts.push(converted);
     else if (!remaining.isZero()) {
       unconverted.count += nanToZero(parseInt(row.split_count, 10));
@@ -402,13 +413,13 @@ export async function getOwedRecipientSummary(
   }
   return {
     currency: target,
-    remaining: roundMoney(addAll(amounts)),
+    remaining: roundMoney(sumMoney(amounts, target).amount),
     ...unconvertedFields(unconverted),
   };
 }
 
 export async function getOwedByRecipient(
-  recipientId: number,
+  recipientId: RecipientId,
   page: { limit?: number | null; offset?: number } = {},
 ) {
   const rows = await splitRepository.getOwedByRecipientRows(recipientId, page);
@@ -426,7 +437,7 @@ export async function getOwedByRecipient(
 }
 
 export async function addPayment(input: {
-  split_id: number;
+  split_id: SplitId;
   amount: number | string;
   note?: string | null | undefined;
   paid_at?: string | null | undefined;
@@ -471,7 +482,7 @@ export async function addPayment(input: {
 }
 
 export async function settleSplit(
-  splitId: number,
+  splitId: SplitId,
   actor: string | null = null,
 ) {
   return withTransaction(async (client) => {
@@ -489,7 +500,7 @@ export async function settleSplit(
 }
 
 export async function settleAllByRecipient(
-  recipientId: number,
+  recipientId: RecipientId,
   actor: string | null = null,
 ) {
   return withTransaction(async (client) => {
@@ -513,7 +524,7 @@ export async function settleAllByRecipient(
 }
 
 export async function deleteSplit(
-  splitId: number,
+  splitId: SplitId,
   actor: string | null = null,
 ) {
   return withTransaction(async (client) => {

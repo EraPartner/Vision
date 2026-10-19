@@ -11,12 +11,13 @@ import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export function useRecipients(params?: {
     limit?: number | undefined;
     offset?: number | undefined;
     name?: string | undefined;
-    default_category_id?: number | undefined;
+    default_category_id?: CategoryId | undefined;
     active?: boolean | undefined;
     search?: string | undefined;
 }) {
@@ -30,7 +31,7 @@ export function useRecipients(params?: {
     return query;
 }
 
-export function useRecipient(id?: number | null) {
+export function useRecipient(id?: RecipientId | null) {
     return useQuery({
         queryKey: recipientKeys.detail(id),
         queryFn: () => {
@@ -42,7 +43,7 @@ export function useRecipient(id?: number | null) {
     });
 }
 
-export function useRecipientPatterns(recipientId: number, enabled: boolean) {
+export function useRecipientPatterns(recipientId: RecipientId, enabled: boolean) {
     return useQuery({
         queryKey: ["recipient-patterns", recipientId],
         enabled,
@@ -134,7 +135,7 @@ export function useUpdateRecipient() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: RecipientUpdate }) =>
+        mutationFn: ({ id, data }: { id: RecipientId; data: RecipientUpdate }) =>
             apiClient.updateRecipient(id, data),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
@@ -153,7 +154,7 @@ export function useDeleteRecipient() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteRecipient(id),
+        mutationFn: (id: RecipientId) => apiClient.deleteRecipient(id),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             toast.success(t("recipients.deleted"));
@@ -175,8 +176,8 @@ export function useMergeRecipients() {
             primaryId,
             aliasIds,
         }: {
-            primaryId: number;
-            aliasIds: number[];
+            primaryId: RecipientId;
+            aliasIds: RecipientId[];
         }) => apiClient.mergeRecipients(primaryId, aliasIds),
         onSuccess: (data) => {
             void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
@@ -243,7 +244,7 @@ export function useUnmergeRecipient() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (id: number) => apiClient.unmergeRecipient(id),
+        mutationFn: (id: RecipientId) => apiClient.unmergeRecipient(id),
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             void queryClient.invalidateQueries({

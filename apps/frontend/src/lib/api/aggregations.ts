@@ -15,11 +15,18 @@ import {
     TagPivotSchema,
 } from "@vision/types/contracts";
 import type { AggregationEnvelope } from "@/types/apiClient";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+    TagId,
+} from "@vision/types/brands";
 
 export function getAggregationMonthlySummary(params?: {
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
-    currency?: string | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
+    currency?: CurrencyCode | undefined;
     all_time?: boolean | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
@@ -76,15 +83,15 @@ export function getAggregationMonthlySummary(params?: {
 }
 
 export function getAggregationRecipientInsights(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
 }): Promise<
     AggregationEnvelope<{
         topMerchants: Array<{
-            recipientId: number;
+            recipientId: RecipientId;
             name: string;
             totalSpend: number;
             transactionCount: number;
@@ -93,7 +100,7 @@ export function getAggregationRecipientInsights(params?: {
             lastSeen: string;
         }>;
         monthOverMonth: Array<{
-            recipientId: number;
+            recipientId: RecipientId;
             name: string;
             currentSpend: number;
             previousSpend: number;
@@ -137,7 +144,7 @@ export interface AverageVsCurrentData {
 
 /** Month-to-date spending against the six-month average (Home hero). */
 export function getAggregationAverageVsCurrent(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
 }): Promise<AggregationEnvelope<AverageVsCurrentData>> {
     return requestWithQuery("/api/aggregations/average-vs-current", params, {
         schema: AverageVsCurrentSchema,
@@ -145,11 +152,11 @@ export function getAggregationAverageVsCurrent(params?: {
 }
 
 export function getAggregationBankBalances(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
 }): Promise<
     AggregationEnvelope<{
         accounts: Array<{
-            account_id: number;
+            account_id: AccountId;
             bank_account: string;
             display_name: string;
             balance: number;
@@ -177,9 +184,9 @@ export function getAggregationBankBalances(params?: {
 }
 
 export interface CategoryPivotItem {
-    categoryId: number | null;
+    categoryId: CategoryId | null;
     categoryName: string;
-    categoryPathIds?: number[];
+    categoryPathIds?: CategoryId[];
     categoryPathSegments?: string[];
     total: number; // net (income + expense)
     income?: number; // sum of amount >= 0 (explicit, not sign-of-net)
@@ -190,7 +197,7 @@ export interface CategoryPivotItem {
 }
 
 export interface RecipientYearlySpending {
-    recipientId: number;
+    recipientId: RecipientId;
     name: string;
     totalSpend: number;
     transactionCount: number;
@@ -199,18 +206,18 @@ export interface RecipientYearlySpending {
 /** A period pivot's conversion contract (recipient and tag pivots). */
 export interface RecipientPivotConversion {
     usedHistoricalFallback: boolean;
-    affectedCurrencies: string[];
+    affectedCurrencies: CurrencyCode[];
     /** Transactions left out for want of any stored rate (ADR-216). */
     unconvertedCount: number;
-    unconvertedCurrencies: string[];
+    unconvertedCurrencies: CurrencyCode[];
 }
 
 export function getAggregationCategoryPivot(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
 }): Promise<
     AggregationEnvelope<{
         categoryPivot: Record<string, CategoryPivotItem[]>;
@@ -246,11 +253,11 @@ export function getAggregationCategoryPivot(params?: {
 }
 
 export function getAggregationRecipientByYear(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
-    excluded_recipient_ids?: number[] | undefined;
-    excluded_category_ids?: number[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
 }): Promise<
     AggregationEnvelope<{
         recipientsByYear: Record<string, RecipientYearlySpending[]>;
@@ -289,16 +296,16 @@ export function getAggregationRecipientByYear(params?: {
 }
 
 export interface RecipientPivotItem {
-    recipientId: number;
+    recipientId: RecipientId;
     name: string;
     total: number;
     transactionCount: number;
 }
 
 export function getAggregationRecipientPivot(params?: {
-    currency?: string | undefined;
-    excluded_recipient_ids?: number[] | undefined;
-    recipient_ids?: number[] | undefined;
+    currency?: CurrencyCode | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
+    recipient_ids?: RecipientId[] | undefined;
     bucket?: "monthly" | "yearly" | undefined;
     start_date?: string | null | undefined;
     end_date?: string | null | undefined;
@@ -333,15 +340,15 @@ export function getAggregationRecipientPivot(params?: {
 }
 
 export interface TagPivotItem {
-    tagId: number;
+    tagId: TagId;
     slug: string;
     total: number;
     transactionCount: number;
 }
 
 export function getAggregationTagPivot(params?: {
-    currency?: string | undefined;
-    tag_ids?: number[] | undefined;
+    currency?: CurrencyCode | undefined;
+    tag_ids?: TagId[] | undefined;
     all?: boolean | undefined;
     bucket?: "monthly" | "yearly" | undefined;
     start_date?: string | null | undefined;
@@ -446,7 +453,7 @@ export interface ForecastDiagnostics {
 
 export interface CashflowForecastMethodsData {
     readonly month: string;
-    readonly currency: string;
+    readonly currency: CurrencyCode;
     readonly days_in_month: number;
     readonly current_day: number;
     readonly actual: ForecastActualPoint[];
@@ -462,9 +469,9 @@ export interface CashflowForecastMethodsData {
 }
 
 export function getCashflowForecastMethods(params?: {
-    currency?: string | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    currency?: CurrencyCode | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
     history_months?: number | undefined;
     mc_paths?: number | undefined;
     mc_percentiles?: number[] | undefined;
@@ -514,7 +521,7 @@ export interface CashflowForecastRollingData {
     readonly window_start: string;
     readonly window_end: string;
     readonly today: string;
-    readonly currency: string;
+    readonly currency: CurrencyCode;
     readonly days_back: number;
     readonly days_forward: number;
     readonly actual: ForecastActualPoint[];
@@ -530,9 +537,9 @@ export interface CashflowForecastRollingData {
 }
 
 export function getCashflowForecastRolling(params?: {
-    currency?: string | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    currency?: CurrencyCode | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
     history_months?: number | undefined;
     days_back?: number | undefined;
     days_forward?: number | undefined;
@@ -619,10 +626,10 @@ export function getCashflowForecastAccuracy(params?: {
 }
 
 export function getSankeyFlow(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     year?: number | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
 }): Promise<AggregationEnvelope<SankeyFlowData>> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);

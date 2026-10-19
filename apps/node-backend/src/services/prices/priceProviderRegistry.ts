@@ -16,13 +16,14 @@ import {
 import { toNumber, isValidPrice } from './priceCache.ts';
 import { madReturnStats, isRobustNeedle } from '../../lib/math.ts';
 import {
-    convertAtLatestRates,
+    convertCodeAtLatestRates,
     loadLatestRatesToEur,
 } from '../currency/latestRateConversion.ts';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
 import { getYahooClient } from './yahooClient.ts';
 import { forEachConcurrent } from '../../lib/concurrency.ts';
 import type { InvestmentRow, PricePoint } from '../../types/rows.ts';
+import { storedCurrencyCode } from '../../lib/currencyCode.ts';
 
 export type { InvestmentRow, PricePoint };
 
@@ -672,10 +673,10 @@ export const PROVIDERS = {
           // the latest stored rate before it becomes this asset's current
           // price. Without a stored rate the quote is skipped, never stored
           // 1:1 or at a built-in rate.
-          const invCurrency = (inv.currency || 'EUR').toUpperCase();
+          const invCurrency = storedCurrencyCode(inv.currency);
           let price = usdPrice;
           if (needsUsdToEur && invCurrency !== 'USD') {
-            const converted = convertAtLatestRates(
+            const converted = convertCodeAtLatestRates(
               usdPrice,
               'USD',
               invCurrency,

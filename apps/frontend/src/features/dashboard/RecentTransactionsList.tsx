@@ -11,15 +11,16 @@ import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import { amountClass } from "@/features/transactions/amountClass";
 import { cn } from "@/lib/utils";
+import type { CategoryId, TransactionId } from "@vision/types/brands";
 
 export interface RecentTransactionRow {
-    id: number;
+    id: TransactionId;
     date: string | null;
     description: string;
     amount: number;
     currency: string;
     category: string;
-    categoryId?: number | null | undefined;
+    categoryId?: CategoryId | null | undefined;
     recipient: string;
 }
 

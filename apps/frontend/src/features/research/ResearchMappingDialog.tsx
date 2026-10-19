@@ -39,6 +39,7 @@ import {
     researchMappingsKey,
     useResearchMappingsQuery,
 } from "./useResearchQueries";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface ResearchMappingDialogProps {
     open: boolean;
@@ -54,7 +55,7 @@ interface ResearchMappingDialogProps {
      * When this mapping is for a held investment, its id — the holding's
      * already-configured provider is pre-seeded as a confirmed proposal.
      */
-    investmentId?: number | undefined;
+    investmentId?: InvestmentId | undefined;
 }
 
 /** A proposal that was pre-seeded from the held investment is already known-good. */

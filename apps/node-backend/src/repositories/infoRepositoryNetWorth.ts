@@ -35,6 +35,7 @@ import {
 } from "../lib/unconvertedTally.ts";
 import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
 import { nanToZero } from "../lib/math.ts";
+import { currencyOrEur } from "../lib/currencyCode.ts";
 
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
 
@@ -373,7 +374,7 @@ export const netWorthRepository = {
               return parts.map((p) => ({
                 ...base,
                 balance: p.balance,
-                currency: p.currency || "EUR",
+                currency: currencyOrEur(p.currency),
               }));
             }),
             "balance",

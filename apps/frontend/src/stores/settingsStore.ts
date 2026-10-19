@@ -20,7 +20,21 @@ import { create } from "zustand";
 import { z } from "zod";
 import type { Language } from "@/types/i18n";
 import type { ThemeVariant } from "@/styles/themes";
-import { NUMBER_FORMATS, type NumberFormat } from "@/utils/currency";
+import {
+    DEFAULT_CURRENCY,
+    NUMBER_FORMATS,
+    type NumberFormat,
+} from "@/utils/currency";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 import {
     createBelgianTaxSlice,
     type BelgianTaxSlice,
@@ -57,7 +71,7 @@ export const APP_DATE_FORMATS = [
 export type AppDateFormat = (typeof APP_DATE_FORMATS)[number];
 
 export interface AppSettings {
-    defaultCurrency: string;
+    defaultCurrency: CurrencyCode;
     dateFormat: AppDateFormat;
     numberFormat: NumberFormat;
     defaultPageSize: number;
@@ -94,8 +108,8 @@ export interface AppSettings {
 export type ExclusionScope = "everywhere" | "dashboard" | "statistics";
 
 export interface DashboardSettings {
-    excludedCategoryIds: number[];
-    excludedRecipientIds: number[];
+    excludedCategoryIds: CategoryId[];
+    excludedRecipientIds: RecipientId[];
     excludeHiddenCategories: boolean;
     exclusionScope: ExclusionScope;
 }
@@ -112,7 +126,7 @@ export interface ThemeSchedule {
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-    defaultCurrency: "EUR",
+    defaultCurrency: DEFAULT_CURRENCY,
     dateFormat: "DD/MM/YYYY",
     numberFormat: "eu",
     defaultPageSize: 50,
@@ -151,6 +165,7 @@ const storedAppSettingsSchema = z.looseObject({
     defaultCurrency: z
         .string()
         .regex(/^[A-Za-z]{3}$/)
+        .transform((code) => asCurrencyCode(code.toUpperCase()))
         .catch(DEFAULT_APP_SETTINGS.defaultCurrency),
     dateFormat: z.enum(APP_DATE_FORMATS).catch(DEFAULT_APP_SETTINGS.dateFormat),
     numberFormat: z
@@ -263,8 +278,12 @@ export const DEFAULT_DASHBOARD_SETTINGS: DashboardSettings = {
  * result is written back to the API.
  */
 const storedDashboardSettingsSchema = z.looseObject({
-    excludedCategoryIds: z.array(z.number()).catch(() => []),
-    excludedRecipientIds: z.array(z.number()).catch(() => []),
+    excludedCategoryIds: z
+        .array(z.number().transform(asCategoryId))
+        .catch(() => []),
+    excludedRecipientIds: z
+        .array(z.number().transform(asRecipientId))
+        .catch(() => []),
     excludeHiddenCategories: z
         .boolean()
         .catch(DEFAULT_DASHBOARD_SETTINGS.excludeHiddenCategories),

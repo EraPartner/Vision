@@ -9,6 +9,11 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import {
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const virtualWindow = vi.hoisted(() => ({ measured: true }));
 
@@ -72,8 +77,8 @@ function renderWithApp(ui: ReactElement<{ investment: InvestmentSummary }>) {
 }
 
 const TXN = {
-    id: 101,
-    investment_id: 1,
+    id: asPortfolioTransactionId(101),
+    investment_id: asInvestmentId(1),
     type: "buy" as const,
     date: "2025-01-10",
     amount: 900,
@@ -81,7 +86,7 @@ const TXN = {
     price_per_unit: 90,
     fees: 2.5,
     taxes: 0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     fx_rate_to_eur: 1,
     note: "Initial buy",
     is_recurring: false,
@@ -97,12 +102,12 @@ const {
 } = TXN;
 
 const INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     is_active: true,
@@ -200,7 +205,7 @@ describe("InvestmentDetailDialog", () => {
                     transactions: [
                         {
                             ...TXN_WITHOUT_UNITS,
-                            id: 102,
+                            id: asPortfolioTransactionId(102),
                             type: "dividend",
                             amount: 7,
                             note: "Literal source income",
@@ -320,7 +325,7 @@ describe("InvestmentDetailDialog", () => {
         const onEditTransaction = vi.fn();
         const second = {
             ...TXN,
-            id: 102,
+            id: asPortfolioTransactionId(102),
             type: "sell" as const,
             date: "2025-02-11",
         };

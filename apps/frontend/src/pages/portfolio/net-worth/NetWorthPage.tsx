@@ -51,6 +51,7 @@ import {
     type NetWorthAccountRow,
 } from "./NetWorthByAccountList";
 import type { AccountType } from "@/types/api";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -73,7 +74,7 @@ export default function NetWorthPage() {
     const { t, language } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY);
 
     const { data, isLoading, error } = useNetWorthSummary(targetCurrency);
     const byAccountQuery = useNetWorthByAccount(targetCurrency);

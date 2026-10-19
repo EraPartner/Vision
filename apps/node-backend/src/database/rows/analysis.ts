@@ -11,7 +11,14 @@
  */
 import { z } from "zod";
 import type { AnalysisDefinition } from "@vision/types/analysis";
-import { pgBigint, pgInt, pgNumeric, pgTimestamptz } from "../rowSchemas.ts";
+import {
+  pgBigint,
+  pgCategoryId,
+  pgInt,
+  pgInvestmentId,
+  pgNumeric,
+  pgTimestamptz,
+} from "../rowSchemas.ts";
 import { storedJsonObject } from "./ai.ts";
 import type {
   SavedAnalysisParameters,
@@ -312,8 +319,8 @@ export const researchDossierLinkRowSchema = z
     link_type: z.string(),
     historical_id: z.string(),
     label_snapshot: z.string(),
-    category_id: pgInt.nullable(),
-    investment_id: pgInt.nullable(),
+    category_id: pgCategoryId.nullable(),
+    investment_id: pgInvestmentId.nullable(),
     saved_analysis_id: z.string().nullable(),
   })
   .describe("research_dossier_links row");

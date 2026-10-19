@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTransactionDrillUrl } from "@/lib/transactionDrillUrl";
+import { asCategoryId } from "@vision/types/brands";
 
 describe("buildTransactionDrillUrl", () => {
     it("builds a leap-month income drill", () => {
@@ -15,10 +16,10 @@ describe("buildTransactionDrillUrl", () => {
     });
 
     it("supports one category, many categories, and uncategorised rows", () => {
-        expect(buildTransactionDrillUrl({ categoryId: 7 })).toBe(
+        expect(buildTransactionDrillUrl({ categoryId: asCategoryId(7) })).toBe(
             "/transactions?category_id=7",
         );
-        expect(buildTransactionDrillUrl({ categoryIds: [3, 8] })).toBe(
+        expect(buildTransactionDrillUrl({ categoryIds: [asCategoryId(3), asCategoryId(8)] })).toBe(
             "/transactions?category_ids=3%2C8",
         );
         expect(buildTransactionDrillUrl({ uncategorised: true })).toBe(

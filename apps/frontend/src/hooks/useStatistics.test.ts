@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { mapToStatisticsData } from './useStatistics';
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
 
 // ── Fixture builders ──────────────────────────────────────────────────────────
 
@@ -32,7 +33,11 @@ function categoryPivot(entries: Record<string, Array<{ categoryId: number | null
     categoryPivot: Object.fromEntries(
       Object.entries(entries).map(([period, items]) => [
         period,
-        items.map((i) => ({ ...i, transactionCount: i.transactionCount ?? 1 })),
+        items.map((i) => ({
+          ...i,
+          categoryId: i.categoryId === null ? null : asCategoryId(i.categoryId),
+          transactionCount: i.transactionCount ?? 1,
+        })),
       ]),
     ),
     unconverted_count: 0,
@@ -46,6 +51,7 @@ function recipientInsights(
   return {
     topMerchants: topMerchants.map((m) => ({
       ...m,
+      recipientId: asRecipientId(m.recipientId),
       avgAmount: 0,
       firstSeen: '2026-01-01',
       lastSeen: '2026-12-31',
@@ -62,7 +68,11 @@ function recipientByYear(entries: Record<string, Array<{ recipientId: number; na
     recipientsByYear: Object.fromEntries(
       Object.entries(entries).map(([year, recs]) => [
         year,
-        recs.map((r) => ({ ...r, transactionCount: r.transactionCount ?? 1 })),
+        recs.map((r) => ({
+          ...r,
+          recipientId: asRecipientId(r.recipientId),
+          transactionCount: r.transactionCount ?? 1,
+        })),
       ]),
     ),
     unconverted_count: 0,

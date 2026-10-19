@@ -11,16 +11,21 @@ import { ok, err } from "@/test/msw/handlers";
 import { ExecutionHistoryDialog } from "@/features/planned/ExecutionHistoryDialog";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { transactionRow } from "@/test/msw/rowFixtures";
+import {
+    asCurrencyCode,
+    asPlannedTransactionId,
+    asTransactionId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 // A payment with no executions
 const EMPTY_PAYMENT: PlannedPayment = {
-    id: 1,
+    id: asPlannedTransactionId(1),
     name: "Monthly Rent",
     due_date: "2025-02-01",
     amount: 1200,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     is_recurring: true,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
@@ -33,10 +38,10 @@ const EMPTY_PAYMENT: PlannedPayment = {
 // A payment with a single executed_transaction_id link (legacy path)
 const EXECUTED_PAYMENT: PlannedPayment = {
     ...EMPTY_PAYMENT,
-    id: 2,
+    id: asPlannedTransactionId(2),
     name: "Gym Fee",
     is_executed: true,
-    executed_transaction_id: 99,
+    executed_transaction_id: asTransactionId(99),
     last_executed_date: "2025-01-15",
     executions: [],
 };
@@ -216,7 +221,7 @@ describe("ExecutionHistoryDialog", () => {
         );
         renderDialog(true, [
             EXECUTED_PAYMENT,
-            { ...EXECUTED_PAYMENT, id: 3, executed_transaction_id: 100 },
+            { ...EXECUTED_PAYMENT, id: asPlannedTransactionId(3), executed_transaction_id: asTransactionId(100) },
         ]);
         expect(await screen.findByRole("alert")).toBeInTheDocument();
         expect(screen.getByText("January membership")).toBeInTheDocument();

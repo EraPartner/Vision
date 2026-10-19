@@ -32,6 +32,7 @@ import {
 } from "@/hooks/useCurrencyFormatter";
 import { useRecurringPatterns } from "@/hooks/usePlannedMatchSuggestions";
 import { useCategoryTree } from "@/hooks/useCategories";
+import type { RecipientId } from "@vision/types/brands";
 
 const DISMISSED_PATTERNS_STORAGE_KEY = "dismissed_recurring_patterns";
 
@@ -159,7 +160,7 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
 
     const { data, isLoading, error } = useRecurringPatterns();
 
-    const dismiss = (recipientId: number) => {
+    const dismiss = (recipientId: RecipientId) => {
         const next = new Set(dismissedIds);
         next.add(recipientId);
         persistDismissed(next);

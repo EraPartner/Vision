@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { query } from "../database/connection.ts";
 import { queryRows } from "../database/rowContracts.ts";
-import { pgBigint, pgInt } from "../database/rowSchemas.ts";
+import { pgBigint, pgInt, pgTransactionId } from "../database/rowSchemas.ts";
 import type { ImportedTransactionInput } from "./transactionRepository.ts";
 
 export interface BulkImportRow extends ImportedTransactionInput {
@@ -77,7 +77,7 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
   const inserted = candidates.length > 0
     ? await queryRows(
         z.object({
-          id: pgInt,
+          id: pgTransactionId,
           dedup_fingerprint: z.string(),
           dedup_fingerprint_version: pgInt,
         }),

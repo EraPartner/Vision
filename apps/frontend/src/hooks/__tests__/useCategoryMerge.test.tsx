@@ -11,6 +11,7 @@ import {
     transactionKeys,
     aggregationKeys,
 } from "@/lib/queryKeys";
+import { asCategoryId } from "@vision/types/brands";
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({ t: (key: string) => key }),
 }));
@@ -66,8 +67,8 @@ describe("category merge dependent views", () => {
         );
         await act(async () => {
             await result.current.merge.mutateAsync({
-                sourceId: 1,
-                targetId: 2,
+                sourceId: asCategoryId(1),
+                targetId: asCategoryId(2),
             });
         });
         await waitFor(() =>

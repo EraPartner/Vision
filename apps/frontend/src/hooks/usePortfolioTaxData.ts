@@ -7,6 +7,9 @@ import { useTaxYearFigures } from "@/hooks/useBelgianTaxComputation";
 import { usePortfolioTaxDashboardQuery } from "@/hooks/useBelgianTaxDashboards";
 import type { BelgianPortfolioTaxDashboard } from "@/lib/api/belgianTax";
 import { getAssetClassLabel, type AssetClass } from "@/types/portfolio";
+import { asInvestmentId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
+import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 
 /** One row of the per-tax-type / per-fee-type breakdown lists. */
 export interface CostBreakdownEntry {
@@ -31,7 +34,7 @@ export interface MonthlyCostDatum {
 
 /** One row of the per-investment cost table; amounts are in the response currency. */
 export interface InvestmentCostRow {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol: string | undefined;
     assetClass: string;
@@ -48,7 +51,7 @@ export interface InvestmentCostRow {
 
 /** Investment identity for the manual-adjustments dialog. */
 export interface PortfolioTaxInvestmentSummary {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol: string | undefined;
     assetClass: AssetClass;
@@ -88,7 +91,7 @@ export function usePortfolioTaxData() {
 
     const dashboardQuery = usePortfolioTaxDashboardQuery({
         year: viewedYear,
-        currency: appSettings.defaultCurrency || "EUR",
+        currency: currencyOr(appSettings.defaultCurrency, DEFAULT_CURRENCY),
         enabled: !isProfileLoading,
     });
     const view = useMemo(
@@ -140,6 +143,7 @@ function localizeDashboard(
     const investmentBreakdown = dashboard.investmentBreakdown.map(
         (row): InvestmentCostRow => ({
             ...row,
+            id: asInvestmentId(row.id),
             symbol: row.symbol ?? undefined,
             assetClass: getAssetClassLabel(t, row.assetClass as AssetClass),
         }),
@@ -147,6 +151,7 @@ function localizeDashboard(
     const summaries = dashboard.summaries.map(
         (row): PortfolioTaxInvestmentSummary => ({
             ...row,
+            id: asInvestmentId(row.id),
             symbol: row.symbol ?? undefined,
             assetClass: row.assetClass as AssetClass,
         }),

@@ -25,10 +25,11 @@ import {
     portfolioExposureQueryKey,
     usePortfolioExposureQuery,
 } from "@/hooks/portfolio/usePortfolioExposure";
+import type { CurrencyCode } from "@vision/types/brands";
 
 type Dimension = "issuer" | "sector" | "issuerCountry";
 
-export function PortfolioExposureCard({ currency }: { currency: string }) {
+export function PortfolioExposureCard({ currency }: { currency: CurrencyCode }) {
     const { t } = useLanguage();
     const formatPercent = usePercentFormatter();
     const sourceInputRef = useRef<HTMLInputElement>(null);

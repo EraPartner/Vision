@@ -15,7 +15,7 @@ import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
  */
 
 import { query, withTransaction } from "../database/connection.ts";
-import { idRowSchema } from "../database/rowSchemas.ts";
+import { transactionKeyRowSchema } from "../database/rowSchemas.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   importBatchListRowSchema,
@@ -305,7 +305,7 @@ export async function rollbackBatch(
       );
     }
     const targets = await queryRows(
-      idRowSchema,
+      transactionKeyRowSchema,
       "SELECT id FROM transactions WHERE import_batch_id = $1",
       [id],
     );

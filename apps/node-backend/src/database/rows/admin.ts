@@ -4,7 +4,9 @@
  * `name` columns arrive as strings, BIGINT counters and sizes as strings.
  */
 import { z } from "zod";
-import { pgBigint } from "../rowSchemas.ts";
+import {
+  pgBigint,
+} from "../rowSchemas.ts";
 
 /** A `pg_stat_user_tables` row as `/database/stats` projects it. */
 export const tableStatsRowSchema = z

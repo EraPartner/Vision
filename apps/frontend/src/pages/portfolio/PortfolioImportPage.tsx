@@ -80,6 +80,7 @@ import {
     type DetectedPortfolioImport,
 } from "./portfolioImportDetection";
 import { PortfolioImportSession } from "./PortfolioImportSession";
+import { asAccountId } from "@vision/types/brands";
 
 export function PortfolioImportPage() {
     const { t } = useLanguage();
@@ -618,7 +619,7 @@ export function PortfolioImportPage() {
                                 setConfig({
                                     ...config,
                                     accountId: value
-                                        ? Number(value)
+                                        ? asAccountId(Number(value))
                                         : undefined,
                                 });
                             }}

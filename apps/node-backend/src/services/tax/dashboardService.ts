@@ -29,7 +29,7 @@ import type {
 import { computeMonthlySummary } from "../calculations/aggregation/monthly.ts";
 import { computeCategoryPivot } from "../calculations/aggregation/categoryPivot.ts";
 import {
-  convertAtLatestRates,
+  convertCodeAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
@@ -416,7 +416,7 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
     const from = (fromCurrency ?? "EUR").toUpperCase();
     const to = currency.toUpperCase();
     if (from === to) return amount;
-    const converted = convertAtLatestRates(amount, from, to, latest);
+    const converted = convertCodeAtLatestRates(amount, from, to, latest);
     return converted === undefined ? undefined : converted.toNumber();
   };
   const investment: PortfolioTaxInvestment = {

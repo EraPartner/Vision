@@ -9,6 +9,7 @@ import {
   toPgMathTxRow,
 } from "./helpers/portfolioPgRows.ts";
 import type { InvestmentSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
+import { asInvestmentId } from "@vision/types/brands";
 
 const investment = toPgSummaryInvestmentRow(
   makeInvestmentRow({
@@ -74,7 +75,7 @@ describe("Archived ordinary presentation parity", () => {
     expect(rows[0]?.avgCostBasis).toBe(80);
   });
   it("keeps active rows out and returns unrounded ordinary web amounts", () => {
-    const active = { ...investment, id: 2, is_active: true };
+    const active = { ...investment, id: asInvestmentId(2), is_active: true };
     const rows = buildArchivedPortfolioPresentation(
       [active, investment],
       [tx({ amount: 100.01, units: 1 })],

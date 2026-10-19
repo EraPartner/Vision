@@ -14,16 +14,17 @@ import {
 } from "@/test/msw/handlers";
 import { EditInvestmentDialog } from "@/features/portfolio/EditInvestmentDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 const INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     price_provider: "yahoo",
@@ -89,8 +90,8 @@ describe("EditInvestmentDialog", () => {
         const user = userEvent.setup();
         const foreign: InvestmentSummary = {
             ...INVESTMENT,
-            currency: "EUR",
-            originalCurrency: "USD",
+            currency: asCurrencyCode("EUR"),
+            originalCurrency: asCurrencyCode("USD"),
         };
         renderWithApp(<EditInvestmentDialog investment={foreign} />);
 
@@ -328,7 +329,7 @@ describe("EditInvestmentDialog", () => {
 
         const other: InvestmentSummary = {
             ...INVESTMENT,
-            id: 99,
+            id: asInvestmentId(99),
             name: "Gold ETC",
             symbol: "SGLN",
         };

@@ -11,6 +11,17 @@ import { z } from "zod";
 import { MAX_INT32_ID, validateId } from "../lib/validation.ts";
 import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 import { parseIntClamped } from "../lib/pagination.ts";
+import {
+  AccountIdSchema,
+  CategoryIdSchema,
+  InvestmentIdSchema,
+  PlannedTransactionIdSchema,
+  PortfolioTransactionIdSchema,
+  RecipientIdSchema,
+  SplitIdSchema,
+  TagIdSchema,
+  TransactionIdSchema,
+} from "@vision/types/brands";
 
 /**
  * A field that may be absent. zod 4 rejects a missing object key even when its
@@ -44,6 +55,47 @@ export function idSchema(max = MAX_INT32_ID) {
 /** `{ id }` route params. */
 export const idParams = z.object({ id: idSchema() });
 
+/*
+ * Entity ids: `idSchema`'s accept set, then the shared branded schema, so a
+ * handler holds an `AccountId` (not a bare number) from the parse onwards.
+ */
+export const accountIdSchema = () => idSchema().pipe(AccountIdSchema);
+export const transactionIdSchema = () => idSchema().pipe(TransactionIdSchema);
+export const categoryIdSchema = () => idSchema().pipe(CategoryIdSchema);
+export const recipientIdSchema = () => idSchema().pipe(RecipientIdSchema);
+export const tagIdSchema = () => idSchema().pipe(TagIdSchema);
+/** @public */
+export const splitIdSchema = () => idSchema().pipe(SplitIdSchema);
+/** @public */
+export const plannedTransactionIdSchema = () =>
+  idSchema().pipe(PlannedTransactionIdSchema);
+export const investmentIdSchema = () => idSchema().pipe(InvestmentIdSchema);
+/** @public */
+export const portfolioTransactionIdSchema = () =>
+  idSchema().pipe(PortfolioTransactionIdSchema);
+
+/** `{ id }` params of an account route. */
+export const accountIdParams = z.object({ id: accountIdSchema() });
+/**
+ * `{ id }` params of a transaction route.
+ * @public
+ */
+export const transactionIdParams = z.object({ id: transactionIdSchema() });
+/**
+ * `{ id }` params of a category route.
+ * @public
+ */
+export const categoryIdParams = z.object({ id: categoryIdSchema() });
+/** `{ id }` params of a recipient route. */
+export const recipientIdParams = z.object({ id: recipientIdSchema() });
+/** `{ id }` params of a tag route. */
+export const tagIdParams = z.object({ id: tagIdSchema() });
+/**
+ * `{ id }` params of an investment route.
+ * @public
+ */
+export const investmentIdParams = z.object({ id: investmentIdSchema() });
+
 /**
  * An optional id filter: absent, `null` and `''` mean "no filter"
  * (`assertOptionalId`'s convention); anything else must be a valid id.
@@ -55,8 +107,23 @@ export const optionalIdFilter = optionalValue.transform((value, ctx) =>
 /**
  * A nullable id in a write body: absent stays absent, `null` keeps its "clear"
  * meaning, and anything else must be a valid id.
+ * @public
  */
 export const nullableId = z.union([z.null(), idSchema()]).optional();
+
+/** {@link optionalIdFilter} yielding an entity's branded id. */
+export function optionalEntityIdFilter<S extends z.ZodType<number, number>>(
+  brand: S,
+) {
+  return optionalIdFilter.pipe(brand.optional());
+}
+
+/** {@link nullableId} yielding an entity's branded id. */
+export function nullableEntityId<S extends z.ZodType<number, number>>(
+  brand: S,
+) {
+  return z.union([z.null(), idSchema().pipe(brand)]).optional();
+}
 
 /**
  * Boolean query flag with the shared spelling set (`true`/`false`/`1`/`0`).

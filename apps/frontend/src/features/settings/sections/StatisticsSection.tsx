@@ -26,16 +26,17 @@ import {
     useSetting,
     useStatisticsRecipientOptions,
 } from "../useSettingsQueries";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 interface CategoryOption {
-    id: number;
+    id: CategoryId;
     name: string;
     path: string[];
     is_active: boolean;
 }
 
 interface RecipientOption {
-    id: number;
+    id: RecipientId;
     name: string;
     is_active: boolean;
 }
@@ -80,14 +81,14 @@ export const StatisticsSection = memo(function StatisticsSection() {
     );
     const includeTransfers = includeTransfersSetting?.value === true;
 
-    const toggleCategory = (id: number) => {
+    const toggleCategory = (id: CategoryId) => {
         const next = excludedCategorySet.has(id)
             ? excludedCategories.filter((c) => c !== id)
             : [...excludedCategories, id];
         updateSettings({ excludedCategoryIds: next });
     };
 
-    const toggleRecipient = (id: number) => {
+    const toggleRecipient = (id: RecipientId) => {
         const next = excludedRecipientSet.has(id)
             ? excludedRecipients.filter((r) => r !== id)
             : [...excludedRecipients, id];

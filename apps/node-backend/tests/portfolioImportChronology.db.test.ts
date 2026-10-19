@@ -10,6 +10,9 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const fixtures: {
@@ -232,7 +235,7 @@ describe.skipIf(!hasTestDatabase())(
         date: "2026-01-01",
         units: 5,
         price_per_unit: 100,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       }))!;
       const source = [
         { date: "2026-02-01", type: "sell", units: 8, price: 110 },

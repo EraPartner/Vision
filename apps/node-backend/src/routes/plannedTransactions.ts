@@ -21,8 +21,17 @@ import {
   validateId,
   validateDateString,
   assertCurrency,
-  assertIdParam,
+  assertEntityIdParam,
 } from "../middleware/validation.ts";
+import {
+  PlannedTransactionIdSchema,
+  asAccountId,
+  asCategoryId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
+import { EUR } from "../lib/currencyCode.ts";
+import type { PlannedTransactionId } from "@vision/types/brands";
 import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
 import { generateLoanRepaymentSchedule } from "../services/calculations/loanSchedule.ts";
@@ -82,9 +91,9 @@ const router = Router();
 // Matches the 12-integer-digit ceiling of the money columns (NUMERIC).
 const MAX_PLANNED_AMOUNT = 1e12;
 
-// Structural request type: assertIdParam requires it.
-function parseRouteId(req: ExpressRequest): number {
-  return assertIdParam(req);
+// Structural request type: assertEntityIdParam requires it.
+function parseRouteId(req: ExpressRequest): PlannedTransactionId {
+  return assertEntityIdParam(req, PlannedTransactionIdSchema);
 }
 
 function withoutPatchOnlyReadOnlyFields(
@@ -405,7 +414,7 @@ const executeBodySchema = z
       return z.NEVER;
     }
     return {
-      executedTransactionId: idCheck.value,
+      executedTransactionId: asTransactionId(idCheck.value),
       executionDate: dateCheck.value ?? undefined,
     };
   });
@@ -539,15 +548,15 @@ router.get("/", async (req, res) => {
     startDate: assertYmd(start_date, "start_date"),
     endDate: assertYmd(end_date, "end_date"),
     bankAccount: bank_account || undefined,
-    accountId: assertOptionalId(account_id, "account_id"),
+    accountId: assertOptionalId(account_id, "account_id", asAccountId),
     // Same strict id parse as the transactions list endpoint — absent/empty
     // means "no filter" (undefined, 200), malformed is a 400. These were bare
     // `x ? parseInt(x) : null`, which takes the leading digits of anything, so
     // ?category_id=12abc listed the planned transactions of category 12 and
     // ?recipient_id=1e3 those of recipient 1, while a NaN passed the builder's
     // `!= null` guard and reached Postgres as a 22P02 500.
-    categoryId: assertOptionalId(category_id, "category_id"),
-    recipientId: assertOptionalId(recipient_id, "recipient_id"),
+    categoryId: assertOptionalId(category_id, "category_id", asCategoryId),
+    recipientId: assertOptionalId(recipient_id, "recipient_id", asRecipientId),
     isRecurring:
       is_recurring != null ? parseBooleanQueryParam(is_recurring) : undefined,
     isExecuted:
@@ -631,7 +640,7 @@ router.get("/due-soon", async (req, res) => {
  */
 router.get("/totals", async (req, res) => {
   const currency =
-    assertCurrency(optionalQueryString(req.query, "currency")) ?? "EUR";
+    assertCurrency(optionalQueryString(req.query, "currency")) ?? EUR;
   res.ok(await computePlannedTotals({ currency }));
 });
 

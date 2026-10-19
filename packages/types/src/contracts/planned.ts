@@ -1,7 +1,14 @@
 import { z } from "zod";
 
 import {
+  CategoryIdSchema,
+  PlannedTransactionIdSchema,
+  RecipientIdSchema,
+  TransactionIdSchema,
+} from "../brands.ts";
+import {
   IdSchema,
+  WireCurrencySchema,
   WireDateSchema,
   WireLinkSchema,
   WireTimestampSchema,
@@ -23,7 +30,7 @@ export const LoanScheduleEntrySchema = z.looseObject({
 /** One `planned_transaction_executions` row as the formatter emits it. */
 export const PlannedExecutionSchema = z.looseObject({
   id: IdSchema,
-  executed_transaction_id: IdSchema,
+  executed_transaction_id: TransactionIdSchema,
   execution_date: WireDateSchema,
   /** Nullable/optional in `plannedExecutionRowSchema`; an absent value drops the key. */
   created_at: WireTimestampSchema.nullable().optional(),
@@ -37,15 +44,15 @@ export const PlannedExecutionSchema = z.looseObject({
  * their keys can be absent.
  */
 export const PlannedTransactionSchema = z.looseObject({
-  id: IdSchema,
+  id: PlannedTransactionIdSchema,
   planned_date: WireDateSchema,
   bank_account: z.string().nullable().optional(),
-  recipient_id: IdSchema.nullable(),
+  recipient_id: RecipientIdSchema.nullable(),
   recipient_name: z.string().nullable(),
   memo: z.string().nullable(),
   amount: z.number(),
-  currency: z.string().nullable(),
-  category_id: IdSchema.nullable(),
+  currency: WireCurrencySchema.nullable(),
+  category_id: CategoryIdSchema.nullable(),
   category_name: z.string().nullable(),
   comment: z.string().nullable(),
   url: z.string().nullable(),
@@ -66,7 +73,7 @@ export const PlannedTransactionSchema = z.looseObject({
   loan_regular_payment_amount: z.number().nullable(),
   loan_first_payment_date: WireDateSchema.nullable(),
   loan_schedule: z.array(LoanScheduleEntrySchema),
-  executed_transaction_id: IdSchema.nullable(),
+  executed_transaction_id: TransactionIdSchema.nullable(),
   execution_count: z.number().int().nonnegative(),
   executions: z.array(PlannedExecutionSchema),
   tags: z.array(TransactionTagRefSchema),
@@ -84,21 +91,21 @@ export const PlannedTransactionListSchema = wirePageOf(
 /** `getMatchSuggestions` (services/plannedMatchService.ts). */
 export const PlannedMatchSuggestionSchema = z.looseObject({
   planned: z.looseObject({
-    id: IdSchema,
-    recipient_id: IdSchema.nullable(),
+    id: PlannedTransactionIdSchema,
+    recipient_id: RecipientIdSchema.nullable(),
     recipient_name: z.string().nullable(),
     amount: z.number(),
     planned_date: WireDateSchema,
-    currency: z.string().nullable(),
+    currency: WireCurrencySchema.nullable(),
     is_recurring: z.boolean(),
   }),
   candidates: z.array(
     z.looseObject({
-      id: IdSchema,
+      id: TransactionIdSchema,
       recipient_name: z.string().nullable(),
       amount: z.number(),
       transaction_date: WireDateSchema,
-      currency: z.string().nullable(),
+      currency: WireCurrencySchema.nullable(),
       memo: z.string().nullable(),
     }),
   ),
@@ -111,7 +118,7 @@ export const PlannedMatchSuggestionListSchema = wireCollectionOf(
 
 /** `GET /api/planned-transactions/totals`: server-computed planned totals. */
 export const PlannedTotalsSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   today: WireDateSchema,
   month_end: WireDateSchema,
   rest_of_month: z.looseObject({

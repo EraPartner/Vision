@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CategoryIdSchema, RecipientIdSchema } from "../brands.ts";
 import {
   IdSchema,
   WireDateSchema,
@@ -100,8 +101,8 @@ export const ImportStagingRowSchema = z.looseObject({
   match_source: z.string().nullable(),
   match_similarity: z.number().nullable(),
   matched_pattern_id: IdSchema.nullable(),
-  user_override_recipient_id: IdSchema.nullable(),
-  override_category_id: IdSchema.nullable(),
+  user_override_recipient_id: RecipientIdSchema.nullable(),
+  override_category_id: CategoryIdSchema.nullable(),
 });
 
 /** `GET /api/import/batches/:id/preview` (`buildImportBatchPreview`). */
@@ -109,12 +110,12 @@ export const ImportPreviewSchema = z.looseObject({
   batch_id: IdSchema,
   groups: z.array(
     z.looseObject({
-      recipient_id: IdSchema.nullable(),
+      recipient_id: RecipientIdSchema.nullable(),
       recipient_name: z.string().nullable(),
-      recipient_default_category_id: IdSchema.nullable(),
+      recipient_default_category_id: CategoryIdSchema.nullable(),
       recipient_default_category_label: z.string().nullable(),
-      override_category_id: IdSchema.nullable(),
-      current_category_id: IdSchema.nullable(),
+      override_category_id: CategoryIdSchema.nullable(),
+      current_category_id: CategoryIdSchema.nullable(),
       current_category_label: z.string().nullable(),
       matched_pattern_id: IdSchema.nullable(),
       matched_pattern_text: z.string().nullable(),

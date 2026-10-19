@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { WireCurrencySchema } from "./common.ts";
 import { SettingRecordSchema } from "./settings.ts";
 
 /**
@@ -23,7 +25,7 @@ const HistoricalCalculationSchema = z.looseObject({
 /** `GET /api/belgian-tax/dashboard` — services/tax/dashboardService.getTaxDashboard. */
 export const BelgianTaxDashboardSchema = z.looseObject({
   year: z.number().int(),
-  currency: z.string(),
+  currency: WireCurrencySchema,
   isHistorical: z.boolean(),
   hasIncomeSources: z.boolean(),
   hasStatsData: z.boolean(),
@@ -92,7 +94,7 @@ const CostEntrySchema = z.looseObject({
 /** `GET /api/belgian-tax/portfolio-dashboard` — services/tax/portfolioDashboardService. */
 export const BelgianPortfolioTaxDashboardSchema = z.looseObject({
   year: z.number().int(),
-  currency: z.string(),
+  currency: WireCurrencySchema,
   isEmpty: z.boolean(),
   hasProfile: z.boolean(),
   hasInKindIncomeUnclassified: z.boolean(),
@@ -134,7 +136,7 @@ export const BelgianPortfolioTaxDashboardSchema = z.looseObject({
       fees: z.number(),
       total: z.number(),
       realizedGain: z.number(),
-      currency: z.string(),
+      currency: WireCurrencySchema,
     }),
   ),
   yearlyCostTrend: z.array(
@@ -172,7 +174,7 @@ export const BelgianPortfolioTaxDashboardSchema = z.looseObject({
       name: z.string(),
       symbol: z.string().nullable(),
       assetClass: z.string(),
-      currency: z.string(),
+      currency: WireCurrencySchema,
     }),
   ),
   records: z.array(SettingRecordSchema),
@@ -191,9 +193,7 @@ const BelgianTaxCalculationSchema = z.looseObject({
   marginalRate: z.number(),
   netTakeHome: z.number(),
   propertyTaxEstimate: z.number(),
-  breakdown: z.array(
-    z.looseObject({ label: z.string(), amount: z.number() }),
-  ),
+  breakdown: z.array(z.looseObject({ label: z.string(), amount: z.number() })),
 });
 
 /** Household engine result (`computeHouseholdTax`). */
@@ -218,9 +218,7 @@ const BelgianTaxHouseholdResultSchema = z.looseObject({
     benefit: z.number(),
   }),
   totals: z.looseObject({}),
-  issues: z.array(
-    z.looseObject({ code: z.string(), severity: z.string() }),
-  ),
+  issues: z.array(z.looseObject({ code: z.string(), severity: z.string() })),
 });
 
 /** `POST /api/belgian-tax/compute` — stateless engine run on a submitted household. */

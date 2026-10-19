@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { txRow } from "./helpers/pgRows.ts";
+import {
+  asTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
@@ -175,7 +178,7 @@ describe("transaction list count cache", () => {
         })),
       }),
     );
-    await expect(transactionRepository.hardDelete(9)).resolves.toBe(true);
+    await expect(transactionRepository.hardDelete(asTransactionId(9))).resolves.toBe(true);
     await transactionRepository.getAllWithCount({ active: true });
 
     expect(countCalls()).toHaveLength(2);
@@ -195,14 +198,14 @@ describe("transaction list count cache", () => {
           return { rows: [{ id: 3 }] };
         }
         if (sql.includes("FROM transactions t")) {
-          return { rows: [txRow({ id: 9 })] };
+          return { rows: [txRow({ id: asTransactionId(9) })] };
         }
         return { rows: [] };
       }),
     };
     withTransaction.mockImplementation(async (fn) => fn(client));
     await expect(
-      transactionRepository.update(9, { tags: ["food"] }),
+      transactionRepository.update(asTransactionId(9), { tags: ["food"] }),
     ).resolves.toMatchObject({ id: 9, tags: [] });
     await transactionRepository.getAllWithCount({ tagSlugs: ["food"] });
 

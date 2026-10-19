@@ -20,10 +20,14 @@ import { todayAppDateString } from "../lib/timezone.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import type { HydratedPlannedTransactionRow } from "../types/rows.ts";
 import { nanToZero } from "../lib/math.ts";
+import type {
+  PlannedTransactionId,
+  TransactionId,
+} from "@vision/types/brands";
 
 export interface ExecutePlannedArgs {
-  id: number;
-  executedTransactionId: number;
+  id: PlannedTransactionId;
+  executedTransactionId: TransactionId;
   /** 'YYYY-MM-DD'; defaults to today in the app timezone. */
   executionDate?: string | undefined;
   /** Auto-match snapshot; reject if another execution advanced the occurrence. */
