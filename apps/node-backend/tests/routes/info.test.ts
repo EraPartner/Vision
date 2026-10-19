@@ -621,7 +621,6 @@ describe("Info Routes", () => {
                 fetched_at: "2026-04-10T08:30:00.000Z",
               },
             ],
-            fallback_rates: { USD: 1.1 },
             source: "database",
             is_stale: true,
             last_fetched_at: "2026-04-10T08:30:00.000Z",

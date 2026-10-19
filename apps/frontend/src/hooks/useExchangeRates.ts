@@ -1,8 +1,7 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 /**
  * FX freshness status for the banner. Client-side conversion lives in
- * `useCurrencyConverter` (stored rates only); the unused rate-map hook that
- * merged the hard-coded `fallback_rates` was removed (ADR-216).
+ * `useCurrencyConverter` (stored rates only, ADR-216).
  */
 
 import { useQuery } from "@tanstack/react-query";

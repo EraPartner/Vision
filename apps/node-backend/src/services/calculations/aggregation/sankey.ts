@@ -19,6 +19,11 @@
 
 import { getSankeyAggregates } from "../../../repositories/infoRepositorySankey.ts";
 import { convertRowsToEur } from "../../currency/currencyConversionService.ts";
+import {
+  createUnconvertedTally,
+  partitionConvertedRows,
+  unconvertedFields,
+} from "../../../lib/unconvertedTally.ts";
 import { buildEnvelope } from "./_envelope.ts";
 import { assertNoNaN } from "./_invariants.ts";
 import { roundMoney } from "../../../lib/money.ts";
@@ -61,19 +66,29 @@ export async function computeSankeyFlow({
 
   if (!groupedRows.length) {
     return buildEnvelope(
-      { nodes: [], links: [], year: targetYear },
+      {
+        nodes: [],
+        links: [],
+        year: targetYear,
+        ...unconvertedFields(createUnconvertedTally()),
+      },
       { source: "live" },
     );
   }
 
-  // Convert to target currency
-  const rows = await convertRowsToEur(
-    groupedRows.map((r) => ({
-      ...r,
-      amount: Math.abs(parseFloat(r.amount)),
-    })),
-    targetCurrency,
+  // Convert to target currency. A group without a stored rate is left out of
+  // the graph and counted, never drawn at its native amount.
+  const { converted: rows, unconverted } = partitionConvertedRows(
+    await convertRowsToEur(
+      groupedRows.map((r) => ({
+        ...r,
+        amount: Math.abs(parseFloat(r.amount)),
+      })),
+      targetCurrency,
+    ),
+    (row) => parseInt(row.cnt, 10) || 0,
   );
+  const unconvertedSummary = unconvertedFields(unconverted);
 
   // Accumulate totals
   let totalIncome = 0;
@@ -83,7 +98,7 @@ export async function computeSankeyFlow({
   >();
 
   for (const row of rows) {
-    const eur = parseFloat(String(row.amount_eur ?? row.amount));
+    const eur = row.amount_eur;
     if (row.is_income) {
       totalIncome += eur;
     } else {
@@ -106,7 +121,7 @@ export async function computeSankeyFlow({
 
   if (totalIncome === 0 && spendingByCategory.size === 0) {
     return buildEnvelope(
-      { nodes: [], links: [], year: targetYear },
+      { nodes: [], links: [], year: targetYear, ...unconvertedSummary },
       { source: "live" },
     );
   }
@@ -219,7 +234,7 @@ export async function computeSankeyFlow({
       : []),
   ];
 
-  const data = { nodes, links, year: targetYear };
+  const data = { nodes, links, year: targetYear, ...unconvertedSummary };
   assertNoNaN(data, "computeSankey");
   return buildEnvelope(data, { source: "live" });
 }

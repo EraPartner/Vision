@@ -7,6 +7,10 @@ import { queryRows } from "../database/rowContracts.ts";
 import { plannedTransactionListRowSchema } from "../database/rowSchemas.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
+  partitionConvertedRows,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
+import {
   todayAppDateString,
   firstOfMonthYmd,
   addDaysYmd,
@@ -170,9 +174,13 @@ export const plannedRepository = {
       endYmd,
     ]);
 
-    const plannedConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(plannedRows, "amount", false),
-      targetCurrency,
+    // A planned row without a stored rate is left out of every day and the
+    // summary, and counted (rows, like GET /api/planned-transactions/totals).
+    const { converted: plannedConverted, unconverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(plannedRows, "amount", false),
+        targetCurrency,
+      ),
     );
 
     // The day totals are Decimal-or-number (PlannedDay); `toDecimal` returns a
@@ -260,6 +268,7 @@ export const plannedRepository = {
         net_amount: roundToCents(totalIncome.plus(totalExpenses)),
         transaction_count: occurrenceCount,
       },
+      ...unconvertedFields(unconverted),
     };
   },
 };

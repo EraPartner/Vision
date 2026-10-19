@@ -225,6 +225,16 @@ migration SQL (`bun run db:lint`) and `kysely-codegen` generates the database ty
 taken after the switch restore. See [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]
 and [[docs/guides/migrations|Database Migration Guide]].
 
+### 2026-10-19 — Proportional CI (ADR-221)
+
+CI runs seven jobs instead of about 22. `Repo Checks` and `CI Complete` run on every diff, while
+`Lint`, `Type Check`, the frontend tests and `Test (Backend)` run on code diffs. Pull requests
+split the frontend suite over two shards without coverage; pushes to `main` enforce the coverage
+ratchet. Trivy and the Quality Gate job were removed. Dependabot opens one grouped pull request per
+ecosystem. Release verification requires a passing `CI Complete` on the tagged commit instead of
+re-running the suites. See [[docs/adr/221-proportional-ci|ADR-221]] and
+[[docs/guides/cicd-pipelines|CI/CD Pipelines]].
+
 ### 2026-09-04 — Balance-Provenance Lateral Naming (ADR-118)
 
 The account-level balance SQL export is now `BALANCE_PROVENANCE_LATERAL`, matching its actual `anchor_date` and `post_anchor_count` output. Per-currency helpers remain the source of numeric balances. See [[docs/adr/118-balance-provenance-lateral-naming|ADR-118]].
@@ -604,6 +614,10 @@ See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-com
 - Resource ceilings (`mem_limit: 4g`, `cpus: 4.0`)
 - Container healthcheck via `/health` endpoint
 - CI image scanning via Trivy on every push/PR (CRITICAL/HIGH, exit-code 1, ignore-unfixed)
+
+> [!history]
+> The container image and its Trivy scan were later retired (ADR-133, then
+> [[docs/adr/221-proportional-ci|ADR-221]] for the remaining Trivy filesystem scan).
 
 Surfaces accidental writes; prevents RCE-to-root escalation; attachments persist across rebuilds; CI blocks releases on critical CVEs.
 

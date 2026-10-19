@@ -6,7 +6,7 @@ date: 2026-10-19
 updated: 2026-10-19
 tags:
   [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
-description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability at the canonical /admin/exchange-rates route.
+description: Exchange rate viewing and management with the latest stored ECB rates and manual refresh at the canonical /admin/exchange-rates route. Since 2026-10-19 conversions use stored rates only; the built-in fallback rates and their tab are gone.
 aliases: [FX rates, currency rates, exchange rates page]
 related_code:
   - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
@@ -19,10 +19,12 @@ related_code:
 
 ## Overview
 
-The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section) displays current
-exchange rates from the European Central Bank (ECB) and hardcoded fallback rates. It allows
-viewing, comparing, and manually refreshing the exchange rates used throughout the application for
-currency normalization. It lives under admin mode because it inspects/manages the FX rate feed
+The Exchange Rates page (`/admin/exchange-rates`, in the admin-mode section) displays the latest
+stored exchange rates from the European Central Bank (ECB) and its supplementary source. It allows
+viewing and manually refreshing the exchange rates used throughout the application for currency
+normalization. These stored rates are the only rates conversions use: a currency without one is
+unavailable and flagged where it is shown, never converted at a built-in rate
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). It lives under admin mode because it inspects/manages the FX rate feed
 rather than being a per-user portfolio task (conversion itself happens automatically everywhere).
 The retired `/portfolio/exchange-rates` alias now renders Not Found.
 
@@ -35,21 +37,23 @@ Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `
 #### Summary Cards
 
 1. **Stored Rates**: Total number of rates in the database
-2. **Fallback Currencies**: Number of hardcoded fallback currencies
-3. **Latest Fetch**: Date of the most recent rate fetch and timestamp
+2. **Latest Fetch**: Date of the most recent rate fetch and timestamp
+
+The former **Fallback Currencies** card was removed on 2026-10-19.
 
 Summary cards stack below the extra-large breakpoint. Counts and rate values follow the selected number format; dates follow the selected date format. The **100 Units in EUR** column always uses EUR, independent of the preferred display currency.
 
-#### Tabs
+#### Rates table
 
-- **Live Rates**: Table of current ECB rates with columns:
-  - Currency code
-  - Unit to EUR (rate_to_eur)
-  - EUR to Unit (1 / rate_to_eur)
-  - 100 Units in EUR
-- **Fallback Rates**: Table of hardcoded fallback rates (same columns)
+One table of the latest stored rates, with columns:
 
-The active tab (`live` | `fallback`) is mirrored to `?tab=` via [[docs/components/hooks#usetabparam-aug-2026|useTabParam]] (Aug 2026), so reload/Back keep the tab the user was viewing.
+- Currency code
+- Unit to EUR (rate_to_eur)
+- EUR to Unit (1 / rate_to_eur)
+- 100 Units in EUR
+
+With no stored rates the page shows an empty state with a **Refresh** action. The Live/Fallback
+tabs and their `?tab=` state were removed on 2026-10-19 together with the built-in rates.
 
 #### Refresh Button
 
@@ -57,7 +61,7 @@ Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.
 
 #### Global stale-rate warning
 
-`FxStatusBanner` appears in the application layout when stored rates are stale or fallback rates are in use. The admin page relies on this single warning instead of repeating it inside the page. It shows the last successful fetch time when available. Its inline **Refresh** button calls the same `POST /api/info/exchange-rates/refresh` endpoint as the admin page, invalidates both exchange-rate cache families, and reloads the banner status. Success and failure are reported with localized toasts. Dismissing the warning still suppresses it locally for one hour.
+`FxStatusBanner` appears in the application layout when stored rates are stale or none are stored (`source: "fallback"`), in which case it says that amounts in other currencies can't be converted. The admin page relies on this single warning instead of repeating it inside the page. It shows the last successful fetch time when available. Its inline **Refresh** button calls the same `POST /api/info/exchange-rates/refresh` endpoint as the admin page, invalidates both exchange-rate cache families, and reloads the banner status. Success and failure are reported with localized toasts. Dismissing the warning still suppresses it locally for one hour.
 
 ### Backend Endpoints
 
@@ -73,17 +77,19 @@ Returns cached exchange rates from the database:
   "rates": [
     { "currency": "USD", "rate_to_eur": 0.92, "rate_date": "2026-04-01", "fetched_at": "2026-04-01T10:00:00Z" }
   ],
-  "fallback_rates": { "USD": 0.92, "GBP": 1.17, ... }
+  "source": "database",
+  "is_stale": false,
+  "last_fetched_at": "2026-04-01T10:00:00Z"
 }
 ```
 
-The data also carries `source` (`database`, or `fallback` when nothing is stored), `is_stale` and
-`last_fetched_at` (the `ExchangeRates` schema in `openapi.yaml`, inside the ADR-026 envelope).
+`source` is `database`, or `fallback` when nothing is stored (only EUR amounts can then be
+converted); `is_stale` and `last_fetched_at` complete the `ExchangeRates` schema in
+`openapi.yaml`, inside the ADR-026 envelope.
 
-`fallback_rates` feeds the admin page's Fallback tab and count. Since 2026-10-19 the web
-`useCurrencyConverter` hook converts with stored rates only and no longer merges these constants,
-and server-owned display totals convert at the latest stored rates
-([[docs/integrations/currency-conversion|Currency Conversion]],
+The `fallback_rates` field (the server's hard-coded constants) was removed on 2026-10-19. The web
+`useCurrencyConverter` hook and the server-owned display figures convert at the latest stored rates
+only ([[docs/integrations/currency-conversion|Currency Conversion]],
 [[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
 
 **Auto-refresh logic**: If stored rates are from a previous day, the endpoint clears the memory cache and triggers a background `warmCache()` call to fetch fresh rates. With `db_only=true` (also `1`) it serves the stored rates without that refresh; the admin page asks for it.
@@ -108,13 +114,18 @@ Forces a fresh fetch from the ECB API:
 - Covers ~33 currencies
 - Parsed using regex-based XML parser handling both single-quoted and double-quoted attribute formats
 
-### Fallback: Hardcoded Rates
+### Supplementary: open.er-api.com
 
-Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currency/currencyConversionService.ts]]`:
+Fills currencies ECB does not publish (Gulf, South Asian and African currencies, among others).
+ECB takes priority on overlap.
 
-- Covers ~40 currencies
-- Used when ECB data is unavailable or for rare currencies
-- Updated manually when significant rate changes occur
+### No built-in rates (2026-10-19)
+
+The `FALLBACK_RATES` constant was removed from
+`[[apps/node-backend/src/services/currency/currencyConversionService.ts]]`; the Belgian tax
+dashboards, its last readers, now use stored rates too. An amount without a stored rate is left
+out of totals and flagged, never added 1:1; see
+[[docs/integrations/currency-conversion|Currency Conversion]].
 
 ## Data Model
 

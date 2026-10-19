@@ -42,6 +42,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
       scheduledActual: [],
       plannedCurrent: [],
       historyMonths,
+      unconverted: { count: 0, currencies: new Set<string>() },
     })),
     getCashflowForecastData: vi.fn(),
     getCashflowForecastDataByCategory: vi.fn(),

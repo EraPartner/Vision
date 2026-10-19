@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 
+// Latest stored rates: 1 USD = 0.5 EUR.
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
-  loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
-  convertWithRates: vi.fn((amount, from, to) =>
-    from === to ? amount : Number(amount) * 0.5,
-  ),
+  listLatestStoredRates: vi.fn(async () => ({
+    rows: [
+      {
+        currency_code: "USD",
+        rate_to_eur: "0.5",
+        rate_date: "2026-06-01",
+        fetched_at: "2026-06-01T10:00:00Z",
+      },
+    ],
+  })),
 }));
 
 vi.mock("../src/database/connection.ts", () =>

@@ -369,7 +369,7 @@ reclaim and net-cost estimates are marked incomplete until every included row is
 
 ### Cross-Currency Normalization
 
-All monetary displays on the Portfolio Tax page are converted to `appSettings.defaultCurrency` using live exchange rates from `/api/info/exchange-rates`. The yearly cost trend, total realized / unrealized gain, and tax/fee breakdowns now consistently apply the conversion (an earlier path mixed transaction-native currencies into the chart).
+All monetary displays on the Portfolio Tax page are converted to `appSettings.defaultCurrency` by the server at the latest stored exchange rates. The yearly cost trend, total realized / unrealized gain, and tax/fee breakdowns now consistently apply the conversion (an earlier path mixed transaction-native currencies into the chart). Since 2026-10-19 an amount without a stored rate is left out rather than added 1:1. The dashboards list its currency in `unconvertedCurrencies` and the affected fields in `incompleteFigures`, and the Tax overview and Portfolio Tax pages show "Incomplete: no exchange rate is stored for …" under their disclaimer.
 
 ---
 

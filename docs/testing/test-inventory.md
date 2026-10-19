@@ -169,7 +169,7 @@ Expanded to cover additional boot-time endpoints so more pages render without pe
 | `/api/planned-transactions`                               | Paginated list envelope                       | **Phase A** |
 | `/api/investments`                                        | Paginated list envelope                       | **Phase A** |
 | `/api/aggregations/:name`                                 | Null envelope                                 | **Phase A** |
-| `/api/info/exchange-rates`                                | { rates, fallback_rates, base, date }         | **Phase A** |
+| `/api/info/exchange-rates`                                | { total_rates, rates, source, is_stale }      | **Phase A** |
 | `/api/market/news`                                        | { articles: [] }                              | **Phase A** |
 | `/api/import/batches`                                     | { items: [], total: 0, limit, offset }        | **Phase A** |
 | `/api/admin/endpoint-liveness`                            | { items: [], total: 0 }                       | Phase 0     |
@@ -424,7 +424,7 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
   - PlannedTransactionItemSchema: 25+ fields including loan/recurrence config
 - Planned: array of objects
 - Aggregations: nullable blob
-- Exchange-Rates: `{ rates[{currency, rate_to_eur, rate_date, fetched_at}], fallback_rates, base, date }`
+- Exchange-Rates: `{ total_rates, rates[{currency, rate_to_eur, rate_date, fetched_at}], source, is_stale, last_fetched_at }`
 - Market News: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
 - Import Batches: `{ batches[], total }`
 - Portfolio Summary: `{ currency, computed_at, totals{10 fields}, summaries[] }`

@@ -29,6 +29,10 @@ import {
   mapRowsForAmountConversion,
   convertRowsWithHistoricalRateFallback,
 } from "./infoRepositoryHelpers.ts";
+import {
+  createUnconvertedTally,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
 import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
 
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
@@ -338,13 +342,17 @@ export const netWorthRepository = {
     ]);
 
     // Convert the current-point balances at today's date so the historical-rate
-    // lookup keys on the same day the headline represents.
+    // lookup keys on the same day the headline represents. A balance without a
+    // stored rate is left out of every figure and its currency listed in
+    // `unconvertedCurrencies`, never added 1:1.
+    const unconverted = createUnconvertedTally();
     const [bankHistoryConvertedInitial, currentBalancesConverted] =
       await Promise.all([
         convertRowsWithHistoricalRateFallback(
           mapRowsForAmountConversion(bankHistoryRows, "balance"),
           targetCurrency,
           "day",
+          unconverted,
         ),
         convertRowsWithHistoricalRateFallback(
           mapRowsForAmountConversion(
@@ -371,6 +379,7 @@ export const netWorthRepository = {
           ),
           targetCurrency,
           "day",
+          unconverted,
         ),
       ]);
     // The transaction-flow fallback below projects different columns; the
@@ -487,6 +496,7 @@ export const netWorthRepository = {
         mapRowsForAmountConversion(liquidFlowRows, "value"),
         targetCurrency,
         "day",
+        unconverted,
       );
     }
 
@@ -628,6 +638,8 @@ export const netWorthRepository = {
       monthlyChange: roundToCents(monthlyChange),
       monthlyChangePercent: roundToCents(monthlyChangePercent),
       snapshots: sanitizedSnapshots,
+      unconvertedCurrencies:
+        unconvertedFields(unconverted).unconverted_currencies,
     };
   },
 };

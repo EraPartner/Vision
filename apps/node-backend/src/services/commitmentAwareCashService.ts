@@ -129,15 +129,22 @@ export async function computeCommitmentAwareCash({
       }
     }
   }
-  const convertedOccurrences = occurrences.map((occurrence) => ({
-    date: occurrence.date,
-    amount: convertWithRates(
+  // Every currency was checked above, so a missing rate cannot reach here;
+  // fail closed rather than add an amount 1:1 if it ever does.
+  const convertedOccurrences = occurrences.map((occurrence) => {
+    const amount = convertWithRates(
       occurrence.amount,
       occurrence.currency,
       target,
       rates,
-    ),
-  }));
+    );
+    if (amount === undefined) {
+      throw new Error(
+        `Cash estimate unavailable: no exchange rate for ${occurrence.currency}`,
+      );
+    }
+    return { date: occurrence.date, amount };
+  });
 
   return {
     currency: target,

@@ -65,7 +65,7 @@ cloud "Build & Distribution" as DevToolsCloud {
   node "electron-builder\n(ad hoc signing)" as Builder
   node "GitHub Releases\n(trusted publisher)" as GitHubReleases
   node "Vitest 4 + property tests" as Vitest
-  node "Trivy filesystem scan" as Trivy
+  node "gitleaks / dependency audits / CodeQL" as SecurityScans
   node "ESLint / openapi-typescript" as Lint
 }
 

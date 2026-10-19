@@ -636,6 +636,7 @@ describe("orchestrator computeCashflowForecast", () => {
             plannedCurrent: [],
             plannedHist: [],
             historyMonths: 36,
+            unconverted: { count: 0, currencies: new Set<string>() },
           }),
         },
       };
@@ -683,6 +684,7 @@ describe("orchestrator computeCashflowForecast", () => {
             plannedCurrent: [],
             plannedHist: [],
             historyMonths: 36,
+            unconverted: { count: 0, currencies: new Set<string>() },
           }),
         },
       };
@@ -711,6 +713,7 @@ describe("orchestrator computeCashflowForecast", () => {
             plannedCurrent: [],
             plannedHist: [],
             historyMonths: 36,
+            unconverted: { count: 0, currencies: new Set<string>() },
           }),
         },
       };

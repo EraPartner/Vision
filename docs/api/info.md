@@ -178,6 +178,11 @@ Get planned expenses for next month.
 
 ---
 
+Additive (2026-10-19): a planned row whose currency has no stored rate is left out of the totals,
+never added 1:1. `unconverted_count` counts those planned rows and `unconverted_currencies` lists
+their currencies.
+
+
 ### ~~GET /api/info/average-vs-current-spending~~ _(removed — use `/api/aggregations/average-vs-current`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/average-vs-current`]] instead.
@@ -467,6 +472,7 @@ Notes:
 - Historical conversion is date-aware for both bank history and portfolio history using each snapshot `day`.
 - FX changes are reflected over time in historical snapshots (instead of applying only latest rates).
 - If historical conversion fails for a snapshot set, conversion retries with latest available rates so net worth data still loads.
+- An account balance whose currency has no stored rate is left out of `liquid`, `liabilities` and the snapshots, never added 1:1. Additive (2026-10-19): `unconvertedCurrencies` lists those currencies; it is empty when every balance converted.
 - When bank-account balance snapshots are unavailable, liquid net worth falls back to cumulative transaction flow (date- and currency-aware) so snapshots remain populated instead of returning empty liquid history.
 - Regression coverage includes a transactions-only (no investments) case to ensure `/api/info/net-worth` still returns non-zero liquid/net worth when transaction data exists ([[apps/node-backend/tests/infoRepository.test.ts]]).
 - Latest snapshot investment value is reconciled from active investment holdings (`units` × `current_price` for unit-based assets, principal-based for savings/bonds, plus appreciation for real estate) so current net worth is not stuck at `0` when historical portfolio aggregation is sparse.
@@ -574,7 +580,8 @@ Get the latest stored exchange rate per currency from the database
 Notes:
 
 - When the stored rates are stale and `db_only` is not set, the backend clears its in-memory rate cache and starts a background refresh; the response never waits for it.
-- `source` is `database` when stored rates exist and `fallback` when there are none. `fallback_rates` carries the server's hard-coded constants; since 2026-10-19 the web app no longer merges them into its client-side converter (`useCurrencyConverter` uses stored rates only, ADR-216), so a currency without a stored rate is shown as unavailable rather than converted at a stale constant.
+- `source` is `database` when stored rates exist and `fallback` when there are none; only EUR amounts can then be converted. Conversions on the server and in the web app use stored rates only (ADR-216): a currency without a stored rate is unavailable and flagged, never converted at a built-in constant.
+- Contract change (2026-10-19, breaking for readers of the field): the `fallback_rates` field (the server's hard-coded constants) was removed from the response. The web app was its only reader (the removed Fallback tab of the admin Exchange Rates page).
 - `is_stale` is `true` when the stored rate date is before today, or when nothing is stored.
 - `last_fetched_at` is the latest `fetched_at` of the returned rows as an ISO timestamp, or `null` when there are none.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the response and documents `db_only`, `source`, `is_stale` and `last_fetched_at`, which the route already returned or accepted. It drops the `base` and `month` query parameters, which the route never read.
@@ -599,7 +606,6 @@ Notes:
       "fetched_at": "2025-03-18T10:30:00Z"
     }
   ],
-  "fallback_rates": { "USD": 0.917, "GBP": 1.176 },
   "source": "database",
   "is_stale": false,
   "last_fetched_at": "2025-03-18T10:30:00.000Z"

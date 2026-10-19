@@ -112,6 +112,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
         accountCurrency: "USD",
         balance: 100,
         balanceCurrency: "EUR",
+        unconvertedCurrencies: [],
       },
     ]);
   });
@@ -185,6 +186,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
         accountCurrency: "EUR",
         balance: 150,
         balanceCurrency: "EUR",
+        unconvertedCurrencies: [],
       },
     ]);
     // The EUR partition is already in the target and must not hit FX at all.
@@ -215,6 +217,7 @@ describe("assembleRebalanceInputs (ADR-098)", () => {
         accountCurrency: "EUR",
         balance: 0,
         balanceCurrency: "EUR",
+        unconvertedCurrencies: [],
       },
     ]);
   });

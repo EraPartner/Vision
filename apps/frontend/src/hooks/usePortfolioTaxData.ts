@@ -159,6 +159,7 @@ function localizeDashboard(
         taxTable: dashboard.taxTable,
         isEmpty: dashboard.isEmpty,
         hasInKindIncomeUnclassified: dashboard.hasInKindIncomeUnclassified,
+        unconvertedCurrencies: dashboard.unconvertedCurrencies,
         taxBreakdown: entries(dashboard.taxBreakdown),
         feeBreakdown: entries(dashboard.feeBreakdown),
         taxByAssetClass,

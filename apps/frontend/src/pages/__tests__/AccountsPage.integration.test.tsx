@@ -409,6 +409,18 @@ describe("AccountsPage (integration, grouped list)", () => {
                             gainLoss: 250,
                         },
                     ],
+                    accountTotals: [
+                        {
+                            account_id: 4,
+                            assignment: "account",
+                            oversold: false,
+                            currentValue: 1250,
+                            totalInvested: 1000,
+                            realizedGain: 20,
+                            unrealizedGain: 230,
+                            gainLoss: 250,
+                        },
+                    ],
                 }),
             ),
         );

@@ -183,7 +183,6 @@ describe("useCurrencyConverter", () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
             rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
-            fallback_rates: {},
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -194,7 +193,6 @@ describe("useCurrencyConverter", () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
             rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
-            fallback_rates: {},
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -207,7 +205,6 @@ describe("useCurrencyConverter", () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 0,
             rates: [],
-            fallback_rates: {},
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -218,7 +215,6 @@ describe("useCurrencyConverter", () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 0,
             rates: [],
-            fallback_rates: {},
         });
         const { result } = renderHook(() => useCurrencyConverter("EUR"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -232,7 +228,6 @@ describe("useCurrencyConverter", () => {
         vi.spyOn(apiClient, "getExchangeRates").mockResolvedValue({
             total_rates: 1,
             rates: [{ currency: "USD", rate_to_eur: 0.9, rate_date: "2025-01-01", fetched_at: "2025-01-01T00:00:00.000Z" }],
-            fallback_rates: {},
         });
         const { result } = renderHook(() => useCurrencyConverter("GBP"), { wrapper: makeQueryWrapper() });
         await waitFor(() => expect(result.current.isLoading).toBe(false));

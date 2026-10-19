@@ -170,6 +170,8 @@ export const NetWorthSchema = z.looseObject({
   snapshotsTotal: CountSchema.optional(),
   snapshotsLimit: z.number().int().positive().optional(),
   snapshotsOffset: CountSchema.optional(),
+  /** Balances left out for want of a stored rate (ADR-216); empty when none. */
+  unconvertedCurrencies: z.array(z.string()),
 });
 
 /** `GET /api/info/net-worth/by-account` — services/info/netWorthByAccount.ts. */
@@ -202,7 +204,6 @@ export const ExchangeRatesSchema = z.looseObject({
       fetched_at: z.string(),
     }),
   ),
-  fallback_rates: z.record(z.string(), z.number()),
   source: z.enum(["database", "fallback"]),
   is_stale: z.boolean(),
   last_fetched_at: z.string().nullable(),

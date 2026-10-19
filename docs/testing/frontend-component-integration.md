@@ -2,8 +2,8 @@
 title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 last-updated: 2026-09-24
 last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
@@ -263,6 +263,12 @@ Add new defaults sparingly — most flows belong in per-test overrides via `serv
 | Lines      | 64%                  |
 
 The measured scope includes components, hooks, libraries, pages, utilities, features, contexts, stores, and `App.tsx`. `main.tsx` and `theme-flash.ts` are explicitly excluded because importing either immediately performs boot-time document side effects; their dependencies remain measured, but their boot execution is outside the Vitest coverage gate. Thresholds follow the config's `floor(measured) - 2` convention, so they act as a regression ratchet rather than an aspirational target.
+
+CI enforces the gate on every push to `main`, in the single `Test (Frontend 1/1)` run. Pull requests
+run the suite split over two shards without coverage and receive no frontend coverage comment, so a
+threshold drop surfaces on `main` after merge. Run `bun run test:coverage` locally before merging a
+change that may lower coverage. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]] and
+[[docs/adr/221-proportional-ci|ADR-221]].
 
 ## Dialog Component Integration Tests (2026-05-01 — Phase A)
 

@@ -80,6 +80,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
         })),
         plannedCurrent: [],
         historyMonths,
+        unconverted: { count: 0, currencies: new Set<string>() },
       }),
     ),
     getCashflowForecastData: vi.fn(),
@@ -239,6 +240,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
         })),
         plannedCurrent: [],
         historyMonths,
+        unconverted: { count: 0, currencies: new Set<string>() },
       }) as Partial<RollingData> as RollingData,
     );
   });
@@ -382,6 +384,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
         })),
         plannedCurrent: [],
         historyMonths,
+        unconverted: { count: 0, currencies: new Set<string>() },
       }) as Partial<RollingData> as RollingData,
     );
   });

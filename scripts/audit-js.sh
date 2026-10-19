@@ -2,7 +2,7 @@
 #
 # Single source of truth for the JS dependency audit.
 #
-# Both the CI "Deps Audit (JS)" job (.github/workflows/ci.yml) and the release
+# Both the CI "Lint" job (.github/workflows/ci.yml) and the release
 # "verify" job (.github/workflows/release.yml) call this script instead of each
 # spelling out their own `bun audit` invocation. Previously they diverged — CI
 # carried --ignore flags while release ran a plain `bun audit --audit-level=high`

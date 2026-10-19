@@ -50,6 +50,7 @@ import {
   commitImport,
 } from "../src/services/importPipeline/index.ts";
 import { accountService } from "../src/services/accountService.ts";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 
 // Neither the MV refresh (this database has no materialized views) nor the
@@ -182,6 +183,7 @@ async function wipe() {
   await pool!.query(`DELETE FROM recipients`);
   await deleteAllCategoryFixtures(pool!);
   await pool!.query(`DELETE FROM accounts`);
+  await pool!.query(`DELETE FROM exchange_rates`);
 }
 
 describeDb("Revolut multi-currency import (real DB)", () => {
@@ -233,6 +235,12 @@ describeDb("Revolut multi-currency import (real DB)", () => {
 
   it("anchors each currency on its own stamps — a USD statement figure never anchors EUR", async () => {
     await importExport(EXPORT_V1);
+    // computed_balance converts at the latest stored rate only.
+    await pool!.query(
+      `INSERT INTO exchange_rates (currency_code, rate_to_eur, rate_date, is_latest)
+       VALUES ('USD', '0.5', CURRENT_DATE, true)`,
+    );
+    clearMemoryCache();
     const account = await hubAccount();
 
     // `reconcilable_balance` is the hub's NATIVE (unconverted) figure for the
@@ -248,10 +256,9 @@ describeDb("Revolut multi-currency import (real DB)", () => {
 
     // The USD partition anchors on its own stamp and is NOT reduced by the
     // later EUR row: computed_balance is the FX-converted sum of both
-    // partitions, so it must exceed the EUR partition by a positive USD 260
-    // (whatever today's rate). Under a collapse there is only one partition and
-    // the total IS the (single) balance.
-    expect(account.computed_balance).toBeGreaterThan(220);
+    // partitions, 220 EUR + 260 USD × 0.5 = 350. Under a collapse there is only
+    // one partition and the total IS the (single) balance.
+    expect(account.computed_balance).toBe(350);
 
     // Provenance stays account-level: the newest stamp of any currency.
     expect(account.anchor_date).toBe("2026-03-03");

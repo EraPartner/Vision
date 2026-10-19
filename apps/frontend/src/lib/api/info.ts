@@ -432,6 +432,8 @@ export interface PortfolioSummaryItem {
     fullyAssigned: boolean;
     oversold: boolean;
     byAccount: PortfolioSummaryByAccountItem[];
+    /** This holding's server figures per broker account (broker filter). */
+    accountTotals: PortfolioSummaryAccountTotals[];
 }
 
 /** Server totals of a set of holdings (sums of the rounded summary figures). */
@@ -490,12 +492,20 @@ export interface PortfolioSummaryByAccountItem {
     gainLoss: number;
 }
 
+/** One broker account's figures, every contribution kind summed on the server. */
+export type PortfolioSummaryAccountTotals = Omit<
+    PortfolioSummaryByAccountItem,
+    "contribution_kind"
+>;
+
 export interface PortfolioSummaryResponse {
     currency: string;
     computed_at: string;
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
     byAccount: PortfolioSummaryByAccountItem[];
+    /** Portfolio-wide figures per broker account (broker filter subtotals). */
+    accountTotals: PortfolioSummaryAccountTotals[];
     /** Totals per asset class present in `summaries`. */
     byAssetClass: PortfolioAssetClassTotals[];
     /** Totals per asset page group, all five groups always present. */
@@ -571,7 +581,6 @@ export interface ExchangeRate {
 export interface ExchangeRatesData {
     total_rates: number;
     rates: ExchangeRate[];
-    fallback_rates: Record<string, number>;
     source?: "database" | "fallback";
     is_stale?: boolean;
     last_fetched_at?: string | null;

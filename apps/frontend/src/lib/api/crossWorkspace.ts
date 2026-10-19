@@ -51,7 +51,11 @@ export interface RebalanceResponse {
         accountCurrency: string;
         balance: number;
         balanceCurrency: string;
+        /** Partitions left out of `balance` for want of a stored rate (ADR-216). */
+        unconvertedCurrencies: string[];
     }>;
+    /** Cash partitions left out of `availableCash` for want of a stored rate. */
+    unconvertedCurrencies: string[];
     /** Per-sleeve cash to deploy (only underweight sleeves appear). */
     deployment: Record<string, number>;
 }

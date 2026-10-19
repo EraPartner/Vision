@@ -110,123 +110,77 @@ test("fails closed when cancellation event identity is incomplete", () => {
   );
 });
 
-test("both workflow aggregation gates call the shared policy with read-only PR access", () => {
-  const workflow = fs.readFileSync(
+function readCiWorkflow(): string {
+  return fs.readFileSync(
     path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
     "utf8",
   );
-  const qualityGate = workflowJob(workflow, "quality-gate");
-  const ciComplete = workflowJob(workflow, "ci-complete");
-  for (const gate of [qualityGate, ciComplete]) {
-    assert.match(gate, /pull-requests: read/);
-    assert.match(gate, /bun scripts\/ci-cancellation-policy\.ts/);
-    assert.match(gate, /EVENT_PR_HEAD_SHA:/);
-    assert.match(gate, /PR_NUMBER:/);
-  }
+}
+
+test("CI Complete calls the shared policy with read-only PR access", () => {
+  const ciComplete = workflowJob(readCiWorkflow(), "ci-complete");
+  assert.match(ciComplete, /pull-requests: read/);
+  assert.match(ciComplete, /bun scripts\/ci-cancellation-policy\.ts/);
+  assert.match(ciComplete, /EVENT_PR_HEAD_SHA:/);
+  assert.match(ciComplete, /PR_NUMBER:/);
 });
 
 test("CI Complete requires the fail-closed branch-protection verifier", () => {
-  const workflow = fs.readFileSync(
-    path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
-    "utf8",
-  );
-  const verifier = workflowJob(workflow, "verify-branch-protection");
+  const workflow = readCiWorkflow();
+  const repoChecks = workflowJob(workflow, "repo-checks");
   const ciComplete = workflowJob(workflow, "ci-complete");
 
-  assert.match(verifier, /Could not read branch rules[\s\S]*Failing closed/);
+  assert.match(repoChecks, /Could not read branch rules[\s\S]*Failing closed/);
   assert.doesNotMatch(
-    verifier,
+    repoChecks,
     /Could not read branch rules[\s\S]{0,300}exit 0/,
   );
-
-  assert.match(ciComplete, /verify-branch-protection/);
   assert.match(
     ciComplete,
-    /BRANCH_PROTECTION_RESULT: \$\{\{ needs\.verify-branch-protection\.result \}\}/,
+    /REPO_CHECKS_RESULT: \$\{\{ needs\.repo-checks\.result \}\}/,
   );
-  assert.match(
-    ciComplete,
-    /require verify-branch-protection "\$BRANCH_PROTECTION_RESULT"/,
-  );
+  assert.match(ciComplete, /require repo-checks "\$REPO_CHECKS_RESULT"/);
 });
 
-test("CI Complete requires native production and filesystem security gates", () => {
-  const workflow = fs.readFileSync(
-    path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
-    "utf8",
-  );
+test("CI Complete requires every code tier, native production checks included", () => {
+  const workflow = readCiWorkflow();
   const ciComplete = workflowJob(workflow, "ci-complete");
-
-  assert.match(
-    ciComplete,
-    /NATIVE_RUNTIME_RESULT: \$\{\{ needs\.native-runtime-verify\.result \}\}/,
-  );
-  assert.match(
-    ciComplete,
-    /require native-runtime-verify "\$NATIVE_RUNTIME_RESULT"/,
-  );
-  assert.match(ciComplete, /require trivy-scan "\$TRIVY_SCAN_RESULT"/);
+  for (const [job, variable] of [
+    ["lint", "LINT_RESULT"],
+    ["typecheck", "TYPECHECK_RESULT"],
+    ["test-frontend", "TEST_FRONTEND_RESULT"],
+    ["test-backend", "TEST_BACKEND_RESULT"],
+  ] as const) {
+    assert.match(
+      ciComplete,
+      new RegExp(`${variable}: \\$\\{\\{ needs\\.${job}\\.result \\}\\}`),
+    );
+    assert.match(ciComplete, new RegExp(`require ${job} "\\$${variable}"`));
+  }
+  const backend = workflowJob(workflow, "test-backend");
+  assert.match(backend, /with-native-stack\.sh curl -fsS http:\/\/127\.0\.0\.1:3002\/health/);
+  assert.match(backend, /with-native-stack\.sh bun run vitest run src\/test\/live-contracts/);
 });
 
-test("jobs downstream of the PR-only Dependency Review still run on pushes", () => {
-  const workflow = fs.readFileSync(
-    path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
-    "utf8",
-  );
-  // A job condition without a status function gets an implicit success(),
-  // which is false once any transitive dependency was skipped. Dependency
-  // Review is skipped outside pull requests, so such a job never runs on a
-  // push to main, and CI Complete then fails on its required result.
+test("PR-only checks never stop jobs from running on pushes", () => {
+  const workflow = readCiWorkflow();
+  // A job-level condition on the event (or a needs edge to such a job) would
+  // skip on a push to main, and CI Complete then fails on its required result.
+  // Dependency Review is PR-only, so it is a step-level condition instead.
   assert.match(
-    workflowJob(workflow, "dependency-review"),
-    /\n    if: github\.event_name == 'pull_request'\n/,
+    workflowJob(workflow, "repo-checks"),
+    /if: github\.event_name == 'pull_request'\n        uses: actions\/dependency-review-action@/,
   );
   const jobs = workflow.slice(workflow.indexOf("\njobs:\n"));
   const names = [...jobs.matchAll(/\n  ([a-z][a-z0-9-]*):\n/g)].map(
     (match) => match[1] ?? "",
   );
-  const needsOf = (name: string): string[] =>
-    workflowJob(workflow, name)
-      .match(/\n    needs:([\s\S]*?)(?=\n    [a-z-]+:)/)?.[1]
-      ?.match(/[a-z][a-z0-9-]*/g) ?? [];
-  const conditionOf = (name: string): string =>
-    workflowJob(workflow, name).match(/\n    if: (.+)/)?.[1] ?? "";
-
-  const downstream = new Set(["dependency-review"]);
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const name of names) {
-      if (
-        !downstream.has(name) &&
-        needsOf(name).some((need) => downstream.has(need))
-      ) {
-        downstream.add(name);
-        grew = true;
-      }
-    }
-  }
-  downstream.delete("dependency-review");
-
-  const gated = [
-    "trivy-scan",
-    "native-runtime-verify",
-    "test-live-api-contracts",
-  ];
-  for (const name of [...gated, "quality-gate", "ci-complete"]) {
-    assert.ok(downstream.has(name), `${name} must depend on dependency-review`);
-  }
-  for (const name of downstream) {
-    assert.match(
-      conditionOf(name),
-      /always\(\)|!cancelled\(\)/,
-      `${name} needs an explicit status function in its if: condition`,
+  for (const name of names) {
+    assert.doesNotMatch(
+      workflowJob(workflow, name),
+      /\n    if: [^\n]*event_name/,
+      `${name} must not be gated on the event at job level`,
     );
   }
-  for (const name of gated) {
-    assert.match(
-      conditionOf(name),
-      /^\$\{\{ !cancelled\(\) && needs\.quality-gate\.result == 'success' && /,
-      `${name} must still wait for a passing Quality Gate`,
-    );
-  }
+  assert.match(workflowJob(workflow, "ci-complete"), /\n    if: always\(\)\n/);
 });

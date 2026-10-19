@@ -279,6 +279,15 @@ head, and Kysely's migrator applies numbered SQL files in-process. The existing 
 adopted only at Alembic `0128` with an identical catalog fingerprint; only backups taken after the
 switch restore. It supersedes ADR-027, ADR-165, ADR-166 and ADR-184.
 
+### 2026-10-19: Proportional CI (accepted)
+
+[[docs/adr/221-proportional-ci|ADR-221]] cuts `ci.yml` from about 22 jobs to seven and removes
+the Quality Gate job. Pull requests run the frontend suite in two shards without coverage; pushes
+to `main` keep the coverage ratchet. Native runtime verification and the live API contracts run
+inside `Test (Backend)`, also on drafts. Trivy is removed from CI and release, Dependabot groups
+updates per ecosystem, and release verification requires a passing `CI Complete` on the tagged
+commit instead of re-running the suites. It supersedes the Trivy part of ADR-050.
+
 ### 2026-10-19: Minimal macOS Electron shell hardening; retire v1 backups (accepted)
 
 [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] makes the shell macOS-only, flips

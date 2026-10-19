@@ -197,8 +197,10 @@ bun run --filter 'vision-frontend' test
 The root command builds the frontend, starts a disposable native PostgreSQL 18 cluster and
 backend, then runs the complete frontend Vitest suite with `LIVE_API_BASE` set. It clears inherited
 database URLs and fails if the native stack cannot start. The workspace command excludes the
-live-contract file; CI runs the same unit suite with coverage and runs the live contracts in its separate native-stack
-job.
+live-contract file. On pull requests CI runs that unit suite split over two runners without
+coverage (`Test (Frontend 1/2)` and `Test (Frontend 2/2)`); on pushes to `main` it runs it once
+with coverage. The live contracts run in the `Test (Backend)` job against a native stack; see
+[[docs/guides/cicd-pipelines|CI/CD Pipelines]].
 
 #### The direct Vitest skip banner
 
@@ -213,10 +215,12 @@ backend:
 ==============================================================================
   LIVE_API_BASE is not set, so the real-backend API contract suite
   self-skipped. This run is NOT equivalent to CI's full-stack
-  "Test (Live API Contracts)" job.
+  "Test (Backend)" live-contract step.
 ==============================================================================
 ```
 
+- Since [[docs/adr/221-proportional-ci|ADR-221]] the live contracts run as a step of the
+  `Test (Backend)` job rather than a job of their own.
 - Counts come from the current run; the reporter does not hardcode the example's 36 tests.
 - Other skipped frontend tests do not trigger this banner.
 - The reporter is silent when `LIVE_API_BASE` is set or the live-contract file is excluded.
@@ -897,7 +901,7 @@ The helper returns `null` when `TEST_DATABASE_URL` is unset, so tests skip grace
 | CI — `Test (Backend)` job | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
 | Local                     | private native PostgreSQL 18 cluster from `scripts/with-test-db.sh` | the same script                     |
 
-Backend vitest runs in exactly one CI job, so the service is wired only there. `quality-gate` runs no tests — it only aggregates results.
+Backend vitest runs in exactly one CI job, so the service is wired only there. `CI Complete` runs no tests — it only aggregates results.
 
 **`DATABASE_URL` must equal `TEST_DATABASE_URL`.** DB-backed suites seed through the _test_ pool (`getTestPool()`), but the code under test queries through the _app_ pool (`src/database/connection.ts`, built from `DATABASE_URL` at import time). Point them at different databases and the seed is invisible to the service. Both the CI job and `with-test-db.sh` set the two to the same value; a suite that depends on it should assert this in `beforeAll` rather than fail mysteriously.
 
@@ -1186,7 +1190,7 @@ Four key testing gotchas discovered during Phase A completion:
 - Paginated list items: `{ items[], total, limit, offset, links[] }` (categories, recipients, transactions, planned-transactions, investments) with strict per-field schemas
 - Resource items: CategoryItemSchema, RecipientItemSchema, TransactionItemSchema, InvestmentItemSchema, PlannedTransactionItemSchema (all with explicit field types, not passthrough)
 - Delete responses: `{ message, links[] }` with optional transaction-specific `details`
-- Exchange rates: `{ rates[{currency, rate_to_eur, rate_date, fetched_at}], fallback_rates, base, date }`
+- Exchange rates: `{ total_rates, rates[{currency, rate_to_eur, rate_date, fetched_at}], source, is_stale, last_fetched_at }`
 - Market news: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
 - Import batches: `{ batches[], total }`
 - Portfolio summary: `{ currency, computed_at, totals{10 numeric fields}, summaries[] }`
@@ -1390,17 +1394,25 @@ it("should process data correctly", () => {
 
 ## CI/CD Integration
 
-Tests run automatically on:
+`.github/workflows/ci.yml` runs the test suites on every code pull request (drafts included) and
+on every push to `main`. Documentation-only diffs skip them. See
+[[docs/guides/cicd-pipelines|CI/CD Pipelines]] for the full job layout.
 
-- Every pull request
-- Every push to main branch
-- Before deployment
+| Suite                                      | CI job                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| Frontend Vitest, pull requests             | `Test (Frontend 1/2)` and `Test (Frontend 2/2)`: two shards, no coverage       |
+| Frontend Vitest, push to `main`            | `Test (Frontend 1/1)`: one run of `test:coverage` with the v8 coverage ratchet |
+| Backend Vitest, DB lifecycle tasks         | `Test (Backend)`, with coverage, on a disposable native PostgreSQL 18 cluster  |
+| Electron and native-runtime contract tests | `Test (Backend)`                                                               |
+| Native health and migration round trip     | `Test (Backend)`                                                               |
+| Live API contracts                         | `Test (Backend)`, against the native production stack                          |
+| Repository script tests                    | `Lint`                                                                         |
+| Shared package tests                       | `Type Check`                                                                   |
 
-```yaml
-# Example GitHub Actions (if configured)
-- name: Run tests
-  run: bun test
-```
+The frontend coverage ratchet is not measured on pull requests. A drop below a threshold fails
+the push run on `main`; run `bun run test:coverage` locally before merging changes that may lower
+coverage. The release workflow does not run tests again; it requires `CI Complete` to have passed
+on the tagged commit ([[docs/adr/221-proportional-ci|ADR-221]]).
 
 ## Debugging Failed Tests
 

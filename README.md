@@ -197,7 +197,7 @@ bun run test                 # backend Vitest suite
 bun run test:db              # backend suite with a private temporary PostgreSQL 18
 bun run test:frontend        # full frontend suite with disposable PostgreSQL 18 and live API contracts
 bun run test:all             # backend + full frontend suites (concurrent)
-bun run test:coverage        # frontend unit/integration coverage report; CI runs live contracts separately
+bun run test:coverage        # frontend unit/integration coverage report; CI enforces it on pushes to main
 bun run test:watch           # backend watch mode with disposable PostgreSQL 18
 
 # Database (Kysely migrator / PostgreSQL)
@@ -306,7 +306,7 @@ When adding new adapters, endpoints, or env vars, update `openapi.yaml`, regener
 
 ## Releases
 
-Tag-driven releases (`vX.Y.Z`) trigger GitHub Actions to build and push release artifacts (container images + Electron packages) and publish a GitHub Release.
+Tag-driven releases (`vX.Y.Z`) trigger GitHub Actions to build the Apple Silicon macOS app and DMG and publish a GitHub Release. The release does not re-run the test suites: it requires the tagged commit, which must be on `main`, to have a passing `CI Complete` check, then re-runs the full-tree secrets scan and the dependency audits before packaging. See [docs/guides/cicd-pipelines.md](docs/guides/cicd-pipelines.md).
 
 Workflow: `.github/workflows/release.yml`
 

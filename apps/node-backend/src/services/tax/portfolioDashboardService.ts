@@ -8,9 +8,9 @@ import { investmentRepository } from "../../repositories/investmentRepository.ts
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.ts";
 import {
-  FALLBACK_RATES,
-  listLatestStoredRates,
-} from "../currency/currencyConversionService.ts";
+  convertAtLatestRates,
+  loadLatestRatesToEur,
+} from "../currency/latestRateConversion.ts";
 import settingsService from "../settingsService.ts";
 import { getTaxOverview } from "./overviewService.ts";
 
@@ -30,7 +30,7 @@ export async function getPortfolioTaxDashboard(
         offset: 0,
         active: false,
       }),
-      listLatestStoredRates(),
+      loadLatestRatesToEur(),
       settingsService.getAllWithBaselines(),
     ]);
   // Match useInvestmentsQuery's first 500 metadata rows, then attach newest 1000 ordinary
@@ -63,23 +63,14 @@ export async function getPortfolioTaxDashboard(
       },
     ];
   }) satisfies PortfolioDashboardInvestment[];
-  const ratesToEur: Record<string, number> = {
-    ...FALLBACK_RATES,
-    EUR: 1,
-    ...Object.fromEntries(
-      rates.rows.map((r) => [r.currency_code, Number(r.rate_to_eur)]),
-    ),
-  };
+  // Latest stored rates only (ADR-216). A currency without one converts to
+  // undefined: the dashboard leaves that amount out and flags the figures it
+  // feeds (`unconvertedCurrencies`, `incompleteFigures`).
   const convert = (amount: number, source?: string) => {
     const from = (source ?? "EUR").toUpperCase();
     if (from === target) return amount;
-    const fromRate = ratesToEur[from],
-      toRate = ratesToEur[target];
-    // Existing useCurrencyConverter display fallback is the original amount.
-    if (!fromRate || !toRate) return amount;
-    // Preserve the existing useCurrencyConverter display formula and order.
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    return (amount * fromRate) / toRate;
+    const converted = convertAtLatestRates(amount, from, target, rates);
+    return converted === undefined ? undefined : converted.toNumber();
   };
   const calculation = overview.calculation as { totalPIT?: unknown };
   if (

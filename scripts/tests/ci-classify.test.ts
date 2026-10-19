@@ -56,20 +56,24 @@ test("empty, unresolvable and special-mode diffs fail closed", () => {
   assert.equal(classifyRange("base", "head", failing), true);
 });
 
-test("the agent check cannot be silently skipped by the quality gate", () => {
+test("the agent check cannot be silently skipped", () => {
   const workflow = fs.readFileSync(
     path.join(import.meta.dirname, "..", "..", ".github/workflows/ci.yml"),
     "utf8",
   );
-  const quality =
-    workflow.split("  quality-gate:")[1]?.split("  build-image:")[0] ?? "";
-  assert.ok(quality.includes("      - agent-tooling"));
+  const repoChecks =
+    workflow.split("\n  repo-checks:\n")[1]?.split("\n  lint:\n")[0] ?? "";
+  const complete = workflow.split("\n  ci-complete:\n")[1] ?? "";
+  // Repo Checks runs on every diff (no job-level condition) and CI Complete
+  // requires it, so the agent check cannot be skipped.
+  assert.ok(repoChecks.length > 0);
+  assert.ok(!repoChecks.includes("\n    if:"));
+  assert.ok(repoChecks.includes("bun scripts/check-agent-instructions.ts"));
   assert.ok(
-    quality.includes("AGENT_TOOLING_RESULT: ${{ needs.agent-tooling.result }}"),
+    complete.includes("REPO_CHECKS_RESULT: ${{ needs.repo-checks.result }}"),
   );
-  assert.ok(quality.includes('case "$AGENT_TOOLING_RESULT" in'));
-  assert.ok(quality.includes("success|cancelled)"));
-  assert.ok(quality.includes("bun scripts/ci-cancellation-policy.ts"));
+  assert.ok(complete.includes('require repo-checks "$REPO_CHECKS_RESULT"'));
+  assert.ok(complete.includes("bun scripts/ci-cancellation-policy.ts"));
 });
 
 test("NUL delimiters, file modes and disabled rename detection are honoured", () => {

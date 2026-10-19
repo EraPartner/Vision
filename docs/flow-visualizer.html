@@ -3821,7 +3821,7 @@
             "id": "github-release",
             "name": "Build & ship a desktop release",
             "category": "Build",
-            "summary": "GitHub Actions verifies the native runtime, builds the Electron bundle, and publishes the macOS release.",
+            "summary": "GitHub Actions requires a passing CI Complete on the tagged main commit, re-runs the secrets scan and dependency audits, builds the Electron bundle, and publishes the macOS release.",
             "steps": [
               {
                 "from": "build.release",
@@ -3839,7 +3839,7 @@
                 "from": "build.release",
                 "to": "build.githubrelease",
                 "payload": "draft assets + checksums, then publish",
-                "annotation": "release.yml checks the tag version and main ancestry, builds the exact verified commit, stages every asset in a draft, rechecks the tag, then publishes. Live immutable-release protection still needs readback."
+                "annotation": "release.yml checks the tag version and main ancestry, requires a successful github-actions CI Complete check run on that commit (ADR-221) instead of re-running the CI suites, builds the exact verified commit, stages every asset in a draft, rechecks the tag, then publishes. Live immutable-release protection still needs readback."
               },
               {
                 "from": "build.githubrelease",

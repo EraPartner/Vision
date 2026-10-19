@@ -46,6 +46,29 @@ describe("getBrokerAccountMetrics", () => {
                         gainLoss: 100,
                     },
                 ],
+                // Server totals per account, every contribution kind summed.
+                accountTotals: [
+                    {
+                        account_id: 4,
+                        assignment: "account",
+                        oversold: false,
+                        currentValue: 1200,
+                        totalInvested: 1000,
+                        realizedGain: 50,
+                        unrealizedGain: 200,
+                        gainLoss: 275,
+                    },
+                    {
+                        account_id: 8,
+                        assignment: "account",
+                        oversold: true,
+                        currentValue: 900,
+                        totalInvested: 800,
+                        realizedGain: 0,
+                        unrealizedGain: 100,
+                        gainLoss: 100,
+                    },
+                ],
             },
             4,
         );
@@ -69,6 +92,7 @@ describe("getBrokerAccountMetrics", () => {
                     byAssetClass: [],
                     byAssetGroup: [],
                     byAccount: [],
+                    accountTotals: [],
                 },
                 4,
             ),

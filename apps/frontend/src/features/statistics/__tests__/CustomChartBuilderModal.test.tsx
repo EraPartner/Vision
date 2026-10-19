@@ -53,6 +53,7 @@ const STATS_DATA: StatisticsData = {
     totalSpending: -700,
     averageMonthlySpending: 0,
     averageMonthlyIncome: 0,
+    unconvertedCount: 0,
 };
 
 const SAVED_CHART: SavedChart = {

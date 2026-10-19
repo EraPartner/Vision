@@ -186,7 +186,6 @@ const ExchangeRateItemSchema = z.object({
 const ExchangeRatesSchema = z.object({
     total_rates: z.number().int().nonnegative(),
     rates: z.array(ExchangeRateItemSchema),
-    fallback_rates: z.record(z.string(), z.unknown()),
     source: z.enum(["database", "fallback"]),
     is_stale: z.boolean(),
     last_fetched_at: z.string().nullable(),
@@ -233,6 +232,7 @@ const PortfolioSummarySchema = z.object({
     totals: PortfolioTotalsSchema,
     summaries: z.array(z.object({}).passthrough()),
     byAccount: z.array(z.object({}).passthrough()),
+    accountTotals: z.array(z.object({}).passthrough()),
 });
 
 // ── Tests: static GET endpoints ───────────────────────────────────────────────

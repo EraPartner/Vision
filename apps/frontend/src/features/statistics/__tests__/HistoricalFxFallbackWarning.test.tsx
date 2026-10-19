@@ -9,6 +9,7 @@ vi.mock("@/stores/hydration/LanguageHydration", () => ({
             key === "common.unknown"
                 ? "Unknown"
                 : `Historical rates unavailable: ${vars?.currencies}`,
+        tc: (key: string, count: number) => `${key}:${count}`,
     }),
 }));
 
@@ -19,6 +20,8 @@ describe("HistoricalFxFallbackWarning", () => {
                 conversion={{
                     usedHistoricalFallback: true,
                     affectedCurrencies: ["GBP", "USD"],
+                    unconvertedCount: 0,
+                    unconvertedCurrencies: [],
                 }}
             />,
         );
@@ -34,10 +37,30 @@ describe("HistoricalFxFallbackWarning", () => {
                 conversion={{
                     usedHistoricalFallback: false,
                     affectedCurrencies: [],
+                    unconvertedCount: 0,
+                    unconvertedCurrencies: [],
                 }}
             />,
         );
 
         expect(container).toBeEmptyDOMElement();
+    });
+
+    it("says how many transactions were left out for want of any rate", () => {
+        render(
+            <HistoricalFxFallbackWarning
+                conversion={{
+                    usedHistoricalFallback: false,
+                    affectedCurrencies: [],
+                    unconvertedCount: 3,
+                    unconvertedCurrencies: ["XYZ"],
+                }}
+            />,
+        );
+
+        expect(
+            screen.getByText("common.fxUnavailableTransactions:3"),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 });
