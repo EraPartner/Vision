@@ -1,6 +1,6 @@
+import { sql } from "kysely";
 import { z } from "zod";
-import { query } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { checkedRows, db } from "../database/db.ts";
 import { pgBigint, pgInt, pgTransactionId } from "../database/rowSchemas.ts";
 import type { ImportedTransactionInput } from "./transactionRepository.ts";
 
@@ -31,15 +31,15 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
     dedup_fingerprint: row.dedupFingerprint,
     dedup_fingerprint_version: row.fingerprintVersion,
   }));
-  const identities = await queryRows(
+  const identities = await checkedRows(
     z.object({
       staging_id: pgBigint,
       duplicate: z.boolean(),
       legacy_count: pgInt,
     }),
-    `
+    sql`
     WITH input AS (
-      SELECT * FROM jsonb_to_recordset($1::jsonb) AS i(staging_id bigint, date date, account_id integer,
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(data)}::jsonb) AS i(staging_id bigint, date date, account_id integer,
         recipient_id integer, amount numeric, normalized_memo text, currency text,
         dedup_fingerprint text, dedup_fingerprint_version smallint)
     )
@@ -53,7 +53,6 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
       AND COALESCE(BTRIM(legacy.memo, E' \\t\\n\\r\\f\\013'), '') = i.normalized_memo
       AND legacy.account_id IS NOT DISTINCT FROM i.account_id AND legacy.currency = i.currency
     GROUP BY i.staging_id, modern.id`,
-    [JSON.stringify(data)],
   );
   const byId = new Map(identities.map((row) => [row.staging_id, row]));
   const seen = new Set<string>();
@@ -75,29 +74,26 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
   });
   const candidateIds = new Set(candidates.map((row) => row.stagingId));
   const inserted = candidates.length > 0
-    ? await queryRows(
+    ? await checkedRows(
         z.object({
           id: pgTransactionId,
           dedup_fingerprint: z.string(),
           dedup_fingerprint_version: pgInt,
         }),
-        `
+        sql`
     INSERT INTO transactions (date, account_id, recipient_id, category_id, amount, memo, currency, balance,
       bank_sequence, comment, import_batch_id, matched_pattern_id, source_record_hash,
       dedup_fingerprint, dedup_fingerprint_version, is_active)
     SELECT date, account_id, recipient_id, category_id, amount, memo, currency, balance,
       bank_sequence, comment, import_batch_id, matched_pattern_id, source_record_hash,
       dedup_fingerprint, dedup_fingerprint_version, true
-    FROM jsonb_to_recordset($1::jsonb) AS i(date date, account_id integer, recipient_id integer,
+    FROM jsonb_to_recordset(${JSON.stringify(
+      data.filter((row) => candidateIds.has(row.staging_id)),
+    )}::jsonb) AS i(date date, account_id integer, recipient_id integer,
       category_id integer, amount numeric, memo text, currency text, balance numeric, bank_sequence numeric,
       comment text, import_batch_id bigint, matched_pattern_id integer, source_record_hash text,
       dedup_fingerprint text, dedup_fingerprint_version smallint)
     ON CONFLICT DO NOTHING RETURNING id, dedup_fingerprint, dedup_fingerprint_version`,
-        [
-          JSON.stringify(
-            data.filter((row) => candidateIds.has(row.staging_id)),
-          ),
-        ],
       )
     : [];
   const insertedByKey = new Map(
@@ -112,15 +108,13 @@ export async function commitFingerprintRows(rows: BulkImportRow[]) {
       ? insertedByKey.get(key(row))
       : undefined,
   }));
-  await query(
-    `UPDATE import_staging_rows s SET status = v.status
-    FROM unnest($1::bigint[], $2::text[]) AS v(id, status) WHERE s.id = v.id`,
-    [
-      outcomes.map((row) => row.stagingId),
-      outcomes.map((row) =>
-        row.transactionId == null ? "duplicate" : "committed",
-      ),
-    ],
+  const stagingIds = outcomes.map((row) => row.stagingId);
+  const statuses = outcomes.map((row) =>
+    row.transactionId == null ? "duplicate" : "committed",
+  );
+  await sql`UPDATE import_staging_rows s SET status = v.status
+    FROM unnest(${stagingIds}::bigint[], ${statuses}::text[]) AS v(id, status) WHERE s.id = v.id`.execute(
+    db,
   );
   return outcomes;
 }

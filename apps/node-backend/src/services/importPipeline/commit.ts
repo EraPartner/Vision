@@ -17,11 +17,12 @@ import { ConflictError } from "../../middleware/errorHandler.ts";
  * partial unique fingerprint index is the concurrent-import race guard.
  */
 
+import { sql } from "kysely";
 import {
-  query,
   withSavepointIfInTransaction,
   withTransaction,
 } from "../../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../../database/db.ts";
 import {
   clearTransactionCountCache,
   transactionRepository,
@@ -35,7 +36,6 @@ import {
 import { logger } from "../../config/logger.ts";
 import { autoLinkTransactions } from "../plannedMatchService.ts";
 import { getAdapter } from "./adapters/index.ts";
-import { queryOne, queryRows } from "../../database/rowContracts.ts";
 import {
   commitStagingRowSchema,
   importBatchAdapterRowSchema,
@@ -413,10 +413,14 @@ async function resolveChunkAccounts(
     ),
   ].sort((a, b) => a - b);
   if (accountIds.length > 0) {
-    const active = await queryRows(
+    const active = await checkedRows(
       z.object({ id: z.number(), is_active: z.boolean() }),
-      "SELECT id, is_active FROM accounts WHERE id = ANY($1::int[]) ORDER BY id FOR SHARE",
-      [accountIds],
+      db
+        .selectFrom("accounts")
+        .select(["id", "is_active"])
+        .where("id", "=", sql<AccountId>`ANY(${accountIds}::int[])`)
+        .orderBy("id")
+        .forShare(),
     );
     if (
       active.length !== accountIds.length ||
@@ -465,11 +469,14 @@ export async function commitBatch({
   errors: number;
   autoLinkedCount: number;
 }> {
-  const statusRow = await queryOne(
+  const statusRow = await checkedRow(
     importBatchAdapterRowSchema,
-    `UPDATE import_batches SET status = 'committing' WHERE id = $1 AND status IN ('awaiting_review', 'matching')
-     RETURNING adapter_name`,
-    [batchId],
+    db
+      .updateTable("import_batches")
+      .set({ status: "committing" })
+      .where("id", "=", String(batchId))
+      .where("status", "in", ["awaiting_review", "matching"])
+      .returning("adapter_name"),
   );
   if (!statusRow)
     throw new ConflictError(
@@ -480,9 +487,9 @@ export async function commitBatch({
     multiCurrencyCash: adapter?.multiCurrencyCash === true,
   };
 
-  const reviewed: CommitStagingRow[] = await queryRows(
+  const reviewed: CommitStagingRow[] = await checkedRows(
     commitStagingRowSchema,
-    `SELECT isr.id,
+    sql`SELECT isr.id,
             isr.row_index,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
             isr.bank_account,
@@ -505,9 +512,8 @@ export async function commitBatch({
        FROM import_staging_rows isr
        LEFT JOIN recipients r
          ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)
-      WHERE isr.batch_id = $1 AND isr.status = 'matched'
+      WHERE isr.batch_id = ${batchId} AND isr.status = 'matched'
       ORDER BY isr.row_index ASC`,
-    [batchId],
   );
 
   // Unresolved rows stay 'matched' through review (the only status the
@@ -525,18 +531,19 @@ export async function commitBatch({
   );
 
   if (unresolvedRows.length > 0) {
-    await query(
-      `UPDATE import_staging_rows
-          SET status = 'error', error_message = $2
-        WHERE id = ANY($1::bigint[])`,
-      [unresolvedRows.map((r) => r.id), UNRESOLVED_RECIPIENT_MESSAGE],
-    );
-    await query(
-      `UPDATE import_batches
-          SET rows_error = COALESCE(rows_error, 0) + $2
-        WHERE id = $1`,
-      [batchId, unresolvedRows.length],
-    );
+    const unresolvedIds = unresolvedRows.map((r) => r.id);
+    await db
+      .updateTable("import_staging_rows")
+      .set({ status: "error", error_message: UNRESOLVED_RECIPIENT_MESSAGE })
+      .where("id", "=", sql<string>`ANY(${unresolvedIds}::bigint[])`)
+      .execute();
+    await db
+      .updateTable("import_batches")
+      .set({
+        rows_error: sql<number>`COALESCE(rows_error, 0) + ${unresolvedRows.length}`,
+      })
+      .where("id", "=", String(batchId))
+      .execute();
     logger.warn(
       "[pipeline:commit] rows without a resolved recipient marked as errors",
       {
@@ -591,14 +598,15 @@ export async function commitBatch({
     // Checkpoint counters per chunk so a crash mid-import leaves recoverable
     // state in import_batches. Increment by chunk-local delta to preserve
     // any rows_error already set by earlier pipeline phases (validate).
-    await query(
-      `UPDATE import_batches
-          SET rows_imported = COALESCE(rows_imported, 0) + $2,
-              rows_duplicate = COALESCE(rows_duplicate, 0) + $3,
-              rows_error = COALESCE(rows_error, 0) + $4
-        WHERE id = $1`,
-      [batchId, chunkImported, chunkDuplicates, chunkErrors],
-    );
+    await db
+      .updateTable("import_batches")
+      .set({
+        rows_imported: sql<number>`COALESCE(rows_imported, 0) + ${chunkImported}`,
+        rows_duplicate: sql<number>`COALESCE(rows_duplicate, 0) + ${chunkDuplicates}`,
+        rows_error: sql<number>`COALESCE(rows_error, 0) + ${chunkErrors}`,
+      })
+      .where("id", "=", String(batchId))
+      .execute();
 
     if (onProgress) {
       onProgress({

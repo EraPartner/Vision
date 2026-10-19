@@ -14,9 +14,12 @@ import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
  * shared query helper — no raw pool references in this file.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
+import { sql } from "kysely";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
+import type { RecipientId, TransactionId } from "@vision/types/brands";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import { transactionKeyRowSchema } from "../database/rowSchemas.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   importBatchListRowSchema,
   importBatchRowSchema,
@@ -33,6 +36,32 @@ import type { ImportBatchRow } from "../types/rows.ts";
 
 export type { ImportBatchRow, ImportPreviewRow };
 
+const BATCH_LIST_COLUMNS = [
+  "b.id",
+  "b.adapter_name",
+  "b.source_filename",
+  "b.source_size_bytes",
+  "b.status",
+  "b.rows_total",
+  "b.rows_imported",
+  "b.rows_duplicate",
+  "b.rows_error",
+  "b.error_summary",
+  "b.started_at",
+  "b.completed_at",
+] as const;
+
+/** Batches grouped by id with the count of their still-active transactions. */
+function batchesWithRemaining() {
+  return db
+    .selectFrom("import_batches as b")
+    .leftJoin("transactions as t", (join) =>
+      join.onRef("t.import_batch_id", "=", "b.id").on("t.is_active", "=", true),
+    )
+    .select(sql<number>`COUNT(t.id)::int`.as("transactions_remaining"))
+    .groupBy("b.id");
+}
+
 export async function listBatches({
   limit = 50,
   offset = 0,
@@ -41,32 +70,19 @@ export async function listBatches({
   total: number;
 }> {
   const [batches, countRows] = await Promise.all([
-    queryRows(
+    checkedRows(
       importBatchListRowSchema,
-      `SELECT
-                b.id,
-                b.adapter_name,
-                b.source_filename,
-                b.source_size_bytes,
-                b.status,
-                b.rows_total,
-                b.rows_imported,
-                b.rows_duplicate,
-                b.rows_error,
-                b.error_summary,
-                b.started_at,
-                b.completed_at,
-                COUNT(t.id)::int AS transactions_remaining
-             FROM import_batches b
-             LEFT JOIN transactions t ON t.import_batch_id = b.id AND t.is_active = true
-             GROUP BY b.id
-             ORDER BY b.started_at DESC
-             LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      batchesWithRemaining()
+        .select(BATCH_LIST_COLUMNS)
+        .orderBy("b.started_at", "desc")
+        .limit(limit)
+        .offset(offset),
     ),
-    queryRows(
+    checkedRows(
       importBatchTotalRowSchema,
-      "SELECT COUNT(*)::int AS total FROM import_batches",
+      db
+        .selectFrom("import_batches")
+        .select(sql<number>`COUNT(*)::int`.as("total")),
     ),
   ]);
 
@@ -79,28 +95,11 @@ export async function listBatches({
 export async function getBatch(
   id: number | string,
 ): Promise<ImportBatchRow | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     importBatchRowSchema,
-    `SELECT
-            b.id,
-            b.adapter_name,
-            b.source_filename,
-            b.source_size_bytes,
-            b.custom_config,
-            b.status,
-            b.rows_total,
-            b.rows_imported,
-            b.rows_duplicate,
-            b.rows_error,
-            b.error_summary,
-            b.started_at,
-            b.completed_at,
-            COUNT(t.id)::int AS transactions_remaining
-         FROM import_batches b
-         LEFT JOIN transactions t ON t.import_batch_id = b.id AND t.is_active = true
-         WHERE b.id = $1
-         GROUP BY b.id`,
-    [id],
+    batchesWithRemaining()
+      .select([...BATCH_LIST_COLUMNS, "b.custom_config"])
+      .where("b.id", "=", String(id)),
   );
   return row ?? null;
 }
@@ -115,9 +114,9 @@ export async function getBatch(
 export async function getPreviewRows(
   batchId: number | string,
 ): Promise<ImportPreviewRow[]> {
-  return queryRows(
+  return checkedRows(
     importPreviewRowSchema,
-    `SELECT
+    sql`SELECT
             isr.id,
             isr.row_index,
             isr.recipient_raw,
@@ -153,11 +152,33 @@ export async function getPreviewRows(
            LEFT JOIN categories rdc ON rdc.id = r.default_category_id
            LEFT JOIN categories oc ON oc.id = isr.override_category_id
            LEFT JOIN recipient_match_patterns rmp ON rmp.id = isr.matched_pattern_id
-          WHERE isr.batch_id = $1
+          WHERE isr.batch_id = ${batchId}
             AND isr.status = 'matched'
           ORDER BY isr.row_index ASC`,
-    [batchId],
   );
+}
+
+/** Lock a batch still awaiting review, or refuse the override. */
+async function lockBatchUnderReview(batchId: number): Promise<void> {
+  const batch = await db
+    .selectFrom("import_batches")
+    .select("id")
+    .where("id", "=", String(batchId))
+    .where("status", "=", "awaiting_review")
+    .forUpdate()
+    .executeTakeFirst();
+  if (!batch)
+    throw new ConflictError(
+      "Import review has ended; reload the batch before making changes",
+    );
+}
+
+function updateMatchedStagingRow(batchId: number, rowId: number) {
+  return db
+    .updateTable("import_staging_rows")
+    .where("id", "=", String(rowId))
+    .where("batch_id", "=", String(batchId))
+    .where("status", "=", "matched");
 }
 
 /**
@@ -174,22 +195,15 @@ export async function overrideRecipient({
   rowId: number;
   recipientId: number | null;
 }): Promise<number> {
-  return withTransaction(async (client) => {
-    const batch = await client.query(
-      "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
-      [batchId],
-    );
-    if ((batch.rowCount ?? 0) === 0)
-      throw new ConflictError(
-        "Import review has ended; reload the batch before making changes",
-      );
-    const { rowCount } = await client.query(
-      `UPDATE import_staging_rows
-            SET user_override_recipient_id = $3
-          WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-      [rowId, batchId, recipientId],
-    );
-    return rowCount ?? 0;
+  return withTransaction(async () => {
+    await lockBatchUnderReview(batchId);
+    const result = await updateMatchedStagingRow(batchId, rowId)
+      .set({
+        user_override_recipient_id:
+          recipientId === null ? null : asRecipientId(recipientId),
+      })
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   });
 }
 
@@ -207,23 +221,28 @@ export async function overrideCategory({
   rowId: number;
   categoryId: number | null;
 }): Promise<number> {
-  return withTransaction(async (client) => {
-    const batch = await client.query(
-      "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
-      [batchId],
-    );
-    if ((batch.rowCount ?? 0) === 0)
-      throw new ConflictError(
-        "Import review has ended; reload the batch before making changes",
-      );
-    const { rowCount } = await client.query(
-      `UPDATE import_staging_rows
-            SET override_category_id = $3
-          WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-      [rowId, batchId, categoryId],
-    );
-    return rowCount ?? 0;
+  return withTransaction(async () => {
+    await lockBatchUnderReview(batchId);
+    const result = await updateMatchedStagingRow(batchId, rowId)
+      .set({
+        override_category_id:
+          categoryId === null ? null : asCategoryId(categoryId),
+      })
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   });
+}
+
+async function setStagingRowStatus(
+  rowId: number | string,
+  values: { status: string; error_message?: string },
+): Promise<number> {
+  const result = await db
+    .updateTable("import_staging_rows")
+    .set(values)
+    .where("id", "=", String(rowId))
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
 }
 
 /**
@@ -236,22 +255,14 @@ export async function overrideCategory({
 export async function markStagingRowDuplicate(
   rowId: number | string,
 ): Promise<number> {
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows SET status = 'duplicate' WHERE id = $1`,
-    [rowId],
-  );
-  return rowCount ?? 0;
+  return setStagingRowStatus(rowId, { status: "duplicate" });
 }
 
 /** @returns rowCount */
 export async function markStagingRowCommitted(
   rowId: number | string,
 ): Promise<number> {
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows SET status = 'committed' WHERE id = $1`,
-    [rowId],
-  );
-  return rowCount ?? 0;
+  return setStagingRowStatus(rowId, { status: "committed" });
 }
 
 /**
@@ -262,19 +273,20 @@ export async function markStagingRowError(
   rowId: number | string,
   message: string,
 ): Promise<number> {
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows SET status = 'error', error_message = $2 WHERE id = $1`,
-    [rowId, message],
-  );
-  return rowCount ?? 0;
+  return setStagingRowStatus(rowId, {
+    status: "error",
+    error_message: message,
+  });
 }
 
 export async function categoryExists(categoryId: number): Promise<boolean> {
-  const { rows } = await query(
-    `SELECT id FROM categories WHERE id = $1 LIMIT 1`,
-    [categoryId],
-  );
-  return rows.length > 0;
+  const row = await db
+    .selectFrom("categories")
+    .select("id")
+    .where("id", "=", asCategoryId(categoryId))
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
 }
 
 /**
@@ -288,11 +300,13 @@ export async function rollbackBatch(
   return withTransaction(async (client) => {
     // The route's earlier read is advisory. Serialize against the commit claim
     // and review overrides before discovering any ledger rows to remove.
-    const batch = await queryOne(
+    const batch = await checkedRow(
       z.object({ status: z.string() }),
-      "SELECT status FROM import_batches WHERE id = $1 FOR UPDATE",
-      [id],
-      client,
+      db
+        .selectFrom("import_batches")
+        .select("status")
+        .where("id", "=", String(id))
+        .forUpdate(),
     );
     if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
     if (batch.status === "aborted")
@@ -304,20 +318,21 @@ export async function rollbackBatch(
         "Cannot rollback a batch that is still in progress",
       );
     }
-    const targets = await queryRows(
+    const targets = await checkedRows(
       transactionKeyRowSchema,
-      "SELECT id FROM transactions WHERE import_batch_id = $1",
-      [id],
+      db
+        .selectFrom("transactions")
+        .select("id")
+        .where("import_batch_id", "=", String(id)),
     );
-    await lockAccountsForLedgerMutation(
-      client,
-      targets.map((row) => row.id),
-    );
-    await protectPlannedExecutions(targets.map((row) => row.id));
-    const { rowCount: deleted } = await client.query(
-      `DELETE FROM transactions WHERE import_batch_id = $1 AND id = ANY($2::int[])`,
-      [id, targets.map((row) => row.id)],
-    );
+    const targetIds = targets.map((row) => row.id);
+    await lockAccountsForLedgerMutation(client, targetIds);
+    await protectPlannedExecutions(targetIds);
+    const deleted = await db
+      .deleteFrom("transactions")
+      .where("import_batch_id", "=", String(id))
+      .where("id", "=", sql<TransactionId>`ANY(${targetIds}::int[])`)
+      .executeTakeFirst();
 
     // Clean up recipients this import auto-created that are now orphaned.
     // Candidates: referenced by this batch's staging rows AND created during the
@@ -325,48 +340,48 @@ export async function rollbackBatch(
     // transaction, planned transaction, or merge alias. This prevents rolled-back
     // imports from leaving behind zero-transaction recipients, without touching
     // pre-existing recipients (older created_at) or any still in use.
-    const orphanRows = await queryRows(
+    const orphanRows = await checkedRows(
       recipientIdOnlyRowSchema,
-      `SELECT r.id FROM recipients r
+      sql`SELECT r.id FROM recipients r
               WHERE r.id IN (
                     SELECT resolved_recipient_id FROM import_staging_rows
-                     WHERE batch_id = $1 AND resolved_recipient_id IS NOT NULL
+                     WHERE batch_id = ${id} AND resolved_recipient_id IS NOT NULL
                     UNION
                     SELECT user_override_recipient_id FROM import_staging_rows
-                     WHERE batch_id = $1 AND user_override_recipient_id IS NOT NULL
+                     WHERE batch_id = ${id} AND user_override_recipient_id IS NOT NULL
                 )
                 AND r.created_at >= COALESCE(
-                    (SELECT started_at FROM import_batches WHERE id = $1), to_timestamp(0))
+                    (SELECT started_at FROM import_batches WHERE id = ${id}), to_timestamp(0))
                 AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM planned_transactions pt WHERE pt.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
-      [id],
-      client,
     );
     const orphanIds = orphanRows.map((r) => r.id);
     let recipientsRemoved = 0;
     if (orphanIds.length > 0) {
       // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.
-      await client.query(
-        `DELETE FROM recipient_bank_accounts WHERE recipient_id = ANY($1::int[])`,
-        [orphanIds],
-      );
-      const { rowCount } = await client.query(
-        `DELETE FROM recipients WHERE id = ANY($1::int[])`,
-        [orphanIds],
-      );
-      recipientsRemoved = rowCount ?? 0;
+      const anyOrphan = sql<RecipientId>`ANY(${orphanIds}::int[])`;
+      await db
+        .deleteFrom("recipient_bank_accounts")
+        .where("recipient_id", "=", anyOrphan)
+        .execute();
+      const removed = await db
+        .deleteFrom("recipients")
+        .where("id", "=", anyOrphan)
+        .executeTakeFirst();
+      recipientsRemoved = Number(removed.numDeletedRows);
     }
 
-    await client.query(
-      `UPDATE import_batches
-                SET status = 'aborted',
-                    completed_at = NOW(),
-                    rows_imported = 0
-              WHERE id = $1`,
-      [id],
-    );
+    await db
+      .updateTable("import_batches")
+      .set({
+        status: "aborted",
+        completed_at: sql<Date>`NOW()`,
+        rows_imported: 0,
+      })
+      .where("id", "=", String(id))
+      .execute();
 
-    return { deleted: deleted ?? 0, recipientsRemoved };
+    return { deleted: Number(deleted.numDeletedRows), recipientsRemoved };
   });
 }

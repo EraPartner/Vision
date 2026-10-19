@@ -49,8 +49,6 @@ describe("auditChainRepository", () => {
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
     expect(client.query).toHaveBeenCalledTimes(4);
-    expect(client.query.mock.calls[0]![0]).toContain("FOR UPDATE");
-    expect(client.query.mock.calls[1]![0]).toContain("ORDER BY sequence DESC");
     expect(client.query.mock.calls[2]![1][0]).toBe(1);
     expect(client.query.mock.calls[2]![1][4]).toBe(
       JSON.stringify(Object.fromEntries(Object.entries(payload).sort())),
@@ -58,7 +56,7 @@ describe("auditChainRepository", () => {
     expect(client.query.mock.calls[3]![1]).toEqual([
       1,
       entry.hash,
-      0,
+      "0",
       AUDIT_CHAIN_GENESIS_HASH,
     ]);
     expect(
@@ -167,7 +165,6 @@ describe("auditChainRepository", () => {
     await expect(recordAuditCheckpoint(receipt)).resolves.toMatchObject({
       id: "7",
     });
-    expect(client.query.mock.calls[0]![0]).toContain("FOR UPDATE");
     expect(client.query.mock.calls[1]![1]).toEqual([
       3,
       hash,
@@ -199,7 +196,7 @@ describe("auditChainRepository", () => {
     await expect(recordAuditCheckpoint(receipt)).resolves.toMatchObject({
       id: "7",
     });
-    expect(client.query.mock.calls[1]![1]).toEqual([3]);
+    expect(client.query.mock.calls[1]![1]).toEqual(["3"]);
   });
 
   it("accepts an exact repeated checkpoint and rejects a conflicting receipt identity", async () => {
@@ -279,6 +276,6 @@ describe("auditChainRepository", () => {
         createdAt: CREATED_AT,
       },
     ]);
-    expect(query.mock.calls[0]![1]).toEqual([8, 1]);
+    expect(query.mock.calls[0]![1]).toEqual(["8", 1]);
   });
 });

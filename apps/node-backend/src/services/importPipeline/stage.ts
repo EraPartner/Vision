@@ -7,8 +7,9 @@
  * next stage. No recipient resolution or dedup happens here.
  */
 
-import { query, withTransaction } from "../../database/connection.ts";
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRows, db } from "../../database/db.ts";
 import { importBatchIdRowSchema } from "../../database/rows/imports.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import { logger } from "../../config/logger.ts";
@@ -53,18 +54,19 @@ export async function createBatch({
   sizeBytes?: number | null | undefined;
   customConfig?: object | null | undefined;
 }): Promise<number> {
-  const [row] = await queryRows(
+  const [row] = await checkedRows(
     importBatchIdRowSchema,
-    `INSERT INTO import_batches
-       (adapter_name, source_filename, source_size_bytes, custom_config, status, started_at)
-     VALUES ($1, $2, $3, $4, 'pending', NOW())
-     RETURNING id`,
-    [
-      adapterName,
-      filename || null,
-      sizeBytes ?? null,
-      customConfig ? JSON.stringify(customConfig) : null,
-    ],
+    db
+      .insertInto("import_batches")
+      .values({
+        adapter_name: adapterName,
+        source_filename: filename || null,
+        source_size_bytes: sizeBytes ?? null,
+        custom_config: customConfig ? JSON.stringify(customConfig) : null,
+        status: "pending",
+        started_at: sql<Date>`NOW()`,
+      })
+      .returning("id"),
   );
   // INSERT ... RETURNING without ON CONFLICT yields its row or throws.
   if (!row) throw new Error("import_batches insert returned no row");
@@ -103,9 +105,11 @@ export async function stageBatch({
   return runImportStageLifecycle({
     batchId,
     markStaging: () =>
-      query(`UPDATE import_batches SET status = 'staging' WHERE id = $1`, [
-        batchId,
-      ]),
+      db
+        .updateTable("import_batches")
+        .set({ status: "staging" })
+        .where("id", "=", String(batchId))
+        .execute(),
     parseRows: async () => {
       const rows = await (customConfig &&
       typeof adapter.parseWithConfig === "function"
@@ -124,10 +128,11 @@ export async function stageBatch({
       return rows;
     },
     persistTotal: (total) =>
-      query(`UPDATE import_batches SET rows_total = $1 WHERE id = $2`, [
-        total,
-        batchId,
-      ]),
+      db
+        .updateTable("import_batches")
+        .set({ rows_total: total })
+        .where("id", "=", String(batchId))
+        .execute(),
     insertChunk: (rows, start) => insertStagingChunk(batchId, rows, start),
     onParsed: ({ total, skipped }) =>
       logger.info("[pipeline:stage] parsed rows", {
@@ -152,45 +157,31 @@ async function insertStagingChunk(
   startIndex: number,
 ): Promise<void> {
   if (rows.length === 0) return;
-  await withTransaction(async (client) => {
-    const values: unknown[] = [];
-    const placeholders: string[] = [];
-    rows.forEach((r, i) => {
-      const idx = startIndex + i;
-      const dateStr = parsedDateToYmd(r.date) ?? null;
-
-      const base = values.length;
-      placeholders.push(
-        `($${base + 1},$${base + 2},'pending',$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12},$${base + 13},$${base + 14},$${base + 15},$${base + 16},$${base + 17})`,
-      );
-      values.push(
-        batchId,
-        idx,
-        dateStr,
-        r.bankAccount || null,
-        r.recipient || null,
-        r.memo || null,
-        r.amount ?? null,
-        r.currency || null,
-        r.balance ?? null,
-        r.recipientAccount || null,
-        r.recipientAddress || null,
-        r.recipientBankName || null,
-        r.comment || null,
-        r.rawData || null,
-        r.sourceId || null,
-        r.bankAccount || null,
-        r.bankSequence ?? null,
-      );
-    });
-
-    const sql = `INSERT INTO import_staging_rows
-      (batch_id, row_index, status, tx_date, bank_account, recipient_raw, memo,
-       amount, currency, balance, recipient_account, recipient_address,
-       recipient_bank_name, comment, raw_data, source_transaction_id,
-       source_account_identity, bank_sequence)
-      VALUES ${placeholders.join(",")}`;
-
-    await client.query(sql, values);
+  await withTransaction(async () => {
+    await db
+      .insertInto("import_staging_rows")
+      .values(
+        rows.map((r, i) => ({
+          batch_id: String(batchId),
+          row_index: startIndex + i,
+          status: "pending",
+          tx_date: parsedDateToYmd(r.date) ?? null,
+          bank_account: r.bankAccount || null,
+          recipient_raw: r.recipient || null,
+          memo: r.memo || null,
+          amount: r.amount ?? null,
+          currency: r.currency || null,
+          balance: r.balance ?? null,
+          recipient_account: r.recipientAccount || null,
+          recipient_address: r.recipientAddress || null,
+          recipient_bank_name: r.recipientBankName || null,
+          comment: r.comment || null,
+          raw_data: r.rawData || null,
+          source_transaction_id: r.sourceId || null,
+          source_account_identity: r.bankAccount || null,
+          bank_sequence: r.bankSequence ?? null,
+        })),
+      )
+      .execute();
   });
 }

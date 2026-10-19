@@ -7,13 +7,13 @@
  */
 
 import { z } from "zod";
-import { query } from "../../database/connection.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../../database/db.ts";
 import { logger } from "../../config/logger.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,
 } from "../importIdentity.ts";
-import { queryRows } from "../../database/rowContracts.ts";
 import { pendingStagingRowSchema } from "../../database/rows/imports.ts";
 import type { PendingStagingRow } from "../../database/rows/imports.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
@@ -36,25 +36,26 @@ export async function validateBatch({
   batchId: ImportBatchId;
   onProgress?: ImportProgressCallback | undefined;
 }): Promise<{ validated: number; duplicates: number; errors: number }> {
-  await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [
-    batchId,
-  ]);
+  await db
+    .updateTable("import_batches")
+    .set({ status: "validating" })
+    .where("id", "=", String(batchId))
+    .execute();
 
   // tx_date via to_char, matching commit.js: read raw, a pg DATE arrives as a
   // server-local-midnight Date whose toISOString() (in the fallback hash below)
   // rolls back a day east of UTC — and silently changes fallback hashes if the
   // server timezone ever changes between imports.
-  const batchRows = await queryRows(
+  const batchRows = await checkedRows(
     pendingStagingRowSchema,
-    `SELECT s.id, s.row_index, s.status, to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date,
+    sql`SELECT s.id, s.row_index, s.status, to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date,
             s.amount, s.recipient_raw, s.memo, s.currency, s.raw_data,
             s.bank_account, s.balance,
             s.source_transaction_id AS source_id, b.adapter_name
        FROM import_staging_rows s
        JOIN import_batches b ON b.id = s.batch_id
-      WHERE s.batch_id = $1
+      WHERE s.batch_id = ${batchId}
       ORDER BY s.row_index ASC`,
-    [batchId],
   );
 
   const pending = batchRows.filter(
@@ -104,27 +105,18 @@ export async function validateBatch({
         errorMessages.push(null);
       }
     }
-    await query(
-      `UPDATE import_staging_rows s
+    await sql`UPDATE import_staging_rows s
           SET status        = v.status,
               source_record_hash = v.source_record_hash,
               dedup_fingerprint = v.fingerprint,
               dedup_fingerprint_version = v.fingerprint_version,
               dedup_occurrence = v.occurrence,
               error_message = v.error_message
-         FROM unnest($1::bigint[], $2::text[], $3::text[], $4::text[], $5::smallint[], $6::integer[], $7::text[])
+         FROM unnest(${ids}::bigint[], ${statuses}::text[], ${txHashes}::text[],
+                     ${sourceRecordHashes}::text[], ${fingerprintVersions}::smallint[],
+                     ${occurrences}::integer[], ${errorMessages}::text[])
               AS v(id, status, fingerprint, source_record_hash, fingerprint_version, occurrence, error_message)
-        WHERE s.id = v.id`,
-      [
-        ids,
-        statuses,
-        txHashes,
-        sourceRecordHashes,
-        fingerprintVersions,
-        occurrences,
-        errorMessages,
-      ],
-    );
+        WHERE s.id = v.id`.execute(db);
     seen += chunk.length;
     if (onProgress) onProgress({ phase: "validating", current: seen, total });
   }

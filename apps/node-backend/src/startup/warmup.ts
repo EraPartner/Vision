@@ -14,7 +14,8 @@ import { prepareViewsAfterBackfill } from "./prepareViews.ts";
  */
 
 import { logger } from "../config/logger.ts";
-import { query } from "../database/connection.ts";
+import { sql } from "kysely";
+import { db } from "../database/db.ts";
 import {
   createMaterializedViews,
   ensureMaterializedViewIndexes,
@@ -111,16 +112,15 @@ async function pruneOldImportBatches() {
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (native_source.asset_transfer_details::jsonb ? 'networkBinding' OR native_source.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt' OR native_source.asset_adjustment_details::jsonb ? 'networkReceipt'))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows annotation WHERE annotation.batch_id = ${table}.id AND annotation.route = 'account_internal')`
           : "";
-      const result = await query(
-        `DELETE FROM ${table}
+      // `preserveReconciliation` is built only from the constant table list.
+      const result = await sql`DELETE FROM ${sql.table(table)}
           WHERE status IN ('complete', 'complete_with_errors', 'failed', 'aborted')
-            AND started_at < now() - ($1 || ' days')::interval
-            ${preserveReconciliation}`,
-        [String(IMPORT_RETENTION_DAYS)],
-      );
-      if (result.rowCount !== null && result.rowCount > 0) {
+            AND started_at < now() - (${String(IMPORT_RETENTION_DAYS)} || ' days')::interval
+            ${sql.raw(preserveReconciliation)}`.execute(db);
+      const pruned = result.numAffectedRows ?? 0n;
+      if (pruned > 0n) {
         logger.info(
-          `Pruned ${result.rowCount} old ${table} row(s) (> ${IMPORT_RETENTION_DAYS}d, staging rows cascade)`,
+          `Pruned ${pruned} old ${table} row(s) (> ${IMPORT_RETENTION_DAYS}d, staging rows cascade)`,
         );
       }
     } catch (err) {

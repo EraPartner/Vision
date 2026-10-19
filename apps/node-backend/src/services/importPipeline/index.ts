@@ -18,7 +18,8 @@
  * Phase primitives are also re-exported for direct use by route handlers.
  */
 
-import { query } from "../../database/connection.ts";
+import { sql } from "kysely";
+import { db } from "../../database/db.ts";
 import { logger } from "../../config/logger.ts";
 import {
   clearForecastMcCaches,
@@ -59,6 +60,10 @@ export type ImportProgressCallback = (progress: {
  * `createBatch` for why number won.
  */
 export type ImportBatchId = number;
+
+function updateBatch(batchId: ImportBatchId) {
+  return db.updateTable("import_batches").where("id", "=", String(batchId));
+}
 
 /**
  * Stage → validate → match a batch that already exists.
@@ -117,10 +122,7 @@ async function prepareImport({
     unresolved > 0;
 
   if (requiresReview) {
-    await query(
-      `UPDATE import_batches SET status = 'awaiting_review' WHERE id = $1`,
-      [batchId],
-    );
+    await updateBatch(batchId).set({ status: "awaiting_review" }).execute();
     logger.info("[pipeline] awaiting review", {
       batchId,
       matchSourceCounts,
@@ -158,13 +160,9 @@ export async function commitImport({
     onProgress,
   });
 
-  await query(
-    `UPDATE import_batches
-        SET status = 'complete',
-            completed_at = NOW()
-      WHERE id = $1`,
-    [batchId],
-  );
+  await updateBatch(batchId)
+    .set({ status: "complete", completed_at: sql<Date>`NOW()` })
+    .execute();
 
   // Detect internal transfers across the whole corpus (not just this batch) so
   // cross-bank pairs whose legs arrived in separate imports get matched (ADR-083).
@@ -267,10 +265,7 @@ export async function runImportPipeline({
     } = await commitImport({ batchId, onProgress });
 
     const totalErrors = nanToZero(validateErrors) + nanToZero(commitErrors);
-    await query(`UPDATE import_batches SET rows_error = $2 WHERE id = $1`, [
-      batchId,
-      totalErrors,
-    ]);
+    await updateBatch(batchId).set({ rows_error: totalErrors }).execute();
 
     logger.info("[pipeline] complete", {
       batchId,
@@ -290,25 +285,21 @@ export async function runImportPipeline({
       autoLinkedCount,
     };
   } catch (err) {
-    await query(
-      `UPDATE import_batches
-          SET status = 'failed',
-              completed_at = NOW(),
-              error_summary = $2
-        WHERE id = $1`,
-      [
-        batchId,
-        String((err instanceof Error ? err.message : undefined) || err).slice(
-          0,
-          2000,
-        ),
-      ],
-    ).catch((updateErr) => {
-      logger.error("[pipeline] failed to mark batch as failed", {
-        batchId,
-        error: updateErr?.message,
+    await updateBatch(batchId)
+      .set({
+        status: "failed",
+        completed_at: sql<Date>`NOW()`,
+        error_summary: String(
+          (err instanceof Error ? err.message : undefined) || err,
+        ).slice(0, 2000),
+      })
+      .execute()
+      .catch((updateErr) => {
+        logger.error("[pipeline] failed to mark batch as failed", {
+          batchId,
+          error: updateErr?.message,
+        });
       });
-    });
     logger.error("[pipeline] failed", {
       batchId,
       error: err instanceof Error ? err.message : undefined,
