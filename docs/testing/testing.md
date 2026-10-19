@@ -727,6 +727,17 @@ The envelope middleware (`wrapResponse`) and error handler (`createErrorHandler`
 
 Reference: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[apps/node-backend/tests/routes/import.test.ts]]
 
+### Vitest 5 clears mock history before each test
+
+Vitest 5 defaults `clearMocks` to `true`, so call history recorded while a module is imported (for
+example `multer.memoryStorage()` running at module scope) is gone by the time a test body runs.
+Assert import-time behaviour through state the mock factory captured, as
+[[apps/node-backend/tests/attachmentUploadMiddleware.test.ts]] does, not through call counts.
+
+The jest-dom matchers are registered for Vitest by importing `@testing-library/jest-dom/vitest`
+in [[apps/frontend/src/test-setup.ts]]; since jest-dom 7 the bare package import only types the
+matchers for Jest.
+
 ### Vitest 4 constructor-compatible mocks
 
 With Vitest 4, some module mocks must preserve constructor-compatible behavior when the imported dependency is instantiated.
