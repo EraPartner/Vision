@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-19
 tags:
   [
     guide,
@@ -59,7 +59,7 @@ git config core.hooksPath .githooks
 brew install gitleaks
 ```
 
-The `.githooks/pre-commit` script runs before every `git commit`, scanning staged changes for hardcoded secrets (API keys, credentials, passphrases). If gitleaks is not installed, the hook gracefully skips with a warning; the CI `secrets-scan` job will catch any leaks during PR review.
+The `.githooks/pre-commit` script runs before every `git commit`, scanning staged changes for hardcoded secrets (API keys, credentials, passphrases). If gitleaks is not installed, the hook gracefully skips with a warning; the gitleaks step in the CI `Repo Checks` job will catch any leaks during PR review.
 
 See [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]] for details.
 

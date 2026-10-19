@@ -40,7 +40,7 @@ describe('formatLiveContractSkipBanner', () => {
         const text = formatLiveContractSkipBanner({ skippedTests: 36, skippedFiles: 1 });
         expect(text).toContain('36 live-contract tests across 1 file were SKIPPED');
         expect(text).toContain('LIVE_API_BASE is not set');
-        expect(text).toContain('Test (Live API Contracts)');
+        expect(text).toContain('"Test (Backend)" live-contract step');
     });
 });
 

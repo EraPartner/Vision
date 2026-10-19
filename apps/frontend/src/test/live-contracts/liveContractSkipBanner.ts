@@ -66,7 +66,7 @@ export function formatLiveContractSkipBanner(
         `${bold}${SEPARATOR}${reset}`,
         `${dim}  LIVE_API_BASE is not set, so the real-backend API contract suite${reset}`,
         `${dim}  self-skipped. This run is NOT equivalent to CI's full-stack${reset}`,
-        `${dim}  "Test (Live API Contracts)" job.${reset}`,
+        `${dim}  "Test (Backend)" live-contract step.${reset}`,
         "",
         `${bold}  Run the live-contract suite against the Vision Demo or another${reset}`,
         `${bold}  disposable backend before trusting API-contract changes.${reset}`,
