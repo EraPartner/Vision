@@ -94,9 +94,6 @@ let exitCode = 0;
 try {
   if (command === "up") {
     const result = await runMigrations();
-    if (result.adopted) {
-      console.log("[db-migrate] adopted the Alembic database onto the baseline");
-    }
     console.log(
       `[db-migrate] schema is at ${result.revision}` +
         (result.applied.length ? ` (applied ${result.applied.join(", ")})` : ""),

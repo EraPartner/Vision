@@ -74,6 +74,9 @@ Tor's database is the only one, and it is at `0128_category_path_on_legacy_renam
 > The installed database was at `0126`, not `0128`. Adoption also accepts `0126` and `0127` by
 > applying the frozen `0127` and `0128` SQL first, then requiring the baseline fingerprint.
 
+> [!note] Adoption removed by [[docs/adr/224-remove-alembic-adoption|ADR-224]] (2026-10-19)
+> A database still on Alembic is now refused; `db:drift-check` is gone.
+
 ## Consequences
 
 - Development, CI and the Mac build need no Python. The app bundle no longer ships a PyInstaller

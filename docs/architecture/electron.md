@@ -349,8 +349,8 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 6. **Backend startup** (`apps/node-backend/src/main.ts`, native Bun):
    - **Database connection** — `checkConnection()` polls with exponential backoff (40 attempts, 50ms→1s)
    - **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
-     with Kysely's migrator in one transaction (installing or adopting the `0001` baseline when
-     needed). It uses the owner connection in split-role mode, while the application pool remains
+     with Kysely's migrator in one transaction (installing the `0001` baseline into an empty
+     database). It uses the owner connection in split-role mode, while the application pool remains
      least-privilege ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
    - **Materialized-view warmup** — Post-listen create, index, and refresh for `mv_monthly_summary`
      and `mv_category_totals`; boot trace keeps the three phases separate.
@@ -1376,10 +1376,8 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 **Symptom:** The backend exits during `runMigrations()`. Electron stops polling, shows the
 startup error page and a "Failed to start Vision." dialog with the error from `backend.log`.
 
-**Cause:** The database carries Alembic's `alembic_version` at a revision older than
-`0126_income_recognition_check_name`, its catalog fingerprint differs from the `0001` baseline,
-or it has application objects but no migration marker. Adoption and fresh install fail closed and
-change nothing.
+**Cause:** The database still carries Alembic's `alembic_version`, or it has application objects
+but no migration marker. The migrator fails closed and changes nothing.
 
 **Fix:** Read the error in `backend.log`; do not wipe the database to make it boot. See
 [[docs/guides/migrations|Database Migration Guide]].

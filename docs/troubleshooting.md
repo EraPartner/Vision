@@ -59,8 +59,8 @@ bun run db:lint
 
 All pending migrations run in one transaction, so a failure rolls the whole run back. Read the
 first failing migration and database error and fix it in a new or corrected unapplied file. A
-database still carrying `alembic_version` is adopted at `0126`, `0127` or
-`0128` when its schema then matches the baseline fingerprint. If the app stays on "Almost ready…" or shows "Failed to
+database still carrying `alembic_version` is refused; restore a backup taken after the switch to
+TypeScript migrations. If the app stays on "Almost ready…" or shows "Failed to
 start Vision.", read `~/Library/Application Support/Vision/native/vision/logs/backend.log`. A
 destructive `db:migrate:down` requires a verified backup and explicit review.
 See [[docs/guides/migrations|Database Migration Guide]].

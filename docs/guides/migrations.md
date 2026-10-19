@@ -10,7 +10,6 @@ aliases: [migration-guide, database-schema, schema-changes]
 related_code:
   [
     "db/migrations/",
-    "db/alembic-bridge/",
     "db/schema-inventory.sql",
     "apps/node-backend/src/database/migrate.ts",
     "apps/node-backend/src/database/schemaInventory.ts",
@@ -55,7 +54,7 @@ when set, is the owner role that runs DDL.
   `asset_price_history`. `VISION_MIGRATE_TIMEOUT_MS` (default 10 minutes, `0` disables) is the
   statement timeout of the migration connection.
 
-### Fresh install and adoption
+### Fresh install
 
 An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fingerprint
 (`db/schema-inventory.sql` through `schemaInventory.ts`, ignoring bookkeeping tables, the
@@ -63,13 +62,10 @@ An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fi
 migrating, column order and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
 back. A database with application objects but no migration marker is refused.
 
-A database still carrying `alembic_version` is adopted when it is at
-`0126_income_recognition_check_name`, `0127_bank_chronology` or
-`0128_category_path_on_legacy_rename`. Below `0128`, the missing steps run first from the frozen
-SQL in `db/alembic-bridge/`, each with a `revision_applied` audit event
-([[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]]). The catalog fingerprint must then
-equal the baseline's. Adoption drops `alembic_version`, records `0001_baseline` and appends a
-`version_changed`/`stamp` audit event, all in one transaction. Anything else fails closed.
+A database still carrying `alembic_version` is refused and left unchanged
+([[docs/adr/224-remove-alembic-adoption|ADR-224]]): the one existing database was adopted on
+2026-10-19. Restore a backup taken after the switch, or reset the Demo with
+`bun run demo:reset-native`.
 
 ## Creating a migration
 
