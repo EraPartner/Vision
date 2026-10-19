@@ -39,7 +39,6 @@ package "Middleware" {
 
   class PortfolioUpload {
     +portfolioUpload: CSV / XLSX, 50 MiB
-    +assertPortfolioUploadSupported: Saxo workbook preflight
     +readPortfolioWorkbook: bounded ZIP + typed provenance
   }
 
@@ -441,7 +440,7 @@ Main --> PlannedTransactionsRouter
 Main --> InvestmentsRouter
 Main --> ImportRouter
 Main --> PortfolioImportRouter
-PortfolioImportRouter --> PortfolioUpload : upload + preflight before batch creation
+PortfolioImportRouter --> PortfolioUpload : CSV / XLSX upload
 Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
@@ -485,7 +484,7 @@ ImportRouter --> StreamingImportService
 ImportRouter --> DataImportService
 ImportRouter ..> ImportBatchRoutes : registers shared batch routes
 ImportRouter --> ImportBatchService
-PortfolioImportRouter --> PortfolioImportPipelineService
+PortfolioImportRouter --> PortfolioImportPipelineService : uploadSupport.assertPortfolioUploadSupported preflight before batch creation
 PortfolioImportRouter ..> ImportBatchRoutes : registers shared batch routes
 PortfolioImportRouter --> PortfolioImportBatchService
 PortfolioImportRouter --> PortfolioImportCommitService : reviewed atomic commit

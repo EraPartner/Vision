@@ -62,6 +62,7 @@ related_code:
   - "apps/node-backend/src/routes/portfolioImportRoutes.ts"
   - "apps/node-backend/src/routes/importBatchRoutes.ts"
   - "apps/node-backend/src/lib/portfolioUpload.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/uploadSupport.ts"
   - "apps/node-backend/src/services/portfolio/fxResolve.ts"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"

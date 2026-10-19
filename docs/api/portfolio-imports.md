@@ -6,7 +6,7 @@ path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
 date: 2026-10-19
 updated: 2026-10-19
-last_modified: 2026-10-13
+last_modified: 2026-10-19
 tags:
   [
     api,
@@ -56,6 +56,7 @@ related_code:
   - "apps/node-backend/src/repositories/portfolioImportBatchRepository.ts"
   - "apps/node-backend/src/services/customParserConfigService.ts"
   - "apps/node-backend/src/lib/portfolioUpload.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/uploadSupport.ts"
   - "apps/node-backend/src/services/portfolioImportProbe.ts"
   - "packages/shared-utils/src/portfolioImportDetection.ts"
   - "packages/shared-utils/src/csvPreview.ts"

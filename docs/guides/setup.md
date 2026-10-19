@@ -89,7 +89,7 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 | `bun run dev`                            | Start the native development profile                                                 |
 | `bun run electron:dev`                   | Start Electron explicitly in the native development profile                          |
 | `bun run build`                          | Build the production frontend                                                        |
-| `bun run lint` / `bun run lint:backend`  | Lint frontend and backend                                                            |
+| `bun run lint` / `bun run lint:backend`  | Lint frontend (plus import boundaries and dead code) and backend                     |
 | `bun run typecheck`                      | Type-check the frontend                                                              |
 | `bun run test` / `bun run test:frontend` | Run backend tests or the full frontend suite with a disposable PostgreSQL 18 backend |
 | `bun run test:watch`                     | Watch all backend tests with a disposable PostgreSQL 18 database                     |

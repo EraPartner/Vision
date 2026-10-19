@@ -17,9 +17,10 @@ This document contains UML diagrams for the Node.js backend application.
 
 ## Portfolio Upload Boundary
 
-The portfolio router uses `lib/portfolioUpload.ts` for CSV and detailed Saxo XLSX. Workbook
-preflight validates archive bounds and joined accounting detail before batch creation or SSE
-headers. Maintained statements stage first, then `portfolioImportReconciliationService.js` builds
+The portfolio router uses `lib/portfolioUpload.ts` for CSV and detailed Saxo XLSX uploads.
+Workbook preflight (`assertPortfolioUploadSupported` in
+`services/portfolioImportPipeline/uploadSupport.ts`) validates archive bounds and joined
+accounting detail before batch creation or SSE headers. Maintained statements stage first, then `portfolioImportReconciliationService.js` builds
 one reviewed source/history plan. `portfolioImportCommitService.js` locks the scope and applies
 adoption, canonical rows, and custody events atomically. Immutable receipt repositories retain
 before/after financial images. The separate duplicate-repair service retains both manual/imported

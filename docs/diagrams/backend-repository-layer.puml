@@ -68,7 +68,6 @@ package "Repositories" {
     +addExecution(plannedTransactionId, txId, date): Promise<void>
     +insertPlannedTransactionInTransaction(client, data): Promise<number>
     +applyPlannedFieldUpdate(client, id, fields): Promise<boolean>
-    +updatePlannedFields(id, fields): Promise<PlannedTransaction>
     +setPlannedTransactionTags(client, id, tags): Promise<void>
     +replaceLoanScheduleInTransaction(client, id, schedule): Promise<void>
     +insertExecutionInTransaction(client, plannedId, txId, date): Promise<boolean>

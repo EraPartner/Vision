@@ -217,6 +217,16 @@ SORT date DESC
 LIMIT 10
 ```
 
+### 2026-10-19 — Static Checks for Agents (ADR-223)
+
+`bun run lint` now also runs `lint:deps` (dependency-cruiser import boundaries, including no
+runtime cycles and no frontend import of the Belgian tax engine) and `lint:dead` (knip unused
+files, exports and dependencies). Frontend and backend ESLint share type-aware rules such as
+`no-floating-promises`, `switch-exhaustiveness-check` and `strict-boolean-expressions` without
+numbers. CI runs them in its existing `Lint` job. See
+[[docs/adr/223-static-checks-for-agents|ADR-223]] and
+[[docs/reference/code-patterns#static-checks|Code Patterns: Static checks]].
+
 ### 2026-10-19 — TypeScript Migrations with Kysely (ADR-222)
 
 Alembic, its 128 revisions and all Python tooling are gone. `db/migrations/0001_baseline.sql` holds
