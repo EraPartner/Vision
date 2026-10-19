@@ -60,6 +60,12 @@ vi.mock("../src/services/plannedMatchService.ts", () => ({
 // Only dereferenced inside the describeDb-gated suite.
 const pool = getTestPool()!;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
+// A row-lock waiter waits on the holder's transaction id; a session queued
+// for a table lock (DDL, TRUNCATE) does not, so it cannot pass for the claim.
+const ROW_LOCK_WAITERS = `SELECT count(*)::int AS n
+  FROM pg_locks l JOIN pg_stat_activity gate ON gate.pid = $1
+  WHERE NOT l.granted AND l.locktype = 'transactionid'
+    AND l.transactionid = gate.backend_xid`;
 
 /** Ids seeded by `seedFixtures()`. */
 const fx: Record<string, number> = {};
@@ -307,9 +313,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
       const work: Promise<unknown>[] = [];
       try {
         await gate.query("BEGIN");
-        // Count only sessions this gate blocks: other DB test files share the
-        // database, and their lock waiters made the first claim look queued
-        // before it was, so the second claim could win the row lock.
+        // Count only sessions queued on the gate's row lock: other DB test
+        // files share the database, and their table-lock waiters made the
+        // first claim look queued before it was, so the second claim could
+        // win the row lock.
         const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
           .rows[0].pid;
         await gate.query(
@@ -323,12 +330,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
         const deadline = Date.now() + 5000;
         let waiters = 0;
         while (Date.now() < deadline) {
-          waiters = (
-            await pool.query(
-              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))",
-              [gatePid],
-            )
-          ).rows[0].n;
+          waiters = (await pool.query(ROW_LOCK_WAITERS, [gatePid])).rows[0].n;
           if (waiters) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
@@ -373,9 +375,10 @@ describeDb("importPipeline commit (real Postgres)", () => {
       const work: Promise<unknown>[] = [];
       try {
         await gate.query("BEGIN");
-        // Count only sessions this gate blocks: other DB test files share the
-        // database, and their lock waiters made the first claim look queued
-        // before it was, so the second claim could win the row lock.
+        // Count only sessions queued on the gate's row lock: other DB test
+        // files share the database, and their table-lock waiters made the
+        // first claim look queued before it was, so the second claim could
+        // win the row lock.
         const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
           .rows[0].pid;
         await gate.query(
@@ -389,12 +392,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
         const deadline = Date.now() + 5000;
         let waiters = 0;
         while (Date.now() < deadline) {
-          waiters = (
-            await pool.query(
-              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))",
-              [gatePid],
-            )
-          ).rows[0].n;
+          waiters = (await pool.query(ROW_LOCK_WAITERS, [gatePid])).rows[0].n;
           if (waiters) break;
           await new Promise((resolve) => setTimeout(resolve, 20));
         }
@@ -404,7 +402,7 @@ describeDb("importPipeline commit (real Postgres)", () => {
         await gate.query("COMMIT");
         const results = await outcomes;
         await firstObserved;
-        expect(results[0]?.status).toBe("fulfilled");
+        expect(results[0]).toMatchObject({ status: "fulfilled" });
         expect(results[1]).toMatchObject({
           status: "rejected",
           reason: { status: rollbackFirst ? 409 : 400 },
