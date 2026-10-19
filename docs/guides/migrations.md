@@ -11,6 +11,7 @@ related_code:
   [
     "db/migrations/",
     "db/alembic-bridge/",
+    "db/baseline-inventory.json",
     "db/schema-inventory.sql",
     "apps/node-backend/src/database/migrate.ts",
     "apps/node-backend/src/database/schemaInventory.ts",
@@ -77,8 +78,9 @@ Run `bun run db:drift-check` first. It reads the database URL from Vision's `run
 so Vision must be running; `--from-env` uses `DATABASE_URL_MIGRATIONS`/`DATABASE_URL` instead
 (Bun loads a checkout's `.env` automatically, so this is opt-in). It runs any bridge steps in a
 transaction it rolls back, prints the revision and both fingerprints, and on a mismatch lists the
-names of the differing objects (it builds the baseline in a temporary database on the same server
-and drops it). The checked database does not change.
+names of the differing objects against `db/baseline-inventory.json`, the baseline's hashed
+catalog inventory (no `CREATEDB` privilege needed; a DB test keeps it equal to a fresh baseline
+install). The checked database does not change.
 
 ## Creating a migration
 
