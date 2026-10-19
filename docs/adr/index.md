@@ -265,7 +265,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-19: Test behaviour at stable boundaries (accepted)
 
-[[docs/adr/214-behaviour-boundary-tests|ADR-214]] lets agents restructure code freely: tests that
+[[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that
 assert internal structure may be deleted with a one-line reason, and a behaviour they alone
 covered gets a boundary test in the same change.
 

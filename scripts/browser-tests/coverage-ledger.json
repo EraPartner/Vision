@@ -1,6 +1,6 @@
 {
   "reviewedOn": "2026-10-19",
-  "policy": "Preserve independently justified behavior. Protected financial, database and recovery tests and coverage thresholds remain unchanged. On 2026-10-18 the owner removed the Playwright browser journeys: only the Swift native app is a supported UI, so React web layout has no browser coverage. On 2026-10-19 ADR-214 made structure-only tests (source text, mock call order, SQL strings sent to mocks, private helpers) deletable with a one-line reason; behaviour they alone covered gets a boundary test.",
+  "policy": "Preserve independently justified behavior. Protected financial, database and recovery tests and coverage thresholds remain unchanged. On 2026-10-18 the owner removed the Playwright browser journeys: only the Swift native app is a supported UI, so React web layout has no browser coverage. On 2026-10-19 ADR-215 made structure-only tests (source text, mock call order, SQL strings sent to mocks, private helpers) deletable with a one-line reason; behaviour they alone covered gets a boundary test.",
   "reviewedTests": [
     {
       "path": "apps/frontend/src/pages/__tests__/responsiveLayout.contract.test.ts",
@@ -106,34 +106,34 @@
     },
     {
       "path": "apps/node-backend/tests/accountRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 17 mocked-pool its asserting SQL text/params (findActiveId, advisory lock, active filters, provenance columns, LIMIT/OFFSET, getCount, getById/getByName, create/update/rename, resolveOrCreateByName) and SQL lines from the list-shaping test; kept balance/drift/partition shaping and not-found tests",
       "replacement": "apps/node-backend/tests/accountRepositoryBoundary.db.test.ts (new: active filter + count, unlimited vs paged listing, id/normalized-name lookup, whitelisted create/update/rename/no-op update, remove, resolveOrCreateByName trim/idempotence/sticky multi_currency_cash/blank name); findActiveId and funding-graph lock already covered by accountLifecycleConcurrency.db.test.ts and services/accountFundingGraphConcurrency.db.test.ts"
     },
     {
       "path": "apps/node-backend/tests/cashflowCacheDateTypesMigration.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed the it reading three repository .ts files for SQL cast strings; kept the migration-0093 text assertions (immutable migration)",
       "replacement": "apps/node-backend/tests/importInfoRowContracts.db.test.ts (existing: round-trips accuracy, MC and rolling caches through the real DATE columns)"
     },
     {
       "path": "apps/node-backend/tests/backup-coverage.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed the it asserting localStorage-keys.ts source text contains eight literal keys; kept backup table registry checks and the registered-key scan that feeds BackupSection (data-safety)"
     },
     {
       "path": "apps/node-backend/tests/materializedViewHousekeeping.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed source-text its on materializedViewService.ts (MATERIALIZED_VIEWS slice) and warmup.ts (markPhase names); kept migration-0094 text",
       "replacement": "apps/node-backend/tests/materializedViewService.test.ts (existing: asserts mv_cashflow_daily is not created/analyzed); boot phase names are diagnostics with no behaviour replacement"
     },
     {
       "path": "apps/node-backend/tests/legacyCleanupContracts.test.ts",
-      "decision": "rewrite at a boundary (ADR-214)",
+      "decision": "rewrite at a boundary (ADR-215)",
       "boundary": "structure",
       "reason": "tx_hash it read five named src files (locked file layout); rewritten to scan the whole backend src tree so files may move/split while the drop-safety invariant stays enforced; manual-SQL guard and read-only status-script checks kept (data-safety)"
     },
@@ -145,7 +145,7 @@
     },
     {
       "path": "apps/node-backend/tests/cashflowForecastRepositories.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 15 mocked-pool its asserting SQL fragments/bound params (upserts, ON CONFLICT, ORDER BY, DISTINCT ON, limit params, provider-health counter SQL, error truncation param) and the SQL line of mc.get; kept TTL, active-user discovery/fail-closed, row passthrough and not-found tests",
       "replacement": "apps/node-backend/tests/forecastCacheProviderHealth.db.test.ts (new: MC/rolling overwrite-on-key and miss, accuracy upsert idempotence + DESC history + limit, latest-per-method, chronological windowed history, provider failure counter/reset/1000-char truncation/String coercion/listAll order)"
@@ -158,98 +158,98 @@
     },
     {
       "path": "apps/node-backend/tests/accountService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 9 its whose only assertion was the argument object passed to mocked accountRepository.create/update/upsertStatementBalance/getAll (trim/uppercase, allowlist, null forwarding, empty PATCH, active filter passthrough, funding id accepted); kept validation errors, conflict mapping, funding-cycle and shaping tests",
       "replacement": "apps/node-backend/tests/accountRepositoryBoundary.db.test.ts ('normalizes and allowlists account input in the service': trimmed name, uppercased currency, unknown fields dropped, funding id accepted, nulls clear metadata, empty PATCH no-op, USD statement reading stored; active filter covered by the filter test)"
     },
     {
       "path": "apps/node-backend/tests/categoryRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "every it asserted SQL text, bound params or query call counts on a mocked pool; the only behaviour (normalization, ILIKE filters, de-duplicated active ids, legacy-only update/delete, recipient assignment) was visible only through those params",
       "replacement": "apps/node-backend/tests/categoryBoundary.db.test.ts (new: createOrGet/update trim+uppercase, existing on conflict, no-op update, getById miss, case-insensitive general/detail/search filters, active flag, count, limit/offset, de-duplicated getActiveByIds excluding inactive, hierarchy nodes refused by legacy update/hardDelete, assignToRecipients count); merged-pair redirect already covered by catalogRowContracts.db.test.ts"
     },
     {
       "path": "apps/node-backend/tests/categoryHierarchyRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "all its scripted a mocked client's query sequence and asserted call indexes/SQL (INSERT params, UPDATE parent_id at call 3, DELETE at call 8)",
       "replacement": "apps/node-backend/tests/categoryBoundary.db.test.ts (new: normalized depth-one node, invalid parent rejected, delete with children refused, move below descendant -> 'cannot be moved', merge into source subtree refused, merge moves children and transaction category references then deletes source)"
     },
     {
       "path": "apps/node-backend/tests/infoRepoMonthly.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 11 its asserting MV-vs-live path choice, SQL fragments and bound params (MV fast path, app-date anchor, MV unavailable/non-target currency fallback, exclusion routing/param numbering, allTime MIN(), explicit bounds, report fetcher SQL); kept malformed-exclusion rejection, int4-ceiling id and grouped-aggregate bucketing",
       "replacement": "apps/node-backend/tests/infoRepoMonthly.db.test.ts (existing: MV parity, MV refresh visibility, non-target currency fallback, exclusions/allTime never use MV, alias-aware exclusions, allTime earliest month, month-rollover anchor) + apps/node-backend/tests/infoRepoMonthlyBounds.db.test.ts (new: explicit from/to bounds limit month series and scan with exclusions; report custom period vs all-time)"
     },
     {
       "path": "apps/node-backend/tests/infoRepoForecast.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed its counting parallel queries, asserting JOIN/exclusion/transfer SQL substrings and param numbering, and the per-entry-point 'no CURRENT_DATE, $1 is app date' SQL scan; kept clock-aligned output, cumulative averages, aggregation/decimal/date shaping and range-validation rejections",
       "replacement": "apps/node-backend/tests/infoRepoForecast.db.test.ts (existing: exclusions on comparison, transfer exclusion on comparison/rolling/by-category, includeTransfers on all four, ledger-start divisor incl. transfer-emptied month, APP_TIMEZONE rollover) + apps/node-backend/tests/infoRepoForecastBoundary.db.test.ts (new: getCashflowForecastData drops transfers by default; by-category category+recipient exclusions)"
     },
     {
       "path": "apps/node-backend/tests/infoRepoStatistics.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 8 its asserting MV path choice, ancestor JOIN/COALESCE SQL, getBanks/getTransactionCount SQL and exclusion/date-bound placeholders and params, plus the SQL-substring lines of two pivot-shaping its; kept grouping/sorting, income-by-owner, mixed-sign, Uncategorised and malformed/int4 exclusion validation",
       "replacement": "apps/node-backend/tests/infoRepoStatistics.db.test.ts (existing: breakdown aggregation, transfers on/off, ancestor roll-up once, getBanks, getTransactionCount with account, pivot alias-aware exclusions, 3-level category) + apps/node-backend/tests/infoRepoStatisticsBounds.db.test.ts (new: explicit startDate/endDate with category+recipient exclusions on breakdown and pivot)"
     },
     {
       "path": "apps/node-backend/tests/infoRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 3 SQL-text its (current-point lateral/in_net_worth/no-gate SQL, filtered fallback CTE/JOIN text, avg-vs-current GROUP BY/probe SQL) and the MV SQL-text assertions of one it (renamed to its remaining zero-fill check); kept net-worth, recipient-insight, planned-expense and projection behaviour tests",
       "replacement": "apps/node-backend/tests/infoRepository.db.test.ts (existing: anchor+delta current point, manual-only, multi-currency headline==chart, in-net-worth population, avg-vs-current calendar-day denominator, unfiltered ledger-start divisor, transfers/inactive) + infoRepoMonthly.db.test.ts (alias-aware exclusions, MV parity)"
     },
     {
       "path": "apps/node-backend/tests/infoRepositoryRecipients.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 10 its asserting exclusion/date-bound SQL fragments and param numbering, NOT IN omission, TO_CHAR bucket SQL and alias-resolution query sequence; kept aggregation/merging, MoM, top-N caps, malformed/int4 id validation, unknown-selection short-circuit and fallback-currency reporting",
       "replacement": "apps/node-backend/tests/infoRepositoryRecipients.db.test.ts (existing: 3-level category + alias-aware exclusions on insights/by-year/pivot, monthly/yearly buckets, alias-cluster selection, pivot inclusive dates with exclusions) + apps/node-backend/tests/infoRepoRecipientsBounds.db.test.ts (new: explicit bounds with recipient exclusion on insights top merchants and by-year)"
     },
     {
       "path": "apps/node-backend/tests/insightCashProjectionRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "single it asserts only the SQL text (WITH saved/ON CONFLICT/DELETE) and params of saveProjection on a mocked pool",
       "replacement": "apps/node-backend/tests/insightCashProjectionRetention.db.test.ts (new: save keeps the 2-month window and prunes older rows) + insightDismissal.db.test.ts (existing: upsert per month/currency/method)"
     },
     {
       "path": "apps/node-backend/tests/portfolioExposureRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "single it asserts that the joined SQL emitted on a mocked client contains ON CONFLICT and no DELETE",
       "replacement": "apps/node-backend/tests/portfolioExposureSources.db.test.ts (new: omitted sources survive a later bundle, supplied source updated in place) + portfolioRowContracts.db.test.ts (existing: bundle with fund document)"
     },
     {
       "path": "apps/node-backend/tests/aiChatRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed LIMIT/OFFSET and COUNT SQL-text/param assertions from the paging it (renamed); kept page+total results and past-end total",
       "replacement": "apps/node-backend/tests/aiAuditRowContracts.db.test.ts (existing listConversations against PostgreSQL)"
     },
     {
       "path": "apps/node-backend/tests/customParserConfigRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 3 update its asserting SET-clause SQL/params and the 'only getById runs' SQL check, plus ORDER BY and INSERT SQL-text lines; kept row mapping, string/jsonb config parsing, not-found, delete result and stored-config validation",
       "replacement": "apps/node-backend/tests/customParserConfigBoundary.db.test.ts (new: name ordering, rename keeps config, config update keeps name, empty update returns row) + importInfoRowContracts.db.test.ts (existing round-trip)"
     },
     {
       "path": "apps/node-backend/tests/infoRepoBanks.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 4 its asserting current-balance SQL columns/lateral text, in_net_worth predicates in both SQL strings and that two queries run in parallel; kept balance/history shaping tests",
       "replacement": "apps/node-backend/tests/infoRepoBanks.db.test.ts (existing: anchor+delta vs manual-only, population gates incl. in_net_worth/tracking-only, drift per currency partition, provenance/first-last dates, headline == chart point)"
     },
     {
       "path": "apps/node-backend/tests/investmentRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 7 its asserting INSERT/UPDATE/UNNEST/DELETE SQL text, call counts and positional params (create, provider fields, direct update, ticker-pref upsert, updatePrice, updatePricesBulk, hardDelete); kept symbol uniqueness/normalization errors, empty-batch, no-allowed-fields and unsupported asset class",
       "replacement": "apps/node-backend/tests/investmentRepositoryBoundary.db.test.ts (new: provider fields persisted, show_in_ticker side table, updatePrice incl. missing id, bulk price update count+values, hardDelete) + portfolioRowContracts.db.test.ts (existing create/update/updatePrice)"
@@ -280,81 +280,81 @@
     },
     {
       "path": "apps/node-backend/tests/reportSectionScaffolding.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 2 source-text its (raw page scaffolding scan of sections/*.ts; 'is wired into the portfolio fetch boundary' source grep) and their fs/url imports; rendered-HTML and view-model tests kept"
     },
     {
       "path": "apps/node-backend/tests/responseEnvelopeContract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "source-text scan fixing which src files call res.json/res.send (file-layout lock); envelope shape covered by tests/envelope.test.ts and route tests"
     },
     {
       "path": "apps/node-backend/tests/transactionRepositoryBehavior.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "mocked-pool suite asserting SQL text and mock.calls; behaviour covered by transactionRepository.db.test.ts, and the hardDelete 409 planned-execution refusal by plannedExecutionConcurrency.db.test.ts",
       "replacement": "apps/node-backend/tests/transactionRepository.db.test.ts + apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts (existing)"
     },
     {
       "path": "apps/node-backend/tests/transactionRepositoryOrdering.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed ORDER BY / running-balance / count-join SQL-text its and the tags-only-PATCH SQL probe (covered by transactionRepository.db.test.ts pagination, sort, running balance, missing-id); kept the count-cache its (only check of cache reuse, TTL, single-flight, invalidation)",
       "replacement": "apps/node-backend/tests/transactionRepository.db.test.ts (existing)"
     },
     {
       "path": "apps/node-backend/tests/portfolioTransactionRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 10 SQL/param-shape its (flat-table INSERT column list, preloaded-asset-class call count, import_batch_id column-probe compat, DELETE/UPDATE statement text, getAllByInvestmentIds clause/param text, getCount SQL); kept money math, oversell rejections, remove/rollback rules, id-validation drops",
       "replacement": "existing portfolioRowContracts/portfolioImportRollback/portfolioSellValidationAccountScoped DB suites"
     },
     {
       "path": "apps/node-backend/tests/portfolioTxRepoCommon.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed import_batch_id column-probe cache its, buildListWhereClause SQL-string its, and 'loads the full ordered history once' query-count/SQL it; normalizeTransactionPayload and sell-availability rules kept"
     },
     {
       "path": "apps/node-backend/tests/tagRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "every case asserts SQL fragments/params on a mocked query",
       "replacement": "apps/node-backend/tests/catalogRepositoryBoundary.db.test.ts (active filter, slug order, counts, empty slug list, missing rows) + catalogRowContracts.db.test.ts (findOrCreate/reactivate/softDelete)"
     },
     {
       "path": "apps/node-backend/tests/watchlistRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts WHERE/SET SQL text and params on a mocked query",
       "replacement": "apps/node-backend/tests/catalogRepositoryBoundary.db.test.ts (asset-class filter, count, update allowlist ignores id/unknown fields, undefined skipped, missing row null, delete true/false)"
     },
     {
       "path": "apps/node-backend/tests/savedChartsRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts membership-table SQL and transaction call counts on mocks",
       "replacement": "apps/node-backend/tests/catalogRepositoryBoundary.db.test.ts (dedup/sorted memberships, patch changes only given sets, FK failure leaves no chart)"
     },
     {
       "path": "apps/node-backend/tests/recipientRepository.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 10 SQL-text its (getAll/getCount clauses, getByName params, createOrGet created flags via scripted queries, getOrCreateSystemId SQL, update SET text); kept SYSTEM-name guards, unknown-sort fallback, concurrent-insert winner, row shaping, cluster-root map; header updated",
       "replacement": "apps/node-backend/tests/catalogRepositoryBoundary.db.test.ts (category-subtree filter, uncategorised-with-activity queue, createOrGet, getByName, update upper-casing, unknown sort) + systemRecipientRows.db.test.ts (system recipient no-write resolve)"
     },
     {
       "path": "apps/node-backend/tests/splitRepository.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "scripted query-order mocks plus LATERAL/CTE SQL-text assertions",
       "replacement": "apps/node-backend/tests/splitRepositoryBoundary.db.test.ts (addPayment==getPayments shape, owed remaining and export amount, settle/getById real amount_paid+recipient_name, batch formatted rows, opt-in pagination, numeric counts) + moneyPrecisionAlignment.db.test.ts"
     },
     {
       "path": "apps/node-backend/tests/repositories/infoRepositorySankey.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts SQL fragments only (exclusion clauses, transfer predicate)",
       "replacement": "apps/node-backend/tests/infoRepositorySankey.db.test.ts (3-level effective category grouping, category-subtree and recipient-cluster exclusion, includeTransfers setting)"
@@ -368,14 +368,14 @@
     },
     {
       "path": "apps/node-backend/tests/services/bulkSelectionFilter.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 2 its asserting the uncategorised predicate SQL text",
       "replacement": "apps/node-backend/tests/transactionServiceBoundary.db.test.ts (uncategorised bulk selection returns only rows with no 3-level effective category)"
     },
     {
       "path": "apps/node-backend/tests/services/transferReconciliationService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed dismissed-pair anti-join SQL, stranded-peer release SQL and orphan-release allowlist SQL its; kept lock/409 concurrency, reciprocity guard and page-input its",
       "replacement": "apps/node-backend/tests/services/transferReconciliation.db.test.ts (existing: dismissed pair, releases prior peer, system rows survive)"
@@ -388,48 +388,48 @@
     },
     {
       "path": "apps/node-backend/tests/researchDossierService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 'writes current data and immutable version in one transaction' (SQL presence only)",
       "replacement": "apps/node-backend/tests/researchDossier.db.test.ts (existing versioning test)"
     },
     {
       "path": "apps/node-backend/tests/settingsStorage.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed set/get its that only checked the upsert/select SQL; kept array serialisation, legacy self-heal, and all setting validation its",
       "replacement": "apps/node-backend/tests/catalogRowContracts.db.test.ts (existing settings set/get round-trip)"
     },
     {
       "path": "apps/node-backend/tests/recurringDetectionService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 'resolves the effective category over three levels in the scan query' (SQL text; its own comment points to aliasCategoryResolution.db.test.ts for behaviour)",
       "replacement": "apps/node-backend/tests/aliasCategoryResolution.db.test.ts (existing)"
     },
     {
       "path": "apps/node-backend/tests/recipientClusterService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed the ORDER BY/LIMIT SQL-text assertions inside the first it; cluster outputs kept"
     },
     {
       "path": "apps/node-backend/tests/priceCache.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed date-param binding, ON CONFLICT SQL and default-source param its",
       "replacement": "apps/node-backend/tests/ratePricePersistence.db.test.ts (inclusive range load, same-day upsert, default source)"
     },
     {
       "path": "apps/node-backend/tests/rateFetcher.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed latest-marker UPDATE SQL it, saveHistoricalRate SQL it, and prior-rate SQL-text it; dropped now-unused imports",
       "replacement": "apps/node-backend/tests/ratePricePersistence.db.test.ts (latest marker moves, historical non-latest upsert) + historicalFxFallback.db.test.ts (existing, prior-quote rule)"
     },
     {
       "path": "apps/node-backend/tests/portfolioPerformanceSnapshotService.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed 'deletes existing currency rows and stores batches' (SQL presence/param count) and 'omits value_fx_neutral on un-migrated DB' (compat SQL text) plus the now-unused buildQueryResponses helper; all money/FX/replay tests kept"
     },
@@ -447,214 +447,214 @@
     },
     {
       "path": "apps/frontend/src/components/shared/__tests__/BackgroundQueryIndicator.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "TypeScript-AST scan of src requiring useBackgroundQueryCue next to every placeholderData: adoption/structure rule, no rendered behaviour"
     },
     {
       "path": "apps/frontend/src/components/shared/__tests__/CoarsePointerActions.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "readFileSync of two components asserting class names"
     },
     {
       "path": "apps/frontend/src/components/shared/__tests__/MoneyTypographyContract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "TS-AST scan of ~30 page sources for <Money>/formatter usage and font-mono; adoption contract. Money sign/format outcomes stay covered by the Money/format tests"
     },
     {
       "path": "apps/frontend/src/components/ui/card-material.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "regex over all .tsx for Card call-site classes"
     },
     {
       "path": "apps/frontend/src/components/ui/card-title.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "regex over all .tsx plus card.tsx/StatCard.tsx source strings (variant class strings, `level = 2` text)"
     },
     {
       "path": "apps/frontend/src/components/ui/overlay-motion.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts Tailwind motion class strings in popover/select/sheet/tooltip sources"
     },
     {
       "path": "apps/frontend/src/components/ui/primitives.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "source-text of index.css, tailwind config and ui/*.tsx (focus ring, sizes, radii, motion classes). Its only behaviour check, delete confirmation while Undo is lossy, is replaced at the UI boundary",
       "replacement": "apps/frontend/src/pages/__tests__/TransactionDeleteConfirm.integration.test.tsx"
     },
     {
       "path": "apps/frontend/src/features/settings/__tests__/AISettingsAnatomy.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "source-text 'anatomy' test (SettingsGroup/SettingRow strings, no <h2-4>)"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/currencyIconSemantics.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts icon import names (Banknote vs DollarSign) in page sources"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/fontAssets.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "main.tsx/fonts.css import strings and lazy-import text in ToolResultCard.tsx (bundle layout)"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/glassThinAdoption.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "'adoption' test: class strings in component sources and index.css"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/motionTokenParity.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "parity of tokens.css text vs lib/motion.ts plus src-wide class/ms-literal scans (token-file parity, listed in the brief)"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/semanticColorContract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "src-wide regex for class names and getChartColor/TrendHue usage strings"
     },
     {
       "path": "apps/frontend/src/pages/admin/adminColorSemantics.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "regex for raw Tailwind palette classes in three admin sources"
     },
     {
       "path": "apps/frontend/src/styles/designTokenDiscipline.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "'discipline' test: src-wide regex for hue classes and CSS text"
     },
     {
       "path": "apps/frontend/src/styles/headingIconDiscipline.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts absence of icon JSX snippets in named sources"
     },
     {
       "path": "apps/frontend/src/styles/microtype.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "src-wide regex for text-[10px]/uppercase and tailwind/index.css text"
     },
     {
       "path": "apps/frontend/src/styles/uiClutter.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "source strings (useState(false), aria-expanded={..}, indexOf order) in three components. UX defaults, not a business/safety rule; no RTL replacement written"
     },
     {
       "path": "apps/frontend/src/test/deltaPresentation.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts <DeltaPill/formatPercent usage strings in ~10 page sources and absence of utils/percent.ts"
     },
     {
       "path": "apps/frontend/src/test/labelAssociation.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "regex lint over all .tsx for <Label htmlFor/id>. Real a11y guard but enforced as source text; suggest the lead replace it with eslint-plugin-jsx-a11y label-has-associated-control if the guard is wanted"
     },
     {
       "path": "apps/frontend/src/test/printReports.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "asserts pathname strings, data-print-* attributes and @media print CSS text in sources"
     },
     {
       "path": "apps/frontend/src/components/ui/card-content.contract.test.tsx",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed src-wide <CardContent> padding-class regex; kept the renderToStaticMarkup variant tests"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/appIdentity.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed readFileSync assertions on AppSidebar.tsx/AboutSection.tsx source; kept the version parity across package.json files (packaging contract) and the exported identity constants"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/categoriesPreload.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed main.tsx source-order test (startCategoriesPreload before createRoot); kept the 4 MSW behaviour tests. The boot-ordering performance property is no longer asserted"
     },
     {
       "path": "apps/frontend/src/lib/__tests__/pageIcons.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed regex scan of *Page.tsx for PageHeader icon={PAGE_ICONS..}; kept the registry/navigation module-API tests"
     },
     {
       "path": "apps/frontend/src/components/shared/__tests__/PageShell.test.tsx",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed scan of page sources for <PageShell>/rhythm strings; kept the two render tests"
     },
     {
       "path": "apps/frontend/src/components/ui/__tests__/modal-overlay.test.tsx",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed index.css rule-text describe (4 tests); kept rendered overlay class tests for dialog/alert-dialog/sheet"
     },
     {
       "path": "apps/frontend/src/__tests__/bootPlaceholder.test.tsx",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed fidelity describe that read packaging/electron/main.ts source and the CSS token-string test; kept the index.html inertness/markup checks (shipped document) and the React handoff render test"
     },
     {
       "path": "apps/frontend/src/styles/designSystemTokens.contract.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "removed tokens.css/index.css/tailwind.config text parity and declaration tests; kept the WCAG contrast floors computed from themes.ts for every variant/mode"
     },
     {
       "path": "apps/frontend/src/features/dashboard/__tests__/recentTransactions.test.ts",
-      "decision": "rewrite at a boundary (ADR-214)",
+      "decision": "rewrite at a boundary (ADR-215)",
       "boundary": "structure",
       "reason": "vi.mock of @/lib/api/transactions asserting call params; rewritten against GET /api/transactions via MSW (same 200-row paging, 3-page cap, stop conditions, error propagation)",
       "replacement": "apps/frontend/src/features/dashboard/__tests__/recentTransactions.test.ts"
     },
     {
       "path": "apps/frontend/src/hooks/__tests__/useStatisticsQueries.test.tsx",
-      "decision": "rewrite at a boundary (ADR-214)",
+      "decision": "rewrite at a boundary (ADR-215)",
       "boundary": "structure",
       "reason": "found by the scan: vi.mock of @tanstack/react-query useQuery and @/lib/api/aggregations, asserting query keys/staleTime/call args; rewritten with real react-query and MSW, asserting the aggregation request URLs (24m window dates, currency, exclusion params, all-time has no date bounds). Query keys and staleTime are no longer asserted (internal)",
       "replacement": "apps/frontend/src/hooks/__tests__/useStatisticsQueries.test.tsx"
     },
     {
       "path": "apps/frontend/src/pages/__tests__/TransactionDeleteConfirm.integration.test.tsx",
-      "decision": "rewrite at a boundary (ADR-214)",
+      "decision": "rewrite at a boundary (ADR-215)",
       "boundary": "structure",
       "reason": "new boundary test replacing primitives.contract 'keeps the delete confirmation while Undo cannot restore everything': renders TransactionsPage, opens Delete from the inspector, asserts the alertdialog and its Undo warning, that Cancel sends no DELETE, and that Confirm sends DELETE /api/transactions/42"
     },
     {
       "path": "packaging/electron/identity.contract.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "Deleted 'desktop boot and recovery shells inherit the Vision palette' (source-text checks on palette constants, CSS colours and SVG markup in main.ts/assets) and dropped About-panel/menu-label regexes; kept version alignment, the trusted-external-URL allowlist with the deny window-open handler (security), demo icon .icns validation, demo packaging config and installer staging"
     },
     {
       "path": "packaging/electron/ipc-contract.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "Deleted 'all six context bridges consume a shared interface' (regex on preload type imports and const annotations = internal typing layout); kept main/preload/d.ts channel parity (IPC contract), per-channel argument contracts (behavioural) and the registerHandler sender-check-before-validation security invariant"
     },
     {
       "path": "packaging/electron/native-ui.contract.test.ts",
-      "decision": "trim structure-only cases (ADR-214)",
+      "decision": "trim structure-only cases (ADR-215)",
       "boundary": "structure",
       "reason": "Deleted source-text/call-order tests: language bridge wiring, splash-before-menu launch order, About/Help menu, native-writer-only, single mutable app port naming, retired deep-link strings, vibrancy wiring, and badge platform dispatch regexes. set-language and set-vibrancy argument validation stays covered behaviourally in runtime/ipc-schemas.test.ts (accept nl / reject fr, reject non-boolean). Kept the badge-image.js packaging config check, dev-profile data isolation (data safety) and the renderer boot watchdog and __dirname/appRoot path tests (see keep entry)",
       "replacement": "packaging/electron/runtime/ipc-schemas.test.ts (existing)"
@@ -667,13 +667,13 @@
     },
     {
       "path": "apps/frontend/src/lib/__tests__/springTokenParity.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "Asserts tokens.css and the TS spring table declare identical names/samples; layer parity, not rendered behaviour."
     },
     {
       "path": "apps/frontend/src/styles/vibrancy.contract.test.ts",
-      "decision": "remove (ADR-214)",
+      "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "Asserts index.css selector text for Electron vibrancy substitution; CSS structure, not behaviour."
     }

@@ -43,7 +43,7 @@ related_code:
 ## Behavior-focused cleanup and test boundaries
 
 Tests are evidence, not an immutable specification of internal design
-([[docs/adr/214-behaviour-boundary-tests|ADR-214]]). Agents may restructure code freely. Tests
+([[docs/adr/215-behaviour-boundary-tests|ADR-215]]). Agents may restructure code freely. Tests
 that assert structure (source text, private helpers, mock call order, SQL strings sent to a
 mocked client) may be deleted when a change breaks them, with a one-line reason per file in the
 PR; if one was the only check of a behaviour, add a boundary test in the same change. Preserve

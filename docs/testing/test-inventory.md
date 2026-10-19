@@ -63,7 +63,7 @@ related_code:
 
 ## Structure-only tests removed (2026-10-19)
 
-[[docs/adr/214-behaviour-boundary-tests|ADR-214]] makes tests that assert internal structure
+[[docs/adr/215-behaviour-boundary-tests|ADR-215]] makes tests that assert internal structure
 (source text, mock call order, SQL strings sent to a mocked client, private helpers) deletable.
 The 2026-10-19 pass reviewed the backend, frontend, Electron and scripts suites (Swift tests were
 out of scope). It removed 34 structure-only files, trimmed structure-only cases from about 40

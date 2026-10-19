@@ -135,7 +135,7 @@ Scale checks to risk:
 
 Finish with changed files, checks run, skipped checks, residual risk, and follow-ups.
 
-Tests are evidence, not an unquestionable specification of the internals (ADR-214). Agents may
+Tests are evidence, not an unquestionable specification of the internals (ADR-215). Agents may
 restructure code freely: move, split, merge or inline modules and change internal signatures to
 reach a better design. Tests belong at stable boundaries: HTTP/API contracts, real PostgreSQL
 state, pure domain functions through their public module (money, FX, tax, parsers, recurrence),

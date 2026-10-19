@@ -1,14 +1,14 @@
 ---
-title: "ADR-214: Test behaviour at stable boundaries, not internal structure"
+title: "ADR-215: Test behaviour at stable boundaries, not internal structure"
 type: adr
 status: Accepted
 date: 2026-10-19
 tags: [adr, testing, agents, refactoring, test-boundaries]
 description: "Accepted 2026-10-19. Tests check behaviour at stable boundaries (API contracts, real PostgreSQL, pure domain functions, file formats, rendered UI and end-to-end journeys). Tests that assert internal structure (source text, private helpers, mock call order, SQL strings sent to mocks) may be deleted when a change breaks them, with a one-line reason in the PR, so agents can restructure freely."
-aliases: [adr-214, behaviour tests, structure tests]
+aliases: [adr-215, behaviour tests, structure tests]
 ---
 
-# ADR-214: Test behaviour at stable boundaries, not internal structure
+# ADR-215: Test behaviour at stable boundaries, not internal structure
 
 ## Status
 
