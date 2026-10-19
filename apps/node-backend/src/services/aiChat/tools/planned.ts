@@ -17,6 +17,7 @@ import {
   requirePositiveInt,
 } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
+import { asPlannedTransactionId } from "@vision/types/brands";
 
 const RECURRENCE_TO_MONTHLY: Readonly<Record<string, number | undefined>> =
   Object.freeze({
@@ -207,10 +208,12 @@ export const getLoanSchedule = {
     args: Record<string, unknown>,
     { maxRows = settings.aiChat.maxToolRows }: ToolContext = {},
   ) {
-    const plannedId = requirePositiveInt(args.plannedId, "plannedId", {
-      min: 1,
-      max: Number.MAX_SAFE_INTEGER,
-    });
+    const plannedId = asPlannedTransactionId(
+      requirePositiveInt(args.plannedId, "plannedId", {
+        min: 1,
+        max: Number.MAX_SAFE_INTEGER,
+      }),
+    );
 
     const row = await plannedTransactionRepository.getById(plannedId);
     if (!row) {

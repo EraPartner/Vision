@@ -12,6 +12,7 @@ import {
     updateDossier,
     type DossierContent,
 } from "@/lib/api/dossiers";
+import { asCategoryId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -25,7 +26,7 @@ const content: DossierContent = {
     conclusion: "",
     reviewDate: null,
     evidence: [],
-    links: { categoryIds: [12], investmentIds: [], savedAnalysisIds: [] },
+    links: { categoryIds: [asCategoryId(12)], investmentIds: [], savedAnalysisIds: [] },
 };
 
 /** A hydrated dossier as the service answers it. */

@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { CategoryCombobox } from "@/components/shared/CategoryCombobox";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { CategoryId } from "@vision/types/brands";
 
 interface BulkRecategorizeDialogProps {
     open: boolean;
     selectedCount: number;
     onOpenChange: (open: boolean) => void;
-    onApply: (categoryId: number | null) => void;
+    onApply: (categoryId: CategoryId | null) => void;
     pending?: boolean;
 }
 
@@ -28,7 +29,7 @@ export function BulkRecategorizeDialog({
     pending,
 }: BulkRecategorizeDialogProps) {
     const { t } = useLanguage();
-    const [categoryId, setCategoryId] = useState<number | null>(null);
+    const [categoryId, setCategoryId] = useState<CategoryId | null>(null);
 
     function handleApply(e: React.FormEvent) {
         e.preventDefault();

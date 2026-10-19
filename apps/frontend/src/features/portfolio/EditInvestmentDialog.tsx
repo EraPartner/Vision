@@ -28,7 +28,11 @@ import { isUnitBased } from "@/utils/assetClass";
 import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
 import { priceProviderPayload } from "./priceProviderPayload";
-import { formatEditableNumber, INVESTMENT_CURRENCIES } from "@/utils/currency";
+import {
+    DEFAULT_CURRENCY,
+    formatEditableNumber,
+    INVESTMENT_CURRENCIES,
+} from "@/utils/currency";
 import {
     useDialogFormState,
     useReseedOnIdentityChange,
@@ -38,6 +42,7 @@ import {
 } from "@/hooks/useDialogFormState";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { asCurrencyCode } from "@vision/types/brands";
 
 interface Props extends ControlledDialogProps {
     investment: InvestmentSummary;
@@ -67,7 +72,10 @@ export function EditInvestmentDialog({
         // the native currency lives in `originalCurrency`. Reading `currency` here
         // pre-filled the wrong value and a save could overwrite the real native
         // currency with the display one.
-        currency: investment.originalCurrency || investment.currency || "EUR",
+        currency:
+            investment.originalCurrency ||
+            investment.currency ||
+            DEFAULT_CURRENCY,
         currentPrice:
             investment.currentPrice != null
                 ? formatEditableNumber(
@@ -235,7 +243,10 @@ export function EditInvestmentDialog({
                             <Select
                                 value={form.currency}
                                 onValueChange={(v) =>
-                                    setForm((f) => ({ ...f, currency: v }))
+                                    setForm((f) => ({
+                                        ...f,
+                                        currency: asCurrencyCode(v),
+                                    }))
                                 }
                             >
                                 <SelectTrigger id="edit-inv-currency">

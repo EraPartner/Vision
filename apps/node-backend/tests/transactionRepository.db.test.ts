@@ -37,6 +37,15 @@ import transactionRepository, {
 import type { TransactionFilters } from "../src/repositories/transactionRepository.ts";
 import { closePool } from "../src/database/connection.ts";
 import { toWireDate } from "../src/lib/dateFormat.ts";
+import {
+  asAccountId,
+  asCategoryId,
+  asCurrencyCode,
+  type CurrencyCode,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
+import { loose } from "./helpers/partial.ts";
 
 /** 'YYYY-MM-DD' of a row's `date` column, using the production DATE boundary. */
 const ymd = (d: Date | string) => toWireDate(d);
@@ -349,7 +358,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("filters by accountId and bankAccount (ILIKE substring)", async () => {
         const wise = await transactionRepository.getAll({
-          accountId: acc["WISE USD"],
+          accountId: asAccountId(acc["WISE USD"]!),
         });
         expect(wise.map((r) => r.id)).toEqual([T.t5]);
         const kbc = await transactionRepository.getAll({ bankAccount: "kbc" });
@@ -369,16 +378,16 @@ describe.skipIf(!hasTestDatabase())(
 
       it("recipientId matches the recipient AND aliases under it; alias id matches only itself", async () => {
         const group = await transactionRepository.getAll({
-          recipientId: rec.delhaize,
+          recipientId: asRecipientId(rec.delhaize),
         });
         expect(group.map((r) => r.id)).toEqual([T.t5, T.t2, T.t1]); // t1 recorded under the alias
         const aliasOnly = await transactionRepository.getAll({
-          recipientId: rec.delhaizeAlias,
+          recipientId: asRecipientId(rec.delhaizeAlias),
         });
         expect(aliasOnly.map((r) => r.id)).toEqual([T.t1]);
         // recipientGroupId from the ALIAS resolves the whole primary group.
         const fullGroup = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaizeAlias,
+          recipientGroupId: asRecipientId(rec.delhaizeAlias),
         });
         expect(fullGroup.map((r) => r.id)).toEqual([T.t5, T.t2, T.t1]);
       });
@@ -390,10 +399,10 @@ describe.skipIf(!hasTestDatabase())(
       // silently narrowed or widened filter fails here rather than in production.
       it("recipientGroupId resolves the same group from the primary, the alias, and a sibling", async () => {
         const fromPrimary = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaize,
+          recipientGroupId: asRecipientId(rec.delhaize),
         });
         const fromAlias = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaizeAlias,
+          recipientGroupId: asRecipientId(rec.delhaizeAlias),
         });
         // Both directions see the whole Delhaize group: t1 sits on the alias,
         // t2/t5 on the primary. t6 is inactive and stays out of both.
@@ -404,14 +413,14 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await transactionRepository.getAll({
-              recipientGroupId: rec.electrabel,
+              recipientGroupId: asRecipientId(rec.electrabel),
             })
           ).map((r) => r.id),
         ).toEqual([T.t3, T.t7]);
         expect(
           (
             await transactionRepository.getAll({
-              recipientGroupId: rec.electrabelAlias,
+              recipientGroupId: asRecipientId(rec.electrabelAlias),
             })
           ).map((r) => r.id),
         ).toEqual([T.t3, T.t7]);
@@ -420,7 +429,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(
           (
             await transactionRepository.getAll({
-              recipientGroupId: rec.employer,
+              recipientGroupId: asRecipientId(rec.employer),
             })
           ).map((r) => r.id),
         ).toEqual([T.t4]);
@@ -428,7 +437,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("recipientGroupId excludes non-members and yields nothing for an unknown id", async () => {
         const rows = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaize,
+          recipientGroupId: asRecipientId(rec.delhaize),
         });
         // Cross-group rows must not leak in.
         expect(rows.map((r) => r.id)).not.toContain(T.t3);
@@ -436,26 +445,26 @@ describe.skipIf(!hasTestDatabase())(
         expect(rows.map((r) => r.id)).not.toContain(T.t7);
         // An id no recipient has resolves to the empty set (not to "all rows").
         expect(
-          await transactionRepository.getAll({ recipientGroupId: 9_999_999 }),
+          await transactionRepository.getAll({ recipientGroupId: asRecipientId(9_999_999) }),
         ).toEqual([]);
       });
 
       it("recipientGroupId honours inactive rows and composes with other filters", async () => {
         const withInactive = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaize,
+          recipientGroupId: asRecipientId(rec.delhaize),
           active: false,
         });
         // t5/t6 share 2024-03-02, so the t.id DESC tiebreaker puts t6 first.
         expect(withInactive.map((r) => r.id)).toEqual([T.t6, T.t5, T.t2, T.t1]);
         // Combined with a date bound and a count, sharing one $-parameter sequence.
         const march = await transactionRepository.getAll({
-          recipientGroupId: rec.delhaize,
+          recipientGroupId: asRecipientId(rec.delhaize),
           startDate: "2024-03-01",
         });
         expect(march.map((r) => r.id)).toEqual([T.t5]);
         expect(
           await transactionRepository.getCount({
-            recipientGroupId: rec.delhaize,
+            recipientGroupId: asRecipientId(rec.delhaize),
           }),
         ).toBe(3);
       });
@@ -654,7 +663,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(all.find((r) => r.id === T.t1)!.bank_account).toBe(
           "CANONICAL KBC",
         );
-        expect((await transactionRepository.getById(T.t1))!.bank_account).toBe(
+        expect((await transactionRepository.getById(asTransactionId(T.t1)))!.bank_account).toBe(
           "CANONICAL KBC",
         );
         const { rows } = await transactionRepository.getAllWithCount({});
@@ -740,17 +749,17 @@ describe.skipIf(!hasTestDatabase())(
       it("counts by effective category across all three levels", async () => {
         // Bills: t7 (recipient default) + t3 (primary's default via alias).
         expect(
-          await transactionRepository.getCount({ categoryId: cat.Bills }),
+          await transactionRepository.getCount({ categoryId: asCategoryId(cat.Bills) }),
         ).toBe(2);
         expect(
-          await transactionRepository.getCount({ categoryId: cat.Food }),
+          await transactionRepository.getCount({ categoryId: asCategoryId(cat.Food) }),
         ).toBe(2);
       });
 
       it("counts category lists, transaction type, and signed or magnitude amount bounds", async () => {
         expect(
           await transactionRepository.getCount({
-            categoryIds: [cat.Food, cat.Salary],
+            categoryIds: [asCategoryId(cat.Food), asCategoryId(cat.Salary)],
           }),
         ).toBe(3);
         expect(
@@ -804,7 +813,7 @@ describe.skipIf(!hasTestDatabase())(
 
       it("categoryIds matches the effective category (own / recipient default / primary default)", async () => {
         const { rows, total } = await transactionRepository.getAllWithCount({
-          categoryIds: [cat.Food, cat.Salary],
+          categoryIds: [asCategoryId(cat.Food), asCategoryId(cat.Salary)],
         });
         expect(total).toBe(3);
         expect(rows.map((r) => r.id)).toEqual([T.t5, T.t4, T.t2]);
@@ -886,12 +895,12 @@ describe.skipIf(!hasTestDatabase())(
             { startDate: "2024-02-01", endDate: "2024-03-31", active: false },
             1,
           ],
-          [{ accountId: acc["KBC CURRENT"] }, 1],
+          [{ accountId: asAccountId(acc["KBC CURRENT"]!) }, 1],
           [{ bankAccount: "wise" }, 0],
-          [{ categoryId: cat.Food }, 1],
-          [{ categoryId: cat.Bills }, 1],
-          [{ recipientId: rec.delhaize }, 1],
-          [{ recipientId: rec.electrabelAlias, active: false }, 0],
+          [{ categoryId: asCategoryId(cat.Food) }, 1],
+          [{ categoryId: asCategoryId(cat.Bills) }, 1],
+          [{ recipientId: asRecipientId(rec.delhaize) }, 1],
+          [{ recipientId: asRecipientId(rec.electrabelAlias), active: false }, 0],
           [{ recipientName: "delh" }, 1],
           [{ recipientName: "Electrabel Invoicing" }, 0],
           [{ recipientName: "nobody" }, 0],
@@ -900,7 +909,7 @@ describe.skipIf(!hasTestDatabase())(
           [{ search: "groceries" }, 1],
           [{ search: "2024-03" }, 0],
           [{ search: "-52.30" }, 1],
-          [{ transactionId: T.t1 }, 1],
+          [{ transactionId: asTransactionId(T.t1) }, 1],
           [
             {
               recipientName: "delh",
@@ -995,7 +1004,7 @@ describe.skipIf(!hasTestDatabase())(
           expect(searched.total).toBe(1);
 
           const exact = await transactionRepository.getUncategorisedWithCount({
-            transactionId: U.small,
+            transactionId: asTransactionId(U.small),
           });
           expect(exact.rows.map((r) => r.id)).toEqual([U.small]);
           expect(exact.total).toBe(1);
@@ -1068,7 +1077,7 @@ describe.skipIf(!hasTestDatabase())(
         it("recipientGroupId narrows both halves and resolves the whole primary group", async () => {
           const viaPrimary =
             await transactionRepository.getUncategorisedWithCount({
-              recipientGroupId: rec.delhaize,
+              recipientGroupId: asRecipientId(rec.delhaize),
             });
           expect(viaPrimary.rows.map((r) => r.id)).toEqual([T.t1]); // t1 hangs off the ALIAS
           expect(viaPrimary.total).toBe(1); // t1
@@ -1076,14 +1085,14 @@ describe.skipIf(!hasTestDatabase())(
           // Asking by the alias resolves the same group (primary + siblings).
           const viaAlias =
             await transactionRepository.getUncategorisedWithCount({
-              recipientGroupId: rec.delhaizeAlias,
+              recipientGroupId: asRecipientId(rec.delhaizeAlias),
             });
           expect(viaAlias.rows.map((r) => r.id)).toEqual([T.t1]);
           expect(viaAlias.total).toBe(1);
 
           // A recipient outside that group selects the Bakery rows instead.
           const outside = await transactionRepository.getUncategorisedWithCount(
-            { recipientGroupId: bakery },
+            { recipientGroupId: asRecipientId(bakery) },
           );
           expect(outside.rows.map((r) => r.id)).toEqual([
             U.income,
@@ -1100,7 +1109,7 @@ describe.skipIf(!hasTestDatabase())(
           // hangs off the ALIAS of the recipient asked for).
           const { rows, total } =
             await transactionRepository.getUncategorisedWithCount({
-              recipientId: rec.delhaize,
+              recipientId: asRecipientId(rec.delhaize),
             });
           expect(rows.map((r) => r.id)).toEqual([T.t1]);
           expect(total).toBe(1); // t1
@@ -1109,7 +1118,7 @@ describe.skipIf(!hasTestDatabase())(
         it("categoryIds does not narrow either half of the uncategorised queue", async () => {
           const { rows, total } =
             await transactionRepository.getUncategorisedWithCount({
-              categoryIds: [cat.Food, cat.Salary],
+              categoryIds: [asCategoryId(cat.Food), asCategoryId(cat.Salary)],
             });
           expect(total).toBe(4);
           // Preserve the row semantics: category filters do not apply to this queue.
@@ -1134,7 +1143,7 @@ describe.skipIf(!hasTestDatabase())(
 
         it("plain and counted uncategorised queries share the same filter semantics", async () => {
           const filters: TransactionFilters = {
-            recipientGroupId: bakery,
+            recipientGroupId: asRecipientId(bakery),
             transactionType: "expense",
             amountMin: 100,
             search: "BAKERY",
@@ -1185,7 +1194,7 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     describe("getById", () => {
       it("returns the enriched row and null for a missing id", async () => {
-        const row = await transactionRepository.getById(T.t3);
+        const row = await transactionRepository.getById(asTransactionId(T.t3));
         expect(row).toMatchObject({
           id: T.t3,
           recipient_name: "Electrabel",
@@ -1193,7 +1202,7 @@ describe.skipIf(!hasTestDatabase())(
           category_name: "Bills:Utilities",
           tags: [],
         });
-        expect(await transactionRepository.getById(T.t7 + 100_000)).toBeNull();
+        expect(await transactionRepository.getById(asTransactionId(T.t7 + 100_000))).toBeNull();
       });
     });
 
@@ -1203,10 +1212,10 @@ describe.skipIf(!hasTestDatabase())(
         const row = await transactionRepository.create({
           transaction_date: "2024-03-10",
           account_id: revolutId,
-          recipient_id: rec.delhaize,
+          recipient_id: asRecipientId(rec.delhaize),
           amount: "-3.20",
           memo: "coffee",
-          currency: "usd",
+          currency: loose<CurrencyCode>("usd"),
           category_id: null,
           comment: "espresso",
         });
@@ -1239,7 +1248,7 @@ describe.skipIf(!hasTestDatabase())(
         const first = await transactionRepository.create({
           transaction_date: "2024-03-10",
           account_id: firstId,
-          recipient_id: rec.delhaize,
+          recipient_id: asRecipientId(rec.delhaize),
           amount: "-1.00",
           category_id: null,
           comment: null,
@@ -1247,7 +1256,7 @@ describe.skipIf(!hasTestDatabase())(
         const second = await transactionRepository.create({
           transaction_date: "2024-03-11",
           account_id: sameId,
-          recipient_id: rec.delhaize,
+          recipient_id: asRecipientId(rec.delhaize),
           amount: "-2.00",
           category_id: null,
           comment: null,
@@ -1264,7 +1273,7 @@ describe.skipIf(!hasTestDatabase())(
       it("defaults currency to EUR and nulls bank/memo when absent", async () => {
         const row = await transactionRepository.create({
           transaction_date: "2024-03-10",
-          recipient_id: rec.delhaize,
+          recipient_id: asRecipientId(rec.delhaize),
           amount: "5.00",
           category_id: null,
           comment: null,
@@ -1278,7 +1287,7 @@ describe.skipIf(!hasTestDatabase())(
       it("resolves the effective category through the recipient on the returned row", async () => {
         const row = await transactionRepository.create({
           transaction_date: "2024-03-10",
-          recipient_id: rec.electrabelAlias,
+          recipient_id: asRecipientId(rec.electrabelAlias),
           amount: "-77.77",
           category_id: null,
           comment: null,
@@ -1291,7 +1300,7 @@ describe.skipIf(!hasTestDatabase())(
       it("sets tags atomically, silently dropping inactive/unknown slugs", async () => {
         const row = await transactionRepository.create({
           transaction_date: "2024-03-10",
-          recipient_id: rec.delhaize,
+          recipient_id: asRecipientId(rec.delhaize),
           amount: "-8.00",
           category_id: null,
           comment: null,
@@ -1308,7 +1317,7 @@ describe.skipIf(!hasTestDatabase())(
 
     describe("update", () => {
       it("maps transaction_date → date and persists NUMERIC edits", async () => {
-        const row = await transactionRepository.update(T.t1, {
+        const row = await transactionRepository.update(asTransactionId(T.t1), {
           transaction_date: "2024-03-15",
           amount: "-60.00",
         });
@@ -1325,12 +1334,12 @@ describe.skipIf(!hasTestDatabase())(
 
       it("returns null for a missing id, with fields and tags-only alike", async () => {
         expect(
-          await transactionRepository.update(T.t7 + 100_000, {
+          await transactionRepository.update(asTransactionId(T.t7 + 100_000), {
             amount: "1.00",
           }),
         ).toBeNull();
         expect(
-          await transactionRepository.update(T.t7 + 100_000, {
+          await transactionRepository.update(asTransactionId(T.t7 + 100_000), {
             tags: ["groceries"],
           }),
         ).toBeNull();
@@ -1343,16 +1352,16 @@ describe.skipIf(!hasTestDatabase())(
       });
 
       it("tags-only PATCH replaces the junction set", async () => {
-        const row = await transactionRepository.update(T.t1, {
+        const row = await transactionRepository.update(asTransactionId(T.t1), {
           tags: ["groceries"],
         });
         expect(row!.tags.map((t) => t.slug)).toEqual(["groceries"]); // 'archived' junction removed
-        const cleared = await transactionRepository.update(T.t1, { tags: [] });
+        const cleared = await transactionRepository.update(asTransactionId(T.t1), { tags: [] });
         expect(cleared!.tags).toEqual([]);
       });
 
       it("no writable fields and no tags falls back to the current row", async () => {
-        const row = await transactionRepository.update(T.t2, {});
+        const row = await transactionRepository.update(asTransactionId(T.t2), {});
         expect(row!.id).toBe(T.t2);
         expect(row!.amount).toBe("-18.7500");
       });
@@ -1367,17 +1376,17 @@ describe.skipIf(!hasTestDatabase())(
       // and the tags-path fetch, so the update response and an immediate GET
       // must be identical.
       it("update() response resolves the full 3-level category — identical to getById on alias rows", async () => {
-        const updated = await transactionRepository.update(T.t3, {
+        const updated = await transactionRepository.update(asTransactionId(T.t3), {
           amount: "-121.00",
         });
-        const fetched = await transactionRepository.getById(T.t3);
+        const fetched = await transactionRepository.getById(asTransactionId(T.t3));
         expect(updated!.category_name).toBe("Bills:Utilities"); // via the PRIMARY's default
         expect(updated!.effective_category_id).toBe(cat.Bills);
         expect(updated!.recipient_name).toBe("Electrabel"); // COALESCE(pr.name, r.name)
         expect(fetched).toEqual(updated); // response ≡ immediate GET, field for field
 
         // The tags-path fetch (fields + tags in one PATCH) resolves identically.
-        const withTags = await transactionRepository.update(T.t3, {
+        const withTags = await transactionRepository.update(asTransactionId(T.t3), {
           amount: "-122.00",
           tags: [],
         });
@@ -1431,7 +1440,7 @@ describe.skipIf(!hasTestDatabase())(
           category_name: "Zzz:Last",
         };
 
-        expect(await transactionRepository.getById(aliasTxn)).toMatchObject(
+        expect(await transactionRepository.getById(asTransactionId(aliasTxn))).toMatchObject(
           expected,
         );
 
@@ -1447,7 +1456,7 @@ describe.skipIf(!hasTestDatabase())(
       it("create / update return the same pairing as an immediate GET", async () => {
         const created = await transactionRepository.create({
           transaction_date: "2024-03-06",
-          recipient_id: aliasId,
+          recipient_id: asRecipientId(aliasId),
           amount: "-22.22",
           category_id: null,
           comment: null,
@@ -1458,15 +1467,15 @@ describe.skipIf(!hasTestDatabase())(
           created,
         );
 
-        const updated = await transactionRepository.update(aliasTxn, {
+        const updated = await transactionRepository.update(asTransactionId(aliasTxn), {
           amount: "-33.33",
         });
         expect(updated!.effective_category_id).toBe(cat.Zzz);
         expect(updated!.category_name).toBe("Zzz:Last");
-        expect(await transactionRepository.getById(aliasTxn)).toEqual(updated);
+        expect(await transactionRepository.getById(asTransactionId(aliasTxn))).toEqual(updated);
 
         // The tags-path fetch (fields + tags in one PATCH) resolves identically.
-        const withTags = await transactionRepository.update(aliasTxn, {
+        const withTags = await transactionRepository.update(asTransactionId(aliasTxn), {
           amount: "-34.00",
           tags: [],
         });
@@ -1475,7 +1484,7 @@ describe.skipIf(!hasTestDatabase())(
       });
 
       it("an own category_id still wins over both defaults", async () => {
-        const row = await transactionRepository.update(aliasTxn, {
+        const row = await transactionRepository.update(asTransactionId(aliasTxn), {
           category_id: cat.Food,
         });
         expect(row!.effective_category_id).toBe(cat.Food);
@@ -1491,14 +1500,14 @@ describe.skipIf(!hasTestDatabase())(
         // 'Zzz:Last' sorts after t7's 'Bills:Utilities'. Under the old pc-first
         // order the alias row was labelled 'Bills:Utilities' and — being the
         // later date — sorted BEFORE t7 on the tiebreaker.
-        expect(ids.indexOf(aliasTxn)).toBeGreaterThan(ids.indexOf(T.t7));
+        expect(ids.indexOf(asTransactionId(aliasTxn))).toBeGreaterThan(ids.indexOf(asTransactionId(T.t7)));
       });
     });
 
     describe("hardDelete", () => {
       it("deletes exactly once (junction rows cascade)", async () => {
-        expect(await transactionRepository.hardDelete(T.t1)).toBe(true);
-        expect(await transactionRepository.hardDelete(T.t1)).toBe(false);
+        expect(await transactionRepository.hardDelete(asTransactionId(T.t1))).toBe(true);
+        expect(await transactionRepository.hardDelete(asTransactionId(T.t1))).toBe(false);
         const { rows } = await getTestPool()!.query(
           "SELECT 1 FROM transaction_tags WHERE transaction_id = $1",
           [T.t1],

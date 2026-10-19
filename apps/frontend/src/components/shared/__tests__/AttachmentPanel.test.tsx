@@ -6,6 +6,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AttachmentPanel } from "@/components/shared/AttachmentPanel";
+import { asTransactionId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -30,7 +31,7 @@ describe("AttachmentPanel", () => {
             ),
         );
 
-        renderWithApp(<AttachmentPanel transactionId={7} />);
+        renderWithApp(<AttachmentPanel transactionId={asTransactionId(7)} />);
 
         expect(
             await screen.findByRole("button", {

@@ -18,6 +18,8 @@
  */
 import { z } from "zod";
 import { parseLocaleNumber, type NumberFormat } from "@/utils/currency";
+import { isCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /** Non-empty string field (mirrors a plain `!value` required check). */
 export function requiredString(requiredKey: string) {
@@ -78,13 +80,32 @@ export function moneyAmount(
 /**
  * Currency code field: trimmed and uppercased, falling back to `defaultCode`
  * when the input is empty (matches the account form's long-standing
- * `trim().toUpperCase() || "EUR"` normalization).
+ * `trim().toUpperCase() || "EUR"` normalization). A value that is still not
+ * an ISO-4217 code fails validation.
  */
-export function currencyCode(defaultCode?: string) {
-    return z.string().transform((value) => {
-        const code = value.trim().toUpperCase();
-        return code || (defaultCode ?? code);
+export function currencyCode(defaultCode?: CurrencyCode) {
+    return z.string().transform((value, ctx): CurrencyCode => {
+        const code = value.trim().toUpperCase() || (defaultCode ?? "");
+        if (isCurrencyCode(code)) return code;
+        ctx.addIssue({ code: "custom", message: "validation.currencyCode" });
+        return z.NEVER;
     });
+}
+
+/**
+ * Optional typed currency code: blank is `undefined` (the caller supplies its
+ * default); anything else is trimmed, uppercased and must be ISO-4217.
+ */
+export function optionalCurrencyCode(message: string) {
+    return z
+        .string()
+        .transform((value, ctx): CurrencyCode | undefined => {
+            const code = value.trim().toUpperCase();
+            if (!code) return undefined;
+            if (isCurrencyCode(code)) return code;
+            ctx.addIssue({ code: "custom", message });
+            return z.NEVER;
+        });
 }
 
 /**

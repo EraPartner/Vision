@@ -10,14 +10,18 @@ import { withCreateOutcome } from "../lib/createOutcome.ts";
 import { parseInput } from "../lib/zodInput.ts";
 import {
   booleanQuery,
-  idParams,
   idSchema,
+  recipientIdParams,
+  recipientIdSchema,
   requiredString,
 } from "./_requestSchemas.ts";
 
 const router = Router();
 
-const accountParams = z.object({ id: idSchema(), accountId: idSchema() });
+const accountParams = z.object({
+  id: recipientIdSchema(),
+  accountId: idSchema(),
+});
 
 const listQuery = z.object({ active: booleanQuery(true) });
 
@@ -40,7 +44,7 @@ const updateBody = z.object({
 });
 
 router.get("/:id/bank-accounts", async (req, res) => {
-  const { id: recipientId } = parseInput(idParams, req.params);
+  const { id: recipientId } = parseInput(recipientIdParams, req.params);
   const { active: activeOnly } = parseInput(listQuery, req.query);
   const accounts = await recipientBankAccountService.getByRecipientId(
     recipientId,
@@ -50,7 +54,7 @@ router.get("/:id/bank-accounts", async (req, res) => {
 });
 
 router.post("/:id/bank-accounts", async (req, res) => {
-  const { id: recipientId } = parseInput(idParams, req.params);
+  const { id: recipientId } = parseInput(recipientIdParams, req.params);
   const { account_number, bank_name, address, account_label, set_as_primary } =
     parseInput(createBody, req.body);
 

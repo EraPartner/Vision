@@ -11,19 +11,24 @@ import {
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { todayYmd } from "@/lib/timezone";
 import type { PlannedTransaction } from "@/types/api";
+import {
+    asCurrencyCode,
+    asPlannedTransactionId,
+    asRecipientId,
+} from "@vision/types/brands";
 
 const makeQueryWrapper = createQueryWrapper;
 
 function makePlanned(overrides: Partial<PlannedTransaction>): PlannedTransaction {
     return {
-        id: 1,
+        id: asPlannedTransactionId(1),
         planned_date: todayYmd(),
         bank_account: "BE12345678901234",
-        recipient_id: 1,
+        recipient_id: asRecipientId(1),
         recipient_name: "Landlord",
         memo: "Monthly rent",
         amount: -1200.0,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         category_id: undefined,
         category_name: undefined,
         comment: undefined,
@@ -79,7 +84,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("useUpcomingPlannedPayments", () => {
     it("hides a dismissed occurrence from visibleUpcoming", async () => {
-        const pt = makePlanned({ id: 7 });
+        const pt = makePlanned({ id: asPlannedTransactionId(7) });
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(listOf([pt]));
 
         const { result } = renderHook(() => useUpcomingPlannedPayments(), {
@@ -94,14 +99,14 @@ describe("useUpcomingPlannedPayments", () => {
     });
 
     it("re-surfaces a recurring payment once planned_date advances to the next cycle", async () => {
-        const thisCycle = makePlanned({ id: 7, planned_date: todayYmd() });
+        const thisCycle = makePlanned({ id: asPlannedTransactionId(7), planned_date: todayYmd() });
         // Same row id, advanced date — what the row looks like after /execute.
         const nextDate = new Date(`${todayYmd()}T00:00:00`);
         nextDate.setDate(nextDate.getDate() + 5);
         const y = nextDate.getFullYear();
         const m = String(nextDate.getMonth() + 1).padStart(2, "0");
         const d = String(nextDate.getDate()).padStart(2, "0");
-        const nextCycle = makePlanned({ id: 7, planned_date: `${y}-${m}-${d}` });
+        const nextCycle = makePlanned({ id: asPlannedTransactionId(7), planned_date: `${y}-${m}-${d}` });
 
         const spy = vi
             .spyOn(apiClient, "getPlannedTransactions")
@@ -124,10 +129,10 @@ describe("useUpcomingPlannedPayments", () => {
     });
 
     it("normalizes ISO-timestamp planned_date when keying dismissals", () => {
-        expect(dismissKeyFor({ id: 3, planned_date: "2026-06-15T00:00:00.000Z" })).toBe(
+        expect(dismissKeyFor({ id: asPlannedTransactionId(3), planned_date: "2026-06-15T00:00:00.000Z" })).toBe(
             "3:2026-06-15",
         );
-        expect(dismissKeyFor({ id: 3, planned_date: "2026-06-15" })).toBe("3:2026-06-15");
+        expect(dismissKeyFor({ id: asPlannedTransactionId(3), planned_date: "2026-06-15" })).toBe("3:2026-06-15");
     });
 
     it("prunes past-dated and legacy id-only entries on load", async () => {
@@ -138,7 +143,7 @@ describe("useUpcomingPlannedPayments", () => {
         );
         __resetDismissedCacheForTests();
 
-        const pt = makePlanned({ id: 7, planned_date: todayYmd() });
+        const pt = makePlanned({ id: asPlannedTransactionId(7), planned_date: todayYmd() });
         vi.spyOn(apiClient, "getPlannedTransactions").mockResolvedValue(listOf([pt]));
 
         const { result } = renderHook(() => useUpcomingPlannedPayments(), {
@@ -149,7 +154,7 @@ describe("useUpcomingPlannedPayments", () => {
         expect(result.current.visibleUpcoming).toHaveLength(0);
 
         // …and a write persists only well-formed, non-stale keys.
-        act(() => result.current.dismiss({ id: 8, planned_date: todayYmd() }));
+        act(() => result.current.dismiss({ id: asPlannedTransactionId(8), planned_date: todayYmd() }));
         const stored = JSON.parse(
             window.localStorage.getItem(LOCAL_STORAGE_KEYS.DISMISSED_UPCOMING_PAYMENTS) ?? "[]",
         );

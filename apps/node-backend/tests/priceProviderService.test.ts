@@ -7,6 +7,10 @@ import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { partial } from "./helpers/partial.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 
 const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
   mockYahooQuote: vi.fn(),
@@ -731,7 +735,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 11,
+          id: asInvestmentId(11),
           price_provider: "yahoo",
           price_provider_id: "AAPL",
         },
@@ -770,7 +774,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 24,
+          id: asInvestmentId(24),
           price_provider: "kinesis",
           price_provider_id: "XAU_USD",
         },
@@ -810,7 +814,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 5,
+          id: asInvestmentId(5),
           price_provider: "custom",
           price_provider_history_url: "https://example.com/series",
           price_provider_history_path: "data.series",
@@ -842,7 +846,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 12,
+          id: asInvestmentId(12),
           price_provider: "custom",
           price_provider_history_url: "https://example.com/history",
           price_provider_history_path: "points",
@@ -874,7 +878,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 12,
+          id: asInvestmentId(12),
           price_provider: "custom",
           price_provider_history_url: "https://example.com/history",
           price_provider_history_path: "points",
@@ -917,7 +921,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 22,
+          id: asInvestmentId(22),
           price_provider: "kinesis",
           price_provider_id: "XAU_USD",
         },
@@ -981,10 +985,10 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 23,
+          id: asInvestmentId(23),
           price_provider: "kinesis",
           price_provider_id: "KAU_EUR",
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
         },
         {
           fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0),
@@ -1037,10 +1041,10 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 24,
+          id: asInvestmentId(24),
           price_provider: "kinesis",
           price_provider_id: "KAU_EUR",
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
         },
         {
           fromMs: Date.UTC(2023, 4, 19, 0, 0, 0, 0),
@@ -1055,7 +1059,7 @@ describe("Price Provider Service", () => {
       query.mockResolvedValueOnce({ rows: [] });
 
       const points = await fetchHistoricalPrices(
-        { id: 1, price_provider: "yahoo", price_provider_id: "", symbol: "" },
+        { id: asInvestmentId(1), price_provider: "yahoo", price_provider_id: "", symbol: "" },
         {},
       );
       expect(points).toEqual([]);
@@ -1080,7 +1084,7 @@ describe("Price Provider Service", () => {
       );
 
       const points = await fetchHistoricalPrices(
-        { id: 11, price_provider: "binance", price_provider_id: "BTCUSDT" },
+        { id: asInvestmentId(11), price_provider: "binance", price_provider_id: "BTCUSDT" },
         {},
       );
 
@@ -1123,7 +1127,7 @@ describe("Price Provider Service", () => {
         );
 
       const points = await fetchHistoricalPrices(
-        { id: 21, price_provider: "binance", price_provider_id: "BTCUSDT" },
+        { id: asInvestmentId(21), price_provider: "binance", price_provider_id: "BTCUSDT" },
         { fromMs, toMs },
       );
 
@@ -1143,7 +1147,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 12,
+          id: asInvestmentId(12),
           price_provider: "kinesis",
           price_provider_id: "",
           name: "unknown-asset",
@@ -1166,7 +1170,7 @@ describe("Price Provider Service", () => {
 
       const points = await fetchHistoricalPrices(
         {
-          id: 13,
+          id: asInvestmentId(13),
           price_provider: "custom",
           price_provider_history_url: "https://example.com/history",
           price_provider_history_path: "points",
@@ -1186,7 +1190,7 @@ describe("Price Provider Service", () => {
       });
 
       const points = await fetchHistoricalPrices(
-        { id: 14, price_provider: "manual" },
+        { id: asInvestmentId(14), price_provider: "manual" },
         {},
       );
 

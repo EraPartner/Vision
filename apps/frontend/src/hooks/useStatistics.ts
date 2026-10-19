@@ -15,6 +15,12 @@ import {
     type CategoryPivotItem,
     type RecipientYearlySpending,
 } from "@/lib/api/aggregations";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,8 +36,8 @@ interface MonthlyData {
 
 interface CategoryMonthlyData {
     categoryName: string;
-    categoryId: number | null;
-    categoryPathIds?: number[];
+    categoryId: CategoryId | null;
+    categoryPathIds?: CategoryId[];
     categoryPathSegments?: string[];
     months: Record<string, number>;
     incomeMonths: Record<string, number>;
@@ -105,9 +111,9 @@ type RecipientByYearPayload = Awaited<
 >["data"];
 
 export function useRecipientInsights(
-    currency: string,
-    excludedCategoryIds: number[],
-    excludedRecipientIds: number[],
+    currency: CurrencyCode,
+    excludedCategoryIds: CategoryId[],
+    excludedRecipientIds: RecipientId[],
     window: StatisticsWindow,
 ) {
     const dateRange = useMemo(() => getStatisticsDateRange(window), [window]);
@@ -131,9 +137,9 @@ export function useRecipientInsights(
 
 export function useSankeyFlow(
     selectedYear: number,
-    currency: string,
-    excludedCategoryIds: number[],
-    excludedRecipientIds: number[],
+    currency: CurrencyCode,
+    excludedCategoryIds: CategoryId[],
+    excludedRecipientIds: RecipientId[],
     applyExclusions: boolean,
 ) {
     return useQuery({
@@ -314,7 +320,7 @@ export function mapToStatisticsData(
 
 export function useStatistics(window: StatisticsWindow = "24m") {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const dateRange = useMemo(() => getStatisticsDateRange(window), [window]);
 
     const [graphExclusions, setGraphExclusions] = useState<GraphExclusions>({});

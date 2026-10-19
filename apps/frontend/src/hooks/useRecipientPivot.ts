@@ -5,11 +5,12 @@ import {
 } from "@/lib/api/aggregations";
 import type { SavedChart } from "@/types/apiClient";
 import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
+import type { RecipientId } from "@vision/types/brands";
 
 export type { RecipientPivotItem };
 
 export interface RecipientPeriodData {
-    recipientId: number;
+    recipientId: RecipientId;
     name: string;
     months: Record<string, number>;
 }
@@ -17,7 +18,8 @@ export interface RecipientPeriodData {
 const config: PivotConfig<
     RecipientPivotItem,
     RecipientPeriodData,
-    RecipientPivotConversion
+    RecipientPivotConversion,
+    RecipientId
 > = {
     kind: "recipient-pivot",
     fetchPivot: async ({ currency, bucket, start, end, all, ids }) => {

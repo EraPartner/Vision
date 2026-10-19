@@ -19,13 +19,15 @@ import {
 } from "../lib/validation.ts";
 import {
   convertAtLatestRates,
-  currencyCode,
   loadLatestRatesToEur,
 } from "./currency/latestRateConversion.ts";
-import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
+import { money, toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.ts";
 import { withTransaction } from "../database/connection.ts";
+import { storedCurrencyCode } from "../lib/currencyCode.ts";
 import { invalidateStatisticsCaches } from "./info/cache.ts";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import type { AccountRow, AccountWithBalanceRow } from "../types/rows.ts";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
@@ -130,7 +132,7 @@ const fundingAccountIdField = z
       });
       return z.NEVER;
     }
-    return parsed.value;
+    return asAccountId(parsed.value);
   })
   .optional();
 
@@ -255,11 +257,11 @@ function sanitize(body: unknown, { requireName }: { requireName: boolean }) {
  * @param selfId  the account being updated (null on create)
  */
 async function assertFundingAccountValid(
-  fundingAccountId: number | null | undefined,
-  selfId: number | null,
+  fundingAccountId: AccountId | null | undefined,
+  selfId: AccountId | null,
 ) {
   if (fundingAccountId == null) return;
-  const self = selfId == null ? undefined : Number(selfId);
+  const self = selfId ?? undefined;
   if (self !== undefined && fundingAccountId === self) {
     throw new ValidationError(
       "funding_account_id cannot reference the account itself",
@@ -273,10 +275,7 @@ async function assertFundingAccountValid(
   }
   if (self === undefined) return;
   const seen = new Set([fundingAccountId]);
-  let ancestorId =
-    funding.funding_account_id == null
-      ? undefined
-      : Number(funding.funding_account_id);
+  let ancestorId = funding.funding_account_id ?? undefined;
   while (ancestorId !== undefined) {
     if (ancestorId === self) {
       throw new ValidationError(
@@ -287,10 +286,7 @@ async function assertFundingAccountValid(
     seen.add(ancestorId);
     const ancestor = await accountRepository.getById(ancestorId);
     if (!ancestor) return;
-    ancestorId =
-      ancestor.funding_account_id == null
-        ? undefined
-        : Number(ancestor.funding_account_id);
+    ancestorId = ancestor.funding_account_id ?? undefined;
   }
 }
 
@@ -326,14 +322,13 @@ const accountService = {
         ...rest
       } = row;
       const partitions = parts ?? [];
-      const accountCurrency = currencyCode(row.currency);
+      const accountCurrency = storedCurrencyCode(row.currency);
       let total = toDecimal(0);
-      const unconvertedCurrencies: string[] = [];
+      const unconvertedCurrencies: CurrencyCode[] = [];
       for (const part of partitions) {
-        const partCurrency = currencyCode(part.currency);
+        const partCurrency = storedCurrencyCode(part.currency);
         const converted = convertAtLatestRates(
-          part.balance,
-          partCurrency,
+          money(part.balance, partCurrency),
           accountCurrency,
           rates,
         );
@@ -341,12 +336,12 @@ const accountService = {
           unconvertedCurrencies.push(partCurrency);
           continue;
         }
-        total = total.plus(converted);
+        total = total.plus(converted.amount);
       }
       const base = statementPartition(partitions, row.currency);
       const baseBalance = toNumber(roundToCents(toDecimal(base.balance)));
       const statementBalances = (rawStatements ?? []).map((statement) => ({
-        currency: String(statement.currency).toUpperCase(),
+        currency: storedCurrencyCode(statement.currency),
         balance: toNumber(toDecimal(statement.balance)),
         balance_date: statement.balance_date,
       }));
@@ -359,7 +354,7 @@ const accountService = {
         statement_balances: statementBalances,
         computed_balance: toNumber(roundToCents(total)),
         balance_parts: partitions.map((part) => ({
-          currency: (part.currency || "EUR").toUpperCase(),
+          currency: storedCurrencyCode(part.currency),
           balance: toNumber(toDecimal(part.balance)),
         })),
         balance_incomplete: unconvertedCurrencies.length > 0,
@@ -388,7 +383,7 @@ const accountService = {
     return { items, total };
   },
 
-  async get(id: number) {
+  async get(id: AccountId) {
     const account = await accountRepository.getById(id);
     if (!account) throw new NotFoundError(`Account ${id} not found`);
     return account;
@@ -421,7 +416,7 @@ const accountService = {
   },
 
   /** @param body unvalidated wire payload — see `sanitize`. */
-  async update(id: number, body: unknown) {
+  async update(id: AccountId, body: unknown) {
     // Widened for closed_at: server-stamped below by the lifecycle logic (D5),
     // never part of the parsed payload.
     const fields: ReturnType<typeof sanitize> & { closed_at?: Date | null } =
@@ -480,7 +475,11 @@ const accountService = {
   },
 
   /** Replace one currency's authoritative statement reading. */
-  async setStatementBalance(id: number, currencyInput: unknown, body: unknown) {
+  async setStatementBalance(
+    id: AccountId,
+    currencyInput: unknown,
+    body: unknown,
+  ) {
     const account = await accountRepository.getById(id);
     if (!account) throw new NotFoundError(`Account ${id} not found`);
     const currency = assertCurrency(currencyInput);
@@ -507,7 +506,7 @@ const accountService = {
   },
 
   /** Remove one currency's statement reading. */
-  async removeStatementBalance(id: number, currencyInput: unknown) {
+  async removeStatementBalance(id: AccountId, currencyInput: unknown) {
     const account = await accountRepository.getById(id);
     if (!account) throw new NotFoundError(`Account ${id} not found`);
     const currency = assertCurrency(currencyInput);
@@ -531,7 +530,7 @@ const accountService = {
    * with zero referencing rows (FK ON DELETE RESTRICT); otherwise a 409 routes
    * the caller to the close flow (lifecycle D5: active → closed → deleted).
    */
-  async remove(id: number) {
+  async remove(id: AccountId) {
     return withTransaction(async () => {
       await accountRepository.lockFundingGraphForMutation();
       let removed;

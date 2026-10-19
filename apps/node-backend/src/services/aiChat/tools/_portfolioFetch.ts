@@ -15,6 +15,7 @@ import type {
   InvestmentRow,
   PortfolioTransactionRow,
 } from '../../../types/rows.ts';
+import type { InvestmentId } from '@vision/types/brands';
 
 /**
  * Active investments, optionally filtered by asset class.
@@ -37,7 +38,7 @@ export function loadActiveInvestments(
 export function loadTransactionsForInvestments(
   cache: ToolCache | undefined,
   assetClass: string | null,
-  ids: number[],
+  ids: InvestmentId[],
   { type = null }: { type?: string | null } = {},
 ): Promise<PortfolioTransactionRow[]> {
   if (ids.length === 0) return Promise.resolve([]);

@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { currencyCode } from "@/lib/forms/schemas";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 export function accountFormSchema() {
     return z
@@ -19,7 +20,7 @@ export function accountFormSchema() {
             }),
             display_name: z.string(),
             institution: z.string(),
-            currency: currencyCode("EUR"),
+            currency: currencyCode(DEFAULT_CURRENCY),
         })
         .transform((values) => ({
             ...values,

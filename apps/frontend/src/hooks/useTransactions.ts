@@ -26,6 +26,12 @@ import { ApiClientError } from "@/lib/api/client";
 import { ApiErrorCode } from "@vision/types";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 interface UseTransactionsParams {
     limit?: number;
@@ -33,8 +39,8 @@ interface UseTransactionsParams {
     start_date?: string;
     end_date?: string;
     bank_account?: string;
-    category_id?: number;
-    recipient_id?: number;
+    category_id?: CategoryId;
+    recipient_id?: RecipientId;
     recipient_name?: string;
     uncategorised?: boolean;
     active?: boolean;
@@ -54,7 +60,7 @@ export function useTransactions(params?: UseTransactionsParams, enabled = true) 
 }
 
 export function useAccountLedger(
-    accountId: number | undefined,
+    accountId: AccountId | undefined,
     ledgerLimit: number,
     enabled: boolean,
 ) {
@@ -185,7 +191,7 @@ export function useUpdateTransaction() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: TransactionUpdate }) =>
+        mutationFn: ({ id, data }: { id: TransactionId; data: TransactionUpdate }) =>
             apiClient.updateTransaction(id, data),
         onMutate: async ({ id, data }) => {
             await queryClient.cancelQueries({ queryKey: transactionKeys.all });
@@ -228,7 +234,7 @@ export function useDeleteTransaction() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteTransaction(id),
+        mutationFn: (id: TransactionId) => apiClient.deleteTransaction(id),
         onMutate: async (id) => {
             await queryClient.cancelQueries({ queryKey: transactionKeys.all });
             const snapshot = snapshotTransactionLists(queryClient);
@@ -263,12 +269,13 @@ export function useDeleteTransaction() {
                 row.account_id != null
             ) {
                 const accountId = row.account_id;
+                const recipientId = row.recipient_id;
                 const restore = async () => {
                     try {
                         await apiClient.createTransaction({
                             transaction_date: row.transaction_date,
                             account_id: accountId,
-                            recipient_id: row.recipient_id as number,
+                            recipient_id: recipientId,
                             memo: row.memo ?? undefined,
                             amount: row.amount,
                             currency: row.currency,

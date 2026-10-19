@@ -6,6 +6,7 @@ import {
     DossierSchema,
     DossierVersionListSchema,
 } from "@vision/types/contracts";
+import type { CategoryId, InvestmentId } from "@vision/types/brands";
 
 export type EvidenceStance = "support" | "oppose" | "context";
 export type EvidenceOrigin = "user" | "ai-draft";
@@ -39,8 +40,8 @@ export interface DossierContent {
     reviewDate: string | null;
     evidence: DossierEvidence[];
     links: {
-        categoryIds: number[];
-        investmentIds: number[];
+        categoryIds: CategoryId[];
+        investmentIds: InvestmentId[];
         savedAnalysisIds: string[];
     };
 }

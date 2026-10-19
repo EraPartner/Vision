@@ -19,27 +19,34 @@ import {
 import { apiRequest, checkResponseContract } from "@/lib/api/client";
 import { requestBlobWithResponse } from "@/lib/api/helpers";
 import { requestWithQuery } from "@/lib/api/helpers";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 export async function getTransactions(
     params?: {
-        transaction_id?: number | undefined;
+        transaction_id?: TransactionId | undefined;
         limit?: number | undefined;
         offset?: number | undefined;
         start_date?: string | undefined;
         end_date?: string | undefined;
         /** Preferred account filter (exact FK match, ADR-088); bank_account is the legacy substring escape hatch. */
-        account_id?: number | undefined;
+        account_id?: AccountId | undefined;
         bank_account?: string | undefined;
-        category_id?: number | undefined;
-        category_ids?: number[] | undefined;
-        recipient_id?: number | undefined;
-        recipient_group_id?: number | undefined;
+        category_id?: CategoryId | undefined;
+        category_ids?: CategoryId[] | undefined;
+        recipient_id?: RecipientId | undefined;
+        recipient_group_id?: RecipientId | undefined;
         recipient_name?: string | undefined;
         uncategorised?: boolean | undefined;
         active?: boolean | undefined;
         search?: string | undefined;
         normalize_to_eur?: boolean | undefined;
-        target_currency?: string | undefined;
+        target_currency?: CurrencyCode | undefined;
         sort_by?: string | undefined;
         sort_dir?: "asc" | "desc" | undefined;
         /** Adds a per-account, per-currency `running_balance` to each row. */
@@ -86,7 +93,7 @@ export function createTransaction(
 }
 
 export function updateTransaction(
-    id: number,
+    id: TransactionId,
     transaction: TransactionUpdate,
 ): Promise<Transaction> {
     return apiRequest<Transaction>(`/api/transactions/${id}`, {
@@ -99,14 +106,14 @@ export function updateTransaction(
  * Marks two existing rows as the legs of one transfer (ADR transfers contract):
  * both must be active, on different accounts and of opposite sign.
  */
-export function markTransfer(aId: number, bId: number): Promise<void> {
+export function markTransfer(aId: TransactionId, bId: TransactionId): Promise<void> {
     return apiRequest<void>("/api/transactions/transfers", {
         method: "POST",
         body: JSON.stringify({ aId, bId }),
     });
 }
 
-export async function deleteTransaction(id: number): Promise<void> {
+export async function deleteTransaction(id: TransactionId): Promise<void> {
     await apiRequest<void>(`/api/transactions/${id}`, { method: "DELETE" });
 }
 

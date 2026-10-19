@@ -9,6 +9,7 @@ import {
 import { onTaxSettingsSaved } from "@/stores/taxPersistence";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { getStatisticsDateRange } from "@/hooks/useStatistics";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /**
  * Refetch both server-computed tax dashboards once a Belgian-tax settings save is
@@ -38,7 +39,7 @@ function useRefetchTaxDashboardsOnSave() {
  */
 export function useTaxDashboardQuery(options: {
     year: number;
-    currency: string;
+    currency: CurrencyCode;
     enabled: boolean;
 }) {
     useRefetchTaxDashboardsOnSave();
@@ -76,7 +77,7 @@ export function useTaxDashboardQuery(options: {
 /** GET /api/belgian-tax/portfolio-dashboard for the viewed year. */
 export function usePortfolioTaxDashboardQuery(options: {
     year: number;
-    currency: string;
+    currency: CurrencyCode;
     enabled: boolean;
 }) {
     useRefetchTaxDashboardsOnSave();

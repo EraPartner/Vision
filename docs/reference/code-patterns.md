@@ -152,6 +152,7 @@ const normalized = coerceNumericFields(row, NUMERIC_FIELDS);
 | Banker's rounding      | HALF_EVEN default; 0.005 rounds to 0, 0.015 to 0.02                                                                   |
 | Single column coercion | `numericColumn(v)` — converts NUMERIC string to number; `null`/`undefined` pass through unchanged; `''` → `undefined` |
 | Multi-column coercion  | `coerceNumericFields(row, fields)` — returns shallow copy with named columns coerced; no-op on nullish row            |
+| Cross-currency totals  | Build `money(amount, currency)` values, convert with `convertAtLatestRates`, and sum with `sumMoney(items, target)`; it throws `CurrencyMismatchError` on an unconverted item ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]) |
 
 ### Mandatory Scopes (Phase 9 Complete + May 2026 Audit)
 
@@ -604,6 +605,7 @@ return parseInt(requireRow(row, "account count").count, 10);
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Schema location  | Add the schema to the area module `database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `audit`, `catalog`, `imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), importing the `pg*` primitives from `database/rowSchemas.ts`. Export the row type as `z.output<typeof schema>` next to it (re-export it from `types/rows.ts` when other layers use it), so the type and the check cannot drift. |
 | pg default types | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. No global type parsers are installed.                        |
+| Branded columns  | Entity ids and currency columns use the branded keys (`pgAccountId`, `pgCategoryId`, …, `pgCurrency`), which brand input and output alike so the schema stays check-only ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]). |
 | Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects pg returned, extra columns included.                   |
 | Columns          | Plain `z.object` ignores unlisted columns, so `SELECT t.*` keeps working after a migration adds one. `.optional()` marks a column only some projections select; `.nullable()` marks SQL NULL. |
 | Transactions     | Pass the `client` as the fourth argument inside `withTransaction`.                                                                                                                  |

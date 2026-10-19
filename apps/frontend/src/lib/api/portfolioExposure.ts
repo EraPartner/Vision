@@ -1,9 +1,10 @@
 import { apiRequest } from "@/lib/api/client";
 import { PortfolioExposureSchema } from "@vision/types/contracts";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 export interface PortfolioExposureContribution {
     sourceType: "direct" | "fund";
-    investmentId: number;
+    investmentId: InvestmentId;
     investmentName: string;
     sourceFundName: string | null;
     amount: number;
@@ -24,7 +25,7 @@ export interface PortfolioExposureDimension {
     unclassifiedWeightPercent: number;
 }
 export interface PortfolioExposureResponse {
-    currency: string;
+    currency: CurrencyCode;
     computedAt: string;
     totalValue: number;
     uncoveredValue: number;
@@ -32,7 +33,7 @@ export interface PortfolioExposureResponse {
     coveredCashValue: number;
     coveredCashWeightPercent: number;
     fundSources: Array<{
-        investmentId: number;
+        investmentId: InvestmentId;
         investmentName: string;
         asOfDate: string;
         evaluatedAt: string;
@@ -48,7 +49,7 @@ export interface PortfolioExposureResponse {
     scopeNotes: string[];
 }
 
-export const getPortfolioExposure = (currency: string) =>
+export const getPortfolioExposure = (currency: CurrencyCode) =>
     apiRequest<PortfolioExposureResponse>(
         `/api/investments/exposure?currency=${encodeURIComponent(currency)}`,
         { schema: PortfolioExposureSchema },

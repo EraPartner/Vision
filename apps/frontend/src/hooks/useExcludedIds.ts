@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { CATEGORY_FETCH_LIMIT } from "@/lib/categoriesPreload";
 import { useAllCategories, useCategoryTree } from "@/hooks/useCategories";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 /**
  * Single source of truth for "which category/recipient IDs are excluded from
@@ -27,16 +28,16 @@ export type ExclusionScopeName = "dashboard" | "statistics";
 
 export interface ExcludedIds {
     /** Settings exclusions + hidden categories, de-duplicated and sorted ascending. */
-    excludedCategoryIds: number[];
+    excludedCategoryIds: CategoryId[];
     /** Settings recipient exclusions, sorted ascending. */
-    excludedRecipientIds: number[];
+    excludedRecipientIds: RecipientId[];
     /** Whether exclusions apply to this scope at all (per settings.exclusionScope). */
     exclusionsApply: boolean;
     /** True once the data needed to resolve exclusions is available (or not needed). */
     isReady: boolean;
 }
 
-const EMPTY: number[] = [];
+const EMPTY: never[] = [];
 
 export function useExcludedIds(scope: ExclusionScopeName): ExcludedIds {
     const { settings, isLoading: settingsLoading } = useSettings();

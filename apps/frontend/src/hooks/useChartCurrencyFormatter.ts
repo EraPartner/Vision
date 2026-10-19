@@ -15,6 +15,7 @@ import {
     getCurrencySymbol,
     type CompactFormatResult,
 } from "@/utils/currency";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export interface ChartCurrencyFormatter {
     formatCurrency: (val: number) => string;
@@ -22,7 +23,7 @@ export interface ChartCurrencyFormatter {
     formatAxisCompact: (val: number) => string;
     currencySymbol: string;
     locale: string;
-    currency: string;
+    currency: CurrencyCode;
 }
 
 export function useChartCurrencyFormatter(): ChartCurrencyFormatter {

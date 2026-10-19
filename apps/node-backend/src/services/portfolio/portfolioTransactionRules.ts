@@ -33,6 +33,13 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
 import type { PartitionedTxnLike } from "@vision/shared-utils/portfolio";
 import type { DecimalInput } from "../../lib/money.ts";
 import type { PortfolioUnitEventRow } from "../../repositories/portfolioTxRepo.reads.ts";
+import { asAccountId } from "@vision/types/brands";
+import type {
+  AccountId,
+  CurrencyCode,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 
 export type PortfolioTransactionRow =
   import("../../types/rows.ts").PortfolioTransactionRow;
@@ -42,7 +49,7 @@ export type PortfolioTransactionRow =
  * {@link normalizeTransactionPayload} fills in the derived unit math.
  */
 export interface PortfolioTransactionInput {
-  investment_id: number;
+  investment_id: InvestmentId;
   type: string;
   /** 'YYYY-MM-DD' */
   date: string;
@@ -53,13 +60,13 @@ export interface PortfolioTransactionInput {
   fees?: number | string | null | undefined;
   taxes?: number | string | null | undefined;
   dividend_amount_convention?: "gross" | "net" | "unknown" | undefined;
-  currency?: string | undefined;
+  currency?: CurrencyCode | undefined;
   note?: string | null | undefined;
   is_recurring?: boolean | undefined;
   recurrence_interval?: string | null | undefined;
   recurrence_end_date?: string | null | undefined;
   fx_rate_to_eur?: number | string | null | undefined;
-  account_id?: number | null | undefined;
+  account_id?: AccountId | null | undefined;
   /**
    * The portfolio import batch that
    *           created this lot (migration 0086) — set only by the import commit path,
@@ -383,6 +390,8 @@ function replayUnits(
   return toNumber(net);
 }
 
+const CUSTODY_EVENT_TYPES = new Set(["asset_transfer", "asset_adjustment"]);
+
 function onOrBefore<R extends { date?: string | null }>(
   rows: R[],
   date: string | undefined,
@@ -391,7 +400,7 @@ function onOrBefore<R extends { date?: string | null }>(
 }
 
 /** Display label for a broker account, for user-facing validation errors. */
-async function getAccountLabel(accountId: number): Promise<string> {
+async function getAccountLabel(accountId: AccountId): Promise<string> {
   try {
     return await loadAccountLabel(accountId);
   } catch (error) {
@@ -441,13 +450,14 @@ export async function validatePortfolioUnitMutation({
 
   const EPSILON = 1e-8;
   const rows = await getUnitEventsForInvestment(investmentId);
-  const numericExcludedId = Number(excludeTransactionId);
-  const excludedIds = new Set(
-    [numericExcludedId, ...excludeTransactionIds.map(Number)].filter(
-      (id) => Number.isInteger(id) && id > 0,
-    ),
+  const excludedIds = new Set<number>(excludeTransactionIds);
+  if (excludeTransactionId !== undefined) excludedIds.add(excludeTransactionId);
+  // Custody events share the UNION's id column but come from their own
+  // tables, so only transaction rows can match an excluded transaction id.
+  const retainedRows = rows.filter(
+    (row) =>
+      CUSTODY_EVENT_TYPES.has(row.type) || !excludedIds.has(Number(row.id)),
   );
-  const retainedRows = rows.filter((row) => !excludedIds.has(Number(row.id)));
   const projectedRows: (PortfolioUnitEventRow | ProjectedUnitEvent)[] =
     omitCandidate
       ? retainedRows
@@ -455,9 +465,7 @@ export async function validatePortfolioUnitMutation({
           ...retainedRows,
           {
             ...candidate,
-            id: excludedIds.has(numericExcludedId)
-              ? numericExcludedId
-              : Number.MAX_SAFE_INTEGER,
+            id: excludeTransactionId ?? Number.MAX_SAFE_INTEGER,
             type,
             date: String(date),
             units: Number(units) || 0,
@@ -476,7 +484,7 @@ export async function validatePortfolioUnitMutation({
     );
 
   const sellUnits = Number(units) || 0;
-  const numericAccountId = accountId == null ? undefined : Number(accountId);
+  const numericAccountId = accountId ?? undefined;
   const accountScoped =
     type === "sell" &&
     sellUnits > 0 &&
@@ -515,7 +523,7 @@ export async function validatePortfolioUnitMutation({
     const after = partitionOversellDeficits(asPartitionedTxns(projectedRows));
     for (const [oversoldAccountId, deficit] of after) {
       if (deficit - (before.get(oversoldAccountId) ?? 0) > EPSILON) {
-        const label = await getAccountLabel(oversoldAccountId);
+        const label = await getAccountLabel(asAccountId(oversoldAccountId));
         throw makeValidationError(
           `change would create or worsen an oversold partition at ${label}`,
         );
@@ -526,17 +534,17 @@ export async function validatePortfolioUnitMutation({
 
 /** Parameters of {@link validatePortfolioUnitMutation}. */
 export interface UnitMutationParams {
-  investmentId: number;
+  investmentId: InvestmentId;
   assetClass: string | undefined;
   type?: string | undefined;
   /** 'YYYY-MM-DD' */
   date?: string | undefined;
   units?: number | string | null | undefined;
-  accountId?: number | string | null | undefined;
+  accountId?: AccountId | null | undefined;
   /** The would-be row merged into the projected history. */
   candidate?: Record<string, unknown> | undefined;
-  excludeTransactionId?: number | string | undefined;
-  excludeTransactionIds?: readonly (number | string)[] | undefined;
+  excludeTransactionId?: PortfolioTransactionId | undefined;
+  excludeTransactionIds?: readonly PortfolioTransactionId[] | undefined;
   omitCandidate?: boolean | undefined;
   checkProjectedHistory?: boolean | undefined;
 }

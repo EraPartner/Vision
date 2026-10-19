@@ -13,7 +13,9 @@
 
 import { query as dbQuery } from "../database/connection.ts";
 import { checkRows } from "../database/rowContracts.ts";
-import { idRowSchema } from "../database/rowSchemas.ts";
+import { transactionKeyRowSchema } from "../database/rowSchemas.ts";
+import { asTransactionId } from "@vision/types/brands";
+import type { TransactionId } from "@vision/types/brands";
 import { intCountRowSchema } from "../database/rows/ledger.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import {
@@ -371,7 +373,7 @@ export function validateBulkSelection(
   selector: BulkSelector = {},
   opts: { idCap?: number } = {},
 ):
-  | { mode: "ids"; ids: number[] }
+  | { mode: "ids"; ids: TransactionId[] }
   | { mode: "filter"; filter: BulkWhereOptions } {
   const { ids, filter } = selector;
   const idCap = opts.idCap ?? DEFAULT_ID_CAP;
@@ -396,7 +398,10 @@ export function validateBulkSelection(
     // Do not coerce the complete array with Number(): validateInt4Ids accepts
     // canonical digit strings while rejecting exponents, hex, booleans, and
     // nested arrays that could otherwise retarget a destructive bulk action.
-    return { mode: "ids", ids: validateInt4Ids(ids, "ids") };
+    return {
+      mode: "ids",
+      ids: validateInt4Ids(ids, "ids").map(asTransactionId),
+    };
   }
 
   return { mode: "filter", filter: normalizeBulkFilter(filter) };
@@ -419,7 +424,7 @@ export async function resolveBulkSelection(
     allowEmpty?: boolean;
     query?: BulkSelectionQuery;
   } = {},
-): Promise<number[]> {
+): Promise<TransactionId[]> {
   const idCap = opts.idCap ?? DEFAULT_ID_CAP;
   const filterCap = opts.filterCap ?? DEFAULT_FILTER_CAP;
   const query: BulkSelectionQuery = opts.query ?? dbQuery;
@@ -452,7 +457,9 @@ export async function resolveBulkSelection(
     `SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${whereSql} ORDER BY t.id`,
     params,
   );
-  return checkRows(idRowSchema, idsResult.rows).map((row) => row.id);
+  return checkRows(transactionKeyRowSchema, idsResult.rows).map(
+    (row) => row.id,
+  );
 }
 
 const BULK_SELECTION_DEFAULTS = Object.freeze({

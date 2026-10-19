@@ -60,6 +60,8 @@ function assertReviewable(
 }
 
 import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId } from "@vision/types/brands";
 import { scheduleRefresh } from "./materializedViewService.ts";
 import { scheduleReconcile } from "./transferReconciliationService.ts";
 
@@ -99,7 +101,10 @@ async function commitLockedScope(
         ]),
       ].filter((id) => id != null),
     ),
-  ].sort((a, b) => a - b);
+  ]
+    .sort((a, b) => a - b)
+    // Stored review JSON names these accounts; the asserts below check them.
+    .map(asAccountId);
   // Existing broker-retag/account-lifecycle lock order: accounts, then writers.
   for (const accountId of accountIds)
     await assertPortfolioImportAccount(accountId);
@@ -467,7 +472,7 @@ export async function commitReviewedPortfolioImport({
   expectedPlanFingerprint,
 }: {
   batchId: number;
-  accountId?: number | undefined;
+  accountId?: AccountId | undefined;
   adoptPolicy?: string | undefined;
   expectedPlanFingerprint?: string | undefined;
 }) {

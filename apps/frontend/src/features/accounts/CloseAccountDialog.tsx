@@ -39,6 +39,7 @@ import {
     PortfolioLotRetagChoice,
     UNASSIGNED_PORTFOLIO_LOTS,
 } from "@/features/portfolio/PortfolioLotRetagChoice";
+import { asAccountId } from "@vision/types/brands";
 
 interface CloseAccountDialogProps {
     account: Account;
@@ -128,7 +129,7 @@ export function CloseAccountDialog({
                     const destination =
                         portfolioChoice === UNASSIGNED_PORTFOLIO_LOTS
                             ? null
-                            : Number(portfolioChoice);
+                            : asAccountId(Number(portfolioChoice));
                     const fingerprint = `${preview.transaction_ids.join(",")}|${account.id}|${destination ?? "unassigned"}`;
                     if (idempotencyRef.current?.fingerprint !== fingerprint) {
                         idempotencyRef.current = {

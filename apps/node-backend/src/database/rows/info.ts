@@ -14,11 +14,18 @@
  */
 import { z } from "zod";
 import {
+  pgAccountId,
   pgBigint,
+  pgCategoryId,
+  pgCurrency,
   pgDate,
   pgDayString,
   pgInt,
+  pgInvestmentId,
   pgNumeric,
+  pgPortfolioTransactionId,
+  pgRecipientId,
+  pgTagId,
   pgTimestamptz,
 } from "../rowSchemas.ts";
 
@@ -39,7 +46,7 @@ const pgJsonObject = z.record(z.string(), z.unknown());
  * active rows.
  */
 const balancePartsSchema = z
-  .array(z.object({ currency: z.string(), balance: pgNumeric }))
+  .array(z.object({ currency: pgCurrency, balance: pgNumeric }))
   .nullable();
 
 /** `MIN(t.date) AS first_date` over a WHERE that can match nothing. */
@@ -57,22 +64,22 @@ export const ledgerStartRowSchema = z
  */
 export const categoryCurrencyAmountRowSchema = z
   .object({
-    category_id: pgInt,
+    category_id: pgCategoryId,
     name: z.string(),
     amount: pgNumeric,
     cnt: pgBigint,
-    currency: z.string(),
+    currency: pgCurrency,
   })
   .describe("category currency amount row");
 
 /** `SELECT * FROM mv_category_totals` (materializedViewService). */
 export const mvCategoryTotalsRowSchema = z
   .object({
-    category_id: pgInt,
+    category_id: pgCategoryId,
     name: z.string(),
     count: pgBigint,
     total: pgNumeric,
-    currency: z.string(),
+    currency: pgCurrency,
   })
   .describe("mv_category_totals row");
 
@@ -85,7 +92,7 @@ export const bankLabelRowSchema = z
 export const categoryPivotRowSchema = z
   .object({
     /** The effective-category COALESCE, filtered IS NOT NULL. */
-    category_id: pgInt,
+    category_id: pgCategoryId,
     /** LEFT JOIN categories */
     category_name: z.string().nullable(),
     /** LEFT JOIN category_paths: INTEGER[] / TEXT[]. */
@@ -93,7 +100,7 @@ export const categoryPivotRowSchema = z
     category_path_segments: z.array(z.string()).nullable(),
     period: z.string(),
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     /** SUM ... FILTER: NULL when the group has no row of that sign. */
     income: pgNumeric.nullable(),
     expense: pgNumeric.nullable(),
@@ -114,7 +121,7 @@ export const mvMonthlyRowSchema = z
     month_start: pgDate,
     month: pgInt,
     year: pgInt,
-    currency: z.string(),
+    currency: pgCurrency,
     /** SUM over the MV's BIGINT `transaction_count`: NUMERIC. */
     transaction_count: pgNumeric,
     total_income: pgNumeric,
@@ -132,7 +139,7 @@ export const liveMonthlyRowSchema = z
     period_end: pgDate,
     /** NULL for a month without transactions. */
     date: pgDate.nullable(),
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     cnt: pgBigint.nullable(),
     income_amount: pgNumeric.nullable(),
     spending_amount: pgNumeric.nullable(),
@@ -147,7 +154,7 @@ export const liveMonthlyRowSchema = z
 export const signedDailyAmountRowSchema = z
   .object({
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     is_spending: z.boolean(),
     amount: pgNumeric,
     /** COUNT(*): the group's transactions. */
@@ -164,7 +171,7 @@ export const dailyAmountRowSchema = z
     amount: pgNumeric,
     /** COUNT(*): the group's transactions (planned rows for overlays). */
     cnt: pgBigint,
-    currency: z.string(),
+    currency: pgCurrency,
     date: pgDate,
   })
   .describe("daily amount row");
@@ -185,7 +192,7 @@ export const plannedDailyAmountDomRowSchema = z
     amount: pgNumeric,
     /** COUNT(*): the group's planned rows. */
     cnt: pgBigint,
-    currency: z.string(),
+    currency: pgCurrency,
     planned_date: pgDate,
     day_of_month: pgInt,
   })
@@ -200,7 +207,7 @@ export const plannedDailyAmountMonthRowSchema = plannedDailyAmountDomRowSchema
 export const categoryDailyAmountRowSchema = dailyAmountRowSchema
   .extend({
     /** The effective-category COALESCE: NULL when uncategorised. */
-    category_id: pgInt.nullable(),
+    category_id: pgCategoryId.nullable(),
     /** COALESCE(..., 'Uncategorized') */
     general: z.string(),
     detail: z.string(),
@@ -215,10 +222,10 @@ export const categoryDailyAmountRowSchema = dailyAmountRowSchema
 /** `getBankBalances`' current balance: one row per (account, currency). */
 export const bankBalanceRowSchema = z
   .object({
-    account_id: pgInt,
+    account_id: pgAccountId,
     bank_account: z.string(),
     display_name: z.string(),
-    currency: z.string(),
+    currency: pgCurrency,
     balance: pgNumeric,
     /**
      * `json_build_object` over the NUMERIC column: JSON encodes it as a
@@ -226,12 +233,12 @@ export const bankBalanceRowSchema = z
      */
     statement_balances: z.array(
       z.object({
-        currency: z.string(),
+        currency: pgCurrency,
         balance: z.number(),
         balance_date: pgDayString,
       }),
     ),
-    account_currency: z.string(),
+    account_currency: pgCurrency,
     anchor_date: pgDayString.nullable(),
     /** Scalar sub-select of a COUNT(*). */
     post_anchor_count: pgBigint.nullable(),
@@ -248,7 +255,7 @@ export const bankHistoryRowSchema = z
   .object({
     bank_account: z.string(),
     day: pgDayString,
-    currency: z.string(),
+    currency: pgCurrency,
     balance: pgNumeric,
   })
   .describe("bank history row");
@@ -273,7 +280,7 @@ export const netWorthHistoryRowSchema = z
     day: pgDayString,
     bank_account: z.string(),
     is_liability: z.boolean(),
-    currency: z.string(),
+    currency: pgCurrency,
     balance: pgNumeric,
   })
   .describe("net worth history row");
@@ -283,7 +290,7 @@ export const netWorthCurrentBalanceRowSchema = z
   .object({
     bank_account: z.string(),
     is_liability: z.boolean(),
-    account_currency: z.string(),
+    account_currency: pgCurrency,
     balance_parts: balancePartsSchema,
   })
   .describe("net worth current balance row");
@@ -292,7 +299,7 @@ export const netWorthCurrentBalanceRowSchema = z
 export const netWorthFlowRowSchema = z
   .object({
     day: pgDayString,
-    currency: z.string(),
+    currency: pgCurrency,
     is_liability: z.boolean(),
     value: pgNumeric,
   })
@@ -306,9 +313,9 @@ export const netWorthFlowRowSchema = z
 export const recipientTopRawRowSchema = z
   .object({
     recipient_name: z.string(),
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     total_abs_amount: pgNumeric,
     tx_count: pgBigint,
     first_seen: pgDate,
@@ -319,11 +326,11 @@ export const recipientTopRawRowSchema = z
 /** `getRecipientInsights`' month-over-month rows. */
 export const recipientMomRawRowSchema = z
   .object({
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     recipient_name: z.string(),
     period: z.string(),
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     abs_amount: pgNumeric,
   })
   .describe("recipient month-over-month row");
@@ -341,10 +348,10 @@ export const periodKeysRowSchema = z
 export const recipientYearRowSchema = z
   .object({
     year: pgInt,
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     name: z.string(),
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     abs_amount: pgNumeric,
     cnt: pgBigint,
   })
@@ -352,17 +359,17 @@ export const recipientYearRowSchema = z
 
 /** `getRecipientPivot`'s alias-member resolution. */
 export const recipientMemberRowSchema = z
-  .object({ id: pgInt })
+  .object({ id: pgRecipientId })
   .describe("recipient member row");
 
 /** `getRecipientPivot`: per (recipient, period, date, currency). */
 export const recipientPivotRowSchema = z
   .object({
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     recipient_name: z.string(),
     period: z.string(),
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     abs_amount: pgNumeric,
     cnt: pgBigint,
   })
@@ -371,11 +378,11 @@ export const recipientPivotRowSchema = z
 /** `getTagPivot`: per (tag, period, date, currency). */
 export const tagPivotRowSchema = z
   .object({
-    tag_id: pgInt,
+    tag_id: pgTagId,
     tag_slug: z.string(),
     period: z.string(),
     date: pgDate,
-    currency: z.string(),
+    currency: pgCurrency,
     abs_amount: pgNumeric,
     cnt: pgBigint,
   })
@@ -384,9 +391,9 @@ export const tagPivotRowSchema = z
 /** `getSankeyAggregates`; the category is a LEFT JOIN. */
 export const sankeyAggregateRowSchema = z
   .object({
-    category_id: pgInt.nullable(),
+    category_id: pgCategoryId.nullable(),
     category_name: z.string().nullable(),
-    currency: z.string(),
+    currency: pgCurrency,
     is_income: z.boolean(),
     /** SUM(ABS(NUMERIC)) */
     amount: pgNumeric,
@@ -451,8 +458,8 @@ export const insightDismissalRowSchema = z
   .object({
     id: pgBigint,
     kind: insightKindSchema,
-    recipient_id: pgInt.nullable(),
-    category_id: pgInt.nullable(),
+    recipient_id: pgRecipientId.nullable(),
+    category_id: pgCategoryId.nullable(),
     month_key: z.string().nullable(),
     dismissed_at: pgTimestamptz,
     deviation_at_dismiss: pgDouble.nullable(),
@@ -538,9 +545,9 @@ export const belgianInflationMonthRowSchema = belgianInflationRateRowSchema
 /** A spendable account with its per-currency computed balance. */
 export const rebalanceCashAccountRowSchema = z
   .object({
-    id: pgInt,
+    id: pgAccountId,
     name: z.string(),
-    currency: z.string(),
+    currency: pgCurrency,
     balance_parts: balancePartsSchema,
   })
   .describe("rebalance cash account row");
@@ -555,8 +562,8 @@ const incomeRecognitionRoleSchema = z.enum(["standard", "included_in_units"]);
 /** `fetchTaxTransactions` (reports/dataFetcherTax). */
 export const taxTxnRowSchema = z
   .object({
-    id: pgInt,
-    investment_id: pgInt,
+    id: pgPortfolioTransactionId,
+    investment_id: pgInvestmentId,
     investment_name: z.string(),
     symbol: z.string().nullable(),
     /** `asset_class` enum */
@@ -570,7 +577,7 @@ export const taxTxnRowSchema = z
     amount: pgNumeric,
     taxes: pgNumeric,
     fees: pgNumeric,
-    currency: z.string(),
+    currency: pgCurrency,
     rate_date: pgDayString,
     year: pgInt,
     month: pgInt,
@@ -581,14 +588,14 @@ export type TaxTxnRow = z.output<typeof taxTxnRowSchema>;
 /** `fetchDividends` (reports/dataFetcherPortfolio). */
 export const dividendTxRowSchema = z
   .object({
-    investment_id: pgInt,
+    investment_id: pgInvestmentId,
     investment_name: z.string(),
     symbol: z.string().nullable(),
     asset_class: z.string(),
     year: pgInt,
     month: pgInt,
     amount: pgNumeric,
-    currency: z.string(),
+    currency: pgCurrency,
     income_recognition_role: incomeRecognitionRoleSchema,
     rate_date: pgDayString,
   })

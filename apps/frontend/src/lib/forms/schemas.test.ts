@@ -8,6 +8,7 @@ import {
     requiredTrimmedString,
     ymdDateString,
 } from "./schemas";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const moneyAmount = (keys: Parameters<typeof createMoneyAmount>[0]) =>
     createMoneyAmount(keys, "eu");
@@ -94,14 +95,20 @@ describe("moneyAmount", () => {
 
 describe("currencyCode", () => {
     test("trims, uppercases, and falls back to the default when empty", () => {
-        const schema = currencyCode("EUR");
+        const schema = currencyCode(asCurrencyCode("EUR"));
         expect(schema.parse(" usd ")).toBe("USD");
         expect(schema.parse("")).toBe("EUR");
         expect(schema.parse("   ")).toBe("EUR");
     });
 
-    test("without a default, empty stays empty", () => {
-        expect(currencyCode().parse("")).toBe("");
+    test("without a default, empty is not a currency code", () => {
+        expect(currencyCode().safeParse("").success).toBe(false);
+    });
+
+    test("rejects a value that is not an ISO-4217 code", () => {
+        const result = currencyCode().safeParse("euro");
+        expect(result.success).toBe(false);
+        expect(result.error?.issues[0]?.message).toBe("validation.currencyCode");
     });
 });
 

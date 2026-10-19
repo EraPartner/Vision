@@ -19,6 +19,10 @@ import {
 } from "./portfolioTransactionRules.ts";
 import type { PortfolioTransactionInput } from "./portfolioTransactionRules.ts";
 import type { PortfolioTransactionRow } from "../../types/rows.ts";
+import type {
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 
 async function createUnlocked(
   input: PortfolioTransactionInput,
@@ -59,7 +63,7 @@ async function createUnlocked(
 }
 
 async function updateUnlocked(
-  id: number,
+  id: PortfolioTransactionId,
   fields: Record<string, unknown>,
 ): Promise<PortfolioTransactionRow | null> {
   if (Object.prototype.hasOwnProperty.call(fields, "income_recognition_role"))
@@ -180,7 +184,7 @@ async function updateUnlocked(
 }
 
 /** Delete one row without allowing the remaining history to become more oversold. */
-async function removeUnlocked(id: number): Promise<boolean> {
+async function removeUnlocked(id: PortfolioTransactionId): Promise<boolean> {
   const existing = await getById(id);
   if (!existing) return false;
   const assetClass =
@@ -202,18 +206,17 @@ async function removeUnlocked(id: number): Promise<boolean> {
 export async function validateImportBatchRemoval(
   batchId: number | string,
   legacyRows: readonly {
-    id: number | string;
-    investment_id?: number | string | null;
+    id: PortfolioTransactionId;
+    investment_id?: InvestmentId | null;
   }[] = [],
 ): Promise<void> {
   const unitRows = await getUnitEventIdsForImportBatch(batchId);
-  const idsByInvestment = new Map<number, number[]>();
+  const idsByInvestment = new Map<InvestmentId, PortfolioTransactionId[]>();
   for (const row of [...unitRows, ...legacyRows]) {
     if (row.investment_id == null) continue;
-    const investmentId = Number(row.investment_id);
-    const ids = idsByInvestment.get(investmentId) ?? [];
-    ids.push(Number(row.id));
-    idsByInvestment.set(investmentId, ids);
+    const ids = idsByInvestment.get(row.investment_id) ?? [];
+    ids.push(row.id);
+    idsByInvestment.set(row.investment_id, ids);
   }
   for (const [investmentId, ids] of idsByInvestment) {
     const assetClass = await getAssetClassByInvestmentId(investmentId);
@@ -236,7 +239,7 @@ export async function create(
 }
 
 async function update(
-  id: number,
+  id: PortfolioTransactionId,
   fields: Record<string, unknown>,
 ): Promise<PortfolioTransactionRow | null> {
   return withPortfolioHistoryWrite([fields.account_id], () =>
@@ -244,7 +247,7 @@ async function update(
   );
 }
 
-export async function remove(id: number): Promise<boolean> {
+export async function remove(id: PortfolioTransactionId): Promise<boolean> {
   return withPortfolioHistoryWrite([], () => removeUnlocked(id));
 }
 

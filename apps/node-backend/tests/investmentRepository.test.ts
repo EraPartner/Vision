@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
@@ -24,7 +28,7 @@ describe("investmentRepository.create symbol uniqueness", () => {
         name: "Apple",
         symbol: " aapl ",
         asset_class: "stock",
-        currency: "USD",
+        currency: asCurrencyCode("USD"),
       }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
@@ -43,7 +47,7 @@ describe("investmentRepository.create symbol uniqueness", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          investmentDbRow({ id: 12, asset_class: "savings", name: "Book" }),
+          investmentDbRow({ id: asInvestmentId(12), asset_class: "savings", name: "Book" }),
         ],
       }),
     );
@@ -51,7 +55,7 @@ describe("investmentRepository.create symbol uniqueness", () => {
     const result = await investmentRepository.create({
       name: "Book",
       asset_class: "savings",
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
       interest_rate: 2,
     });
 
@@ -75,12 +79,12 @@ describe("investmentRepository.update", () => {
   it("rejects changing asset_class", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [investmentDbRow({ id: 2, asset_class: "stock" })],
+        rows: [investmentDbRow({ id: asInvestmentId(2), asset_class: "stock" })],
       }),
     );
 
     await expect(
-      investmentRepository.update(2, { asset_class: "etf" }),
+      investmentRepository.update(asInvestmentId(2), { asset_class: "etf" }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message: "asset_class cannot be changed",
@@ -90,12 +94,12 @@ describe("investmentRepository.update", () => {
   it("rejects empty symbol", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [investmentDbRow({ id: 3, asset_class: "stock", symbol: "OLD" })],
+        rows: [investmentDbRow({ id: asInvestmentId(3), asset_class: "stock", symbol: "OLD" })],
       }),
     );
 
     await expect(
-      investmentRepository.update(3, { symbol: "   " }),
+      investmentRepository.update(asInvestmentId(3), { symbol: "   " }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message: "symbol is required",
@@ -107,14 +111,14 @@ describe("investmentRepository.update", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            investmentDbRow({ id: 4, asset_class: "stock", symbol: "OLD" }),
+            investmentDbRow({ id: asInvestmentId(4), asset_class: "stock", symbol: "OLD" }),
           ],
         }),
       )
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 99 }] }));
 
     await expect(
-      investmentRepository.update(4, { symbol: " aapl " }),
+      investmentRepository.update(asInvestmentId(4), { symbol: " aapl " }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message: "symbol must be unique",
@@ -136,7 +140,7 @@ describe("investmentRepository.updatePrice", () => {
   it("returns null for a missing investment", async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
 
-    const result = await investmentRepository.updatePrice(404, {
+    const result = await investmentRepository.updatePrice(asInvestmentId(404), {
       current_price: 1,
       price_updated_at: null,
     });
@@ -164,7 +168,7 @@ describe("investmentRepository.hardDelete", () => {
   it("returns false when nothing was deleted", async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rowCount: 0 }));
 
-    expect(await investmentRepository.hardDelete(11)).toBe(false);
+    expect(await investmentRepository.hardDelete(asInvestmentId(11))).toBe(false);
   });
 });
 
@@ -177,14 +181,14 @@ describe("investmentRepository read helpers and extra branches", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [investmentDbRow({ id: 1, name: "A" })],
+          rows: [investmentDbRow({ id: asInvestmentId(1), name: "A" })],
         }),
       )
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ count: "3" }] }))
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            { ...investmentDbRow({ id: 2, name: "B" }), total_count: "5" },
+            { ...investmentDbRow({ id: asInvestmentId(2), name: "B" }), total_count: "5" },
           ],
         }),
       )
@@ -206,7 +210,7 @@ describe("investmentRepository read helpers and extra branches", () => {
       active: true,
       assetClass: null,
     });
-    const byId = await investmentRepository.getById(999);
+    const byId = await investmentRepository.getById(asInvestmentId(999));
 
     expect(all).toHaveLength(1);
     expect(count).toBe(3);
@@ -218,11 +222,11 @@ describe("investmentRepository read helpers and extra branches", () => {
   it("returns existing row when update has no allowed fields", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [investmentDbRow({ id: 5, asset_class: "stock", name: "AAPL" })],
+        rows: [investmentDbRow({ id: asInvestmentId(5), asset_class: "stock", name: "AAPL" })],
       }),
     );
 
-    const result = await investmentRepository.update(5, { unknownField: "x" });
+    const result = await investmentRepository.update(asInvestmentId(5), { unknownField: "x" });
 
     expect(result).toMatchObject({ id: 5, asset_class: "stock", name: "AAPL" });
     expect(query).toHaveBeenCalledTimes(1);
@@ -231,7 +235,7 @@ describe("investmentRepository read helpers and extra branches", () => {
   it("returns null when updating non-existing investment", async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
 
-    const result = await investmentRepository.update(404, { name: "Nope" });
+    const result = await investmentRepository.update(asInvestmentId(404), { name: "Nope" });
 
     expect(result).toBeNull();
   });
@@ -243,7 +247,7 @@ describe("investmentRepository read helpers and extra branches", () => {
       investmentRepository.create({
         name: "X",
         asset_class: "unsupported",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",

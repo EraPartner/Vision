@@ -48,7 +48,17 @@ export const WireDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const WireTimestampSchema = z.string();
 
 /** A currency column guarded by an ISO-4217 `CHECK (~ '^[A-Z]{3}$')`. */
-export const CurrencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
+export { CurrencyCodeSchema } from "../brands.ts";
+
+/**
+ * A currency field the contract does not re-check: a `?currency=` echo, a
+ * figure derived from several rows, or a column without the ISO CHECK
+ * (`investments.currency` is `VARCHAR(10)`). It carries the `CurrencyCode`
+ * brand for the client but accepts any string at runtime, so branding did not
+ * tighten an existing contract. Provider data (quotes, mappings) stays a plain
+ * string because it can hold minor-unit codes such as `GBp`.
+ */
+export const WireCurrencySchema = z.string().brand<"CurrencyCode">();
 
 /**
  * A money/NUMERIC figure: a JSON number, or the decimal string node-postgres

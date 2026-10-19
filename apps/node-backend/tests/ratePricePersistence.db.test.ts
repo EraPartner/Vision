@@ -26,6 +26,9 @@ import {
   loadHistoricalPointsFromDatabase,
   saveHistoricalPointsToDatabase,
 } from "../src/services/prices/priceCache.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const CODES = ["XTS", "XXX"];
 let investmentId: number | undefined;
@@ -122,7 +125,7 @@ describe.skipIf(!hasTestDatabase())(
       const created = await investmentRepository.create({
         name: `Price persistence ${process.pid}`,
         asset_class: "crypto",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         current_price: 1,
       });
       investmentId = Number(created!.id);

@@ -28,6 +28,7 @@ import {
   recordProviderError,
 } from "./providerRegistry.ts";
 import type { AdapterMap, ResearchSearchItem } from "./providerRegistry.ts";
+import type { InvestmentId } from "@vision/types/brands";
 import type { QuotaReserver } from "./quotaGovernor.ts";
 import * as providerHealth from "../providerHealthService.ts";
 import * as mapRepo from "../../repositories/instrumentProviderMapRepository.ts";
@@ -136,7 +137,7 @@ function createResearchMappingService({
     keyType: string;
     assetClass?: string | undefined;
     query: string;
-    investmentId?: number | undefined;
+    investmentId?: InvestmentId | undefined;
   }) {
     const existing = await repo.listByInstrument(instrumentKey, keyType);
     const existingByProvider = new Map(existing.map((r) => [r.provider, r]));

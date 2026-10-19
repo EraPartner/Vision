@@ -6,9 +6,15 @@ import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { BulkSplitRequest, SplitCreateInput } from "@/lib/api/splits";
+import type {
+    CurrencyCode,
+    RecipientId,
+    SplitId,
+    TransactionId,
+} from "@vision/types/brands";
 
 /** Who owes what, converted to `currency` on the server. */
-export function useOwedSummary(currency: string) {
+export function useOwedSummary(currency: CurrencyCode) {
     return useQuery({
         queryKey: splitKeys.owedSummary(currency),
         queryFn: () => apiClient.getOwedSummary(currency),
@@ -18,8 +24,8 @@ export function useOwedSummary(currency: string) {
 
 /** A recipient's open splits plus their server-converted total outstanding. */
 export function useOwedByRecipient(
-    recipientId: number | null,
-    currency: string,
+    recipientId: RecipientId | null,
+    currency: CurrencyCode,
 ) {
     return useQuery({
         queryKey: splitKeys.owedByRecipient(recipientId, currency),
@@ -29,7 +35,7 @@ export function useOwedByRecipient(
     });
 }
 
-export function useSplitsByTransaction(transactionId: number | null) {
+export function useSplitsByTransaction(transactionId: TransactionId | null) {
     return useQuery({
         queryKey: splitKeys.byTransaction(transactionId),
         queryFn: () => apiClient.getSplitsByTransaction(transactionId!),
@@ -43,7 +49,7 @@ export function useCreateSplits() {
     const { t } = useLanguage();
     return useMutation({
         mutationFn: (data: {
-            transaction_id: number;
+            transaction_id: TransactionId;
             splits: SplitCreateInput[];
         }) => apiClient.createSplitsBatch(data.transaction_id, data.splits),
         onSuccess: () => {
@@ -106,7 +112,7 @@ export function useRecordPayment() {
     const { t } = useLanguage();
     return useMutation({
         mutationFn: (data: {
-            splitId: number;
+            splitId: SplitId;
             amount: number;
             note?: string;
             paid_at?: string;
@@ -132,7 +138,7 @@ export function useSettleSplit() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (splitId: number) => apiClient.settleSplit(splitId),
+        mutationFn: (splitId: SplitId) => apiClient.settleSplit(splitId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.settled"));
@@ -148,7 +154,7 @@ export function useSettleAllSplitsByRecipient() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (recipientId: number) =>
+        mutationFn: (recipientId: RecipientId) =>
             apiClient.settleAllSplitsByRecipient(recipientId),
         onSuccess: (result) => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
@@ -165,7 +171,7 @@ export function useDeleteSplit() {
     const qc = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (splitId: number) => apiClient.deleteSplit(splitId),
+        mutationFn: (splitId: SplitId) => apiClient.deleteSplit(splitId),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.removed"));

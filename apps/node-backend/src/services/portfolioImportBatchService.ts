@@ -55,6 +55,14 @@ import type {
   PortfolioImportPreviewRow,
 } from "../repositories/portfolioImportBatchRepository.ts";
 import type { InvestmentRow } from "../types/rows.ts";
+import { EUR } from "../lib/currencyCode.ts";
+import {
+  asCurrencyCode,
+  asPortfolioTransactionId,
+  asTransactionId,
+  isCurrencyCode,
+} from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
 import {
   getRowForInvestmentCreation,
   getPreviewRows,
@@ -69,6 +77,7 @@ import {
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 
 const KINESIS_METAL_SYMBOLS = new Set(["KAU", "KAG"]);
+const USD = asCurrencyCode("USD");
 
 export {
   listBatches,
@@ -324,10 +333,10 @@ async function createInvestmentFromRow({
       : row.default_asset_class;
   const holdingCurrency =
     config.format === "kinesis_transaction_history"
-      ? "USD"
-      : /^[A-Z]{3}$/.test(rawCurrency)
+      ? USD
+      : isCurrencyCode(rawCurrency)
         ? rawCurrency
-        : "EUR";
+        : EUR;
   const investment = await investmentRepository.create({
     name,
     symbol: symbol || undefined,
@@ -353,10 +362,10 @@ export async function resolveInvestmentRows({
 }: {
   batchId: number;
   rowIds: number[];
-  investmentId?: number | undefined;
+  investmentId?: InvestmentId | undefined;
   createNew?: boolean | undefined;
 }): Promise<{
-  investmentId: number;
+  investmentId: InvestmentId;
   created: boolean;
   resolved: number;
   investment?: InvestmentRow;
@@ -673,9 +682,11 @@ export async function rollbackBatch(batchId: number) {
     // staging row from crossing the transactions/portfolio id line.
     const isBrokerage = lockedBatch.is_brokerage === true;
 
-    const portfolioRows = rows.filter(
-      (r) => (!isBrokerage || r.route !== "cash") && r.id != null,
-    );
+    // committed_txn_id names a ledger transaction on cash rows and a
+    // portfolio transaction otherwise; the route decides which.
+    const portfolioRows = rows
+      .filter((r) => (!isBrokerage || r.route !== "cash") && r.id != null)
+      .map((r) => ({ ...r, id: asPortfolioTransactionId(r.id) }));
     // Approve the complete stamped + legacy removal set before deleting any
     // row. Per-row validation would reject a batch's buy before its dependent
     // sell even though removing both restores the pre-import history.
@@ -727,11 +738,11 @@ export async function rollbackBatch(batchId: number) {
               .map((r) => r.id),
             ...ownedCashIds,
           ]),
-        ]
+        ].map(asTransactionId)
       : [];
     if (cashIds.length > 0) {
-      await lockAccountsForLedgerMutation(client, cashIds.map(Number));
-      await protectPlannedExecutions(cashIds.map(Number));
+      await lockAccountsForLedgerMutation(client, cashIds);
+      await protectPlannedExecutions(cashIds);
       const r = await query(
         "DELETE FROM transactions WHERE id = ANY($1::int[])",
         [cashIds],
@@ -742,13 +753,8 @@ export async function rollbackBatch(batchId: number) {
 
     // 3. Pre-0086 trades the stamp cannot reach. On a non-brokerage batch this
     // includes route='cash' rows — they were committed as trades (see guard).
-    const unstampedTradeIds = rows
-      .filter(
-        (r) =>
-          (!isBrokerage || r.route !== "cash") &&
-          r.id != null &&
-          !bulkDeleted.has(String(r.id)),
-      )
+    const unstampedTradeIds = portfolioRows
+      .filter((r) => !bulkDeleted.has(String(r.id)))
       .map((r) => r.id);
     for (const id of unstampedTradeIds) {
       const ok = await portfolioTransactionRepository.hardDelete(id);

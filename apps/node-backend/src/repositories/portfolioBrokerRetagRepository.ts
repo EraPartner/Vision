@@ -9,13 +9,18 @@ import { query } from "../database/connection.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   historicalRateRowSchema,
-  portfolioIntIdRowSchema,
   portfolioRetagAuditInsertedRowSchema,
   portfolioRetagAuditRowSchema,
   retagDestinationAccountRowSchema,
   retagLockedTransactionRowSchema,
+  portfolioTransactionKeyRowSchema,
   retagTransactionEventRowSchema,
 } from "../database/rows/portfolio.ts";
+import type {
+  AccountId,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 import type {
   HistoricalRateDbRow,
   PortfolioRetagAuditDbRow,
@@ -44,7 +49,7 @@ export type RetagTransactionEventRow = RetagTransactionEventDbRow;
 export type RetagCustodyEventRow = Partial<
   Omit<RetagTransactionEventRow, keyof PortfolioUnitEventRow>
 > &
-  PortfolioUnitEventRow & { investment_id: number };
+  PortfolioUnitEventRow & { investment_id: InvestmentId };
 
 export async function lockPortfolioTransactionWrites(): Promise<void> {
   await query(
@@ -67,7 +72,7 @@ export async function getAuditByIdempotencyKey(
 }
 
 export async function lockEligibleDestinationAccount(
-  accountId: number | null,
+  accountId: AccountId | null,
 ): Promise<RetagDestinationAccountRow | undefined> {
   if (accountId == null) return undefined;
   return queryOne(
@@ -83,7 +88,7 @@ export async function lockEligibleDestinationAccount(
 }
 
 export async function lockTransactions(
-  transactionIds: number[],
+  transactionIds: PortfolioTransactionId[],
 ): Promise<RetagLockedTransactionRow[]> {
   return queryRows(
     retagLockedTransactionRowSchema,
@@ -97,7 +102,7 @@ export async function lockTransactions(
 }
 
 export async function getUnitEventsForInvestments(
-  investmentIds: number[],
+  investmentIds: InvestmentId[],
 ): Promise<Array<RetagTransactionEventRow | RetagCustodyEventRow>> {
   const transactionRows = await queryRows(
     retagTransactionEventRowSchema,
@@ -157,12 +162,12 @@ export async function getHistoricalRates(): Promise<HistoricalRateDbRow[]> {
 }
 
 export async function compareAndSetAccount(
-  transactionIds: number[],
-  fromAccountId: number | null,
-  toAccountId: number | null,
-): Promise<number[]> {
+  transactionIds: PortfolioTransactionId[],
+  fromAccountId: AccountId | null,
+  toAccountId: AccountId | null,
+): Promise<PortfolioTransactionId[]> {
   const rows = await queryRows(
-    portfolioIntIdRowSchema,
+    portfolioTransactionKeyRowSchema,
     `UPDATE portfolio_transactions
         SET account_id = $3
       WHERE id = ANY($1::int[])
@@ -170,7 +175,7 @@ export async function compareAndSetAccount(
       RETURNING id`,
     [transactionIds, fromAccountId, toAccountId],
   );
-  return rows.map((row) => Number(row.id));
+  return rows.map((row) => row.id);
 }
 
 export async function insertAudit(

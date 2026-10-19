@@ -5,6 +5,7 @@ import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { getTags, createTag, updateTag, deleteTag, bulkTagTransactions } from "@/lib/api/tags";
+import { asTagId, asTransactionId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -100,7 +101,7 @@ describe("tags API client", () => {
     server.use(
       http.patch(`${API_BASE}/api/tags/7`, () => ok({ id: 7, slug: "rent", color: "#fff" })),
     );
-    const tag = await updateTag(7, { color: "#fff" });
+    const tag = await updateTag(asTagId(7), { color: "#fff" });
     expect(tag.color).toBe("#fff");
   });
 
@@ -112,7 +113,7 @@ describe("tags API client", () => {
         ok({ id: 7, name: "T", is_active: false, links: [] }),
       ),
     );
-    await expect(deleteTag(7)).resolves.toBeUndefined();
+    await expect(deleteTag(asTagId(7))).resolves.toBeUndefined();
   });
 
   it("bulkTagTransactions POSTs to the bulk endpoint", async () => {
@@ -125,7 +126,7 @@ describe("tags API client", () => {
     );
 
     const result = await bulkTagTransactions({
-      transaction_ids: [1, 2, 3],
+      transaction_ids: [asTransactionId(1), asTransactionId(2), asTransactionId(3)],
       add_slugs: ["rent"],
     });
 

@@ -13,6 +13,7 @@ import {
     numberFormatToLocale,
 } from "@/utils/currency";
 import type { AppDateFormat } from "@/stores/settingsStore";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const DATE_FORMATS = [
     { value: "DD/MM/YYYY", labelKey: "settings.dateFormat.ddmmyyyy" },
@@ -38,7 +39,8 @@ export const GeneralSection = memo(function GeneralSection() {
             title: t("settings.general.currency"),
             description: t("settings.general.currencyHint"),
             value: appSettings.defaultCurrency,
-            onValueChange: (v) => updateAppSettings({ defaultCurrency: v }),
+            onValueChange: (v) =>
+                updateAppSettings({ defaultCurrency: asCurrencyCode(v) }),
             options: CURRENCIES.map((c) => ({ value: c, label: c })),
         },
         {

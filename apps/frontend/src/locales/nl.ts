@@ -4864,6 +4864,7 @@ const nl: Record<string, string> = {
   'update.restartNow': 'Nu herstarten',
   'update.versionAvailable': 'Versie {version} is beschikbaar',
   'update.versionDownloaded': 'Versie {version} is gedownload.',
+  'validation.currencyCode': 'Voer een valutacode van drie letters in, zoals EUR.',
   'validation.required': 'Dit veld is verplicht',
   'watchlist.aboveTarget': 'boven doel',
   'watchlist.addButton': 'Toevoegen aan volglijst',

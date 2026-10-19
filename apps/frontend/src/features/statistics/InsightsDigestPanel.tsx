@@ -33,6 +33,7 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
+import type { RecipientId } from "@vision/types/brands";
 
 /**
  * AI-insights digest for the Statistics page (detection layer, no LLM):
@@ -62,7 +63,7 @@ export function InsightsDigestPanel() {
     };
 
     const handleDismissSubscription = (
-        recipientId: number,
+        recipientId: RecipientId,
         findingType: "new" | "priceChange",
     ) => {
         dismissMutation.mutate({

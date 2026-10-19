@@ -16,6 +16,7 @@ import {
     setOpeningBalance,
     reconcileAccount,
 } from "@/lib/api/accounts";
+import { asAccountId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -159,7 +160,7 @@ describe("accounts API client", () => {
                 ok({ ...ACCOUNT_STUB, id: 9, name: "Edited" }),
             ),
         );
-        const a = await updateAccount(9, { name: "Edited" } as never);
+        const a = await updateAccount(asAccountId(9), { name: "Edited" } as never);
         expect(a.name).toBe("Edited");
     });
 
@@ -170,7 +171,7 @@ describe("accounts API client", () => {
                 () => new HttpResponse(null, { status: 204 }),
             ),
         );
-        await expect(deleteAccount(9)).resolves.toBeUndefined();
+        await expect(deleteAccount(asAccountId(9))).resolves.toBeUndefined();
     });
 
     it("loads the complete close portfolio preview by account id", async () => {
@@ -188,7 +189,7 @@ describe("accounts API client", () => {
             ),
         );
 
-        await expect(getAccountPortfolioLotRetagPreview(9)).resolves.toEqual({
+        await expect(getAccountPortfolioLotRetagPreview(asAccountId(9))).resolves.toEqual({
             account_id: 9,
             eligible_count: 2,
             transaction_ids: [11, 12],
@@ -220,7 +221,7 @@ describe("accounts API client", () => {
             ),
         );
 
-        const result = await mergeAccounts(1, [2, 3]);
+        const result = await mergeAccounts(asAccountId(1), [asAccountId(2), asAccountId(3)]);
 
         expect(body).toMatchObject({ source_ids: [2, 3] });
         expect(result.merged).toEqual([2, 3]);
@@ -247,7 +248,7 @@ describe("accounts API client", () => {
             ),
         );
 
-        const result = await setOpeningBalance(4, {
+        const result = await setOpeningBalance(asAccountId(4), {
             balance: 1500,
             date: "2024-01-01",
         });
@@ -279,7 +280,7 @@ describe("accounts API client", () => {
             ),
         );
 
-        const result = await reconcileAccount(4, "adjustment");
+        const result = await reconcileAccount(asAccountId(4), "adjustment");
 
         expect(body).toMatchObject({ mode: "adjustment" });
         expect(result.drift).toBe(0);

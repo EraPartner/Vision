@@ -114,6 +114,8 @@ import { usePriceFreshnessLabel } from "@/features/portfolio/PriceFreshnessCapti
 import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import { UnassignedLotsNudge } from "@/features/portfolio/UnassignedLotsNudge";
 import { usePerformanceQueries } from "@/features/portfolio/usePortfolioQueries";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
+import type { AccountId } from "@vision/types/brands";
 
 /** `?period=` keeps deep links from the former Performance page working. */
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
@@ -227,7 +229,7 @@ export default function PortfolioPage() {
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const navigate = useNavigate();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const formatPercent = usePercentFormatter();
     const fmt = useCurrencyFormatter(targetCurrency);
@@ -461,7 +463,7 @@ export default function PortfolioPage() {
 
     // ── Holdings: broker filter, per-row figures, sort, subtotals ───────────
     const brokerFilterOptions = useMemo(() => {
-        const accountIds = new Set<number>();
+        const accountIds = new Set<AccountId>();
         let hasUnassigned = false;
         for (const row of portfolioSummary?.accountTotals ?? []) {
             if (row.account_id == null) hasUnassigned = true;

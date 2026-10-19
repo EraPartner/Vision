@@ -6,6 +6,10 @@ import type {
 } from "../src/services/portfolioIbkrRepairCandidates.ts";
 import { partial } from "./helpers/partial.ts";
 import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 
 type Item = Omit<RepairItem, "row" | "candidates"> & {
   row: RepairItem["row"] & { id: number };
@@ -34,8 +38,8 @@ const item = (id: number, price = "100", over = {}): Item => {
       route: "portfolio",
       type: "buy",
       tx_date: "2026-01-01",
-      investment_id: 1,
-      currency: "USD",
+      investment_id: asInvestmentId(1),
+      currency: asCurrencyCode("USD"),
       custom_config: { format: "ibkr_transaction_history" },
       dedup_fingerprint: fingerprint,
       dedup_fingerprint_version: 1,

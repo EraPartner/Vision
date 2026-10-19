@@ -2,6 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { HistoricalFxFallbackWarning } from "@/features/statistics/HistoricalFxFallbackWarning";
+import { asCurrencyCode } from "@vision/types/brands";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
@@ -19,7 +20,7 @@ describe("HistoricalFxFallbackWarning", () => {
             <HistoricalFxFallbackWarning
                 conversion={{
                     usedHistoricalFallback: true,
-                    affectedCurrencies: ["GBP", "USD"],
+                    affectedCurrencies: [asCurrencyCode("GBP"), asCurrencyCode("USD")],
                     unconvertedCount: 0,
                     unconvertedCurrencies: [],
                 }}
@@ -53,7 +54,7 @@ describe("HistoricalFxFallbackWarning", () => {
                     usedHistoricalFallback: false,
                     affectedCurrencies: [],
                     unconvertedCount: 3,
-                    unconvertedCurrencies: ["XYZ"],
+                    unconvertedCurrencies: [asCurrencyCode("XYZ")],
                 }}
             />,
         );

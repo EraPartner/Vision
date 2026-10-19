@@ -5,11 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
 import type { Account } from "@/types/api";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 
 const BROKER: Account = {
-    id: 7,
+    id: asAccountId(7),
     name: "Degiro",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     type: "brokerage",
     liquidity_class: "liquid",
     spendable: false,

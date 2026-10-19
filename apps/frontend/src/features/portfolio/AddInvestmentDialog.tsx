@@ -28,7 +28,9 @@ import { priceProviderPayload } from "./priceProviderPayload";
 import { todayYmd } from "@/lib/timezone";
 import { PortfolioBrokerField } from "./PortfolioBrokerField";
 import { useManualTradeBrokerOptions } from "./manualTradeBroker";
-import { formatEditableNumber } from "@/utils/currency";
+import { formatEditableNumber, DEFAULT_CURRENCY } from "@/utils/currency";
+import { asAccountId } from "@vision/types/brands";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 type Props = {
     // when provided, only these asset classes are shown; if exactly one is provided
@@ -38,7 +40,7 @@ type Props = {
     trigger?: ReactNode;
 };
 
-function makeEmptyForm(defaultCurrency: string): InvestmentForm {
+function makeEmptyForm(defaultCurrency: CurrencyCode): InvestmentForm {
     return {
         assetClass: "",
         name: "",
@@ -73,7 +75,7 @@ function makeEmptyForm(defaultCurrency: string): InvestmentForm {
 export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<"type" | "details">("type");
     const {
@@ -91,7 +93,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
     );
     // Set once the investment row exists so a retry after a failed buy leg
     // re-attempts only the transaction instead of creating a duplicate holding.
-    const createdInvestmentIdRef = useRef<number | null>(null);
+    const createdInvestmentIdRef = useRef<InvestmentId | null>(null);
 
     const assetDescriptions: Record<AssetClass, string> = {
         stock: t("addInv.desc.stock"),
@@ -304,7 +306,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     currency: form.currency || defaultCurrency,
                     note: t("addInv.initialPurchaseNote"),
                     account_id: effectiveBrokerId
-                        ? Number(effectiveBrokerId)
+                        ? asAccountId(Number(effectiveBrokerId))
                         : undefined,
                 });
             }

@@ -64,6 +64,10 @@ import plannedTransactionRepository from "../src/repositories/plannedTransaction
 import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 import type { ExpressResponse } from "../src/types/express.ts";
+import {
+  asPlannedTransactionId,
+  asRecipientId,
+} from "@vision/types/brands";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
@@ -718,7 +722,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(effectiveCategoryId).toBe(cat.Zzz);
 
         const rows = await splitRepository.getOwedExportRowsByRecipient(
-          rec.misc,
+          asRecipientId(rec.misc),
         );
         expect(rows).toHaveLength(1);
         expect(rows[0]!.amount).toBe(5);
@@ -741,7 +745,7 @@ describe.skipIf(!hasTestDatabase())(
         const { name } = await listResolvedCategoryName(aliasTxn);
 
         const rows = await splitRepository.getOwedExportRowsByRecipient(
-          rec.misc,
+          asRecipientId(rec.misc),
         );
         expect(rows[0]!.category_name).toBe(name);
       });
@@ -808,7 +812,7 @@ describe.skipIf(!hasTestDatabase())(
         ).toEqual(expectedRecipientNames);
 
         for (const [id, name] of Object.entries(expected)) {
-          const row = await plannedTransactionRepository.getById(Number(id));
+          const row = await plannedTransactionRepository.getById(asPlannedTransactionId(Number(id)));
           expect(row!.category_name).toBe(name);
           expect(row!.recipient_name).toBe("Electrabel");
           // Where the row carries its OWN category_id, the id and the displayed

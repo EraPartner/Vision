@@ -15,6 +15,7 @@ import {
 import { PortfolioImportSession } from "../PortfolioImportSession";
 import { portfolioImportPresetConfig } from "../portfolioImportPresets";
 import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
+import { asAccountId } from "@vision/types/brands";
 
 const api = "http://localhost:3002/api/portfolio/import";
 const nexoHeader =
@@ -2536,15 +2537,15 @@ describe("reviewed portfolio import sessions", () => {
     it("retains distinct custody origin and destination fields in the staging API", async () => {
         const config = {
             ...portfolioImportPresetConfig("nexo")!,
-            transferOriginAccountId: 2,
-            transferDestinationAccountId: 3,
+            transferOriginAccountId: asAccountId(2),
+            transferDestinationAccountId: asAccountId(3),
         };
         await importPortfolioCSVWithProgress(
             statement(),
             config,
             config.format!,
             () => {},
-            { isBrokerage: true, accountId: 1 },
+            { isBrokerage: true, accountId: asAccountId(1) },
         ).result;
         expect(uploads[0]).toContain(
             'name="transfer_origin_account_id"\r\n\r\n2',

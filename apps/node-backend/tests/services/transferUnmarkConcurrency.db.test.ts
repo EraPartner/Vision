@@ -13,6 +13,9 @@ import {
 } from "../../src/services/transferReconciliationService.ts";
 
 import { transactionRepository } from "../../src/repositories/transactionRepository.ts";
+import {
+  asTransactionId,
+} from "@vision/types/brands";
 
 // Synthetic disposable TEST_DATABASE_URL only; never the native personal stack.
 describe.skipIf(!hasTestDatabase())(
@@ -65,7 +68,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       const a = rows[0].id as number;
       const b = rows[1].id as number;
-      await markTransfer(a, b);
+      await markTransfer(asTransactionId(a), asTransactionId(b));
       const blocker = await pool.connect();
       await blocker.query("BEGIN");
       await blocker.query(
@@ -73,8 +76,8 @@ describe.skipIf(!hasTestDatabase())(
         [Math.min(a, b)],
       );
       const outcomes = Promise.allSettled([
-        unmarkTransfer(a),
-        unmarkTransfer(b),
+        unmarkTransfer(asTransactionId(a)),
+        unmarkTransfer(asTransactionId(b)),
       ]);
       try {
         const deadline = Date.now() + 5000;
@@ -129,7 +132,7 @@ describe.skipIf(!hasTestDatabase())(
       const gate = new Promise<void>((resolve) => { release = resolve; });
       const prepared = new Promise<void>((resolve) => { ready = resolve; });
       const repair = withTransaction(async () => {
-        await markTransfer(a, b);
+        await markTransfer(asTransactionId(a), asTransactionId(b));
         ready();
         await gate;
       });
@@ -178,8 +181,8 @@ describe.skipIf(!hasTestDatabase())(
         number,
         number,
       ];
-      await markTransfer(a, x);
-      await markTransfer(b, y);
+      await markTransfer(asTransactionId(a), asTransactionId(x));
+      await markTransfer(asTransactionId(b), asTransactionId(y));
       const blocker = await pool.connect();
       await blocker.query("BEGIN");
       await blocker.query(
@@ -187,8 +190,8 @@ describe.skipIf(!hasTestDatabase())(
         [Math.min(a, x, b, y)],
       );
       const outcomes = Promise.allSettled([
-        markTransfer(a, b),
-        markTransfer(x, y),
+        markTransfer(asTransactionId(a), asTransactionId(b)),
+        markTransfer(asTransactionId(x), asTransactionId(y)),
       ]);
       try {
         const deadline = Date.now() + 5000;

@@ -40,6 +40,7 @@ import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { cn } from "@/lib/utils";
 import { useRecipientPatterns } from "@/hooks/useRecipients";
+import type { RecipientId } from "@vision/types/brands";
 
 type PatternKind = "literal_prefix" | "glob" | "regex";
 
@@ -62,7 +63,7 @@ const DEFAULT_FORM: PatternFormState = {
 interface RecipientPatternsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    recipientId: number;
+    recipientId: RecipientId;
     recipientName: string;
 }
 

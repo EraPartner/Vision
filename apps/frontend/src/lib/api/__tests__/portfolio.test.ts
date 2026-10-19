@@ -22,6 +22,11 @@ import {
     updatePortfolioTransaction,
     bulkRetagPortfolioTransactions,
 } from "@/lib/api/portfolio";
+import {
+    asAccountId,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -63,7 +68,7 @@ describe("portfolio API client", () => {
                 ),
             ),
         );
-        const result = await getPortfolioTransactions(4);
+        const result = await getPortfolioTransactions(asInvestmentId(4));
         expect(
             result.items.map((row) => [
                 row.id,
@@ -110,7 +115,7 @@ describe("portfolio API client", () => {
                 ok(txnList([txn(overrides)])),
             ),
         );
-        await expect(getPortfolioTransactions(4)).rejects.toMatchObject({
+        await expect(getPortfolioTransactions(asInvestmentId(4))).rejects.toMatchObject({
             name: "ApiContractError",
         });
     });
@@ -136,10 +141,10 @@ describe("portfolio API client", () => {
                 income_recognition_role,
             } as never;
             await expect(
-                createPortfolioTransaction(4, payload),
+                createPortfolioTransaction(asInvestmentId(4), payload),
             ).rejects.toThrow("read-only");
             await expect(
-                updatePortfolioTransaction(1, payload),
+                updatePortfolioTransaction(asPortfolioTransactionId(1), payload),
             ).rejects.toThrow("read-only");
             expect(calls).toBe(0);
         },
@@ -222,7 +227,7 @@ describe("portfolio API client", () => {
                 ok({ ...INVESTMENT_STUB, id: 4 }),
             ),
         );
-        expect((await updateInvestment(4, {} as never)).id).toBe(4);
+        expect((await updateInvestment(asInvestmentId(4), {} as never)).id).toBe(4);
     });
 
     it("deleteInvestment resolves on void", async () => {
@@ -232,7 +237,7 @@ describe("portfolio API client", () => {
                 () => new HttpResponse(null, { status: 204 }),
             ),
         );
-        await expect(deleteInvestment(4)).resolves.toBeUndefined();
+        await expect(deleteInvestment(asInvestmentId(4))).resolves.toBeUndefined();
     });
 
     it("getInvestmentPriceHistory forwards range params", async () => {
@@ -250,7 +255,7 @@ describe("portfolio API client", () => {
                 },
             ),
         );
-        await getInvestmentPriceHistory(4, {
+        await getInvestmentPriceHistory(asInvestmentId(4), {
             from_ms: 1000,
             to_ms: 2000,
             db_only: true,
@@ -266,7 +271,7 @@ describe("portfolio API client", () => {
                 ok(txnList([txn({ id: 1, date: "2026-03-03" })])),
             ),
         );
-        const res = await getPortfolioTransactions(4);
+        const res = await getPortfolioTransactions(asInvestmentId(4));
         expect(res.items[0]?.date).toBe("2026-03-03");
     });
 
@@ -294,7 +299,7 @@ describe("portfolio API client", () => {
                 ok(txn({ id: 50, investment_id: 4 }), { status: 201 }),
             ),
         );
-        expect((await createPortfolioTransaction(4, {} as never)).id).toBe(50);
+        expect((await createPortfolioTransaction(asInvestmentId(4), {} as never)).id).toBe(50);
     });
 
     it("updatePortfolioTransaction PATCHes by txn id", async () => {
@@ -315,7 +320,7 @@ describe("portfolio API client", () => {
             recurrence_interval: null,
             recurrence_end_date: null,
         };
-        expect((await updatePortfolioTransaction(50, update)).id).toBe(50);
+        expect((await updatePortfolioTransaction(asPortfolioTransactionId(50), update)).id).toBe(50);
         expect(body).toEqual(update);
     });
 
@@ -345,9 +350,9 @@ describe("portfolio API client", () => {
             ),
         );
         const request = {
-            transaction_ids: [1, 2],
+            transaction_ids: [asPortfolioTransactionId(1), asPortfolioTransactionId(2)],
             from_account_id: null,
-            to_account_id: 7,
+            to_account_id: asAccountId(7),
             idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
         };
         const receipt = await bulkRetagPortfolioTransactions(request);

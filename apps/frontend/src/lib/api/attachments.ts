@@ -4,11 +4,12 @@
 
 import { AttachmentListSchema } from '@vision/types/contracts';
 import { API_BASE_URL, apiRequest, rawFetch, parseEnvelopeError } from '@/lib/api/client';
+import type { TransactionId } from "@vision/types/brands";
 
 export interface Attachment {
     /** BIGSERIAL, sent as decimal text. */
     id: string;
-    transaction_id: number;
+    transaction_id: TransactionId;
     filename: string;
     stored_path: string;
     mime_type: string;
@@ -17,14 +18,14 @@ export interface Attachment {
 }
 
 /** List all attachments for a transaction. */
-export function listAttachments(transactionId: number): Promise<{ items: Attachment[] }> {
+export function listAttachments(transactionId: TransactionId): Promise<{ items: Attachment[] }> {
     return apiRequest(`/api/attachments/transaction/${transactionId}`, {
         schema: AttachmentListSchema,
     });
 }
 
 /** Upload a file attachment for a transaction. */
-export async function uploadAttachment(transactionId: number, file: File): Promise<{ item: Attachment }> {
+export async function uploadAttachment(transactionId: TransactionId, file: File): Promise<{ item: Attachment }> {
     const form = new FormData();
     form.append('file', file);
 

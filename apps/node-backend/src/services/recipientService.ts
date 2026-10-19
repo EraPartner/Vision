@@ -4,7 +4,8 @@
  * (eslint vision-local/no-repo-direct-from-route).
  */
 import { queryOne } from '../database/rowContracts.ts';
-import { idRowSchema } from '../database/rows/catalog.ts';
+import { recipientKeyRowSchema } from '../database/rowSchemas.ts';
+import type { RecipientId } from '@vision/types/brands';
 import { ValidationError } from '../middleware/errorHandler.ts';
 import { normalizeForMatching } from '../lib/textNormalization.ts';
 
@@ -22,10 +23,10 @@ export { default } from '../repositories/recipientRepository.ts';
  * @returns the recipient id
  * @throws {ValidationError} when no recipient matches
  */
-export async function resolveRecipientIdByName(name: string): Promise<number> {
+export async function resolveRecipientIdByName(name: string): Promise<RecipientId> {
   const normalized = normalizeForMatching(name);
   const row = await queryOne(
-    idRowSchema,
+    recipientKeyRowSchema,
     `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
     [normalized],
   );

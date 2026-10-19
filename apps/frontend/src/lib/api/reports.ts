@@ -10,6 +10,11 @@ import { resolveActiveThemeTokens, type ReportThemeTokens } from '@/lib/themeTok
 import { downloadBlob } from '@/lib/downloadBlob';
 import { todayYmd } from '@/lib/timezone';
 import type { BelgianTaxHouseholdV2, PartnerId } from '@/lib/belgianTax/householdTypes';
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 
 export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
 
@@ -58,12 +63,12 @@ export interface TaxReportHousehold {
 }
 
 export interface ReportOptions {
-  currency?: string;
+  currency?: CurrencyCode;
   period?: ReportPeriod;
   sections?: string[];
   theme?: ReportThemeTokens;
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
+  excludedCategoryIds?: CategoryId[];
+  excludedRecipientIds?: RecipientId[];
   taxProfile?: TaxReportProfile | undefined;
   precomputedPIT?: TaxReportPIT | undefined;
   /** The year's household, validated by the backend's household settings schema. */

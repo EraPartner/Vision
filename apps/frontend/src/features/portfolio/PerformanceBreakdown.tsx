@@ -7,7 +7,11 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrency,
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+} from "@/utils/currency";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { TrendingUp, TrendingDown } from "lucide-react";
@@ -20,9 +24,10 @@ import { getAssetClassLabel } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface BreakdownItem {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol: string;
     assetClass: string;
@@ -134,7 +139,7 @@ export default function PerformanceBreakdown({
     const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
 
     const monthLabelLocale = useMemo(
         () => appLanguageToLocale(language),

@@ -19,12 +19,13 @@ import {
     importPortfolioCSVWithProgress,
     type PortfolioCustomConfig,
 } from "@/lib/api/portfolioImports";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
 describe("portfolioImports API client", () => {
     const config: PortfolioCustomConfig = {
-        accountId: 7,
+        accountId: asAccountId(7),
         dateColumn: "Date",
         typeColumn: "Type",
         symbolColumn: "Symbol",
@@ -198,14 +199,14 @@ describe("portfolioImports API client", () => {
                     generic,
                     "portfolio_generic",
                     () => {},
-                    { isBrokerage: true, accountId: 7 },
+                    { isBrokerage: true, accountId: asAccountId(7) },
                 ).result;
             else
                 await importPortfolioCSVCustom(
                     file,
                     generic,
                     "portfolio_generic",
-                    { isBrokerage: true, accountId: 7 },
+                    { isBrokerage: true, accountId: asAccountId(7) },
                 );
             expect(body?.get("adapter_name")).toBe("portfolio_generic");
             expect(body?.has("portfolio_format")).toBe(false);
@@ -254,7 +255,7 @@ describe("portfolioImports API client", () => {
                 new File(["fixture"], `${format}.csv`, { type: "text/csv" }),
                 { ...config, format },
                 format,
-                { isBrokerage: true, accountId: 7 },
+                { isBrokerage: true, accountId: asAccountId(7) },
             );
 
             expect(new URL(requestedUrl).search).toBe("");
@@ -325,7 +326,7 @@ describe("portfolioImports API client", () => {
                 },
             ),
         );
-        await overridePortfolioImportRow(5, 9, { investmentId: 33 });
+        await overridePortfolioImportRow(5, 9, { investmentId: asInvestmentId(33) });
         expect(body).toMatchObject({ investment_id: 33 });
     });
 
@@ -368,7 +369,7 @@ describe("portfolioImports API client", () => {
         );
 
         const result = await overridePortfolioImportRows(5, [9, 10, 11], {
-            investmentId: 33,
+            investmentId: asInvestmentId(33),
         });
 
         expect(requests).toBe(1);
@@ -414,7 +415,7 @@ describe("portfolioImports API client", () => {
                 },
             ),
         );
-        const res = await commitPortfolioImportBatch(5, 12);
+        const res = await commitPortfolioImportBatch(5, asAccountId(12));
         expect(body).toMatchObject({ account_id: 12 });
         expect(res.imported).toBe(4);
     });

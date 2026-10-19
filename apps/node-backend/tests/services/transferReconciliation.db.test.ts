@@ -40,6 +40,9 @@ import {
   backfillTransfersOnce,
 } from "../../src/services/transferReconciliationService.ts";
 import { closePool } from "../../src/database/connection.ts";
+import {
+  asTransactionId,
+} from "@vision/types/brands";
 
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */
 const DAY0 = "2024-03-10";
@@ -392,7 +395,7 @@ describe.skipIf(!hasTestDatabase())(
       it("never overwrites a manual mark", async () => {
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
-        await markTransfer(outId, inId);
+        await markTransfer(asTransactionId(outId), asTransactionId(inId));
 
         await expect(reconcileTransfers()).resolves.toEqual({
           pairsCreated: 0,
@@ -562,10 +565,10 @@ describe.skipIf(!hasTestDatabase())(
           });
           const bId = await insertTxn({ account: "Savings", amount: 100 });
           const before = await readTxn(aId);
-          await expect(markTransfer(aId, bId)).rejects.toThrow(
+          await expect(markTransfer(asTransactionId(aId), asTransactionId(bId))).rejects.toThrow(
             /original workflow/i,
           );
-          await expect(unmarkTransfer(aId)).rejects.toThrow(
+          await expect(unmarkTransfer(asTransactionId(aId))).rejects.toThrow(
             /original workflow/i,
           );
           expect(await readTxn(aId)).toEqual(before);
@@ -578,7 +581,7 @@ describe.skipIf(!hasTestDatabase())(
         async (kind) => {
           await seedFixtures();
           const { outId, inId } = await seedMatchablePair();
-          await markTransfer(outId, inId);
+          await markTransfer(asTransactionId(outId), asTransactionId(inId));
           const update = {
             inactive: "is_active = false",
             "same-account": `account_id = ${accountIds.Checking}`,
@@ -613,7 +616,7 @@ describe.skipIf(!hasTestDatabase())(
           currency: "USD",
         });
 
-        await expect(markTransfer(aId, bId)).resolves.toEqual({ ok: true });
+        await expect(markTransfer(asTransactionId(aId), asTransactionId(bId))).resolves.toEqual({ ok: true });
         await reconcileTransfers();
 
         expect(await readTxn(aId)).toMatchObject({
@@ -639,7 +642,7 @@ describe.skipIf(!hasTestDatabase())(
           date: daysAfter(1),
         });
 
-        await markTransfer(aId, bId);
+        await markTransfer(asTransactionId(aId), asTransactionId(bId));
 
         expect(await readTxn(aId)).toMatchObject({
           transfer_peer_id: bId,
@@ -657,7 +660,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedFixtures();
         const aId = await insertTxn({ account: "Checking", amount: -30 });
         const bId = await insertTxn({ account: "Checking", amount: 30 });
-        await expect(markTransfer(aId, bId)).rejects.toThrow(
+        await expect(markTransfer(asTransactionId(aId), asTransactionId(bId))).rejects.toThrow(
           /two different accounts/i,
         );
         expect((await readTxn(aId)).is_transfer).toBe(false);
@@ -667,7 +670,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedFixtures();
         const aId = await insertTxn({ account: "Checking", amount: -30 });
         const bId = await insertTxn({ account: "Savings", amount: -30 });
-        await expect(markTransfer(aId, bId)).rejects.toThrow(/opposite signs/i);
+        await expect(markTransfer(asTransactionId(aId), asTransactionId(bId))).rejects.toThrow(/opposite signs/i);
         expect((await readTxn(aId)).is_transfer).toBe(false);
       });
 
@@ -679,14 +682,14 @@ describe.skipIf(!hasTestDatabase())(
           amount: 30,
           isActive: false,
         });
-        await expect(markTransfer(aId, bId)).rejects.toThrow(/must be active/i);
+        await expect(markTransfer(asTransactionId(aId), asTransactionId(bId))).rejects.toThrow(/must be active/i);
         expect((await readTxn(aId)).is_transfer).toBe(false);
       });
 
       it("rejects a missing leg", async () => {
         await seedFixtures();
         const aId = await insertTxn({ account: "Checking", amount: -30 });
-        await expect(markTransfer(aId, aId + 100_000)).rejects.toThrow(
+        await expect(markTransfer(asTransactionId(aId), asTransactionId(aId + 100_000))).rejects.toThrow(
           /must exist/i,
         );
         expect((await readTxn(aId)).is_transfer).toBe(false);
@@ -702,7 +705,7 @@ describe.skipIf(!hasTestDatabase())(
         const { outId, inId } = await seedMatchablePair();
         await reconcileTransfers();
 
-        await expect(unmarkTransfer(outId)).resolves.toEqual({ ok: true });
+        await expect(unmarkTransfer(asTransactionId(outId))).resolves.toEqual({ ok: true });
 
         for (const id of [outId, inId]) {
           expect(await readTxn(id)).toMatchObject({
@@ -723,7 +726,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
         await reconcileTransfers();
-        await unmarkTransfer(outId);
+        await unmarkTransfer(asTransactionId(outId));
 
         // Without the per-pair dismissal, the rows are open again and this
         // reconcile would immediately restore the pairing the user just rejected.
@@ -738,7 +741,7 @@ describe.skipIf(!hasTestDatabase())(
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
         await reconcileTransfers();
-        await unmarkTransfer(outId);
+        await unmarkTransfer(asTransactionId(outId));
 
         // The true counterpart arrives later on a third account. A↔B is dismissed,
         // but A must still be able to pair with C.
@@ -766,9 +769,9 @@ describe.skipIf(!hasTestDatabase())(
         await seedFixtures();
         const { outId, inId } = await seedMatchablePair();
         await reconcileTransfers();
-        await unmarkTransfer(outId);
+        await unmarkTransfer(asTransactionId(outId));
 
-        await expect(markTransfer(outId, inId)).resolves.toEqual({ ok: true });
+        await expect(markTransfer(asTransactionId(outId), asTransactionId(inId))).resolves.toEqual({ ok: true });
         expect(await readTxn(outId)).toMatchObject({
           transfer_peer_id: inId,
           transfer_source: "manual",

@@ -38,6 +38,10 @@ import {
   __retagPortfolioTransactions as retagPortfolioTransactions,
 } from "../src/services/portfolio/portfolioBrokerRetagService.ts";
 import {
+  asAccountId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
+import {
   ConflictError,
   ValidationError,
 } from "../src/middleware/errorHandler.ts";
@@ -47,9 +51,9 @@ import {
 type HistoryRows = Parameters<typeof assertRetagPreservesPartitionUnits>[0];
 
 const request = {
-  transaction_ids: [12, 11],
-  from_account_id: 4,
-  to_account_id: 7,
+  transaction_ids: [asPortfolioTransactionId(12), asPortfolioTransactionId(11)],
+  from_account_id: asAccountId(4),
+  to_account_id: asAccountId(7),
   idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
 };
 
@@ -222,7 +226,7 @@ describe("portfolioBrokerRetagService", () => {
   it("records a no-op receipt when source and destination are equal", async () => {
     const result = await retagPortfolioTransactions({
       ...request,
-      to_account_id: 4,
+      to_account_id: asAccountId(4),
     });
     expect(mocks.compareAndSetAccount).not.toHaveBeenCalled();
     expect(result.changed_count).toBe(0);
@@ -232,8 +236,8 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPartitionUnits(
         loose<HistoryRows>(histories),
-        new Set([11]),
-        7,
+        new Set([asPortfolioTransactionId(11)]),
+        asAccountId(7),
       ),
     ).toThrow(ValidationError);
   });
@@ -242,8 +246,50 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPartitionUnits(
         loose<HistoryRows>(histories),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
+      ),
+    ).not.toThrow();
+  });
+
+  it("never re-tags a custody event whose id equals a selected transaction id", () => {
+    // portfolio_asset_adjustments ids come from their own sequence, so an
+    // adjustment can share a number with a selected portfolio transaction.
+    const withCustody = [
+      {
+        id: 30,
+        investment_id: 2,
+        type: "buy",
+        date: "2025-12-01",
+        units: 5,
+        amount: 50,
+        account_id: 9,
+      },
+      {
+        id: "11",
+        investment_id: 2,
+        type: "asset_adjustment",
+        date: "2026-01-01",
+        units: 2,
+        account_id: 9,
+        adjustment_kind: "asset_fee",
+        basis_policy: "carried",
+      },
+      {
+        id: 11,
+        investment_id: 2,
+        type: "buy",
+        date: "2026-02-01",
+        units: 10,
+        amount: 100,
+        account_id: 4,
+      },
+    ];
+    expect(() =>
+      assertRetagPreservesPartitionUnits(
+        loose<HistoryRows>(withCustody),
+        new Set([asPortfolioTransactionId(11)]),
+        asAccountId(7),
       ),
     ).not.toThrow();
   });
@@ -303,8 +349,8 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPortfolioEconomics(
         loose<HistoryRows>(transactions),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
         "fifo",
         "2026-09-08",
       ),
@@ -312,8 +358,8 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPortfolioEconomics(
         loose<HistoryRows>(transactions),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
         "lifo",
         "2026-09-08",
       ),
@@ -332,8 +378,8 @@ describe("portfolioBrokerRetagService", () => {
             asset_class: "stock",
           })),
         ),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
         "fifo",
         "2026-09-08",
       ),
@@ -403,8 +449,8 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPortfolioEconomics(
         loose<HistoryRows>(transactions),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
         "fifo",
         "2026-09-08",
       ),
@@ -468,8 +514,8 @@ describe("portfolioBrokerRetagService", () => {
     expect(() =>
       assertRetagPreservesPortfolioEconomics(
         loose<HistoryRows>(transactions),
-        new Set([11, 12]),
-        7,
+        new Set([asPortfolioTransactionId(11), asPortfolioTransactionId(12)]),
+        asAccountId(7),
         "fifo",
         "2026-09-08",
         usdRates,
@@ -491,8 +537,8 @@ describe("portfolioBrokerRetagService", () => {
             asset_class: "stock",
           },
         ]),
-        new Set([11]),
-        7,
+        new Set([asPortfolioTransactionId(11)]),
+        asAccountId(7),
         "weighted_avg",
         "2026-09-08",
       ),
@@ -534,7 +580,7 @@ describe("portfolioBrokerRetagService", () => {
 
   it("treats transaction IDs as a set when fingerprinting", () => {
     expect(fingerprintRetagRequest(request)).toBe(
-      fingerprintRetagRequest({ ...request, transaction_ids: [11, 12] }),
+      fingerprintRetagRequest({ ...request, transaction_ids: [asPortfolioTransactionId(11), asPortfolioTransactionId(12)] }),
     );
   });
 });

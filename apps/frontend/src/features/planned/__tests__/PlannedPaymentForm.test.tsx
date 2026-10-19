@@ -15,15 +15,20 @@ import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asPlannedTransactionId,
+} from "@vision/types/brands";
 
 const EXPENSE: PlannedPayment = {
-    id: 1,
+    id: asPlannedTransactionId(1),
     name: "Rent",
     amount: -1200,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     due_date: "2025-02-01",
     bank_account: "BE12345678901234",
-    account_id: 1,
+    account_id: asAccountId(1),
     is_recurring: false,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
@@ -31,14 +36,14 @@ const EXPENSE: PlannedPayment = {
 
 const INCOME: PlannedPayment = {
     ...EXPENSE,
-    id: 2,
+    id: asPlannedTransactionId(2),
     name: "Salary",
     amount: 2500,
 };
 
 const LOAN: PlannedPayment = {
     ...EXPENSE,
-    id: 3,
+    id: asPlannedTransactionId(3),
     name: "Mortgage",
     amount: -450.5,
     is_recurring: true,

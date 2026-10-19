@@ -20,6 +20,9 @@ import type { IRoute } from "express";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asInvestmentId,
+} from "@vision/types/brands";
 
 vi.mock("multer", () => {
   const multer = vi.fn(() => ({
@@ -557,7 +560,7 @@ describe("Portfolio Import Routes — bulk investment resolution", () => {
 
   it("resolves a complete row set through one service call", async () => {
     resolveInvestmentRows.mockResolvedValue({
-      investmentId: 42,
+      investmentId: asInvestmentId(42),
       created: false,
       resolved: 3,
     });

@@ -23,6 +23,8 @@ import { resolveBulkSelection } from "./bulkSelection.ts";
 import type { BulkFilterInput } from "./bulkSelection.ts";
 import { scheduleReconcile } from "./transferReconciliationService.ts";
 import { attachmentRepository } from "./attachmentRecordService.ts";
+import { asTransactionId } from "@vision/types/brands";
+import type { TagId } from "@vision/types/brands";
 import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.ts";
 
 /**
@@ -46,13 +48,15 @@ export async function bulkTagTransactions({
 }): Promise<{ added: number; removed: number; transactions_affected: number }> {
   // Validated as sent — see the note in bulkSelection.js: the `.map(Number)`
   // that used to sit here turned '1e3' into id 1000 and true into id 1.
-  const txIds = validateInt4Ids(transactionIds, "transaction_ids");
+  const txIds = validateInt4Ids(transactionIds, "transaction_ids").map(
+    asTransactionId,
+  );
   if (txIds.length === 0) {
     throw new ValidationError("transaction_ids contains no valid IDs");
   }
 
-  const addTagIds: number[] = [];
-  const removeTagIds: number[] = [];
+  const addTagIds: TagId[] = [];
+  const removeTagIds: TagId[] = [];
   const allUnknown: string[] = [];
 
   if (addSlugs.length > 0) {

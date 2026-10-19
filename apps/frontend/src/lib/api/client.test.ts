@@ -15,6 +15,11 @@ import {
     RETRYABLE_STATUS_CODES,
 } from "@/lib/api/client";
 import { buildQuery, buildExclusionQuery } from "@/lib/api/helpers";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 const TEST_URL = "http://localhost:3002/api/client-test";
 
@@ -312,20 +317,20 @@ describe("buildExclusionQuery", () => {
     });
 
     it("repeats excluded_category_ids for each value", () => {
-        const q = buildExclusionQuery({ excluded_category_ids: [1, 2, 3] });
+        const q = buildExclusionQuery({ excluded_category_ids: [asCategoryId(1), asCategoryId(2), asCategoryId(3)] });
         expect(q).toContain("excluded_category_ids=1");
         expect(q).toContain("excluded_category_ids=2");
         expect(q).toContain("excluded_category_ids=3");
     });
 
     it("repeats excluded_recipient_ids for each value", () => {
-        const q = buildExclusionQuery({ excluded_recipient_ids: [5, 6] });
+        const q = buildExclusionQuery({ excluded_recipient_ids: [asRecipientId(5), asRecipientId(6)] });
         expect(q).toContain("excluded_recipient_ids=5");
         expect(q).toContain("excluded_recipient_ids=6");
     });
 
     it("sets currency param", () => {
-        expect(buildExclusionQuery({ currency: "USD" })).toContain(
+        expect(buildExclusionQuery({ currency: asCurrencyCode("USD") })).toContain(
             "currency=USD",
         );
     });
@@ -333,7 +338,7 @@ describe("buildExclusionQuery", () => {
     it("omits empty arrays", () => {
         const q = buildExclusionQuery({
             excluded_category_ids: [],
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
         });
         expect(q).not.toContain("excluded_category_ids");
         expect(q).toContain("currency=EUR");

@@ -24,6 +24,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { asAccountId } from "@vision/types/brands";
 
 interface Props {
     account: Account;
@@ -68,7 +69,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
             const toAccountId =
                 destination === UNASSIGNED_PORTFOLIO_LOTS
                     ? null
-                    : Number(destination);
+                    : asAccountId(Number(destination));
             const fingerprint = `${data.transaction_ids.join(",")}|${account.id}|${toAccountId ?? "unassigned"}`;
             if (idempotencyRef.current?.fingerprint !== fingerprint) {
                 idempotencyRef.current = {

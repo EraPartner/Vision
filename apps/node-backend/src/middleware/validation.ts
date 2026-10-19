@@ -6,6 +6,7 @@
  * the canonical library module directly.
  */
 
+import type { z } from "zod";
 import { validateId } from "../lib/validation.ts";
 import { ValidationError } from "./errorHandler.ts";
 import type {
@@ -24,6 +25,18 @@ export function assertIdParam(req: ExpressRequest, name = "id"): number {
   const result = validateId(req.params[name], name);
   if (!result.valid) throw new ValidationError(result.error);
   return result.value;
+}
+
+/**
+ * {@link assertIdParam} for an entity id: the value comes back as that
+ * entity's branded id (e.g. `CategoryIdSchema` yields a `CategoryId`).
+ */
+export function assertEntityIdParam<S extends z.ZodType<number, number>>(
+  req: ExpressRequest,
+  brand: S,
+  name = "id",
+): z.output<S> {
+  return brand.parse(assertIdParam(req, name));
 }
 
 export function validateIdParam(

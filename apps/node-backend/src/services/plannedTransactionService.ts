@@ -13,6 +13,11 @@ import plannedTransactionRepository, {
 } from "../repositories/plannedTransactionRepository.ts";
 import type { LoanScheduleEntryInput } from "../repositories/plannedTransactionRepository.ts";
 import { stampAccountIdForUpdate } from "../repositories/transactionRepository.ts";
+import type {
+  PlannedTransactionId,
+  TagId,
+  TransactionId,
+} from "@vision/types/brands";
 
 /**
  * The create payload. `createPlannedSchema` is a loose passthrough: apart from
@@ -86,7 +91,7 @@ export async function create(input: PlannedTransactionCreateInput) {
 }
 
 export async function update(
-  id: number,
+  id: PlannedTransactionId,
   fields: Record<string, unknown> & { tags?: string[] },
 ) {
   const { tags, ...txFields } = fields;
@@ -109,7 +114,7 @@ export async function update(
  * An empty schedule clears existing installments.
  */
 export async function updateWithLoanSchedule(
-  id: number,
+  id: PlannedTransactionId,
   fields: Record<string, unknown> & { tags?: string[] },
   scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ) {
@@ -131,11 +136,11 @@ export async function updateWithLoanSchedule(
 }
 
 export async function executeAndAdvance(
-  plannedTransactionId: number,
-  executedTransactionId: number,
+  plannedTransactionId: PlannedTransactionId,
+  executedTransactionId: TransactionId,
   executionDate: string,
   updateFields: Record<string, unknown> = {},
-  tagIdsToInherit: number[] | null = null,
+  tagIdsToInherit: TagId[] | null = null,
 ) {
   return withTransaction(async (client) => {
     const inserted = await insertExecutionInTransaction(
@@ -166,7 +171,7 @@ export async function executeAndAdvance(
 }
 
 export async function replaceLoanSchedule(
-  id: number,
+  id: PlannedTransactionId,
   scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ) {
   return withTransaction((client) =>

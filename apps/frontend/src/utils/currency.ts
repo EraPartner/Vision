@@ -2,6 +2,12 @@
  * Currency utility functions
  */
 
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
+
+/** The app's fallback currency when no setting or row currency applies. */
+export const DEFAULT_CURRENCY: CurrencyCode = asCurrencyCode("EUR");
+
 /**
  * Canonical list of currencies offered in currency dropdowns (account
  * creation/editing and the default-currency setting). Order matters: subset

@@ -8,7 +8,7 @@ import { investmentRepository } from "../../repositories/investmentRepository.ts
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.ts";
 import {
-  convertAtLatestRates,
+  convertCodeAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import settingsService from "../settingsService.ts";
@@ -69,7 +69,7 @@ export async function getPortfolioTaxDashboard(
   const convert = (amount: number, source?: string) => {
     const from = (source ?? "EUR").toUpperCase();
     if (from === target) return amount;
-    const converted = convertAtLatestRates(amount, from, target, rates);
+    const converted = convertCodeAtLatestRates(amount, from, target, rates);
     return converted === undefined ? undefined : converted.toNumber();
   };
   const calculation = overview.calculation as { totalPIT?: unknown };

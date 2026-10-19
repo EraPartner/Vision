@@ -12,6 +12,10 @@
 import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 vi.mock("../../src/services/accountService.ts", () => ({
   default: {
@@ -85,8 +89,8 @@ describe("per-currency statement balance routes (ADR-089 D2)", () => {
 
   it("stores a currency reading and invalidates account-derived caches", async () => {
     accountService.setStatementBalance.mockResolvedValue({
-      account_id: 7,
-      currency: "USD",
+      account_id: asAccountId(7),
+      currency: asCurrencyCode("USD"),
       balance: "120.0000",
       balance_date: "2026-09-04",
     });
@@ -103,8 +107,8 @@ describe("per-currency statement balance routes (ADR-089 D2)", () => {
 
   it("deletes only the named currency reading", async () => {
     accountService.removeStatementBalance.mockResolvedValue({
-      account_id: 7,
-      currency: "USD",
+      account_id: asAccountId(7),
+      currency: asCurrencyCode("USD"),
     });
     await api.delete(`${BASE}/7/statement-balances/USD`).expect(200);
     expect(accountService.removeStatementBalance).toHaveBeenCalledWith(
@@ -164,7 +168,7 @@ describe("POST /:id/merge — listener-free boundary guards", () => {
   it("accepts and forwards exactly 500 sources", async () => {
     const handler = mergeRouteHandler();
     const sourceIds = Array.from({ length: 500 }, (_, index) => index + 2);
-    mergeAccounts.mockResolvedValue(partial({ into: 1, merged: sourceIds }));
+    mergeAccounts.mockResolvedValue(partial({ into: asAccountId(1), merged: sourceIds.map(asAccountId) }));
     const res = { ok: vi.fn() };
     await handler(
       {
@@ -182,7 +186,7 @@ describe("Account Routes — portfolio cache invalidation", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("create busts the portfolio caches", async () => {
-    accountService.create.mockResolvedValue(partial({ id: 1, name: "Cash" }));
+    accountService.create.mockResolvedValue(partial({ id: asAccountId(1), name: "Cash" }));
     const res = await api.post(BASE).send({ name: "Cash" }).expect(201);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(res.body).toEqual(okEnvelope({ id: 1, name: "Cash", links: [] }));
@@ -190,14 +194,14 @@ describe("Account Routes — portfolio cache invalidation", () => {
 
   it("update busts the portfolio caches (rename / in_net_worth / is_active / statement_balance)", async () => {
     accountService.update.mockResolvedValue(
-      partial({ id: 1, name: "Renamed" }),
+      partial({ id: asAccountId(1), name: "Renamed" }),
     );
     await api.patch(`${BASE}/1`).send({ name: "Renamed" }).expect(200);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
   });
 
   it("delete busts the portfolio caches and answers 204 with no body", async () => {
-    accountService.remove.mockResolvedValue(undefined as unknown as number);
+    accountService.remove.mockResolvedValue(asAccountId(undefined as unknown as number));
     const res = await api.delete(`${BASE}/1`).expect(204);
     expect(invalidatePortfolioCaches).toHaveBeenCalledTimes(1);
     expect(res.text).toBe("");
@@ -257,7 +261,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("merges a fully-valid body unchanged (parseInt coercion preserved)", async () => {
-    mergeAccounts.mockResolvedValue(partial({ into: 1, merged: [2, 3] }));
+    mergeAccounts.mockResolvedValue(partial({ into: asAccountId(1), merged: [asAccountId(2), asAccountId(3)] }));
     const res = await api
       .post(`${BASE}/1/merge`)
       .send({ source_ids: [2, "3"] })
@@ -323,7 +327,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
   });
 
   it("leaves the non-array / missing source_ids path to the service (empty list)", async () => {
-    mergeAccounts.mockResolvedValue(partial({ into: 1, merged: [] }));
+    mergeAccounts.mockResolvedValue(partial({ into: asAccountId(1), merged: [] }));
     await api.post(`${BASE}/1/merge`).send({}).expect(200);
     expect(mergeAccounts).toHaveBeenCalledWith(1, []);
   });
@@ -390,7 +394,7 @@ describe("GET /:id/merge-preview — ?into= is a strict id", () => {
   });
 
   it("passes a well-formed ?into= through unchanged", async () => {
-    previewMerge.mockResolvedValue(partial({ into: 2 }));
+    previewMerge.mockResolvedValue(partial({ into: asAccountId(2) }));
     await api.get(`${BASE}/1/merge-preview?into=2`).expect(200);
     expect(previewMerge).toHaveBeenCalledWith(1, 2);
   });
@@ -403,7 +407,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
   // must keep answering the complete list (and must not echo limit/offset).
   it("returns the full list and no limit/offset when neither param is sent", async () => {
     accountService.list.mockResolvedValue({
-      items: [partial({ id: 1 }), partial({ id: 2 })],
+      items: [partial({ id: asAccountId(1) }), partial({ id: asAccountId(2) })],
       total: 2,
     });
     const res = await api.get(BASE).expect(200);
@@ -416,7 +420,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
 
   it("treats an empty limit param as absent", async () => {
     accountService.list.mockResolvedValue({
-      items: [partial({ id: 1 })],
+      items: [partial({ id: asAccountId(1) })],
       total: 1,
     });
     const res = await api.get(`${BASE}?limit=`).expect(200);
@@ -427,7 +431,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
 
   it("pages and reports the full total when limit/offset are supplied", async () => {
     accountService.list.mockResolvedValue({
-      items: [partial({ id: 3 })],
+      items: [partial({ id: asAccountId(3) })],
       total: 12,
     });
     const res = await api
@@ -505,7 +509,7 @@ describe("Account Routes — params and query schemas (zod)", () => {
   });
 
   it("keeps a bodiless merge as the service's empty source list", async () => {
-    mergeAccounts.mockResolvedValue(partial({ into: 1, merged: [] }));
+    mergeAccounts.mockResolvedValue(partial({ into: asAccountId(1), merged: [] }));
     await mergeRouteHandler()({ params: { id: "1" } }, { ok: vi.fn() });
     expect(mergeAccounts).toHaveBeenCalledWith(1, []);
   });

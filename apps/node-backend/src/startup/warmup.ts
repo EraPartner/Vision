@@ -49,6 +49,7 @@ import { createDailyJob } from "./dailyJobs.ts";
 import investmentRepository from "../repositories/investmentRepository.ts";
 import type { InvestmentRow } from "../types/rows.ts";
 import type { ResolvedPrice } from "../services/priceProviderService.ts";
+import { asInvestmentId } from "@vision/types/brands";
 
 /**
  * Each value is tri-state: 'pending' | 'ready' | 'failed' (see module doc
@@ -199,10 +200,13 @@ async function persistRefreshedPrices(
         if (price == null || Number.isNaN(price) || source === "cached")
           return 0;
 
-        await investmentRepository.updatePrice(parseInt(investmentId, 10), {
-          current_price: price,
-          price_updated_at: new Date().toISOString(),
-        });
+        await investmentRepository.updatePrice(
+          asInvestmentId(parseInt(investmentId, 10)),
+          {
+            current_price: price,
+            price_updated_at: new Date().toISOString(),
+          },
+        );
         return 1;
       },
     ),

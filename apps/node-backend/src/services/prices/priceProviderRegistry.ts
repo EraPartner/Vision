@@ -16,7 +16,7 @@ import {
 import { toNumber, isValidPrice } from './priceCache.ts';
 import { madReturnStats, isRobustNeedle } from '../../lib/math.ts';
 import {
-    convertAtLatestRates,
+    convertCodeAtLatestRates,
     loadLatestRatesToEur,
 } from '../currency/latestRateConversion.ts';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
@@ -675,7 +675,7 @@ export const PROVIDERS = {
           const invCurrency = (inv.currency || 'EUR').toUpperCase();
           let price = usdPrice;
           if (needsUsdToEur && invCurrency !== 'USD') {
-            const converted = convertAtLatestRates(
+            const converted = convertCodeAtLatestRates(
               usdPrice,
               'USD',
               invCurrency,

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 // Latest stored rates: 1 USD = 0.5 EUR.
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
@@ -132,7 +135,7 @@ describe("accountService statement balances", () => {
       partial<AccountRow>({ id: 7 }),
     );
     await expect(
-      accountService.setStatementBalance(7, "USD", {
+      accountService.setStatementBalance(asAccountId(7), "USD", {
         balance: 12,
         date: "04/09/2026",
       }),
@@ -147,7 +150,7 @@ describe("accountService statement balances", () => {
         partial<AccountRow>({ id: 7 }),
       );
       await expect(
-        accountService.setStatementBalance(7, "USD", {
+        accountService.setStatementBalance(asAccountId(7), "USD", {
           balance: 12,
           date,
         }),
@@ -162,7 +165,7 @@ describe("accountService statement balances", () => {
     );
     accountRepository.deleteStatementBalance.mockResolvedValueOnce(1);
     await expect(
-      accountService.removeStatementBalance(7, "usd"),
+      accountService.removeStatementBalance(asAccountId(7), "usd"),
     ).resolves.toEqual({ account_id: 7, currency: "USD" });
   });
 });
@@ -171,19 +174,19 @@ describe("accountService.update", () => {
   it("throws NotFound when the row does not exist", async () => {
     accountRepository.update.mockResolvedValueOnce(undefined);
     await expect(
-      accountService.update(9, { display_name: "x" }),
+      accountService.update(asAccountId(9), { display_name: "x" }),
     ).rejects.toThrow(NotFoundError);
   });
 
   it("rejects a non-boolean flag", async () => {
     await expect(
-      accountService.update(1, { in_net_worth: "yes" }),
+      accountService.update(asAccountId(1), { in_net_worth: "yes" }),
     ).rejects.toThrow(ValidationError);
   });
 
   it("rejects a self-referencing funding_account_id with 400", async () => {
     await expect(
-      accountService.update(5, { funding_account_id: 5 }),
+      accountService.update(asAccountId(5), { funding_account_id: 5 }),
     ).rejects.toThrow(ValidationError);
     expect(accountRepository.update).not.toHaveBeenCalled();
   });
@@ -191,7 +194,7 @@ describe("accountService.update", () => {
   it("rejects a funding_account_id pointing at a nonexistent account with 400, not 500", async () => {
     accountRepository.getById.mockResolvedValueOnce(undefined);
     await expect(
-      accountService.update(1, { funding_account_id: 999 }),
+      accountService.update(asAccountId(1), { funding_account_id: 999 }),
     ).rejects.toThrow(ValidationError);
     expect(accountRepository.update).not.toHaveBeenCalled();
   });
@@ -206,22 +209,22 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { display_name: "Main" });
+    await accountService.update(asAccountId(1), { display_name: "Main" });
     expect(cache.statisticsResponseCache.has("cat|probe")).toBe(true);
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { owner: "partner" });
+    await accountService.update(asAccountId(1), { owner: "partner" });
     expect(cache.statisticsResponseCache.has("cat|probe")).toBe(false);
   });
 
   it("rejects retired scalar statement fields on update", async () => {
     await expect(
-      accountService.update(1, { statement_balance: 99 }),
+      accountService.update(asAccountId(1), { statement_balance: 99 }),
     ).rejects.toThrow(ValidationError);
     expect(accountRepository.update).not.toHaveBeenCalled();
     await expect(
-      accountService.update(1, { statement_balance_date: null }),
+      accountService.update(asAccountId(1), { statement_balance_date: null }),
     ).rejects.toThrow(ValidationError);
   });
 
@@ -232,7 +235,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: false });
+    await accountService.update(asAccountId(1), { is_active: false });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.is_active).toBe(false);
     expect(fields.closed_at).toBeInstanceOf(Date);
@@ -249,7 +252,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: false });
+    await accountService.update(asAccountId(1), { is_active: false });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.is_active).toBe(false);
     expect(fields.in_net_worth).toBe(false);
@@ -266,7 +269,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: false, in_net_worth: true });
+    await accountService.update(asAccountId(1), { is_active: false, in_net_worth: true });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.in_net_worth).toBe(true); // explicit intent respected
   });
@@ -282,7 +285,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: true });
+    await accountService.update(asAccountId(1), { is_active: true });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect("in_net_worth" in fields).toBe(false);
   });
@@ -299,7 +302,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: false });
+    await accountService.update(asAccountId(1), { is_active: false });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect("closed_at" in fields).toBe(false);
   });
@@ -316,7 +319,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { is_active: true });
+    await accountService.update(asAccountId(1), { is_active: true });
     const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.closed_at).toBeNull();
   });
@@ -325,7 +328,7 @@ describe("accountService.update", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, {
+    await accountService.update(asAccountId(1), {
       display_name: "X",
       closed_at: "2020-01-01T00:00:00Z",
     });
@@ -357,7 +360,7 @@ describe("accountService — funding chain cycles", () => {
   it("rejects a two-hop cycle (A funds B, then B funds A)", async () => {
     graph({ 2: 1 }); // account 2 is already funded by account 1
     await expect(
-      accountService.update(1, { funding_account_id: 2 }),
+      accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toThrow(/funding cycle/);
     expect(accountRepository.update).not.toHaveBeenCalled();
   });
@@ -365,7 +368,7 @@ describe("accountService — funding chain cycles", () => {
   it("rejects a longer chain closing back on the edited account (A→B→C→D→A)", async () => {
     graph({ 2: 3, 3: 4, 4: 1 });
     await expect(
-      accountService.update(1, { funding_account_id: 2 }),
+      accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toThrow(/funding cycle/);
     expect(accountRepository.update).not.toHaveBeenCalled();
   });
@@ -375,7 +378,7 @@ describe("accountService — funding chain cycles", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { funding_account_id: 2 });
+    await accountService.update(asAccountId(1), { funding_account_id: 2 });
     expect(accountRepository.update).toHaveBeenCalledWith(1, {
       funding_account_id: 2,
     });
@@ -394,7 +397,7 @@ describe("accountService — funding chain cycles", () => {
     accountRepository.update.mockResolvedValueOnce(
       partial<AccountRow>({ id: 1 }),
     );
-    await accountService.update(1, { funding_account_id: 2 });
+    await accountService.update(asAccountId(1), { funding_account_id: 2 });
     expect(accountRepository.update).toHaveBeenCalledWith(1, {
       funding_account_id: 2,
     });
@@ -535,7 +538,7 @@ describe("accountService — sanitize pins (create)", () => {
 
 describe("accountService — sanitize pins (update)", () => {
   it("rejects an explicit null name on update (name is not clearable)", async () => {
-    await expect(accountService.update(1, { name: null })).rejects.toThrow(
+    await expect(accountService.update(asAccountId(1), { name: null })).rejects.toThrow(
       ValidationError,
     );
     expect(accountRepository.update).not.toHaveBeenCalled();
@@ -545,17 +548,17 @@ describe("accountService — sanitize pins (update)", () => {
 describe("accountService.remove", () => {
   it("maps a FK violation (23503) to ConflictError (archive instead)", async () => {
     accountRepository.remove.mockRejectedValueOnce(pgErr("23503"));
-    await expect(accountService.remove(1)).rejects.toThrow(ConflictError);
+    await expect(accountService.remove(asAccountId(1))).rejects.toThrow(ConflictError);
   });
 
   it("throws NotFound when nothing was deleted", async () => {
     accountRepository.remove.mockResolvedValueOnce(undefined);
-    await expect(accountService.remove(1)).rejects.toThrow(NotFoundError);
+    await expect(accountService.remove(asAccountId(1))).rejects.toThrow(NotFoundError);
   });
 
   it("returns the id on success", async () => {
-    accountRepository.remove.mockResolvedValueOnce(7);
-    await expect(accountService.remove(7)).resolves.toBe(7);
+    accountRepository.remove.mockResolvedValueOnce(asAccountId(7));
+    await expect(accountService.remove(asAccountId(7))).resolves.toBe(7);
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
     ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]!);
@@ -598,6 +601,6 @@ describe("accountService.list / get", () => {
 
   it("throws NotFound for a missing account", async () => {
     accountRepository.getById.mockResolvedValueOnce(undefined);
-    await expect(accountService.get(123)).rejects.toThrow(NotFoundError);
+    await expect(accountService.get(asAccountId(123))).rejects.toThrow(NotFoundError);
   });
 });

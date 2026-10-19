@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import type { TxConnectionMock } from "./helpers/repoMocks.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 // Ambient-aware connection mock: transactional SQL lands on `mockClient` whether
 // the service threads the client through explicitly or a repository issues it
 // via module-level query() inside withTransaction (see repoMocks.js).
@@ -84,7 +87,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
       if (sql.includes("information_schema")) return { rows: [] };
       return { rows: [], rowCount: 0 };
     });
-    await mergeRecipients(4, [9, 2, 9]);
+    await mergeRecipients(asRecipientId(4), [asRecipientId(9), asRecipientId(2), asRecipientId(9)]);
     const lock = mockClient.query.mock.calls.find(([sql]) =>
       sql.includes("FOR UPDATE"),
     );
@@ -104,7 +107,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
         return { rows: [{ id: 2, primary_recipient_id: 1 }] };
       return { rows: [] };
     });
-    await expect(mergeRecipients(2, [3])).rejects.toMatchObject({
+    await expect(mergeRecipients(asRecipientId(2), [asRecipientId(3)])).rejects.toMatchObject({
       status: 409,
     });
     expect(
@@ -117,7 +120,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
 
   it("reports a primary removed before the lock as not found without writes", async () => {
     mockClient.query.mockResolvedValue({ rows: [] });
-    await expect(mergeRecipients(2, [3])).rejects.toBeInstanceOf(NotFoundError);
+    await expect(mergeRecipients(asRecipientId(2), [asRecipientId(3)])).rejects.toBeInstanceOf(NotFoundError);
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
         /^\s*(UPDATE|DELETE)\b/.test(sql),
@@ -136,7 +139,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
       return { rows: [], rowCount: 0 };
     });
 
-    await mergeRecipients(1, [3]);
+    await mergeRecipients(asRecipientId(1), [asRecipientId(3)]);
 
     // The grandchildren re-point updates rows WHERE primary_recipient_id = ANY(...)
     // (distinct from the alias flag update which keys on id = ANY(...)).
@@ -160,7 +163,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     });
 
     await mergeRecipients(
-      1,
+      asRecipientId(1),
       // @ts-expect-error -- deliberately invalid ids: the service must filter them
       [3, 3, 1, 0, -1, 1.5, "3", null],
     );

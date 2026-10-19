@@ -19,6 +19,11 @@ import {
 } from "../src/services/portfolio/portfolioTransactionRules.ts";
 import type { UnitMutationParams } from "../src/services/portfolio/portfolioTransactionRules.ts";
 import { RowContractError } from "../src/database/rowContracts.ts";
+import {
+  asAccountId,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const query = vi.mocked(rawQuery);
 
@@ -341,7 +346,7 @@ describe("validateSellUnitsAvailability", () => {
       validateSellUnitsAvailability({
         type: "sell",
         assetClass: "stock",
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         date: "2025-04-01",
         units: 10,
       }),
@@ -358,7 +363,7 @@ describe("validateSellUnitsAvailability", () => {
       validateSellUnitsAvailability({
         type: "sell",
         assetClass: "stock",
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         date: "2025-04-01",
         units: 10,
       }),
@@ -383,7 +388,7 @@ describe("validateSellUnitsAvailability", () => {
       validateSellUnitsAvailability({
         type: "sell",
         assetClass: "stock",
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         date: "2025-04-01",
         units: 20,
       }),
@@ -403,7 +408,7 @@ describe("validateSellUnitsAvailability", () => {
       validateSellUnitsAvailability({
         type: "sell",
         assetClass: "stock",
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         date: "2025-04-01",
         units: 1,
       }),
@@ -425,7 +430,7 @@ describe("validateSellUnitsAvailability", () => {
       validateSellUnitsAvailability({
         type: "sell",
         assetClass: "stock",
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         date: "2025-04-01",
         units: 7,
       }),
@@ -442,21 +447,21 @@ describe("validateSellUnitsAvailability", () => {
               type: "buy",
               units: "5",
               date: "2025-01-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
             unitEvent({
               id: "3",
               type: "buy",
               units: "5",
               date: "2025-01-02",
-              account_id: 2,
+              account_id: asAccountId(2),
             }),
             unitEvent({
               id: "2",
               type: "sell",
               units: "5",
               date: "2025-02-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
           ],
         }),
@@ -469,19 +474,75 @@ describe("validateSellUnitsAvailability", () => {
 
     await expect(
       validatePortfolioUnitMutation({
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         assetClass: "stock",
         type: "buy",
         date: "2025-01-01",
         units: 5,
-        accountId: 2,
-        excludeTransactionId: 1,
+        accountId: asAccountId(2),
+        excludeTransactionId: asPortfolioTransactionId(1),
         checkProjectedHistory: true,
       }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
       message:
         "change would create or worsen an oversold partition at Broker A",
+    });
+  });
+
+  it("keeps a custody event whose id equals the edited transaction id", async () => {
+    // portfolio_asset_transfers ids come from their own sequence; excluding
+    // transaction 7 must not drop asset transfer 7 from the history.
+    query
+      .mockResolvedValueOnce(
+        partial<PgQueryResult>({
+          rows: [
+            unitEvent({
+              id: "1",
+              type: "buy",
+              units: "10",
+              date: "2025-01-01",
+              account_id: asAccountId(1),
+            }),
+            unitEvent({
+              id: "7",
+              type: "asset_transfer",
+              units: "8",
+              date: "2025-02-01",
+              source_account_id: asAccountId(1),
+              destination_account_id: asAccountId(2),
+              transfer_id: "7",
+            }),
+            unitEvent({
+              id: "7",
+              type: "sell",
+              units: "1",
+              date: "2025-03-01",
+              account_id: asAccountId(1),
+            }),
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        partial<PgQueryResult>({
+          rows: [{ display_name: "Broker A", name: "Broker" }],
+        }),
+      );
+
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: asInvestmentId(1),
+        assetClass: "stock",
+        type: "sell",
+        date: "2025-03-01",
+        units: 5,
+        accountId: asAccountId(1),
+        excludeTransactionId: asPortfolioTransactionId(7),
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message:
+        "sell units exceed available holdings at Broker A (2 units held there)",
     });
   });
 
@@ -494,27 +555,27 @@ describe("validateSellUnitsAvailability", () => {
             type: "buy",
             units: "5",
             date: "2025-01-01",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
           unitEvent({
             id: "2",
             type: "sell",
             units: "7",
             date: "2025-02-01",
-            account_id: 1,
+            account_id: asAccountId(1),
           }),
         ],
       }),
     );
     await expect(
       validatePortfolioUnitMutation({
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         assetClass: "stock",
         type: "buy",
         date: "2025-01-01",
         units: 5,
-        accountId: 1,
-        excludeTransactionId: 1,
+        accountId: asAccountId(1),
+        excludeTransactionId: asPortfolioTransactionId(1),
         checkProjectedHistory: true,
       }),
     ).resolves.toBeUndefined();
@@ -530,14 +591,14 @@ describe("validateSellUnitsAvailability", () => {
               type: "buy",
               units: "10",
               date: "2025-01-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
             unitEvent({
               id: "2",
               type: "sell",
               units: "8",
               date: "2025-03-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
           ],
         }),
@@ -550,7 +611,7 @@ describe("validateSellUnitsAvailability", () => {
 
     await expect(
       validatePortfolioUnitMutation({
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         assetClass: "stock",
         type: "split",
         date: "2025-02-01",
@@ -569,13 +630,13 @@ describe("validateSellUnitsAvailability", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            unitEvent({ id: "1", type: "buy", units: "10", account_id: 1 }),
+            unitEvent({ id: "1", type: "buy", units: "10", account_id: asAccountId(1) }),
             unitEvent({
               id: "2",
               type: "sell",
               units: "8",
               date: "2025-03-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
           ],
         }),
@@ -587,7 +648,7 @@ describe("validateSellUnitsAvailability", () => {
 
     await expect(
       validatePortfolioUnitMutation({
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         assetClass: "stock",
         type: "split",
         date: "2025-02-01",
@@ -607,21 +668,21 @@ describe("validateSellUnitsAvailability", () => {
               type: "buy",
               units: "5",
               date: "2025-01-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
             unitEvent({
               id: "2",
               type: "buy",
               units: "5",
               date: "2025-01-02",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
             unitEvent({
               id: "3",
               type: "sell",
               units: "7",
               date: "2025-03-01",
-              account_id: 1,
+              account_id: asAccountId(1),
             }),
           ],
         }),
@@ -634,9 +695,9 @@ describe("validateSellUnitsAvailability", () => {
 
     await expect(
       validatePortfolioUnitMutation({
-        investmentId: 1,
+        investmentId: asInvestmentId(1),
         assetClass: "stock",
-        excludeTransactionId: 1,
+        excludeTransactionId: asPortfolioTransactionId(1),
         omitCandidate: true,
         checkProjectedHistory: true,
       }),

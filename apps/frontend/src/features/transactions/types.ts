@@ -1,18 +1,25 @@
 import type { Tag } from "@/types/api";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 export type TableTransaction = {
-    id: number;
+    id: TransactionId;
     date: string;
     memo: string;
     category: string;
-    categoryId?: number | undefined;
+    categoryId?: CategoryId | undefined;
     recipient: string;
-    recipientId?: number;
+    recipientId?: RecipientId | undefined;
     bank: string;
     bankLabel?: string | undefined;
-    accountId?: number | undefined;
+    accountId?: AccountId | undefined;
     amount: number;
-    currency: string;
+    currency: CurrencyCode;
     runningBalance?: number | undefined;
     balance?: number | undefined;
     comment?: string;
@@ -21,20 +28,20 @@ export type TableTransaction = {
 };
 
 export interface RawApiTransaction {
-    id: number;
+    id: TransactionId;
     date?: string | undefined;
     memo?: string | undefined;
-    category_id?: number | null;
+    category_id?: CategoryId | null;
     category_name?: string | null;
-    recipient_id?: number | null;
+    recipient_id?: RecipientId | null;
     recipient_name?: string | null;
     bank?: string | undefined;
-    account_id?: number | null | undefined;
+    account_id?: AccountId | null | undefined;
     is_transfer?: boolean;
-    transfer_peer_id?: number | null;
+    transfer_peer_id?: TransactionId | null;
     transfer_source?: string | null;
     amount?: number | undefined;
-    currency?: string | null | undefined;
+    currency?: CurrencyCode | null | undefined;
     running_balance?: number | null;
     balance?: number | null;
     comment?: string | null | undefined;

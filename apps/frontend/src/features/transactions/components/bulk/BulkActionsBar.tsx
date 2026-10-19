@@ -48,11 +48,16 @@ import { BulkRecipientDialog } from "./BulkRecipientDialog";
 import { BulkTagDialog } from "./BulkTagDialog";
 import { BulkExportDialog } from "./BulkExportDialog";
 import { BulkSplitDialog } from "./BulkSplitDialog";
+import type {
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 export type BulkSelectionMode = "ids" | "filter";
 
 interface BulkActionsBarProps {
-    selectedIds: Set<number>;
+    selectedIds: Set<TransactionId>;
     selectionMode: BulkSelectionMode;
     totalMatching: number;
     visibleItemCount: number;
@@ -182,7 +187,7 @@ export function BulkActionsBar({
         bulkUpdate.mutate(request, { onSuccess: () => onClearSelection() });
     }
 
-    function handleRecategorize(categoryId: number | null) {
+    function handleRecategorize(categoryId: CategoryId | null) {
         const request: BulkUpdateRequest = {
             ...buildSelector(),
             fields: { category_id: categoryId },
@@ -195,7 +200,7 @@ export function BulkActionsBar({
         });
     }
 
-    function handleReassignRecipient(recipientId: number) {
+    function handleReassignRecipient(recipientId: RecipientId) {
         const request: BulkUpdateRequest = {
             ...buildSelector(),
             fields: { recipient_id: recipientId },
@@ -237,7 +242,7 @@ export function BulkActionsBar({
         });
     }
 
-    function handleSplitApply(recipientId: number, mode: BulkSplitMode) {
+    function handleSplitApply(recipientId: RecipientId, mode: BulkSplitMode) {
         // Ids only, like bulk tag: a preset share is computed per row on the
         // server, and the bulk-split route takes an explicit id list.
         if (selectionMode === "filter") return;

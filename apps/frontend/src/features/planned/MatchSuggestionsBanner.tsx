@@ -3,10 +3,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePlannedMatchSuggestions } from "@/hooks/usePlannedMatchSuggestions";
+import type { PlannedTransactionId } from "@vision/types/brands";
 
 interface MatchSuggestionsBannerProps {
     /** Opens the link dialog for the chosen planned payment so the user can confirm. */
-    onReview: (plannedId: number) => void;
+    onReview: (plannedId: PlannedTransactionId) => void;
 }
 
 function hasSuggestions<T>(items: T[]): items is [T, ...T[]] {

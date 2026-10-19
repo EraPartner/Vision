@@ -27,6 +27,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { WidgetDefinition } from "@/hooks/useWidgetVisibility";
 import { AccountFilterCombobox } from "./AccountFilterCombobox";
 import type { DatePreset } from "../transactionColumns";
+import type { AccountId, CategoryId } from "@vision/types/brands";
 
 /** Chip-shaped toolbar button; `active` marks a filter that narrows the list. */
 export function FilterChip({
@@ -54,8 +55,8 @@ export function FilterChip({
 }
 
 interface CategoryFilterChipProps {
-    value?: number | undefined;
-    onChange: (selection: { id: number; label: string } | null) => void;
+    value?: CategoryId | undefined;
+    onChange: (selection: { id: CategoryId; label: string } | null) => void;
 }
 
 function CategoryFilterChip({ value, onChange }: CategoryFilterChipProps) {
@@ -67,7 +68,7 @@ function CategoryFilterChip({ value, onChange }: CategoryFilterChipProps) {
     const label = selected
         ? selected.path.join(" / ")
         : t("txPage.filter.allCategories");
-    const pick = (selection: { id: number; label: string } | null) => {
+    const pick = (selection: { id: CategoryId; label: string } | null) => {
         onChange(selection);
         setOpen(false);
     };
@@ -133,9 +134,9 @@ function CategoryFilterChip({ value, onChange }: CategoryFilterChipProps) {
 }
 
 export interface TransactionsToolbarProps {
-    accountIdFilter?: number | undefined;
+    accountIdFilter?: AccountId | undefined;
     onAccountChange: (selection: { id: number; label: string } | null) => void;
-    categoryIdFilter?: number | undefined;
+    categoryIdFilter?: CategoryId | undefined;
     onCategoryChange: (selection: { id: number; label: string } | null) => void;
     /** undefined = a custom start/end range not matching a preset. */
     datePreset: DatePreset | undefined;

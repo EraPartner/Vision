@@ -13,6 +13,9 @@ import {
   validatePaymentAmount,
   roundToCents,
 } from "../../src/lib/calculations/splits.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 
 const CENT = 0.01;
 
@@ -91,21 +94,21 @@ describe("property: split conservation law", () => {
   it("computeOwedSummary: total_owed - total_paid == remaining for every row", () => {
     const rows = [
       {
-        recipient_id: 1,
+        recipient_id: asRecipientId(1),
         recipient_name: "A",
         total_owed: "100.00",
         total_paid: "25.50",
         split_count: "3",
       },
       {
-        recipient_id: 2,
+        recipient_id: asRecipientId(2),
         recipient_name: "B",
         total_owed: "500.00",
         total_paid: "500.00",
         split_count: "5",
       },
       {
-        recipient_id: 3,
+        recipient_id: asRecipientId(3),
         recipient_name: "C",
         total_owed: "42.42",
         total_paid: "0.00",

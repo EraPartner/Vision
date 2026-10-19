@@ -24,7 +24,8 @@ import { checkRows, queryRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
   enrichedTransactionDbRowSchema,
-  idRowSchema,
+  tagKeyRowSchema,
+  transactionKeyRowSchema,
   transactionTagRowSchema,
   transferLegRowSchema,
   transferSuggestionRowSchema,
@@ -51,6 +52,14 @@ import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { accountRepository } from "./accountRepository.ts";
 import { lockAccountsForLedgerMutation } from "./accountLifecycleLock.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { asAccountId } from "@vision/types/brands";
+import type {
+  AccountId,
+  CategoryId,
+  CurrencyCode,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 import type {
   EnrichedTransactionRow,
   QueryRunner,
@@ -94,14 +103,14 @@ export interface TransactionCreateInput {
   /** 'YYYY-MM-DD' */
   transaction_date: string;
   /** Canonical account identity. */
-  account_id?: number | null | undefined;
-  recipient_id?: number | null | undefined;
+  account_id?: AccountId | null | undefined;
+  recipient_id?: RecipientId | null | undefined;
   amount: number | string;
   /** Upper-cased before insert. */
   memo?: string | null | undefined;
   /** Defaults to 'EUR' (the column is NOT NULL — migration 0046). */
-  currency?: string | null | undefined;
-  category_id?: number | null | undefined;
+  currency?: CurrencyCode | null | undefined;
+  category_id?: CategoryId | null | undefined;
   comment?: string | null | undefined;
   /** `null` means "do not touch tags". */
   tags?: string[] | null | undefined;
@@ -112,12 +121,12 @@ export interface ImportedTransactionInput {
   /** 'YYYY-MM-DD' */
   date: string;
   /** Resolved account id for the label (commit.js). */
-  accountId: number | null;
-  recipientId: number | null;
-  categoryId: number | null;
+  accountId: AccountId | null;
+  recipientId: RecipientId | null;
+  categoryId: CategoryId | null;
   amount: number | string;
   memo: string | null;
-  currency: string | null;
+  currency: CurrencyCode | null;
   /** Bank-stamped running balance (anchors ADR-094). */
   balance: number | string | null;
   bankSequence?: string | null;
@@ -134,19 +143,19 @@ export interface ImportedTransactionInput {
  * Every field is optional; `null` means "not filtered".
  */
 export interface TransactionFilters {
-  transactionId?: number | null | undefined;
+  transactionId?: TransactionId | null | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
   /** 'YYYY-MM-DD' */
   startDate?: string | null | undefined;
   /** 'YYYY-MM-DD' */
   endDate?: string | null | undefined;
-  accountId?: number | null | undefined;
+  accountId?: AccountId | null | undefined;
   bankAccount?: string | null | undefined;
-  categoryId?: number | null | undefined;
-  categoryIds?: number[] | null | undefined;
-  recipientId?: number | null | undefined;
-  recipientGroupId?: number | null | undefined;
+  categoryId?: CategoryId | null | undefined;
+  categoryIds?: CategoryId[] | null | undefined;
+  recipientId?: RecipientId | null | undefined;
+  recipientGroupId?: RecipientId | null | undefined;
   recipientName?: string | null | undefined;
   search?: string | null | undefined;
   active?: boolean | undefined;
@@ -383,7 +392,7 @@ async function attachTagsToRows(
      WHERE tt.transaction_id = ANY($1::int[])`,
     [ids],
   );
-  const tagMap = new Map<number, TransactionTagRef[]>();
+  const tagMap = new Map<TransactionId, TransactionTagRef[]>();
   for (const row of tagRows) {
     const list = tagMap.get(row.transaction_id) ?? [];
     list.push({
@@ -410,7 +419,7 @@ async function attachTagsToRows(
  */
 async function setTransactionTags(
   client: QueryRunner,
-  transactionId: number,
+  transactionId: TransactionId,
   slugs: string[] | null | undefined,
 ): Promise<void> {
   await client.query("DELETE FROM transaction_tags WHERE transaction_id = $1", [
@@ -418,7 +427,7 @@ async function setTransactionTags(
   ]);
   if (!slugs || slugs.length === 0) return;
   const resolved = await queryRows(
-    idRowSchema,
+    tagKeyRowSchema,
     "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
     client,
@@ -766,7 +775,7 @@ export const transactionRepository = {
   /**
    * Get a single transaction by ID.
    */
-  async getById(id: number): Promise<EnrichedTransactionRow | null> {
+  async getById(id: TransactionId): Promise<EnrichedTransactionRow | null> {
     const sql = `
       SELECT t.*,
              ${ACCOUNT_LABEL_SQL},
@@ -974,12 +983,13 @@ export const transactionRepository = {
    * When `tags` is absent, existing tags are untouched.
    */
   async update(
-    id: number,
+    id: TransactionId,
     fields: Record<string, unknown> & { tags?: string[] | null },
   ): Promise<EnrichedTransactionRow | null> {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields("transactions", txFields);
+    let targetAccountId: AccountId | undefined;
     if (sanitized.account_id != null) {
       const rawAccountId = sanitized.account_id;
       const accountId = Number(rawAccountId);
@@ -990,7 +1000,8 @@ export const transactionRepository = {
       }
       // Repository callers also participate in sorted account locking; do not
       // defer a string target's lock until after transaction rows are locked.
-      sanitized.account_id = accountId;
+      targetAccountId = asAccountId(accountId);
+      sanitized.account_id = targetAccountId;
     }
 
     // Same 3-level enrichment as getById/getAll/create (shared fragments): the
@@ -1012,8 +1023,7 @@ export const transactionRepository = {
         // Resolve the compatibility label on this connection. A missing target
         // row or failed update then rolls back any account minted for the label.
         if (["amount", "date", "transaction_date", "currency", "account_id", "is_active"].some((key) => Object.hasOwn(sanitized, key))) {
-          await lockAccountsForLedgerMutation(client, [id],
-            typeof sanitized.account_id === "number" ? sanitized.account_id : undefined);
+          await lockAccountsForLedgerMutation(client, [id], targetAccountId);
         }
         await stampAccountIdForUpdate(sanitized, client);
         const {
@@ -1067,7 +1077,7 @@ export const transactionRepository = {
    *
    * @returns true when a row was removed
    */
-  async hardDelete(id: number): Promise<boolean> {
+  async hardDelete(id: TransactionId): Promise<boolean> {
     const deleted = await withTransaction(async (client) => {
       await lockAccountsForLedgerMutation(client, [id]);
       await protectPlannedExecutions([id]);
@@ -1127,7 +1137,7 @@ export const transactionRepository = {
    * `min_date`/`max_date` are `to_char`-formatted, so calendar-day strings.
    */
   async getStampedDateRangesByAccount(
-    accountIds: number[],
+    accountIds: AccountId[],
   ): Promise<StampedDateRangeRow[]> {
     return queryRows(stampedDateRangeRowSchema, STAMP_RANGES_SQL, [accountIds]);
   },
@@ -1140,7 +1150,7 @@ export const transactionRepository = {
    * survivor, it is also what would violate `uq_transactions_opening_anchor`.
    */
   async getOpeningAnchorsByAccount(
-    accountIds: number[],
+    accountIds: AccountId[],
   ): Promise<OpeningAnchorRow[]> {
     return queryRows(openingAnchorRowSchema, OPENING_ANCHORS_SQL, [accountIds]);
   },
@@ -1150,7 +1160,10 @@ export const transactionRepository = {
    *
    * @returns rows repointed
    */
-  async repointAccount(targetId: number, sourceIds: number[]): Promise<number> {
+  async repointAccount(
+    targetId: AccountId,
+    sourceIds: AccountId[],
+  ): Promise<number> {
     const result = await query(
       `UPDATE transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
       [targetId, sourceIds],
@@ -1164,8 +1177,8 @@ export const transactionRepository = {
    * @returns rows repointed
    */
   async repointRecipient(
-    primaryId: number,
-    aliasIds: number[],
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await query(
       `UPDATE transactions
@@ -1251,7 +1264,7 @@ export const transactionRepository = {
       // Discovery is unlocked. Never evaluate peer validity in the same statement
       // that waits on a writer: READ COMMITTED would retain a stale peer snapshot.
       const discovered = await queryRows(
-        transferPeerPointerRowSchema.extend(idRowSchema.shape),
+        transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
         `SELECT t.id, t.transfer_peer_id, t.transfer_source FROM transactions t
          WHERE ${invalid} ORDER BY t.id LIMIT 250`,
         [windowDays],
@@ -1260,7 +1273,7 @@ export const transactionRepository = {
       const ids = [...new Set(discovered.flatMap((row) =>
         row.transfer_peer_id === null ? [row.id] : [row.id, row.transfer_peer_id],
       ))].sort((a, b) => a - b);
-      const locked = await queryRows(idRowSchema,
+      const locked = await queryRows(transactionKeyRowSchema,
         `SELECT id FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
         [ids]);
       // A separate statement gets a fresh snapshot after all waits. Repaired
@@ -1279,7 +1292,7 @@ export const transactionRepository = {
    * Display rows for the ambiguous-match suggestions endpoint.
    */
   async listTransferSuggestionRows(
-    ids: number[],
+    ids: TransactionId[],
   ): Promise<TransferSuggestionRow[]> {
     // bank_account is derived from accounts.name over the FK (ADR-088) so the
     // display label survives the out-of-band drop of the string column.
@@ -1300,7 +1313,7 @@ export const transactionRepository = {
    *
    * @returns rows affected (0 when the guard rejected the mark)
    */
-  async markAutoTransferLeg(id: number, peerId: number): Promise<number> {
+  async markAutoTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
     const result = await query(MARK_AUTO_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
   },
@@ -1310,7 +1323,7 @@ export const transactionRepository = {
    *
    * @returns rows affected
    */
-  async markManualTransferLeg(id: number, peerId: number): Promise<number> {
+  async markManualTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
     const result = await query(MARK_MANUAL_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
   },
@@ -1322,7 +1335,7 @@ export const transactionRepository = {
    *
    * @returns rows affected
    */
-  async revertAutoTransferLeg(id: number, peerId: number): Promise<number> {
+  async revertAutoTransferLeg(id: TransactionId, peerId: TransactionId): Promise<number> {
     const result = await query(REVERT_AUTO_LEG_SQL, [id, peerId]);
     return result.rowCount ?? 0;
   },
@@ -1331,7 +1344,7 @@ export const transactionRepository = {
    * Lock both legs of a manual mark and read what markTransfer validates.
    */
   async lockTransferLegs(
-    ids: number[],
+    ids: TransactionId[],
   ): Promise<
     Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active" | "transfer_source">[]
   > {
@@ -1343,7 +1356,7 @@ export const transactionRepository = {
   },
 
   /** Lock every endpoint the manual re-pair can read or release, in one order. */
-  async lockTransferGraphForMark(ids: number[]) {
+  async lockTransferGraphForMark(ids: TransactionId[]) {
     const schema = transferLegRowSchema.extend(transferPeerPointerRowSchema.shape);
     const discoverSql = `SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id
       FROM transactions WHERE id = ANY($1::int[]) OR transfer_peer_id = ANY($1::int[])
@@ -1370,7 +1383,7 @@ export const transactionRepository = {
    *
    * @returns rows released
    */
-  async releaseTransferPeersOf(ids: number[], lockedIds: number[]): Promise<number> {
+  async releaseTransferPeersOf(ids: TransactionId[], lockedIds: TransactionId[]): Promise<number> {
     const result = await query(
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
         WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)
@@ -1384,14 +1397,14 @@ export const transactionRepository = {
    * Lock the discovered pair in ID order and recheck reciprocity before unmarking.
    * A changed target pointer is a retry conflict; never acquire a new peer out of order.
    */
-  async lockTransferPairForUnmark(id: number): Promise<{ peer: number | undefined; peerPointsBack: boolean }> {
+  async lockTransferPairForUnmark(id: TransactionId): Promise<{ peer: TransactionId | undefined; peerPointsBack: boolean }> {
     // Discover without a lock, then acquire the complete known pair in one order.
     // If discovery became stale, reject instead of locking a newly found peer.
     const discovered = await queryRows(transferPeerPointerRowSchema,
       "SELECT transfer_peer_id, transfer_source FROM transactions WHERE id = $1", [id]);
     const expectedPeer = discovered[0]?.transfer_peer_id ?? undefined;
     const ids = expectedPeer === undefined ? [id] : [id, expectedPeer];
-    const locked = await queryRows(transferPeerPointerRowSchema.extend(idRowSchema.shape),
+    const locked = await queryRows(transferPeerPointerRowSchema.extend(transactionKeyRowSchema.shape),
       "SELECT id, transfer_peer_id, transfer_source FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE", [ids]);
     const target = locked.find((row) => row.id === id);
     if ((target?.transfer_peer_id ?? undefined) !== expectedPeer) {
@@ -1410,7 +1423,7 @@ export const transactionRepository = {
   /**
    * Record a rejected pairing (sticky, per-pair — migration 0070).
    */
-  async insertTransferDismissal(aId: number, bId: number): Promise<void> {
+  async insertTransferDismissal(aId: TransactionId, bId: TransactionId): Promise<void> {
     await query(
       `INSERT INTO transfer_dismissals (txn_a_id, txn_b_id)
          VALUES (LEAST($1::int, $2::int), GREATEST($1::int, $2::int))
@@ -1424,7 +1437,7 @@ export const transactionRepository = {
    *
    * @returns rows affected
    */
-  async clearTransferMark(id: number): Promise<number> {
+  async clearTransferMark(id: TransactionId): Promise<number> {
     const result = await query(
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1
         AND (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'))`,
@@ -1440,10 +1453,10 @@ export const transactionRepository = {
   async findImportFingerprint(
     version: number | null | undefined,
     fingerprint: string | null | undefined,
-  ): Promise<number | undefined> {
+  ): Promise<TransactionId | undefined> {
     if (version == null || !fingerprint) return undefined;
     const rows = await queryRows(
-      idRowSchema,
+      transactionKeyRowSchema,
       `SELECT id FROM transactions
         WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
         LIMIT 1`,
@@ -1468,11 +1481,11 @@ export const transactionRepository = {
     /** 'YYYY-MM-DD' */
     date: string;
     amount: number | string;
-    recipientId: number | null;
+    recipientId: RecipientId | null;
     /** Already whitespace-normalized by the caller. */
     memo: string;
-    accountId: number | null;
-    currency: string;
+    accountId: AccountId | null;
+    currency: CurrencyCode;
   }): Promise<number> {
     const rows = await queryRows(
       intCountRowSchema,
@@ -1518,9 +1531,9 @@ export const transactionRepository = {
     sourceRecordHash,
     dedupFingerprint,
     fingerprintVersion,
-  }: ImportedTransactionInput): Promise<number | undefined> {
+  }: ImportedTransactionInput): Promise<TransactionId | undefined> {
     const rows = await queryRows(
-      idRowSchema,
+      transactionKeyRowSchema,
       `INSERT INTO transactions
                 (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, source_record_hash,

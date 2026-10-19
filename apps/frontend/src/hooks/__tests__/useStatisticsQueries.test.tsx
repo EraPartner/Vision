@@ -22,6 +22,11 @@ vi.mock("@/hooks/useExcludedIds", () => ({
 }));
 
 import { useRecipientInsights, useStatistics } from "../useStatistics";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 interface SeenRequest {
     endpoint: string;
@@ -123,7 +128,7 @@ describe("useStatistics requests", () => {
 
 describe("useRecipientInsights window", () => {
     it("requests the selected 24-month window with both exclusion lists", async () => {
-        renderHook(() => useRecipientInsights("USD", [7], [8], "24m"), {
+        renderHook(() => useRecipientInsights(asCurrencyCode("USD"), [asCategoryId(7)], [asRecipientId(8)], "24m"), {
             wrapper: createQueryWrapper(),
         });
 

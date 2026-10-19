@@ -1,8 +1,15 @@
 import { z } from "zod";
 
 import {
+  AccountIdSchema,
+  CategoryIdSchema,
+  PlannedTransactionIdSchema,
+  RecipientIdSchema,
+  TagIdSchema,
+  TransactionIdSchema,
+} from "../brands.ts";
+import {
   CurrencyCodeSchema,
-  IdSchema,
   WireDateSchema,
   WireLinkSchema,
   WireTimestampSchema,
@@ -11,7 +18,7 @@ import {
 
 /** `TransactionTagRef` as `attachTagsToRows` projects it (no timestamps). */
 export const TransactionTagRefSchema = z.looseObject({
-  id: IdSchema,
+  id: TagIdSchema,
   slug: z.string(),
   color: z.string().nullable(),
   is_active: z.boolean(),
@@ -37,14 +44,14 @@ export const TransferSourceSchema = z.enum([
  * present on `include_balance=true` list reads.
  */
 const transactionFields = {
-  id: IdSchema,
+  id: TransactionIdSchema,
   transaction_date: WireDateSchema,
   bank_account: z.string().nullable(),
-  account_id: IdSchema.nullable(),
+  account_id: AccountIdSchema.nullable(),
   is_transfer: z.boolean(),
-  transfer_peer_id: IdSchema.nullable(),
+  transfer_peer_id: TransactionIdSchema.nullable(),
   transfer_source: TransferSourceSchema.nullable(),
-  recipient_id: IdSchema,
+  recipient_id: RecipientIdSchema,
   recipient_name: z.string().nullable(),
   memo: z.string().nullable(),
   amount: z.number(),
@@ -52,7 +59,7 @@ const transactionFields = {
   currency: CurrencyCodeSchema,
   balance: z.number().nullable(),
   running_balance: z.number().optional(),
-  category_id: IdSchema.nullable(),
+  category_id: CategoryIdSchema.nullable(),
   category_name: z.string().nullable(),
   comment: z.string().nullable(),
   tags: z.array(TransactionTagRefSchema),
@@ -70,7 +77,7 @@ export const TransactionSchema = z.looseObject(transactionFields);
 
 /** `POST /api/transactions`: the formatted row plus the auto-link outcome. */
 export const TransactionCreatedSchema = TransactionSchema.extend({
-  auto_linked: IdSchema.nullable(),
+  auto_linked: PlannedTransactionIdSchema.nullable(),
 });
 
 /** `GET /api/transactions` (always paginated by the backend). */

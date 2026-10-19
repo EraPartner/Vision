@@ -4,6 +4,9 @@ import { mockLogger } from "./helpers/mockLogger.ts";
 import { loose, partial } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import { syntheticIbkrCashCorrection } from "./helpers/ibkrCashReconciliation.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 const { client } = vi.hoisted(() => ({ client: { query: vi.fn() } }));
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../src/database/connection.ts", () => mockTxConnection(client));
@@ -170,7 +173,7 @@ beforeEach(() => {
   recipientRepository.createOrGet.mockResolvedValue(
     partial({ recipient: { id: 3 } }),
   );
-  recipientRepository.getOrCreateSystemId.mockResolvedValue(3);
+  recipientRepository.getOrCreateSystemId.mockResolvedValue(asRecipientId(3));
   settingsRepository.get.mockResolvedValue(undefined);
   categoryRepository.getActiveByIds.mockResolvedValue([]);
   readReconciliationSources.mockImplementation(async () =>

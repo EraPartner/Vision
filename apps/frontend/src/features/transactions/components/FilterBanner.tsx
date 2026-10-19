@@ -1,4 +1,4 @@
-import { numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
@@ -7,12 +7,18 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { TransactionsExportButtons } from "./TransactionsExportButtons";
 import { useRecipient } from "@/hooks/useRecipients";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 interface FilterBannerProps {
-    transactionIdFilter?: number | undefined;
-    recipientIdFilter?: number | undefined;
-    categoryIdFilter?: number | undefined;
-    categoryIdsFilter?: number[] | undefined;
+    transactionIdFilter?: TransactionId | undefined;
+    recipientIdFilter?: RecipientId | undefined;
+    categoryIdFilter?: CategoryId | undefined;
+    categoryIdsFilter?: CategoryId[] | undefined;
     startDateFilter?: string | undefined;
     endDateFilter?: string | undefined;
     transactionTypeFilter?: "income" | "expense" | undefined;
@@ -22,7 +28,7 @@ interface FilterBannerProps {
     searchFilter?: string | undefined;
     filterLabel?: string | undefined;
     /** Preferred account filter (exact FK match, ADR-088); shown via filterLabel. */
-    accountIdFilter?: number | undefined;
+    accountIdFilter?: AccountId | undefined;
     bankAccountFilter?: string | undefined;
     tagsFilter?: string[] | undefined;
     onClear: () => void;
@@ -70,7 +76,7 @@ export function FilterBanner({
         return null;
     }
 
-    const currency = appSettings.defaultCurrency || "EUR";
+    const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     // In signed mode the bound values carry their sign; render an explicit + for
     // positives so "+50 income" reads differently from a "50" magnitude match.
     const amountFormatter = new Intl.NumberFormat(

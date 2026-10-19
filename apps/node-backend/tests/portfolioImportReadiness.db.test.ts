@@ -11,6 +11,11 @@ import { closePool } from "../src/database/connection.ts";
 import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import type { PortfolioTransactionInput } from "../src/services/portfolio/portfolioTransactionRules.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asInvestmentId,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const fixtures = {
@@ -68,12 +73,12 @@ async function manualTrade(
   fields: Partial<PortfolioTransactionInput> = {},
 ) {
   return portfolioTransactionService.create({
-    investment_id: position.investmentId,
+    investment_id: asInvestmentId(position.investmentId),
     type: "buy",
     date: "2026-01-01",
     units: 5,
     price_per_unit: 100,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     ...fields,
   });
 }
@@ -327,7 +332,7 @@ describe.skipIf(!hasTestDatabase())(
 
     it("blocks assigned manual trades with equal quantity even when fees and principal differ", async () => {
       const position = await seedPosition();
-      await manualTrade(position, { account_id: position.accountId, fees: 1 });
+      await manualTrade(position, { account_id: asAccountId(position.accountId), fees: 1 });
       const batchId = await stageSource(position, [
         { units: 5.00000002, fees: 2, price: 120 },
       ]);
@@ -446,7 +451,7 @@ describe.skipIf(!hasTestDatabase())(
       const otherPosition = await seedPosition();
       const manual = await manualTrade(position);
       const canonical = await manualTrade(position, {
-        account_id: otherPosition.accountId,
+        account_id: asAccountId(otherPosition.accountId),
       });
       const batchId = await stageSource(position, [{}]);
       await pool.query(

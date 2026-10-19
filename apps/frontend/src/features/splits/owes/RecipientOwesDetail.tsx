@@ -46,14 +46,15 @@ import {
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { parseDecimal } from "@/lib/decimal";
-import { formatEditableNumber } from "@/utils/currency";
+import { formatEditableNumber, DEFAULT_CURRENCY } from "@/utils/currency";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { todayYmd } from "@/lib/timezone";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import type { RecipientId, SplitId } from "@vision/types/brands";
 
 interface RecipientOwesDetailProps {
-    recipient: { id: number; name: string };
+    recipient: { id: RecipientId; name: string };
     onBack: () => void;
 }
 
@@ -62,7 +63,7 @@ export function RecipientOwesDetail({
     onBack,
 }: RecipientOwesDetailProps) {
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const {
         data,
         isLoading,
@@ -74,7 +75,7 @@ export function RecipientOwesDetail({
     const settleAllSplitsByRecipient = useSettleAllSplitsByRecipient();
     const deleteSplit = useDeleteSplit();
     const [payDialog, setPayDialog] = useState<{
-        splitId: number;
+        splitId: SplitId;
         remaining: number;
         currency: string;
     } | null>(null);
@@ -158,7 +159,7 @@ export function RecipientOwesDetail({
         }
     };
 
-    const handleDeleteSplit = async (splitId: number) => {
+    const handleDeleteSplit = async (splitId: SplitId) => {
         const shouldDelete = await confirm({
             title: t("owesPage.deleteSplitConfirmTitle"),
             description: t("owesPage.deleteSplitConfirmDescription"),

@@ -7,6 +7,12 @@ import {
 } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestBlob, requestWithQuery } from '@/lib/api/helpers';
+import type {
+    CurrencyCode,
+    RecipientId,
+    SplitId,
+    TransactionId,
+} from "@vision/types/brands";
 
 /**
  * Canonical home for the splits API types. `@/types/splits.ts` used to hold a
@@ -18,9 +24,9 @@ import { requestBlob, requestWithQuery } from '@/lib/api/helpers';
  * `amount_paid`, which this module previously mistyped as `paid_amount`.
  */
 export interface SplitItem {
-    id: number;
-    transaction_id: number;
-    recipient_id: number;
+    id: SplitId;
+    transaction_id: TransactionId;
+    recipient_id: RecipientId;
     amount: number;
     note: string | null;
     amount_paid: number;
@@ -32,7 +38,7 @@ export interface SplitItem {
 
 /** Body row for POST /api/splits and POST /api/splits/batch. */
 export interface SplitCreateInput {
-    recipient_id: number;
+    recipient_id: RecipientId;
     amount: number;
     note?: string | undefined;
 }
@@ -42,8 +48,8 @@ export type BulkSplitMode = 'equal' | 'full';
 
 /** Body of POST /api/splits/bulk — one payee, one preset, many transactions. */
 export interface BulkSplitRequest {
-    transaction_ids: number[];
-    recipient_id: number;
+    transaction_ids: TransactionId[];
+    recipient_id: RecipientId;
     mode: BulkSplitMode;
     note?: string;
 }
@@ -61,7 +67,7 @@ export interface BulkSplitResult {
 /** Open splits left out of a converted owed figure because their currency has no stored rate. */
 interface OwedUnconverted {
     unconverted_count: number;
-    unconverted_currencies: string[];
+    unconverted_currencies: CurrencyCode[];
 }
 
 /**
@@ -69,7 +75,7 @@ interface OwedUnconverted {
  * converted on the server to the requested currency.
  */
 export interface OwedSummaryItem extends OwedUnconverted {
-    recipient_id: number;
+    recipient_id: RecipientId;
     recipient_name: string;
     total_owed: number;
     total_paid: number;
@@ -79,7 +85,7 @@ export interface OwedSummaryItem extends OwedUnconverted {
 
 /** Server-computed total outstanding (`summary` on both owed reads). */
 export interface OwedTotals extends OwedUnconverted {
-    currency: string;
+    currency: CurrencyCode;
     remaining: number;
 }
 
@@ -88,7 +94,7 @@ export interface OwedDetailItem extends SplitItem {
     transaction_date: string;
     transaction_memo?: string | null;
     transaction_amount: number;
-    transaction_currency: string;
+    transaction_currency: CurrencyCode;
     bank_account?: string | null;
     transaction_recipient_name?: string | null;
     remaining: number;
@@ -97,7 +103,7 @@ export interface OwedDetailItem extends SplitItem {
 /** A split_payments row as emitted by `splitRepository.formatPayment`. */
 export interface SplitPayment {
     id: number;
-    split_id: number;
+    split_id: SplitId;
     amount: number;
     note: string | null;
     paid_at: string;
@@ -105,14 +111,14 @@ export interface SplitPayment {
 }
 
 export function getOwedSummary(
-    currency: string,
+    currency: CurrencyCode,
 ): Promise<{ items: OwedSummaryItem[]; summary: OwedTotals }> {
     return requestWithQuery('/api/splits/owed', { currency }, { schema: OwedSummaryListSchema });
 }
 
 export function getOwedByRecipient(
-    recipientId: number,
-    currency: string,
+    recipientId: RecipientId,
+    currency: CurrencyCode,
 ): Promise<{ items: OwedDetailItem[]; summary: OwedTotals }> {
     return requestWithQuery(
         `/api/splits/owed/${recipientId}`,
@@ -121,18 +127,18 @@ export function getOwedByRecipient(
     );
 }
 
-export async function exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {
+export async function exportOwedByRecipientCsv(recipientId: RecipientId): Promise<Blob> {
     return requestBlob(`/api/splits/owed/${recipientId}/export/csv`);
 }
 
-export function getSplitsByTransaction(transactionId: number): Promise<{ items: SplitItem[] }> {
+export function getSplitsByTransaction(transactionId: TransactionId): Promise<{ items: SplitItem[] }> {
     return apiRequest(`/api/splits/transaction/${transactionId}`, { schema: SplitListSchema });
 }
 
 export function createSplitsBatch(
-    transactionId: number,
+    transactionId: TransactionId,
     splits: Array<{
-        recipient_id: number;
+        recipient_id: RecipientId;
         amount: number;
         note?: string | undefined;
     }>,
@@ -152,7 +158,7 @@ export function createBulkSplits(request: BulkSplitRequest): Promise<BulkSplitRe
 }
 
 export function recordSplitPayment(
-    splitId: number,
+    splitId: SplitId,
     amount: number,
     note?: string,
     paid_at?: string,
@@ -163,17 +169,17 @@ export function recordSplitPayment(
     });
 }
 
-export function settleSplit(splitId: number): Promise<SplitItem> {
+export function settleSplit(splitId: SplitId): Promise<SplitItem> {
     return apiRequest(`/api/splits/${splitId}/settle`, { method: 'POST' });
 }
 
-export function settleAllSplitsByRecipient(recipientId: number): Promise<{ settled_count: number }> {
+export function settleAllSplitsByRecipient(recipientId: RecipientId): Promise<{ settled_count: number }> {
     return apiRequest(`/api/splits/owed/${recipientId}/settle-all`, {
         method: 'POST',
         schema: SettleAllResultSchema,
     });
 }
 
-export async function deleteSplit(splitId: number): Promise<void> {
+export async function deleteSplit(splitId: SplitId): Promise<void> {
     await apiRequest(`/api/splits/${splitId}`, { method: 'DELETE' });
 }

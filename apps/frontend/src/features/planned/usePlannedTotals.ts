@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { plannedKeys } from "@/lib/queryKeys";
 import { todayYmd } from "@/lib/timezone";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /**
  * Planned totals computed on the server in `currency`: money still due this
@@ -9,7 +10,7 @@ import { todayYmd } from "@/lib/timezone";
  * active recurring rows. Planned mutations invalidate it via the upcoming
  * prefix.
  */
-export function usePlannedTotals(currency: string) {
+export function usePlannedTotals(currency: CurrencyCode) {
     return useQuery({
         queryKey: plannedKeys.totals(currency, todayYmd()),
         queryFn: () => apiClient.getPlannedTotals(currency),

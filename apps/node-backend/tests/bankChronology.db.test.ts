@@ -12,6 +12,11 @@ import {
   computedBalanceByCurrencyLateral,
   computedBalanceSeriesCtes,
 } from "../src/repositories/accountBalanceSql.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asRecipientId,
+} from "@vision/types/brands";
 
 describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
   let accountId: number;
@@ -49,13 +54,13 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
   ) {
     return transactionRepository.insertImportedRow({
       date: "2026-07-01",
-      accountId,
-      recipientId,
+      accountId: asAccountId(accountId),
+      recipientId: asRecipientId(recipientId),
       categoryId: null,
       amount,
       balance,
       bankSequence: sequence,
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
       memo: "Chronology fixture",
       comment: null,
       importBatchId: null,
@@ -99,7 +104,7 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
       await insert(null, -10, null);
       expect(await balances()).toEqual([990, 990, 990]);
       const list = await transactionRepository.getAll({
-        accountId,
+        accountId: asAccountId(accountId),
         includeBalance: true,
       });
       const lastBankRow = list.find((row) => Number(row.balance) === 1000);

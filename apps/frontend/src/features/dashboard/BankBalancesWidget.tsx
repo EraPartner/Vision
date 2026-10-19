@@ -11,6 +11,7 @@ import {
     formatCurrency,
     formatCurrencyCompact,
     numberFormatToLocale,
+    DEFAULT_CURRENCY,
 } from "@/utils/currency";
 import {
     AlertCircle,
@@ -81,7 +82,7 @@ export function BankBalancesWidget() {
 
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = new Intl.NumberFormat(locale);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const { data, isLoading, error } = useBankBalances(defaultCurrency);
     // The account entity is the source of truth for the balance CARDS: same
     // accounts, same shared balance source (computed_balance, ADR-094 Phase C)

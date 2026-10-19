@@ -10,6 +10,7 @@ import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog
 import {
     recipientRow,
 } from "@/test/msw/rowFixtures";
+import { asTransactionId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 const SPLITS_TX_URL = `${API_BASE}/api/splits/transaction/99`;
@@ -32,7 +33,7 @@ const RECIPIENTS_LIST = { items: [RECIPIENT_ITEM], total: 1, limit: 1000, offset
 function renderDialog() {
     return renderWithApp(
         <SplitTransactionDialog
-            transactionId={99}
+            transactionId={asTransactionId(99)}
             transactionAmount={-100}
             transactionCurrency="EUR"
         />,

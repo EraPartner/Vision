@@ -36,13 +36,16 @@ import {
   buildAssetClassTotals,
   buildAssetGroupTotals,
 } from "./portfolioAssetClassTotals.ts";
+import { isCurrencyCode } from "@vision/types/brands";
 import {
   convertAtLatestRates,
+  convertCodeAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import type { LatestRatesToEur } from "../currency/latestRateConversion.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
+  money,
   toDecimal,
   toNumber,
   addAll,
@@ -763,7 +766,7 @@ function latestMultipliers(
   const multipliers = new Map<string, number>();
   const unavailable = new Set<string>();
   for (const currency of currencies) {
-    const multiplier = convertAtLatestRates(1, currency, target, rates);
+    const multiplier = convertCodeAtLatestRates(1, currency, target, rates);
     if (multiplier === undefined) unavailable.add(currency.toUpperCase());
     multipliers.set(
       currency,
@@ -849,14 +852,20 @@ function buildInvestmentSummary(
     txns.some((t) => t._fxFellBack === true);
   // Rows arrive ordered by (date, id): the last rent row is the latest one.
   const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
-  const monthlyRent = latestRent
-    ? convertAtLatestRates(
-        latestRent.amount ?? 0,
-        (latestRent.currency || invCurrency).toUpperCase(),
-        targetCurrency,
-        latestRates,
-      )
-    : toDecimal(0);
+  const rentCurrency = (latestRent?.currency || invCurrency).toUpperCase();
+  const target = targetCurrency.toUpperCase();
+  // Rates exist only for ISO codes, so a non-ISO code here has no rate.
+  const monthlyRent = !latestRent
+    ? toDecimal(0)
+    : rentCurrency === target
+      ? toDecimal(latestRent.amount ?? 0)
+      : isCurrencyCode(rentCurrency) && isCurrencyCode(target)
+      ? convertAtLatestRates(
+          money(latestRent.amount ?? 0, rentCurrency),
+          target,
+          latestRates,
+        )?.amount
+      : undefined;
   const roundedFees = round2(convertedTotalFees);
   const roundedTaxes = round2(convertedTotalTaxes);
   const roundedIncome = round2(convertedTotalIncome);

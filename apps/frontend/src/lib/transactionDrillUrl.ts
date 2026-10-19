@@ -1,11 +1,12 @@
 import { getDaysInMonth } from "date-fns";
+import type { CategoryId } from "@vision/types/brands";
 
 export type TransactionDrillValueMode =
     "absolute" | "income" | "expense" | "net";
 
 export interface TransactionDrillParams {
-    categoryId?: number | undefined;
-    categoryIds?: number[];
+    categoryId?: CategoryId | undefined;
+    categoryIds?: CategoryId[];
     period?: string;
     valueMode?: TransactionDrillValueMode;
     label?: string;

@@ -1,6 +1,15 @@
 import { z } from "zod";
 
-import { IdSchema, WireTimestampSchema, wireListOf } from "./common.ts";
+import {
+  RecipientIdSchema,
+  SplitIdSchema,
+  TransactionIdSchema,
+} from "../brands.ts";
+import {
+  WireCurrencySchema,
+  WireTimestampSchema,
+  wireListOf,
+} from "./common.ts";
 
 /**
  * `formatSplit` (repositories/splitRepository.ts): NUMERIC `amount` and
@@ -8,9 +17,9 @@ import { IdSchema, WireTimestampSchema, wireListOf } from "./common.ts";
  * timestamps as serialized pg `Date`s.
  */
 export const SplitSchema = z.looseObject({
-  id: IdSchema,
-  transaction_id: IdSchema,
-  recipient_id: IdSchema,
+  id: SplitIdSchema,
+  transaction_id: TransactionIdSchema,
+  recipient_id: RecipientIdSchema,
   recipient_name: z.string().nullable(),
   amount: z.number(),
   amount_paid: z.number(),
@@ -26,7 +35,7 @@ export const SplitListSchema = wireListOf(SplitSchema);
 /** Open splits left out of a converted owed figure because their currency has no stored rate. */
 const owedUnconvertedFields = {
   unconverted_count: z.number().int().nonnegative(),
-  unconverted_currencies: z.array(z.string()),
+  unconverted_currencies: z.array(WireCurrencySchema),
 };
 
 /**
@@ -34,7 +43,7 @@ const owedUnconvertedFields = {
  * amounts converted to the requested `?currency=` at the latest stored rates.
  */
 export const OwedSummaryItemSchema = z.looseObject({
-  recipient_id: IdSchema,
+  recipient_id: RecipientIdSchema,
   recipient_name: z.string(),
   total_owed: z.number(),
   total_paid: z.number(),
@@ -45,7 +54,7 @@ export const OwedSummaryItemSchema = z.looseObject({
 
 /** Total outstanding in the requested currency (`summary` on both owed reads). */
 export const OwedTotalsSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   remaining: z.number(),
   ...owedUnconvertedFields,
 });
@@ -63,7 +72,7 @@ export const OwedDetailItemSchema = SplitSchema.extend({
   transaction_date: WireTimestampSchema,
   transaction_memo: z.string().nullable(),
   transaction_amount: z.number(),
-  transaction_currency: z.string().nullable(),
+  transaction_currency: WireCurrencySchema.nullable(),
   bank_account: z.string().nullable(),
   transaction_recipient_name: z.string().nullable(),
   remaining: z.number(),

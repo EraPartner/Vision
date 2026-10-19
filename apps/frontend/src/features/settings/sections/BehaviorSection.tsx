@@ -19,6 +19,7 @@ import {
     useBrokerageCashCategoryIds,
     type BrokerageCashCategoryIds,
 } from "../useSettingsQueries";
+import type { CategoryId } from "@vision/types/brands";
 
 const DISMISSED_RECURRING_PATTERNS_KEY = "dismissed_recurring_patterns";
 
@@ -94,7 +95,7 @@ export const BehaviorSection = memo(function BehaviorSection() {
 
     const handleCashCategoryChange = async (
         kind: keyof BrokerageCashCategoryIds,
-        categoryId: number | null,
+        categoryId: CategoryId | null,
     ) => {
         const next = { ...cashCategoryIds, [kind]: categoryId };
         setCashCategoryIds(next);

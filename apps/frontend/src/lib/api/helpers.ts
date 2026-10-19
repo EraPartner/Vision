@@ -7,6 +7,11 @@ import {
     parseEnvelopeError,
     unwrapEnvelope,
 } from "@/lib/api/client";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 
 export type { QueryParams };
 
@@ -45,9 +50,9 @@ export function requestWithQuery<T>(
 }
 
 export function buildExclusionQuery(params?: {
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
-    currency?: string | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
+    currency?: CurrencyCode | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
 }): string {

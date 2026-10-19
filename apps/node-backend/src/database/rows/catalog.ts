@@ -12,10 +12,14 @@ import { z } from "zod";
 import {
   idRowSchema,
   pgBigint,
+  pgCategoryId,
   pgDate,
   pgInt,
   pgNumeric,
+  pgRecipientId,
+  pgTagId,
   pgTimestamptz,
+  pgTransactionId,
 } from "../rowSchemas.ts";
 
 // ---------------------------------------------------------------------------
@@ -34,7 +38,7 @@ export type IdRow = z.output<typeof idRowSchema>;
 /** A row of `categories` as returned by `SELECT *` / `RETURNING *`. */
 export const categoryRowSchema = z
   .object({
-    id: pgInt,
+    id: pgCategoryId,
     general: z.string(),
     detail: z.string(),
     description: z.string().nullable(),
@@ -42,7 +46,7 @@ export const categoryRowSchema = z
     created_at: pgTimestamptz.nullable(),
     updated_at: pgTimestamptz,
     /** Hierarchy parent (self-referencing). */
-    parent_id: pgInt.nullable(),
+    parent_id: pgCategoryId.nullable(),
     name: z.string(),
     hierarchy_only: z.boolean(),
     legacy_compatible: z.boolean(),
@@ -55,11 +59,11 @@ export type CategoryRow = z.output<typeof categoryRowSchema>;
 /** `NODE_SELECT`: `categories` joined to the `category_paths` view. */
 export const categoryNodeRowSchema = z
   .object({
-    id: pgInt,
+    id: pgCategoryId,
     name: z.string(),
-    parent_id: pgInt.nullable(),
+    parent_id: pgCategoryId.nullable(),
     /** INTEGER[] from the recursive view; never NULL for a joined row. */
-    ids: z.array(pgInt),
+    ids: z.array(pgCategoryId),
     names: z.array(z.string()),
     path_name: z.string(),
     /** `cardinality(ids)`: INTEGER. */
@@ -74,7 +78,7 @@ export type CategoryNodeRow = z.output<typeof categoryNodeRowSchema>;
 
 /** `SELECT id,is_active FROM categories ... FOR UPDATE` (parent check). */
 export const categoryActiveRowSchema = z
-  .object({ id: pgInt, is_active: z.boolean() })
+  .object({ id: pgCategoryId, is_active: z.boolean() })
   .describe("category active row");
 
 /** `nextval(...) AS id`: BIGINT, so a string. */
@@ -85,7 +89,7 @@ export const categoryNextIdRowSchema = z
 /** The merge participants' locked projection. */
 export const categoryMergeNodeRowSchema = z
   .object({
-    id: pgInt,
+    id: pgCategoryId,
     is_active: z.boolean(),
     general: z.string(),
     detail: z.string(),
@@ -110,12 +114,12 @@ export const categoryReferenceRowSchema = z
 /** A row of `recipients` as returned by `SELECT *` / `SELECT r.*`. */
 export const recipientRowSchema = z
   .object({
-    id: pgInt,
+    id: pgRecipientId,
     name: z.string(),
     normalized_name: z.string(),
-    default_category_id: pgInt.nullable(),
+    default_category_id: pgCategoryId.nullable(),
     /** Merge target (self-referencing). */
-    primary_recipient_id: pgInt.nullable(),
+    primary_recipient_id: pgRecipientId.nullable(),
     notes: z.string().nullable(),
     is_active: z.boolean(),
     created_at: pgTimestamptz.nullable(),
@@ -147,17 +151,17 @@ export type EnrichedRecipientRow = z.output<typeof enrichedRecipientRowSchema>;
 
 /** `createOrGet`'s upsert: `RETURNING id, (xmax = 0) AS created`. */
 export const recipientUpsertRowSchema = z
-  .object({ id: pgInt, created: z.boolean() })
+  .object({ id: pgRecipientId, created: z.boolean() })
   .describe("recipient upsert row");
 
 /** `lockByIdsForMerge`. */
 export const recipientMergeLockRowSchema = z
-  .object({ id: pgInt, primary_recipient_id: pgInt.nullable() })
+  .object({ id: pgRecipientId, primary_recipient_id: pgRecipientId.nullable() })
   .describe("recipient merge lock row");
 
 /** `getClusterRootMap`: `COALESCE(primary_recipient_id, id)` is never NULL. */
 export const recipientClusterRootRowSchema = z
-  .object({ id: pgInt, cluster_root: pgInt })
+  .object({ id: pgRecipientId, cluster_root: pgRecipientId })
   .describe("recipient cluster root row");
 
 /** `findRecipientClusters`' scan projection. */
@@ -174,7 +178,7 @@ export const recipientNameRowSchema = recipientRowSchema
 export const recipientBankAccountRowSchema = z
   .object({
     id: pgInt,
-    recipient_id: pgInt.nullable(),
+    recipient_id: pgRecipientId.nullable(),
     /** VARCHAR(34), stored trimmed + uppercased. */
     account_number: z.string(),
     bank_name: z.string().nullable(),
@@ -199,7 +203,7 @@ export const recipientMatchPatternRowSchema = z
   .object({
     id: pgInt,
     /** FK → recipients, ON DELETE CASCADE */
-    recipient_id: pgInt,
+    recipient_id: pgRecipientId,
     pattern: z.string(),
     pattern_kind: z.string(),
     case_sensitive: z.boolean(),
@@ -254,7 +258,7 @@ export type RecipientPatternListRow = z.output<
 /** A row of `tags` (`SELECT *` / `RETURNING *`). */
 export const tagRowSchema = z
   .object({
-    id: pgInt,
+    id: pgTagId,
     slug: z.string(),
     color: z.string().nullable(),
     is_active: z.boolean(),
@@ -326,7 +330,7 @@ export type SavedChartRow = z.output<typeof savedChartRowSchema>;
 export const attachmentRowSchema = z
   .object({
     id: pgBigint,
-    transaction_id: pgInt,
+    transaction_id: pgTransactionId,
     filename: z.string(),
     stored_path: z.string(),
     mime_type: z.string(),
@@ -350,7 +354,7 @@ export const categoryOutlierExpenseRowSchema = z
   .object({
     date: pgDate,
     amount: pgNumeric,
-    category_id: pgInt,
+    category_id: pgCategoryId,
     /** LEFT JOIN categories. */
     category_name: z.string().nullable(),
   })

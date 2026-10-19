@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { IdSchema, WireTimestampSchema, wireListOf } from "./common.ts";
+import { TransactionIdSchema } from "../brands.ts";
+import { WireTimestampSchema, wireListOf } from "./common.ts";
 
 /**
  * `formatRow` (repositories/attachmentRepository.ts). `attachments.id` is a
@@ -9,7 +10,7 @@ import { IdSchema, WireTimestampSchema, wireListOf } from "./common.ts";
  */
 export const AttachmentSchema = z.looseObject({
   id: z.string().regex(/^\d+$/),
-  transaction_id: IdSchema,
+  transaction_id: TransactionIdSchema,
   filename: z.string(),
   stored_path: z.string(),
   mime_type: z.string(),

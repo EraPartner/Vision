@@ -8,6 +8,7 @@
 
 import type { components } from "@/types/generated";
 import type { ResearchNewsArticle } from "@/types/research";
+import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
 
 export interface AggregationEnvelope<T> {
     data: T;
@@ -69,17 +70,17 @@ export interface ImportStagingRow {
     match_source: MatchSource | null;
     match_similarity: number | null;
     matched_pattern_id: number | null;
-    user_override_recipient_id: number | null;
-    override_category_id: number | null;
+    user_override_recipient_id: RecipientId | null;
+    override_category_id: CategoryId | null;
 }
 
 export interface ImportPreviewGroup {
-    recipient_id: number | null;
+    recipient_id: RecipientId | null;
     recipient_name: string | null;
-    recipient_default_category_id: number | null;
+    recipient_default_category_id: CategoryId | null;
     recipient_default_category_label: string | null;
-    override_category_id: number | null;
-    current_category_id: number | null;
+    override_category_id: CategoryId | null;
+    current_category_id: CategoryId | null;
     current_category_label: string | null;
     matched_pattern_id: number | null;
     matched_pattern_text: string | null;
@@ -143,9 +144,9 @@ export interface SavedChart {
     chart_type: ChartType;
     chart_variant: ChartVariant;
     time_bucket: TimeBucket;
-    category_ids: number[];
-    recipient_ids: number[];
-    tag_ids: number[];
+    category_ids: CategoryId[];
+    recipient_ids: RecipientId[];
+    tag_ids: TagId[];
     // Dynamic "all of this dimension" sources. When true the matching *_ids list
     // is ignored and every entity (incl. ones added later) is charted.
     all_categories: boolean;
@@ -162,9 +163,9 @@ export interface SavedChartCreate {
     chartType: ChartType;
     chartVariant?: ChartVariant;
     timeBucket?: TimeBucket;
-    categoryIds: number[];
-    recipientIds?: number[];
-    tagIds?: number[];
+    categoryIds: CategoryId[];
+    recipientIds?: RecipientId[];
+    tagIds?: TagId[];
     allCategories?: boolean;
     allRecipients?: boolean;
     allTags?: boolean;

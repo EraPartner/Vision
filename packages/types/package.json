@@ -21,7 +21,8 @@
     "./analysis-datasets": "./src/analysisDatasets.ts",
     "./fund-holdings": "./src/fundHoldings.ts",
     "./electron": "./src/electron.ts",
-    "./contracts": "./src/contracts/index.ts"
+    "./contracts": "./src/contracts/index.ts",
+    "./brands": "./src/brands.ts"
   },
   "files": [
     "src"

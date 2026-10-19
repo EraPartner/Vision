@@ -36,7 +36,11 @@ import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
-import { formatEditableNumber, SUPPORTED_CURRENCIES } from "@/utils/currency";
+import {
+    DEFAULT_CURRENCY,
+    formatEditableNumber,
+    SUPPORTED_CURRENCIES,
+} from "@/utils/currency";
 import {
     useDialogFormState,
     useReseedOnIdentityChange,
@@ -44,6 +48,12 @@ import {
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { PortfolioBrokerField } from "./PortfolioBrokerField";
 import { useManualTradeBrokerOptions } from "./manualTradeBroker";
+import {
+    asAccountId,
+    asCurrencyCode,
+    isCurrencyCode,
+} from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 interface Quote {
     symbol: string;
@@ -59,6 +69,16 @@ interface Quote {
 interface Props {
     quote: Quote;
     existingInvestment?: InvestmentSummary | undefined;
+}
+
+/**
+ * The quote's currency as the form's starting value. The server uppercases
+ * and ISO-checks the code anyway; one that is still not a code (or absent)
+ * starts the picker on the default currency.
+ */
+function toInvestmentCurrency(quoteCurrency: string | undefined): CurrencyCode {
+    const code = quoteCurrency?.trim().toUpperCase();
+    return isCurrencyCode(code) ? code : DEFAULT_CURRENCY;
 }
 
 export function AddInvestmentFromMarketDialog({
@@ -102,7 +122,7 @@ export function AddInvestmentFromMarketDialog({
     const makeNewInvestmentForm = () => ({
         name: quote.name,
         symbol: quote.symbol,
-        currency: quote.currency ?? "EUR",
+        currency: toInvestmentCurrency(quote.currency),
         currentPrice: formatEditableNumber(
             quote.price,
             appSettings.numberFormat,
@@ -299,7 +319,7 @@ export function AddInvestmentFromMarketDialog({
                 currency: existingInvestment.currency,
                 note: transactionForm.note.trim() || undefined,
                 account_id: effectiveBrokerId
-                    ? Number(effectiveBrokerId)
+                    ? asAccountId(Number(effectiveBrokerId))
                     : undefined,
                 is_recurring: transactionForm.isRecurring,
                 recurrence_interval: transactionForm.isRecurring
@@ -468,7 +488,7 @@ export function AddInvestmentFromMarketDialog({
                                         onValueChange={(v) =>
                                             setNewInvestmentForm((f) => ({
                                                 ...f,
-                                                currency: v,
+                                                currency: asCurrencyCode(v),
                                             }))
                                         }
                                     >

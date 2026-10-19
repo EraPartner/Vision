@@ -41,6 +41,7 @@ vi.mock("@/components/shared/VirtualDataTable", () => ({
 }));
 
 import { TransactionsTable } from "../TransactionsTable";
+import { asCurrencyCode, asTransactionId } from "@vision/types/brands";
 
 describe("TransactionsTable currency balances", () => {
     it("shows an explicit ISO currency and formats each balance in that currency", async () => {
@@ -60,26 +61,26 @@ describe("TransactionsTable currency balances", () => {
             <TransactionsTable
                 transactions={[
                     {
-                        id: 1,
+                        id: asTransactionId(1),
                         date: "2026-01-01",
                         memo: "USD row",
                         category: "Other",
                         recipient: "Broker",
                         bank: "Broker",
                         amount: 5,
-                        currency: "USD",
+                        currency: asCurrencyCode("USD"),
                         runningBalance: 35,
                         is_active: true,
                     },
                     {
-                        id: 2,
+                        id: asTransactionId(2),
                         date: "2026-01-02",
                         memo: "EUR row",
                         category: "Other",
                         recipient: "Broker",
                         bank: "Broker",
                         amount: 10,
-                        currency: "EUR",
+                        currency: asCurrencyCode("EUR"),
                         runningBalance: 110,
                         is_active: true,
                     },

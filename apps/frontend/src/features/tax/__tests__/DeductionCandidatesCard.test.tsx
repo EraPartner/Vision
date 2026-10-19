@@ -14,6 +14,7 @@ import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { DeductionCandidatesResponse } from "@/lib/api/info";
 import { DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY } from "@/lib/deductionCandidatesDismiss";
 import DeductionCandidatesCard from "../DeductionCandidatesCard";
+import { asCurrencyCode } from "@vision/types/brands";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     LanguageProvider: ({ children }: { children: React.ReactNode }) => (
@@ -98,7 +99,7 @@ function makeResponse(
         year: 2025,
         from: "2025-01-01",
         to: "2025-12-31",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         byDeductionType: [
             {
                 deductionType: "lifeInsurance",

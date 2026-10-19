@@ -288,6 +288,14 @@ inside `Test (Backend)`, also on drafts. Trivy is removed from CI and release, D
 updates per ecosystem, and release verification requires a passing `CI Complete` on the tagged
 commit instead of re-running the suites. It supersedes the Trivy part of ADR-050.
 
+### 2026-10-19: Branded ids, currency codes and Money values (accepted)
+
+[[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]] brands entity ids and ISO currency
+codes (`@vision/types/brands`) at the row-schema, route, wire-contract and frontend API
+boundaries, so mixed-up ids and free-text currencies fail to compile. Server totals sum converted
+figures as `Money` through `sumMoney`, which refuses to add different currencies. The existing
+typecheck enforces it; no CI step is added.
+
 ### 2026-10-19: Minimal macOS Electron shell hardening; retire v1 backups (accepted)
 
 [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] makes the shell macOS-only, flips

@@ -16,6 +16,12 @@ import {
 import type { AccountTotals } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
+import type {
+    AccountId,
+    CurrencyCode,
+    PortfolioTransactionId,
+    TransactionId,
+} from "@vision/types/brands";
 
 // Money fields the Account type declares as numbers. accountService.list emits
 // them as JSON numbers and AccountListSchema requires that, so `Number(...)` is
@@ -60,7 +66,7 @@ export type { AccountTotals };
  * Accounts hub totals computed on the server in `currency`: converted
  * per-account balances, group subtotals and net cash (ADR-216).
  */
-export function getAccountTotals(currency: string): Promise<AccountTotals> {
+export function getAccountTotals(currency: CurrencyCode): Promise<AccountTotals> {
     return requestWithQuery<AccountTotals>(
         "/api/accounts/totals",
         { currency },
@@ -77,7 +83,7 @@ export function createAccount(account: AccountCreate): Promise<Account> {
 }
 
 export function updateAccount(
-    id: number,
+    id: AccountId,
     account: AccountUpdate,
 ): Promise<Account> {
     return apiRequest<Account>(`/api/accounts/${id}`, {
@@ -86,21 +92,21 @@ export function updateAccount(
     });
 }
 
-export async function deleteAccount(id: number): Promise<void> {
+export async function deleteAccount(id: AccountId): Promise<void> {
     await apiRequest<void>(`/api/accounts/${id}`, { method: "DELETE" });
 }
 
 export type AccountCloseBalanceHandling = "preserve" | "adjustment";
 
 export interface AccountPortfolioLotRetagPreview {
-    account_id: number;
+    account_id: AccountId;
     eligible_count: number;
-    transaction_ids: number[];
+    transaction_ids: PortfolioTransactionId[];
     limit: number;
 }
 
 export function getAccountPortfolioLotRetagPreview(
-    id: number,
+    id: AccountId,
 ): Promise<AccountPortfolioLotRetagPreview> {
     return apiRequest<AccountPortfolioLotRetagPreview>(
         `/api/accounts/${id}/portfolio-lot-retag-preview`,
@@ -109,19 +115,19 @@ export function getAccountPortfolioLotRetagPreview(
 }
 
 export interface AccountCloseResult {
-    account_id: number;
+    account_id: AccountId;
     balance_handling: AccountCloseBalanceHandling;
     already_closed: boolean;
     adjustments: Array<{
-        id: number;
+        id: TransactionId;
         amount: number;
-        currency: string;
+        currency: CurrencyCode;
         transfer_source: "adjustment";
     }>;
 }
 
 export function closeAccount(
-    id: number,
+    id: AccountId,
     balanceHandling: AccountCloseBalanceHandling,
 ): Promise<AccountCloseResult> {
     return apiRequest<AccountCloseResult>(`/api/accounts/${id}/close`, {
@@ -143,8 +149,8 @@ export interface AccountMergeResult {
 
 /** Merge source accounts into the survivor (targetId); repoints all references + deletes sources. */
 export function mergeAccounts(
-    targetId: number,
-    sourceIds: number[],
+    targetId: AccountId,
+    sourceIds: AccountId[],
 ): Promise<AccountMergeResult> {
     return apiRequest<AccountMergeResult>(`/api/accounts/${targetId}/merge`, {
         method: "POST",
@@ -166,13 +172,13 @@ export interface AccountMergePreview {
     /** Post-merge computed balance: per-currency over the union of both accounts' active rows, converted into the survivor's currency. */
     projectedBalance: number;
     /** The survivor's native currency (ISO-4217). */
-    projectedBalanceCurrency: string;
+    projectedBalanceCurrency: CurrencyCode;
     /** Native per-currency partitions included in the preview. */
-    balanceParts: Array<{ currency: string; balance: number }>;
+    balanceParts: Array<{ currency: CurrencyCode; balance: number }>;
     /** True when projectedBalance excludes partitions without a usable rate. */
     projectedBalanceIncomplete: boolean;
     /** Currency codes excluded from projectedBalance. */
-    unconvertedCurrencies: string[];
+    unconvertedCurrencies: CurrencyCode[];
     /** Both accounts carry stamped balance histories with overlapping date ranges — the merge clears the survivor's statement anchor. */
     stampsInterleaved: boolean;
     /** Both accounts hold an opening balance in the same currency — POST /merge refuses (400) until one is removed. */
@@ -185,8 +191,8 @@ export interface AccountMergePreview {
  * move; resulting balance X" preview and the interleaved-stamp warning.
  */
 export function previewMerge(
-    sourceId: number,
-    targetId: number,
+    sourceId: AccountId,
+    targetId: AccountId,
 ): Promise<AccountMergePreview> {
     return requestWithQuery<AccountMergePreview>(
         `/api/accounts/${sourceId}/merge-preview`,
@@ -198,12 +204,12 @@ export function previewMerge(
 export interface OpeningBalanceInput {
     balance: number;
     date: string;
-    currency?: string;
+    currency?: CurrencyCode;
 }
 
 export interface OpeningBalanceResult {
     transaction: {
-        id: number;
+        id: TransactionId;
         /** NUMERIC decimal string: the anchor is a raw `RETURNING *` row. */
         balance: string;
         transfer_source: string;
@@ -218,7 +224,7 @@ export interface OpeningBalanceResult {
  * single sanctioned exception to the `transactions.balance` write-protection.
  */
 export function setOpeningBalance(
-    id: number,
+    id: AccountId,
     input: OpeningBalanceInput,
 ): Promise<OpeningBalanceResult> {
     return apiRequest<OpeningBalanceResult>(
@@ -237,7 +243,7 @@ export interface ReconcileResult {
     mode: ReconcileMode;
     /** Drift after the operation — always 0 on success. */
     drift: number;
-    currency: string;
+    currency: CurrencyCode;
     statement_balance: number;
     /**
      * The reconciliation base after the operation — the balance of the ONE
@@ -246,7 +252,7 @@ export interface ReconcileResult {
      */
     computed_balance: number;
     /** The server-created adjustment row (mode 'adjustment'), else null. */
-    transaction: { id: number; amount: number; transfer_source: string } | null;
+    transaction: { id: TransactionId; amount: number; transfer_source: string } | null;
 }
 
 /**
@@ -259,9 +265,9 @@ export interface ReconcileResult {
  * — ADR-094 descriptive-only default preserved).
  */
 export function reconcileAccount(
-    id: number,
+    id: AccountId,
     mode: ReconcileMode,
-    currency?: string,
+    currency?: CurrencyCode,
 ): Promise<ReconcileResult> {
     return apiRequest<ReconcileResult>(`/api/accounts/${id}/reconcile`, {
         method: "POST",
@@ -270,12 +276,12 @@ export function reconcileAccount(
 }
 
 export function setStatementBalance(
-    id: number,
-    currency: string,
+    id: AccountId,
+    currency: CurrencyCode,
     input: { balance: number; date: string },
 ): Promise<{
-    account_id: number;
-    currency: string;
+    account_id: AccountId;
+    currency: CurrencyCode;
     balance: number;
     balance_date: string;
 }> {
@@ -286,9 +292,9 @@ export function setStatementBalance(
 }
 
 export function deleteStatementBalance(
-    id: number,
-    currency: string,
-): Promise<{ account_id: number; currency: string }> {
+    id: AccountId,
+    currency: CurrencyCode,
+): Promise<{ account_id: AccountId; currency: CurrencyCode }> {
     return apiRequest(`/api/accounts/${id}/statement-balances/${currency}`, {
         method: "DELETE",
     });

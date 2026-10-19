@@ -18,6 +18,7 @@ import {
     accountListItem,
     accountsBody,
 } from "@/test/msw/rowFixtures";
+import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -42,12 +43,12 @@ const PORTFOLIO_TXN_STUB = {
 };
 
 const INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     is_active: true,
@@ -76,12 +77,12 @@ const INVESTMENT: InvestmentSummary = {
 
 const SAVINGS_INVESTMENT: InvestmentSummary = {
     ...INVESTMENT,
-    id: 2,
+    id: asInvestmentId(2),
     name: "Savings Account",
     symbol: undefined,
     asset_class: "savings",
     assetClass: "savings",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
 };
 
 describe("AddPortfolioTxnDialog", () => {

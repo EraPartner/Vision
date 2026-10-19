@@ -30,6 +30,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { Account } from "@/types/api";
+import { asAccountId } from "@vision/types/brands";
 
 const label = (a: Account) => a.display_name || a.name;
 
@@ -96,7 +97,7 @@ export function MergeAccountDialog({
         if (!targetId || !acknowledged || !previewReady || merge.isPending)
             return;
         merge.mutate(
-            { targetId: Number(targetId), sourceIds: [source.id] },
+            { targetId: asAccountId(Number(targetId)), sourceIds: [source.id] },
             {
                 onSuccess: () => {
                     reset();

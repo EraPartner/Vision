@@ -15,6 +15,12 @@ import {
   syntheticSaxoCsvStaging,
 } from "./helpers/saxoReconciliation.ts";
 import { loose } from "./helpers/partial.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 // The synthetic rows are wire-shaped: numeric BIGINT ids and partial batch,
 // history and receipt rows.
@@ -36,8 +42,8 @@ type StagingFixture = Omit<
 function correctionFixture() {
   const row: StagingFixture = syntheticSaxoStaging();
   const current: PortfolioTransactionSnapshot = {
-    id: 40,
-    investment_id: 1,
+    id: asPortfolioTransactionId(40),
+    investment_id: asInvestmentId(1),
     type: "buy",
     date: row.tx_date,
     amount: "200.0000",
@@ -45,9 +51,9 @@ function correctionFixture() {
     price_per_unit: "20.000000",
     fees: "2.0000",
     taxes: "0.0000",
-    currency: "USD",
+    currency: asCurrencyCode("USD"),
     fx_rate_to_eur: "0.9000000000",
-    account_id: 7,
+    account_id: asAccountId(7),
     note: "Keep the original note",
     dividend_amount_convention: "unknown",
     is_recurring: false,

@@ -6,7 +6,12 @@
  * BIGINT, so they arrive as strings; the hash columns are CHAR(64).
  */
 import { z } from "zod";
-import { pgBigint, pgInt, pgTimestamptz } from "../rowSchemas.ts";
+import {
+  pgAccountId,
+  pgBigint,
+  pgInt,
+  pgTimestamptz,
+} from "../rowSchemas.ts";
 
 /** `audit_chain_head`'s lock read. */
 export const auditHeadRowSchema = z
@@ -113,8 +118,8 @@ export const portfolioRetagAuditRowSchema = z
     /** UUID */
     idempotency_key: z.string(),
     request_fingerprint: z.string(),
-    from_account_id: pgInt.nullable(),
-    to_account_id: pgInt.nullable(),
+    from_account_id: pgAccountId.nullable(),
+    to_account_id: pgAccountId.nullable(),
     /** JSONB */
     transaction_ids: z.unknown(),
     /** JSONB */

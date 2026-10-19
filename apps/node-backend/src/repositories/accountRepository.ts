@@ -14,9 +14,9 @@ import { query } from "../database/connection.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   accountBalanceQueryRowSchema,
+  accountKeyRowSchema,
   accountRowSchema,
   countRowSchema,
-  idRowSchema,
   statementBalanceRowSchema,
 } from "../database/rowSchemas.ts";
 import {
@@ -36,6 +36,7 @@ import { todayAppDateString } from "../lib/timezone.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 
 import type { z } from "zod";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import type {
   AccountBalanceQueryRow,
   AccountRow,
@@ -94,9 +95,9 @@ export const accountRepository = {
   async findActiveId(
     id: unknown,
     { client }: { client?: QueryRunner | undefined } = {},
-  ): Promise<number | undefined> {
+  ): Promise<AccountId | undefined> {
     const row = await queryOne(
-      idRowSchema,
+      accountKeyRowSchema,
       // Writers passing their transaction must retain the active-state check
       // until commit. Account closing takes FOR UPDATE before reading balances.
       `SELECT id FROM accounts WHERE id = $1 AND is_active = true${client ? " FOR SHARE" : ""}`,
@@ -213,7 +214,7 @@ export const accountRepository = {
     return parseInt(row.count, 10);
   },
 
-  async getById(id: number): Promise<AccountRow | undefined> {
+  async getById(id: AccountId): Promise<AccountRow | undefined> {
     return queryOne(
       accountRowSchema,
       `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
@@ -222,7 +223,7 @@ export const accountRepository = {
   },
 
   /** Every account's id and owner (me | partner | joint), closed accounts included. */
-  async listOwners(): Promise<Array<{ id: number; owner: string }>> {
+  async listOwners(): Promise<Array<{ id: AccountId; owner: string }>> {
     return queryRows(accountOwnerRowSchema, "SELECT id, owner FROM accounts");
   },
 
@@ -274,7 +275,7 @@ export const accountRepository = {
    * Update an account; returns the updated row, or undefined if not found.
    */
   async update(
-    id: number,
+    id: AccountId,
     fields: Record<string, unknown>,
   ): Promise<AccountRow | undefined> {
     const {
@@ -298,9 +299,9 @@ export const accountRepository = {
    * transactions still reference it (account_id FK is ON DELETE RESTRICT) — the
    * caller turns that into a 409 (archive instead). Returns the id, or undefined.
    */
-  async remove(id: number): Promise<number | undefined> {
+  async remove(id: AccountId): Promise<AccountId | undefined> {
     const row = await queryOne(
-      idRowSchema,
+      accountKeyRowSchema,
       "DELETE FROM accounts WHERE id = $1 RETURNING id",
       [id],
     );
@@ -312,8 +313,8 @@ export const accountRepository = {
    * `bank_account` (ADR-088). FOR UPDATE so concurrent merges serialize.
    */
   async lockByIdForMerge(
-    id: number,
-  ): Promise<{ id: number; name: string } | undefined> {
+    id: AccountId,
+  ): Promise<{ id: AccountId; name: string } | undefined> {
     return queryOne(
       accountNameRowSchema,
       "SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE",
@@ -324,9 +325,9 @@ export const accountRepository = {
   /**
    * Lock the merge sources; returns the ids that exist (caller diffs for 404s).
    */
-  async lockByIdsForMerge(ids: number[]): Promise<{ id: number }[]> {
+  async lockByIdsForMerge(ids: AccountId[]): Promise<{ id: AccountId }[]> {
     return queryRows(
-      idRowSchema,
+      accountKeyRowSchema,
       "SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE",
       [ids],
     );
@@ -338,8 +339,8 @@ export const accountRepository = {
    * @returns rows repointed
    */
   async repointFundingAccount(
-    targetId: number,
-    sourceIds: number[],
+    targetId: AccountId,
+    sourceIds: AccountId[],
   ): Promise<number> {
     const result = await query(
       `UPDATE accounts SET funding_account_id = $1 WHERE funding_account_id = ANY($2::int[])`,
@@ -354,7 +355,7 @@ export const accountRepository = {
    *
    * @returns rows affected
    */
-  async clearStatementAnchor(id: number): Promise<number> {
+  async clearStatementAnchor(id: AccountId): Promise<number> {
     const result = await query(
       "DELETE FROM account_statement_balances WHERE account_id = $1",
       [id],
@@ -364,8 +365,8 @@ export const accountRepository = {
 
   /** Store one authoritative statement reading. */
   async upsertStatementBalance(
-    accountId: number,
-    currency: string,
+    accountId: AccountId,
+    currency: CurrencyCode,
     balance: number | string,
     balanceDate: string,
   ): Promise<StatementBalanceRow> {
@@ -386,8 +387,8 @@ export const accountRepository = {
   },
 
   async deleteStatementBalance(
-    accountId: number,
-    currency: string,
+    accountId: AccountId,
+    currency: CurrencyCode,
   ): Promise<number> {
     const result = await query(
       `DELETE FROM account_statement_balances
@@ -405,8 +406,8 @@ export const accountRepository = {
    * @returns rows deleted
    */
   async deleteMergedSources(
-    sourceIds: number[],
-    targetId: number,
+    sourceIds: AccountId[],
+    targetId: AccountId,
   ): Promise<number> {
     const result = await query(
       "DELETE FROM accounts WHERE id = ANY($1::int[]) AND id <> $2",
@@ -433,12 +434,12 @@ export const accountRepository = {
       multiCurrencyCash = false,
       client,
     }: { multiCurrencyCash?: boolean; client?: QueryRunner } = {},
-  ): Promise<number | undefined> {
+  ): Promise<AccountId | undefined> {
     if (name == null) return undefined;
     const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
     const row = await queryOne(
-      idRowSchema,
+      accountKeyRowSchema,
       `INSERT INTO accounts (name, display_name, multi_currency_cash) VALUES ($1, $1, $2)
        ON CONFLICT (lower(btrim(name))) DO UPDATE
          SET multi_currency_cash = accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash

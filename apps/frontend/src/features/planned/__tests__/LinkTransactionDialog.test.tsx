@@ -12,16 +12,17 @@ import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import {
     transactionRow,
 } from "@/test/msw/rowFixtures";
+import { asCurrencyCode, asPlannedTransactionId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const PAYMENT: PlannedPayment = {
-    id: 1,
+    id: asPlannedTransactionId(1),
     name: "Monthly Rent",
     amount: 1200,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     due_date: "2025-02-01",
     recipient: "Landlord",
     recipient_id: undefined, // avoid the getRecipient side-effect fetch

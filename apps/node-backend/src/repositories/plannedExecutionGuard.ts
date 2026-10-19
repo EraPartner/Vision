@@ -1,9 +1,10 @@
 import { query } from "../database/connection.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
+import type { TransactionId } from "@vision/types/brands";
 
 /** Call inside the deletion transaction; row locks serialize with execution. */
 export async function protectPlannedExecutions(
-  transactionIds: readonly number[],
+  transactionIds: readonly TransactionId[],
 ) {
   if (!transactionIds.length) return;
   await query(

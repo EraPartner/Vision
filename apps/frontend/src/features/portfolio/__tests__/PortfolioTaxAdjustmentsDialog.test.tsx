@@ -8,16 +8,17 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTaxAdjustmentsDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { asCurrencyCode, asInvestmentId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 const INVESTMENT_A: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "MSCI World ETF",
     symbol: "IWDA",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     current_price: 95.5,
     currentPrice: 95.5,
     is_active: true,
@@ -45,12 +46,12 @@ const INVESTMENT_A: InvestmentSummary = {
 };
 
 const INVESTMENT_B: InvestmentSummary = {
-    id: 2,
+    id: asInvestmentId(2),
     name: "Emerging Markets ETF",
     symbol: "EEM",
     asset_class: "etf",
     assetClass: "etf",
-    currency: "USD",
+    currency: asCurrencyCode("USD"),
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: "2025-01-15T10:00:00.000Z",

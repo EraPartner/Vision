@@ -9,9 +9,10 @@ import { appLanguageToLocale } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { usePlannedTotals } from "@/features/planned/usePlannedTotals";
 import { useMonthToDate } from "./useHomeQueries";
+import type { CurrencyCode } from "@vision/types/brands";
 
 interface MonthToDateHeroProps {
-    currency: string;
+    currency: CurrencyCode;
     className?: string;
 }
 

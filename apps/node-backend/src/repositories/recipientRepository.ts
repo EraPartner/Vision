@@ -12,10 +12,12 @@
 
 import { query } from "../database/connection.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
-import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  countRowSchema,
+  recipientKeyRowSchema,
+} from "../database/rowSchemas.ts";
 import {
   enrichedRecipientRowSchema,
-  idRowSchema,
   recipientAliasRowSchema,
   recipientClusterRootRowSchema,
   recipientMergeLockRowSchema,
@@ -28,6 +30,7 @@ import { normalizeForMatching } from "../lib/textNormalization.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { makeValidationError } from "../lib/repositoryErrors.ts";
 import type { EnrichedRecipientRow, RecipientRow } from "../types/rows.ts";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 /**
  * Display name of the shared recipient that owns server-generated ledger rows
@@ -45,7 +48,7 @@ export interface RecipientFilters {
   limit?: number | undefined;
   offset?: number | undefined;
   name?: string | null | undefined;
-  defaultCategoryId?: number | null | undefined;
+  defaultCategoryId?: CategoryId | null | undefined;
   search?: string | null | undefined;
   active?: boolean | undefined;
   uncategorized?: boolean | undefined;
@@ -211,7 +214,7 @@ export const recipientRepository = {
     return parseInt(requireRow(row, "recipient count").count, 10);
   },
 
-  async getById(id: number): Promise<EnrichedRecipientRow | null> {
+  async getById(id: RecipientId): Promise<EnrichedRecipientRow | null> {
     const sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name,
@@ -269,17 +272,17 @@ export const recipientRepository = {
    * An existing user recipient that normalizes to the same name is adopted
    * as-is — never deactivated, and after phase 1 never even written to.
    */
-  async getOrCreateSystemId(): Promise<number> {
+  async getOrCreateSystemId(): Promise<RecipientId> {
     const normalized = normalizeForMatching(SYSTEM_RECIPIENT_NAME);
     const existing = await queryOne(
-      idRowSchema,
+      recipientKeyRowSchema,
       `SELECT id FROM recipients WHERE normalized_name = $1`,
       [normalized],
     );
     if (existing) return existing.id;
 
     const inserted = await queryOne(
-      idRowSchema,
+      recipientKeyRowSchema,
       `INSERT INTO recipients (name, normalized_name, is_active)
        VALUES ($1, $2, false)
        ON CONFLICT (normalized_name) DO UPDATE SET normalized_name = EXCLUDED.normalized_name
@@ -323,7 +326,7 @@ export const recipientRepository = {
     }
 
     const existing = await queryOne(
-      idRowSchema,
+      recipientKeyRowSchema,
       `SELECT id FROM recipients WHERE normalized_name = $1`,
       [normalizedName],
     );
@@ -352,7 +355,7 @@ export const recipientRepository = {
   },
 
   async update(
-    id: number,
+    id: RecipientId,
     {
       name,
       default_category_id,
@@ -360,7 +363,7 @@ export const recipientRepository = {
       is_active,
     }: {
       name?: string | null | undefined;
-      default_category_id?: number | null | undefined;
+      default_category_id?: CategoryId | null | undefined;
       notes?: string | null | undefined;
       is_active?: boolean | null | undefined;
     },
@@ -426,7 +429,7 @@ export const recipientRepository = {
     return row || null;
   },
 
-  async hardDelete(id: number): Promise<boolean> {
+  async hardDelete(id: RecipientId): Promise<boolean> {
     const result = await query("DELETE FROM recipients WHERE id = $1", [id]);
     return (result.rowCount ?? 0) > 0;
   },
@@ -436,8 +439,10 @@ export const recipientRepository = {
    * state. A target can become an alias while a competing merge holds its lock.
    */
   async lockByIdsForMerge(
-    ids: number[],
-  ): Promise<Array<{ id: number; primary_recipient_id: number | null }>> {
+    ids: RecipientId[],
+  ): Promise<
+    Array<{ id: RecipientId; primary_recipient_id: RecipientId | null }>
+  > {
     return queryRows(
       recipientMergeLockRowSchema,
       `SELECT id, primary_recipient_id FROM recipients
@@ -453,11 +458,11 @@ export const recipientRepository = {
    * @returns the alias ids actually flagged
    */
   async flagAliasesOf(
-    primaryId: number,
-    aliasIds: number[],
-  ): Promise<number[]> {
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
+  ): Promise<RecipientId[]> {
     const rows = await queryRows(
-      idRowSchema,
+      recipientKeyRowSchema,
       `UPDATE recipients
           SET primary_recipient_id = $1,
               updated_at = NOW()
@@ -478,8 +483,8 @@ export const recipientRepository = {
    * @returns rows repointed
    */
   async repointGrandchildAliases(
-    primaryId: number,
-    aliasIds: number[],
+    primaryId: RecipientId,
+    aliasIds: RecipientId[],
   ): Promise<number> {
     const result = await query(
       `UPDATE recipients
@@ -495,7 +500,7 @@ export const recipientRepository = {
   /**
    * Unmerge: remove primary_recipient_id from a recipient.
    */
-  async unmergeRecipient(id: number): Promise<boolean> {
+  async unmergeRecipient(id: RecipientId): Promise<boolean> {
     const sql = `UPDATE recipients SET primary_recipient_id = NULL, updated_at = NOW() WHERE id = $1 RETURNING id`;
     const result = await query(sql, [id]);
     return result.rows.length > 0;
@@ -504,7 +509,7 @@ export const recipientRepository = {
   /**
    * Get all aliases for a primary recipient.
    */
-  async getAliases(primaryId: number): Promise<RecipientAliasRow[]> {
+  async getAliases(primaryId: RecipientId): Promise<RecipientAliasRow[]> {
     const sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name
@@ -521,10 +526,12 @@ export const recipientRepository = {
    * Returns a Map<recipientId, clusterRootId> for the ids that exist.
    */
   async getClusterRootMap(
-    recipientIds: Array<number | null | undefined> | null | undefined,
-  ): Promise<Map<number, number>> {
+    recipientIds: Array<RecipientId | null | undefined> | null | undefined,
+  ): Promise<Map<RecipientId, RecipientId>> {
     const ids = [
-      ...new Set((recipientIds || []).filter((id): id is number => id != null)),
+      ...new Set(
+        (recipientIds || []).filter((id): id is RecipientId => id != null),
+      ),
     ];
     if (ids.length === 0) return new Map();
     const rows = await queryRows(
@@ -534,7 +541,7 @@ export const recipientRepository = {
         WHERE id = ANY($1::int[])`,
       [ids],
     );
-    const map = new Map<number, number>();
+    const map = new Map<RecipientId, RecipientId>();
     for (const row of rows) map.set(row.id, row.cluster_root);
     return map;
   },

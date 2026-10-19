@@ -7,6 +7,7 @@ import {
     useInvestmentsQuery,
     usePortfolioTransactionsQuery,
 } from "../useInvestments";
+import { asInvestmentId } from "@vision/types/brands";
 
 // Real query and domain/client layers; only the HTTP transport is gated.
 afterEach(() => vi.restoreAllMocks());
@@ -14,11 +15,11 @@ afterEach(() => vi.restoreAllMocks());
 describe("portfolio transport cancellation", () => {
     it.each([
         ["inventory", () => useInvestmentsQuery(), 1],
-        ["recent history", () => usePortfolioTransactionsQuery([1, 2, 3]), 1],
-        ["detail history", () => useAllPortfolioTransactionsQuery(1), 1],
+        ["recent history", () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2), asInvestmentId(3)]), 1],
+        ["detail history", () => useAllPortfolioTransactionsQuery(asInvestmentId(1)), 1],
         [
             "complete history",
-            () => usePortfolioTransactionsQuery([1, 2, 3, 4, 5, 6, 7], true),
+            () => usePortfolioTransactionsQuery([asInvestmentId(1), asInvestmentId(2), asInvestmentId(3), asInvestmentId(4), asInvestmentId(5), asInvestmentId(6), asInvestmentId(7)], true),
             4,
         ],
     ] as const)(

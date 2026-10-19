@@ -10,6 +10,10 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { __retagPortfolioTransactions as retagPortfolioTransactions } from "../src/services/portfolio/portfolioBrokerRetagService.ts";
+import {
+  asAccountId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
@@ -39,7 +43,7 @@ async function seed() {
      RETURNING id`,
   );
   const accountIdByName = new Map(
-    accounts.rows.map((row) => [row.name, Number(row.id)]),
+    accounts.rows.map((row) => [row.name, asAccountId(Number(row.id))]),
   );
   const source = accountIdByName.get("WPC3 source")!;
   const transactions = await pool.query(
@@ -51,7 +55,10 @@ async function seed() {
     [investment.rows[0].id, source],
   );
   const transactionIdByType = new Map(
-    transactions.rows.map((row) => [row.type, Number(row.id)]),
+    transactions.rows.map((row) => [
+      row.type,
+      asPortfolioTransactionId(Number(row.id)),
+    ]),
   );
   return {
     source,

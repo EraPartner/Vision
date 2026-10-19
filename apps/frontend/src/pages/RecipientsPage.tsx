@@ -59,6 +59,7 @@ import {
     booleanSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 const RECIPIENT_SORT_KEYS = new Set([
     "name",
@@ -69,12 +70,12 @@ const RECIPIENT_SORT_KEYS = new Set([
 ]);
 
 type TableRecipient = {
-    id: number;
+    id: RecipientId;
     name: string;
     primary_bank_account: string;
     default_category_name?: string | undefined;
-    default_category_id?: number | null | undefined;
-    primary_recipient_id?: number | null | undefined;
+    default_category_id?: CategoryId | null | undefined;
+    primary_recipient_id?: RecipientId | null | undefined;
     primary_recipient_name?: string | null | undefined;
     alias_count?: number | undefined;
     is_active: boolean;
@@ -106,7 +107,7 @@ export default function RecipientsPage() {
     const sortDir = validSort ? rawSortDir : null;
     const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
     const [patternsDialogRecipient, setPatternsDialogRecipient] = useState<{
-        id: number;
+        id: RecipientId;
         name: string;
     } | null>(null);
     const [allItems, setAllItems] = useState<Recipient[]>([]);
@@ -246,7 +247,7 @@ export default function RecipientsPage() {
     };
 
     const statusMutation = useMutation({
-        mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+        mutationFn: ({ id, is_active }: { id: RecipientId; is_active: boolean }) =>
             apiClient.updateRecipient(id, { is_active }),
         onSuccess: () =>
             queryClient.invalidateQueries({ queryKey: recipientKeys.all }),

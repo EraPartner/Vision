@@ -7,6 +7,7 @@ import { CATEGORY_STUB } from "@/test/msw/handlers";
 import { ApiContractError } from "@/lib/api/client";
 
 import { getCategories, getCategoryTree, createCategory, updateCategory, deleteCategory } from "@/lib/api/categories";
+import { asCategoryId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -75,11 +76,11 @@ describe("categories API client", () => {
 
   it("updateCategory PATCHes", async () => {
     server.use(http.patch(`${API_BASE}/api/categories/9`, () => ok({ id: 9 })));
-    expect((await updateCategory(9, {} as never)).id).toBe(9);
+    expect((await updateCategory(asCategoryId(9), {} as never)).id).toBe(9);
   });
 
   it("deleteCategory resolves on void", async () => {
     server.use(http.delete(`${API_BASE}/api/categories/9`, () => new HttpResponse(null, { status: 204 })));
-    await expect(deleteCategory(9)).resolves.toBeUndefined();
+    await expect(deleteCategory(asCategoryId(9))).resolves.toBeUndefined();
   });
 });

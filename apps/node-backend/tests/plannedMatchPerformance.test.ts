@@ -1,6 +1,10 @@
 import { performance } from "node:perf_hooks";
 import { expect, it, vi } from "vitest";
 import type { AutoLinkTxRow } from "../src/services/plannedMatchService.ts";
+import {
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const mocks = vi.hoisted(() => ({
   plans: vi.fn(),
@@ -55,20 +59,22 @@ function fixture() {
   const txs: AutoLinkTxRow[] = plans
     .filter((_, i) => i % 3 === 0)
     .map((p, i) => ({
-      id: 10_000 + i,
-      recipient_id: p.recipient_cluster_id,
+      id: asTransactionId(10_000 + i),
+      recipient_id: asRecipientId(p.recipient_cluster_id),
       currency: i % 2 ? p.currency.toLowerCase() : p.currency,
       amount: p.amount,
       transaction_date: p.planned_date,
     }));
   // Both ambiguity directions must stay unlinked; these are not empty-match fixtures.
   plans.push(...plans.slice(0, 30).map((p, i) => ({ ...p, id: 3000 + i })));
-  txs.push(...txs.slice(30, 60).map((t, i) => ({ ...t, id: 20_000 + i })));
+  txs.push(
+    ...txs.slice(30, 60).map((t, i) => ({ ...t, id: asTransactionId(20_000 + i) })),
+  );
   // Same identity partition, amount/date just outside the documented tolerances.
   txs.push(
     ...txs.slice(60, 90).map((t, i) => ({
       ...t,
-      id: 30_000 + i,
+      id: asTransactionId(30_000 + i),
       amount: String(Number(t.amount) * 2),
       transaction_date: ymd(200),
     })),
@@ -251,8 +257,8 @@ it("keeps calendar windows across DST, leap day and year boundaries and rejects 
   mocks.clusters.mockResolvedValue(new Map());
   mocks.execute.mockResolvedValue({ duplicate: false });
   const txs = dates.map(([, date], i) => ({
-    id: i + 100,
-    recipient_id: i + 1,
+    id: asTransactionId(i + 100),
+    recipient_id: asRecipientId(i + 1),
     amount: "-50",
     currency: "EUR",
     transaction_date: date,
@@ -260,8 +266,8 @@ it("keeps calendar windows across DST, leap day and year boundaries and rejects 
   const result = await autoLinkTransactions([
     ...txs,
     {
-      id: 999,
-      recipient_id: 99,
+      id: asTransactionId(999),
+      recipient_id: asRecipientId(99),
       amount: "-50",
       currency: "EUR",
       transaction_date: "2026-03-02",

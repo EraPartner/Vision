@@ -6,8 +6,9 @@
  * is where category name→id resolution and bulk operations belong.
  */
 import { queryRows } from "../database/rowContracts.ts";
-import { idRowSchema } from "../database/rows/catalog.ts";
+import { categoryKeyRowSchema } from "../database/rowSchemas.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
+import type { CategoryId } from "@vision/types/brands";
 
 export { default } from "../repositories/categoryRepository.ts";
 export {
@@ -32,10 +33,12 @@ export {
  * @returns the category id
  * @throws {ValidationError} on malformed input or when no category matches
  */
-export async function resolveCategoryIdByName(name: string): Promise<number> {
+export async function resolveCategoryIdByName(
+  name: string,
+): Promise<CategoryId> {
   const normalized = String(name).toUpperCase().trim();
   const byPath = await queryRows(
-    idRowSchema,
+    categoryKeyRowSchema,
     `SELECT id FROM categories
      WHERE path_name = $1 AND is_active = true
      ORDER BY id LIMIT 2`,
@@ -57,7 +60,7 @@ export async function resolveCategoryIdByName(name: string): Promise<number> {
   const general = normalized.slice(0, delimiter).trim();
   const detail = normalized.slice(delimiter + 1).trim();
   const legacy = await queryRows(
-    idRowSchema,
+    categoryKeyRowSchema,
     `SELECT id FROM categories
      WHERE general = $1 AND detail = $2 AND is_active = true
      UNION

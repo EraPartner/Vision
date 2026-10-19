@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { RecipientId } from "@vision/types/brands";
 
 interface BulkRecipientDialogProps {
     open: boolean;
     selectedCount: number;
     onOpenChange: (open: boolean) => void;
-    onApply: (recipientId: number) => void;
+    onApply: (recipientId: RecipientId) => void;
     pending?: boolean;
 }
 
@@ -28,7 +29,7 @@ export function BulkRecipientDialog({
     pending,
 }: BulkRecipientDialogProps) {
     const { t } = useLanguage();
-    const [recipientId, setRecipientId] = useState<number | null>(null);
+    const [recipientId, setRecipientId] = useState<RecipientId | null>(null);
 
     function handleApply(e: React.FormEvent) {
         e.preventDefault();

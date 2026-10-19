@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { NetWorthByAccountList } from "../NetWorthByAccountList";
+import { asAccountId } from "@vision/types/brands";
 
 describe("NetWorthByAccountList", () => {
     it("formats an absolute below-headline difference as localized money", async () => {
@@ -11,7 +12,7 @@ describe("NetWorthByAccountList", () => {
                 rows={[
                     {
                         key: "cash",
-                        accountId: 1,
+                        accountId: asAccountId(1),
                         label: "Cash",
                         type: "checking",
                         cash: 50,

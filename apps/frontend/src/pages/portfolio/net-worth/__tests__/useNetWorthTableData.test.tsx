@@ -10,6 +10,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { createLanguageQueryWrapper } from "@/test/queryWrapper";
 import { apiClient } from "@/lib/api";
 import { useNetWorthTableData } from "../useNetWorthTableData";
+import { asCurrencyCode } from "@vision/types/brands";
 
 afterEach(() => vi.clearAllMocks());
 
@@ -28,7 +29,7 @@ describe("useNetWorthTableData", () => {
         } as never);
 
         const { result } = renderHook(
-            () => useNetWorthTableData({ currency: "EUR", pageSize: 2 }),
+            () => useNetWorthTableData({ currency: asCurrencyCode("EUR"), pageSize: 2 }),
             { wrapper: createLanguageQueryWrapper() },
         );
 
@@ -46,7 +47,7 @@ describe("useNetWorthTableData", () => {
         } as never);
 
         const { result } = renderHook(
-            () => useNetWorthTableData({ currency: "EUR", pageSize: 2 }),
+            () => useNetWorthTableData({ currency: asCurrencyCode("EUR"), pageSize: 2 }),
             { wrapper: createLanguageQueryWrapper() },
         );
 
@@ -72,7 +73,7 @@ describe("useNetWorthTableData", () => {
             } as never);
 
         const { result } = renderHook(
-            () => useNetWorthTableData({ currency: "EUR", pageSize: 1 }),
+            () => useNetWorthTableData({ currency: asCurrencyCode("EUR"), pageSize: 1 }),
             { wrapper: createLanguageQueryWrapper() },
         );
 
