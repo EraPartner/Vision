@@ -2,8 +2,8 @@
 title: React Query Keys Reference
 type: reference
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-19
+updated: 2026-10-19
 tags: [reference, react-query, caching, frontend]
 description: Complete reference of all React Query keys used in the Vision frontend
 aliases: [react query keys, query keys, cache keys, queryKey, invalidation]
@@ -74,6 +74,7 @@ named beside their owning feature when they express a distinct backend or prefet
 | ------------------------------------------- | ----------------------------------------- | ---------------- | -------------------------------------------- |
 | `['investments']`                           | —                                         | `usePortfolio()` | All holdings, including archived investments |
 | `['portfolio-transactions', investmentIds]` | `investmentIds: string` (comma-separated) | `usePortfolio()` | History for active and archived investments  |
+| `['portfolio-summary', currency, 'all']` | `currency: string` | `usePortfolio()` | Server summaries including archived holdings (`active=false`); fetched only when an archived holding exists |
 
 `usePortfolio()` derives active current-view data and an inactive discovery list from the shared
 cache. **Invalidation:** create, edit, archive, restore, and delete mutations invalidate
@@ -153,7 +154,7 @@ cannot leave stale insights in the interface. A successful dismissal invalidates
 | --------------------------------------------- | ------------------- | ------------------------------- | ------------------------------------------------- |
 | `['plannedTransactions', showInactive]`       | `showInactive`      | `usePlannedPayments()`          | Planned-payment management list                   |
 | `['upcomingPlannedPayments', ...]`            | Forecast parameters | Dashboard cash-flow forecast    | Upcoming planned payments                         |
-| `['upcomingPlannedPayments', 'restOfMonth', todayYmd]` | `todayYmd: string` | `useRestOfMonthPlanned()` | Planned rows from today to month end (Home hero) |
+| `['upcomingPlannedPayments', 'totals', currency, todayYmd]` | `currency: string`, `todayYmd: string` | `usePlannedTotals()` | Server-computed planned totals (Home hero, planned page Est. monthly) |
 | `['account-planned-transactions', accountId]` | `accountId: number` | `useAccountPlannedTransactions` | Active, unexecuted plans for one account forecast |
 
 **Invalidation:** Planned-payment mutations invalidate the management, upcoming, and

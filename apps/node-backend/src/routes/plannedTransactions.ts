@@ -29,6 +29,7 @@ import { generateLoanRepaymentSchedule } from "../services/calculations/loanSche
 import { isValidPattern } from "../lib/calculations/recurrence.ts";
 import { executePlanned } from "../services/plannedExecutionService.ts";
 import { getMatchSuggestions } from "../services/plannedMatchService.ts";
+import { computePlannedTotals } from "../services/plannedTotalsService.ts";
 import {
   AppError,
   NotFoundError,
@@ -618,6 +619,20 @@ router.get("/due-soon", async (req, res) => {
   // Canonical collection shape `{items, total}` in the data body (never counts
   // in meta); `days` echoes the effective window alongside.
   res.ok({ items, total: items.length, days });
+});
+
+/**
+ * GET /api/planned-transactions/totals?currency=EUR
+ *
+ * Server-computed planned totals in one display currency: money still due
+ * from today to month end (every recurring occurrence counted) and the net
+ * monthly-equivalent of active recurring rows. Rows without a stored FX rate
+ * are left out and counted. Registered before /:id.
+ */
+router.get("/totals", async (req, res) => {
+  const currency =
+    assertCurrency(optionalQueryString(req.query, "currency")) ?? "EUR";
+  res.ok(await computePlannedTotals({ currency }));
 });
 
 /**

@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-18
-last_modified: 2026-10-18
+date: 2026-10-19
+updated: 2026-10-19
+last_modified: 2026-10-19
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 309
+api_operation_count: 310
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 309 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 310 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **309 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **310 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -391,6 +391,7 @@ opening anchors without changing request fields, response shape or operation cou
 | DELETE | `/api/planned-transactions/:id`               | Hard delete                                                                                 | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                      | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`)  | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET    | `/api/planned-transactions/totals`            | Server-computed rest-of-month and monthly-equivalent totals in `currency` (2026-10-19; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
 ## Investments
 
@@ -689,7 +690,10 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/portfolio-summary`               | Realtime portfolio totals and active holdings (eight-decimal units; canonical custody/adjustments). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
 The additive `active=false` scope on `portfolio-summary` includes all canonical holdings and
-an inactive-only `archivedPresentation` retaining the web's ordinary-history/current-FX display.
+an inactive-only `archivedPresentation` retaining the ordinary-history/current-FX display. Since
+2026-10-19 the web portfolio reads archived holdings from the canonical `summaries` of this scope
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]); the Belgian tax dashboard still uses
+`archivedPresentation`.
 The default active response is unchanged; scope and currency have separate cache entries and
 share mutation invalidation. This query scope adds no operation. See [[docs/api/portfolio-summary|the full contract]].
 

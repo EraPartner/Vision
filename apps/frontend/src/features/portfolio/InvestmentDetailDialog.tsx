@@ -36,7 +36,7 @@ import { useAllPortfolioTransactionsQuery } from "@/hooks/portfolio/useInvestmen
 import { PageError } from "@/components/shared/PageError";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
+import { holdingPnl } from "@/hooks/portfolio/holdingPnl";
 import { AddPortfolioTxnDialog } from "./AddPortfolioTxnDialog";
 import { EditInvestmentDialog } from "./EditInvestmentDialog";
 import { EditPortfolioTxnDialog } from "./EditPortfolioTxnDialog";
@@ -497,10 +497,7 @@ export function InvestmentDetailDialog({
     // FX-aware realized/unrealized P&L in the target currency, computed here so the
     // dialog renders identically wherever it is opened (overview, stocks, crypto,
     // …) instead of depending on the caller to pass it in.
-    const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
-    const fxAwarePnl = isForeignCurrency
-        ? computeFxAwarePnl(investment)
-        : undefined;
+    const fxAwarePnl = isForeignCurrency ? holdingPnl(investment) : undefined;
 
     // The same add-transaction control appears in three spots (overview footer,
     // empty-transactions CTA, transactions footer) — build it once.

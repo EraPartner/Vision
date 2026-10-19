@@ -2,8 +2,8 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
@@ -79,14 +79,14 @@ Dashboard widget (`CashFlowForecastChart`) displays the 8-method forecast (7 bas
 - **Diagnostics panel** — Right-side sheet showing:
   - Backtest accuracy table (MAE/RMSE/MAPE per method, sorted by MAE with rank badge)
   - Per-method MAE sparkline for quick visual comparison
-  - Suggested ensemble weights preview (inverse-MSE bar chart, read-only)
+  - Ensemble weights bar chart, read-only: the weights the ensemble applied in this forecast, read from `diagnostics.ensemble_weights` (server-computed since 2026-10-19; the browser no longer recomputes them)
 - **Named-hook data loading** — The component owns its display state and passes filters (`excludedCategoryIds`, `excludedRecipientIds`, `currency`) to `useCashflowForecastQueries`; the hook owns the React Query definitions
 - **Responsive design** — Adapts to mobile/tablet/desktop viewports
 
 **Related Components:**
 
 - `CashFlowForecastChart` — Main multi-method forecast visualization with controls
-- `CashFlowForecastDiagnostics` — Diagnostics sheet panel with accuracy metrics and ensemble preview
+- `CashFlowForecastDiagnostics` — Diagnostics sheet panel with accuracy metrics and the applied ensemble weights
 
 ## Phase 10 & F: Eight Forecasting Methods
 
@@ -744,7 +744,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 - New parameter `_forceCache` (default false; internal use by nightly job)
 - Before computing: checks DB cache if not _forceCache and using default MC params (1000 paths, [10,50,90] percentiles)
-  - Returns cached result if fresh (<6h) AND diagnostics condition met (cached.payload.diagnostics != null || !includeBacktest)
+  - Returns cached result if fresh (<6h) AND diagnostics condition met (`!includeBacktest || cached.payload.diagnostics.ensemble_weights != null`; since 2026-10-19 an entry cached before `ensemble_weights` existed is recomputed when a backtest is requested)
   - Response envelope includes `source: 'cache'` in meta
 - After computing: always writes to cache asynchronously (non-blocking) if default MC params
   - Response envelope includes `source: 'live'` in meta
@@ -782,7 +782,8 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 - `id = 'ensemble_imse'`, `label = 'Ensemble (inv-MSE)'`
 - `computeWeights(accuracyRows, methodIds)` — Derives per-method weights using inverse-MSE normalization; filters out methods with RMSE ≤ 0; returns normalized Map summing to 1; returns empty map when no accuracy data available
-- `forecast({ forecastDates, methodOutputs, weights })` — Computes weighted-average daily forecasts across point methods (excludes MC methods and errored methods); falls back to equal weights when weights map is empty
+- `forecast({ forecastDates, methodOutputs, weights })` — Computes weighted-average daily forecasts across point methods (excludes MC methods and errored methods) using `effectiveWeights`
+- `effectiveWeights(weights, eligibleIds)` (2026-10-19) — The weights actually applied: equal weights when no accuracy history exists, otherwise the accuracy weights renormalised over the methods that produced a series. The orchestrator returns them as `diagnostics.ensemble_weights`
 - Not included in `POINT_METHODS` or `MC_METHODS` — excluded from walk-forward backtest to avoid circular dependency on accuracy metrics it consumes
 
 **Orchestrator Integration:** Updated `apps/node-backend/src/services/calculations/forecast/index.ts`
@@ -818,7 +819,7 @@ When requesting `GET /api/aggregations/cashflow-forecast-methods`, the response 
 }
 ```
 
-Additionally, the diagnostics section includes ensemble weights:
+Additionally, when `include_backtest=true` the diagnostics section includes the weights the ensemble applied (`effectiveWeights`; returned since 2026-10-19 by both the month and rolling endpoints):
 
 ```json
 {
@@ -902,7 +903,7 @@ Additionally, the diagnostics section includes ensemble weights:
   - Accuracy table (MAE/RMSE/MAPE, sorted by MAE ascending) — displays latest DB history per method
   - Rank badge per method (1st, 2nd, 3rd place)
   - Per-method MAE sparkline (visual trend from DB history, 24-month limit)
-  - Ensemble weights bar chart (inverse-MSE normalized, read-only preview)
+  - Ensemble weights bar chart from `diagnostics.ensemble_weights` (read-only; labelled "Ensemble weights". Before 2026-10-19 the panel recomputed a "Suggested ensemble weights (preview)" copy of `computeWeights` in the browser)
   - Informational note distinguishing backtest (current session) vs. persisted history (nightly updates)
 
 ## Phase H: Rolling-Window View

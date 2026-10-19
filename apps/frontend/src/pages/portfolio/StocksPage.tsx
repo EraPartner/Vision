@@ -20,7 +20,7 @@ import { Banknote, Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
+import { holdingPnl } from "@/hooks/portfolio/holdingPnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
@@ -167,7 +167,6 @@ export default function StocksPage({
     const targetCurrency = appSettings.defaultCurrency || "EUR";
 
     const { convertToTarget } = useCurrencyConverter(targetCurrency);
-    const computeFxAwarePnl = useFxAwarePnl(targetCurrency);
 
     // Per-investment FX attribution comes from the backend summary (it has the
     // historical-rate machinery); only shown when a holding is in a foreign currency.
@@ -200,8 +199,7 @@ export default function StocksPage({
         > = {};
         for (const holding of holdings) {
             if (enableFxAwarePnl) {
-                const pnl = computeFxAwarePnl(holding);
-                if (pnl) map[holding.id] = pnl;
+                map[holding.id] = holdingPnl(holding);
                 continue;
             }
 
@@ -235,7 +233,6 @@ export default function StocksPage({
     }, [
         holdings,
         enableFxAwarePnl,
-        computeFxAwarePnl,
         convertToTarget,
         simplePnlPercentSource,
     ]);

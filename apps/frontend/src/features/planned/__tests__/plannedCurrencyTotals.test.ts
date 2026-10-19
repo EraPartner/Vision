@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  sumConvertedAmounts,
-  sumConvertedMonthlyAmounts,
-} from "@/features/planned/plannedCurrencyTotals";
+import { sumConvertedAmounts } from "@/features/planned/plannedCurrencyTotals";
 
 describe("sumConvertedAmounts", () => {
   it("excludes amounts with unavailable exchange rates instead of blending currencies", () => {
@@ -21,49 +18,5 @@ describe("sumConvertedAmounts", () => {
       total: -46,
       unavailableCount: 1,
     });
-  });
-
-  it("includes only active recurring rows and reports missing monthly conversions", () => {
-    const items = [
-      { amount: -10, currency: "EUR", is_active: true, is_recurring: true, frequency: "monthly" },
-      { amount: -20, currency: "USD", is_active: true, is_recurring: true, frequency: "weekly" },
-      { amount: -30, currency: "GBP", is_active: true, is_recurring: true, frequency: "monthly" },
-      { amount: -40, currency: "EUR", is_active: false, is_recurring: true, frequency: "monthly" },
-      { amount: -50, currency: "EUR", is_active: true, is_recurring: false, frequency: "monthly" },
-    ];
-    const convertAmount = (amount: number, currency?: string) => {
-      if (currency === "GBP") return undefined;
-      if (currency === "USD") return amount * 0.9;
-      return amount;
-    };
-
-    expect(sumConvertedMonthlyAmounts(items, convertAmount)).toEqual({
-      total: -87.94,
-      unavailableCount: 1,
-    });
-  });
-
-  it.each([
-    ["daily", undefined, 30],
-    ["weekly", undefined, 4.33],
-    ["biweekly", undefined, 2.17],
-    ["monthly", undefined, 1],
-    ["quarterly", undefined, 1 / 3],
-    ["yearly", undefined, 1 / 12],
-    ["custom", 15, 2],
-  ])("applies the %s monthly multiplier", (frequency, customIntervalDays, expected) => {
-    const result = sumConvertedMonthlyAmounts([
-      {
-        amount: 1,
-        currency: "EUR",
-        is_active: true,
-        is_recurring: true,
-        frequency,
-        custom_interval_days: customIntervalDays,
-      },
-    ], (amount) => amount);
-
-    expect(result.total).toBeCloseTo(expected, 8);
-    expect(result.unavailableCount).toBe(0);
   });
 });

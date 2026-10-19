@@ -3,7 +3,6 @@
  *
  * Implementation split across:
  *   hooks/portfolio/useInvestments.ts      ← queries + mutations
- *   hooks/portfolio/usePortfolioCalculations.ts ← pure math
  *   hooks/portfolio/usePortfolioSummaries.ts    ← composed summaries
  */
 
@@ -14,15 +13,12 @@ import {
     useInvestmentMutations,
 } from "./portfolio/useInvestments";
 import { usePortfolioSummaries } from "./portfolio/usePortfolioSummaries";
-import { usePortfolioSummaryQuery } from "./portfolio/usePortfolioSummary";
+import {
+    useAllHoldingsSummaryQuery,
+    usePortfolioSummaryQuery,
+} from "./portfolio/usePortfolioSummary";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
-export {
-    calculateCostBasis,
-    calculateAccruedInterest,
-    calculateProjectedAnnualInterest,
-} from "./portfolio/usePortfolioCalculations";
-export type { CostBasisResult } from "./portfolio/usePortfolioCalculations";
 export {
     useInvestmentsQuery,
     usePortfolioTransactionsQuery,
@@ -38,11 +34,14 @@ export function usePortfolio({
     completeAssetClass,
 }: { completeHistory?: boolean; completeAssetClass?: string } = {}) {
     const { appSettings } = useAppSettings();
-    const canonicalQuery = usePortfolioSummaryQuery(
-        appSettings.defaultCurrency || "EUR",
-    );
+    const currency = appSettings.defaultCurrency || "EUR";
+    const canonicalQuery = usePortfolioSummaryQuery(currency);
     const investmentsQuery = useInvestmentsQuery();
     const allInvestments = investmentsQuery.data?.items ?? EMPTY_INVESTMENTS;
+    const archivedQuery = useAllHoldingsSummaryQuery(
+        currency,
+        allInvestments.some((investment) => !investment.is_active),
+    );
     const investments = useMemo(
         () => allInvestments.filter((investment) => investment.is_active),
         [allInvestments],
@@ -96,9 +95,7 @@ export function usePortfolio({
             investments: allInvestments,
             transactions: allTransactions,
             canonicalSummaries: canonicalQuery.data?.summaries,
-            canonicalArchivedInKindIncome:
-                canonicalQuery.data?.archivedInKindIncome,
-            requireCanonical: true,
+            canonicalArchivedSummaries: archivedQuery.data?.summaries,
         });
 
     return {
@@ -117,16 +114,19 @@ export function usePortfolio({
         isLoading:
             investmentsQuery.isLoading ||
             canonicalQuery.isLoading ||
+            archivedQuery.isLoading ||
             recentQuery.isLoading ||
             historyQuery.isLoading,
         isError:
             investmentsQuery.isError ||
             canonicalQuery.isError ||
+            archivedQuery.isError ||
             recentQuery.isError ||
             historyQuery.isError,
         error:
             investmentsQuery.error ||
             canonicalQuery.error ||
+            archivedQuery.error ||
             recentQuery.error ||
             historyQuery.error,
         historyIsLoading: recentQuery.isLoading || historyQuery.isLoading,
@@ -135,6 +135,7 @@ export function usePortfolio({
             Promise.all([
                 investmentsQuery.refetch(),
                 canonicalQuery.refetch(),
+                ...(archivedQuery.isEnabled ? [archivedQuery.refetch()] : []),
                 ...(recentIds.length ? [recentQuery.refetch()] : []),
                 ...(completeIds.length ? [historyQuery.refetch()] : []),
             ]),

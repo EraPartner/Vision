@@ -105,6 +105,8 @@ export interface MethodResult {
 
 export interface DiagnosticsPayload {
   history_months: number;
+  /** Weights the ensemble applied to each point method in this forecast. */
+  ensemble_weights?: Record<string, number>;
   backtest: Array<{
     method_id: string;
     label: string;
@@ -266,6 +268,8 @@ async function runForecastEngine({
   planned: DailyNetPoint[];
   scheduled: DailyNetPoint[];
   trainHistory: DailyNetPoint[];
+  /** Weights the ensemble applied to each point method. */
+  ensembleWeights: Record<string, number>;
 }> {
   const actualDaily = actualCumulativeDaily(currentActual, all, todayIndex);
   const plannedMap = plannedDailyMap(plannedCurrent);
@@ -305,6 +309,7 @@ async function runForecastEngine({
   }
 
   // Ensemble: inverse-MSE weighted combination of point methods.
+  let ensembleWeights: Record<string, number> = {};
   let accuracyRows: AccuracyRecord[] = [];
   try {
     accuracyRows = await getLatestAccuracyByMethod({ userId });
@@ -318,11 +323,18 @@ async function runForecastEngine({
       accuracyRows,
       POINT_METHODS.map((m) => m.id),
     );
+    const eligibleOutputs = methodOutputs.filter((m) => !m.error);
     const ensembleSeries = ensemble.forecast({
       forecastDates: future,
-      methodOutputs: methodOutputs.filter((m) => !m.error),
+      methodOutputs: eligibleOutputs,
       weights,
     });
+    ensembleWeights = Object.fromEntries(
+      ensemble.effectiveWeights(
+        weights,
+        eligibleOutputs.map((m) => m.id),
+      ),
+    );
     methodOutputs.push({
       id: ensemble.id,
       label: ensemble.label,
@@ -438,7 +450,14 @@ async function runForecastEngine({
     net,
   })).sort((a, b) => a.date.localeCompare(b.date));
 
-  return { actualDaily, methods, planned, scheduled, trainHistory };
+  return {
+    actualDaily,
+    methods,
+    planned,
+    scheduled,
+    trainHistory,
+    ensembleWeights,
+  };
 }
 
 function plannedDailyMap(plannedCurrent: DailyNetPoint[]): Map<string, number> {
@@ -563,7 +582,8 @@ export async function computeCashflowForecast({
       } | null;
       // Don't serve a diagnostics-free cache entry when backtest is needed.
       const diagnosticsOk =
-        !includeBacktest || cached?.payload?.diagnostics != null;
+        !includeBacktest ||
+        cached?.payload?.diagnostics?.ensemble_weights != null;
       if (cached && mcCacheRepo.isFresh(cached.computed_at) && diagnosticsOk) {
         if (includeBreakdown) {
           // Reconstruct effective values from the cached payload's actual array.
@@ -625,6 +645,7 @@ export async function computeCashflowForecast({
     planned: plannedArr,
     scheduled,
     trainHistory,
+    ensembleWeights,
   } = await runForecastEngine({
     history,
     currentActual,
@@ -662,6 +683,7 @@ export async function computeCashflowForecast({
     });
     diagnostics = {
       history_months: historyMonths,
+      ensemble_weights: ensembleWeights,
       backtest: backtest.map((b) => ({
         method_id: b.id,
         label: b.label,
@@ -823,8 +845,14 @@ export async function computeCashflowForecastRolling({
     `${userId}|${todayIso}|${daysBack}|${daysForward}|${hash}`,
   );
 
-  const { actualDaily, methods, planned, scheduled, trainHistory } =
-    await runForecastEngine({
+  const {
+    actualDaily,
+    methods,
+    planned,
+    scheduled,
+    trainHistory,
+    ensembleWeights,
+  } = await runForecastEngine({
       history,
       currentActual,
       scheduledActual,
@@ -862,6 +890,7 @@ export async function computeCashflowForecastRolling({
     });
     diagnostics = {
       history_months: historyMonths,
+      ensemble_weights: ensembleWeights,
       backtest: backtest.map((b) => ({
         method_id: b.id,
         label: b.label,

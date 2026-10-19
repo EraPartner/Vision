@@ -384,6 +384,8 @@ export interface ForecastBacktestEntry {
 
 export interface ForecastDiagnostics {
     readonly history_months: number;
+    /** Weights the ensemble applied to each point method (server-computed). */
+    readonly ensemble_weights?: Readonly<Record<string, number>>;
     readonly backtest: ForecastBacktestEntry[];
 }
 

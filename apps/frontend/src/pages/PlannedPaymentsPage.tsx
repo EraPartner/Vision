@@ -27,7 +27,7 @@ import { NextSevenDaysStrip } from "@/features/planned/NextSevenDaysStrip";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import { RecurringDetectionPanel } from "@/features/planned/RecurringDetectionPanel";
-import { sumConvertedMonthlyAmounts } from "@/features/planned/plannedCurrencyTotals";
+import { usePlannedTotals } from "@/features/planned/usePlannedTotals";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import {
@@ -124,11 +124,11 @@ export default function PlannedPaymentsPage() {
         [payments, showAll],
     );
 
-    const monthlyTotal = useMemo(() => {
-        // Net monthly impact of active recurring rows: incoming and outgoing both
-        // keep their sign, while rows without an available FX rate are excluded.
-        return sumConvertedMonthlyAmounts(payments, convertToTargetIfAvailable);
-    }, [payments, convertToTargetIfAvailable]);
+    // Net monthly impact of active recurring rows, computed on the server.
+    const { data: plannedTotals } = usePlannedTotals(
+        appSettings.defaultCurrency || "EUR",
+    );
+    const monthlyTotal = plannedTotals?.monthly_equivalent;
 
     const handleRequestExecution = useCallback((payment: PlannedPayment) => {
         setPaymentToLink(payment);
@@ -362,9 +362,9 @@ export default function PlannedPaymentsPage() {
 
                 <NextSevenDaysStrip
                     payments={payments}
-                    estimatedMonthly={monthlyTotal.total}
+                    estimatedMonthly={monthlyTotal?.total}
                     estimatedMonthlyUnavailableCount={
-                        monthlyTotal.unavailableCount
+                        monthlyTotal?.unconverted_count ?? 0
                     }
                     currencyRatesLoading={currencyRatesLoading}
                     convertAmount={convertToTargetIfAvailable}

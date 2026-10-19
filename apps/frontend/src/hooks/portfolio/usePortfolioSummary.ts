@@ -23,3 +23,18 @@ export function usePortfolioSummaryQuery(currency: string, enabled = true) {
         gcTime: 5 * 60_000,
     });
 }
+
+/**
+ * Server summaries for every holding, archived ones included, so archived
+ * gains come from the same engine (dated FX, configured cost-basis method) as
+ * active ones. Only fetched when there is an archived holding to show.
+ */
+export function useAllHoldingsSummaryQuery(currency: string, enabled = true) {
+    return useQuery<PortfolioSummaryResponse>({
+        queryKey: portfolioKeys.summaryAllHoldings(currency),
+        queryFn: () => apiClient.getPortfolioSummary({ currency, active: false }),
+        enabled,
+        staleTime: QUERY_STALE_TIME_MS.STANDARD,
+        gcTime: 5 * 60_000,
+    });
+}

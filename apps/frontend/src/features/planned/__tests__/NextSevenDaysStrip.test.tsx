@@ -62,7 +62,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     renderWithApp(
       <NextSevenDaysStrip
         payments={payments}
-        estimatedMonthly={-10}
+        estimatedMonthly={undefined}
         estimatedMonthlyUnavailableCount={1}
         currencyRatesLoading
         convertAmount={(amount, currency) => currency === "GBP" ? undefined : amount}

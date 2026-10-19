@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Domain calculations run on the server (accepted)
+
+[[docs/adr/216-server-owned-domain-calculations|ADR-216]] keeps financial figures on the
+server; the browser only previews unsaved input. It adds `GET /api/planned-transactions/totals`,
+returns the applied forecast `ensemble_weights`, and reads archived holdings from
+`portfolio-summary?active=false` instead of rebuilding them in the browser.
+
 ### 2026-10-19: Test behaviour at stable boundaries (accepted)
 
 [[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that

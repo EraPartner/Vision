@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-13
-last_modified: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+last_modified: 2026-10-19
+updated: 2026-10-19
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -198,6 +198,12 @@ The Portfolio page provides an **Archived investments** widget. Archived rows ar
 retain a read-only detail and transaction-history view, and can be restored. Restoring sets
 `is_active=true` and returns the holding to current views and totals. Archive, restore, and other
 investment mutations invalidate both the investment and portfolio-transaction query families.
+
+Since 2026-10-19 archived figures come from the server: `usePortfolio` requests
+`GET /api/info/portfolio-summary?active=false` (only when an archived holding exists) and
+`usePortfolioSummaries` takes each archived holding's canonical summary, with dated FX and the
+configured cost-basis method. The browser no longer rebuilds archived summaries at today's FX
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
 
 Code links: [[apps/frontend/src/features/portfolio/ArchivedInvestmentsCard.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts]]
 
@@ -774,6 +780,8 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
 > `@vision/shared-utils/portfolio` ([[docs/adr/073-shared-portfolio-math-package|ADR-073]]) and
 > `portfolioSummaryService` / `usePortfolioSummaries` both dispatch on the stored
 > `cost_basis_method` (invalid/missing values fall back to `weighted_avg`).
+> Since 2026-10-19 only `portfolioSummaryService` applies it; `usePortfolioSummaries` reads the
+> server summaries for active and archived holdings ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
 
 **Available methods:**
 
@@ -785,7 +793,7 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
 
 **Implementation:**
 
-- Shared calculation functions in `[[packages/shared-utils/src/portfolio.ts|@vision/shared-utils/portfolio]]` (used directly by backend portfolio services and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
+- Shared calculation functions in `[[packages/shared-utils/src/portfolio.ts|@vision/shared-utils/portfolio]]` (used directly by backend portfolio services; the frontend wrapper `usePortfolioCalculations.ts` was deleted on 2026-10-19):
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
@@ -981,9 +989,11 @@ Active holdings in [[apps/frontend/src/hooks/usePortfolio.ts]] and
 It includes dated custody transfers and unit adjustments that ordinary transaction lists omit.
 The hook retains investment metadata and ordinary transactions for editing, while the server owns
 active units, gains, assignment and oversold state. Pending or failed canonical queries surface
-loading or errors instead of displaying an incomplete active replay. Archived summaries retain the
-ordinary transaction calculation. The FX profit/loss helper uses canonical target-currency gains
-directly; it does not replay those transactions or convert them again. Crypto units display eight
+loading or errors instead of displaying an incomplete active replay. Since 2026-10-19 archived
+holdings also use canonical summaries, from the `active=false` scope. The FX profit/loss helper
+`holdingPnl` ([[apps/frontend/src/hooks/portfolio/holdingPnl.ts]]) reads the summary's
+target-currency `realizedGain` and `unrealizedGain` directly and only derives the unrealized
+percentage against `avgCostBasis × totalUnits`; it does not replay transactions or convert them again. Crypto units display eight
 decimal places, matching the summary quantity precision.
 
 The portfolio table, overview, and `InvestmentDetailDialog` render the shared oversold warning.
@@ -1119,6 +1129,12 @@ Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.t
 
 ### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
 
+> [!note] Replaced on 2026-10-19
+> `useFxAwarePnl` and its browser EUR-pool replay were deleted. `InvestmentDetailDialog` and
+> `StocksPage` now call `holdingPnl(holding)` from [[apps/frontend/src/hooks/portfolio/holdingPnl.ts]],
+> which returns the server summary's `realizedGain` / `unrealizedGain` plus an unrealized
+> percentage. The section below records the 2026-06-28 design.
+
 > [!info] Breaking change for component API — props removed
 > `InvestmentDetailDialog` no longer accepts `fxAwarePnl` or `fxAwareCurrency` props. Both computed internally via the new `useFxAwarePnl` hook. Callers that previously passed these props (i.e. `StocksPage`) must be updated.
 
@@ -1126,7 +1142,7 @@ Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.t
 
 **Solution — `useFxAwarePnl` hook:**
 
-A new shared hook at [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]] encapsulates the EUR-pool realized/unrealized P&L computation:
+A new shared hook at `apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts` (deleted 2026-10-19) encapsulated the EUR-pool realized/unrealized P&L computation:
 
 ```typescript
 export function useFxAwarePnl(
@@ -1157,7 +1173,7 @@ The hook:
 | `invDetail.fxAwareRealized`   | Label for the FX-aware realized P&L row (shows `{currency}`)   |
 | `invDetail.fxAwareUnrealized` | Label for the FX-aware unrealized P&L row (shows `{currency}`) |
 
-Code links: [[apps/frontend/src/hooks/portfolio/useFxAwarePnl.ts]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
+Code links: [[apps/frontend/src/hooks/portfolio/holdingPnl.ts]] (replaces the deleted `useFxAwarePnl.ts`), [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]]
 
 ## Cash-Aware Rebalancing (ADR-098, updated 2026-06-19)
 
