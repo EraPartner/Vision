@@ -7,7 +7,7 @@ import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { appRoot } from "../paths";
 
 export const PYINSTALLER_VERSION = "6.22.2";
-export const ALEMBIC_VERSION = "1.19.1";
+export const ALEMBIC_VERSION = "1.20.0";
 export const ALEMBIC_RUNTIME_IMPORTS = Object.freeze([
   "logging.config",
   "dotenv",
