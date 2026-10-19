@@ -10,8 +10,10 @@ import {
   computeReyndersEstimate,
   computeCgtEstimate,
   computeDividendWht,
+  leaveOutUnconverted,
   type PortfolioTaxInvestment,
-  type ConvertFn,
+  type MaybeConvertFn,
+  type UnconvertedFigures,
 } from "./portfolioTax.ts";
 
 export interface PortfolioDashboardInvestment extends PortfolioTaxInvestment {
@@ -27,7 +29,12 @@ function record(value: unknown): Record<string, unknown> {
 
 /** Mirrors usePortfolioTaxData, including all-time gain/current-value estimates for a
  * historical year and original number accumulation order. Recorded costs/dividends/buy
- * legs and manual adjustment keys are filtered by the viewed year. */
+ * legs and manual adjustment keys are filtered by the viewed year.
+ *
+ * `convert` returns undefined for a currency without an exchange rate. Such an
+ * amount is left out (never converted 1:1 or at a guessed rate); the result
+ * lists its currency in `unconvertedCurrencies` and every figure it feeds in
+ * `incompleteFigures`. */
 export function buildPortfolioTaxDashboard(input: {
   summaries: PortfolioDashboardInvestment[];
   year: number;
@@ -37,9 +44,21 @@ export function buildPortfolioTaxDashboard(input: {
   hasProfile: boolean;
   adjustments: unknown;
   classifications: unknown;
-  convert: ConvertFn;
+  convert: MaybeConvertFn;
 }) {
-  const { year, currency, totalPIT, filingStatus, hasProfile, convert } = input;
+  const { year, currency, totalPIT, filingStatus, hasProfile } = input;
+  const missing: UnconvertedFigures = {
+    currencies: new Set(),
+    figures: new Set(),
+  };
+  const convertFor = (...figures: string[]) =>
+    leaveOutUnconverted(input.convert, missing, ...figures);
+  // Recorded costs feed the totals, the per-asset and per-investment tables.
+  const convertCosts = convertFor(
+    "totals",
+    "taxByAssetClass",
+    "investmentBreakdown",
+  );
   const adjustments = record(input.adjustments);
   const classifications = record(input.classifications);
   // The web overlays the complete persisted classification entry. Reads never sanitize
@@ -52,7 +71,7 @@ export function buildPortfolioTaxDashboard(input: {
     const manual = record(adjustments[`${year}:${inv.id}`]);
     return {
       ...inv,
-      ...enrichInvestmentCosts(inv, year, convert, {
+      ...enrichInvestmentCosts(inv, year, convertCosts, {
         taxes: Number(manual.taxes) || 0,
         fees: Number(manual.fees) || 0,
       }),
@@ -64,18 +83,19 @@ export function buildPortfolioTaxDashboard(input: {
   const totalRecordedFees = enriched.reduce((s, i) => s + i.recordedFees, 0);
   const totalManualTaxes = enriched.reduce((s, i) => s + i.manualTaxes, 0);
   const totalManualFees = enriched.reduce((s, i) => s + i.manualFees, 0);
+  const convertTotals = convertFor("totals");
   const totalRealizedGain = summaries.reduce(
-    (s, i) => s + convert(i.realizedGain || 0, i.currency),
+    (s, i) => s + convertTotals(i.realizedGain || 0, i.currency),
     0,
   );
   const totalUnrealizedGain = summaries.reduce(
-    (s, i) => s + convert(i.unrealizedGain || 0, i.currency),
+    (s, i) => s + convertTotals(i.unrealizedGain || 0, i.currency),
     0,
   );
   const breakdowns = buildPortfolioCostBreakdowns({
     summaries,
     year,
-    convert,
+    convert: convertFor("taxBreakdown", "feeBreakdown"),
     manualTaxes: totalManualTaxes,
     manualFees: totalManualFees,
     labels: {
@@ -100,21 +120,54 @@ export function buildPortfolioTaxDashboard(input: {
     string,
     { period: string; taxes: number; fees: number }
   > = {};
+  const convertTrend = convertFor("yearlyCostTrend");
   for (const inv of summaries)
     for (const txn of inv.transactions) {
       if (yearOf(txn.date) !== year || !txn.date) continue;
       const period = txn.date.slice(0, 7);
       const month = (months[period] ??= { period, taxes: 0, fees: 0 });
       if (txn.type === "tax")
-        month.taxes += convert(Number(txn.amount) || 0, txn.currency);
-      month.taxes += convert(Number(txn.taxes) || 0, txn.currency);
+        month.taxes += convertTrend(Number(txn.amount) || 0, txn.currency);
+      month.taxes += convertTrend(Number(txn.taxes) || 0, txn.currency);
       if (txn.type === "fee")
-        month.fees += convert(Number(txn.amount) || 0, txn.currency);
-      month.fees += convert(Number(txn.fees) || 0, txn.currency);
+        month.fees += convertTrend(Number(txn.amount) || 0, txn.currency);
+      month.fees += convertTrend(Number(txn.fees) || 0, txn.currency);
     }
   const table = getTaxTable(year);
   const cgtActive = table.capitalGainsTaxRate > 0;
-  const split = computeRealizedGainSplit(summaries, convert, cgtActive);
+  const split = computeRealizedGainSplit(
+    summaries,
+    convertFor("estimates.reyndersEstimate", "estimates.cgtEstimate"),
+    cgtActive,
+  );
+  const dividend = computeDividendWht(
+    summaries,
+    year,
+    table,
+    convertFor("dividend"),
+    filingStatus,
+  );
+  const estimates = {
+    tobRecorded: computeTobRecorded(
+      summaries,
+      year,
+      convertFor("estimates.tobRecorded"),
+    ),
+    tobAutoEstimate: computeTobAutoEstimate(
+      summaries,
+      year,
+      table,
+      convertFor("estimates.tobAutoEstimate"),
+    ),
+    tacrEstimate: computeTacrEstimate(
+      summaries,
+      table,
+      convertFor("estimates.tacrEstimate"),
+    ),
+    reyndersEstimate: computeReyndersEstimate(split, table),
+    cgtEstimate: computeCgtEstimate(split, table, filingStatus, cgtActive),
+  };
+  const convertRealizedGain = convertFor("investmentBreakdown");
   const rates = {
     securitiesAccountTaxRate: table.securitiesAccountTaxRate,
     capitalGainsTaxRate: table.capitalGainsTaxRate,
@@ -179,7 +232,7 @@ export function buildPortfolioTaxDashboard(input: {
         taxes: inv.taxes,
         fees: inv.fees,
         total: inv.total,
-        realizedGain: convert(inv.realizedGain || 0, inv.currency),
+        realizedGain: convertRealizedGain(inv.realizedGain || 0, inv.currency),
         currency,
       }))
       .filter((row) => row.total > 0)
@@ -188,16 +241,10 @@ export function buildPortfolioTaxDashboard(input: {
       a.period.localeCompare(b.period),
     ),
     dividend: {
-      ...computeDividendWht(summaries, year, table, convert, filingStatus),
+      ...dividend,
       dividendExemption: table.dividendExemption,
     },
-    estimates: {
-      tobRecorded: computeTobRecorded(summaries, year, convert),
-      tobAutoEstimate: computeTobAutoEstimate(summaries, year, table, convert),
-      tacrEstimate: computeTacrEstimate(summaries, table, convert),
-      reyndersEstimate: computeReyndersEstimate(split, table),
-      cgtEstimate: computeCgtEstimate(split, table, filingStatus, cgtActive),
-    },
+    estimates,
     taxTable: {
       ...rates,
       securitiesAccountTaxThreshold: table.securitiesAccountTaxThreshold,
@@ -215,5 +262,7 @@ export function buildPortfolioTaxDashboard(input: {
       assetClass: inv.assetClass,
       currency: inv.currency ?? "EUR",
     })),
+    unconvertedCurrencies: [...missing.currencies].sort(),
+    incompleteFigures: [...missing.figures].sort(),
   };
 }

@@ -21,11 +21,7 @@ import type {
   ArchivedIncomeDbRow,
   SummaryInvestmentDbRow,
 } from "../../database/rows/portfolio.ts";
-import {
-  convertToCurrency,
-  listLatestStoredRates,
-  FALLBACK_RATES,
-} from "../currency/currencyConversionService.ts";
+import { convertToCurrency } from "../currency/currencyConversionService.ts";
 import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
@@ -151,6 +147,7 @@ export async function getPortfolioSummary(
   totals: PortfolioTotals;
   summaries: InvestmentSummary[];
   byAccount: AccountBreakdownRow[];
+  accountTotals: AccountTotalsRow[];
   byAssetClass: ReturnType<typeof buildAssetClassTotals>;
   byAssetGroup: ReturnType<typeof buildAssetGroupTotals>;
   archivedInKindIncome: { id: number; totalInKindIncome: number }[];
@@ -225,15 +222,14 @@ export async function getPortfolioSummary(
       ...includedTxnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
     ]),
   ];
-  const multiplierByCurrency = new Map<string, number>();
-  await Promise.all(
-    distinctCurrencies.map(async (cur) => {
-      multiplierByCurrency.set(
-        cur,
-        cur === target ? 1 : await convertToCurrency(1, cur, target),
-      );
-    }),
-  );
+  // Current multipliers come from the latest STORED rates (ADR-216). A
+  // currency without one keeps the unconverted amount and is flagged through
+  // usedFallbackRate — never converted at a built-in constant.
+  const latestRates = await loadLatestRatesToEur();
+  const {
+    multipliers: multiplierByCurrency,
+    unavailable: currenciesWithoutRate,
+  } = latestMultipliers(distinctCurrencies, target, latestRates);
 
   // Historical rates for every involved currency (plus the target), so each
   // transaction converts at the rate of ITS date — invested capital must not
@@ -255,14 +251,6 @@ export async function getPortfolioSummary(
     ),
   );
 
-  // Latest rates only convert foreign-currency rent (monthlyRent).
-  const latestRates: LatestRatesToEur = includedTxnRows.some(
-    (txn) =>
-      txn.type === "rent_income" &&
-      (!txn.currency || txn.currency.toUpperCase() !== target),
-  )
-    ? await loadLatestRatesToEur()
-    : new Map();
   const perInvestment = investmentRows.map((inv) =>
     buildInvestmentSummary(
       inv,
@@ -273,15 +261,16 @@ export async function getPortfolioSummary(
         costBasisMethod,
         todayYmd,
         latestRates,
+        currenciesWithoutRate,
       },
     ),
   );
   const summaries = perInvestment.map((r) => r.summary);
 
   const totals = aggregateTotals(summaries);
-  const byAccount = aggregateByAccount(
-    perInvestment.flatMap((r) => r.accountContributions),
-  );
+  const allContributions = perInvestment.flatMap((r) => r.accountContributions);
+  const byAccount = aggregateByAccount(allContributions);
+  const accountTotals = aggregateAccountTotals(allContributions);
 
   // Archived descriptive income must use its transaction currency and date.
   // The active holding totals keep their existing scope and replay behavior.
@@ -304,12 +293,11 @@ export async function getPortfolioSummary(
     const archiveCurrencies = [
       ...new Set(archivedRows.map((row) => row.currency || "EUR")),
     ];
-    const archiveMultipliers = new Map<string, number>();
-    for (const currency of archiveCurrencies)
-      archiveMultipliers.set(
-        currency,
-        currency === target ? 1 : await convertToCurrency(1, currency, target),
-      );
+    const { multipliers: archiveMultipliers } = latestMultipliers(
+      archiveCurrencies,
+      target,
+      latestRates,
+    );
     annotateTransactionFxMultipliers(
       archivedRows,
       target,
@@ -350,25 +338,6 @@ export async function getPortfolioSummary(
     throughDate ?? todayYmd,
     totals.totalGainLoss,
   );
-  let archivedMultipliers = multiplierByCurrency;
-  if (includeArchivedPresentation) {
-    const latest = await listLatestStoredRates();
-    const rates: Record<string, number> = { ...FALLBACK_RATES, EUR: 1 };
-    for (const row of latest.rows)
-      if (Number(row.rate_to_eur) > 0)
-        rates[row.currency_code.toUpperCase()] = Number(row.rate_to_eur);
-    archivedMultipliers = new Map(
-      investmentRows.map((inv) => {
-        const from = (inv.currency || "EUR").toUpperCase();
-        return [
-          from,
-          from === target || !rates[from] || !rates[target]
-            ? 1
-            : divide(rates[from], rates[target]).toNumber(),
-        ];
-      }),
-    );
-  }
 
   return {
     currency: target,
@@ -377,6 +346,7 @@ export async function getPortfolioSummary(
     totals,
     summaries,
     byAccount,
+    accountTotals,
     byAssetClass: buildAssetClassTotals(summaries),
     byAssetGroup: buildAssetGroupTotals(summaries),
     archivedInKindIncome,
@@ -387,7 +357,8 @@ export async function getPortfolioSummary(
             investmentRows,
             archivedOrdinaryRows,
             summaries,
-            archivedMultipliers,
+            multiplierByCurrency,
+            currenciesWithoutRate,
             costBasisMethod,
             todayYmd,
           ),
@@ -515,11 +486,11 @@ async function getBrokerageCashFees(
   );
   const currencies = [...new Set(rows.map((row) => row.currency))];
   const historicalIndex = await loadHistoricalRateIndex(currencies, target);
-  const fallbackMultipliers = new Map<string, number>();
+  const fallbackMultipliers = new Map<string, number | undefined>();
   let usedFallbackRate = false;
   const accounts = new Map<number, Decimal>();
   for (const row of rows) {
-    let multiplier = 1;
+    let multiplier: number | undefined = 1;
     if (row.currency !== target) {
       const from = findRateOnOrBeforeInIndex(
         historicalIndex,
@@ -537,9 +508,11 @@ async function getBrokerageCashFees(
             await convertToCurrency(1, row.currency, target),
           );
         }
-        multiplier = fallbackMultipliers.get(row.currency)!;
+        multiplier = fallbackMultipliers.get(row.currency);
       }
     }
+    // No stored rate at all: the fee is left out (flagged above), not 1:1.
+    if (multiplier === undefined) continue;
     const account = Number(row.account_id);
     accounts.set(
       account,
@@ -630,6 +603,53 @@ function aggregateByAccount(
       account_id: a.account_id,
       assignment: a.assignment,
       contribution_kind: a.contribution_kind,
+      oversold: a.oversold,
+      currentValue: round2(a.currentValue),
+      totalInvested: round2(a.totalInvested),
+      realizedGain: round2(a.realizedGain),
+      unrealizedGain: round2(a.unrealizedGain),
+      gainLoss: round2(a.gainLoss),
+    }))
+    .sort((x, y) => y.currentValue - x.currentValue);
+}
+
+/** One emitted accountTotals row: every contribution kind of one account. */
+export type AccountTotalsRow = Omit<AccountBreakdownRow, "contribution_kind">;
+
+/**
+ * Broker-filter totals (ADR-216): the {@link AccountContribution}s of one
+ * account summed across contribution kinds with Decimal and rounded once, so
+ * the Portfolio page reads the figures of a selected broker instead of adding
+ * byAccount rows in the browser. Sorted by current value, descending.
+ */
+function aggregateAccountTotals(
+  contributions: AccountContribution[],
+): AccountTotalsRow[] {
+  const acc = new Map<string, Omit<AccountContribution, "contribution_kind">>();
+  for (const c of contributions) {
+    const key = String(c.account_id ?? "null");
+    const cur = acc.get(key) ?? {
+      account_id: c.account_id,
+      assignment: c.account_id == null ? "unassigned" : "account",
+      oversold: false,
+      currentValue: toDecimal(0),
+      totalInvested: toDecimal(0),
+      realizedGain: toDecimal(0),
+      unrealizedGain: toDecimal(0),
+      gainLoss: toDecimal(0),
+    };
+    cur.currentValue = cur.currentValue.plus(c.currentValue);
+    cur.totalInvested = cur.totalInvested.plus(c.totalInvested);
+    cur.realizedGain = cur.realizedGain.plus(c.realizedGain);
+    cur.unrealizedGain = cur.unrealizedGain.plus(c.unrealizedGain);
+    cur.gainLoss = cur.gainLoss.plus(c.gainLoss);
+    cur.oversold ||= c.oversold;
+    acc.set(key, cur);
+  }
+  return [...acc.values()]
+    .map((a) => ({
+      account_id: a.account_id,
+      assignment: a.assignment,
       oversold: a.oversold,
       currentValue: round2(a.currentValue),
       totalInvested: round2(a.totalInvested),
@@ -731,6 +751,29 @@ function annotateTransactionFxMultipliers(
 }
 
 /**
+ * Currency → target multipliers at the latest stored rates. A currency without
+ * a stored rate (or a target without one) keeps multiplier 1 — the amount
+ * stays unconverted — and is listed in `unavailable` so callers flag it.
+ */
+function latestMultipliers(
+  currencies: readonly string[],
+  target: string,
+  rates: LatestRatesToEur,
+): { multipliers: Map<string, number>; unavailable: Set<string> } {
+  const multipliers = new Map<string, number>();
+  const unavailable = new Set<string>();
+  for (const currency of currencies) {
+    const multiplier = convertAtLatestRates(1, currency, target, rates);
+    if (multiplier === undefined) unavailable.add(currency.toUpperCase());
+    multipliers.set(
+      currency,
+      multiplier === undefined ? 1 : toNumber(multiplier),
+    );
+  }
+  return { multipliers, unavailable };
+}
+
+/**
  * Compute a rich summary for a single investment, with all monetary fields
  * pre-converted to targetCurrency.
  *
@@ -761,11 +804,13 @@ function buildInvestmentSummary(
   multiplierByCurrency: Map<string, number>,
   {
     latestRates,
+    currenciesWithoutRate,
     ...opts
   }: {
     costBasisMethod: CostBasisMethod;
     todayYmd: string;
     latestRates: LatestRatesToEur;
+    currenciesWithoutRate: ReadonlySet<string>;
   },
 ) {
   const invCurrency = (inv.currency || "EUR").toUpperCase();
@@ -799,7 +844,9 @@ function buildInvestmentSummary(
   const convertedCurrentPrice = conv(Number(inv.current_price) || 0);
   const { totalUnits } = core;
   const gainLossPercent = cv.gainLossPercent;
-  const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
+  const usedFallbackRate =
+    currenciesWithoutRate.has(invCurrency) ||
+    txns.some((t) => t._fxFellBack === true);
   // Rows arrive ordered by (date, id): the last rent row is the latest one.
   const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
   const monthlyRent = latestRent
@@ -939,6 +986,8 @@ function buildInvestmentSummary(
     // Exact per-investment broker partitions for client-side filtering. The
     // portfolio-wide `byAccount` array remains the round-once aggregate truth.
     byAccount: aggregateByAccount(accountContributions),
+    /** This investment's figures per broker account, kinds merged (broker filter). */
+    accountTotals: aggregateAccountTotals(accountContributions),
   };
 
   return {

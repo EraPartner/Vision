@@ -44,6 +44,44 @@ export type PortfolioTaxInvestment = {
 /** Convert an amount in `currency` to the active target currency. */
 export type ConvertFn = (amount: number, currency?: string) => number;
 
+/**
+ * A converter that can report a missing exchange rate by returning undefined.
+ * {@link leaveOutUnconverted} adapts it to a {@link ConvertFn} for the
+ * estimators.
+ */
+export type MaybeConvertFn = (
+  amount: number,
+  currency?: string,
+) => number | undefined;
+
+/** Currencies and figures affected by amounts a converter could not convert. */
+export interface UnconvertedFigures {
+  currencies: Set<string>;
+  figures: Set<string>;
+}
+
+/**
+ * A {@link ConvertFn} over `convert` that leaves an amount without a rate out
+ * (contributes 0) and records its currency and the figures it feeds in
+ * `missing`, so a caller can flag those figures as incomplete instead of
+ * guessing a rate. A zero amount never marks a figure.
+ */
+export function leaveOutUnconverted(
+  convert: MaybeConvertFn,
+  missing: UnconvertedFigures,
+  ...figures: string[]
+): ConvertFn {
+  return (amount, currency) => {
+    const value = convert(amount, currency);
+    if (value !== undefined) return value;
+    if (amount !== 0) {
+      missing.currencies.add((currency ?? "EUR").toUpperCase());
+      for (const figure of figures) missing.figures.add(figure);
+    }
+    return 0;
+  };
+}
+
 /** Manual per-investment, per-year tax/fee adjustment. */
 export type ManualAdjustment = { taxes: number; fees: number };
 

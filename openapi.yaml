@@ -1902,8 +1902,24 @@ components:
           taxTable,
           summaries,
           records,
+          unconvertedCurrencies,
+          incompleteFigures,
         ]
       properties:
+        unconvertedCurrencies:
+          type: array
+          items: { type: string }
+          description: >-
+            Additive (ADR-216). Currencies of amounts left out because no
+            stored rate converts them; empty when everything converted.
+        incompleteFigures:
+          type: array
+          items: { type: string }
+          description: >-
+            Additive (ADR-216). Figures that miss such an amount: totals,
+            taxBreakdown, feeBreakdown, taxByAssetClass, investmentBreakdown,
+            yearlyCostTrend, dividend, or estimates.<name>. A tax estimate in
+            this list is a lower bound, not a guess.
         year: { type: integer }
         currency: { type: string }
         isEmpty: { type: boolean }
@@ -2030,8 +2046,24 @@ components:
           suggestions,
           householdBreakdownRows,
           rules,
+          unconvertedCurrencies,
+          incompleteFigures,
         ]
       properties:
+        unconvertedCurrencies:
+          type: array
+          items: { type: string }
+          description: >-
+            Additive (ADR-216). Currencies of amounts left out because no
+            stored rate converts them; empty when everything converted.
+        incompleteFigures:
+          type: array
+          items: { type: string }
+          description: >-
+            Additive (ADR-216). Response fields that miss such an amount, from
+            yearlyIncome, monthlyIncomeTax, recordedIncomeByPartner,
+            portfolioTaxesForYear, totalTaxIncludingPortfolio and
+            totalTaxIncludingPropertyEstimate.
         year: { type: integer }
         currency: { type: string }
         isHistorical: { type: boolean }
@@ -2145,17 +2177,19 @@ components:
     ExchangeRates:
       type: object
       required:
-        [total_rates, rates, fallback_rates, source, is_stale, last_fetched_at]
+        [total_rates, rates, source, is_stale, last_fetched_at]
       properties:
         total_rates: { type: integer, minimum: 0 }
         rates:
           type: array
           items: { $ref: "#/components/schemas/ExchangeRate" }
-        fallback_rates:
-          type: object
-          description: Built-in rates to EUR by currency code, used when no stored rate exists
-          additionalProperties: { type: number }
-        source: { type: string, enum: [database, fallback] }
+        source:
+          type: string
+          enum: [database, fallback]
+          description: >-
+            `database` when rates are stored. `fallback` when none are stored yet;
+            amounts in other currencies are then unavailable (flagged), never
+            converted at built-in constants.
         is_stale:
           { type: boolean, description: The stored rate date is before today }
         last_fetched_at: { type: string, format: date-time, nullable: true }
@@ -3258,7 +3292,7 @@ components:
 
     PortfolioSummaryItem:
       type: object
-      required: [id, fullyAssigned, oversold, byAccount]
+      required: [id, fullyAssigned, oversold, byAccount, accountTotals]
       additionalProperties: true
       properties:
         id: { type: integer, format: int32 }
@@ -3270,7 +3304,9 @@ components:
         originalCurrency: { type: string }
         summarySource: { type: string }
         is_active: { type: boolean }
-        usedFallbackRate: { type: boolean }
+        usedFallbackRate:
+          type: boolean
+          description: A transaction-date rate was missing (current-rate fallback), or the holding's currency has no latest stored rate, in which case the current figures stay unconverted rather than use a built-in constant. Archived presentation rows set it only for the missing stored rate.
         gainLossPercent: { type: number }
         interestRate: { type: number }
         transactionCount:
@@ -3332,6 +3368,10 @@ components:
           type: array
           description: Exact current holdings and profit/loss partitions for this investment.
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        accountTotals:
+          type: array
+          description: This investment's figures per broker account (account_id null for unassigned), every contribution kind summed with Decimal and rounded once. The Portfolio broker filter reads these instead of adding byAccount rows.
+          items: { $ref: "#/components/schemas/PortfolioSummaryAccountTotals" }
 
     PortfolioSummaryByAccountItem:
       type: object
@@ -3357,6 +3397,32 @@ components:
           type: string
           enum: [position, non_position]
           description: Lot-bearing position result or standalone income/adjustment partition.
+        oversold: { type: boolean }
+        currentValue: { type: number }
+        totalInvested: { type: number }
+        realizedGain: { type: number }
+        unrealizedGain: { type: number }
+        gainLoss: { type: number }
+
+    PortfolioSummaryAccountTotals:
+      type: object
+      required:
+        [
+          account_id,
+          assignment,
+          oversold,
+          currentValue,
+          totalInvested,
+          realizedGain,
+          unrealizedGain,
+          gainLoss,
+        ]
+      properties:
+        account_id: { type: integer, format: int32, nullable: true }
+        assignment:
+          type: string
+          enum: [account, unassigned]
+          description: Stable machine-readable identity for accountless contributions.
         oversold: { type: boolean }
         currentValue: { type: number }
         totalInvested: { type: number }
@@ -3481,7 +3547,16 @@ components:
     PortfolioSummaryData:
       type: object
       required:
-        [currency, computed_at, totals, summaries, byAccount, byAssetClass, byAssetGroup]
+        [
+          currency,
+          computed_at,
+          totals,
+          summaries,
+          byAccount,
+          accountTotals,
+          byAssetClass,
+          byAssetGroup,
+        ]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
@@ -3501,6 +3576,10 @@ components:
         byAccount:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        accountTotals:
+          type: array
+          description: Portfolio-wide figures per broker account (account_id null for unassigned), summed over every investment and contribution kind with Decimal and rounded once, sorted by currentValue descending. The Portfolio broker filter's holdings and P/L subtotals.
+          items: { $ref: "#/components/schemas/PortfolioSummaryAccountTotals" }
         byAssetClass:
           type: array
           description: Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order.
@@ -5094,11 +5173,13 @@ components:
           description: >-
             The account's anchor+delta computed balance (ADR-094), denominated in
             `currency`. On a multi-currency account each currency partition is
-            computed separately and converted into `currency` at today's rate, so
-            this figure moves with exchange rates. A partition with no usable
-            source or target rate is excluded rather than treated as 1:1; when
-            that happens `balance_incomplete` is true and the native amount is
-            available in `balance_parts`.
+            computed separately and converted into `currency` at the latest
+            stored exchange rate, so this figure moves with exchange rates. A
+            partition without a stored source or target rate is excluded rather
+            than converted at a built-in constant or 1:1; when that happens
+            `balance_incomplete` is true, the currency is listed in
+            `unconverted_currencies` and the native amount is available in
+            `balance_parts`.
         balance_parts:
           type: array
           description: Native per-currency ledger balances; only returned by the list endpoint.
@@ -5533,6 +5614,13 @@ components:
         amount_eur:
           type: number
           format: double
+        amount_eur_unconverted:
+          type: boolean
+          enum: [true]
+          description: >-
+            Additive (ADR-216). Present only on a normalize_to_eur read whose
+            row currency has no stored rate: `amount_eur` then holds the native
+            amount, exactly as on a read without normalize_to_eur.
         currency:
           type: string
         balance:
@@ -5673,6 +5761,17 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/Link"
+            unconverted_count:
+              type: integer
+              minimum: 0
+              description: >-
+                Additive (ADR-216), present only with normalize_to_eur=true.
+                Rows on this page whose currency has no stored rate; each
+                carries amount_eur_unconverted=true.
+            unconverted_currencies:
+              type: array
+              items: { type: string }
+              description: Additive (ADR-216), present only with normalize_to_eur=true.
 
     # ─── Planned Transactions ────────────────────────────────────────────────
     PlannedLoanType:
@@ -6742,10 +6841,53 @@ components:
               items: { type: string }
               description: Sorted uppercase source currencies whose rows used the fallback.
 
+    UnconvertedAmounts:
+      type: object
+      description: >-
+        Additive (ADR-216). An amount without a stored exchange rate is left out
+        of every figure of the response, never added 1:1 or at a constant.
+        `unconverted_count` counts the records left out (transactions unless the
+        operation says otherwise) and `unconverted_currencies` lists their
+        currencies, sorted. Both are zero/empty when every amount converted.
+      required: [unconverted_count, unconverted_currencies]
+      properties:
+        unconverted_count: { type: integer, minimum: 0 }
+        unconverted_currencies:
+          type: array
+          items: { type: string }
+
+    PeriodPivotConversion:
+      type: object
+      description: >-
+        Conversion contract of a period pivot. `usedHistoricalFallback` and
+        `affectedCurrencies` report rows converted at the latest stored rate
+        because no historical rate exists on or before their date. Additive
+        (ADR-216): rows with no stored rate at all are left out of the pivot;
+        `unconvertedCount` counts their transactions and
+        `unconvertedCurrencies` lists their currencies.
+      required:
+        [usedHistoricalFallback, affectedCurrencies, unconvertedCount, unconvertedCurrencies]
+      properties:
+        usedHistoricalFallback: { type: boolean }
+        affectedCurrencies:
+          type: array
+          items: { type: string }
+        unconvertedCount: { type: integer, minimum: 0 }
+        unconvertedCurrencies:
+          type: array
+          items: { type: string }
+
     CategoryPivotData:
       type: object
-      required: [categoryPivot]
+      required: [categoryPivot, unconverted_count, unconverted_currencies]
       properties:
+        unconverted_count:
+          type: integer
+          minimum: 0
+          description: Additive (ADR-216). Transactions left out of every cell because no stored rate converts their currency.
+        unconverted_currencies:
+          type: array
+          items: { type: string }
         categoryPivot:
           type: object
           additionalProperties:
@@ -6806,8 +6948,16 @@ components:
 
     NetWorthResponse:
       type: object
-      required: [current, monthlyChange, monthlyChangePercent, snapshots]
+      required:
+        [current, monthlyChange, monthlyChangePercent, snapshots, unconvertedCurrencies]
       properties:
+        unconvertedCurrencies:
+          type: array
+          items: { type: string }
+          description: >-
+            Additive (ADR-216). Currencies of account balances left out of
+            `liquid`, `liabilities` and the snapshots because no stored rate
+            converts them; empty when every balance converted.
         current:
           type: object
           required: [liquid, liabilities, investments, netWorth, currency]
@@ -9823,6 +9973,9 @@ paths:
       description: >-
         Deploy spendable account cash into underweight portfolio sleeves toward a
         target allocation, without selling. Composes Budgeting + Portfolio.
+        Additive (ADR-216): a cash partition without a stored rate is not
+        deployable cash; it is left out of availableCash and listed in
+        unconvertedCurrencies (top level and on its cashAccounts entry).
       operationId: computeRebalance
       tags: [CrossWorkspace]
       requestBody:
@@ -10202,7 +10355,7 @@ paths:
                               funding: { type: integer }
                           projectedBalance:
                             type: number
-                            description: Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency
+                            description: Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at the latest stored rate into the survivor's currency (a partition without one is excluded and listed in unconvertedCurrencies)
                           projectedBalanceCurrency:
                             type: string
                             description: The survivor's native currency (ISO-4217)
@@ -12954,7 +13107,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/info/recurring-patterns:
     get:
@@ -13341,7 +13499,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/category-breakdown:
     get:
@@ -13365,7 +13528,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/recipient-insights:
     get:
@@ -13395,7 +13563,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/cashflow-comparison:
     get:
@@ -13413,7 +13586,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/average-vs-current:
     get:
@@ -13431,12 +13609,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/bank-balances:
     get:
       summary: Current balance per bank account
-      description: Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible.
+      description: Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible. Additive (ADR-216) - a currency partition without a stored rate is left out of the account balance, the totals and the history; the account lists it in unconverted_currencies, and data.unconverted_count counts such partitions.
       operationId: getBankBalances
       tags: [Aggregations]
       responses:
@@ -13445,7 +13628,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/cashflow-forecast:
     get:
@@ -13472,7 +13660,7 @@ paths:
   /api/aggregations/cashflow-forecast-methods:
     get:
       summary: List available cashflow forecast methods
-      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions. Additive (ADR-216) - history and planned rows without a stored rate are left out of the inputs; data.unconverted_count and data.unconverted_currencies report them (absent on cache entries written before these fields existed).
       operationId: getCashflowForecastMethods
       tags: [Aggregations]
       responses:
@@ -13486,7 +13674,7 @@ paths:
   /api/aggregations/cashflow-forecast-rolling:
     get:
       summary: Rolling-window cashflow forecast
-      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+      description: Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions. Additive (ADR-216) - history and planned rows without a stored rate are left out of the inputs; data.unconverted_count and data.unconverted_currencies report them (absent on cache entries written before these fields existed).
       operationId: getCashflowForecastRolling
       tags: [Aggregations]
       parameters:
@@ -13556,7 +13744,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/category-pivot:
     get:
@@ -13653,7 +13846,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/UnconvertedAmounts"
 
   /api/aggregations/recipient-pivot:
     get:
@@ -13706,7 +13904,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [conversion]
+                        properties:
+                          conversion:
+                            $ref: "#/components/schemas/PeriodPivotConversion"
 
   /api/aggregations/tag-pivot:
     get:
@@ -13761,7 +13968,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [conversion]
+                        properties:
+                          conversion:
+                            $ref: "#/components/schemas/PeriodPivotConversion"
 
   # ─── Investments extra ───────────────────────────────────────────────────────
   /api/investments/exposure:
@@ -15153,7 +15369,7 @@ paths:
         - name: currency
           in: query
           schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
-          description: Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable.
+          description: Response display currency, normalized uppercase. Ordinary recorded costs use the latest stored rates; an amount without one is left out and flagged in unconvertedCurrencies and incompleteFigures.
       responses:
         "200":
           description: Server-computed fiscal dashboard and original setting records.
@@ -15185,7 +15401,7 @@ paths:
       operationId: getBelgianTaxDashboard
       summary: Read server-computed tax charts, recorded income, and tax widget presentation
       tags: [Belgian Tax]
-      description: Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+      description: Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes (an amount without a stored rate is left out and flagged in unconvertedCurrencies and incompleteFigures), and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
       parameters:
         - name: year
           in: query

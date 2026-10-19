@@ -23,6 +23,11 @@ import {
   validateInt4Ids,
 } from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
+import {
+  createUnconvertedTally,
+  noteUnconverted,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
 import { logger } from "../config/logger.ts";
 import {
   toDecimal,
@@ -157,10 +162,22 @@ export async function getMonthlyFinancialSummary(
       dateField: "date",
     });
 
+    // Every MV row is already in the target currency (checked above), so no
+    // row lacks a rate here; the tally keeps the response shape uniform.
+    const unconverted = createUnconvertedTally();
     const monthMap: Record<string, MonthTotals> = {};
     for (const conv of mergedConverted) {
       const key = conv._key;
       const r = conv._row;
+      if (conv.amount_eur === undefined) {
+        if (conv._type === "income")
+          noteUnconverted(
+            unconverted,
+            conv.currency,
+            parseInt(r.transaction_count, 10) || 0,
+          );
+        continue;
+      }
       if (!monthMap[key]) {
         monthMap[key] = {
           month: r.month,
@@ -234,7 +251,11 @@ export async function getMonthlyFinancialSummary(
         net_amount: roundToCents(m.net_amount),
       }));
 
-    return { months, summary: buildMonthlySummary(months) };
+    return {
+      months,
+      summary: buildMonthlySummary(months),
+      ...unconvertedFields(unconverted),
+    };
   }
 
   // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses):
@@ -376,6 +397,9 @@ export async function getMonthlyFinancialSummary(
     }
   }
 
+  // A (date, currency) group without a stored rate is left out of its month
+  // (amounts and transaction count) and counted once in `unconverted_count`.
+  const unconverted = createUnconvertedTally();
   for (const [i, row] of dailyRows.entries()) {
     const key = formatYearMonthKey(row.year, row.month);
     // Every live row seeded its month above, and convertRowsToEur returns one
@@ -387,6 +411,10 @@ export async function getMonthlyFinancialSummary(
       throw new Error(
         "monthly summary: converted rows out of step with daily rows",
       );
+    }
+    if (income.amount_eur === undefined || spending.amount_eur === undefined) {
+      noteUnconverted(unconverted, row.currency, Number(row.cnt) || 0);
+      continue;
     }
     totals.total_income = toNumber(
       toDecimal(totals.total_income).plus(toDecimal(income.amount_eur)),
@@ -409,5 +437,9 @@ export async function getMonthlyFinancialSummary(
       net_amount: roundToCents(m.net_amount),
     }));
 
-  return { months, summary: buildMonthlySummary(months) };
+  return {
+    months,
+    summary: buildMonthlySummary(months),
+    ...unconvertedFields(unconverted),
+  };
 }

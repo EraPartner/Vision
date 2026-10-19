@@ -875,7 +875,7 @@ export interface paths {
         put?: never;
         /**
          * Cash-aware rebalancing plan (ADR-098)
-         * @description Deploy spendable account cash into underweight portfolio sleeves toward a target allocation, without selling. Composes Budgeting + Portfolio.
+         * @description Deploy spendable account cash into underweight portfolio sleeves toward a target allocation, without selling. Composes Budgeting + Portfolio. Additive (ADR-216): a cash partition without a stored rate is not deployable cash; it is left out of availableCash and listed in unconvertedCurrencies (top level and on its cashAccounts entry).
          */
         post: operations["computeRebalance"];
         delete?: never;
@@ -2281,7 +2281,7 @@ export interface paths {
         };
         /**
          * Current balance per bank account
-         * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible.
+         * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible. Additive (ADR-216) - a currency partition without a stored rate is left out of the account balance, the totals and the history; the account lists it in unconverted_currencies, and data.unconverted_count counts such partitions.
          */
         get: operations["getBankBalances"];
         put?: never;
@@ -2318,7 +2318,7 @@ export interface paths {
         };
         /**
          * List available cashflow forecast methods
-         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions. Additive (ADR-216) - history and planned rows without a stored rate are left out of the inputs; data.unconverted_count and data.unconverted_currencies report them (absent on cache entries written before these fields existed).
          */
         get: operations["getCashflowForecastMethods"];
         put?: never;
@@ -2338,7 +2338,7 @@ export interface paths {
         };
         /**
          * Rolling-window cashflow forecast
-         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions.
+         * @description Returns actual-to-date separately from future ledger rows in scheduled_actual. Scheduled actuals are always applied on their effective date; include_planned controls only pending planned transactions. Additive (ADR-216) - history and planned rows without a stored rate are left out of the inputs; data.unconverted_count and data.unconverted_currencies report them (absent on cache entries written before these fields existed).
          */
         get: operations["getCashflowForecastRolling"];
         put?: never;
@@ -3081,7 +3081,7 @@ export interface paths {
         };
         /**
          * Read server-computed tax charts, recorded income, and tax widget presentation
-         * @description Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+         * @description Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes (an amount without a stored rate is left out and flagged in unconvertedCurrencies and incompleteFigures), and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
          */
         get: operations["getBelgianTaxDashboard"];
         put?: never;
@@ -5499,6 +5499,10 @@ export interface components {
             currency: string;
         };
         BelgianPortfolioTaxDashboard: {
+            /** @description Additive (ADR-216). Currencies of amounts left out because no stored rate converts them; empty when everything converted. */
+            unconvertedCurrencies: string[];
+            /** @description Additive (ADR-216). Figures that miss such an amount: totals, taxBreakdown, feeBreakdown, taxByAssetClass, investmentBreakdown, yearlyCostTrend, dividend, or estimates.<name>. A tax estimate in this list is a lower bound, not a guess. */
+            incompleteFigures: string[];
             year: number;
             currency: string;
             isEmpty: boolean;
@@ -5551,6 +5555,10 @@ export interface components {
             household: number;
         };
         BelgianTaxDashboard: {
+            /** @description Additive (ADR-216). Currencies of amounts left out because no stored rate converts them; empty when everything converted. */
+            unconvertedCurrencies: string[];
+            /** @description Additive (ADR-216). Response fields that miss such an amount, from yearlyIncome, monthlyIncomeTax, recordedIncomeByPartner, portfolioTaxesForYear, totalTaxIncludingPortfolio and totalTaxIncludingPropertyEstimate. */
+            incompleteFigures: string[];
             year: number;
             currency: string;
             isHistorical: boolean;
@@ -5622,11 +5630,10 @@ export interface components {
         ExchangeRates: {
             total_rates: number;
             rates: components["schemas"]["ExchangeRate"][];
-            /** @description Built-in rates to EUR by currency code, used when no stored rate exists */
-            fallback_rates: {
-                [key: string]: number;
-            };
-            /** @enum {string} */
+            /**
+             * @description `database` when rates are stored. `fallback` when none are stored yet; amounts in other currencies are then unavailable (flagged), never converted at built-in constants.
+             * @enum {string}
+             */
             source: "database" | "fallback";
             /** @description The stored rate date is before today */
             is_stale: boolean;
@@ -6328,6 +6335,7 @@ export interface components {
             originalCurrency?: string;
             summarySource?: string;
             is_active?: boolean;
+            /** @description A transaction-date rate was missing (current-rate fallback), or the holding's currency has no latest stored rate, in which case the current figures stay unconverted rather than use a built-in constant. Archived presentation rows set it only for the missing stored rate. */
             usedFallbackRate?: boolean;
             gainLossPercent?: number;
             interestRate?: number;
@@ -6378,6 +6386,8 @@ export interface components {
             oversold: boolean;
             /** @description Exact current holdings and profit/loss partitions for this investment. */
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description This investment's figures per broker account (account_id null for unassigned), every contribution kind summed with Decimal and rounded once. The Portfolio broker filter reads these instead of adding byAccount rows. */
+            accountTotals: components["schemas"]["PortfolioSummaryAccountTotals"][];
         } & {
             [key: string]: unknown;
         };
@@ -6394,6 +6404,21 @@ export interface components {
              * @enum {string}
              */
             contribution_kind: "position" | "non_position";
+            oversold: boolean;
+            currentValue: number;
+            totalInvested: number;
+            realizedGain: number;
+            unrealizedGain: number;
+            gainLoss: number;
+        };
+        PortfolioSummaryAccountTotals: {
+            /** Format: int32 */
+            account_id: number | null;
+            /**
+             * @description Stable machine-readable identity for accountless contributions.
+             * @enum {string}
+             */
+            assignment: "account" | "unassigned";
             oversold: boolean;
             currentValue: number;
             totalInvested: number;
@@ -6474,6 +6499,8 @@ export interface components {
             archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description Portfolio-wide figures per broker account (account_id null for unassigned), summed over every investment and contribution kind with Decimal and rounded once, sorted by currentValue descending. The Portfolio broker filter's holdings and P/L subtotals. */
+            accountTotals: components["schemas"]["PortfolioSummaryAccountTotals"][];
             /** @description Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order. */
             byAssetClass: components["schemas"]["PortfolioAssetClassTotals"][];
             /** @description Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty. */
@@ -7284,7 +7311,7 @@ export interface components {
                 /** Format: date */
                 balance_date: string;
             }[];
-            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. A partition with no usable source or target rate is excluded rather than treated as 1:1; when that happens `balance_incomplete` is true and the native amount is available in `balance_parts`. */
+            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at the latest stored exchange rate, so this figure moves with exchange rates. A partition without a stored source or target rate is excluded rather than converted at a built-in constant or 1:1; when that happens `balance_incomplete` is true, the currency is listed in `unconverted_currencies` and the native amount is available in `balance_parts`. */
             computed_balance?: number | null;
             /** @description Native per-currency ledger balances; only returned by the list endpoint. */
             balance_parts?: {
@@ -7481,6 +7508,11 @@ export interface components {
             amount: number;
             /** Format: double */
             amount_eur?: number;
+            /**
+             * @description Additive (ADR-216). Present only on a normalize_to_eur read whose row currency has no stored rate: `amount_eur` then holds the native amount, exactly as on a read without normalize_to_eur.
+             * @enum {boolean}
+             */
+            amount_eur_unconverted?: true;
             currency?: string;
             /** Format: double */
             balance?: number;
@@ -7547,6 +7579,10 @@ export interface components {
         TransactionList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Transaction"][];
             links: components["schemas"]["Link"][];
+            /** @description Additive (ADR-216), present only with normalize_to_eur=true. Rows on this page whose currency has no stored rate; each carries amount_eur_unconverted=true. */
+            unconverted_count?: number;
+            /** @description Additive (ADR-216), present only with normalize_to_eur=true. */
+            unconverted_currencies?: string[];
         };
         /** @enum {string} */
         PlannedLoanType: "amortizing" | "fixed_principal" | "interest_only";
@@ -8036,7 +8072,22 @@ export interface components {
                 affectedCurrencies: string[];
             };
         };
+        /** @description Additive (ADR-216). An amount without a stored exchange rate is left out of every figure of the response, never added 1:1 or at a constant. `unconverted_count` counts the records left out (transactions unless the operation says otherwise) and `unconverted_currencies` lists their currencies, sorted. Both are zero/empty when every amount converted. */
+        UnconvertedAmounts: {
+            unconverted_count: number;
+            unconverted_currencies: string[];
+        };
+        /** @description Conversion contract of a period pivot. `usedHistoricalFallback` and `affectedCurrencies` report rows converted at the latest stored rate because no historical rate exists on or before their date. Additive (ADR-216): rows with no stored rate at all are left out of the pivot; `unconvertedCount` counts their transactions and `unconvertedCurrencies` lists their currencies. */
+        PeriodPivotConversion: {
+            usedHistoricalFallback: boolean;
+            affectedCurrencies: string[];
+            unconvertedCount: number;
+            unconvertedCurrencies: string[];
+        };
         CategoryPivotData: {
+            /** @description Additive (ADR-216). Transactions left out of every cell because no stored rate converts their currency. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
             categoryPivot: {
                 [key: string]: {
                     categoryId: number | null;
@@ -8065,6 +8116,8 @@ export interface components {
             netWorth: number;
         };
         NetWorthResponse: {
+            /** @description Additive (ADR-216). Currencies of account balances left out of `liquid`, `liabilities` and the snapshots because no stored rate converts them; empty when every balance converted. */
+            unconvertedCurrencies: string[];
             current: {
                 liquid: number;
                 liabilities: number;
@@ -11385,7 +11438,7 @@ export interface operations {
                                 portfolio?: number;
                                 funding?: number;
                             };
-                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency */
+                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at the latest stored rate into the survivor's currency (a partition without one is excluded and listed in unconvertedCurrencies) */
                             projectedBalance?: number;
                             /** @description The survivor's native currency (ISO-4217) */
                             projectedBalanceCurrency?: string;
@@ -14064,7 +14117,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
             /** @description VALIDATION_ERROR: currency must be a single value */
@@ -14484,7 +14539,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14508,7 +14565,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14534,7 +14593,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14556,7 +14617,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14578,7 +14641,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14598,7 +14663,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14709,7 +14776,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14767,7 +14836,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["UnconvertedAmounts"];
+                    };
                 };
             };
         };
@@ -14798,7 +14869,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            conversion: components["schemas"]["PeriodPivotConversion"];
+                        };
+                    };
                 };
             };
         };
@@ -14829,7 +14904,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            conversion: components["schemas"]["PeriodPivotConversion"];
+                        };
+                    };
                 };
             };
         };
@@ -16156,7 +16235,7 @@ export interface operations {
             query?: {
                 /** @description Omit to use the live household year. Historical years use their snapshot or a year-pinned live estimate. */
                 year?: number;
-                /** @description Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable. */
+                /** @description Response display currency, normalized uppercase. Ordinary recorded costs use the latest stored rates; an amount without one is left out and flagged in unconvertedCurrencies and incompleteFigures. */
                 currency?: string;
             };
             header?: never;

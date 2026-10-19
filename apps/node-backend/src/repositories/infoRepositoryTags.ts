@@ -17,6 +17,9 @@ import { queryRows } from '../database/rowContracts.ts';
 import { tagPivotRowSchema } from '../database/rows/info.ts';
 import { validateInt4Ids } from '../lib/filterBuilder.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
+import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
+import { periodPivotConversion } from './infoRepositoryRecipients.ts';
+import type { PeriodPivotConversion } from './infoRepositoryRecipients.ts';
 import {
   buildPeriodPivot,
   mapRowsForAmountConversion,
@@ -42,13 +45,15 @@ export const tagInsightsRepository = {
     allTags = false,
   }: TagPivotOptions = {}): Promise<{
     tagPivot: Record<string, PeriodPivotEntity[]>;
+    conversion: PeriodPivotConversion;
   }> {
     // Tag pivot is rendered either for an explicit selection on a saved chart or
     // for an "all tags" dynamic source. With no selection and no all-flag there
     // is nothing to chart, so short-circuit instead of scanning every tagged
     // expense row.
     const validTagIds = validateInt4Ids(tagIds, 'tagIds');
-    if (!allTags && validTagIds.length === 0) return { tagPivot: {} };
+    if (!allTags && validTagIds.length === 0)
+      return { tagPivot: {}, conversion: periodPivotConversion([]) };
 
     const periodExpr = bucket === 'yearly' ? "TO_CHAR(t.date, 'YYYY')" : "TO_CHAR(t.date, 'YYYY-MM')";
 
@@ -90,11 +95,12 @@ export const tagInsightsRepository = {
 
     const rows = await queryRows(tagPivotRowSchema, sql, params);
 
-    const converted = await convertRowsToEur(
+    const all = await convertRowsToEur(
       mapRowsForAmountConversion(rows, 'abs_amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );
+    const { converted } = partitionConvertedRows(all);
 
     const tagPivot = buildPeriodPivot(converted, {
       idField: 'tag_id',
@@ -103,7 +109,7 @@ export const tagInsightsRepository = {
       labelKey: 'slug',
     });
 
-    return { tagPivot };
+    return { tagPivot, conversion: periodPivotConversion(all) };
   },
 };
 

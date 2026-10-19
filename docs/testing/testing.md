@@ -1190,7 +1190,7 @@ Four key testing gotchas discovered during Phase A completion:
 - Paginated list items: `{ items[], total, limit, offset, links[] }` (categories, recipients, transactions, planned-transactions, investments) with strict per-field schemas
 - Resource items: CategoryItemSchema, RecipientItemSchema, TransactionItemSchema, InvestmentItemSchema, PlannedTransactionItemSchema (all with explicit field types, not passthrough)
 - Delete responses: `{ message, links[] }` with optional transaction-specific `details`
-- Exchange rates: `{ rates[{currency, rate_to_eur, rate_date, fetched_at}], fallback_rates, base, date }`
+- Exchange rates: `{ total_rates, rates[{currency, rate_to_eur, rate_date, fetched_at}], source, is_stale, last_fetched_at }`
 - Market news: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
 - Import batches: `{ batches[], total }`
 - Portfolio summary: `{ currency, computed_at, totals{10 numeric fields}, summaries[] }`

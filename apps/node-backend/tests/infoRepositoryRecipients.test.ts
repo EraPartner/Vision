@@ -304,6 +304,8 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
       conversion: {
         usedHistoricalFallback: false,
         affectedCurrencies: [],
+        unconvertedCount: 0,
+        unconvertedCurrencies: [],
       },
     });
 
@@ -374,6 +376,8 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
     expect(r.conversion).toEqual({
       usedHistoricalFallback: false,
       affectedCurrencies: [],
+      unconvertedCount: 0,
+      unconvertedCurrencies: [],
     });
   });
 
@@ -413,6 +417,8 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
     expect(result.conversion).toEqual({
       usedHistoricalFallback: true,
       affectedCurrencies: ["GBP", "USD"],
+      unconvertedCount: 0,
+      unconvertedCurrencies: [],
     });
     expect(result.recipientPivot["2025-04"]).toHaveLength(3);
   });

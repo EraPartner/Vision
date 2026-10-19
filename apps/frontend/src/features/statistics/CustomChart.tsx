@@ -128,7 +128,11 @@ export function CustomChart({
         conversion: recipientConversion,
         isLoading: recipientLoading,
     } = useRecipientPivot(savedChart);
-    const { tagData, isLoading: tagLoading } = useTagPivot(savedChart);
+    const {
+        tagData,
+        conversion: tagConversion,
+        isLoading: tagLoading,
+    } = useTagPivot(savedChart);
 
     // Resolve the in-scope categories once — this was recomputed three times per
     // render (allPeriods, seriesMeta, chartData) with an O(n) `.includes` lookup
@@ -409,7 +413,14 @@ export function CustomChart({
             </CardHeader>
 
             <CardContent>
-                <HistoricalFxFallbackWarning conversion={recipientConversion} />
+                {hasRecipients && (
+                    <HistoricalFxFallbackWarning
+                        conversion={recipientConversion}
+                    />
+                )}
+                {hasTags && (
+                    <HistoricalFxFallbackWarning conversion={tagConversion} />
+                )}
                 {isLoading ? (
                     <Skeleton
                         {...loadingSurfaceProps}

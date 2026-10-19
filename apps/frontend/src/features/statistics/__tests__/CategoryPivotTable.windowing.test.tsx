@@ -44,6 +44,7 @@ function buildLongHistoryData(periods: string[]): StatisticsData {
         totalSpending: periods.length * 2,
         averageMonthlySpending: 2,
         averageMonthlyIncome: 0,
+        unconvertedCount: 0,
     };
 }
 

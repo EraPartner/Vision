@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { SettingRecordSchema } from "./settings.ts";
 
+/**
+ * Additive (ADR-216): currencies of amounts left out for want of a stored
+ * exchange rate, and the response fields that miss them. A tax figure listed
+ * in `incompleteFigures` is incomplete, never computed at a guessed rate.
+ */
+const UnconvertedFiguresShape = {
+  unconvertedCurrencies: z.array(z.string()),
+  incompleteFigures: z.array(z.string()),
+};
+
 // ── /api/belgian-tax/dashboard ───────────────────────────────────────────────
 
 const HistoricalCalculationSchema = z.looseObject({
@@ -69,6 +79,7 @@ export const BelgianTaxDashboardSchema = z.looseObject({
       household: z.number(),
     }),
   ),
+  ...UnconvertedFiguresShape,
 });
 
 // ── /api/belgian-tax/portfolio-dashboard ─────────────────────────────────────
@@ -165,6 +176,7 @@ export const BelgianPortfolioTaxDashboardSchema = z.looseObject({
     }),
   ),
   records: z.array(SettingRecordSchema),
+  ...UnconvertedFiguresShape,
 });
 
 // ── /api/belgian-tax/compute and /api/belgian-tax/overview ───────────────────

@@ -283,6 +283,7 @@ describe("info API client", () => {
                     },
                     monthlyChange: 0,
                     monthlyChangePercent: 0,
+                    unconvertedCurrencies: [],
                     snapshots: [],
                     snapshotsTotal: 0,
                     snapshotsLimit: 10,
@@ -303,7 +304,6 @@ describe("info API client", () => {
                 return ok({
                     total_rates: 0,
                     rates: [],
-                    fallback_rates: {},
                     source: "fallback",
                     is_stale: true,
                     last_fetched_at: null,

@@ -277,14 +277,19 @@ describe("Portfolio Tax authoritative dashboard", () => {
       "USD",
     );
   });
-  it("retains original-amount fallback for missing stored/fallback FX", async () => {
+  it("leaves an amount without a stored rate out and flags the figures it feeds", async () => {
     vi.mocked(
       portfolioTransactionRepository.getAllByInvestmentIds,
     ).mockResolvedValue([
       { ...txnRows[0], currency: "XYZ" },
     ] as unknown as Transactions);
     const res = await api.get(path).query({ year: 2025 });
-    expect(bodyAt(res, "data", "totals", "totalRecordedTaxes")).toBe(10);
+    // Never the original amount 1:1 (ADR-216): left out, currency and figures flagged.
+    expect(bodyAt(res, "data", "totals", "totalRecordedTaxes")).toBe(0);
+    expect(bodyAt(res, "data", "unconvertedCurrencies")).toEqual(["XYZ"]);
+    expect(bodyAt(res, "data", "incompleteFigures")).toEqual(
+      expect.arrayContaining(["totals", "taxBreakdown", "yearlyCostTrend"]),
+    );
   });
   it("returns empty holdings success without inventing a profile", async () => {
     vi.mocked(settingsService.getAllWithBaselines).mockResolvedValue({

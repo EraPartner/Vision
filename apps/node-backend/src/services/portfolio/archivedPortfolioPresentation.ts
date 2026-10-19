@@ -11,7 +11,8 @@ import type {
 } from "./portfolioSummaryService.ts";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 
-/** Existing usePortfolioSummaries archive presentation. Ordinary history uses current quote FX,
+/** Existing usePortfolioSummaries archive presentation. Ordinary history uses the latest stored
+ * quote FX (a currency without a stored rate stays unconverted and sets usedFallbackRate),
  * while in-kind descriptive income keeps the canonical dated figure. Do not replace this with
  * canonical P&L during the frontend migration. */
 export function buildArchivedPortfolioPresentation(
@@ -19,6 +20,7 @@ export function buildArchivedPortfolioPresentation(
   transactions: AnnotatedTxRow[],
   canonical: InvestmentSummary[],
   multipliers: Map<string, number>,
+  currenciesWithoutRate: ReadonlySet<string>,
   costBasisMethod: CostBasisMethod,
   todayYmd: string,
 ) {
@@ -40,13 +42,9 @@ export function buildArchivedPortfolioPresentation(
         { costBasisMethod, todayYmd },
       );
       const current = canonicalById.get(Number(inv.id))!;
+      const invCurrency = (inv.currency || "EUR").toUpperCase();
       const conv = (value: DecimalInput) =>
-        toNumber(
-          multiply(
-            value,
-            multipliers.get((inv.currency || "EUR").toUpperCase()) ?? 1,
-          ),
-        );
+        toNumber(multiply(value, multipliers.get(invCurrency) ?? 1));
       return {
         ...current,
         totalUnits: toNumber(core.totalUnits),
@@ -91,7 +89,9 @@ export function buildArchivedPortfolioPresentation(
         assetGain: undefined,
         fxGain: undefined,
         nativeCurrentValue: undefined,
-        usedFallbackRate: undefined,
+        usedFallbackRate: currenciesWithoutRate.has(invCurrency)
+          ? true
+          : undefined,
         transactionCount: txns.length,
         // byAccount retains the separate canonical broker snapshot, just as detail API reads do.
         totalInKindIncome: current.totalInKindIncome,

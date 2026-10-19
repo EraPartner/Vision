@@ -223,6 +223,11 @@ function convertToTarget(amount: number, fromCurrency?: string) {
 }
 ```
 
+**Missing rates (2026-10-19):** the server converts at the latest stored rates. An amount without
+one is left out (the converter reports it), never added 1:1 or at a fallback constant. The
+dashboard lists the currency in `unconvertedCurrencies` and the fields that miss it in
+`incompleteFigures`, and the page shows an "Incomplete" warning.
+
 **Conversion coverage (2026-04-26 fix):** the per-investment summary, tax/fee type breakdown, monthly tax/fee trend, total realized & unrealized gain, total dividend income, and TOB total all run through `convertToTarget`. An earlier implementation skipped conversion in the monthly trend chart and on `realizedGain`, which mixed native transaction currencies into the displayed totals.
 
 ## Query Configuration

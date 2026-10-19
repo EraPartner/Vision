@@ -17,8 +17,11 @@ export const RebalanceResponseSchema = z.looseObject({
       accountCurrency: z.string(),
       balance: z.number(),
       balanceCurrency: z.string(),
+      /** Partitions left out of `balance` for want of a stored rate (ADR-216). */
+      unconvertedCurrencies: z.array(z.string()),
     }),
   ),
+  unconvertedCurrencies: z.array(z.string()),
   deployment: NumberRecordSchema,
 });
 
