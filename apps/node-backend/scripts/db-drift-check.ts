@@ -13,8 +13,8 @@
  * of the differing objects. Never prints row data or the connection URL. A
  * database at an earlier adoptable Alembic revision is checked as it will look
  * after the adoption bridge: the bridge steps run in a transaction that is
- * rolled back. The comparison installs the baseline into a temporary database
- * on the same server and drops it again. Nothing in the checked database changes.
+ * rolled back. Differences are listed against db/baseline-inventory.json, so the
+ * check needs no CREATEDB privilege. Nothing in the checked database changes.
  */
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
@@ -23,13 +23,13 @@ import pg from "pg";
 import {
   ADOPTABLE_ALEMBIC_REVISIONS,
   BASELINE_SCHEMA_FINGERPRINT,
-  MIGRATIONS_DIR,
-  BASELINE_MIGRATION,
   alembicBridgeSteps,
   readAlembicBridgeStep,
 } from "../src/database/migrate.ts";
 import {
   diffSchemaInventory,
+  hashSchemaInventory,
+  readBaselineInventory,
   readSchemaInventory,
   schemaFingerprint,
 } from "../src/database/schemaInventory.ts";
@@ -77,34 +77,6 @@ function resolveUrl(): string {
 
 async function inventoryOf(client: pg.Client): Promise<SchemaInventoryEntry[]> {
   return readSchemaInventory((text) => client.query(text), REPO_ROOT);
-}
-
-async function baselineInventory(url: string): Promise<SchemaInventoryEntry[]> {
-  const scratch = `vision_drift_check_${process.pid}`;
-  const admin = new pg.Client({ connectionString: url });
-  await admin.connect();
-  try {
-    await admin.query(`CREATE DATABASE ${scratch}`);
-    const target = new URL(url);
-    target.pathname = `/${scratch}`;
-    const client = new pg.Client({ connectionString: target.toString() });
-    await client.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        readFileSync(path.join(MIGRATIONS_DIR, `${BASELINE_MIGRATION}.sql`), "utf8"),
-      );
-      await client.query('SET LOCAL search_path = "$user", public');
-      const inventory = await inventoryOf(client);
-      await client.query("ROLLBACK");
-      return inventory;
-    } finally {
-      await client.end();
-    }
-  } finally {
-    await admin.query(`DROP DATABASE IF EXISTS ${scratch}`).catch(() => {});
-    await admin.end();
-  }
 }
 
 const url = resolveUrl();
@@ -163,7 +135,10 @@ if (!revisionOk) {
   );
 }
 if (fingerprint !== BASELINE_SCHEMA_FINGERPRINT) {
-  const diff = diffSchemaInventory(await baselineInventory(url), actual);
+  const diff = diffSchemaInventory(
+    readBaselineInventory(REPO_ROOT),
+    hashSchemaInventory(actual),
+  );
   console.log("\nDRIFT: the schema differs from the baseline.");
   for (const [label, names] of Object.entries(diff)) {
     if (names.length === 0) continue;
