@@ -271,6 +271,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: TypeScript migrations with Kysely; one squashed baseline (accepted)
+
+[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] removes Python, Alembic and the
+PyInstaller runner. `db/migrations/0001_baseline.sql` is the full schema at the former `0128`
+head, and Kysely's migrator applies numbered SQL files in-process. The existing database is
+adopted only at Alembic `0128` with an identical catalog fingerprint; only backups taken after the
+switch restore. It supersedes ADR-027, ADR-165, ADR-166 and ADR-184.
+
 ### 2026-10-19: Minimal macOS Electron shell hardening; retire v1 backups (accepted)
 
 [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] makes the shell macOS-only, flips

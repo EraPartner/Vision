@@ -18,8 +18,7 @@ queries:
 # Deny-list only (no allow-list) so newly added source roots are scanned by
 # default. We exclude code that is either not shipped (tests/fixtures),
 # generated, vendored, or pure build output — scanning it adds noise and false
-# positives without covering anything we author. (Python is not scanned, so its
-# Alembic migrations need no entry here.)
+# positives without covering anything we author.
 paths-ignore:
   # Tests, mocks & fixtures
   - "**/__tests__/**"

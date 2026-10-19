@@ -15,10 +15,6 @@ import { describe, expect, it } from "vitest";
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const harnessPath = path.join(repoRoot, "scripts", "with-test-db.sh");
 const harnessSource = readFileSync(harnessPath, "utf8");
-const migrationRunnerSource = readFileSync(
-  path.join(repoRoot, "apps", "node-backend", "scripts", "db-migrate.ts"),
-  "utf8",
-);
 
 function runHarness(envOverrides: Record<string, string>) {
   const env = { ...process.env, ...envOverrides };
@@ -93,17 +89,6 @@ describe("disposable database test harness", () => {
     );
     expect(harnessSource).toContain(
       "Refusing to remove unexpected native path",
-    );
-  });
-
-  it("probes migration executables and ignores stale virtual environments", () => {
-    expect(migrationRunnerSource).toContain(
-      'spawnSync(candidate, ["--version"]',
-    );
-    expect(migrationRunnerSource).toContain('".venv-native-build"');
-    expect(migrationRunnerSource).toContain('"vision-alembic"');
-    expect(migrationRunnerSource).toContain(
-      "!result.error && result.status === 0",
     );
   });
 });

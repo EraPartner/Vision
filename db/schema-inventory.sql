@@ -1,4 +1,4 @@
--- Catalog inventory of the Vision application schema (ADR-221).
+-- Catalog inventory of the Vision application schema (ADR-222).
 -- One row per object: kind, qualified name and a JSON definition. Excludes
 -- object IDs, owners, grants, row data, sequence positions and the migration
 -- bookkeeping tables, so a database and the baseline compare by shape only.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * One-off, read-only check before the switch to TypeScript migrations
- * (ADR-221): does this database's schema match db/migrations/0001_baseline.sql?
+ * (ADR-222): does this database's schema match db/migrations/0001_baseline.sql?
  *
  * Usage: bun run db:drift-check [--env-file <runtime.env>]
  *   Default env file: ~/Library/Application Support/Vision/native/vision/runtime.env

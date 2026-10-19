@@ -49,7 +49,7 @@ const NEW_CHECKS = [
   ["portfolio_import_staging_rows", "chk_portfolio_import_staging_rows_route"],
 ];
 
-/** Mirror of _CONSTRAINT_RENAMES in alembic/versions/0090_constraint_index_naming.py. */
+/** Constraint renames from former migration 0090, now part of 0001_baseline. */
 const CONSTRAINT_RENAMES = [
   [
     "accounts",
@@ -105,7 +105,7 @@ const CONSTRAINT_RENAMES = [
   ],
 ];
 
-/** Mirror of _INDEX_RENAMES in alembic/versions/0090_constraint_index_naming.py. */
+/** Index renames from former migration 0090, now part of 0001_baseline. */
 const INDEX_RENAMES = [
   ["uniq_pte_planned_executed", "uq_pte_planned_executed", true],
   ["ux_transactions_opening_anchor", "uq_transactions_opening_anchor", true],

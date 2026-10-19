@@ -11,6 +11,7 @@
         "concurrently": "^10.0.3",
         "openapi-typescript": "^7.13.0",
         "prettier": "^3.9.6",
+        "squawk-cli": "2.66.0",
         "typescript": "^6.0.3",
       },
     },
@@ -584,6 +585,16 @@
     "@simple-libs/stream-utils": ["@simple-libs/stream-utils@2.0.0", "", {}, "sha512-fCTuZK4QBa+39Oz9l4OGfJfz+GpwCp3AqO7Zch3to99xHPgstVsRFpeQ8LNd2o1Gv8raL2mCFwiaHh7bFSp5DQ=="],
 
     "@sindresorhus/merge-streams": ["@sindresorhus/merge-streams@4.0.0", "", {}, "sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ=="],
+
+    "@squawk-cli/darwin-arm64": ["@squawk-cli/darwin-arm64@2.66.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-SL+U00okgqdtTgFI7mBY+W8Xv101c7OulCReobKIMYw9e679ik9sU9UqoYJkqz0u6igEWRoOaysO67Kpd2Y+PA=="],
+
+    "@squawk-cli/darwin-x64": ["@squawk-cli/darwin-x64@2.66.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-/75w84+SRUYZWnQB8Tzll8BImPspiy0iAUUIgCJxgAdR4LP4DfMx5nOnKKLBfiKor+k/iiPK3MixVcmaS1lCew=="],
+
+    "@squawk-cli/linux-arm64": ["@squawk-cli/linux-arm64@2.66.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-dn59nAt4PFXa3cuCvoeGsSruaAUqKU3tReOJ0QZNP6Q7tnlyVbotoAljtK46X2v6HIvMWJMUBxc6cfQlmJxx6Q=="],
+
+    "@squawk-cli/linux-x64": ["@squawk-cli/linux-x64@2.66.0", "", { "os": "linux", "cpu": "x64" }, "sha512-p5Wq5BIcDGujJpmub3hiULkiEYnwI7FPdXaWMjCwoYQvN5RI79EniI95ws10lLXxcgbN/LdnYD+asaRiHuINsw=="],
+
+    "@squawk-cli/win32-x64": ["@squawk-cli/win32-x64@2.66.0", "", { "os": "win32", "cpu": "x64" }, "sha512-cVQofBmOj6ZSNnSlujlgnKnIg2aLdGqHWh4ws1H1/kfFqXFgtOMcOvgzlOUpR183T6wD9qQkAhS+Rxz8hzh74A=="],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
@@ -1682,6 +1693,8 @@
     "source-map-js": ["source-map-js@1.2.2", "", {}, "sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw=="],
 
     "split2": ["split2@4.2.0", "", {}, "sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg=="],
+
+    "squawk-cli": ["squawk-cli@2.66.0", "", { "optionalDependencies": { "@squawk-cli/darwin-arm64": "2.66.0", "@squawk-cli/darwin-x64": "2.66.0", "@squawk-cli/linux-arm64": "2.66.0", "@squawk-cli/linux-x64": "2.66.0", "@squawk-cli/win32-x64": "2.66.0" }, "bin": { "squawk": "js/bin/squawk" } }, "sha512-6aSLqaWp0cxEerI+LQJGW0NCh90btT/RUe3bB8B++0hLjVDL86Z21kdkU1I9/Jt04lXeqUFJIw+kGfXZ/z8E8w=="],
 
     "stackback": ["stackback@0.0.2", "", {}, "sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw=="],
 

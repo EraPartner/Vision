@@ -1,8 +1,7 @@
 /**
  * Instrument Provider Map Repository — data access for instrument_provider_map.
  *
- * Table is created by Alembic migration
- * 0042_add_research_provider_mapping_and_quota. Holds the user-confirmed
+ * Table is defined in db/migrations/0001_baseline.sql. Holds the user-confirmed
  * cross-provider symbol map (ADR-079): one row per (instrument_key, key_type,
  * provider). All mutations use parameterised queries.
  */

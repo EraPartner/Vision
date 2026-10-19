@@ -317,31 +317,29 @@ export function parsePostgresVersionNumber(
   return major * 10_000 + minor;
 }
 
-export function revisionNumericPrefix(
-  revision: string | undefined,
-): number | undefined {
-  const digits = /^(\d+)/.exec(String(revision || ""))?.[1];
-  return digits !== undefined ? Number.parseInt(digits, 10) : undefined;
+/**
+ * A backup is restorable only when it carries the Kysely migration ledger
+ * (`public.kysely_migration`). Alembic-era backups predate the squashed
+ * TypeScript baseline and are refused by this code.
+ */
+export const PRE_BASELINE_BACKUP_CODE = "BACKUP_PRE_BASELINE";
+export const PRE_BASELINE_BACKUP_MESSAGE =
+  "This backup was taken before Vision switched to the TypeScript migration baseline. Only backups taken after that switch can be restored.";
+
+export function preBaselineBackupError(): NativeRuntimeError {
+  const error: NativeRuntimeError = new Error(
+    `${PRE_BASELINE_BACKUP_CODE}: ${PRE_BASELINE_BACKUP_MESSAGE}`,
+  );
+  error.code = PRE_BASELINE_BACKUP_CODE;
+  return error;
 }
 
-export function pickHighestRevision(revisions: readonly string[]): string {
-  const rows = revisions
-    .map((revision) => String(revision).trim())
-    .filter(Boolean);
-  if (rows.length === 0) return "";
-  return rows.reduce((best, candidate) => {
-    const candidatePrefix = revisionNumericPrefix(candidate);
-    const bestPrefix = revisionNumericPrefix(best);
-    if (
-      candidatePrefix !== undefined &&
-      (bestPrefix === undefined || candidatePrefix > bestPrefix)
-    ) {
-      return candidate;
-    }
-    if (candidatePrefix === bestPrefix && candidate > best) return candidate;
-    return best;
-  });
-}
+// The schema version is the highest applied Kysely migration name. Names are
+// zero-padded `NNNN_name`, so text ordering is migration order. The first
+// row reports whether each ledger exists so a missing table is not an error.
+const SCHEMA_LEDGER_SQL =
+  "SELECT to_regclass('public.kysely_migration') IS NOT NULL, to_regclass('public.alembic_version') IS NOT NULL;";
+const SCHEMA_HEAD_SQL = "SELECT max(name) FROM public.kysely_migration;";
 
 export function assertPostgres18Version(label: string, output: string): number {
   const major = parsePostgresMajor(output);
@@ -741,7 +739,7 @@ export interface NativeBackendEnvOptions {
   paths: Pick<NativeRuntimePaths, "attachments" | "cache" | "env">;
   runtimeRoot?: string | undefined;
   repoRoot?: string | undefined;
-  tools: { alembic?: string | undefined; chrome?: string | undefined };
+  tools: { chrome?: string | undefined };
   auditBridgeToken?: string | undefined;
   syntheticOffline?: boolean | undefined;
 }
@@ -772,13 +770,10 @@ export function buildNativeBackendEnv({
     NODE_ENV: "production",
     ENVIRONMENT: "production",
     ATTACHMENTS_DIR: paths.attachments,
-    VISION_CACHE_DIR: paths.cache,
     VISION_RUNTIME_ROOT: resolvedRuntimeRoot,
     VISION_NATIVE_ENV_FILE: paths.env,
     VISION_DIST_DIR: path.join(resolvedRuntimeRoot, "dist"),
     VISION_SKIP_CONFIG_ENV_LOCAL: "true",
-    ALEMBIC_BIN: tools.alembic,
-    ALEMBIC_CONFIG: path.join(resolvedRuntimeRoot, "config", "alembic.ini"),
     PUPPETEER_EXECUTABLE_PATH: tools.chrome,
     OLLAMA_URL: "http://127.0.0.1:11434",
     ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
@@ -991,35 +986,6 @@ function resolveBun(
     "/opt/homebrew/bin/bun",
     "/usr/local/bin/bun",
   ]);
-}
-
-async function resolveAlembic(
-  explicitPath: string | undefined,
-  repoRoot: string | undefined,
-  runFile: RunFile = defaultRunFile,
-): Promise<string> {
-  const candidates = [
-    explicitPath,
-    process.env.ALEMBIC_BIN,
-    repoRoot && path.join(repoRoot, "vision-alembic"),
-    repoRoot && path.join(repoRoot, "venv", "bin", "alembic"),
-    "/opt/homebrew/bin/alembic",
-    "/usr/local/bin/alembic",
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  for (const candidate of candidates) {
-    if (!executableExists(candidate)) continue;
-    try {
-      await runFile(candidate, ["--version"], { timeout: 10_000 });
-      return candidate;
-    } catch {
-      // A checked-in venv may belong to a container and have a dead interpreter.
-    }
-  }
-  const error: NativeRuntimeError = new Error(
-    "Vision's packaged Alembic migration runtime was not found. Reinstall Vision or prepare the native runtime before starting.",
-  );
-  error.code = "ALEMBIC_NOT_FOUND";
-  throw error;
 }
 
 export interface FingerprintEntry {
@@ -1297,7 +1263,6 @@ export interface NativeRuntimeOptions {
   appPort?: number | (() => number) | undefined;
   postgresBinDir?: string | undefined;
   allowExternalPostgres?: boolean | undefined;
-  alembicPath?: string | undefined;
   bunPath?: string | undefined;
   chromePath?: string | undefined;
   requireRuntimeManifest?: boolean | undefined;
@@ -1330,7 +1295,6 @@ export interface NativeRuntimePaths {
 }
 
 export interface NativeTools extends DiscoveredPostgres {
-  alembic: string;
   bun: string | undefined;
   compiledBackend: string | undefined;
   chrome: string | undefined;
@@ -1540,11 +1504,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       allowExternalPostgres: options.allowExternalPostgres === true,
       runFile,
     });
-    const alembic = await resolveAlembic(
-      options.alembicPath,
-      repoRoot || runtimeRoot,
-      runFile,
-    );
     const bun = resolveBun(options.bunPath, runtimeRoot);
     const compiledBackend = runtimeRoot
       ? findFirstExecutable([path.join(runtimeRoot, "vision-backend")])
@@ -1558,7 +1517,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     }
     tools = {
       ...postgres,
-      alembic,
       bun,
       compiledBackend,
       chrome: discoverChrome(options.chromePath, browserRuntimeRoot),
@@ -2262,7 +2220,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     );
     await runFile(
       bun,
-      ["run", "apps/node-backend/scripts/db-migrate.ts", "upgrade", "head"],
+      ["run", "apps/node-backend/scripts/db-migrate.ts", "up"],
       {
         cwd: repoRoot,
         timeout: 15 * 60_000,
@@ -2270,14 +2228,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         env: safeChildEnv({
           ...runtimeEnv,
           VISION_RUNTIME_ROOT: runtimeRoot || repoRoot,
-          VISION_CACHE_DIR: paths.cache,
           VISION_SKIP_CONFIG_ENV_LOCAL: "true",
-          ALEMBIC_BIN: requireTools().alembic,
-          ALEMBIC_CONFIG: path.join(
-            runtimeRoot || repoRoot,
-            "config",
-            "alembic.ini",
-          ),
         }),
       },
     );
@@ -3125,29 +3076,46 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       config,
       config.ownerRole,
       config.ownerPassword,
-      async (env) => {
-        const result = await runFile(
-          path.join(requireTools().binDir, "psql"),
-          [
-            "-h",
-            LOOPBACK_HOST,
-            "-p",
-            String(config.port),
-            "-U",
-            config.ownerRole,
-            "-d",
-            targetDatabase,
-            "--tuples-only",
-            "--no-align",
-            "--no-psqlrc",
-            "--command",
-            "SELECT version_num FROM alembic_version ORDER BY version_num;",
-          ],
-          { timeout: 10_000, env },
-        );
-        return pickHighestRevision(result.stdout.split("\n"));
-      },
+      async (env) =>
+        (await readSchemaLedger(targetDatabase, config, env, 10_000)).head ||
+        "",
     );
+  }
+
+  async function readSchemaLedger(
+    database: string,
+    config: NativeDatabaseConfig,
+    env: ChildEnv,
+    timeout: number,
+  ): Promise<{ head: string | undefined; hasAlembicVersion: boolean }> {
+    const query = (command: string) =>
+      runFile(
+        path.join(requireTools().binDir, "psql"),
+        [
+          "-h",
+          LOOPBACK_HOST,
+          "-p",
+          String(config.port),
+          "-U",
+          config.ownerRole,
+          "-d",
+          database,
+          "--tuples-only",
+          "--no-align",
+          "--no-psqlrc",
+          "--set",
+          "ON_ERROR_STOP=1",
+          "--command",
+          command,
+        ],
+        { timeout, env },
+      ).then((result) => result.stdout.trim());
+    const [hasKysely, hasAlembic] = (await query(SCHEMA_LEDGER_SQL)).split("|");
+    const head =
+      hasKysely === "t"
+        ? (await query(SCHEMA_HEAD_SQL)) || undefined
+        : undefined;
+    return { head, hasAlembicVersion: hasAlembic === "t" };
   }
 
   async function adminDatabasePsql(
@@ -3319,7 +3287,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     database: string,
     config: NativeDatabaseConfig,
     expectedSchemaHead: string | undefined,
-  ): Promise<{ schemaHeads: string[]; tableCount: number }> {
+  ): Promise<{ schemaHead: string; tableCount: number }> {
     const target = validateIdentifier(database, "database name");
     return withPgPass(
       config,
@@ -3343,37 +3311,22 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
             "--set",
             "ON_ERROR_STOP=1",
             "--command",
-            "SELECT version_num FROM alembic_version ORDER BY version_num; SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';",
+            "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';",
           ],
           { timeout: 30_000, env },
         );
-        const lines = result.stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean);
-        const tableCount = Number(lines.at(-1));
-        const schemaHeads = lines.slice(0, -1);
+        const tableCount = Number(result.stdout.trim());
         if (!Number.isInteger(tableCount) || tableCount <= 0)
           throw new Error("Restored database has no public schema tables");
-        if (expectedSchemaHead) {
-          const expectedHeads = String(expectedSchemaHead)
-            .split(",")
-            .map((head) => head.trim())
-            .filter(Boolean)
-            .sort();
-          const restoredHeads = [...schemaHeads].sort();
-          const matches =
-            expectedHeads.length > 1
-              ? JSON.stringify(restoredHeads) === JSON.stringify(expectedHeads)
-              : expectedHeads[0] !== undefined &&
-                restoredHeads.includes(expectedHeads[0]);
-          if (!matches) {
-            throw new Error(
-              "Restored database schema revision does not match backup metadata",
-            );
-          }
+        const ledger = await readSchemaLedger(target, config, env, 30_000);
+        if (!ledger.head || ledger.hasAlembicVersion)
+          throw preBaselineBackupError();
+        if (expectedSchemaHead && ledger.head !== expectedSchemaHead.trim()) {
+          throw new Error(
+            "Restored database schema revision does not match backup metadata",
+          );
         }
-        return { schemaHeads, tableCount };
+        return { schemaHead: ledger.head, tableCount };
       },
     );
   }
@@ -3386,7 +3339,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     }: { format?: string; expectedSchemaHead?: string | undefined } = {},
   ): Promise<{
     switchToken: DatabaseSwitchToken;
-    validation: { schemaHeads: string[]; tableCount: number };
+    validation: { schemaHead: string; tableCount: number };
   }> {
     await assertNativeActive();
     const config = await bootstrapDatabase();

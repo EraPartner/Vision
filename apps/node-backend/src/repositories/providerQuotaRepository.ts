@@ -1,8 +1,7 @@
 /**
  * Provider Quota Repository — data access for the provider_quota table.
  *
- * Table is created by Alembic migration
- * 0042_add_research_provider_mapping_and_quota. Holds per-provider, per-UTC-day
+ * Table is defined in db/migrations/0001_baseline.sql. Holds per-provider, per-UTC-day
  * request counters so the quota governor's daily budget survives restarts
  * (ADR-079). All mutations use parameterised queries.
  */

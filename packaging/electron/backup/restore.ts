@@ -20,6 +20,7 @@ import {
   ERR_INVALID_PASSPHRASE,
 } from "./crypto";
 import { restoreNativeBundle, restoreNativeDatabase } from "./native-transport";
+import { preBaselineBackupError } from "../runtime/native";
 import type { NativeRestoreRuntime } from "./native-transport";
 
 /** The native runtime operations backup and restore use. */
@@ -101,76 +102,92 @@ export async function resolveDatabaseEnvironment(): Promise<{
   return { nativeRuntime: getNativeRuntime() };
 }
 
-function revisionNumericPrefix(rev: string): number | null {
-  const match = /^(\d+)/.exec(String(rev || ""));
-  return match?.[1] !== undefined ? parseInt(match[1], 10) : null;
+function revisionNumericPrefix(rev: string): number | undefined {
+  const match = /^(\d+)_/.exec(String(rev || ""));
+  return match?.[1] !== undefined ? Number.parseInt(match[1], 10) : undefined;
 }
 
+/** Highest migration shipped with this install, from db/migrations. */
 function getLocalMigrationChainHead(): string {
   try {
     const root = ctx.workDir?.() || ctx.repoRootFallback;
     // path.join() rejects a missing root; that is "no local chain".
     if (typeof root !== "string") return "";
-    const versionsDir = path.join(root, "alembic", "versions");
-    let best = "";
-    for (const filename of fs.readdirSync(versionsDir)) {
-      if (!filename.endsWith(".py") || filename.startsWith("_")) continue;
-      const revision = filename.slice(0, -3);
-      const candidate = revisionNumericPrefix(revision);
-      const current = revisionNumericPrefix(best);
-      if (candidate != null && (current == null || candidate > current))
-        best = revision;
-    }
-    return best;
+    return (
+      fs
+        .readdirSync(path.join(root, "db", "migrations"))
+        .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
+        .filter((name) => !name.endsWith(".down.sql"))
+        .map((name) => name.slice(0, -".sql".length))
+        .sort()
+        .at(-1) || ""
+    );
   } catch {
     return "";
   }
 }
 
-function readDumpSchemaHead(sqlPath: string): Promise<string> {
-  return new Promise((resolve) => {
+interface DumpSchemaLedger {
+  /** Highest public.kysely_migration name, or "" when the ledger is absent. */
+  head: string;
+  /** The dump creates or fills Alembic's version table. */
+  hasAlembicVersion: boolean;
+}
+
+const KYSELY_COPY =
+  /^COPY\s+(?:"?public"?\.)?"?kysely_migration"?\s*\(\s*"?name"?\s*,[^)]*\)\s+FROM\s+stdin;/i;
+const KYSELY_INSERT =
+  /^INSERT INTO\s+(?:"?public"?\.)?"?kysely_migration"?\s*(?:\([^)]*\)\s*)?VALUES\s*\('([^']+)'/i;
+const ANY_COPY = /^COPY\s+\S.*\s+FROM\s+stdin;$/i;
+const ALEMBIC_TABLE =
+  /^(?:CREATE TABLE|COPY|INSERT INTO)\s+(?:"?[\w$]+"?\.)?"?alembic_version"?[\s(]/i;
+
+// Reads the migration ledger rows from a plain pg_dump. A plain dump writes
+// one COPY block per table, so the scan reads the whole file.
+function readDumpSchemaLedger(sqlPath: string): Promise<DumpSchemaLedger> {
+  return new Promise((resolve, reject) => {
     const stream = fs.createReadStream(sqlPath, { encoding: "utf8" });
     const lines = readline.createInterface({
       input: stream,
       crlfDelay: Infinity,
     });
-    let inCopyBlock = false;
-    let settled = false;
-    const finish = (value: string) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-      lines.close();
-      stream.destroy();
+    const ledger: DumpSchemaLedger = { head: "", hasAlembicVersion: false };
+    const record = (name: string | undefined) => {
+      if (name && name > ledger.head) ledger.head = name;
     };
+    let copyBlock: "kysely" | "other" | undefined;
     lines.on("line", (line) => {
-      if (inCopyBlock) {
-        const value = line.trim();
-        finish(value === "\\." ? "" : value);
+      // COPY rows are table data; only statements outside them are parsed.
+      if (copyBlock) {
+        if (line === "\\.") copyBlock = undefined;
+        else if (copyBlock === "kysely") record(line.split("\t", 1)[0]);
         return;
       }
-      if (
-        /^COPY\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*\("?version_num"?\)\s+FROM\s+stdin;/i.test(
-          line,
-        )
-      ) {
-        inCopyBlock = true;
-        return;
-      }
-      const insert = line.match(
-        /^INSERT INTO\s+(?:"?[\w$]+"?\.)?"?alembic_version"?\s*(?:\("?version_num"?\)\s*)?VALUES\s*\('([^']+)'\)/i,
-      );
-      if (insert) finish(insert[1] ?? "");
+      if (ALEMBIC_TABLE.test(line)) ledger.hasAlembicVersion = true;
+      if (KYSELY_COPY.test(line)) copyBlock = "kysely";
+      else if (ANY_COPY.test(line)) copyBlock = "other";
+      else record(KYSELY_INSERT.exec(line)?.[1]);
     });
-    lines.on("close", () => finish(""));
-    stream.on("error", () => finish(""));
+    // A read error rejects first; the later close cannot settle the promise.
+    stream.on("error", reject);
+    lines.on("close", () => resolve(ledger));
   });
+}
+
+/**
+ * Refuses a backup taken before the TypeScript migration baseline: it has
+ * Alembic's version table and no Kysely migration ledger.
+ */
+function assertPostBaselineBackup(ledger: DumpSchemaLedger): string {
+  if (!ledger.head || ledger.hasAlembicVersion) throw preBaselineBackupError();
+  return ledger.head;
 }
 
 function isSchemaRevisionNewer(candidate: string, current: string): boolean {
   const candidateNumber = revisionNumericPrefix(candidate);
   const currentNumber = revisionNumericPrefix(current);
-  if (candidateNumber == null || currentNumber == null) return false;
+  if (candidateNumber === undefined || currentNumber === undefined)
+    return false;
   return candidateNumber > currentNumber;
 }
 
@@ -285,16 +302,20 @@ export async function runBundleRestore(
     opened;
   const nativeRuntime = getNativeRuntime();
   try {
-    // metadata.json is untrusted bundle content; a schema head is compared as text.
-    const schemaHead = metadata.schemaHead
-      ? String(metadata.schemaHead)
-      : undefined;
-    if (schemaHead) {
-      const currentHead =
-        (await nativeRuntime.getSchemaHead().catch(() => "")) ||
-        getLocalMigrationChainHead();
-      assertBackupSchemaCompatible(schemaHead, currentHead, "bundle");
+    // metadata.json is untrusted bundle content; the dump's own migration
+    // ledger decides the schema revision and must agree with it.
+    const schemaHead = assertPostBaselineBackup(
+      await readDumpSchemaLedger(dbSqlPath),
+    );
+    if (metadata.schemaHead && String(metadata.schemaHead) !== schemaHead) {
+      throw new Error(
+        "Backup schema revision does not match its metadata; the bundle is corrupt.",
+      );
     }
+    const currentHead =
+      (await nativeRuntime.getSchemaHead().catch(() => "")) ||
+      getLocalMigrationChainHead();
+    assertBackupSchemaCompatible(schemaHead, currentHead, "bundle");
     const restore = await restoreNativeBundle(nativeRuntime, {
       dbSqlPath,
       attachmentsDir,
@@ -336,16 +357,16 @@ export async function runRestore(
   }
   const nativeRuntime = getNativeRuntime();
   try {
-    const dumpHead = await readDumpSchemaHead(restoreSource);
-    if (dumpHead) {
-      const currentHead =
-        (await nativeRuntime.getSchemaHead().catch(() => "")) ||
-        getLocalMigrationChainHead();
-      assertBackupSchemaCompatible(dumpHead, currentHead);
-    }
+    const dumpHead = assertPostBaselineBackup(
+      await readDumpSchemaLedger(restoreSource),
+    );
+    const currentHead =
+      (await nativeRuntime.getSchemaHead().catch(() => "")) ||
+      getLocalMigrationChainHead();
+    assertBackupSchemaCompatible(dumpHead, currentHead);
     await restoreNativeDatabase(nativeRuntime, restoreSource, {
       format: "plain",
-      expectedSchemaHead: dumpHead || undefined,
+      expectedSchemaHead: dumpHead,
       allowUnverifiedAudit,
     });
     return { success: true, file: sqlFilePath };

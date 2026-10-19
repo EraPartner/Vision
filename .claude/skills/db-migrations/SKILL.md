@@ -1,6 +1,6 @@
 ---
 name: db-migrations
-description: Vision database schema changes via Alembic — creating, applying, or rolling back PostgreSQL migrations. Use when a change touches the data model, schema, alembic/versions/, or the user mentions migrations/database changes.
+description: Vision database schema changes via the Kysely migrator — creating, applying, or rolling back PostgreSQL migrations. Use when a change touches the data model, schema, db/migrations/, or the user mentions migrations/database changes.
 ---
 
 # Vision database migrations

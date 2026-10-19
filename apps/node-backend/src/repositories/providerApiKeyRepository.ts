@@ -1,7 +1,7 @@
 /**
  * Provider API Key Repository — data access for provider_api_keys.
  *
- * Table is created by Alembic migration 0043. Stores Settings-managed research
+ * Table is defined in db/migrations/0001_baseline.sql. Stores Settings-managed research
  * provider API keys (ADR-079); one row per provider. The key is masked in API
  * responses by the service layer and never returned in full to the frontend.
  */

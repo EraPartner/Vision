@@ -1,7 +1,7 @@
 -- Vision baseline: the complete PostgreSQL 18 schema at the former Alembic
 -- head 0128_category_path_on_legacy_rename, with reference rows and one
 -- baseline_installed audit event. Generated once from a disposable database
--- (ADR-221). Never edit this file; add a new numbered migration instead.
+-- (ADR-222). Never edit this file; add a new numbered migration instead.
 --
 -- PostgreSQL database dump
 --

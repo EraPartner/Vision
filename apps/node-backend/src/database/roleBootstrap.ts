@@ -74,7 +74,7 @@ export type BootstrapLogger = Pick<typeof logger, "info" | "warn">;
 export interface EnsureAppRoleOptions {
   /** Runtime pool URL (the app role). */
   databaseUrl: string;
-  /** Privileged URL (DDL / Alembic role). */
+  /** Privileged URL (DDL / migration role). */
   migrationsUrl?: string | undefined;
   /** Connect attempts while the DB cold-starts. */
   maxAttempts?: number;

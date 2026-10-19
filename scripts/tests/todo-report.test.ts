@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-const script = join(import.meta.dirname, "..", "todo-report.py");
+const script = join(import.meta.dirname, "..", "todo-report.ts");
 
 /** execFileSync failures carry the child's captured stderr. */
 function stderrOf(error: unknown): string {
@@ -32,7 +32,7 @@ test("accepts a completed authoritative Findings queue", () => {
     ].join("\n"),
   );
 
-  const output = execFileSync("python3", [script, "--check", "--file", todo], {
+  const output = execFileSync(process.execPath, [script, "--check", "--file", todo], {
     encoding: "utf8",
   });
 
@@ -56,7 +56,7 @@ test("derives state from Tracking metadata rather than title prose", () => {
     ].join("\n"),
   );
 
-  const output = execFileSync("python3", [script, "--file", todo], {
+  const output = execFileSync(process.execPath, [script, "--file", todo], {
     encoding: "utf8",
   });
 
@@ -82,7 +82,7 @@ test("rejects open findings without explicit Tracking metadata", () => {
 
   assert.throws(
     () =>
-      execFileSync("python3", [script, "--check", "--file", todo], {
+      execFileSync(process.execPath, [script, "--check", "--file", todo], {
         encoding: "utf8",
         stdio: "pipe",
       }),
@@ -126,7 +126,7 @@ test("rejects duplicate, conflicting, or unrecognized Tracking metadata", () => 
 
   assert.throws(
     () =>
-      execFileSync("python3", [script, "--check", "--file", duplicateTodo], {
+      execFileSync(process.execPath, [script, "--check", "--file", duplicateTodo], {
         encoding: "utf8",
         stdio: "pipe",
       }),
@@ -137,7 +137,7 @@ test("rejects duplicate, conflicting, or unrecognized Tracking metadata", () => 
   );
   assert.throws(
     () =>
-      execFileSync("python3", [script, "--check", "--file", conflictingTodo], {
+      execFileSync(process.execPath, [script, "--check", "--file", conflictingTodo], {
         encoding: "utf8",
         stdio: "pipe",
       }),
@@ -151,7 +151,7 @@ test("rejects duplicate, conflicting, or unrecognized Tracking metadata", () => 
   );
   assert.throws(
     () =>
-      execFileSync("python3", [script, "--check", "--file", unrecognizedTodo], {
+      execFileSync(process.execPath, [script, "--check", "--file", unrecognizedTodo], {
         encoding: "utf8",
         stdio: "pipe",
       }),

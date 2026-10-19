@@ -1,4 +1,0 @@
-# Development-only Python tools. Constrained to the runtime pins so type checking
-# sees the same alembic/sqlalchemy versions that ship.
--c requirements.txt
-mypy>=1.18

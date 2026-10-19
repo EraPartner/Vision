@@ -91,7 +91,6 @@ export async function main(): Promise<void> {
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: nativePayloadRoot,
     browserRuntimeRoot: nativePayloadRoot,
-    alembicPath: path.join(nativePayloadRoot, "vision-alembic"),
     allowExternalPostgres:
       process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
     runtimeId: "vision_dev",

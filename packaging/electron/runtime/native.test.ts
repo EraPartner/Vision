@@ -15,8 +15,6 @@ import {
   parsePostgresMajor,
   parsePostgresVersionNumber,
   classifyDatabaseSwitchState,
-  revisionNumericPrefix,
-  pickHighestRevision,
   assertPostgres18Version,
   bundledPostgresBin,
   discoverPostgres18,
@@ -242,16 +240,6 @@ test("PostgreSQL discovery accepts major 18 and rejects older tools", () => {
   );
 });
 
-test("schema revision selection is deterministic across legacy multi-head rows", () => {
-  assert.equal(revisionNumericPrefix("0087_example"), 87);
-  assert.equal(revisionNumericPrefix("hash_revision"), undefined);
-  assert.equal(
-    pickHighestRevision(["0099_second", "0100_first", "0098_old"]),
-    "0100_first",
-  );
-  assert.equal(pickHighestRevision(["0100_alpha", "0100_beta"]), "0100_beta");
-});
-
 test("database switch recovery classifies every atomic rename interruption point", () => {
   assert.equal(
     classifyDatabaseSwitchState({ liveExists: true, previousExists: false }),
@@ -347,7 +335,6 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_init",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(calls),
       auditBridgeToken: "a".repeat(64),
@@ -476,7 +463,6 @@ test("managed PostgreSQL provisions roles, database and extensions in one sessio
       postgresRuntimeRoot: runtimeRoot,
       runtimeId,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile,
     });
@@ -563,7 +549,6 @@ test("managed PostgreSQL upgrades observability config for an existing cluster",
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_observability_upgrade",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(),
     });
@@ -617,7 +602,6 @@ test("managed PostgreSQL restarts a warm cluster after observability config chan
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_observability_restart",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       isPortFree: async () => true,
       spawnPostgresProcess: () => {
@@ -693,7 +677,6 @@ test("managed PostgreSQL quarantines an interrupted first initialization before 
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_recovery",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(),
     });
@@ -735,7 +718,6 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_collision",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       isPortFree: async () => false,
       runFile: async (executable, args) => {
@@ -783,7 +765,6 @@ test("managed PostgreSQL shutdown targets only Vision's exact data directory", a
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_stop",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(calls),
     });
@@ -916,8 +897,14 @@ test("database activation applies materialized-view ownership inside the staging
       ) {
         return { stdout: "1\n", stderr: "" };
       }
-      if (command.includes("SELECT version_num FROM alembic_version")) {
-        return { stdout: "0064_example\n42\n", stderr: "" };
+      if (command.includes("to_regclass('public.kysely_migration')")) {
+        return { stdout: "t|f\n", stderr: "" };
+      }
+      if (command.includes("FROM public.kysely_migration")) {
+        return { stdout: "0064_example\n", stderr: "" };
+      }
+      if (command.includes("FROM pg_catalog.pg_tables")) {
+        return { stdout: "42\n", stderr: "" };
       }
       return { stdout: "", stderr: "" };
     };
@@ -927,7 +914,6 @@ test("database activation applies materialized-view ownership inside the staging
       runtimeId: "vision_restore_owner_test",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile,
     });
@@ -1005,7 +991,6 @@ test("native seed SQL is applied transactionally with an argument array", async 
       runtimeId,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args: [...args] });
@@ -1108,7 +1093,6 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
       postgresBinDir: binDir,
       postgresPort: 55_432,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args });
@@ -1164,7 +1148,6 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
       runtimeId: "vision_external_observability",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
@@ -1294,7 +1277,6 @@ test("native first start persists and unreferences an argument-array backend chi
       appPort: 43_210,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       isPortFree: async () => true,
       runFile: async (executable, args) => {
@@ -1366,7 +1348,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
     runtimeRoot,
     auditBridgeToken: "a".repeat(64),
     tools: {
-      alembic: "/opt/homebrew/bin/alembic",
       chrome: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     },
   });
@@ -1375,11 +1356,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
   assert.equal(env.PORT, "43123");
   assert.equal(env.VISION_RUNTIME_ROOT, runtimeRoot);
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
-  assert.equal(
-    env.ALEMBIC_CONFIG,
-    path.join(runtimeRoot, "config", "alembic.ini"),
-  );
-  assert.equal(env.ALEMBIC_BIN, "/opt/homebrew/bin/alembic");
   assert.equal(env.VISION_SKIP_CONFIG_ENV_LOCAL, "true");
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
   assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
@@ -1405,7 +1381,7 @@ test("packaged OpenAI drops its key unless explicitly enabled", () => {
       cache: "/tmp/cache",
     },
     runtimeRoot: "/tmp/native-runtime",
-    tools: { alembic: "/tmp/alembic", chrome: "/tmp/chrome" },
+    tools: { chrome: "/tmp/chrome" },
   };
   for (const runtimeEnv of [
     { OPENAI_API_ENABLED: "false", OPENAI_API_KEY: "synthetic-key" },
@@ -2195,7 +2171,6 @@ test("native custom dump validation rejects corrupt or truncated input", async (
       runtimeId: "vision_corrupt_dump",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
@@ -2235,7 +2210,6 @@ for (const phase of ["before", "between", "after"] as const) {
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_recovery_test",
       bunPath: "/bin/echo",
-      alembicPath: "/bin/echo",
       chromePath: "/bin/echo",
       runFile: async (file, args, options) => {
         const sql = args[args.indexOf("--command") + 1] ?? "";

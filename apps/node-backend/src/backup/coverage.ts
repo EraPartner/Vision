@@ -14,15 +14,15 @@
  * All Postgres tables that exist in the current schema and must be included
  * in every backup.  Sorted alphabetically for easy diffing.
  *
- * Derived from alembic/versions/ — compute as:
- *   all CREATE TABLE ... across all upgrade() blocks
- *   minus all DROP TABLE ... across all upgrade() blocks
- *   minus Alembic internals (alembic_version)
- *
+ * Derived from db/migrations/ — compute as:
+ *   all CREATE TABLE ... in 0001_baseline.sql and later up migrations
+ *   minus all DROP TABLE ... in later up migrations
+ *   (migrator bookkeeping tables are listed in BACKUP_EXCLUDED_TABLES)
  */
 const BACKUP_COVERED_TABLES = Object.freeze([
   "account_statement_balances",
   "accounts",
+  "adr109_legacy_cleanup_marker",
   "agg_split_outstanding",
   "ai_conversations",
   "ai_disclosure_grants",
@@ -42,7 +42,6 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "audit_chain_checkpoints",
   "audit_chain_entries",
   "audit_chain_head",
-  "belfius_raw_transactions",
   "belgian_inflation_rates",
   "cashflow_forecast_accuracy",
   "cashflow_forecast_mc",
@@ -51,7 +50,6 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "category_merge_aliases",
   "category_root_aliases",
   "custom_parser_configs",
-  "custom_raw_transactions",
   "db_editor_audit",
   "exchange_rates",
   "import_batches",
@@ -62,8 +60,6 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "instrument_provider_map",
   "investment_ticker_prefs",
   "investments",
-  "kbc_raw_transactions",
-  "manual_raw_transactions",
   "manual_transaction_dedup_claims",
   "planned_transaction_executions",
   "planned_transaction_loan_schedule",
@@ -93,8 +89,6 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "research_dossier_links",
   "research_dossier_versions",
   "research_dossiers",
-  "revolut_raw_transactions",
-  "sabb_raw_transactions",
   "saved_analyses",
   "saved_analysis_definition_versions",
   "saved_analysis_runs",
@@ -105,7 +99,6 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "split_audit",
   "split_payments",
   "tags",
-  "transaction_raw_references",
   "transaction_source_links",
   "transaction_source_records",
   "transaction_splits",
@@ -113,9 +106,7 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "transactions",
   "transfer_dismissals",
   "user_settings",
-  "vision_raw_transactions",
   "watchlist",
-  "wise_raw_transactions",
 ]);
 
 /**
@@ -123,20 +114,10 @@ const BACKUP_COVERED_TABLES = Object.freeze([
  * Document the reason so reviewers understand each omission.
  */
 const BACKUP_EXCLUDED_TABLES = Object.freeze({
-  alembic_version:
-    "Alembic internal — schema version is re-derived on restore via alembic upgrade head",
-  agg_shadow_divergences:
-    "Dropped in migration 0009 — no longer exists in current schema",
-  feature_flags:
-    "Dropped in migration 0011 — no longer exists in current schema",
-  bank_statements:
-    "Dropped in migration 0014 — bank reconciliation feature was removed",
-  reconciliation_entries:
-    "Dropped in migration 0014 — bank reconciliation feature was removed",
-  investments_flat:
-    "Transient name inside migration 0087 (ADR-109 conversion) — renamed to `investments` before the migration commits, so no table of this name exists at head",
-  portfolio_transactions_flat:
-    "Transient name inside migration 0087 (ADR-109 conversion) — renamed to `portfolio_transactions` before the migration commits, so no table of this name exists at head",
+  kysely_migration:
+    "Migrator bookkeeping created by database/migrate.ts, not by a migration; the schema version it records travels with the dump",
+  kysely_migration_lock:
+    "Migrator lock row created by database/migrate.ts, not by a migration",
 });
 
 export {

@@ -493,7 +493,7 @@ async function start() {
         dbReady = true;
         endDbPoll();
         logger.info("Database connection verified successfully");
-        // Apply pending migrations from db/migrations (fail-fast, ADR-221).
+        // Apply pending migrations from db/migrations (fail-fast, ADR-222).
         const endMig = bootMark("run_migrations");
         await runMigrations();
         // Approved views may be created or replaced by this migration pass.

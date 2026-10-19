@@ -1,6 +1,6 @@
 /**
  * Validation middleware tests.
- * Mirrors validation-related tests from Python test suite.
+ * Covers request validation behaviour.
  */
 import { describe, it, expect, vi } from "vitest";
 import {

@@ -70,16 +70,16 @@ jobs:
           bun-version: "1.4.2"
       - name: Check agent instructions and CI classification
         run: |
-          python3 scripts/check-agent-instructions.py
-          python3 scripts/tests/ci-classify.test.py
+          bun scripts/check-agent-instructions.ts
+          bun test scripts/tests/ci-classify.test.ts
       - name: Enforce private internal package boundaries
         run: |
           bun scripts/check-package-boundaries.ts
           bun test scripts/tests/package-boundaries.test.ts
       - name: Enforce workflow supply-chain policy
         run: |
-          python3 scripts/check-workflow-supply-chain.py
-          python3 scripts/tests/workflow-supply-chain.test.py
+          bun scripts/check-workflow-supply-chain.ts
+          bun test scripts/tests/workflow-supply-chain.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Secrets scan — gitleaks on push/PR diff range
@@ -112,6 +112,11 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+
       - name: Classify changed paths
         id: classify
         # Values reach the script through env, never via ${{ }} interpolation
@@ -122,7 +127,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_SHA: ${{ github.sha }}
-        run: python3 scripts/ci-classify.py
+        run: bun scripts/ci-classify.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Commit messages — enforce the same conventional-commit contract as the
@@ -219,30 +224,6 @@ jobs:
         run: sh scripts/audit-js.sh
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Python deps audit — pip-audit on config/requirements*.txt
-  # ─────────────────────────────────────────────────────────────────────────────
-  pip-audit:
-    name: Deps Audit (Python)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Audit Python dependencies
-        run: pip install pip-audit==2.10.1 && pip-audit -r config/requirements.txt -r config/requirements-dev.txt
-
-  # ─────────────────────────────────────────────────────────────────────────────
   # Lint — frontend ESLint + backend ESLint
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
@@ -266,6 +247,10 @@ jobs:
 
       - name: Lint backend
         run: bun run lint:backend
+
+      # Destructive DDL must carry a squawk-ignore comment (config/squawk.toml, ADR-222).
+      - name: Lint migrations for destructive DDL
+        run: bun run db:lint
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Type-check — TypeScript strict check on frontend and shared packages
@@ -334,38 +319,6 @@ jobs:
 
       - name: Type-check the Electron shell (strict TypeScript, ADR-196)
         run: bun run typecheck:electron
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Python type check — mypy --strict over Alembic env and migrations, repo
-  # scripts and their tests (config/mypy.ini). Dependencies come from the
-  # hash-pinned runtime and dev requirement files so mypy sees shipped versions.
-  # ─────────────────────────────────────────────────────────────────────────────
-  typecheck-python:
-    name: Type Check (Python)
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install pinned Python dependencies
-        run: pip install --require-hashes -r config/requirements.txt -r config/requirements-dev.txt
-
-      - name: Type-check Python (mypy --strict)
-        run: python3 -m mypy --config-file config/mypy.ini
-
-      - name: Test Alembic audit callback
-        run: python3 scripts/tests/test_audit_migration_hook.py
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Verify generated artifacts — the committed locale TS files and the
@@ -510,16 +463,6 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      # Migrations are Alembic (Python) even though the backend is Node, so the
-      # bun toolchain alone cannot build the schema.
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Alembic toolchain
-        run: pip install -r config/requirements.txt
-
       - name: Install native PostgreSQL 18
         run: bash .github/scripts/install-postgres-18.sh
 
@@ -533,13 +476,9 @@ jobs:
         env:
           VISION_RUN_PERFORMANCE_PROBES: "1"
           VISION_RUN_AUDIT_PERFORMANCE: "1"
+          # Fails when src/database/schema.generated.ts drifts from the migrated schema.
+          VISION_TEST_DB_VERIFY_CODEGEN: "1"
         run: scripts/with-test-db.sh --coverage
-
-      - name: Run database lifecycle and contract tests
-        run: |
-          for task in migration-fidelity legacy-retirements adr090-retirement adr088-contract statement-contract; do
-            VISION_TEST_DB_TASK="$task" scripts/with-test-db.sh
-          done
 
       - name: Report backend coverage on PR
         if: always()
@@ -640,36 +579,6 @@ jobs:
           echo "Branch protection OK — every expected gate is enforced."
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Destructive migrations — native startup uses the guarded migration
-  # runner before accepting requests, so a DROP in alembic/versions/ reaches every
-  # installation on its next start. That is exactly how 0055 dropped bank_account
-  # ahead of its coupled code and crashed startup (ADR-088; 0055 neutered, 0056
-  # recovery).
-  # This gate makes destructive DDL state its case instead of relying on someone
-  # remembering that incident.
-  # ─────────────────────────────────────────────────────────────────────────────
-  verify-destructive-migrations:
-    name: Verify Destructive Migrations
-    needs: [changes]
-    if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
-        with:
-          persist-credentials: false
-
-      # No setup-python step on purpose: the checker is stdlib-only (ast + re) and
-      # ubuntu-24.04 ships python3, so this stays dependency-free.
-      - name: Self-test the checker
-        run: python3 scripts/check-destructive-migrations.py --self-test
-
-      - name: Check migrations for unmarked destructive DDL
-        run: python3 scripts/check-destructive-migrations.py
-
-  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all static and unit-level quality checks must pass before the
   # native production-process checks run.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -687,16 +596,13 @@ jobs:
       - dependency-review
       - secrets-scan
       - deps-audit
-      - pip-audit
       - lint
       - typecheck
       - typecheck-backend
-      - typecheck-python
       - verify-generated
       - build-frontend
       - test-frontend
       - test-backend
-      - verify-destructive-migrations
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
@@ -818,15 +724,8 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install native runtime dependencies
-        run: |
-          pip install -r config/requirements.txt
-          bash .github/scripts/install-postgres-18.sh
+      - name: Install native PostgreSQL 18
+        run: bash .github/scripts/install-postgres-18.sh
 
       - name: Build production frontend
         run: CI=1 bun run build
@@ -858,15 +757,8 @@ jobs:
       - name: Setup toolchain
         uses: ./.github/actions/setup
 
-      - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install native runtime dependencies
-        run: |
-          pip install -r config/requirements.txt
-          bash .github/scripts/install-postgres-18.sh
+      - name: Install native PostgreSQL 18
+        run: bash .github/scripts/install-postgres-18.sh
 
       - name: Build production frontend
         run: CI=1 bun run build

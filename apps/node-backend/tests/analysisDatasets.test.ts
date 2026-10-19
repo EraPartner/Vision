@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   ANALYSIS_DATASET_CATALOG_VERSION,
@@ -9,14 +8,6 @@ import {
 import { calculateCostBasis } from "@vision/shared-utils/portfolio";
 import type { CostBasisTxnLike } from "@vision/shared-utils/portfolio";
 import { loose } from "./helpers/partial.ts";
-
-const migration = readFileSync(
-  new URL(
-    "../../../alembic/versions/0107_analysis_dataset_views.py",
-    import.meta.url,
-  ),
-  "utf8",
-);
 
 describe("versioned analysis datasets", () => {
   it("publishes four immutable, scoped version-1 datasets", () => {
@@ -55,30 +46,6 @@ describe("versioned analysis datasets", () => {
         authorizationScope: "local-user-database",
       }),
     ).toThrow("Unsupported analysis dataset");
-  });
-
-  it("materializes security-barrier views without secret or admin surfaces", () => {
-    for (const relation of [
-      "transactions_v1",
-      "accounts_v1",
-      "holding_events_v1",
-      "cash_flows_v1",
-    ]) {
-      expect(migration).toContain(`CREATE VIEW vision_analysis.${relation}`);
-    }
-    expect(migration).toContain("security_barrier = true");
-    expect(migration).toContain(
-      "REVOKE ALL ON ALL TABLES IN SCHEMA vision_analysis FROM PUBLIC",
-    );
-    for (const forbidden of [
-      "provider_api_keys",
-      "db_editor_audit",
-      "raw_csv_line",
-      "dedup_fingerprint",
-      "tx_hash",
-    ]) {
-      expect(migration).not.toContain(`public.${forbidden}`);
-    }
   });
 
   it("keeps transfers out of spending and leaves refunds distinguishable", () => {
@@ -136,13 +103,5 @@ describe("versioned analysis datasets", () => {
     expect(getAnalysisDataset("holdings")!.coverage).toContain(
       "canonical engine",
     );
-  });
-
-  it("declares a reversible migration chain", () => {
-    expect(migration).toContain(
-      'down_revision: Union[str, Sequence[str], None] = "0106_remove_federal_pit_total_alias"',
-    );
-    expect(migration).toContain("DROP VIEW vision_analysis.cash_flows_v1");
-    expect(migration).toContain("DROP SCHEMA vision_analysis");
   });
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Migration CLI for the DATABASE_URL database. Delegates to
- * `src/database/migrate.ts`, the exact code the app runs on boot (ADR-221).
+ * `src/database/migrate.ts`, the exact code the app runs on boot (ADR-222).
  *
  * Usage: DATABASE_URL=postgres://... bun run apps/node-backend/scripts/db-migrate.ts [command]
  *   (no command) | up   apply every pending migration

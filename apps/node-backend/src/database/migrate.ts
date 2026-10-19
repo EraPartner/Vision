@@ -19,7 +19,7 @@ const REPO_ROOT = process.env.VISION_RUNTIME_ROOT
 
 export const MIGRATIONS_DIR = path.join(REPO_ROOT, "db", "migrations");
 export const BASELINE_MIGRATION = "0001_baseline";
-/** The only Alembic revision a database can be adopted from (ADR-221). */
+/** The only Alembic revision a database can be adopted from (ADR-222). */
 export const FINAL_ALEMBIC_REVISION = "0128_category_path_on_legacy_rename";
 /**
  * Normalized catalog fingerprint of `0001_baseline.sql` on PostgreSQL 18,
@@ -366,7 +366,7 @@ export async function revertLatestMigration(): Promise<string | undefined> {
     }
     const { error, results } = await migrator.migrateDown();
     assertSucceeded(error, results);
-    return latestApplied(migrator);
+    return await latestApplied(migrator);
   } finally {
     await db.destroy();
   }
