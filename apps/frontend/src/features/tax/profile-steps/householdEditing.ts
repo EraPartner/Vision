@@ -4,7 +4,6 @@
  * only sit on `net_professional_amount`, partner references never dangle and expense choices
  * are dropped once no activity uses their category.
  */
-// By path, not through the `@/lib/belgianTax` barrel, which re-exports the household engine.
 import { forfaitCategoryOf } from "@/lib/belgianTax/forfaitCategory";
 import type { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type {

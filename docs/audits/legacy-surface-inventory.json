@@ -803,7 +803,7 @@
       "disposition": "Removed from runtime emission and acceptance. Migration 0106 strips equal persisted aliases and refuses alias-only, malformed, or divergent data.",
       "paths": [
         "apps/frontend/src/lib/belgianTax/types.ts",
-        "apps/frontend/src/lib/belgianTax/pit.ts",
+        "packages/shared-utils/src/belgianTax/pit.ts",
         "alembic/versions/0106_remove_federal_pit_total_alias.py",
         "apps/node-backend/src/routes/settings.ts"
       ],

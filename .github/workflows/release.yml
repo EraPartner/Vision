@@ -226,6 +226,9 @@ jobs:
       - name: Run repository script tests
         run: bun run test:scripts
 
+      - name: Run shared package tests
+        run: bun run test:packages
+
       - name: Run backend tests with disposable PostgreSQL
         run: scripts/with-test-db.sh --coverage
 

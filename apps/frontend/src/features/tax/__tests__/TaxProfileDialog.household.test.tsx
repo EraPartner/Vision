@@ -9,10 +9,8 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
-import {
-    applyProfileV1PatchToHousehold,
-    upgradeProfileV1ToHousehold,
-} from "@/lib/belgianTax/householdMigration";
+import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration";
+import { applyProfileV1PatchToHousehold } from "@/lib/belgianTax/householdRuntime";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { TAX_COMPUTE_DEBOUNCE_MS } from "@/hooks/useBelgianTaxComputation";

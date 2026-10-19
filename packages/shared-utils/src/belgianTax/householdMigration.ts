@@ -19,7 +19,6 @@
  *  - spouse fields on a `single` profile, and unknown keys → migratedFrom.unmappedFields.
  */
 
-import { deriveAssessment } from "./assessment.ts";
 import { forfaitCategoryOf } from "./forfaitCategory.ts";
 import type {
     ActivityKind,
@@ -392,14 +391,25 @@ function activityAmount(activity: IncomeActivity): number {
 }
 
 /**
+ * Decides whether a household with partner B files jointly, for the v1 `filingStatus`. The
+ * server passes `filesJointly` from `assessment.ts` (WIB 92 art. 126). The browser passes
+ * `undefined` so this module never loads the assessment and its tax tables (ADR-217).
+ */
+export type JointFilingCheck = (household: BelgianTaxHouseholdV2) => boolean;
+
+/**
  * Project a household onto the v1 profile shape for consumers that still read v1 fields. Lossy
  * when the household holds more than v1 can express: the primary activity of partner A sets the
  * employment type, A's activities are summed into `grossAnnualIncome`, and partner B is reduced
  * to `spouseProfessionalIncome` (sum of B's amounts). Unmapped v1 fields recorded by the upgrade
  * are restored.
+ *
+ * `filingStatus` is `single` without partner B. With partner B it is `married_joint` when
+ * `isJointFiling` says so, else `single`; without `isJointFiling` it is left out.
  */
 export function projectHouseholdToProfileV1(
     household: BelgianTaxHouseholdV2,
+    isJointFiling: JointFilingCheck | undefined,
 ): BelgianTaxProfile {
     const restored: Record<string, unknown> = {};
     for (const field of household.migratedFrom?.unmappedFields ?? []) {
@@ -445,12 +455,8 @@ export function projectHouseholdToProfileV1(
         profile.taxIncomeCategoryIds = [...household.taxIncomeCategoryIds];
 
     if (b) {
-        const joint =
-            household.relationship.legacyAssumedJoint === true &&
-            household.relationship.events.length === 0
-                ? true
-                : deriveAssessment(household, household.taxYear).decision.mode === "joint";
-        profile.filingStatus = joint ? "married_joint" : "single";
+        if (isJointFiling)
+            profile.filingStatus = isJointFiling(household) ? "married_joint" : "single";
         profile.spouseProfessionalIncome = b.activities.reduce(
             (s, x) => s + activityAmount(x),
             0,
@@ -466,17 +472,20 @@ export function projectHouseholdToProfileV1(
  * Household-only data (relationship events, extra activities, partner B's own data, birth years)
  * is preserved. Unknown keys are ignored. The deprecated `mortgageRegion` (ADR-202) is never
  * written, and a patch that edits a home field drops a stored one, so the household region is
- * the only regime input after one edit of the home step.
+ * the only regime input after one edit of the home step. `isJointFiling` decides the filing
+ * status of a spouse-field patch that does not set one; without it such a patch leaves partner B
+ * unchanged.
  */
 export function applyProfileV1PatchToHousehold(
     household: BelgianTaxHouseholdV2,
     patch: Partial<BelgianTaxProfile>,
+    isJointFiling: JointFilingCheck | undefined,
 ): BelgianTaxHouseholdV2 {
     const next = structuredClone(household);
     const entries = Object.entries(patch) as [ProfileKey, unknown][];
     let a = next.partners.find((p) => p.id === "A");
     if (!a) {
-        a = upgradeProfileV1ToHousehold(projectHouseholdToProfileV1(next)).partners[0] as HouseholdPartner;
+        a = upgradeProfileV1ToHousehold(projectHouseholdToProfileV1(next, isJointFiling)).partners[0] as HouseholdPartner;
         next.partners.unshift(a);
     }
     const partnerA = a;
@@ -504,7 +513,7 @@ export function applyProfileV1PatchToHousehold(
 
     const touches = (keys: readonly string[]) => entries.some(([k]) => keys.includes(k));
     if (touches(PRIMARY_ACTIVITY_KEYS)) {
-        const merged = { ...projectHouseholdToProfileV1(household), ...patch };
+        const merged = { ...projectHouseholdToProfileV1(household, isJointFiling), ...patch };
         const kind = activityKindFor(merged.employmentType, merged.selfEmployedIncomeKind);
         let primary = primaryActivity(partnerA);
         if (!primary) {
@@ -528,7 +537,7 @@ export function applyProfileV1PatchToHousehold(
     }
 
     if (touches(SPOUSE_KEYS)) {
-        const merged = { ...projectHouseholdToProfileV1(household), ...patch };
+        const merged = { ...projectHouseholdToProfileV1(household, isJointFiling), ...patch };
         const bIndex = next.partners.findIndex((p) => p.id === "B");
         if (merged.filingStatus === "married_joint") {
             if (bIndex < 0) next.partners.push(legacySpouse(merged));

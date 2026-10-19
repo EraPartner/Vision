@@ -1,6 +1,7 @@
 import { computeHouseholdTax, toBelgianTaxCalculation } from "./household.ts";
 import { loadHouseholdSettings } from "./settings.ts";
 import { projectHouseholdToProfileV1 } from "./householdMigration.ts";
+import { filesJointly } from "./assessment.ts";
 import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     hasMeaningfulBelgianTaxData,
@@ -56,7 +57,7 @@ export function buildTaxOverview(
     let live = loaded.household;
     if (
         !live.profileConfigured &&
-        hasMeaningfulBelgianTaxData(projectHouseholdToProfileV1(live))
+        hasMeaningfulBelgianTaxData(projectHouseholdToProfileV1(live, filesJointly))
     ) {
         live = { ...live, profileConfigured: true };
     }

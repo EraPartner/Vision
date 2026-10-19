@@ -1,7 +1,6 @@
 import type { StateCreator } from "zustand";
 import type { SettingsStore } from "@/stores/settingsStore";
-// Type-only imports from the `@/lib/belgianTax` barrel: it also re-exports the tax engine,
-// which runs on the server and must stay out of the browser bundle.
+// Type-only imports; every tax figure comes from the server (ADR-217).
 import type {
     BelgianTaxCalculation,
     BelgianTaxHouseholdSnapshotsV2,

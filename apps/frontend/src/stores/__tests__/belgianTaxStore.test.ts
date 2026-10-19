@@ -75,7 +75,8 @@ describe("Belgian tax settings slice", () => {
         expect(state.household?.partners.map((p) => p.id)).toEqual(["A", "B"]);
         const figures = await serverFigures(state.profile.taxYear);
         expect(figures.frozenHouseholdResult?.assessment.mode).toBe("joint");
-        expect(state.profile.filingStatus).toBe("married_joint");
+        // The browser does not decide the assessment (ADR-217); the server's result above does.
+        expect(state.profile).not.toHaveProperty("filingStatus");
         expect(state.profile.spouseProfessionalIncome).toBe(15_000);
     });
 
@@ -271,7 +272,7 @@ describe("Belgian tax settings slice", () => {
         expect(
             (await serverFigures(year)).frozenHouseholdResult?.assessment.mode,
         ).toBe("joint");
-        expect(state.profile.filingStatus).toBe("married_joint");
+        expect(state.profile).not.toHaveProperty("filingStatus");
 
         useSettingsStore.getState().updateHousehold((h) => ({
             ...h,
@@ -282,6 +283,7 @@ describe("Belgian tax settings slice", () => {
         expect(
             (await serverFigures(year)).frozenHouseholdResult?.assessment.mode,
         ).toBe("single");
+        expect(state.profile.filingStatus).toBe("single");
         expect(state.household).toEqual(before);
     });
 

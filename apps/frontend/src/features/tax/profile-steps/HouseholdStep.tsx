@@ -13,7 +13,6 @@ import {
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-// By path: the barrel re-exports the household engine (see belgianTaxStore.ts).
 import { useHouseholdComputation } from "@/hooks/useBelgianTaxComputation";
 import {
     RELATIONSHIP_EVENT_KINDS,

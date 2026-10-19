@@ -22,6 +22,12 @@
  */
 
 import type { BelgianRegion } from './types.ts';
+import {
+    DEFAULT_COMMUNAL_SURCHARGE,
+    EARLIEST_TAX_YEAR,
+    LATEST_TAX_YEAR,
+    SUPPORTED_TAX_YEARS,
+} from './taxYears.ts';
 
 export interface CSSSTier {
     /** Annual net taxable income (single filer) lower bound */
@@ -881,9 +887,7 @@ const TABLES: Record<number, BelgianTaxYearTable> = {
     2026: TABLE_2026,
 };
 
-export const SUPPORTED_TAX_YEARS = Object.keys(TABLES).map(Number).sort((a, b) => a - b);
-export const LATEST_TAX_YEAR = Math.max(...SUPPORTED_TAX_YEARS);
-export const EARLIEST_TAX_YEAR = Math.min(...SUPPORTED_TAX_YEARS);
+export { SUPPORTED_TAX_YEARS, LATEST_TAX_YEAR, EARLIEST_TAX_YEAR, DEFAULT_COMMUNAL_SURCHARGE };
 
 function requireTable(year: number): BelgianTaxYearTable {
     const table = TABLES[year];
@@ -893,6 +897,21 @@ function requireTable(year: number): BelgianTaxYearTable {
 
 const EARLIEST_TABLE = requireTable(EARLIEST_TAX_YEAR);
 const LATEST_TABLE = requireTable(LATEST_TAX_YEAR);
+
+// taxYears.ts repeats these facts for the browser; refuse to load when they drift apart.
+function assertTaxYearsMatchTables(): void {
+    const tableYears = Object.keys(TABLES).map(Number).sort((a, b) => a - b);
+    const years = [EARLIEST_TAX_YEAR, LATEST_TAX_YEAR];
+    if (
+        tableYears.join() !== SUPPORTED_TAX_YEARS.join() ||
+        years.join() !== [tableYears[0], tableYears.at(-1)].join() ||
+        JSON.stringify(LATEST_TABLE.defaultCommunalSurcharge) !==
+            JSON.stringify(DEFAULT_COMMUNAL_SURCHARGE)
+    ) {
+        throw new Error("taxYears.ts does not match the Belgian tax tables in constants.ts");
+    }
+}
+assertTaxYearsMatchTables();
 
 /**
  * Resolve the tax table for a given income year.
@@ -913,5 +932,3 @@ export function getTaxTable(year: number): BelgianTaxYearTable {
 export function isApproximatedTaxYear(year: number): boolean {
     return !TABLES[year];
 }
-
-export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = LATEST_TABLE.defaultCommunalSurcharge;

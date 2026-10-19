@@ -76,7 +76,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `typecheck:backend`          | Type-check backend source, tests and scripts       |
 | `typecheck:scripts`          | Type-check repository scripts and their tests      |
 | `typecheck:electron`         | Type-check the Electron shell and its preload      |
-| `typecheck:packages`         | Type-check the shared packages (strict)            |
+| `typecheck:packages`         | Type-check the shared packages and their tests     |
 | `typecheck:python`           | Run `mypy --strict` over Alembic and scripts       |
 | `validate-locales`           | Validate source/generated locale parity            |
 | `generate-locales`           | Generate frontend and Electron locale outputs      |
@@ -99,6 +99,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
 | `test:electron`                 | Build the Electron shell, then run its compiled `node:test` suites (`node --test 'packaging/electron/out/**/*.test.js'`)       |
 | `test:scripts`                  | Repository script tests (`bun test scripts/tests`)                                                                             |
+| `test:packages`                 | Shared package Vitest suite, including the Belgian tax engine tests (`packages/shared-utils/tests`)                            |
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
 | `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |

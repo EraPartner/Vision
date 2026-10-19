@@ -6,6 +6,7 @@ import {
   applyProfileV1PatchToHousehold,
   projectHouseholdToProfileV1,
 } from "@vision/shared-utils/belgian-tax/householdMigration";
+import { filesJointly } from "@vision/shared-utils/belgian-tax/assessment";
 import { isApproximatedTaxYear } from "@vision/shared-utils/belgian-tax/constants";
 import {
   attributeToPartners,
@@ -82,10 +83,10 @@ export function buildTaxDashboard(
   convert: (amount: number, currency?: string) => number,
   currency: string,
 ) {
-  const profile = projectHouseholdToProfileV1(overview.household);
+  const profile = projectHouseholdToProfileV1(overview.household, filesJointly);
   const selected = new Set(profile.taxIncomeCategoryIds ?? []);
   const liveSelected = new Set(
-    projectHouseholdToProfileV1(overview.liveHousehold).taxIncomeCategoryIds ??
+    projectHouseholdToProfileV1(overview.liveHousehold, filesJointly).taxIncomeCategoryIds ??
       [],
   );
   const hasIncomeSources = selected.size > 0;
@@ -136,7 +137,7 @@ export function buildTaxDashboard(
     const attributed = householdForRecordedIncome(household, gross, owners);
     const next = attributed
       ? { ...attributed, taxYear: year }
-      : applyProfileV1PatchToHousehold(household, { grossAnnualIncome: gross });
+      : applyProfileV1PatchToHousehold(household, { grossAnnualIncome: gross }, filesJointly);
     return toBelgianTaxCalculation(computeHouseholdTax(next), next).totalPIT;
   };
   const monthly = months
@@ -311,7 +312,7 @@ export function buildTaxDashboard(
           row("finalTax", "total", (p) => p.totalPIT),
         ];
   const hasStatsData = monthly.some((m) => m.income > 0);
-  const liveProfile = projectHouseholdToProfileV1(overview.liveHousehold);
+  const liveProfile = projectHouseholdToProfileV1(overview.liveHousehold, filesJointly);
   const liveCalculation = toBelgianTaxCalculation(
     computeHouseholdTax(overview.liveHousehold),
     overview.liveHousehold,

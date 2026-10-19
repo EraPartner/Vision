@@ -273,8 +273,8 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-19: Compute Belgian tax figures on the server (accepted)
 
-[[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] removes the PIT/household engine from
-the browser. The tax store hydrates from `GET /api/belgian-tax/overview`, the editor's live
+[[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] removes the PIT/household engine, including
+the assessment and the year tables, from the browser bundle. The tax store hydrates from `GET /api/belgian-tax/overview`, the editor's live
 figures come from a debounced `POST /api/belgian-tax/compute`, and freezing, filing and exports
 use server figures. It amends the lazily loaded engine of ADR-200 phase B2.
 

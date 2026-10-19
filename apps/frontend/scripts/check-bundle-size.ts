@@ -52,9 +52,11 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  * absorb routine dependency-lockfile churn without false alarms — tight
  * enough that a single mis-scoped import still trips it.
  *
- * Last measured (2026-10-06, production build with the current locked dependencies):
- *   boot-preload graph: 440.67 KB gz (49 files: entry + 48 modulepreloads)
- *   total (all routes): 1117.21 KB gz (164 JS/CSS assets)
+ * Last measured (2026-10-19, after the Belgian tax engine left the browser, ADR-217):
+ *   boot-preload graph: 454.44 KB gz
+ *   total (all routes): 1367.28 KB gz (200 JS/CSS assets)
+ * The 2026-10-06 measurement was 440.67 KB gz (49 files: entry + 48 modulepreloads) and
+ * 1117.21 KB gz (164 JS/CSS assets).
  * The 2026-09-24 revision measured 445.33 KB / 1046.60 KB (163 assets). Since
  * then locales, the analysis workbench, the lazy xlsx reader and portfolio
  * import grew the total, all in lazy route or locale chunks; the owner approved
@@ -83,7 +85,9 @@ const BUDGETS_KB = {
     // boot graph: 470.52 measured.
     // Reviewed native Settings and fixed shell bridge preparation (2026-10-13):
     // 474.69 KB measured; household schema, migration and engine remain lazy (ADR-200).
-    preload: 475,
+    // Lowered from 475 when the Belgian tax engine and its tax tables left the browser
+    // (ADR-217): 461.15 -> 456.52 (server figures) -> 454.44 measured (engine removed).
+    preload: 456,
     // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
     // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
@@ -110,7 +114,9 @@ const BUDGETS_KB = {
     // persistence, lazy Settings sections, the filing workflow and report changes) merged
     // into the native branch; the native bridges, shared tax report context and transfer
     // source add 7.40 KB, all lazy (boot preload 464.76): 1388.73 measured.
-    total: 1390,
+    // Lowered from 1390 when the Belgian tax engine left the browser (ADR-217):
+    // 1379.95 -> 1369.83 (server figures) -> 1367.28 measured (engine removed).
+    total: 1369,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

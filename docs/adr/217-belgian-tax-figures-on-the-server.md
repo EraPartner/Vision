@@ -4,7 +4,7 @@ type: adr
 status: accepted
 date: 2026-10-19
 tags: [adr, architecture, tax, belgian, frontend, api, adr-200]
-description: "Accepted on 2026-10-19 by the owner. The web app no longer runs the Belgian PIT/household engine. The store hydrates from GET /api/belgian-tax/overview, the editor's live figures come from a debounced POST /api/belgian-tax/compute, and freezing, filing, CSV and PDF exports use server figures. Amends the lazily loaded engine of ADR-200 phase B2."
+description: "Accepted on 2026-10-19 by the owner. The web app no longer runs the Belgian PIT/household engine. The store hydrates from GET /api/belgian-tax/overview, the editor's live figures come from a debounced POST /api/belgian-tax/compute, and freezing, filing, CSV and PDF exports use server figures. The engine, including the assessment and the year tables, leaves the browser bundle. Amends the lazily loaded engine of ADR-200 phase B2."
 aliases: [adr-217, server tax figures, belgian tax on the server]
 ---
 
@@ -46,21 +46,35 @@ after a short debounce.
   `resolveTaxYearFigures`). The stored frozen metadata keeps its shape: `frozenCalculation` and
   `frozenHouseholdResult` are the compute response verbatim.
 - The browser keeps only shape helpers: the v1 projection and patch, the zod household schema and
-  the Art. 51 category map (`forfaitCategory.ts`, split out of `household.ts`). The projection
-  still derives the joint/separate filing status with `deriveAssessment`.
+  the Art. 51 category map (`forfaitCategory.ts`, split out of `household.ts`).
+- The v1 projection and patch (`householdMigration.ts`) take the joint-filing decision as an
+  argument. The server passes `filesJointly` (`assessment.ts`: a migrated joint profile without
+  relationship events stays joint, otherwise the art. 126 assessment decides), so its projections
+  are unchanged. The browser passes none: with partner B its projection leaves `filingStatus` out,
+  and the year CSV takes the filing status from the server's `assessment` of the year (empty for a
+  year frozen before household results were stored). No browser editor patches the spouse fields
+  without a filing status, so the browser's patches are unchanged.
+- The supported income years and the latest default communal surcharges move to `taxYears.ts`, so
+  the profile defaults and the region step no longer load the year tables. `constants.ts`
+  re-exports them and refuses to load when they disagree with its tables.
+- The engine wrappers and their re-exports leave `apps/frontend/src/lib/belgianTax/`. The engine's
+  unit, property and scenario tests move to `packages/shared-utils/tests/belgianTax/` with their
+  expected values unchanged and run with `bun run test:packages` in CI.
 
 ## Consequences
 
-- The PIT, person, quotient, exemption, own-home, property and social-security modules no longer
-  reach the browser bundle (boot 461.15 → 456.52 KB gz, all assets 1379.95 → 1369.83 KB gz).
+- No Belgian tax engine module reaches the browser bundle: no PIT, person, quotient, exemption,
+  own-home, property, social-security, assessment or year-table code (boot 461.15 → 456.52 →
+  454.44 KB gz, all assets 1379.95 → 1369.83 → 1367.28 KB gz; the bundle budgets are lowered to
+  456 / 1369 KB).
 - Edited figures, including the household step's assessment badge, appear about 300 ms after the
   last keystroke plus a round trip. A failed computation replaces the figures with an error until
   the next edit.
 - The tax screen needs the backend for any figure, as the dashboards already did.
-- `assessment.ts` remains in the browser through the v1 projection; removing it needs a
-  projection that does not decide the assessment, or one supplied by the server.
-- The engine wrapper files under `apps/frontend/src/lib/belgianTax/` remain for the engine tests
-  and are no longer imported by application code.
+- The browser's v1 profile of a two-partner household has no `filingStatus`; consumers that need
+  it read the server's `assessment`.
+- `taxYears.ts` repeats facts of the year tables; adding a year means updating both, which the
+  load-time check and `taxYears.test.ts` enforce.
 
 ## Related
 

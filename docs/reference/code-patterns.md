@@ -4304,7 +4304,7 @@ useEffect(() => {
 
 **Source:** [[apps/frontend/src/stores/belgianTaxStore.ts|belgianTaxStore]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx|BelgianTaxProfile hydration boundary]], [[apps/frontend/src/lib/belgianTax/types.ts|belgianTax/types.ts]]
 
-When displaying calculated tax information (PIT, effective rates, etc.) for any year, use `useTaxYearFigures(year)` ([[apps/frontend/src/hooks/useBelgianTaxComputation.ts|useBelgianTaxComputation]]) instead of recomputing. This pattern solves engine-drift: an engine fix should not retroactively change filed years. Since [[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] the browser never runs the engine.
+When displaying calculated tax information (PIT, effective rates, etc.) for any year, use `useTaxYearFigures(year)` ([[apps/frontend/src/hooks/useBelgianTaxComputation.ts|useBelgianTaxComputation]]) instead of recomputing. This pattern solves engine-drift: an engine fix should not retroactively change filed years. Since [[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] the browser never runs the engine, and the engine is not in the browser bundle: do not import `@vision/shared-utils/belgian-tax/{pit,household,assessment,constants,…}` from application code (tests and MSW handlers may). Read the supported years and default communal surcharges from `taxYears.ts` (re-exported by the `@/lib/belgianTax` barrel), and project households with `householdRuntime.projectProfileV1`, which leaves `filingStatus` to the server's `assessment` for two partners. Engine tests live in `packages/shared-utils/tests/belgianTax/` (`bun run test:packages`).
 
 ### Pattern
 

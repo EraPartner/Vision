@@ -3,6 +3,7 @@ import {
   type PortfolioDashboardInvestment,
 } from "@vision/shared-utils/belgian-tax/portfolioDashboard";
 import { projectHouseholdToProfileV1 } from "@vision/shared-utils/belgian-tax/householdMigration";
+import { filesJointly } from "@vision/shared-utils/belgian-tax/assessment";
 import { investmentRepository } from "../../repositories/investmentRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.ts";
@@ -86,8 +87,8 @@ export async function getPortfolioTaxDashboard(
     !Number.isFinite(calculation.totalPIT)
   )
     throw new Error("Portfolio tax overview has no valid PIT calculation");
-  const profile = projectHouseholdToProfileV1(overview.household);
-  const live = projectHouseholdToProfileV1(overview.liveHousehold);
+  const profile = projectHouseholdToProfileV1(overview.household, filesJointly);
+  const live = projectHouseholdToProfileV1(overview.liveHousehold, filesJointly);
   return {
     ...buildPortfolioTaxDashboard({
       summaries,

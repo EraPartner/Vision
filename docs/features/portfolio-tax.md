@@ -2,8 +2,8 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-07
+date: 2026-10-19
+updated: 2026-10-19
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
@@ -12,8 +12,8 @@ related_code:
   - apps/frontend/src/hooks/usePortfolioTaxAdjustments.ts
   - apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
-  - apps/frontend/src/lib/belgianTax/portfolioTax.ts
-  - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
+  - packages/shared-utils/src/belgianTax/portfolioTax.ts
+  - packages/shared-utils/tests/belgianTax/portfolioTax.test.ts
 ---
 
 # Portfolio Tax Feature
@@ -49,10 +49,10 @@ totalCosts = totalTaxes + totalFees
 
 ## Pure Estimator Module (2026-05-29)
 
-All portfolio-tax math previously inlined in `PortfolioTaxPage.tsx` has been extracted to `apps/frontend/src/lib/belgianTax/portfolioTax.ts`. This module is:
+All portfolio-tax math previously inlined in `PortfolioTaxPage.tsx` has been extracted to a pure module, now `packages/shared-utils/src/belgianTax/portfolioTax.ts`, which the server runs for `GET /api/belgian-tax/portfolio-dashboard` ([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]). This module is:
 
 - **Pure** — no React context imports, no side effects. Currency conversion is injected via a `ConvertFn` parameter.
-- **Tested** — 12 golden-output cases in `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` lock all estimator outputs to 8 decimal places.
+- **Tested** — 12 golden-output cases in `packages/shared-utils/tests/belgianTax/portfolioTax.test.ts` (run by `bun run test:packages`) lock all estimator outputs to 8 decimal places.
 - **Decimal-accumulating** — monetary sums and products run through `decimal.js` internally to eliminate float-accumulation drift across many transactions; the public surface returns `number`.
 - **De-duplicated** — `recordedTaxesForYear` is now shared between `PortfolioTaxPage` and `TaxOverviewPage`. Both pages call the same function rather than each maintaining a separate per-transaction accumulation loop.
 
