@@ -29,7 +29,6 @@ import { PlannedPaymentsTable } from "@/features/planned/PlannedPaymentsTable";
 import { RecurringDetectionPanel } from "@/features/planned/RecurringDetectionPanel";
 import { usePlannedTotals } from "@/features/planned/usePlannedTotals";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import {
     usePlannedPayments,
     type PlannedPayment,
@@ -56,8 +55,6 @@ export default function PlannedPaymentsPage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const { convertToTargetIfAvailable, isLoading: currencyRatesLoading } =
-        useCurrencyConverter(appSettings.defaultCurrency || "EUR");
 
     const [showAll, setShowAll] = useSearchParamState(
         "show_all",
@@ -124,7 +121,8 @@ export default function PlannedPaymentsPage() {
         [payments, showAll],
     );
 
-    // Net monthly impact of active recurring rows, computed on the server.
+    // Net monthly impact of active recurring rows and the money due in the
+    // next-days strip, computed on the server.
     const { data: plannedTotals } = usePlannedTotals(
         appSettings.defaultCurrency || "EUR",
     );
@@ -366,8 +364,7 @@ export default function PlannedPaymentsPage() {
                     estimatedMonthlyUnavailableCount={
                         monthlyTotal?.unconverted_count ?? 0
                     }
-                    currencyRatesLoading={currencyRatesLoading}
-                    convertAmount={convertToTargetIfAvailable}
+                    windowTotal={plannedTotals?.next_days_total}
                     onSelect={handleEdit}
                 />
 

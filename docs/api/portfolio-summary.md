@@ -34,7 +34,10 @@ related_code:
     "apps/node-backend/src/routes/info/_cache.js",
     "apps/node-backend/src/routes/info/_liveSummary.js",
     "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts",
+    "apps/node-backend/src/services/portfolio/portfolioAssetClassTotals.ts",
+    "apps/node-backend/src/services/currency/latestRateConversion.ts",
     "apps/frontend/src/hooks/portfolio/holdingPnl.ts",
+    "apps/frontend/src/hooks/portfolio/assetGroupTotals.ts",
     "apps/frontend/src/lib/api/info.ts",
   ]
 ---
@@ -257,13 +260,15 @@ including dated custody and unit adjustments; ordinary transaction lists remain 
 
 **Top-level:**
 
-| Field         | Type              | Description                                                                                                                                                                                                                                                                            |
-| ------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `currency`    | string            | Echo of requested currency (default EUR)                                                                                                                                                                                                                                               |
-| `computed_at` | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation                                                                                                                                                                                                             |
-| `totals`      | object            | Aggregate portfolio metrics across all assets                                                                                                                                                                                                                                          |
-| `summaries`   | array             | Per-investment metrics. Each entry also carries its exact `byAccount` partition rows for current-point client filtering.                                                                                                                                                               |
-| `byAccount`   | array             | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
+| Field          | Type              | Description                                                                                                                                                                                                                                                                            |
+| -------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `currency`     | string            | Echo of requested currency (default EUR)                                                                                                                                                                                                                                               |
+| `computed_at`  | string (ISO-8601) | Timestamp when this snapshot was computed; refreshes on cache invalidation                                                                                                                                                                                                             |
+| `totals`       | object            | Aggregate portfolio metrics across all assets                                                                                                                                                                                                                                          |
+| `summaries`    | array             | Per-investment metrics. Each entry also carries its exact `byAccount` partition rows for current-point client filtering.                                                                                                                                                               |
+| `byAssetClass` | array             | **2026-10-19 (ADR-216).** One `PortfolioHoldingTotals` entry per asset class present (plus `assetClass`). See [[docs/api/portfolio-summary#Asset-class and asset-group totals                                                                                                          | Asset-class and asset-group totals]]. |
+| `byAssetGroup` | array             | **2026-10-19 (ADR-216).** One `PortfolioHoldingTotals` entry per page group (`stocks_etfs`, `crypto`, `metals`, `real_estate`, `savings_bonds`) plus its `assetClasses`.                                                                                                               |
+| `byAccount`    | array             | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
 
 **byAccount[] object (identified by `account_id` plus `contribution_kind`):**
 
@@ -326,23 +331,27 @@ improving repair edits.
 
 **summaries[] object (one per investment; selected fields):**
 
-| Field                | Type    | Description                                                                                        |
-| -------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `asset_class`        | string  | Asset class: `stock`, `etf`, `crypto`, `metals`, `real_estate`, `savings`, or `bonds`              |
-| `currentValue`       | number  | Current market value in target currency (today's FX)                                               |
-| `totalBuyCost`       | number  | Cost basis at transaction-date FX rates                                                            |
-| `gainLoss`           | number  | Net gain including ordinary income and costs (= `assetGain + fxGain`)                              |
-| `assetGain`          | number  | **New (ADR-074).** Pure asset-performance component for this class                                 |
-| `fxGain`             | number  | **New (ADR-074).** Currency-movement component for this class                                      |
-| `nativeCurrentValue` | number  | **New (ADR-074).** Current market value in the investment's native currency (before FX conversion) |
-| `realized`           | number  | Realized gains for this class                                                                      |
-| `unrealized`         | number  | Unrealized gains for this class                                                                    |
-| `fees`               | number  | Fees for this class                                                                                |
-| `taxes`              | number  | Taxes for this class                                                                               |
-| `income`             | number  | Income for this class                                                                              |
-| `returnPct`          | number  | Return % for this class                                                                            |
-| `count`              | integer | Number of investments in this class                                                                |
-| `usedFallbackRate`   | boolean | **New (ADR-074).** `true` if any transaction in this class used a fallback (non-historical) rate   |
+| Field                   | Type           | Description                                                                                                                                                                       |
+| ----------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `asset_class`           | string         | Asset class: `stock`, `etf`, `crypto`, `metals`, `real_estate`, `savings`, or `bonds`                                                                                             |
+| `currentValue`          | number         | Current market value in target currency (today's FX)                                                                                                                              |
+| `totalBuyCost`          | number         | Cost basis at transaction-date FX rates                                                                                                                                           |
+| `gainLoss`              | number         | Net gain including ordinary income and costs (= `assetGain + fxGain`)                                                                                                             |
+| `assetGain`             | number         | **New (ADR-074).** Pure asset-performance component for this class                                                                                                                |
+| `fxGain`                | number         | **New (ADR-074).** Currency-movement component for this class                                                                                                                     |
+| `nativeCurrentValue`    | number         | **New (ADR-074).** Current market value in the investment's native currency (before FX conversion)                                                                                |
+| `realized`              | number         | Realized gains for this class                                                                                                                                                     |
+| `unrealized`            | number         | Unrealized gains for this class                                                                                                                                                   |
+| `fees`                  | number         | Fees for this class                                                                                                                                                               |
+| `taxes`                 | number         | Taxes for this class                                                                                                                                                              |
+| `income`                | number         | Income for this class                                                                                                                                                             |
+| `returnPct`             | number         | Return % for this class                                                                                                                                                           |
+| `count`                 | integer        | Number of investments in this class                                                                                                                                               |
+| `usedFallbackRate`      | boolean        | **New (ADR-074).** `true` if any transaction in this class used a fallback (non-historical) rate                                                                                  |
+| `feesAndTaxes`          | number         | **2026-10-19.** `totalFees + totalTaxes`, from the rounded fields                                                                                                                 |
+| `propertyReturn`        | number         | **2026-10-19.** Real Estate return: `totalAppreciation + totalIncome − totalFees − totalTaxes`                                                                                    |
+| `monthlyRent`           | number \| null | **2026-10-19.** Latest `rent_income` amount (by date, then id) converted from its booking currency at the latest **stored** rate; `0` without rent, `null` when no rate is stored |
+| `unrealizedGainPercent` | number         | Unrealized gain against the held basis (`avgCostBasis × totalUnits`); `0` without a basis                                                                                         |
 
 **Reconciliation invariants (verified by test):**
 
@@ -378,12 +387,35 @@ transaction is known. All-time annualized hints can use this date without relabe
 period-scoped chart start as the investment start.
 
 Summary items expose `nativeCurrentPrice` and `nativeAvgCostBasis` in the investment quote
-currency, plus server-computed `unrealizedGainPercent` against the held basis. `estimatedMonthlyRent`
-preserves the existing RealEstatePage's latest ordinary rent amount interpretation, including
-its raw-amount display behavior; this port does not apply an additional FX conversion to that
-number. Fields, totals and nullability are declared in `openapi.yaml`; generated readers
+currency, plus server-computed `unrealizedGainPercent` against the held basis. Per-item
+`estimatedMonthlyRent` is still the latest ordinary rent amount in its booking currency without FX
+conversion; since 2026-10-19 the Real Estate page reads the converted `monthlyRent` instead, and the
+browser rent conversion (`hooks/portfolio/monthlyRent.ts`) was removed. Fields, totals and nullability are declared in `openapi.yaml`; generated readers
 can decode money and unit/rate quantities directly as Decimal. Metadata that is null in storage
 remains nullable. `totals.usedFallbackRate` is boolean, rather than a numeric dynamic-map entry.
+
+### Asset-class and asset-group totals
+
+Added 2026-10-19 ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]), built by
+[[apps/node-backend/src/services/portfolio/portfolioAssetClassTotals.ts]]. Every total is the
+Decimal sum of the rounded per-investment figures in the same response, so a page total equals the
+sum of the rows it shows. `byAssetClass[]` adds `assetClass`; `byAssetGroup[]` adds `group` and
+`assetClasses` (`stocks_etfs` = stock + etf, `crypto`, `metals`, `real_estate`,
+`savings_bonds` = savings + bond).
+
+Each entry (OpenAPI `PortfolioHoldingTotals`) carries `holdingCount`, `totalPortfolioValue`,
+`totalInvested`, `totalGainLoss`, `totalRealizedGain`, `totalUnrealizedGain`, `totalIncome`,
+`totalDividends`, `totalInKindIncome`, `totalFees`, `totalTaxes`, `totalFeesAndTaxes`,
+`netReturnExcludingIncome`, `netReturnWithDividends`, `totalAppreciation`, `totalPropertyReturn`,
+`totalAccruedInterest`, `totalProjectedAnnualInterest`, `valueWeightedInterestRate`,
+`estimatedMonthlyRent` (Σ `monthlyRent` of holdings that have a rate), `monthlyRentRateMissing`
+(some holding's `monthlyRent` is `null`), and `usedFallbackRate`.
+
+The Stocks, Crypto, Metals, Real Estate and Savings pages and the Portfolio allocation chart read
+these through `findHoldingTotals(summary, assetClasses)` in
+`apps/frontend/src/hooks/portfolio/assetGroupTotals.ts` instead of summing or converting holdings
+in the browser. Covered on real PostgreSQL by
+[[apps/node-backend/tests/portfolioSummaryTotals.db.test.ts]].
 
 ## Caching Strategy
 
@@ -467,16 +499,15 @@ const metricsBlock = {
 
 The `GET /api/info/net-worth` endpoint now overlays its _current_ investments value with the live summary from this endpoint, via the shared `portfolioSummaryCache`. The new shared helper `resolveLivePortfolioValue(targetCurrency)` in `apps/node-backend/src/routes/info/_liveSummary.js` reads `totals.totalPortfolioValue` from the cache and passes it to `infoRepositoryNetWorth.getNetWorthFromSnapshots`. This means Dashboard, Performance, and Net Worth all derive their "current portfolio value" from the same source — a true single source of truth across all three surfaces. Historical Net Worth snapshot days are unaffected. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 
-### Per-Asset-Class Breakdown
+### Per-Asset-Group Breakdown
 
-Portfolio composition chart uses `summaries`:
+The Portfolio allocation chart reads the server group totals (2026-10-19); only the shares are
+derived in the browser:
 
 ```typescript
-const chartData = data?.summaries.map((s) => ({
-  asset_class: s.asset_class,
-  value: s.currentValue,
-  invested: s.invested,
-  allocation: (s.currentValue / data.totals.currentValue) * 100,
+const slices = Object.entries(assetClassGroups).map(([name, classes]) => ({
+  name,
+  value: findHoldingTotals(portfolioSummary, classes).totalPortfolioValue,
 }));
 ```
 

@@ -16,6 +16,7 @@ import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 vi.mock("../../src/services/splitService.ts", () => ({
   default: {
     getOwedSummary: vi.fn(),
+    getOwedRecipientSummary: vi.fn(),
     getOwedByRecipient: vi.fn(),
     countOwedByRecipient: vi.fn(),
     getSplitsByTransaction: vi.fn(),
@@ -70,30 +71,45 @@ const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 const BASE = "/api/splits";
 const api = routeAgent(splitsRouter, { mountPath: BASE });
 
+const OWED_SUMMARY = {
+  currency: "EUR",
+  remaining: 0,
+  unconverted_count: 0,
+  unconverted_currencies: [],
+};
+
 describe("Splits Routes", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("GET /owed", () => {
     it("returns owed summary items", async () => {
-      splitService.getOwedSummary.mockResolvedValue([
-        loose({ recipient_id: 2, amount: 12.5 }),
-      ]);
+      splitService.getOwedSummary.mockResolvedValue({
+        items: [loose({ recipient_id: 2, amount: 12.5 })],
+        summary: OWED_SUMMARY,
+      });
 
       const res = await api.get(`${BASE}/owed`).expect(200);
 
       expect(res.body).toEqual(
-        okEnvelope({ items: [{ recipient_id: 2, amount: 12.5 }], total: 1 }),
+        okEnvelope({
+          items: [{ recipient_id: 2, amount: 12.5 }],
+          total: 1,
+          summary: OWED_SUMMARY,
+        }),
       );
     });
 
     // The summary is derived in JS, so the route slices the computed array —
     // `total` must still be the full group count, not the page length.
     it("slices the computed summary when limit/offset are supplied", async () => {
-      splitService.getOwedSummary.mockResolvedValue([
-        partial({ recipient_id: 1 }),
-        partial({ recipient_id: 2 }),
-        partial({ recipient_id: 3 }),
-      ]);
+      splitService.getOwedSummary.mockResolvedValue({
+        items: [
+          partial({ recipient_id: 1 }),
+          partial({ recipient_id: 2 }),
+          partial({ recipient_id: 3 }),
+        ],
+        summary: OWED_SUMMARY,
+      });
 
       const res = await api
         .get(`${BASE}/owed`)
@@ -106,6 +122,7 @@ describe("Splits Routes", () => {
           total: 3,
           limit: 1,
           offset: 1,
+          summary: OWED_SUMMARY,
         }),
       );
     });
@@ -121,6 +138,10 @@ describe("Splits Routes", () => {
   });
 
   describe("GET /owed/:id", () => {
+    beforeEach(() => {
+      splitService.getOwedRecipientSummary.mockResolvedValue(OWED_SUMMARY);
+    });
+
     it("returns owed items by recipient", async () => {
       splitService.getOwedByRecipient.mockResolvedValue([
         loose({ id: 1, split_id: 4 }),
@@ -130,7 +151,11 @@ describe("Splits Routes", () => {
 
       expect(splitService.getOwedByRecipient).toHaveBeenCalledWith(7, {});
       expect(res.body).toEqual(
-        okEnvelope({ items: [{ id: 1, split_id: 4 }], total: 1 }),
+        okEnvelope({
+          items: [{ id: 1, split_id: 4 }],
+          total: 1,
+          summary: OWED_SUMMARY,
+        }),
       );
     });
 
@@ -155,6 +180,7 @@ describe("Splits Routes", () => {
           total: 31,
           limit: 1,
           offset: 10,
+          summary: OWED_SUMMARY,
         }),
       );
     });
@@ -959,7 +985,10 @@ describe("Splits Routes", () => {
     });
 
     it("keeps lenient opt-in pagination on the owed summary", async () => {
-      splitService.getOwedSummary.mockResolvedValue([]);
+      splitService.getOwedSummary.mockResolvedValue({
+        items: [],
+        summary: OWED_SUMMARY,
+      });
       const res = await api.get(`${BASE}/owed?limit=abc`).expect(200);
       expect(bodyAt(res, "data")).toMatchObject({ total: 0, offset: 0 });
     });

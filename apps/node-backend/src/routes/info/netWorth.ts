@@ -10,6 +10,10 @@
  * snapshot series), not a bare collection, so the list fields are prefixed with
  * the list they describe rather than being the bare `total/limit/offset` a
  * `{items, total}` collection body uses.
+ *
+ * /api/info/net-worth/by-account:
+ *   - Current net worth per account (cash at the latest stored rate plus live
+ *     holdings partitions), uncached; see services/info/netWorthByAccount.ts.
  */
 
 import { Router } from "express";
@@ -22,6 +26,7 @@ import {
   resolveCacheWithInflight,
 } from "../../services/info/cache.ts";
 import { resolveLivePortfolioValue } from "../../services/info/liveSummary.ts";
+import { getNetWorthByAccount } from "../../services/info/netWorthByAccount.ts";
 import { parseInput } from "../../lib/zodInput.ts";
 import { optionalPaginationQuery } from "../_inputBridges.ts";
 
@@ -82,6 +87,19 @@ router.get(
       snapshotsLimit: limit,
       snapshotsOffset: offset,
     });
+  },
+);
+
+router.get(
+  "/net-worth/by-account",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "net-worth-by-account",
+  }),
+  async (req, res) => {
+    const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
+    res.ok(await getNetWorthByAccount(targetCurrency));
   },
 );
 

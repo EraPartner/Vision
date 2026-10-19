@@ -123,6 +123,24 @@ export const PlannedTotalsSchema = z.looseObject({
     total: z.number(),
     unconverted_count: z.number().int(),
   }),
+  /** Today and the seven days after it, every recurring occurrence on its own day. */
+  next_days: z.array(
+    z.looseObject({
+      date: WireDateSchema,
+      incoming: z.number(),
+      outgoing: z.number(),
+      unconverted_count: z.number().int(),
+    }),
+  ),
+  /** The `next_days` window; `unconverted_count` counts rows, not occurrences. */
+  next_days_total: z.looseObject({
+    from: WireDateSchema,
+    to: WireDateSchema,
+    incoming: z.number(),
+    outgoing: z.number(),
+    net: z.number(),
+    unconverted_count: z.number().int(),
+  }),
 });
 
 export type PlannedTotals = z.output<typeof PlannedTotalsSchema>;

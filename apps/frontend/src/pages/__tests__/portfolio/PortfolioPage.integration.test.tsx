@@ -11,6 +11,7 @@ import {
     INVESTMENT_STUB,
     PORTFOLIO_SUMMARY_ITEM_STUB,
     PORTFOLIO_SUMMARY_STUB,
+    assetGroupTotalsStub,
 } from "@/test/msw/handlers";
 import PortfolioPage from "@/pages/portfolio/PortfolioPage";
 import type { PortfolioSummaryResponse } from "@/lib/api/info";
@@ -185,6 +186,14 @@ function useTwoHoldings(options: {
                 ...PORTFOLIO_SUMMARY_STUB,
                 computed_at: "2026-09-08T00:00:00Z",
                 totals: TOTALS,
+                // Server group totals of Fund A (700) and Fund B (500).
+                byAssetGroup: assetGroupTotalsStub({
+                    stocks_etfs: {
+                        holdingCount: 2,
+                        totalPortfolioValue: 1200,
+                        totalInvested: 1080,
+                    },
+                }),
                 brokerageCashFees:
                     options.cashFees ?? PORTFOLIO_SUMMARY_STUB.brokerageCashFees,
                 summaries: [

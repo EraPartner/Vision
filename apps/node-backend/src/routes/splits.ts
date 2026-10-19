@@ -18,6 +18,8 @@ import {
 import { validateId } from "../middleware/validation.ts";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import { escapeCsvValue } from "../lib/csv.ts";
+import { assertCurrency } from "../lib/validation.ts";
+import { optionalQueryString } from "../lib/httpParams.ts";
 import { listBody } from "../lib/pagination.ts";
 import { formatZodIssues, parseInput } from "../lib/zodInput.ts";
 import {
@@ -247,26 +249,36 @@ function resolveActor(req: {
   return req.get("x-actor") || null;
 }
 
+/** `?currency=` for the converted owed figures; EUR when absent. */
+function owedCurrency(query: Record<string, unknown>): string {
+  return assertCurrency(optionalQueryString(query, "currency")) ?? "EUR";
+}
+
 // The owed summary is derived in JS after the aggregate (see the repository),
 // so this one pages the computed array rather than the query; `total` is still
-// the full group count.
+// the full group count and `summary` covers every recipient.
 router.get("/owed", async (req, res) => {
+  const currency = owedCurrency(req.query);
   const page = parseInput(listPageQuerySchema, req.query);
-  const summary = await splitService.getOwedSummary();
-  const items = page
-    ? summary.slice(page.offset, page.offset + page.limit)
-    : summary;
-  res.ok(listBody(items, summary.length, page));
+  const { items: all, summary } = await splitService.getOwedSummary({
+    currency,
+  });
+  const items = page ? all.slice(page.offset, page.offset + page.limit) : all;
+  res.ok({ ...listBody(items, all.length, page), summary });
 });
 
 router.get("/owed/:id", async (req, res) => {
   const recipientId = parseRouteId(req);
+  const currency = owedCurrency(req.query);
   const page = parseInput(listPageQuerySchema, req.query);
-  const splits = await splitService.getOwedByRecipient(recipientId, page ?? {});
+  const [splits, summary] = await Promise.all([
+    splitService.getOwedByRecipient(recipientId, page ?? {}),
+    splitService.getOwedRecipientSummary(recipientId, { currency }),
+  ]);
   const total = page
     ? await splitService.countOwedByRecipient(recipientId)
     : splits.length;
-  res.ok(listBody(splits, total, page));
+  res.ok({ ...listBody(splits, total, page), summary });
 });
 
 router.get("/owed/:id/export/csv", async (req, res) => {

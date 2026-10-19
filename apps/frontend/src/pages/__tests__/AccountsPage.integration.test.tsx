@@ -11,6 +11,7 @@ import {
     ok,
     ACCOUNT_STUB,
     PORTFOLIO_SUMMARY_STUB,
+    accountTotalsStub,
 } from "@/test/msw/handlers";
 import { toYmd } from "@/lib/dateUtils";
 import AccountsPage from "@/pages/AccountsPage";
@@ -102,6 +103,40 @@ function mockAccounts(items: unknown[] = FIXTURE) {
     );
 }
 
+type GroupId = "cash" | "portfolio" | "liabilities" | "archived";
+
+/**
+ * GET /api/accounts/totals: the hub's subtotals and net cash come from the
+ * server (ADR-216); tests pass the figures the server returns for FIXTURE.
+ */
+function mockTotals({
+    groups = {},
+    netCash = {},
+    delay,
+}: {
+    groups?: Partial<Record<GroupId, Record<string, unknown>>>;
+    netCash?: Record<string, unknown>;
+    delay?: Promise<void>;
+} = {}) {
+    const base = accountTotalsStub("EUR");
+    const body = {
+        ...base,
+        net_cash: { ...base.net_cash, ...netCash },
+        groups: Object.fromEntries(
+            (Object.keys(base.groups) as GroupId[]).map((id) => [
+                id,
+                { ...base.groups[id], ...groups[id] },
+            ]),
+        ),
+    };
+    server.use(
+        http.get(`${API_BASE}/api/accounts/totals`, async () => {
+            if (delay) await delay;
+            return ok(body);
+        }),
+    );
+}
+
 describe("AccountsPage (integration, grouped list)", () => {
     it("keeps Reconcile reachable for a multi-currency account with no primary drift", async () => {
         mockAccounts([
@@ -166,6 +201,21 @@ describe("AccountsPage (integration, grouped list)", () => {
                 ],
             },
         ]);
+        mockTotals({
+            netCash: {
+                total: 100,
+                unconverted_count: 1,
+                unconverted_currencies: ["USD"],
+            },
+            groups: {
+                cash: {
+                    total: 100,
+                    cash: 100,
+                    unconverted_count: 1,
+                    unconverted_currencies: ["USD"],
+                },
+            },
+        });
         renderWithApp(<AccountsPage />);
 
         const link = await screen.findByRole("link", {
@@ -180,7 +230,7 @@ describe("AccountsPage (integration, grouped list)", () => {
             within(card).getByText(/left out of the converted total/i),
         ).toBeInTheDocument();
         expect(
-            screen.getByText(
+            await screen.findByText(
                 /total is incomplete because at least one native balance/i,
             ),
         ).toBeInTheDocument();
@@ -238,17 +288,28 @@ describe("AccountsPage (integration, grouped list)", () => {
         expect(await screen.findByText("Old Savings")).toBeInTheDocument();
     });
 
-    it("shows per-group subtotals and a Net cash grand line matching the WP-A1 population", async () => {
+    it("shows the server's per-group subtotals and Net cash grand line", async () => {
         mockAccounts();
+        // Server figures for FIXTURE: Cash & Savings is the FULL group
+        // (1000 + 500 + 999); Net cash is the in_net_worth, active,
+        // non-portfolio population (1000 + 500 - 300).
+        mockTotals({
+            groups: {
+                cash: { total: 2499, cash: 2499 },
+                liabilities: { total: -300, cash: -300 },
+            },
+            netCash: { total: 1200 },
+        });
         renderWithApp(<AccountsPage />);
 
         const cash = await screen.findByRole("region", {
             name: "Cash & savings",
         });
         // Default settings: EUR, 'eu' number format → de-DE (1.234,56 €).
-        // Cash & Savings subtotal is the FULL group: 1000 + 500 + 999 = 2499.
-        expect(within(cash).getByText(/subtotal/i).textContent).toMatch(
-            /2\.499,00/,
+        await waitFor(() =>
+            expect(within(cash).getByText(/subtotal/i).textContent).toMatch(
+                /2\.499,00/,
+            ),
         );
 
         // Liabilities subtotal is naturally negative.
@@ -257,50 +318,8 @@ describe("AccountsPage (integration, grouped list)", () => {
             /-300,00/,
         );
 
-        // Net cash = in_net_worth-only Cash&Savings + Liabilities
-        // (1000 + 500 − 300 = 1200) — excludes the not-in-net-worth account,
-        // the archived account, and the portfolio-type ledger balance.
         const grandLine = screen.getByRole("region", { name: "Net cash" });
         expect(grandLine).toHaveTextContent(/1\.200,00/);
-    });
-
-    it("keeps cash subtotals consistent with cards when cash accounts have assigned positions", async () => {
-        mockAccounts();
-        server.use(
-            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-                ok({
-                    ...PORTFOLIO_SUMMARY_STUB,
-                    computed_at: "2026-09-08T00:00:00Z",
-                    summaries: [],
-                    byAccount: [1, 4].map((account_id) => ({
-                        account_id,
-                        assignment: "account",
-                        contribution_kind: "position",
-                        oversold: false,
-                        currentValue: 1250,
-                        totalInvested: 1000,
-                        realizedGain: 20,
-                        unrealizedGain: 230,
-                        gainLoss: 250,
-                    })),
-                }),
-            ),
-        );
-        renderWithApp(<AccountsPage />);
-
-        const portfolio = await screen.findByRole("region", {
-            name: "Portfolio accounts",
-        });
-        // Wait for holdings to load before checking the cash subtotal.
-        await waitFor(() =>
-            expect(within(portfolio).getByText(/subtotal/i)).toHaveTextContent(
-                /1\.250,00/,
-            ),
-        );
-        const cash = screen.getByRole("region", { name: "Cash & savings" });
-        expect(within(cash).getByText(/subtotal/i)).toHaveTextContent(
-            /2\.499,00/,
-        );
     });
 
     it("keeps non-zero brokerage cash and provenance visible without assigned holdings", async () => {
@@ -333,23 +352,13 @@ describe("AccountsPage (integration, grouped list)", () => {
         );
     });
 
-    it("marks the Portfolio subtotal as pending until holdings load", async () => {
+    it("marks the subtotals as pending until the server totals load", async () => {
         mockAccounts();
         let release!: () => void;
         const pending = new Promise<void>((resolve) => {
             release = resolve;
         });
-        server.use(
-            http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
-                await pending;
-                return ok({
-                    ...PORTFOLIO_SUMMARY_STUB,
-                    computed_at: "2026-09-08T00:00:00Z",
-                    summaries: [],
-                    byAccount: [],
-                });
-            }),
-        );
+        mockTotals({ delay: pending });
         renderWithApp(<AccountsPage />);
 
         const portfolio = await screen.findByRole("region", {
@@ -366,13 +375,9 @@ describe("AccountsPage (integration, grouped list)", () => {
         );
     });
 
-    it("marks the Portfolio subtotal unavailable when holdings fail", async () => {
+    it("marks the Portfolio subtotal unavailable when the server has no holdings", async () => {
         mockAccounts();
-        server.use(
-            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-                err(503, "summary unavailable"),
-            ),
-        );
+        mockTotals({ groups: { portfolio: { holdings_unavailable: true } } });
         renderWithApp(<AccountsPage />);
 
         const portfolio = await screen.findByRole("region", {
@@ -407,6 +412,9 @@ describe("AccountsPage (integration, grouped list)", () => {
                 }),
             ),
         );
+        mockTotals({
+            groups: { portfolio: { total: 1250, cash: 0, holdings: 1250 } },
+        });
         renderWithApp(<AccountsPage />);
 
         const card = (
@@ -419,8 +427,10 @@ describe("AccountsPage (integration, grouped list)", () => {
         const portfolio = screen.getByRole("region", {
             name: "Portfolio accounts",
         });
-        expect(within(portfolio).getByText(/subtotal/i).textContent).toMatch(
-            /1\.250,00/,
+        await waitFor(() =>
+            expect(within(portfolio).getByText(/subtotal/i).textContent).toMatch(
+                /1\.250,00/,
+            ),
         );
     });
 

@@ -86,6 +86,7 @@ cache. **Invalidation:** create, edit, archive, restore, and delete mutations in
 | -------------------------------------------- | ------------------------- | ----------------- | --------------------------- |
 | `['portfolio-performance', defaultCurrency]` | `defaultCurrency: string` | `PortfolioPage` | Daily performance snapshots |
 | `['net-worth', targetCurrency]`              | `targetCurrency: string`  | `NetWorthPage`    | Net worth time series       |
+| `['net-worth', 'by-account', currency]`     | `currency: string`        | `useNetWorthByAccount()` (`NetWorthPage`) | Server-computed current net worth per account (`GET /api/info/net-worth/by-account`) |
 
 ### Exchange Rates
 
@@ -101,12 +102,18 @@ cache. **Invalidation:** create, edit, archive, restore, and delete mutations in
 | `['watchlist']`                 | —                                   | `useWatchlist()` (`WatchlistPage`, `ResearchHomePage`) | Watchlist items                      |
 | `['watchlist-quotes', symbols]` | `symbols: string` (comma-separated) | `WatchlistPage`, `ResearchHomePage`                    | Current quotes for watchlist symbols |
 
+### Accounts
+
+| Query Key                         | Variables          | Used By                                                       | Description                                                                 |
+| --------------------------------- | ------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `['accounts', 'totals', currency]` | `currency: string` | `useAccountTotals(currency)` (`AccountsPage`, `AccountsList`) | Server-computed hub totals (`GET /api/accounts/totals`); under the `['accounts']` prefix so account invalidation refetches them |
+
 ### Splits / Owes
 
 | Query Key                                  | Variables               | Used By       | Description                         |
 | ------------------------------------------ | ----------------------- | ------------- | ----------------------------------- |
-| `['splits', 'owed']`                       | —                       | `useSplits()` | All owed summaries                  |
-| `['splits', 'owed', recipientId]`          | `recipientId: number`   | `useSplits()` | Owed summary for specific recipient |
+| `['splits', 'owed', 'summary', currency]`  | `currency: string`      | `useOwedSummary(currency)` | All owed summaries converted to `currency` on the server, plus `summary` total |
+| `['splits', 'owed', recipientId, currency]` | `recipientId: number`, `currency: string` | `useOwedByRecipient(recipientId, currency)` | Open splits for a recipient plus its server-converted `summary` |
 | `['splits', 'transaction', transactionId]` | `transactionId: number` | `useSplits()` | Splits for a specific transaction   |
 
 **Invalidation:** All split mutations invalidate `['splits']`.

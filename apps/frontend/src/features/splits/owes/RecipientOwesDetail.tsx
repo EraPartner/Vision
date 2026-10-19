@@ -61,12 +61,14 @@ export function RecipientOwesDetail({
     recipient,
     onBack,
 }: RecipientOwesDetailProps) {
+    const { appSettings } = useAppSettings();
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const {
         data,
         isLoading,
         error: loadError,
         refetch,
-    } = useOwedByRecipient(recipient.id);
+    } = useOwedByRecipient(recipient.id, defaultCurrency);
     const recordPayment = useRecordPayment();
     const settleSplit = useSettleSplit();
     const settleAllSplitsByRecipient = useSettleAllSplitsByRecipient();
@@ -74,23 +76,21 @@ export function RecipientOwesDetail({
     const [payDialog, setPayDialog] = useState<{
         splitId: number;
         remaining: number;
+        currency: string;
     } | null>(null);
     const paymentId = useId();
     const [payError, setPayError] = useState(false);
     const [payAmount, setPayAmount] = useState("");
     const [isExportingCsv, setIsExportingCsv] = useState(false);
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
-    const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     const items = data?.items || [];
-    const totalOutstanding = items.reduce(
-        (sum, split) => sum + split.remaining,
-        0,
-    );
+    // Converted to the display currency on the server; splits in a currency
+    // without a stored rate are left out (and named in the description).
+    const totalOutstanding = data?.summary.remaining ?? 0;
 
     const handlePay = (event: FormEvent) => {
         event.preventDefault();
@@ -114,17 +114,22 @@ export function RecipientOwesDetail({
 
     const handleSettleAll = async () => {
         if (!items.length) return;
+        const unconvertedCount = data?.summary.unconverted_count ?? 0;
+        const description = t("owesPage.settleAll.confirmDescription", {
+            count: items.length,
+            amount: formatCurrency(
+                totalOutstanding,
+                defaultCurrency,
+                locale,
+                appSettings.showDecimalPlaces ?? 2,
+            ),
+        });
         const shouldSettle = await confirm({
             title: t("owesPage.settleAll.confirmTitle"),
-            description: t("owesPage.settleAll.confirmDescription", {
-                count: items.length,
-                amount: formatCurrency(
-                    totalOutstanding,
-                    defaultCurrency,
-                    locale,
-                    appSettings.showDecimalPlaces ?? 2,
-                ),
-            }),
+            description:
+                unconvertedCount > 0
+                    ? `${description} ${tc("owesPage.fxUnavailable", unconvertedCount)}`
+                    : description,
             confirmLabel: t("owesPage.settleAll.confirmAction"),
             cancelLabel: t("common.cancel"),
         });
@@ -247,10 +252,14 @@ export function RecipientOwesDetail({
                                 appSettings.dateFormat,
                             );
                             const splitContext = `${splitTitle}, ${splitDate}`;
+                            // A split is owed in its transaction's currency.
+                            const splitCurrency =
+                                split.transaction_currency || defaultCurrency;
                             const openPayDialog = () => {
                                 setPayDialog({
                                     splitId: split.id,
                                     remaining: split.remaining,
+                                    currency: splitCurrency,
                                 });
                                 setPayError(false);
                                 setPayAmount(
@@ -309,12 +318,12 @@ export function RecipientOwesDetail({
                                             <span className="hidden shrink-0 whitespace-nowrap sm:inline">
                                                 <Money
                                                     amount={split.amount_paid}
-                                                    currency={defaultCurrency}
+                                                    currency={splitCurrency}
                                                 />{" "}
                                                 /{" "}
                                                 <Money
                                                     amount={split.amount}
-                                                    currency={defaultCurrency}
+                                                    currency={splitCurrency}
                                                 />
                                             </span>
                                         </span>
@@ -324,7 +333,7 @@ export function RecipientOwesDetail({
                                             <span className="w-36 text-right type-headline tabular-nums text-foreground">
                                                 <Money
                                                     amount={split.remaining}
-                                                    currency={defaultCurrency}
+                                                    currency={splitCurrency}
                                                 />
                                             </span>
                                             <Button
@@ -436,7 +445,7 @@ export function RecipientOwesDetail({
                                         {t("owesPage.recordDialog.remaining", {
                                             amount: formatCurrency(
                                                 payDialog.remaining,
-                                                defaultCurrency,
+                                                payDialog.currency,
                                                 locale,
                                                 appSettings.showDecimalPlaces ??
                                                     2,

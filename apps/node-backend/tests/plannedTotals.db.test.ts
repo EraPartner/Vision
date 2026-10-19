@@ -171,6 +171,63 @@ describeDb("GET /api/planned-transactions/totals (real DB)", () => {
     });
   });
 
+  it("returns per-day totals for today and the next seven days", async () => {
+    await setRate("USD", "0.9", today);
+    // Every day of the window, today included.
+    await insertPlanned({ date: today, amount: "-5", pattern: "daily" });
+    // Today and today+7.
+    await insertPlanned({ date: today, amount: "-10", pattern: "weekly" });
+    await insertPlanned({
+      date: addDaysYmd(today, 3),
+      amount: "100",
+      currency: "USD",
+    });
+    // No stored GBP rate: counted on its day, never added 1:1.
+    await insertPlanned({
+      date: addDaysYmd(today, 1),
+      amount: "-7",
+      currency: "GBP",
+    });
+    // Outside the window, paused or already executed: not counted.
+    await insertPlanned({ date: addDaysYmd(today, 8), amount: "-3000" });
+    await insertPlanned({ date: today, amount: "-1000", isActive: false });
+    await insertPlanned({ date: today, amount: "-2000", isExecuted: true });
+
+    const res = await api.get("/api/planned-transactions/totals?currency=EUR");
+
+    expect(res.status).toBe(200);
+    const day = (
+      offset: number,
+      incoming: number,
+      outgoing: number,
+      unconverted = 0,
+    ) => ({
+      date: addDaysYmd(today, offset),
+      incoming,
+      outgoing,
+      unconverted_count: unconverted,
+    });
+    expect(bodyAt(res, "data", "next_days")).toEqual([
+      day(0, 0, -15),
+      day(1, 0, -5, 1),
+      day(2, 0, -5),
+      day(3, 90, -5),
+      day(4, 0, -5),
+      day(5, 0, -5),
+      day(6, 0, -5),
+      day(7, 0, -15),
+    ]);
+    // 8 daily × -5 + 2 weekly × -10 = -60; 100 USD × 0.9 = 90.
+    expect(bodyAt(res, "data", "next_days_total")).toEqual({
+      from: today,
+      to: addDaysYmd(today, 7),
+      incoming: 90,
+      outgoing: -60,
+      net: 30,
+      unconverted_count: 1,
+    });
+  });
+
   it("converts into a non-EUR display currency through EUR", async () => {
     await setRate("USD", "0.8", today);
     await insertPlanned({ date: today, amount: "-40", pattern: "monthly" });

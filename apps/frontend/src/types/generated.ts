@@ -902,6 +902,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accounts hub totals in one display currency
+         * @description Server-computed accounts hub figures (ADR-216). Every balance partition converts to `currency` at the latest stored exchange rate; a partition without a rate is left out and its account counted in `unconverted_count`. `net_cash` covers active, in_net_worth accounts outside the portfolio types. Group subtotals add the portfolio-summary position value of the group's brokerage, crypto_exchange and wallet accounts to the ledger balances (holdings-only types excluded).
+         */
+        get: operations["getAccountTotals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{id}": {
         parameters: {
             query?: never;
@@ -1327,6 +1347,26 @@ export interface paths {
          * @description Holdings-only crypto_exchange and wallet accounts contribute portfolio value but no ledger cash to current totals, history, or the transaction-flow fallback. Ordinary brokerage cash remains eligible.
          */
         get: operations["getNetWorth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/info/net-worth/by-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get current net worth by account
+         * @description One row per account that counts toward net worth (its cash balance converted at the latest stored rate) and per account or unassigned bucket holding live portfolio positions. Holdings-only crypto_exchange and wallet accounts contribute holdings but no cash. Not cached.
+         */
+        get: operations["getNetWorthByAccount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6316,8 +6356,14 @@ export interface components {
             nativeCurrentPrice?: number;
             nativeAvgCostBasis?: number;
             unrealizedGainPercent?: number;
-            /** @description Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion. */
+            /** @description Latest ordinary rent amount in its booking currency, without FX conversion. The Real Estate page reads monthlyRent instead. */
             estimatedMonthlyRent?: number;
+            /** @description Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate. 0 without rent; null when no stored rate exists. */
+            monthlyRent?: number | null;
+            /** @description totalFees + totalTaxes, from the rounded fields. */
+            feesAndTaxes?: number;
+            /** @description Real Estate return shown per property, totalAppreciation + totalIncome − totalFees − totalTaxes, from the rounded fields. */
+            propertyReturn?: number;
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -6355,6 +6401,48 @@ export interface components {
             unrealizedGain: number;
             gainLoss: number;
         };
+        /** @description Totals of a set of holdings, each the exact sum of the rounded per-investment figures in `summaries`, in the response currency. */
+        PortfolioHoldingTotals: {
+            holdingCount: number;
+            /** @description Σ currentValue. */
+            totalPortfolioValue: number;
+            /** @description Σ totalBuyCost */
+            totalInvested: number;
+            totalGainLoss: number;
+            totalRealizedGain: number;
+            totalUnrealizedGain: number;
+            totalIncome: number;
+            totalDividends: number;
+            totalInKindIncome: number;
+            totalFees: number;
+            totalTaxes: number;
+            /** @description Σ feesAndTaxes. */
+            totalFeesAndTaxes: number;
+            /** @description Σ (gainLoss − totalIncome). */
+            netReturnExcludingIncome: number;
+            /** @description Σ (gainLoss − totalIncome + totalDividends). */
+            netReturnWithDividends: number;
+            totalAppreciation: number;
+            /** @description Σ propertyReturn. */
+            totalPropertyReturn: number;
+            totalAccruedInterest: number;
+            totalProjectedAnnualInterest: number;
+            /** @description Σ (interestRate × currentValue) / Σ currentValue, in percent; 0 without value. */
+            valueWeightedInterestRate: number;
+            /** @description Σ monthlyRent of the holdings that have a rate. */
+            estimatedMonthlyRent: number;
+            /** @description Some holding's monthlyRent is null. */
+            monthlyRentRateMissing: boolean;
+            usedFallbackRate: boolean;
+        };
+        PortfolioAssetClassTotals: {
+            assetClass: string;
+        } & components["schemas"]["PortfolioHoldingTotals"];
+        PortfolioAssetGroupTotals: {
+            /** @enum {string} */
+            group: "stocks_etfs" | "crypto" | "metals" | "real_estate" | "savings_bonds";
+            assetClasses: string[];
+        } & components["schemas"]["PortfolioHoldingTotals"];
         PortfolioSummaryTotals: {
             totalPortfolioValue: number;
             totalInvested: number;
@@ -6386,6 +6474,10 @@ export interface components {
             archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order. */
+            byAssetClass: components["schemas"]["PortfolioAssetClassTotals"][];
+            /** @description Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty. */
+            byAssetGroup: components["schemas"]["PortfolioAssetGroupTotals"][];
             /** @description Imported, source-owned account fees without an instrument, converted at transaction-date rates and counted once per canonical cash transaction. Separate from investment totals, cost basis and return series. Optional for compatibility with older responses; absence means unavailable. */
             brokerageCashFees?: {
                 total: number;
@@ -7129,6 +7221,42 @@ export interface components {
             color?: string | null;
             is_active?: boolean | null;
         };
+        AccountGroupTotal: {
+            /** @description cash + holdings. */
+            total: number;
+            /** @description Converted ledger balances; crypto_exchange and wallet accounts excluded. */
+            cash: number;
+            /** @description Portfolio-summary position value of the group's portfolio-type accounts. */
+            holdings: number;
+            /** @description The portfolio summary could not be computed; holdings is 0. */
+            holdings_unavailable: boolean;
+            /** @description Accounts with a balance partition left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
+        };
+        AccountTotals: {
+            currency: string;
+            /** @description Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet. */
+            net_cash: {
+                total: number;
+                unconverted_count: number;
+                unconverted_currencies: string[];
+            };
+            groups: {
+                cash: components["schemas"]["AccountGroupTotal"];
+                portfolio: components["schemas"]["AccountGroupTotal"];
+                liabilities: components["schemas"]["AccountGroupTotal"];
+                archived: components["schemas"]["AccountGroupTotal"];
+            };
+            accounts: {
+                id: number;
+                /** @enum {string} */
+                group: "cash" | "portfolio" | "liabilities" | "archived";
+                /** @description Sum of the account's convertible balance partitions. */
+                converted_balance: number;
+                unconverted_currencies: string[];
+            }[];
+        };
         Account: {
             id: number;
             name: string;
@@ -7453,6 +7581,27 @@ export interface components {
             };
             monthly_equivalent: {
                 total: number;
+                unconverted_count: number;
+            };
+            /** @description Today and the seven days after it (eight entries), every recurring occurrence counted on its own day. `unconverted_count` counts the occurrences on that day without a stored rate. */
+            next_days: {
+                /** Format: date */
+                date: string;
+                incoming: number;
+                /** @description Negative or zero. */
+                outgoing: number;
+                unconverted_count: number;
+            }[];
+            /** @description The `next_days` window summed; `unconverted_count` counts rows without a stored rate, like `rest_of_month`. */
+            next_days_total: {
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+                incoming: number;
+                /** @description Negative or zero. */
+                outgoing: number;
+                net: number;
                 unconverted_count: number;
             };
         };
@@ -7930,6 +8079,29 @@ export interface components {
             snapshotsLimit?: number;
             snapshotsOffset?: number;
         };
+        NetWorthByAccountRow: {
+            /** @description null for holdings not assigned to an account. */
+            accountId: number | null;
+            /** @description Account display_name or name; null for the unassigned row or an unknown account. */
+            name: string | null;
+            type: string | null;
+            cashCurrency: string | null;
+            /** @description Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency has no rate. */
+            cash: number | null;
+            /** @description Σ live portfolio-summary byAccount currentValue. */
+            holdings: number;
+            /** @description cash + holdings; null when cash is null. */
+            total: number | null;
+            unconverted: boolean;
+        };
+        NetWorthByAccountResponse: {
+            currency: string;
+            /** @description Ordered by account id, the unassigned row last. */
+            rows: components["schemas"]["NetWorthByAccountRow"][];
+            /** @description Σ row totals; null while any cash balance is unconverted. */
+            total: number | null;
+            unconvertedAccountIds: number[];
+        };
         SavedChart: {
             id: number;
             name: string;
@@ -8015,6 +8187,7 @@ export interface components {
             skipped_missing: number;
             items: components["schemas"]["Split"][];
         };
+        /** @description Owed, paid and remaining amounts converted to the requested currency at the latest stored exchange rates, per transaction currency. Open splits in a currency without a stored rate are left out and counted. */
         SplitOwed: {
             recipient_id: number;
             recipient_name: string;
@@ -8022,6 +8195,16 @@ export interface components {
             total_paid: number;
             remaining: number;
             split_count: number;
+            /** @description Open splits left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
+        };
+        OwedTotals: {
+            currency: string;
+            remaining: number;
+            /** @description Open splits left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
         };
         SplitOwedDetail: components["schemas"]["Split"] & {
             /** Format: date */
@@ -10898,6 +11081,37 @@ export interface operations {
             };
         };
     };
+    getAccountTotals: {
+        parameters: {
+            query?: {
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AccountTotals"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getAccount: {
         parameters: {
             query?: never;
@@ -12353,6 +12567,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["NetWorthResponse"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR: currency must be a single value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getNetWorthByAccount: {
+        parameters: {
+            query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Net worth rows by account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["NetWorthByAccountResponse"];
                     };
                 };
             };
@@ -15419,6 +15665,8 @@ export interface operations {
     getSplitsOwed: {
         parameters: {
             query?: {
+                /** @description Currency of the converted figures. */
+                currency?: string;
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
                 /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
@@ -15430,7 +15678,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owed summary per recipient (complete unless limit/offset are supplied) */
+            /** @description Owed summary per recipient (complete unless limit/offset are supplied), converted to `currency`; `summary` is the total outstanding across every recipient. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15439,15 +15687,25 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SplitOwed"][];
+                            summary: components["schemas"]["OwedTotals"];
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
     getSplitOwedByRecipient: {
         parameters: {
             query?: {
+                /** @description Currency of `summary`; split rows stay in their transaction currency. */
+                currency?: string;
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
                 /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
@@ -15461,7 +15719,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owed detail (complete unless limit/offset are supplied) */
+            /** @description Owed detail (complete unless limit/offset are supplied); `summary` is the recipient's total outstanding over every unsettled split, converted to `currency` at the latest stored rates. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15470,9 +15728,17 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SplitOwedDetail"][];
+                            summary: components["schemas"]["OwedTotals"];
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

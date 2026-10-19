@@ -19,6 +19,7 @@ describe("NetWorthByAccountList", () => {
                         total: 50,
                     },
                 ]}
+                total={50}
                 currency="EUR"
                 headline={100}
             />,
@@ -32,7 +33,12 @@ describe("NetWorthByAccountList", () => {
 
     it("does not suggest investigating a matching breakdown", async () => {
         renderWithApp(
-            <NetWorthByAccountList rows={[]} currency="EUR" headline={0} />,
+            <NetWorthByAccountList
+                rows={[]}
+                total={0}
+                currency="EUR"
+                headline={0}
+            />,
         );
         expect(await screen.findByText(/matches net worth/i)).toBeInTheDocument();
         expect(
@@ -53,6 +59,7 @@ describe("NetWorthByAccountList", () => {
                         total: 50,
                     },
                 ]}
+                total={50}
                 currency="EUR"
                 headline={50}
             />,

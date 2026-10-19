@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -178,8 +178,8 @@ Overpayment protection operates at three layers:
 
 | Method | Path                              | Description                         |
 | ------ | --------------------------------- | ----------------------------------- |
-| GET    | `/api/splits/owed`                | Overall owed summary                |
-| GET    | `/api/splits/owed/:id`            | Owed summary for specific recipient |
+| GET    | `/api/splits/owed`                | Overall owed summary in `?currency=` with total `summary` |
+| GET    | `/api/splits/owed/:id`            | Open splits for a recipient with converted `summary`     |
 | GET    | `/api/splits/owed/:id/export/csv` | Export owed data as CSV             |
 
 ### Split Management
@@ -229,6 +229,15 @@ Implementation notes:
 pagination live beside it in `RecentRecipientTransactionsTable.tsx` and
 `useRecentRecipientTransactions.ts`. The feature-local hook preserves the 10-row page size,
 recipient-group query key, duplicate-ID suppression, and response-body total semantics.
+
+**Currency (2026-10-19, [[docs/adr/216-server-owned-domain-calculations|ADR-216]]).** Both reads
+pass the app's display currency (`useOwedSummary(currency)`, `useOwedByRecipient(id, currency)`).
+The page total and the _Settle all_ confirmation amount come from the server-converted `summary`
+of [[docs/api/splits|GET /api/splits/owed and GET /api/splits/owed/:id]] instead of summing raw
+`remaining` values in the browser, so mixed-currency splits are no longer added as if they shared
+one currency. Splits whose currency has no stored rate are left out of those totals and named by a
+localized `owesPage.fxUnavailable` count. Individual split rows, and the record-payment dialog,
+show amounts in the split's own `transaction_currency`.
 
 ### Recipient Alias Grouping (Owed View Consistency)
 

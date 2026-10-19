@@ -24,15 +24,33 @@ const OWED_DETAIL = {
   remaining: 20,
 };
 
+/** Server-converted total outstanding on both owed reads. */
+const OWED_TOTALS = { currency: "EUR", remaining: 20, unconverted_count: 0, unconverted_currencies: [] };
+
 describe("splits API client", () => {
-  it("getOwedSummary fetches the owed summary", async () => {
-    server.use(http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })));
-    expect((await getOwedSummary()).items).toEqual([]);
+  it("getOwedSummary fetches the owed summary in the requested currency", async () => {
+    let currency: string | null = null;
+    server.use(
+      http.get(`${API_BASE}/api/splits/owed`, ({ request }) => {
+        currency = new URL(request.url).searchParams.get("currency");
+        return ok({ items: [], total: 0, summary: OWED_TOTALS });
+      }),
+    );
+    const res = await getOwedSummary("EUR");
+    expect(res.items).toEqual([]);
+    expect(res.summary).toEqual(OWED_TOTALS);
+    expect(currency).toBe("EUR");
   });
 
-  it("getOwedByRecipient fetches by recipient id", async () => {
-    server.use(http.get(`${API_BASE}/api/splits/owed/4`, () => ok({ items: [OWED_DETAIL], total: 1 })));
-    expect((await getOwedByRecipient(4)).items).toHaveLength(1);
+  it("getOwedByRecipient fetches by recipient id with the converted total", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/splits/owed/4`, () =>
+        ok({ items: [OWED_DETAIL], total: 1, summary: OWED_TOTALS }),
+      ),
+    );
+    const res = await getOwedByRecipient(4, "EUR");
+    expect(res.items).toHaveLength(1);
+    expect(res.summary.remaining).toBe(20);
   });
 
   it("getSplitsByTransaction fetches by transaction id", async () => {
@@ -84,10 +102,10 @@ describe("splits API client", () => {
   it("rejects an owed detail row whose NUMERIC remaining arrives as a string", async () => {
     server.use(
       http.get(`${API_BASE}/api/splits/owed/4`, () =>
-        ok({ items: [{ ...OWED_DETAIL, remaining: "20.0000" }], total: 1 }),
+        ok({ items: [{ ...OWED_DETAIL, remaining: "20.0000" }], total: 1, summary: OWED_TOTALS }),
       ),
     );
-    await expect(getOwedByRecipient(4)).rejects.toMatchObject({
+    await expect(getOwedByRecipient(4, "EUR")).rejects.toMatchObject({
       name: "ApiContractError",
       endpoint: "GET /api/splits/owed/4",
     });

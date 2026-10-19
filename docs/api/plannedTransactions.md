@@ -260,8 +260,10 @@ Permanently delete a planned transaction.
 > [!info] Added 2026-10-19 (non-breaking). Registered before `/:id` in the router.
 
 Server-computed planned totals in one display currency, read by the Home hero ("planned in" and
-"planned out") and the planned page's "Est. monthly" figure through
-`features/planned/usePlannedTotals.ts`. Implemented by
+"planned out"), the planned page's "Est. monthly" figure and the window total of the planned
+page's next-days strip (`next_days_total`, passed to `features/planned/NextSevenDaysStrip.tsx`)
+through `features/planned/usePlannedTotals.ts`. The web app does not read the per-day `next_days`
+entries yet; the strip still buckets its rows client-side for display. Implemented by
 [[apps/node-backend/src/services/plannedTotalsService.ts]].
 
 **Query Parameters:**
@@ -270,7 +272,7 @@ Server-computed planned totals in one display currency, read by the Home hero ("
 | ---------- | ------ | ------- | --------------------------------------------------- |
 | `currency` | string | `EUR`   | 3-letter ISO code; anything else returns `400 VALIDATION_ERROR` |
 
-**Response:** `{ currency, today, month_end, rest_of_month, monthly_equivalent }` (OpenAPI schema
+**Response:** `{ currency, today, month_end, rest_of_month, monthly_equivalent, next_days, next_days_total }` (OpenAPI schema
 `PlannedTotals`, contract `PlannedTotalsSchema` in `packages/types/src/contracts/planned.ts`).
 
 ```json
@@ -279,7 +281,18 @@ Server-computed planned totals in one display currency, read by the Home hero ("
   "today": "2026-10-19",
   "month_end": "2026-10-31",
   "rest_of_month": { "incoming": 1200.0, "outgoing": -845.5, "unconverted_count": 0 },
-  "monthly_equivalent": { "total": -312.4, "unconverted_count": 1 }
+  "monthly_equivalent": { "total": -312.4, "unconverted_count": 1 },
+  "next_days": [
+    { "date": "2026-10-19", "incoming": 0, "outgoing": -45.0, "unconverted_count": 0 }
+  ],
+  "next_days_total": {
+    "from": "2026-10-19",
+    "to": "2026-10-26",
+    "incoming": 1200.0,
+    "outgoing": -320.5,
+    "net": 879.5,
+    "unconverted_count": 0
+  }
 }
 ```
 
@@ -295,8 +308,15 @@ Server-computed planned totals in one display currency, read by the Home hero ("
   (monthly 1, quarterly 1/3, yearly 1/12), day cadences use `30.4375/n` days (daily 30.4375,
   weekly 30.4375/7, biweekly 30.4375/14, `every N days` 30.4375/N). Rows with an unrecognised
   pattern are skipped.
+- `next_days` (added 2026-10-19, additive) has one entry per day for `today` and the seven days
+  after it (8 entries). Every recurring occurrence counts on its own day, split by sign into
+  `incoming` and `outgoing`; a row without a rate is counted in that day's `unconverted_count`.
+  `next_days_total` covers the same window (`from`..`to`) with `incoming`, `outgoing`, `net`, and an
+  `unconverted_count` that counts rows once, not occurrences.
 - Amounts are converted with the latest stored `exchange_rates` through EUR. A row whose source
   or target rate is missing is left out and counted in `unconverted_count`.
+  The conversion helper is the shared `services/currency/latestRateConversion.ts`; hard-coded
+  fallback constants are never used.
 
 Covered on real PostgreSQL by [[apps/node-backend/tests/plannedTotals.db.test.ts]].
 

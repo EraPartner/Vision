@@ -36,8 +36,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useAccounts } from "@/hooks/useAccounts";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useAccountTotals, useAccounts } from "@/hooks/useAccounts";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 import { useDriftBadge } from "@/features/accounts/driftBadge";
@@ -45,8 +44,6 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     groupAccounts,
-    sumConvertedBalances,
-    computeNetCash,
     isHoldingsOnlyPortfolioType,
     isPortfolioType,
     type AccountGroup,
@@ -96,7 +93,9 @@ export default function AccountsPage() {
     const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
     const displayCurrency = appSettings.defaultCurrency || "EUR";
-    const { convertToTarget } = useCurrencyConverter(displayCurrency);
+    // Net cash and the group subtotals are computed on the server (ADR-216).
+    const totalsQuery = useAccountTotals(displayCurrency);
+    const totals = totalsQuery.data;
     const portfolioSummaryQuery = usePortfolioSummaryQuery(displayCurrency);
     const portfolioSummary = portfolioSummaryQuery.data;
     const [archivedOpen, setArchivedOpen] = useState(false);
@@ -121,22 +120,10 @@ export default function AccountsPage() {
         [groups],
     );
     // Grand line: WP-A1's Liquid + Liabilities population (in_net_worth only,
-    // active, portfolio-type ledger balances excluded until WP-C5).
-    const netCash = useMemo(
-        () => computeNetCash(accounts, convertToTarget),
-        [accounts, convertToTarget],
-    );
-    const netCashIncomplete = useMemo(
-        () =>
-            accounts.some(
-                (account) =>
-                    account.is_active &&
-                    account.in_net_worth &&
-                    !isPortfolioType(account.type) &&
-                    account.balance_incomplete,
-            ),
-        [accounts],
-    );
+    // active, portfolio-type ledger balances excluded until WP-C5), summed and
+    // converted on the server.
+    const netCash = totals?.net_cash;
+    const netCashIncomplete = (netCash?.unconverted_count ?? 0) > 0;
 
     // Filter by the account entity's id (ADR-088) — reads key on the FK, not
     // the retiring bank_account string.
@@ -381,12 +368,11 @@ export default function AccountsPage() {
         );
     };
 
-    // Group header: label left, converted subtotal right.
+    // Group header: label left, server-computed subtotal right (ledger cash
+    // plus the portfolio summary's holdings for portfolio-type accounts).
     const renderGroupSubtotal = (group: AccountGroup) => {
-        const needsPortfolioSummary = group.accounts.some((account) =>
-            isPortfolioType(account.type),
-        );
-        if (needsPortfolioSummary && portfolioSummaryQuery.isLoading) {
+        const subtotal = totals?.groups[group.id];
+        if (totalsQuery.isLoading) {
             return (
                 <p className="type-footnote text-label-secondary">
                     {t("accounts.group.subtotal")}{" "}
@@ -394,7 +380,7 @@ export default function AccountsPage() {
                 </p>
             );
         }
-        if (needsPortfolioSummary && portfolioSummaryQuery.isError) {
+        if (!subtotal || subtotal.holdings_unavailable) {
             return (
                 <p className="type-footnote text-warning">
                     {t("accounts.group.subtotal")}{" "}
@@ -402,35 +388,13 @@ export default function AccountsPage() {
                 </p>
             );
         }
-        const cash = sumConvertedBalances(
-            group.accounts.filter(
-                (account) => !isHoldingsOnlyPortfolioType(account.type),
-            ),
-            convertToTarget,
-        );
-        const holdings = group.accounts
-            .filter((account) => isPortfolioType(account.type))
-            .reduce(
-                (sum, account) =>
-                    sum +
-                    (getBrokerAccountMetrics(portfolioSummary, account.id)
-                        ?.holdingsValue ?? 0),
-                0,
-            );
         return (
             <p className="type-footnote text-label-secondary">
                 {t("accounts.group.subtotal")}{" "}
                 <span className="font-medium tabular-nums text-foreground">
-                    <Money
-                        amount={cash + holdings}
-                        currency={displayCurrency}
-                    />
+                    <Money amount={subtotal.total} currency={displayCurrency} />
                 </span>
-                {group.accounts.some(
-                    (account) =>
-                        !isHoldingsOnlyPortfolioType(account.type) &&
-                        account.balance_incomplete,
-                ) && (
+                {subtotal.unconverted_count > 0 && (
                     <span className="ml-1 text-warning">
                         {t("accounts.group.subtotalIncomplete")}
                     </span>
@@ -518,10 +482,28 @@ export default function AccountsPage() {
                                     )}
                                 </div>
                                 <p className="type-title-1 tabular-nums text-foreground">
-                                    <Money
-                                        amount={netCash}
-                                        currency={displayCurrency}
-                                    />
+                                    {netCash ? (
+                                        <Money
+                                            amount={netCash.total}
+                                            currency={displayCurrency}
+                                        />
+                                    ) : totalsQuery.isLoading ? (
+                                        <span
+                                            role="status"
+                                            aria-label={t("common.loading")}
+                                        >
+                                            <Skeleton
+                                                aria-hidden
+                                                className="inline-block h-8 w-32 align-middle"
+                                            />
+                                        </span>
+                                    ) : (
+                                        <span className="type-footnote text-warning">
+                                            {t(
+                                                "accounts.group.subtotalUnavailable",
+                                            )}
+                                        </span>
+                                    )}
                                 </p>
                             </CardContent>
                         </Card>

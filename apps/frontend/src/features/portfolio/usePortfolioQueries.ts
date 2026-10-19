@@ -198,3 +198,12 @@ export function useNetWorthSummary(currency: string) {
         staleTime: 120_000,
     });
 }
+
+/** Current net worth per account, computed on the server (ADR-216). */
+export function useNetWorthByAccount(currency: string) {
+    return useQuery({
+        queryKey: netWorthKeys.byAccount(currency),
+        queryFn: () => apiClient.getNetWorthByAccount({ currency }),
+        staleTime: 120_000,
+    });
+}

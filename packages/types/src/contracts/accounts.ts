@@ -93,6 +93,59 @@ export const AccountListItemSchema = z.looseObject({
   post_anchor_count: z.number().int().nonnegative().optional(),
 });
 
+/** Accounts hub groups (`accountTotalsService.ts`). */
+export const AccountGroupIdSchema = z.enum([
+  "cash",
+  "portfolio",
+  "liabilities",
+  "archived",
+]);
+
+const accountUnconvertedFields = {
+  /** Accounts with a balance partition left out for want of a stored rate. */
+  unconverted_count: z.number().int().nonnegative(),
+  unconverted_currencies: z.array(z.string()),
+};
+
+const AccountGroupTotalSchema = z.looseObject({
+  /** `cash` + `holdings`. */
+  total: z.number(),
+  /** Converted ledger balances, holdings-only types (crypto_exchange, wallet) excluded. */
+  cash: z.number(),
+  /** Portfolio-summary position value of the group's portfolio-type accounts. */
+  holdings: z.number(),
+  /** The portfolio summary could not be computed; `holdings` is 0. */
+  holdings_unavailable: z.boolean(),
+  ...accountUnconvertedFields,
+});
+
+/**
+ * `GET /api/accounts/totals?currency=` (ADR-216): converted balances, group
+ * subtotals and net cash, at the latest stored exchange rates.
+ */
+export const AccountTotalsSchema = z.looseObject({
+  currency: z.string(),
+  /** Active, in_net_worth, non-portfolio accounts. */
+  net_cash: z.looseObject({ total: z.number(), ...accountUnconvertedFields }),
+  groups: z.looseObject({
+    cash: AccountGroupTotalSchema,
+    portfolio: AccountGroupTotalSchema,
+    liabilities: AccountGroupTotalSchema,
+    archived: AccountGroupTotalSchema,
+  }),
+  accounts: z.array(
+    z.looseObject({
+      id: IdSchema,
+      group: AccountGroupIdSchema,
+      /** Convertible partitions only; see `unconverted_currencies`. */
+      converted_balance: z.number(),
+      unconverted_currencies: z.array(z.string()),
+    }),
+  ),
+});
+
+export type AccountTotals = z.output<typeof AccountTotalsSchema>;
+
 /**
  * `GET /api/accounts` — opt-in pagination: `limit`/`offset` only when the
  * request paginated; the body-level `links` is always present.

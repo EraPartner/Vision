@@ -25,6 +25,18 @@ export function useAccounts(params?: { active?: "true" | "false" | "all" }) {
     return query;
 }
 
+/**
+ * Accounts hub totals computed on the server in `currency` (ADR-216):
+ * converted balances, group subtotals and net cash.
+ */
+export function useAccountTotals(currency: string) {
+    return useQuery({
+        queryKey: accountKeys.totals(currency),
+        queryFn: () => apiClient.getAccountTotals(currency),
+        staleTime: 2 * 60_000,
+    });
+}
+
 export function useAccountMergePreview(sourceId: number, targetId?: number) {
     return useQuery({
         queryKey: accountKeys.mergePreview(sourceId, targetId ?? 0),

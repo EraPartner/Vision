@@ -172,6 +172,25 @@ export const NetWorthSchema = z.looseObject({
   snapshotsOffset: CountSchema.optional(),
 });
 
+/** `GET /api/info/net-worth/by-account` — services/info/netWorthByAccount.ts. */
+export const NetWorthByAccountSchema = z.looseObject({
+  currency: z.string(),
+  rows: z.array(
+    z.looseObject({
+      accountId: IdSchema.nullable(),
+      name: z.string().nullable(),
+      type: z.string().nullable(),
+      cashCurrency: z.string().nullable(),
+      cash: z.number().nullable(),
+      holdings: z.number(),
+      total: z.number().nullable(),
+      unconverted: z.boolean(),
+    }),
+  ),
+  total: z.number().nullable(),
+  unconvertedAccountIds: z.array(IdSchema),
+});
+
 /** `GET /api/info/exchange-rates` (routes/info/rates.ts). */
 export const ExchangeRatesSchema = z.looseObject({
   total_rates: CountSchema,

@@ -9,6 +9,8 @@ describe("getBrokerAccountMetrics", () => {
                 computed_at: "2026-09-08T00:00:00Z",
                 totals: {} as never,
                 summaries: [],
+                byAssetClass: [],
+                byAssetGroup: [],
                 byAccount: [
                     {
                         account_id: 4,
@@ -64,6 +66,8 @@ describe("getBrokerAccountMetrics", () => {
                     computed_at: "2026-09-08T00:00:00Z",
                     totals: {} as never,
                     summaries: [],
+                    byAssetClass: [],
+                    byAssetGroup: [],
                     byAccount: [],
                 },
                 4,

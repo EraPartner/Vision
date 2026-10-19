@@ -37,6 +37,11 @@ import {
     TransactionItemSchema,
 } from "@/test/contracts/schemas";
 import {
+    AccountTotalsSchema,
+    OwedDetailListSchema,
+    OwedSummaryListSchema,
+} from "@vision/types/contracts";
+import {
     TRANSACTION_STUB,
     CATEGORY_STUB,
     RECIPIENT_STUB,
@@ -566,10 +571,16 @@ describe("Missing GET endpoint contracts (E4)", () => {
             }),
         ],
         [
-            "GET /api/splits/owed returns { items, total }",
+            "GET /api/splits/owed returns { items, total, summary }",
             "/api/splits/owed",
             "GET /api/splits/owed",
-            collectionSchema(),
+            OwedSummaryListSchema,
+        ],
+        [
+            "GET /api/accounts/totals returns the server-computed hub totals",
+            "/api/accounts/totals?currency=EUR",
+            "GET /api/accounts/totals",
+            AccountTotalsSchema,
         ],
         [
             "GET /api/market/quote returns { items, total }",
@@ -976,10 +987,10 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             z.object({ items: z.array(z.unknown()) }),
         ],
         [
-            "GET /api/splits/owed/:recipientId returns items + total",
+            "GET /api/splits/owed/:recipientId returns items + total + summary",
             "/api/splits/owed/1",
             "GET /api/splits/owed/:recipientId",
-            z.object({ items: z.array(z.unknown()), total: z.number() }),
+            OwedDetailListSchema,
         ],
         [
             "GET /api/transactions/:id returns single transaction",

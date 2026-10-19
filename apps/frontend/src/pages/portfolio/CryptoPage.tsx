@@ -20,7 +20,6 @@ export default function CryptoPage() {
             assetCellVariant="combined"
             unitsDecimals={8}
             unitsMonospace
-            priceColumnsInTargetCurrency
             // Crypto has always shown spot-converted P&L and the legacy total-return
             // percentage in the unrealized pill — keep both verbatim.
             enableFxAwarePnl={false}

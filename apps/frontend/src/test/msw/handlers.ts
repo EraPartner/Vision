@@ -280,6 +280,60 @@ export const PORTFOLIO_TRANSACTION_STUB = {
 };
 
 /** portfolioSummaryService.getPortfolioSummary with no holdings. */
+/** Zero `PortfolioHoldingTotals` (portfolioAssetClassTotals.buildHoldingTotals). */
+export const HOLDING_TOTALS_STUB = {
+    holdingCount: 0,
+    totalPortfolioValue: 0,
+    totalInvested: 0,
+    totalGainLoss: 0,
+    totalRealizedGain: 0,
+    totalUnrealizedGain: 0,
+    totalIncome: 0,
+    totalDividends: 0,
+    totalInKindIncome: 0,
+    totalFees: 0,
+    totalTaxes: 0,
+    totalFeesAndTaxes: 0,
+    netReturnExcludingIncome: 0,
+    netReturnWithDividends: 0,
+    totalAppreciation: 0,
+    totalPropertyReturn: 0,
+    totalAccruedInterest: 0,
+    totalProjectedAnnualInterest: 0,
+    valueWeightedInterestRate: 0,
+    estimatedMonthlyRent: 0,
+    monthlyRentRateMissing: false,
+    usedFallbackRate: false,
+};
+
+/** The five `byAssetGroup` entries, zero totals unless overridden per group. */
+export function assetGroupTotalsStub(
+    overrides: Partial<
+        Record<
+            | "stocks_etfs"
+            | "crypto"
+            | "metals"
+            | "real_estate"
+            | "savings_bonds",
+            Partial<typeof HOLDING_TOTALS_STUB>
+        >
+    > = {},
+) {
+    const groups = [
+        ["stocks_etfs", ["stock", "etf"]],
+        ["crypto", ["crypto"]],
+        ["metals", ["metals"]],
+        ["real_estate", ["real_estate"]],
+        ["savings_bonds", ["savings", "bond"]],
+    ] as const;
+    return groups.map(([group, assetClasses]) => ({
+        group,
+        assetClasses: [...assetClasses],
+        ...HOLDING_TOTALS_STUB,
+        ...overrides[group],
+    }));
+}
+
 export const PORTFOLIO_SUMMARY_STUB = {
     currency: "EUR",
     computed_at: "2025-01-01T00:00:00.000Z",
@@ -302,6 +356,8 @@ export const PORTFOLIO_SUMMARY_STUB = {
     },
     summaries: [],
     byAccount: [],
+    byAssetClass: [],
+    byAssetGroup: assetGroupTotalsStub(),
     archivedInKindIncome: [],
     brokerageCashFees: {
         total: 0,
@@ -364,6 +420,10 @@ export const PORTFOLIO_SUMMARY_ITEM_STUB = {
     accruedInterest: 0,
     projectedAnnualInterest: 0,
     totalAppreciation: 0,
+    feesAndTaxes: 0,
+    propertyReturn: 0,
+    monthlyRent: 0,
+    unrealizedGainPercent: 0,
     fullyAssigned: true,
     oversold: false,
     byAccount: [],
@@ -514,6 +574,38 @@ export const SPLIT_STUB = {
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: "2025-01-01T00:00:00.000Z",
 };
+
+/** `summary` on GET /api/splits/owed[/:id]: nothing outstanding. */
+export const OWED_TOTALS_STUB = {
+    currency: "EUR",
+    remaining: 0,
+    unconverted_count: 0,
+    unconverted_currencies: [],
+};
+
+const EMPTY_ACCOUNT_GROUP_TOTAL = {
+    total: 0,
+    cash: 0,
+    holdings: 0,
+    holdings_unavailable: false,
+    unconverted_count: 0,
+    unconverted_currencies: [],
+};
+
+/** GET /api/accounts/totals for the default empty account list. */
+export function accountTotalsStub(currency = "EUR") {
+    return {
+        currency,
+        net_cash: { total: 0, unconverted_count: 0, unconverted_currencies: [] },
+        groups: {
+            cash: EMPTY_ACCOUNT_GROUP_TOTAL,
+            portfolio: EMPTY_ACCOUNT_GROUP_TOTAL,
+            liabilities: EMPTY_ACCOUNT_GROUP_TOTAL,
+            archived: EMPTY_ACCOUNT_GROUP_TOTAL,
+        },
+        accounts: [],
+    };
+}
 
 /**
  * A `split_payments` row as `splitRepository.formatPayment` emits it
@@ -826,6 +918,14 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/accounts`, () =>
         ok({ items: [], total: 0, links: [] }),
     ),
+    // Before /:id: server-computed hub totals (GET /api/accounts/totals).
+    http.get(`${API_BASE}/api/accounts/totals`, ({ request }) =>
+        ok(
+            accountTotalsStub(
+                new URL(request.url).searchParams.get("currency") ?? "EUR",
+            ),
+        ),
+    ),
     http.get(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     // Tags API — used by TagPicker inside dialogs/forms across the app.
     // Returning an empty list keeps async fetches from leaking past test
@@ -1006,9 +1106,11 @@ export const defaultHandlers = [
         }),
     ),
 
-    // Real route answers listBody(items, total, page) — `{items, total}`
-    // (apps/node-backend/src/routes/splits.js, GET /owed).
-    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })),
+    // Real route answers listBody(items, total, page) plus the converted
+    // `summary` (apps/node-backend/src/routes/splits.ts, GET /owed).
+    http.get(`${API_BASE}/api/splits/owed`, () =>
+        ok({ items: [], total: 0, summary: OWED_TOTALS_STUB }),
+    ),
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     // marketLookupService search: `{items}` without `total`.
@@ -1120,6 +1222,10 @@ export const defaultHandlers = [
             monthlyChangePercent: 0,
             snapshots: [],
         }),
+    ),
+    // netWorthByAccount.getNetWorthByAccount with no accounts or holdings.
+    http.get(`${API_BASE}/api/info/net-worth/by-account`, () =>
+        ok({ currency: "EUR", rows: [], total: 0, unconvertedAccountIds: [] }),
     ),
     // Live response shapes (these routes all return objects, not bare scalars/
     // arrays). The old scalar/array mocks let component tests run against
@@ -1605,10 +1711,10 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/splits/:id/settle`, () =>
         ok({ ...SPLIT_STUB, is_settled: true }),
     ),
-    // Real route answers listBody(splits, total, page) — `{items, total}`, never
-    // a `total_owed` field (apps/node-backend/src/routes/splits.js, GET /owed/:id).
+    // Real route answers listBody(splits, total, page) plus the converted
+    // `summary`, never a `total_owed` field (routes/splits.ts, GET /owed/:id).
     http.get(`${API_BASE}/api/splits/owed/:recipientId`, () =>
-        ok({ items: [], total: 0 }),
+        ok({ items: [], total: 0, summary: OWED_TOTALS_STUB }),
     ),
     http.post(`${API_BASE}/api/splits/owed/:recipientId/settle-all`, () =>
         ok({ message: "Settled", settled_count: 0 }),

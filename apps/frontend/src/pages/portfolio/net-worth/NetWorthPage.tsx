@@ -42,12 +42,15 @@ import {
     enumSearchParamCodec,
     useSearchParamState,
 } from "@/hooks/useSearchParamState";
-import { useNetWorthSummary } from "@/features/portfolio/usePortfolioQueries";
-import { useAccounts } from "@/hooks/useAccounts";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
-import { NetWorthByAccountList } from "./NetWorthByAccountList";
-import { buildNetWorthAccountRows } from "./netWorthByAccount";
+import {
+    useNetWorthByAccount,
+    useNetWorthSummary,
+} from "@/features/portfolio/usePortfolioQueries";
+import {
+    NetWorthByAccountList,
+    type NetWorthAccountRow,
+} from "./NetWorthByAccountList";
+import type { AccountType } from "@/types/api";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
@@ -73,9 +76,7 @@ export default function NetWorthPage() {
     const targetCurrency = appSettings.defaultCurrency || "EUR";
 
     const { data, isLoading, error } = useNetWorthSummary(targetCurrency);
-    const accountsQuery = useAccounts({ active: "all" });
-    const portfolioSummaryQuery = usePortfolioSummaryQuery(targetCurrency);
-    const currencyConverter = useCurrencyConverter(targetCurrency);
+    const byAccountQuery = useNetWorthByAccount(targetCurrency);
 
     const { investments, refreshPrices, isRefreshingPrices } = usePortfolio();
     const isOnline = useOnlineStatus();
@@ -164,23 +165,37 @@ export default function NetWorthPage() {
         investments: 0,
         netWorth: 0,
     };
-    const byAccountRows = useMemo(
-        () =>
-            accountsQuery.data && portfolioSummaryQuery.data
-                ? buildNetWorthAccountRows(
-                      accountsQuery.data.items,
-                      portfolioSummaryQuery.data,
-                      currencyConverter.convertToTargetIfAvailable,
-                      t("networth.byAccount.unassigned"),
-                  )
-                : undefined,
-        [
-            accountsQuery.data,
-            portfolioSummaryQuery.data,
-            currencyConverter.convertToTargetIfAvailable,
-            t,
-        ],
-    );
+    // Server rows with their localized labels, sorted by label (unassigned
+    // last). A cash balance without a stored rate leaves the breakdown
+    // unavailable rather than mixing currencies.
+    const byAccount = useMemo(() => {
+        const data = byAccountQuery.data;
+        if (!data || data.total === null) return undefined;
+        const rows: NetWorthAccountRow[] = data.rows.map((row) => ({
+            key:
+                row.accountId == null
+                    ? "unassigned"
+                    : `account-${row.accountId}`,
+            accountId: row.accountId,
+            label:
+                row.accountId == null
+                    ? t("networth.byAccount.unassigned")
+                    : row.name || `#${row.accountId}`,
+            type: (row.type ?? undefined) as AccountType | undefined,
+            cash: row.cash ?? 0,
+            holdings: row.holdings,
+            total: row.total ?? 0,
+        }));
+        rows.sort((a, b) => {
+            if (a.accountId == null) return 1;
+            if (b.accountId == null) return -1;
+            return a.label.localeCompare(b.label, undefined, {
+                sensitivity: "base",
+                numeric: true,
+            });
+        });
+        return { rows, total: data.total };
+    }, [byAccountQuery.data, t]);
 
     const tooltipLabelFormatter = useCallback(
         (v: string) => fmtDay(v, appSettings.dateFormat),
@@ -459,18 +474,13 @@ export default function NetWorthPage() {
                 </CardContent>
             </Card>
 
-            {accountsQuery.isLoading ||
-            portfolioSummaryQuery.isLoading ||
-            currencyConverter.isLoading ? (
+            {byAccountQuery.isLoading ? (
                 <Card>
                     <CardContent variant="headerless">
                         <Skeleton className="h-48 w-full" />
                     </CardContent>
                 </Card>
-            ) : accountsQuery.isError ||
-              portfolioSummaryQuery.isError ||
-              currencyConverter.error ||
-              !byAccountRows ? (
+            ) : byAccountQuery.isError || !byAccount ? (
                 <Card>
                     <CardContent variant="state" className="text-center">
                         <p className="type-callout text-label-secondary">
@@ -480,7 +490,8 @@ export default function NetWorthPage() {
                 </Card>
             ) : (
                 <NetWorthByAccountList
-                    rows={byAccountRows}
+                    rows={byAccount.rows}
+                    total={byAccount.total}
                     currency={targetCurrency}
                     headline={current.netWorth}
                 />

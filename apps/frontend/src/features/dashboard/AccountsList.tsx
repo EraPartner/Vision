@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { List, ListRow } from "@/components/ui/list";
 import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { useAccounts } from "@/hooks/useAccounts";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useAccountTotals, useAccounts } from "@/hooks/useAccounts";
 import { useCurrencyFormatSettings } from "@/hooks/useCurrencyFormatter";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 
@@ -17,18 +16,21 @@ export function AccountsList() {
     const { t } = useLanguage();
     const { data } = useAccounts({ active: "true" });
     const { currency } = useCurrencyFormatSettings();
-    const { convertToTargetIfAvailable } = useCurrencyConverter(currency);
+    // Largest balance first, compared in one currency converted on the server.
+    const { data: totals } = useAccountTotals(currency);
     const provenance = useBalanceProvenance();
+    const convertedById = new Map(
+        (totals?.accounts ?? [])
+            .filter((row) => row.unconverted_currencies.length === 0)
+            .map((row) => [row.id, row.converted_balance]),
+    );
     const accounts = (data?.items ?? [])
         .map((account) => ({
             account,
             balance:
                 account.computed_balance == null
                     ? undefined
-                    : convertToTargetIfAvailable(
-                          account.computed_balance,
-                          account.currency,
-                      ),
+                    : convertedById.get(account.id),
         }))
         .sort((a, b) => {
             const aKnown =

@@ -12,44 +12,24 @@ import {
 import { toWireDate } from "../lib/dateFormat.ts";
 import {
   addAll,
-  divide,
   multiply,
   roundMoney,
   toDecimal,
   type Decimal,
 } from "../lib/money.ts";
-import { listLatestStoredRates } from "./currency/currencyConversionService.ts";
+import {
+  convertAtLatestRates as convert,
+  currencyCode,
+  loadLatestRatesToEur,
+  type LatestRatesToEur as RatesToEur,
+} from "./currency/latestRateConversion.ts";
 
 // Same expansion cap as the commitment-aware cash estimate.
 const MAX_EXPANDED_OCCURRENCES = 500;
 // Planned rows never reach past this; used as "no horizon" for the monthly view.
 const OPEN_HORIZON = "9999-12-31";
-
-type RatesToEur = ReadonlyMap<string, Decimal>;
-
-async function loadRatesToEur(): Promise<RatesToEur> {
-  const { rows } = await listLatestStoredRates();
-  const rates = new Map<string, Decimal>([["EUR", toDecimal(1)]]);
-  for (const row of rows) {
-    const rate = toDecimal(row.rate_to_eur);
-    if (rate.isFinite() && rate.gt(0)) rates.set(row.currency_code, rate);
-  }
-  return rates;
-}
-
-/** Convert with the latest stored rates; undefined when a rate is missing. */
-function convert(
-  amount: Decimal,
-  from: string,
-  to: string,
-  rates: RatesToEur,
-): Decimal | undefined {
-  if (from === to) return amount;
-  const fromRate = rates.get(from);
-  const toRate = rates.get(to);
-  if (!fromRate || !toRate) return undefined;
-  return divide(multiply(amount, fromRate), toRate);
-}
+// The planned page's day strip: today plus the seven days after it.
+const NEXT_DAYS_WINDOW = 8;
 
 function remainingOccurrences(row: PlannedCommitmentRow): number {
   if (row.max_occurrences == null) return MAX_EXPANDED_OCCURRENCES;
@@ -72,7 +52,7 @@ function occurrencesBetween(
 }
 
 function sourceCurrency(row: PlannedCommitmentRow): string {
-  return (row.currency || "EUR").toUpperCase();
+  return currencyCode(row.currency);
 }
 
 /**
@@ -145,6 +125,71 @@ function monthlyEquivalent(
   return { total: roundMoney(addAll(amounts)), unconvertedCount };
 }
 
+/**
+ * Planned money per day for today and the seven days after it, every
+ * recurring occurrence counted on its own day, converted to `currency` at the
+ * latest stored rates. A row without a rate is left out and counted on each
+ * day it falls on; the window total counts it once, like `rest_of_month`.
+ */
+function nextDaysTotals(
+  rows: PlannedCommitmentRow[],
+  today: string,
+  currency: string,
+  rates: RatesToEur,
+) {
+  const dates = Array.from({ length: NEXT_DAYS_WINDOW }, (_, offset) =>
+    addDaysYmd(today, offset),
+  );
+  const lastDate = addDaysYmd(today, NEXT_DAYS_WINDOW - 1);
+  const days = new Map(
+    dates.map((date) => [
+      date,
+      { incoming: [] as Decimal[], outgoing: [] as Decimal[], unconverted: 0 },
+    ]),
+  );
+  const unconvertedRows = new Set<number>();
+  for (const row of rows) {
+    const occurrences = occurrencesBetween(row, today, lastDate);
+    if (occurrences.length === 0) continue;
+    const converted = convert(
+      toDecimal(row.amount),
+      sourceCurrency(row),
+      currency,
+      rates,
+    );
+    if (!converted) unconvertedRows.add(row.id);
+    for (const date of occurrences) {
+      const day = days.get(date);
+      if (!day) continue;
+      if (!converted) day.unconverted += 1;
+      else
+        (converted.isNegative() ? day.outgoing : day.incoming).push(converted);
+    }
+  }
+  const buckets = [...days.values()];
+  const incoming = addAll(buckets.flatMap((day) => day.incoming));
+  const outgoing = addAll(buckets.flatMap((day) => day.outgoing));
+  return {
+    days: dates.map((date) => {
+      const day = days.get(date)!;
+      return {
+        date,
+        incoming: roundMoney(addAll(day.incoming)),
+        outgoing: roundMoney(addAll(day.outgoing)),
+        unconverted_count: day.unconverted,
+      };
+    }),
+    total: {
+      from: today,
+      to: lastDate,
+      incoming: roundMoney(incoming),
+      outgoing: roundMoney(outgoing),
+      net: roundMoney(incoming.plus(outgoing)),
+      unconverted_count: unconvertedRows.size,
+    },
+  };
+}
+
 export async function computePlannedTotals({
   currency = "EUR",
 }: { currency?: string } = {}) {
@@ -152,10 +197,11 @@ export async function computePlannedTotals({
   const today = todayAppDateString();
   const [rows, rates] = await Promise.all([
     plannedTransactionRepository.getForCommitmentProjection(OPEN_HORIZON),
-    loadRatesToEur(),
+    loadLatestRatesToEur(),
   ]);
   const restOfMonth = restOfMonthTotals(rows, today, target, rates);
   const monthly = monthlyEquivalent(rows, target, rates);
+  const nextDays = nextDaysTotals(rows, today, target, rates);
   return {
     currency: target,
     today,
@@ -169,5 +215,7 @@ export async function computePlannedTotals({
       total: monthly.total,
       unconverted_count: monthly.unconvertedCount,
     },
+    next_days: nextDays.days,
+    next_days_total: nextDays.total,
   };
 }

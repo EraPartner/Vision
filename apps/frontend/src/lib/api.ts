@@ -76,6 +76,7 @@ export const apiClient = {
 
     // Accounts (ADR-088)
     getAccounts: acct.getAccounts,
+    getAccountTotals: acct.getAccountTotals,
     createAccount: acct.createAccount,
     updateAccount: acct.updateAccount,
     deleteAccount: acct.deleteAccount,
@@ -189,6 +190,7 @@ export const apiClient = {
     getBrokerPortfolioPerformance: info.getBrokerPortfolioPerformance,
     getPortfolioSummary: info.getPortfolioSummary,
     getNetWorth: info.getNetWorth,
+    getNetWorthByAccount: info.getNetWorthByAccount,
     getExchangeRates: info.getExchangeRates,
     refreshExchangeRates: info.refreshExchangeRates,
 

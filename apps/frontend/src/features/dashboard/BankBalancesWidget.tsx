@@ -367,7 +367,7 @@ export function BankBalancesWidget() {
                                             into `a.currency`, not into the app default), so it must be
                                             labelled with `a.currency` — the same idiom the Accounts hub
                                             card uses (AccountsPage: fmtCur(a.computed_balance, a.currency));
-                                            group subtotals there convert first (sumConvertedBalances).
+                                            group subtotals there come converted from GET /api/accounts/totals.
                                             Labelling it `defaultCurrency` put a € sign on a $ figure. The
                                             total/chart above stay in `defaultCurrency` because the server
                                             converts THAT payload for the requested currency. */}

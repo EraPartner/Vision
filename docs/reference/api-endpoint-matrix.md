@@ -8,7 +8,7 @@ last_modified: 2026-10-19
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 310
+api_operation_count: 312
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 310 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 312 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **310 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **312 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -219,6 +219,7 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
 | GET    | `/api/accounts`                                  | List accounts (`?active=true\|false\|all`, default true; optional `limit`/`offset` — omit both for the full list) (ADR-088)                                      | —          | [[docs/api/accounts\|Accounts]] |
 | POST   | `/api/accounts`                                  | Create account                                                                                                                                                   | —          | [[docs/api/accounts\|Accounts]] |
+| GET    | `/api/accounts/totals`                           | Hub totals in `?currency=` at the latest stored rates: converted per-account balance, group subtotals, net cash, unconverted counts (ADR-216)                     | —          | [[docs/api/accounts\|Accounts]] |
 | GET    | `/api/accounts/:id`                              | Get single account                                                                                                                                               | —          | [[docs/api/accounts\|Accounts]] |
 | PATCH  | `/api/accounts/:id`                              | Update account (partial)                                                                                                                                         | —          | [[docs/api/accounts\|Accounts]] |
 | DELETE | `/api/accounts/:id`                              | Delete account (409 if still referenced — archive instead)                                                                                                       | —          | [[docs/api/accounts\|Accounts]] |
@@ -391,7 +392,7 @@ opening anchors without changing request fields, response shape or operation cou
 | DELETE | `/api/planned-transactions/:id`               | Hard delete                                                                                 | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                      | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`)  | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
-| GET    | `/api/planned-transactions/totals`            | Server-computed rest-of-month and monthly-equivalent totals in `currency` (2026-10-19; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
+| GET    | `/api/planned-transactions/totals`            | Server-computed rest-of-month, monthly-equivalent and next-8-day (`next_days`, `next_days_total`) totals in `currency` (2026-10-19; registered before `/:id`) | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
 ## Investments
 
@@ -552,8 +553,8 @@ in ascending order and preserves source order within a date. See
 
 | Method | Path                              | Description                                                               | Rate Limit | Doc                         |
 | ------ | --------------------------------- | ------------------------------------------------------------------------- | ---------- | --------------------------- |
-| GET    | `/api/splits/owed`                | Owed summary (optional `limit`/`offset`; omit both for all)               | —          | [[docs/api/splits\|Splits]] |
-| GET    | `/api/splits/owed/:id`            | Owed by recipient (optional `limit`/`offset`; omit both for all)          | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/owed`                | Owed summary converted to `?currency=` at the latest stored rates, with `summary` total outstanding (optional `limit`/`offset`; omit both for all) | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/owed/:id`            | Owed by recipient, with `summary` total outstanding in `?currency=` (optional `limit`/`offset`; omit both for all) | —          | [[docs/api/splits\|Splits]] |
 | GET    | `/api/splits/owed/:id/export/csv` | Export owed CSV                                                           | —          | [[docs/api/splits\|Splits]] |
 | GET    | `/api/splits/transaction/:id`     | Splits for transaction (optional `limit`/`offset`; omit both for all)     | —          | [[docs/api/splits\|Splits]] |
 | POST   | `/api/splits`                     | Create split                                                              | —          | [[docs/api/splits\|Splits]] |
@@ -680,6 +681,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/deduction-candidates`            | Transaction-derived Belgian deduction candidates for one year; each type carries an additive `byOwner` split by account owner (ADR-201)                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
 | PUT    | `/api/info/insight-dismissals`              | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                                                  | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/net-worth`                       | Net worth; excludes holdings-only wallet/exchange ledger cash (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/net-worth/by-account`            | Current net worth per account: cash at the latest stored rate (unconverted accounts flagged), live holdings partitions, unassigned row and total (ADR-216)                                                                                                                                            | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/exchange-rates`                  | Exchange rates                                                                                                                                                                                                                                                                                        | 30 req/min | [[docs/api/info\|Info]]                           |
 | POST   | `/api/info/exchange-rates/refresh`          | Refresh exchange rates                                                                                                                                                                                                                                                                                | admin      | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/inflation-rates`                 | Inflation rates                                                                                                                                                                                                                                                                                       | 30 req/min | [[docs/api/info\|Info]]                           |

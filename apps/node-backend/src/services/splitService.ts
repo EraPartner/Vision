@@ -12,7 +12,19 @@ import {
   validateBatchSplitAllocation,
   validateSplitAllocation,
 } from "../lib/calculations/splits.ts";
-import { subtract, toDecimal, toNumber } from "../lib/money.ts";
+import {
+  addAll,
+  roundMoney,
+  subtract,
+  toDecimal,
+  toNumber,
+  type Decimal,
+} from "../lib/money.ts";
+import {
+  convertAtLatestRates,
+  currencyCode,
+  loadLatestRatesToEur,
+} from "./currency/latestRateConversion.ts";
 import { toAppDateString } from "../lib/timezone.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import splitRepository, {
@@ -241,9 +253,157 @@ export async function createBulkSplitsAtomic({
   });
 }
 
-export async function getOwedSummary() {
-  const rows = await splitRepository.getOwedSummaryRows();
-  return computeOwedSummary(rows);
+/** Unsettled money left out of a converted owed figure for want of a rate. */
+interface UnconvertedOwed {
+  count: number;
+  currencies: Set<string>;
+}
+
+function unconvertedFields(unconverted: UnconvertedOwed) {
+  return {
+    unconverted_count: unconverted.count,
+    unconverted_currencies: [...unconverted.currencies].sort(),
+  };
+}
+
+/**
+ * Who owes what, in `currency`. A split is denominated in its transaction's
+ * currency, so each recipient's per-currency owed and paid sums convert at the
+ * latest stored rates before they are added up. A currency without a rate is
+ * left out of the figures and its open splits are counted per recipient and
+ * in `summary`, never added 1:1. `summary.remaining` is the page's total
+ * outstanding across recipients.
+ */
+export async function getOwedSummary({
+  currency = "EUR",
+}: { currency?: string } = {}) {
+  const target = currency.toUpperCase();
+  const [rows, rates] = await Promise.all([
+    splitRepository.getOwedSummaryRows(),
+    loadLatestRatesToEur(),
+  ]);
+  const recipients = new Map<
+    number,
+    {
+      name: string;
+      owed: Decimal[];
+      paid: Decimal[];
+      splitCount: number;
+      unconverted: UnconvertedOwed;
+    }
+  >();
+  for (const row of rows) {
+    let entry = recipients.get(row.recipient_id);
+    if (!entry) {
+      entry = {
+        name: row.recipient_name,
+        owed: [],
+        paid: [],
+        splitCount: 0,
+        unconverted: { count: 0, currencies: new Set() },
+      };
+      recipients.set(row.recipient_id, entry);
+    }
+    entry.splitCount += parseInt(row.split_count, 10) || 0;
+    const from = currencyCode(row.currency);
+    const owed = convertAtLatestRates(
+      toDecimal(row.total_owed),
+      from,
+      target,
+      rates,
+    );
+    const paid = convertAtLatestRates(
+      toDecimal(row.total_paid),
+      from,
+      target,
+      rates,
+    );
+    if (owed && paid) {
+      entry.owed.push(owed);
+      entry.paid.push(paid);
+    } else if (toDecimal(row.total_owed).gt(toDecimal(row.total_paid))) {
+      entry.unconverted.count += parseInt(row.split_count, 10) || 0;
+      entry.unconverted.currencies.add(from);
+    }
+  }
+  const converted = computeOwedSummary(
+    [...recipients].map(([recipientId, entry]) => ({
+      recipient_id: recipientId,
+      recipient_name: entry.name,
+      total_owed: addAll(entry.owed).toString(),
+      total_paid: addAll(entry.paid).toString(),
+      split_count: String(entry.splitCount),
+    })),
+  );
+  const listed = new Set(converted.map((row) => row.recipient_id));
+  const unconvertedOf = (recipientId: number) =>
+    recipients.get(recipientId)?.unconverted ?? {
+      count: 0,
+      currencies: new Set<string>(),
+    };
+  // A recipient whose only open splits lack a rate still owes money: keep the
+  // row (with zero converted figures) after the convertible ones.
+  const unconvertedOnly = [...recipients]
+    .filter(([id, entry]) => !listed.has(id) && entry.unconverted.count > 0)
+    .map(([id, entry]) => ({
+      recipient_id: id,
+      recipient_name: entry.name,
+      total_owed: 0,
+      total_paid: 0,
+      remaining: 0,
+      split_count: entry.splitCount,
+    }));
+  const items = [...converted, ...unconvertedOnly].map((row) => ({
+    ...row,
+    ...unconvertedFields(unconvertedOf(row.recipient_id)),
+  }));
+  const allUnconverted: UnconvertedOwed = { count: 0, currencies: new Set() };
+  for (const [, entry] of recipients) {
+    allUnconverted.count += entry.unconverted.count;
+    for (const code of entry.unconverted.currencies)
+      allUnconverted.currencies.add(code);
+  }
+  return {
+    items,
+    summary: {
+      currency: target,
+      remaining: roundMoney(addAll(items.map((row) => row.remaining))),
+      ...unconvertedFields(allUnconverted),
+    },
+  };
+}
+
+/**
+ * A recipient group's total outstanding in `currency` (every unsettled split,
+ * whatever page of the detail list is shown), converted per transaction
+ * currency at the latest stored rates; open splits without a rate are counted.
+ */
+export async function getOwedRecipientSummary(
+  recipientId: number,
+  { currency = "EUR" }: { currency?: string } = {},
+) {
+  const target = currency.toUpperCase();
+  const [rows, rates] = await Promise.all([
+    splitRepository.getOwedRemainingByCurrency(recipientId),
+    loadLatestRatesToEur(),
+  ]);
+  const amounts: Decimal[] = [];
+  const unconverted: UnconvertedOwed = { count: 0, currencies: new Set() };
+  for (const row of rows) {
+    const from = currencyCode(row.currency);
+    const remaining = toDecimal(row.remaining);
+    const converted = convertAtLatestRates(remaining, from, target, rates);
+    if (converted) amounts.push(converted);
+    else if (!remaining.isZero()) {
+      unconverted.count += parseInt(row.split_count, 10) || 0;
+      unconverted.currencies.add(from);
+    }
+  }
+  return {
+    currency: target,
+    remaining: roundMoney(addAll(amounts)),
+    ...unconvertedFields(unconverted),
+  };
 }
 
 export async function getOwedByRecipient(
@@ -381,6 +541,7 @@ export default {
   createSplitsBatchAtomic,
   createBulkSplitsAtomic,
   getOwedSummary,
+  getOwedRecipientSummary,
   getOwedByRecipient,
   addPayment,
   settleSplit,

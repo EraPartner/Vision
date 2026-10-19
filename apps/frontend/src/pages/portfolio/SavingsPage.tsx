@@ -10,6 +10,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Banknote, Calendar, PiggyBank, Shield } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
+import { findHoldingTotals } from "@/hooks/portfolio/assetGroupTotals";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import {
     AssetPageActions,
@@ -26,7 +28,6 @@ import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
-import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,34 +58,15 @@ export default function SavingsPage() {
     });
     const accounts = byAssetClass([...ALLOWED_ASSET_CLASSES]);
 
-    const { convertToTarget } = useCurrencyConverter(targetCurrency);
-
-    const totalBalance = accounts.reduce(
-        (s, a) => s + convertToTarget(a.currentValue, a.currency),
-        0,
-    );
-    const totalInterestEarned = accounts.reduce(
-        (s, a) => s + convertToTarget(a.totalIncome, a.currency),
-        0,
-    );
-    const totalProjectedAnnual = accounts.reduce(
-        (s, a) => s + convertToTarget(a.projectedAnnualInterest, a.currency),
-        0,
-    );
-    const totalAccrued = accounts.reduce(
-        (s, a) => s + convertToTarget(a.accruedInterest, a.currency),
-        0,
-    );
-    const weightedRate =
-        totalBalance > 0
-            ? accounts.reduce(
-                  (s, a) =>
-                      s +
-                      (a.interestRate ?? 0) *
-                          convertToTarget(a.currentValue, a.currency),
-                  0,
-              ) / totalBalance
-            : 0;
+    // Page totals come from the server summary, in targetCurrency.
+    const { data: summary } = usePortfolioSummaryQuery(targetCurrency);
+    const {
+        totalPortfolioValue: totalBalance,
+        totalIncome: totalInterestEarned,
+        totalProjectedAnnualInterest: totalProjectedAnnual,
+        totalAccruedInterest: totalAccrued,
+        valueWeightedInterestRate: weightedRate,
+    } = findHoldingTotals(summary, ALLOWED_ASSET_CLASSES);
 
     const [exportOpen, setExportOpen] = useState(false);
     const exportDialog = (
@@ -243,10 +225,7 @@ export default function SavingsPage() {
                             daysToMaturity !== null && daysToMaturity <= 0;
                         const isSavings = a.assetClass === "savings";
                         const Glyph = isSavings ? PiggyBank : Shield;
-                        const interestEarned = convertToTarget(
-                            a.totalIncome,
-                            a.currency,
-                        );
+                        const interestEarned = a.totalIncome;
 
                         return (
                             <Card
@@ -311,10 +290,7 @@ export default function SavingsPage() {
                                             </p>
                                             <p className="type-title-2 tabular-nums">
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        a.currentValue,
-                                                        a.currency,
-                                                    )}
+                                                    amount={a.currentValue}
                                                     currency={targetCurrency}
                                                 />
                                             </p>
@@ -356,10 +332,9 @@ export default function SavingsPage() {
                                                         tone="text-primary"
                                                         value={
                                                             <Money
-                                                                amount={convertToTarget(
-                                                                    a.projectedAnnualInterest,
-                                                                    a.currency,
-                                                                )}
+                                                                amount={
+                                                                    a.projectedAnnualInterest
+                                                                }
                                                                 currency={
                                                                     targetCurrency
                                                                 }
@@ -375,10 +350,9 @@ export default function SavingsPage() {
                                                             tone="text-gain"
                                                             value={
                                                                 <Money
-                                                                    amount={convertToTarget(
-                                                                        a.accruedInterest,
-                                                                        a.currency,
-                                                                    )}
+                                                                    amount={
+                                                                        a.accruedInterest
+                                                                    }
                                                                     currency={
                                                                         targetCurrency
                                                                     }
@@ -441,10 +415,9 @@ export default function SavingsPage() {
                                                     value={
                                                         <Money
                                                             amount={
-                                                                -convertToTarget(
-                                                                    a.totalFees +
-                                                                        a.totalTaxes,
-                                                                    a.currency,
+                                                                -(
+                                                                    a.feesAndTaxes ??
+                                                                    0
                                                                 )
                                                             }
                                                             currency={

@@ -2310,6 +2310,8 @@ const en: Record<string, string> = {
   'owesPage.export.success': 'CSV exported',
   'owesPage.fromPeople': 'from {n} people',
   'owesPage.fromPerson': 'from {n} person',
+  'owesPage.fxUnavailable.one': '{count} split left out: exchange rate unavailable',
+  'owesPage.fxUnavailable.other': '{count} splits left out: exchange rates unavailable',
   'owesPage.markSettled': 'Mark as settled',
   'owesPage.menu': 'More actions',
   'owesPage.noDebts': 'No outstanding debts',

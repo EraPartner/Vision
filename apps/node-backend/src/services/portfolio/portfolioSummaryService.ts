@@ -36,6 +36,15 @@ import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { buildArchivedPortfolioPresentation } from "./archivedPortfolioPresentation.ts";
+import {
+  buildAssetClassTotals,
+  buildAssetGroupTotals,
+} from "./portfolioAssetClassTotals.ts";
+import {
+  convertAtLatestRates,
+  loadLatestRatesToEur,
+} from "../currency/latestRateConversion.ts";
+import type { LatestRatesToEur } from "../currency/latestRateConversion.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
   toDecimal,
@@ -44,6 +53,7 @@ import {
   multiply,
   divide,
   roundMoney,
+  subtract,
 } from "../../lib/money.ts";
 import type {
   HistoricalRateIndex,
@@ -141,6 +151,8 @@ export async function getPortfolioSummary(
   totals: PortfolioTotals;
   summaries: InvestmentSummary[];
   byAccount: AccountBreakdownRow[];
+  byAssetClass: ReturnType<typeof buildAssetClassTotals>;
+  byAssetGroup: ReturnType<typeof buildAssetGroupTotals>;
   archivedInKindIncome: { id: number; totalInKindIncome: number }[];
   brokerageCashFees: Awaited<ReturnType<typeof getBrokerageCashFees>>;
   brokerSnapshotParity?: { totalValue: string; partitionValue: string };
@@ -243,6 +255,14 @@ export async function getPortfolioSummary(
     ),
   );
 
+  // Latest rates only convert foreign-currency rent (monthlyRent).
+  const latestRates: LatestRatesToEur = includedTxnRows.some(
+    (txn) =>
+      txn.type === "rent_income" &&
+      (!txn.currency || txn.currency.toUpperCase() !== target),
+  )
+    ? await loadLatestRatesToEur()
+    : new Map();
   const perInvestment = investmentRows.map((inv) =>
     buildInvestmentSummary(
       inv,
@@ -252,6 +272,7 @@ export async function getPortfolioSummary(
       {
         costBasisMethod,
         todayYmd,
+        latestRates,
       },
     ),
   );
@@ -356,6 +377,8 @@ export async function getPortfolioSummary(
     totals,
     summaries,
     byAccount,
+    byAssetClass: buildAssetClassTotals(summaries),
+    byAssetGroup: buildAssetGroupTotals(summaries),
     archivedInKindIncome,
     brokerageCashFees,
     ...(includeArchivedPresentation
@@ -736,7 +759,14 @@ function buildInvestmentSummary(
   txns: AnnotatedTxRow[],
   targetCurrency: string,
   multiplierByCurrency: Map<string, number>,
-  opts: { costBasisMethod: CostBasisMethod; todayYmd: string },
+  {
+    latestRates,
+    ...opts
+  }: {
+    costBasisMethod: CostBasisMethod;
+    todayYmd: string;
+    latestRates: LatestRatesToEur;
+  },
 ) {
   const invCurrency = (inv.currency || "EUR").toUpperCase();
   // Multiplier was resolved once per distinct currency by the caller.
@@ -770,6 +800,20 @@ function buildInvestmentSummary(
   const { totalUnits } = core;
   const gainLossPercent = cv.gainLossPercent;
   const usedFallbackRate = txns.some((t) => t._fxFellBack === true);
+  // Rows arrive ordered by (date, id): the last rent row is the latest one.
+  const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
+  const monthlyRent = latestRent
+    ? convertAtLatestRates(
+        latestRent.amount ?? 0,
+        (latestRent.currency || invCurrency).toUpperCase(),
+        targetCurrency,
+        latestRates,
+      )
+    : toDecimal(0);
+  const roundedFees = round2(convertedTotalFees);
+  const roundedTaxes = round2(convertedTotalTaxes);
+  const roundedIncome = round2(convertedTotalIncome);
+  const roundedAppreciation = round2(convertedTotalAppreciation);
 
   // Per-account contributions in target currency: value at today's rate,
   // flows locked at their transaction-date rates — the same converted track
@@ -848,10 +892,10 @@ function buildInvestmentSummary(
     totalBuyCost: round2(convertedTotalBuyCost),
     totalSellProceeds: round2(convertedTotalSellProceeds),
     currentValue: round2(convertedCurrentValue),
-    totalFees: round2(convertedTotalFees),
-    totalTaxes: round2(convertedTotalTaxes),
+    totalFees: roundedFees,
+    totalTaxes: roundedTaxes,
     totalDividends: round2(convertedTotalDividends),
-    totalIncome: round2(convertedTotalIncome),
+    totalIncome: roundedIncome,
     totalInKindIncome: round2(cv.totalInKindIncome),
 
     avgCostBasis: round2(convertedAvgCostBasis),
@@ -871,7 +915,21 @@ function buildInvestmentSummary(
 
     accruedInterest: round2(convertedAccruedInterest),
     projectedAnnualInterest: round2(convertedProjectedInterest),
-    totalAppreciation: round2(convertedTotalAppreciation),
+    totalAppreciation: roundedAppreciation,
+    // Display figures of the asset pages, from the rounded fields above.
+    feesAndTaxes: round2(addAll([roundedFees, roundedTaxes])),
+    /** Real Estate return: appreciation + income − fees − taxes. */
+    propertyReturn: round2(
+      subtract(
+        addAll([roundedAppreciation, roundedIncome]),
+        addAll([roundedFees, roundedTaxes]),
+      ),
+    ),
+    /**
+     * Latest rent_income amount converted from its booking currency at the
+     * latest stored rate; 0 without rent, null when no rate is stored.
+     */
+    monthlyRent: monthlyRent === undefined ? null : round2(monthlyRent),
 
     // ADR-108 transition flag: false while the instrument still has broker-
     // unassigned lots (its per-account figures then live entirely on the

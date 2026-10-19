@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import {
-    ACCOUNT_STUB,
     err,
     INVESTMENT_STUB,
     ok,
@@ -29,7 +28,6 @@ import MarketLookupPage from "@/pages/research/MarketLookupPage";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
-import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -349,85 +347,46 @@ describe("Portfolio pages (integration)", () => {
     }, 15_000);
 
     it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {
+        // GET /api/info/net-worth/by-account: cash already converted on the
+        // server (USD 1 000 at 0.9 = 900), holdings partitions and the total.
         server.use(
-            http.get(`${API_BASE}/api/accounts`, () =>
-                ok(
-                    accountsBody({
-                        items: [
-                            accountListItem({
-                                ...ACCOUNT_STUB,
-                                id: 10,
-                                name: "Daily cash",
-                                display_name: "Daily cash",
-                                currency: "USD",
-                                computed_balance: 1000,
-                            }),
-                            accountListItem({
-                                ...ACCOUNT_STUB,
-                                id: 20,
-                                name: "Broker",
-                                display_name: "Broker",
-                                type: "brokerage",
-                                computed_balance: 100,
-                            }),
-                        ],
-                        total: 2,
-                        links: [],
-                    }),
-                ),
-            ),
-            http.get(`${API_BASE}/api/info/exchange-rates`, () =>
+            http.get(`${API_BASE}/api/info/net-worth/by-account`, () =>
                 ok({
-                    rates: [
+                    currency: "EUR",
+                    rows: [
                         {
-                            currency: "USD",
-                            rate_to_eur: 0.9,
-                            rate_date: "2026-09-08",
-                            fetched_at: "2026-09-08T00:00:00Z",
+                            accountId: 10,
+                            name: "Daily cash",
+                            type: "checking",
+                            cashCurrency: "USD",
+                            cash: 900,
+                            holdings: 0,
+                            total: 900,
+                            unconverted: false,
+                        },
+                        {
+                            accountId: 20,
+                            name: "Broker",
+                            type: "brokerage",
+                            cashCurrency: "EUR",
+                            cash: 100,
+                            holdings: 900,
+                            total: 1000,
+                            unconverted: false,
+                        },
+                        {
+                            accountId: null,
+                            name: null,
+                            type: null,
+                            cashCurrency: null,
+                            cash: 0,
+                            holdings: 50,
+                            total: 50,
+                            unconverted: false,
                         },
                     ],
-                    fallback_rates: {},
-                    base: "EUR",
-                    date: "2026-09-08",
-                    total_rates: 1,
-                    source: "database",
-                    is_stale: false,
-                    last_fetched_at: "2026-09-08T00:00:00Z",
-                }),
-            ),
-            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-                ok({
-                    ...PORTFOLIO_SUMMARY_STUB,
-                    computed_at: "2026-09-08T00:00:00Z",
-                    totals: {
-                        ...PORTFOLIO_SUMMARY_STUB.totals,
-                        totalPortfolioValue: 950,
-                    },
-                    summaries: [],
-                    byAccount: [
-                        {
-                            account_id: 20,
-                            assignment: "account",
-                            contribution_kind: "position",
-                            oversold: false,
-                            currentValue: 900,
-                            totalInvested: 800,
-                            realizedGain: 0,
-                            unrealizedGain: 100,
-                            gainLoss: 100,
-                        },
-                        {
-                            account_id: null,
-                            assignment: "unassigned",
-                            contribution_kind: "position",
-                            oversold: false,
-                            currentValue: 50,
-                            totalInvested: 50,
-                            realizedGain: 0,
-                            unrealizedGain: 0,
-                            gainLoss: 0,
-                        },
-                    ],
+                    total: 1950,
+                    unconvertedAccountIds: [],
                 }),
             ),
             http.get(`${API_BASE}/api/info/net-worth`, () =>
@@ -459,8 +418,8 @@ describe("Portfolio pages (integration)", () => {
             name: "By account",
         });
         const card = heading.closest(".glass-thin") as HTMLElement;
-        expect(card).toHaveTextContent(/Daily cash.*900,00/s);
         expect(card).toHaveTextContent(/Broker.*100,00.*900,00.*1\.000,00/s);
+        expect(card).toHaveTextContent(/Daily cash.*900,00/s);
         expect(card).toHaveTextContent(/Unassigned.*50,00/s);
         expect(
             within(card).getByRole("link", { name: "Assign to an account" }),
@@ -470,36 +429,32 @@ describe("Portfolio pages (integration)", () => {
         );
     }, 15_000);
 
-    it("keeps By Account pending and then unavailable when FX rates fail", async () => {
+    it("keeps By Account pending and then unavailable when a cash balance has no rate", async () => {
         let release!: () => void;
         const pending = new Promise<void>((resolve) => {
             release = resolve;
         });
         server.use(
-            http.get(`${API_BASE}/api/accounts`, () =>
-                ok(
-                    accountsBody({
-                        items: [
-                            accountListItem({
-                                ...ACCOUNT_STUB,
-                                id: 10,
-                                currency: "USD",
-                                computed_balance: 100,
-                            }),
-                        ],
-                        total: 1,
-                        links: [],
-                    }),
-                ),
-            ),
-            http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-                ok({
-                    ...PORTFOLIO_SUMMARY_STUB,
-                    computed_at: "2026-09-08T00:00:00Z",
-                    summaries: [],
-                    byAccount: [],
-                }),
-            ),
+            http.get(`${API_BASE}/api/info/net-worth/by-account`, async () => {
+                await pending;
+                return ok({
+                    currency: "EUR",
+                    rows: [
+                        {
+                            accountId: 10,
+                            name: "Cash",
+                            type: "checking",
+                            cashCurrency: "XYZ",
+                            cash: null,
+                            holdings: 0,
+                            total: null,
+                            unconverted: true,
+                        },
+                    ],
+                    total: null,
+                    unconvertedAccountIds: [10],
+                });
+            }),
             http.get(`${API_BASE}/api/info/net-worth`, () =>
                 ok({
                     current: {
@@ -521,10 +476,6 @@ describe("Portfolio pages (integration)", () => {
                     ],
                 }),
             ),
-            http.get(`${API_BASE}/api/info/exchange-rates`, async () => {
-                await pending;
-                return err(500, "rates unavailable");
-            }),
         );
 
         renderWithApp(<NetWorthPage />);
@@ -536,7 +487,7 @@ describe("Portfolio pages (integration)", () => {
         expect(
             await screen.findByText(/account breakdown could not be loaded/i),
         ).toBeInTheDocument();
-    });
+    }, 15_000);
 
     it("NetWorthPage hydrates its visible period from the URL", async () => {
         server.use(

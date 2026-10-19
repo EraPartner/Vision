@@ -102,6 +102,11 @@ const canonical: PortfolioSummaryItem = {
     accruedInterest: 0,
     projectedAnnualInterest: 0,
     totalAppreciation: 0,
+    feesAndTaxes: 1,
+    propertyReturn: 1,
+    monthlyRent: 0,
+    // 6 / (400 × 0.04987654) × 100
+    unrealizedGainPercent: 30.07,
     fullyAssigned: true,
     oversold: false,
     byAccount: [],

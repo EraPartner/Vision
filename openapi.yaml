@@ -3303,7 +3303,17 @@ components:
         unrealizedGainPercent: { type: number }
         estimatedMonthlyRent:
           type: number
-          description: Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion.
+          description: Latest ordinary rent amount in its booking currency, without FX conversion. The Real Estate page reads monthlyRent instead.
+        monthlyRent:
+          type: number
+          nullable: true
+          description: Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate. 0 without rent; null when no stored rate exists.
+        feesAndTaxes:
+          type: number
+          description: totalFees + totalTaxes, from the rounded fields.
+        propertyReturn:
+          type: number
+          description: Real Estate return shown per property, totalAppreciation + totalIncome − totalFees − totalTaxes, from the rounded fields.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         totalUnits:
@@ -3354,6 +3364,83 @@ components:
         unrealizedGain: { type: number }
         gainLoss: { type: number }
 
+    PortfolioHoldingTotals:
+      type: object
+      description: >-
+        Totals of a set of holdings, each the exact sum of the rounded
+        per-investment figures in `summaries`, in the response currency.
+      required:
+        [
+          holdingCount,
+          totalPortfolioValue,
+          totalInvested,
+          totalGainLoss,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          totalIncome,
+          totalDividends,
+          totalInKindIncome,
+          totalFees,
+          totalTaxes,
+          totalFeesAndTaxes,
+          netReturnExcludingIncome,
+          netReturnWithDividends,
+          totalAppreciation,
+          totalPropertyReturn,
+          totalAccruedInterest,
+          totalProjectedAnnualInterest,
+          valueWeightedInterestRate,
+          estimatedMonthlyRent,
+          monthlyRentRateMissing,
+          usedFallbackRate,
+        ]
+      properties:
+        holdingCount: { type: integer, minimum: 0 }
+        totalPortfolioValue: { type: number, description: Σ currentValue. }
+        totalInvested: { type: number, description: Σ totalBuyCost, as totals.totalInvested. }
+        totalGainLoss: { type: number }
+        totalRealizedGain: { type: number }
+        totalUnrealizedGain: { type: number }
+        totalIncome: { type: number }
+        totalDividends: { type: number }
+        totalInKindIncome: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalFeesAndTaxes: { type: number, description: Σ feesAndTaxes. }
+        netReturnExcludingIncome: { type: number, description: Σ (gainLoss − totalIncome). }
+        netReturnWithDividends: { type: number, description: Σ (gainLoss − totalIncome + totalDividends). }
+        totalAppreciation: { type: number }
+        totalPropertyReturn: { type: number, description: Σ propertyReturn. }
+        totalAccruedInterest: { type: number }
+        totalProjectedAnnualInterest: { type: number }
+        valueWeightedInterestRate:
+          type: number
+          description: Σ (interestRate × currentValue) / Σ currentValue, in percent; 0 without value.
+        estimatedMonthlyRent: { type: number, description: Σ monthlyRent of the holdings that have a rate. }
+        monthlyRentRateMissing: { type: boolean, description: Some holding's monthlyRent is null. }
+        usedFallbackRate: { type: boolean }
+
+    PortfolioAssetClassTotals:
+      allOf:
+        - type: object
+          required: [assetClass]
+          properties:
+            assetClass: { type: string }
+        - $ref: "#/components/schemas/PortfolioHoldingTotals"
+
+    PortfolioAssetGroupTotals:
+      allOf:
+        - type: object
+          required: [group, assetClasses]
+          properties:
+            group:
+              type: string
+              enum: [stocks_etfs, crypto, metals, real_estate, savings_bonds]
+            assetClasses:
+              type: array
+              items: { type: string }
+        - $ref: "#/components/schemas/PortfolioHoldingTotals"
+
     PortfolioSummaryTotals:
       type: object
       required:
@@ -3393,7 +3480,8 @@ components:
 
     PortfolioSummaryData:
       type: object
-      required: [currency, computed_at, totals, summaries, byAccount]
+      required:
+        [currency, computed_at, totals, summaries, byAccount, byAssetClass, byAssetGroup]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
@@ -3413,6 +3501,14 @@ components:
         byAccount:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryByAccountItem" }
+        byAssetClass:
+          type: array
+          description: Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order.
+          items: { $ref: "#/components/schemas/PortfolioAssetClassTotals" }
+        byAssetGroup:
+          type: array
+          description: Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty.
+          items: { $ref: "#/components/schemas/PortfolioAssetGroupTotals" }
 
         brokerageCashFees:
           type: object
@@ -4830,6 +4926,88 @@ components:
           type: boolean
           nullable: true
 
+    AccountGroupTotal:
+      type: object
+      required:
+        [
+          total,
+          cash,
+          holdings,
+          holdings_unavailable,
+          unconverted_count,
+          unconverted_currencies,
+        ]
+      properties:
+        total:
+          type: number
+          description: cash + holdings.
+        cash:
+          type: number
+          description: Converted ledger balances; crypto_exchange and wallet accounts excluded.
+        holdings:
+          type: number
+          description: Portfolio-summary position value of the group's portfolio-type accounts.
+        holdings_unavailable:
+          type: boolean
+          description: The portfolio summary could not be computed; holdings is 0.
+        unconverted_count:
+          type: integer
+          description: Accounts with a balance partition left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
+
+    AccountTotals:
+      type: object
+      required: [currency, net_cash, groups, accounts]
+      properties:
+        currency:
+          type: string
+        net_cash:
+          type: object
+          description: Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet.
+          required: [total, unconverted_count, unconverted_currencies]
+          properties:
+            total:
+              type: number
+            unconverted_count:
+              type: integer
+            unconverted_currencies:
+              type: array
+              items:
+                type: string
+        groups:
+          type: object
+          required: [cash, portfolio, liabilities, archived]
+          properties:
+            cash:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            portfolio:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            liabilities:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            archived:
+              $ref: "#/components/schemas/AccountGroupTotal"
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [id, group, converted_balance, unconverted_currencies]
+            properties:
+              id:
+                type: integer
+              group:
+                type: string
+                enum: [cash, portfolio, liabilities, archived]
+              converted_balance:
+                type: number
+                description: Sum of the account's convertible balance partitions.
+              unconverted_currencies:
+                type: array
+                items:
+                  type: string
+
     Account:
       type: object
       required:
@@ -5545,7 +5723,16 @@ components:
 
     PlannedTotals:
       type: object
-      required: [currency, today, month_end, rest_of_month, monthly_equivalent]
+      required:
+        [
+          currency,
+          today,
+          month_end,
+          rest_of_month,
+          monthly_equivalent,
+          next_days,
+          next_days_total,
+        ]
       properties:
         currency:
           type: string
@@ -5571,6 +5758,48 @@ components:
           required: [total, unconverted_count]
           properties:
             total:
+              type: number
+            unconverted_count:
+              type: integer
+        next_days:
+          type: array
+          description: >
+            Today and the seven days after it (eight entries), every recurring
+            occurrence counted on its own day. `unconverted_count` counts the
+            occurrences on that day without a stored rate.
+          items:
+            type: object
+            required: [date, incoming, outgoing, unconverted_count]
+            properties:
+              date:
+                type: string
+                format: date
+              incoming:
+                type: number
+              outgoing:
+                type: number
+                description: Negative or zero.
+              unconverted_count:
+                type: integer
+        next_days_total:
+          type: object
+          description: >
+            The `next_days` window summed; `unconverted_count` counts rows
+            without a stored rate, like `rest_of_month`.
+          required: [from, to, incoming, outgoing, net, unconverted_count]
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+            incoming:
+              type: number
+            outgoing:
+              type: number
+              description: Negative or zero.
+            net:
               type: number
             unconverted_count:
               type: integer
@@ -6610,6 +6839,45 @@ components:
         snapshotsOffset:
           type: integer
 
+    NetWorthByAccountRow:
+      type: object
+      required: [accountId, name, type, cashCurrency, cash, holdings, total, unconverted]
+      properties:
+        accountId:
+          type: integer
+          nullable: true
+          description: null for holdings not assigned to an account.
+        name:
+          type: string
+          nullable: true
+          description: Account display_name or name; null for the unassigned row or an unknown account.
+        type: { type: string, nullable: true }
+        cashCurrency: { type: string, nullable: true }
+        cash:
+          type: number
+          nullable: true
+          description: Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency has no rate.
+        holdings: { type: number, description: Σ live portfolio-summary byAccount currentValue. }
+        total: { type: number, nullable: true, description: cash + holdings; null when cash is null. }
+        unconverted: { type: boolean }
+
+    NetWorthByAccountResponse:
+      type: object
+      required: [currency, rows, total, unconvertedAccountIds]
+      properties:
+        currency: { type: string }
+        rows:
+          type: array
+          description: Ordered by account id, the unassigned row last.
+          items: { $ref: "#/components/schemas/NetWorthByAccountRow" }
+        total:
+          type: number
+          nullable: true
+          description: Σ row totals; null while any cash balance is unconverted.
+        unconvertedAccountIds:
+          type: array
+          items: { type: integer }
+
     # ─── Saved Charts ────────────────────────────────────────────────────────
     SavedChart:
       type: object
@@ -6840,7 +7108,13 @@ components:
           total_paid,
           remaining,
           split_count,
+          unconverted_count,
+          unconverted_currencies,
         ]
+      description: >
+        Owed, paid and remaining amounts converted to the requested currency at
+        the latest stored exchange rates, per transaction currency. Open splits
+        in a currency without a stored rate are left out and counted.
       properties:
         recipient_id:
           type: integer
@@ -6854,6 +7128,31 @@ components:
           type: number
         split_count:
           type: integer
+        unconverted_count:
+          type: integer
+          description: Open splits left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
+
+    # Total outstanding in one currency (`summary` on GET /api/splits/owed and
+    # GET /api/splits/owed/{id}), whatever page of items is returned.
+    OwedTotals:
+      type: object
+      required: [currency, remaining, unconverted_count, unconverted_currencies]
+      properties:
+        currency:
+          type: string
+        remaining:
+          type: number
+        unconverted_count:
+          type: integer
+          description: Open splits left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
 
     # One unsettled split of a recipient (GET /api/splits/owed/{id}) — a Split
     # enriched with the fields of the transaction it was carved out of.
@@ -9606,6 +9905,41 @@ paths:
         "409":
           description: An account with that name already exists
 
+  /api/accounts/totals:
+    get:
+      summary: Accounts hub totals in one display currency
+      description: >
+        Server-computed accounts hub figures (ADR-216). Every balance partition
+        converts to `currency` at the latest stored exchange rate; a partition
+        without a rate is left out and its account counted in
+        `unconverted_count`. `net_cash` covers active, in_net_worth accounts
+        outside the portfolio types. Group subtotals add the portfolio-summary
+        position value of the group's brokerage, crypto_exchange and wallet
+        accounts to the ledger balances (holdings-only types excluded).
+      operationId: getAccountTotals
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
+      responses:
+        "200":
+          description: Account totals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AccountTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
+
   /api/accounts/{id}:
     parameters:
       - in: path
@@ -10953,6 +11287,37 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/NetWorthResponse"
+
+  /api/info/net-worth/by-account:
+    get:
+      summary: Get current net worth by account
+      description: >-
+        One row per account that counts toward net worth (its cash balance
+        converted at the latest stored rate) and per account or unassigned
+        bucket holding live portfolio positions. Holdings-only crypto_exchange
+        and wallet accounts contribute holdings but no cash. Not cached.
+      operationId: getNetWorthByAccount
+      tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
+          schema:
+            type: string
+      responses:
+        "400":
+          description: "VALIDATION_ERROR: currency must be a single value"
+        "200":
+          description: Net worth rows by account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/NetWorthByAccountResponse"
 
   /api/saved-charts:
     get:
@@ -14253,11 +14618,21 @@ paths:
       operationId: getSplitsOwed
       tags: [Splits]
       parameters:
+        - in: query
+          name: currency
+          description: Currency of the converted figures.
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed summary per recipient (complete unless limit/offset are supplied)
+          description: >
+            Owed summary per recipient (complete unless limit/offset are
+            supplied), converted to `currency`; `summary` is the total
+            outstanding across every recipient.
           content:
             application/json:
               schema:
@@ -14269,12 +14644,16 @@ paths:
                         allOf:
                           - $ref: "#/components/schemas/OptionalPaginationFields"
                           - type: object
-                            required: [items]
+                            required: [items, summary]
                             properties:
                               items:
                                 type: array
                                 items:
                                   $ref: "#/components/schemas/SplitOwed"
+                              summary:
+                                $ref: "#/components/schemas/OwedTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
 
   /api/splits/owed/{id}:
     parameters:
@@ -14290,11 +14669,21 @@ paths:
       operationId: getSplitOwedByRecipient
       tags: [Splits]
       parameters:
+        - in: query
+          name: currency
+          description: Currency of `summary`; split rows stay in their transaction currency.
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed detail (complete unless limit/offset are supplied)
+          description: >
+            Owed detail (complete unless limit/offset are supplied); `summary`
+            is the recipient's total outstanding over every unsettled split,
+            converted to `currency` at the latest stored rates.
           content:
             application/json:
               schema:
@@ -14306,12 +14695,16 @@ paths:
                         allOf:
                           - $ref: "#/components/schemas/OptionalPaginationFields"
                           - type: object
-                            required: [items]
+                            required: [items, summary]
                             properties:
                               items:
                                 type: array
                                 items:
                                   $ref: "#/components/schemas/SplitOwedDetail"
+                              summary:
+                                $ref: "#/components/schemas/OwedTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
 
   /api/splits/owed/{id}/export/csv:
     parameters:

@@ -23,7 +23,16 @@ export const SplitSchema = z.looseObject({
 /** `GET /api/splits/transaction/:id`. */
 export const SplitListSchema = wireListOf(SplitSchema);
 
-/** `computeOwedSummary` (lib/calculations/splits.ts). */
+/** Open splits left out of a converted owed figure because their currency has no stored rate. */
+const owedUnconvertedFields = {
+  unconverted_count: z.number().int().nonnegative(),
+  unconverted_currencies: z.array(z.string()),
+};
+
+/**
+ * `splitService.getOwedSummary`: a recipient group's owed, paid and remaining
+ * amounts converted to the requested `?currency=` at the latest stored rates.
+ */
 export const OwedSummaryItemSchema = z.looseObject({
   recipient_id: IdSchema,
   recipient_name: z.string(),
@@ -31,10 +40,20 @@ export const OwedSummaryItemSchema = z.looseObject({
   total_paid: z.number(),
   remaining: z.number(),
   split_count: z.number().int().nonnegative(),
+  ...owedUnconvertedFields,
 });
 
-/** `GET /api/splits/owed`. */
-export const OwedSummaryListSchema = wireListOf(OwedSummaryItemSchema);
+/** Total outstanding in the requested currency (`summary` on both owed reads). */
+export const OwedTotalsSchema = z.looseObject({
+  currency: z.string(),
+  remaining: z.number(),
+  ...owedUnconvertedFields,
+});
+
+/** `GET /api/splits/owed`: `summary` covers every recipient, whatever the page. */
+export const OwedSummaryListSchema = wireListOf(OwedSummaryItemSchema).extend({
+  summary: OwedTotalsSchema,
+});
 
 /**
  * `splitService.getOwedByRecipient`: a split plus its parent transaction.
@@ -50,8 +69,10 @@ export const OwedDetailItemSchema = SplitSchema.extend({
   remaining: z.number(),
 });
 
-/** `GET /api/splits/owed/:recipientId`. */
-export const OwedDetailListSchema = wireListOf(OwedDetailItemSchema);
+/** `GET /api/splits/owed/:recipientId`: `summary` covers every unsettled split. */
+export const OwedDetailListSchema = wireListOf(OwedDetailItemSchema).extend({
+  summary: OwedTotalsSchema,
+});
 
 /** `createBulkSplitsAtomic` (services/splitService.ts). */
 export const BulkSplitResultSchema = z.looseObject({
