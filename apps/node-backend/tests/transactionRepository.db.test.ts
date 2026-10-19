@@ -1,11 +1,9 @@
 /**
  * Real-Postgres tests for transactionRepository.
  *
- * DB-backed complement to transactionRepositoryBehavior.test.ts and
- * transactionRepositoryOrdering.test.ts (which stay: they run without a DB).
- * Those suites choreograph SQL result ORDER on a mocked pool, so they assert
- * the query strings we wrote rather than the rows Postgres actually returns.
- * Everything here runs the same behaviours against a migrated schema with
+ * The mocked-pool suites that asserted query strings were removed (ADR-215);
+ * transactionRepositoryOrdering.test.ts keeps only the count-cache checks.
+ * Everything here runs the repository against a migrated schema with
  * realistic fixtures: NUMERIC amounts as strings with cents, real DATE columns
  * spanning a (leap-year) month boundary, multiple accounts and currencies,
  * alias recipients and inactive rows mixed in. Account writes use account_id
