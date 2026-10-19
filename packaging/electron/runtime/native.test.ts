@@ -30,6 +30,7 @@ import {
   bundledChromiumPath,
   isPortFree,
   isDetailedHealthReady,
+  lastStartupError,
   managedPostgresArgs,
   verifyRuntimeManifest,
   directoryFingerprint,
@@ -1321,9 +1322,32 @@ test("native first start persists and unreferences an argument-array backend chi
     assert.deepEqual(spawned.args, ["run", "apps/node-backend/src/main.ts"]);
     assert.equal(spawned.options.env?.SERVER_HOST, "127.0.0.1");
     assert.equal((await runtime.readState())?.activeRuntime, "native");
+
+    assert.equal(await runtime.backendStartupFailure(), undefined);
+    await fs.promises.appendFile(
+      runtime.paths.backendLog,
+      `2026-10-19T18:45:42.511Z [ERROR] Failed to start application {"error":"Database is at Alembic revision 0125_x"}\n`,
+    );
+    (child as unknown as EventEmitter).emit("exit");
+    assert.equal(
+      await runtime.backendStartupFailure(),
+      "Database is at Alembic revision 0125_x",
+    );
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
+});
+
+test("startup error is read from the last failed backend start in the log", () => {
+  const log = [
+    `2026-10-19T18:37:01.000Z [ERROR] Failed to start application {"error":"old"}`,
+    `2026-10-19T18:45:42.511Z [INFO] migration failed {"migration":"0001_baseline"}`,
+    `2026-10-19T18:45:42.512Z [ERROR] Failed to start application {"error":"new"}`,
+    "",
+  ].join("\n");
+  assert.equal(lastStartupError(log), "new");
+  assert.equal(lastStartupError("2026-10-19T09:21:00.000Z [INFO] ready\n"), undefined);
+  assert.equal(lastStartupError("[ERROR] Failed to start application {broken"), undefined);
 });
 
 test("packaged backend environment pins native data, migration, browser, and loopback paths", () => {

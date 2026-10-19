@@ -273,13 +273,19 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-19: Static checks for agents (accepted)
 
-[[docs/adr/223-static-checks-for-agents|ADR-223]] makes `bun run lint` run frontend ESLint,
+[[docs/adr/224-static-checks-for-agents|ADR-224]] makes `bun run lint` run frontend ESLint,
 `lint:deps` (dependency-cruiser: no runtime cycles, unresolvable or undeclared imports, app-to-app
 imports, packages importing apps, or frontend imports of the Belgian tax engine) and `lint:dead`
 (knip) in parallel. Frontend and backend share type-aware typescript-eslint rules from
 `config/eslint-type-aware.mjs`. The checks run in the existing CI `Lint` job; no job is added.
 Intended exports without a static importer carry the `@public` JSDoc tag; knip's duplicate-export
 rule is off.
+
+### 2026-10-19: Adopt Alembic 0126 and 0127 through a bridge (accepted)
+
+[[docs/adr/223-adopt-alembic-0126-through-bridge|ADR-223]] amends ADR-222: a database stopped at
+Alembic `0126` or `0127` gets the frozen `0127`/`0128` SQL from `db/alembic-bridge/` before the
+fingerprint check. Electron reports a backend startup failure instead of polling for minutes.
 
 ### 2026-10-19: TypeScript migrations with Kysely; one squashed baseline (accepted)
 

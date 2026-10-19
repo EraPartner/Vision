@@ -3,28 +3,33 @@
  * One-off, read-only check before the switch to TypeScript migrations
  * (ADR-222): does this database's schema match db/migrations/0001_baseline.sql?
  *
- * Usage: bun run db:drift-check [--env-file <runtime.env>]
+ * Usage: bun run db:drift-check [--env-file <runtime.env> | --from-env]
  *   Default env file: ~/Library/Application Support/Vision/native/vision/runtime.env
  *   (Vision must be running so its PostgreSQL accepts connections.)
- *   DATABASE_URL_MIGRATIONS or DATABASE_URL in the environment win over the file.
+ *   --from-env uses DATABASE_URL_MIGRATIONS or DATABASE_URL from the environment
+ *   instead. It is opt-in because Bun auto-loads a checkout's .env files.
  *
  * Prints the revision marker, both fingerprints and, on a mismatch, the names
- * of the differing objects. Never prints row data or the connection URL. The
- * comparison installs the baseline into a temporary database on the same
- * server and drops it again; the checked database is only read.
+ * of the differing objects. Never prints row data or the connection URL. A
+ * database at an earlier adoptable Alembic revision is checked as it will look
+ * after the adoption bridge: the bridge steps run in a transaction that is
+ * rolled back. Differences are listed against db/baseline-inventory.json, so the
+ * check needs no CREATEDB privilege. Nothing in the checked database changes.
  */
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import pg from "pg";
 import {
+  ADOPTABLE_ALEMBIC_REVISIONS,
   BASELINE_SCHEMA_FINGERPRINT,
-  FINAL_ALEMBIC_REVISION,
-  MIGRATIONS_DIR,
-  BASELINE_MIGRATION,
+  alembicBridgeSteps,
+  readAlembicBridgeStep,
 } from "../src/database/migrate.ts";
 import {
   diffSchemaInventory,
+  hashSchemaInventory,
+  readBaselineInventory,
   readSchemaInventory,
   schemaFingerprint,
 } from "../src/database/schemaInventory.ts";
@@ -52,11 +57,14 @@ function readEnvFile(file: string): Record<string, string> {
 
 function resolveUrl(): string {
   const args = process.argv.slice(2);
+  if (args.includes("--from-env")) {
+    const fromEnv =
+      process.env.DATABASE_URL_MIGRATIONS?.trim() ||
+      process.env.DATABASE_URL?.trim();
+    if (!fromEnv) throw new Error("--from-env: DATABASE_URL is not set");
+    return fromEnv;
+  }
   const flag = args.indexOf("--env-file");
-  const fromEnv =
-    process.env.DATABASE_URL_MIGRATIONS?.trim() ||
-    process.env.DATABASE_URL?.trim();
-  if (flag === -1 && fromEnv) return fromEnv;
   const file = flag === -1 ? DEFAULT_ENV_FILE : args[flag + 1];
   if (!file || !existsSync(file)) {
     throw new Error(`Env file not found: ${file ?? "(missing value)"}`);
@@ -71,34 +79,6 @@ async function inventoryOf(client: pg.Client): Promise<SchemaInventoryEntry[]> {
   return readSchemaInventory((text) => client.query(text), REPO_ROOT);
 }
 
-async function baselineInventory(url: string): Promise<SchemaInventoryEntry[]> {
-  const scratch = `vision_drift_check_${process.pid}`;
-  const admin = new pg.Client({ connectionString: url });
-  await admin.connect();
-  try {
-    await admin.query(`CREATE DATABASE ${scratch}`);
-    const target = new URL(url);
-    target.pathname = `/${scratch}`;
-    const client = new pg.Client({ connectionString: target.toString() });
-    await client.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query(
-        readFileSync(path.join(MIGRATIONS_DIR, `${BASELINE_MIGRATION}.sql`), "utf8"),
-      );
-      await client.query('SET LOCAL search_path = "$user", public');
-      const inventory = await inventoryOf(client);
-      await client.query("ROLLBACK");
-      return inventory;
-    } finally {
-      await client.end();
-    }
-  } finally {
-    await admin.query(`DROP DATABASE IF EXISTS ${scratch}`).catch(() => {});
-    await admin.end();
-  }
-}
-
 const url = resolveUrl();
 const client = new pg.Client({ connectionString: url });
 await client.connect();
@@ -106,7 +86,7 @@ let actual: SchemaInventoryEntry[];
 let alembic: string | null = null;
 let kysely: string | null = null;
 try {
-  await client.query("BEGIN TRANSACTION READ ONLY");
+  await client.query("BEGIN");
   const tables = await client.query<{ alembic: boolean; kysely: boolean }>(
     `SELECT to_regclass('public.alembic_version') IS NOT NULL AS alembic,
             to_regclass('public.kysely_migration') IS NOT NULL AS kysely`,
@@ -126,6 +106,11 @@ try {
   console.log(`PostgreSQL:        ${(await client.query("SHOW server_version")).rows[0]?.server_version}`);
   console.log(`Alembic revision:  ${alembic ?? "(none)"}`);
   console.log(`Kysely migrations: ${kysely ?? "(none)"}`);
+  const bridge = alembic ? (alembicBridgeSteps(alembic) ?? []) : [];
+  for (const step of bridge) {
+    await client.query(readAlembicBridgeStep(step));
+    console.log(`Bridge step:       ${step} (rolled back after the check)`);
+  }
   actual = await inventoryOf(client);
   await client.query("ROLLBACK");
 } finally {
@@ -137,18 +122,23 @@ console.log(`Schema objects:    ${actual.length}`);
 console.log(`Fingerprint:       ${fingerprint}`);
 console.log(`Baseline:          ${BASELINE_SCHEMA_FINGERPRINT}`);
 
-const revisionOk = alembic === FINAL_ALEMBIC_REVISION || (kysely ?? "").length > 0;
+const revisionOk =
+  (alembic !== null && alembicBridgeSteps(alembic) !== undefined) ||
+  (kysely ?? "").length > 0;
 if (fingerprint === BASELINE_SCHEMA_FINGERPRINT && revisionOk) {
   console.log("\nMATCH: this database can switch to the TypeScript migrations.");
   process.exit(0);
 }
 if (!revisionOk) {
   console.log(
-    `\nREVISION: expected Alembic ${FINAL_ALEMBIC_REVISION}; start the current Vision once to upgrade it first.`,
+    `\nREVISION: expected one of Alembic ${ADOPTABLE_ALEMBIC_REVISIONS.join(", ")}.`,
   );
 }
 if (fingerprint !== BASELINE_SCHEMA_FINGERPRINT) {
-  const diff = diffSchemaInventory(await baselineInventory(url), actual);
+  const diff = diffSchemaInventory(
+    readBaselineInventory(REPO_ROOT),
+    hashSchemaInventory(actual),
+  );
   console.log("\nDRIFT: the schema differs from the baseline.");
   for (const [label, names] of Object.entries(diff)) {
     if (names.length === 0) continue;

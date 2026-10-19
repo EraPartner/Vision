@@ -1,7 +1,8 @@
 /**
  * The production migrator (src/database/migrate.ts) against real, disposable
  * PostgreSQL 18 databases: fresh install, idempotent re-run, adoption of a
- * database left at the final Alembic revision, fail-closed refusals, and a
+ * database left at the final Alembic revision or at 0126 (through the
+ * db/alembic-bridge steps), fail-closed refusals, and a
  * later reversible migration with its audit events.
  */
 
@@ -10,6 +11,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pg from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import {
+  hashSchemaInventory,
+  readBaselineInventory,
+  readSchemaInventory,
+} from "../src/database/schemaInventory.ts";
 import { hasTestDatabase } from "./setup/db.ts";
 import {
   createEmptyDatabase,
@@ -148,6 +154,14 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
             heads: ["0001_baseline"],
           },
         ]);
+        // db:drift-check lists differences against this committed snapshot.
+        const inventory = await readSchemaInventory(
+          (text) => client.query(text),
+          repoRoot,
+        );
+        expect(hashSchemaInventory(inventory)).toEqual(
+          readBaselineInventory(repoRoot),
+        );
       });
 
       const second = await withMigrationTarget(db.url, () =>
@@ -218,12 +232,77 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       });
     }, 180_000);
 
+    it("adopts a database stopped at Alembic 0126 by applying the bridge steps first", async () => {
+      const migrator = await loadMigrator();
+      const db = await alembicHeadDatabase("0126_income_recognition_check_name");
+      // Undo 0128 and 0127 with the SQL their Alembic downgrades ran.
+      await withClient(db.url, (client) =>
+        client.query(`
+          DROP TRIGGER trg_categories_refresh_path_names ON categories;
+          CREATE TRIGGER trg_categories_refresh_path_names
+            AFTER INSERT OR UPDATE OF name, parent_id ON categories
+            FOR EACH ROW EXECUTE FUNCTION category_refresh_path_names();
+          DROP INDEX idx_transactions_bank_chronology;
+          ALTER TABLE import_staging_rows DROP COLUMN bank_sequence;
+          ALTER TABLE transactions DROP COLUMN bank_sequence;
+          -- A database that ever booted carries the backend's materialized views.
+          CREATE MATERIALIZED VIEW mv_monthly_summary AS
+            SELECT date_trunc('month', date)::date AS month_start, currency, count(*)
+              FROM transactions GROUP BY 1, 2;
+          CREATE UNIQUE INDEX idx_mv_monthly_summary
+            ON mv_monthly_summary (month_start, currency);
+          CREATE MATERIALIZED VIEW mv_category_totals AS
+            SELECT category_id, currency, count(*) FROM transactions GROUP BY 1, 2;
+          CREATE UNIQUE INDEX idx_mv_category_totals
+            ON mv_category_totals (category_id, currency);
+        `),
+      );
+      const result = await withMigrationTarget(db.url, () =>
+        migrator.runMigrations(),
+      );
+      expect(result).toEqual({
+        revision: "0001_baseline",
+        applied: ["0001_baseline"],
+        adopted: true,
+      });
+      await withClient(db.url, async (client) => {
+        expect(await regclass(client, "public.alembic_version")).toBeNull();
+        expect(await regclass(client, "public.idx_transactions_bank_chronology")).toBe(
+          "idx_transactions_bank_chronology",
+        );
+        const events = await auditEvents(client);
+        expect(events.slice(-3)).toEqual([
+          {
+            stream: "schema_migration",
+            event: "revision_applied",
+            direction: "upgrade",
+            revision: "0127_bank_chronology",
+            heads: ["0127_bank_chronology"],
+          },
+          {
+            stream: "schema_migration",
+            event: "revision_applied",
+            direction: "upgrade",
+            revision: "0128_category_path_on_legacy_rename",
+            heads: ["0128_category_path_on_legacy_rename"],
+          },
+          {
+            stream: "schema_migration",
+            event: "version_changed",
+            direction: "stamp",
+            revision: "0001_baseline",
+            heads: ["0001_baseline"],
+          },
+        ]);
+      });
+    }, 180_000);
+
     it("refuses adoption from another Alembic revision without changing anything", async () => {
       const migrator = await loadMigrator();
       const db = await alembicHeadDatabase("0127_previous_revision");
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),
-      ).rejects.toThrow("only 0128_category_path_on_legacy_rename");
+      ).rejects.toThrow("can be adopted");
       await withClient(db.url, async (client) => {
         expect(
           (await client.query("SELECT version_num FROM public.alembic_version"))

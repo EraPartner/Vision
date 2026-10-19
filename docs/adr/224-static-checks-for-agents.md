@@ -1,5 +1,5 @@
 ---
-title: "ADR-223: Static checks for agents: import boundaries, type-aware lint, dead-code detection"
+title: "ADR-224: Static checks for agents: import boundaries, type-aware lint, dead-code detection"
 type: adr
 status: accepted
 date: 2026-10-19
@@ -39,7 +39,7 @@ related_code:
   ]
 ---
 
-# ADR-223: Static checks for agents: import boundaries, type-aware lint, dead-code detection
+# ADR-224: Static checks for agents: import boundaries, type-aware lint, dead-code detection
 
 ## Status
 

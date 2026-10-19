@@ -793,12 +793,17 @@ function pingReady(timeoutMs = 2000): Promise<{ ready: boolean } | undefined> {
 // Same cadence/budget as pollHealth, but waits for warmup readiness, not just
 // liveness. Used only for the initial navigation; restart/update flows keep using
 // the lighter pollHealth liveness probe.
+class BackendStartupError extends Error {}
+
 function pollReady(maxAttempts = HEALTH_POLL_ATTEMPTS): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let tries = 0;
     const attempt = async () => {
       const status = await pingReady();
       if (status && status.ready) return resolve();
+      // A backend that already exited will never answer; stop waiting.
+      const failure = await activeRuntime?.backendStartupFailure();
+      if (failure) return reject(new BackendStartupError(failure));
       tries += 1;
       if (tries >= maxAttempts) return reject(new Error("timeout"));
       const interval =
@@ -1173,7 +1178,7 @@ function pollAndLoad({ building = false } = {}): void {
       startHealthWatchdog();
       bootSummary("launch_total");
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       endPollHealth();
       logStartupDiagnostics().catch((err: unknown) => {
         console.error(
@@ -1182,6 +1187,16 @@ function pollAndLoad({ building = false } = {}): void {
         );
       });
       loadErrorPage();
+      if (error instanceof BackendStartupError) {
+        void showMessageBoxOverMainWindow({
+          type: "error",
+          buttons: [t("common.ok", null, "OK")],
+          title: APP_NAME,
+          message: t("app.failedStart", null, "Vision could not start."),
+          detail: error.message,
+        });
+        return;
+      }
       // Keep polling in the background so a still-running migration that finishes
       // after the budget elapses re-navigates to the app on its own.
       renavigateWhenReady();
