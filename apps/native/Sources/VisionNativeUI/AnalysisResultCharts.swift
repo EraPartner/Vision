@@ -242,11 +242,15 @@ struct AnalysisResultCharts: View {
         return Color(token: [p.chart1, p.chart2, p.chart3, p.chart4, p.chart5][index % 5])
     }
     private func tick(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = shell.settings.numberFormat.locale
-        formatter.numberStyle = .decimal
-        formatter.usesSignificantDigits = true
-        formatter.maximumSignificantDigits = 5
+        let locale = shell.settings.numberFormat.locale
+        let formatter = FormatterCache.shared("analysis.tick|\(locale.identifier)") {
+            let made = NumberFormatter()
+            made.locale = locale
+            made.numberStyle = .decimal
+            made.usesSignificantDigits = true
+            made.maximumSignificantDigits = 5
+            return made
+        }
         return formatter.string(from: NSNumber(value: value)) ?? String(value)
     }
     private func coordinate(_ raw: TaxValue?) -> Double? {

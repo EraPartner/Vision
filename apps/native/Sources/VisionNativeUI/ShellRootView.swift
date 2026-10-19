@@ -15,10 +15,17 @@ public struct ShellRootView<WebContent: View>: View {
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
     /// The landing point at the top of a native screen (`<main>` for the skip link).
     @FocusState private var contentFocused: Bool
-    /// The page-level scroll offset of the current native screen (the topbar's title).
-    @State private var pageScroll: CGFloat = 0
+    /// Whether the current native screen has scrolled past the topbar title threshold. Only
+    /// the crossing is stored: a per-pixel offset here would re-run the whole shell body (and
+    /// re-diff the sidebar) on every scroll tick and every resize frame of the sidebar animation.
+    @State private var pageScrolled = false
     /// The titlebar strip the topbar occupies.
     @State private var titlebarHeight: CGFloat = 28
+    /// The native page's width while the sidebar animates in or out (see `FrozenWidthLayout`).
+    @State private var frozenDetailWidth: CGFloat?
+    /// The last settled column widths, the frozen width's sources. A plain reference, so the
+    /// per-frame writes of a window resize never invalidate the shell body.
+    @State private var columnWidths = ShellColumnWidths()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -55,15 +62,20 @@ public struct ShellRootView<WebContent: View>: View {
                     webContent($0)
                 }.ignoresSafeArea()
                 if case .native(let screen) = model.detail {
-                    NativePageZoomView(factor: model.pageZoom) {
-                        NativeScreenContainer(screen: screen, model: model)
-                            .safeAreaInset(edge: .top, spacing: 0) { shellBanners }
-                            .overlay(alignment: .topLeading) { contentLanding }
-                            .background { PageScrollObserver { pageScroll = $0 } }
-                            .environment(\.colorScheme, theme.colorScheme)
-                            // The mounted destination receives cold CSV/new-transaction intents.
-                            .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
+                    FrozenWidthLayout(width: frozenDetailWidth) {
+                        NativePageZoomView(factor: model.pageZoom) {
+                            NativeScreenContainer(screen: screen, model: model)
+                                .safeAreaInset(edge: .top, spacing: 0) { shellBanners }
+                                .overlay(alignment: .topLeading) { contentLanding }
+                                .background { PageScrollObserver { pageScrollDidChange($0) } }
+                                .environment(\.colorScheme, theme.colorScheme)
+                                // The mounted destination receives cold CSV/new-transaction intents.
+                                .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
+                        }
                     }
+                    // Clip the page to its column sideways only: the canvas still runs up under
+                    // the titlebar strip.
+                    .mask { Rectangle().padding(.vertical, -400) }
                 } else if case .notFound = model.detail {
                     NativePageZoomView(factor: model.pageZoom) {
                         NativeNotFoundView(shell: model)
@@ -72,6 +84,10 @@ public struct ShellRootView<WebContent: View>: View {
                 } else if model.detail == .loading || model.detail == .unavailable {
                     unavailableView(theme)
                 }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                // Only settled widths: mid-slide widths would make the next freeze wrong.
+                if frozenDetailWidth == nil { columnWidths.detail = width }
             }
             .overlay(alignment: .top) {
                 if case .native = model.detail, let inspector = model.apiInspector {
@@ -82,13 +98,30 @@ public struct ShellRootView<WebContent: View>: View {
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
         .overlay(alignment: .top) {
             if isNativeDetail {
-                NativeTopbar(
-                    model: model, height: titlebarHeight, scrolled: pageScroll > NativeTopbar.titleThreshold
-                )
-                .ignoresSafeArea(.container, edges: .top)
+                NativeTopbar(model: model, height: titlebarHeight, scrolled: pageScrolled)
+                    .ignoresSafeArea(.container, edges: .top)
             }
         }
-        .onChange(of: model.route.path) { pageScroll = 0 }
+        .onChange(of: model.route.path) { pageScrolled = false }
+    }
+
+    /// Holds the native page at one width while the sidebar column slides: AppKit resizes the
+    /// detail column every frame, and every chart, table and geometry reader on the page
+    /// re-laid out with it. Closing lays the page out at its final width at once (revealed as
+    /// the sidebar leaves); opening keeps the current width until the slide ends, then reflows once.
+    private func freezeDetailForSidebarAnimation(opening: Bool) {
+        let widths = columnWidths
+        guard !reduceMotion, isNativeDetail, widths.detail > 0 else { return }
+        frozenDetailWidth = opening ? widths.detail : widths.detail + widths.sidebar
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(DesignTokens.Duration.normal + 0.12))
+            frozenDetailWidth = nil
+        }
+    }
+
+    private func pageScrollDidChange(_ offset: CGFloat) {
+        let scrolled = offset > NativeTopbar.titleThreshold
+        if scrolled != pageScrolled { pageScrolled = scrolled }
     }
 
     private func unavailableView(_ theme: VisionTheme) -> some View {
@@ -108,6 +141,9 @@ public struct ShellRootView<WebContent: View>: View {
                 .background(
                     SidebarWidthGuard(minimum: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth))
                 .environment(\.colorScheme, theme.colorScheme)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+                    if frozenDetailWidth == nil, width > 0 { columnWidths.sidebar = width }
+                }
                 // The window has no toolbar (the page draws its topbar under the traffic
                 // lights); NativeTopbar, View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
                 .toolbar(removing: .sidebarToggle)
@@ -179,6 +215,7 @@ public struct ShellRootView<WebContent: View>: View {
         .onChange(of: model.isSidebarVisible) { _, visible in
             let target: NavigationSplitViewVisibility = visible ? .all : .detailOnly
             if columnVisibility != target {
+                freezeDetailForSidebarAnimation(opening: visible)
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Duration.normal)) {
                     columnVisibility = target
                 }
@@ -665,4 +702,31 @@ struct NativeScreenContainer: View {
             RecipientsView(model: model.recipients, shell: model)
         }
     }
+}
+
+/// Lays its one subview out at `width` when set, pinned to the trailing edge, and otherwise
+/// at the offered size. The same view type either way, so freezing never resets page state.
+struct FrozenWidthLayout: Layout {
+    var width: CGFloat?
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let fitted = subview.sizeThatFits(
+            width.map { ProposedViewSize(width: $0, height: proposal.height) } ?? proposal)
+        return CGSize(width: proposal.width ?? fitted.width, height: proposal.height ?? fitted.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+        let laidOut = width ?? bounds.width
+        subview.place(
+            at: CGPoint(x: bounds.maxX - laidOut, y: bounds.minY), anchor: .topLeading,
+            proposal: ProposedViewSize(width: laidOut, height: bounds.height))
+    }
+}
+
+/// Column widths read by the sidebar freeze; deliberately not observable.
+final class ShellColumnWidths {
+    var detail: CGFloat = 0
+    var sidebar: CGFloat = 0
 }

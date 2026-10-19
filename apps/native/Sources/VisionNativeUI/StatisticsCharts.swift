@@ -27,61 +27,16 @@ struct InsightRankedChart: View {
         VStack(alignment: .leading, spacing: 10) {
             if rows.isEmpty { Text(strings.t("table.noData")).foregroundStyle(theme.secondaryLabel) }
             // The web TopRecipientsChart: names in a fixed left gutter, one palette colour per
-            // bar (`--chart-1…8`), compact currency ticks along the value axis.
-            Chart(Array(rows.enumerated()), id: \.element.id) { position, row in
-                BarMark(
-                    x: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), y: .value(row.name, row.id),
-                    height: .ratio(0.62)
-                )
-                .cornerRadius(4)
-                .foregroundStyle(barColor(position))
-                .opacity(selection == nil || selection == row.id ? 1 : 0.45)
-                .accessibilityLabel(row.name)
-                .accessibilityValue(MoneyText.text(row.total, currency: currency, settings: settings, signed: false))
-            }
-            .chartYScale(domain: rows.map(\.id))
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisValueLabel(horizontalSpacing: 10) {
-                        if let id = value.as(String.self), let row = rows.first(where: { $0.id == id }) {
-                            Text(row.name.count > 20 ? String(row.name.prefix(20)) + "…" : row.name)
-                                .font(.caption)
-                                .foregroundStyle(theme.secondaryLabel)
-                                .lineLimit(1)
-                                .frame(width: 140, alignment: .trailing)
-                        }
-                    }
+            // bar (`--chart-1…8`). Drawn as rows rather than a Swift Charts y axis, whose
+            // labels sat half a band above their bars.
+            let maximum = rows.map(\.total).max() ?? 0
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
+                    rankedRow(row, position: position, maximum: maximum)
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 5)) { value in
-                    AxisGridLine().foregroundStyle(theme.border.opacity(0.5))
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) {
-                            Text(
-                                VisionFormat.currency(
-                                    Decimal(number), code: currency, locale: settings.numberFormat.locale,
-                                    fractionDigits: 0))
-                        }
-                    }
-                }
-            }
-            .chartYSelection(value: $selection)
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle()).onContinuousHover { phase in
-                        switch phase {
-                        case .ended: selection = nil
-                        case .active(let point):
-                            if let plot = proxy.plotFrame {
-                                selection = proxy.value(atY: point.y - geometry[plot].minY, as: String.self)
-                            }
-                        }
-                    }
-                }
-            }
-            .frame(height: CGFloat(max(180, min(700, rows.count * 34))))
-            .focusable().focused($focused).onKeyPress(phases: .down) { press in
+            .padding(.vertical, 4)
+            .focusable().focused($focused).focusEffectDisabled().onKeyPress(phases: .down) { press in
                 guard !rows.isEmpty else { return .ignored }
                 let index = selection.flatMap { id in rows.firstIndex { $0.id == id } } ?? 0
                 if press.key == .downArrow || press.key == .rightArrow {
@@ -101,15 +56,42 @@ struct InsightRankedChart: View {
             }
             .onChange(of: focused) { _, value in if !value { selection = nil } }
             .onChange(of: selection) { _, value in onSelectionChange(value) }
-            if let row = rows.first(where: { $0.id == selection }) {
-                HStack {
-                    Text(row.name)
-                    Spacer()
-                    MoneyText(amount: row.total, currency: currency, settings: settings, signed: false, colored: false)
-                }.font(.caption).accessibilityElement(children: .combine)
-            }
         }
     }
+    private func rankedRow(_ row: CustomChartEntity, position: Int, maximum: Decimal) -> some View {
+        let ratio = maximum > 0 ? NSDecimalNumber(decimal: max(0, row.total) / maximum).doubleValue : 0
+        let dimmed = selection != nil && selection != row.id
+        return HStack(spacing: 12) {
+            Text(row.name)
+                .font(.callout)
+                .foregroundStyle(selection == row.id ? theme.foreground : theme.secondaryLabel)
+                .lineLimit(1).truncationMode(.tail)
+                .frame(width: 160, alignment: .trailing)
+            GeometryReader { proxy in
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(barColor(position))
+                        .frame(width: max(4, (proxy.size.width - 96) * ratio), height: 14)
+                    MoneyText(
+                        amount: row.total, currency: currency, settings: settings, signed: false, colored: false
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                }
+                .frame(height: proxy.size.height, alignment: .leading)
+            }
+        }
+        .frame(height: 24)
+        .opacity(dimmed ? 0.5 : 1)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering { selection = row.id } else if selection == row.id { selection = nil }
+        }
+        .help(row.name)
+        .accessibilityElement(children: .combine)
+        .animation(.easeOut(duration: DesignTokens.Duration.fast), value: dimmed)
+    }
+
     private func barColor(_ position: Int) -> Color {
         let palette = theme.palette
         let colors = [

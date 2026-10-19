@@ -269,9 +269,13 @@ struct InsightTimelineChart: View {
         guard parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]),
             let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1))
         else { return key }
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = "MMM yyyy"
+        // Built once per locale: axis ticks format on every layout pass.
+        let formatter = FormatterCache.shared("insight.period|\(locale.identifier)") {
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateFormat = "MMM yyyy"
+            return made
+        }
         return formatter.string(from: date)
     }
     private func coordinate(_ value: Decimal) -> Double {
@@ -411,15 +415,13 @@ struct HomeCategoryChart: View {
                             return value < count
                         }?.id
                 }
-                // Native buttons preserve an accessible and keyboard-operable link for every slice.
-                HStack {
+                // Each slice stays reachable without a pointer as an accessibility action, as the
+                // web chart's keyboard-focusable sectors are; no visible link row (the web has none).
+                .accessibilityElement(children: .contain)
+                .accessibilityActions {
                     ForEach(slices) { slice in
                         Button(slice.name) { navigate(slice.route.string) }
-                            .buttonStyle(.visionLink).font(.caption)
                     }
-                }
-                if let selected {
-                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.visionOutline)
                 }
             }
         }

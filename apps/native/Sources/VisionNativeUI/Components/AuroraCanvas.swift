@@ -240,7 +240,10 @@ final class AuroraMTKView: MTKView {
         // RESOLUTION_SCALE 0.25, capped at MAX_CANVAS_WIDTH 640; the layer upscales it.
         let width = max(1, bounds.width)
         let scale = min(0.25, 640 / width)
-        drawableSize = CGSize(width: max(1, (width * scale).rounded()), height: max(1, (bounds.height * scale).rounded()))
+        let size = CGSize(width: max(1, (width * scale).rounded()), height: max(1, (bounds.height * scale).rounded()))
+        // Layout also runs when nothing moved; a new drawable size reallocates the drawables.
+        guard size != drawableSize else { return }
+        drawableSize = size
         if isPaused { needsDisplay = true }
     }
 }

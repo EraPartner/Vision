@@ -219,6 +219,7 @@ struct TransactionAddSheet: View {
                         day: form.day, placeholder: strings.t("plannedPage.link.pickDate"),
                         invalid: errors[.date] != nil, settings: settings, strings: strings, calendar: model.calendar
                     ) { day in form.setCustomDay(day) }
+                    .frame(minWidth: 140)
                 }
             }
             if let anchor = form.backdatedAnchorDate {

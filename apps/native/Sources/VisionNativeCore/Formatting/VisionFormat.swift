@@ -126,21 +126,51 @@ public enum VisionFormat {
     /// An ISO 8601 timestamp with or without fractional seconds and zone; without a zone it
     /// is local time, like `new Date("2026-01-02T03:04:05")`.
     public static func parseTimestamp(_ text: String, timeZone: TimeZone = .current) -> Date? {
-        for options: ISO8601DateFormatter.Options in [
-            [.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime],
-        ] {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = options
+        for formatter in isoTimestampParsers {
             if let date = formatter.date(from: text) { return date }
         }
-        for pattern in ["yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm"] {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = timeZone
-            formatter.dateFormat = pattern
+        for formatter in localTimestampParsers.parsers(timeZone) {
             if let date = formatter.date(from: text) { return date }
         }
         return nil
+    }
+
+    /// Formatters are costly to create and table rows parse a timestamp per cell, so the
+    /// parsers are built once. They are never mutated after creation, and Foundation's date
+    /// formatters are thread-safe for parsing.
+    private nonisolated(unsafe) static let isoTimestampParsers: [ISO8601DateFormatter] = {
+        let variants: [ISO8601DateFormatter.Options] = [
+            [.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime],
+        ]
+        return variants.map { options in
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = options
+            return formatter
+        }
+    }()
+
+    private static let localTimestampParsers = LocalTimestampParsers()
+
+    /// The zone-less timestamp parsers, one set per time zone.
+    private final class LocalTimestampParsers: @unchecked Sendable {
+        private let lock = NSLock()
+        private var byZone: [TimeZone: [DateFormatter]] = [:]
+
+        func parsers(_ timeZone: TimeZone) -> [DateFormatter] {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = byZone[timeZone] { return cached }
+            let patterns = ["yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm"]
+            let parsers = patterns.map { pattern in
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = timeZone
+                formatter.dateFormat = pattern
+                return formatter
+            }
+            byZone[timeZone] = parsers
+            return parsers
+        }
     }
 
     private static func ymdParts(_ text: String) -> (year: Int, month: Int, day: Int)? {

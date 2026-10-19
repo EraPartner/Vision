@@ -13,8 +13,9 @@ enum VisionMotion {
     static let reveal = 0.6
 }
 
-/// PageTransition: each pathname enters with opacity 0 → 1, y 14 → 0 and scale 0.995 → 1
-/// over 0.52 s on the out-expo curve; enter-only, and none under Reduce Motion.
+/// PageTransition: each pathname enters with opacity 0 → 1 and y 14 → 0 over 0.52 s on the
+/// out-expo curve; enter-only, and none under Reduce Motion. The web's scale 0.995 → 1 is left
+/// out: an invisible half-percent, it made every layer of the page re-render each frame.
 struct PageEntrance: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var entered = false
@@ -24,7 +25,6 @@ struct PageEntrance: ViewModifier {
         content
             .opacity(shown ? 1 : 0)
             .offset(y: shown ? 0 : 14)
-            .scaleEffect(shown ? 1 : 0.995)
             .onAppear {
                 guard !reduceMotion else { return }
                 withAnimation(VisionMotion.outExpo(VisionMotion.page)) { entered = true }

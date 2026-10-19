@@ -48,6 +48,13 @@ struct SidebarWidthGuard: NSViewRepresentable {
         /// make the probe fight it forever.
         private var corrections = 0
         private weak var observedSplitView: NSSplitView?
+        /// A too-narrow width seen after the first layout, and when it was first seen. A sidebar
+        /// that is being shown or hidden passes through every width below `minimum`; moving the
+        /// divider then fights the animation (and spends the bounded corrections), so only a width
+        /// that stays put for `settleDelay` is treated as SwiftUI's own column default.
+        private var narrowWidth: (width: CGFloat, since: ContinuousClock.Instant)?
+        private var settleCheckPending = false
+        private static let settleDelay: Duration = .milliseconds(350)
 
         init(minimum: CGFloat, ideal: CGFloat) {
             self.minimum = minimum
@@ -119,10 +126,13 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 return
             }
             let before = sidebar.frame.width
+            let firstLayout = !widened
             let width = SidebarWidthGuard.correctedWidth(
                 sidebar: before, splitView: splitWidth, minimum: minimum, ideal: ideal,
-                firstLayout: !widened)
+                firstLayout: firstLayout)
             widened = true
+            if width != nil, !firstLayout, !hasSettled(at: before) { return }
+            narrowWidth = nil
             if let width {
                 corrections += 1
                 splitView.setPosition(width, ofDividerAt: 0)
@@ -135,6 +145,27 @@ struct SidebarWidthGuard: NSViewRepresentable {
             }
             SidebarWidthGuard.note(
                 "split=\(splitWidth) sidebar=\(before) target=\(width.map { "\($0)" } ?? "none") after=\(sidebar.frame.width)")
+        }
+
+        /// Whether `width` has held since it was first seen at least `settleDelay` ago; otherwise
+        /// records it and re-checks once the delay has passed.
+        private func hasSettled(at width: CGFloat) -> Bool {
+            let now = ContinuousClock.now
+            if let narrowWidth, narrowWidth.width == width,
+                narrowWidth.since.duration(to: now) >= Self.settleDelay
+            {
+                return true
+            }
+            if narrowWidth?.width != width { narrowWidth = (width, now) }
+            if !settleCheckPending {
+                settleCheckPending = true
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: Self.settleDelay + .milliseconds(30))
+                    self?.settleCheckPending = false
+                    self?.scheduleCorrection()
+                }
+            }
+            return false
         }
 
         private func enclosingSplitView() -> NSSplitView? {

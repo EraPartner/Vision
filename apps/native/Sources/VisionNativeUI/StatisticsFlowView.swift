@@ -38,7 +38,7 @@ struct StatisticsFlowView: View {
                         || hoveredNode == link.target || hoveredLink == link.id
                     context.fill(
                         band(link: link, from: from, to: to, links: layout.links, size: size),
-                        with: .color(color(to.node).opacity(active ? (hoveredNode == nil && hoveredLink == nil ? 0.25 : 0.6) : 0.1)))
+                        with: .color(color(to.node).opacity(active ? (hoveredNode == nil && hoveredLink == nil ? 0.34 : 0.6) : 0.1)))
                 }
             }
             .onContinuousHover { phase in
@@ -51,7 +51,7 @@ struct StatisticsFlowView: View {
                         layout.nodes.first { node in
                             let bounds = rect(node, size: size)
                             let label = CGRect(
-                                x: bounds.midX > size.width / 2 ? bounds.minX - 6 - Self.labelWidth : bounds.maxX,
+                                x: node.column == 0 ? bounds.minX - 6 - Self.labelWidth : bounds.maxX,
                                 y: bounds.midY - 8, width: Self.labelWidth + 6, height: 16)
                             return bounds.union(label).contains(location)
                         }?.id
@@ -69,22 +69,34 @@ struct StatisticsFlowView: View {
             let labelYs = labelPositions(layout, size: size)
             ForEach(layout.nodes) { node in
                 let bounds = rect(node, size: size)
-                // The web SankeyChart: labels 6 pt off the node edge, end-anchored in the right
-                // half, one line at 11 pt; spread apart vertically so thin neighbours don't collide.
-                let isRight = bounds.midX > size.width / 2
+                // Labels 6 pt off the node edge, outside the flow: the first column's on its left
+                // (end-anchored), every other column's on its right. Middle-column labels sit on a
+                // card chip so the bands behind them stay readable. Spread apart vertically so
+                // thin neighbours don't collide.
+                let isRight = node.column == 0
+                let isMiddle = node.column > 0 && node.column < layout.columnCount - 1
                 let labelY = labelYs[node.id] ?? bounds.midY
                 RoundedRectangle(cornerRadius: 3).fill(color(node.node).opacity(hoveredNode == node.id ? 1 : 0.85))
                     .frame(width: bounds.width, height: max(1, bounds.height))
                     .position(x: bounds.midX, y: bounds.midY)
                     .overlay {
                         VStack(alignment: isRight ? .trailing : .leading, spacing: 2) {
-                            Text(label(node.node)).font(.system(size: 11)).foregroundStyle(theme.foreground)
+                            Text(label(node.node)).font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(theme.foreground)
                                 .lineLimit(1).truncationMode(.tail)
                             if hoveredNode == node.id {
                                 MoneyText(
                                     amount: node.node.value, currency: currency, settings: settings, signed: false,
                                     colored: false
                                 ).font(.system(size: 10)).foregroundStyle(theme.mutedForeground)
+                            }
+                        }
+                        .padding(.horizontal, isMiddle ? 6 : 0)
+                        .padding(.vertical, isMiddle ? 3 : 0)
+                        .background {
+                            if isMiddle {
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                                    .fill(theme.card.opacity(0.92))
                             }
                         }
                         .frame(width: Self.labelWidth, alignment: isRight ? .trailing : .leading)
