@@ -146,18 +146,12 @@ struct ResearchDossierHistoryView: View {
         }
     }
     private func timestamp(_ text: String) -> String {
-        let parser = FormatterCache.shared("iso.fractional") {
-            let made = ISO8601DateFormatter()
-            made.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return made
-        }
-        let plain = FormatterCache.shared("iso.plain") { ISO8601DateFormatter() }
-        let date = parser.date(from: text) ?? plain.date(from: text)
-        guard let date else { return text }
+        guard let date = VisionFormat.parseTimestamp(text) else { return text }
         // Version history uses host locale/timezone, independently of the app date setting.
         let locale = Locale.current
         let timeZone = TimeZone.current
         let formatter = FormatterCache.shared("dossierHistory|\(locale.identifier)|\(timeZone.identifier)") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = locale
             made.timeZone = timeZone
