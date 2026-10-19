@@ -41,7 +41,7 @@ extension RebalanceView {
                     text: Binding(
                         get: { model.draft.cap }, set: { value in model.updateDraft { $0.cap = value } })
                 )
-                .textFieldStyle(.roundedBorder).frame(width: 160).accessibilityLabel(
+                .textFieldStyle(.vision).frame(width: 160).accessibilityLabel(
                     strings.t("rebalance.editor.capCash"))
                 Text(strings.t("rebalance.editor.capHint", ["amount": money(model.availableCash)]))
                     .font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -56,7 +56,7 @@ extension RebalanceView {
                             set: { value in
                                 model.updateDraft { $0.name = value }
                             })
-                    ).textFieldStyle(.roundedBorder).frame(maxWidth: 300).focused($focus, equals: "name")
+                    ).textFieldStyle(.vision).frame(maxWidth: 300).focused($focus, equals: "name")
                 }
                 Button {
                     Task { await model.savePlan() }
@@ -93,7 +93,7 @@ extension RebalanceView {
                 ForEach(RebalanceURLDraft.sleeves, id: \.self) { sleeve in Text(label(sleeve)).tag(sleeve) }
             }.labelsHidden().frame(maxWidth: .infinity)
             TextField("%", text: Binding(get: { row.pct }, set: { value in model.updateRow(index, pct: value) }))
-                .textFieldStyle(.roundedBorder).frame(width: 100).multilineTextAlignment(.trailing)
+                .textFieldStyle(.vision).frame(width: 100).multilineTextAlignment(.trailing)
                 .accessibilityLabel(targetLabel)
             Text("%").foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
             Button {

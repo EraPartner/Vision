@@ -17,7 +17,7 @@ extension TaxProfileSheet {
                 }
             }
             TextField(strings.t("tax.profile.section.incomeSources.searchPlaceholder"), text: $model.categorySearch)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
             if model.categoriesLoading { ProgressView() }
             if let error = model.categoriesError {
                 Text(verbatim: error).foregroundStyle(theme.destructive)

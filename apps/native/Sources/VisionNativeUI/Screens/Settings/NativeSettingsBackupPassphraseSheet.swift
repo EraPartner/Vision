@@ -24,7 +24,7 @@ struct NativeSettingsBackupPassphraseSheet: View {
                         } else {
                             SecureField("", text: $model.restorePassphrase)
                         }
-                    }.textFieldStyle(.roundedBorder).focused($focused).disabled(model.restoreSubmitting)
+                    }.textFieldStyle(.vision).focused($focused).disabled(model.restoreSubmitting)
                         .accessibilityLabel(strings.t("settings.restore.passphraseLabel"))
                         .onSubmit { Task { await model.submitRestorePassphrase() } }
                     Button {

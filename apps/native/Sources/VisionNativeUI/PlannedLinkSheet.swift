@@ -27,7 +27,7 @@ struct PlannedLinkSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     TextField(strings.t("plannedPage.link.searchPlaceholder"), text: $link.search)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .accessibilityLabel(strings.t("plannedPage.link.searchPlaceholder"))
                     filters
                     candidates
@@ -122,14 +122,14 @@ struct PlannedLinkSheet: View {
                         strings.t("importPage.bankAccount"),
                         text: Binding(get: { link.filters.bankAccount }, set: { link.setBankAccount($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                 }
                 labeled("recipientsPage.col.recipient") {
                     TextField(
                         strings.t("recipientsPage.search"),
                         text: Binding(get: { link.filters.recipientName }, set: { link.setRecipientName($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     if link.includesLinked {
                         Text(strings.t("plannedPage.link.includesLinked"))
                             .font(.footnote)
@@ -152,7 +152,7 @@ struct PlannedLinkSheet: View {
                     TextField(
                         "", text: Binding(get: { link.toleranceInput }, set: { link.setToleranceInput($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .frame(width: 52)
                     .multilineTextAlignment(.trailing)
                     .focused($toleranceFocused)

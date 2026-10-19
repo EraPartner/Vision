@@ -180,7 +180,7 @@ public struct ResearchForecastView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(strings.t(key) + " (" + currency + ")").font(.callout.weight(.medium))
-            TextField(placeholder, text: text).textFieldStyle(.roundedBorder).accessibilityLabel(
+            TextField(placeholder, text: text).textFieldStyle(.vision).accessibilityLabel(
                 strings.t(key) + " (" + currency + ")"
             )
             .overlay(

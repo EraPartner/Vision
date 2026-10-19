@@ -109,7 +109,7 @@ struct ResearchWatchlistChartSheet: View {
         let label = strings.t("watchlistChart.targetPrice")
         let identity: String = "\(item.name) (\(item.symbol ?? ""))"
         return TextField("0", text: Binding<String>(get: { model.targetDraft }, set: { model.targetDraft = $0 }))
-            .textFieldStyle(.roundedBorder).focused($targetFocused)
+            .textFieldStyle(.vision).focused($targetFocused)
             .accessibilityLabel("\(label): \(identity)")
             .onSubmit { save() }.disabled(model.isMutating)
     }

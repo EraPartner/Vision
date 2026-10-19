@@ -141,7 +141,7 @@ struct NativeSettingsAIView: View {
                             strings.t("settings.analysisPreferences.benchmarkPlaceholder"),
                             text: Binding(get: { model.benchmarkDraft }, set: { model.updateBenchmarkDraft($0) })
                         )
-                        .textFieldStyle(.roundedBorder).focused($benchmarkFocused)
+                        .textFieldStyle(.vision).focused($benchmarkFocused)
                         .onChange(of: benchmarkFocused) { wasFocused, focused in
                             if wasFocused && !focused {
                                 model.commitBenchmark { settings.setAppValue("analysisBenchmark", $0) }
@@ -181,7 +181,7 @@ struct NativeSettingsAIView: View {
                         text: Binding(
                             get: { model.keyInput(status.provider) }, set: { model.setKeyInput(status.provider, $0) })
                     )
-                    .textFieldStyle(.roundedBorder).font(.body.monospaced()).accessibilityLabel(status.label)
+                    .textFieldStyle(.vision).font(.body.monospaced()).accessibilityLabel(status.label)
                     Button(strings.t("settings.research.save")) {
                         Task { await model.saveProviderKey(status.provider) }
                     }.disabled(!model.canSaveKey(status.provider))

@@ -134,7 +134,7 @@ struct PortfolioTransactionForm: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(strings.t(key, variables)).font(.callout)
-            TextField("", text: lockGift ? .constant("0") : text(path)).textFieldStyle(.roundedBorder)
+            TextField("", text: lockGift ? .constant("0") : text(path)).textFieldStyle(.vision)
                 .disabled(lockGift).focused($focused, equals: id).onSubmit(save).accessibilityLabel(
                     strings.t(key, variables))
             if model.issue?.field == id {

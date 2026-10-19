@@ -111,7 +111,7 @@ struct NativeSettingsBackupView: View {
             ) {
                 HStack {
                     SecureField(strings.t("settings.backup.passphrase.placeholder"), text: $model.backupPassphrase)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .accessibilityLabel(strings.t("settings.backup.passphrase.label"))
                     Button {
                         Task { await model.savePassphrase() }

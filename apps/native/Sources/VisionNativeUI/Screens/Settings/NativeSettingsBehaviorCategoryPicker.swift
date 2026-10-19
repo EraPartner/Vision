@@ -34,7 +34,7 @@ struct NativeSettingsBehaviorCategoryPicker: View {
             placeholder: strings.t("combobox.category.placeholder"), disabled: disabled, isOpen: $isOpen
         ) {
             VStack(alignment: .leading, spacing: 6) {
-                TextField(strings.t("combobox.category.search"), text: $search).textFieldStyle(.roundedBorder)
+                TextField(strings.t("combobox.category.search"), text: $search).textFieldStyle(.vision)
                     .focused($searchFocused).onSubmit {
                         if choices.indices.contains(activeIndex) { pick(choices[activeIndex]) }
                     }

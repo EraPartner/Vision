@@ -22,7 +22,7 @@ struct ResearchChartBuilderSaveSheet: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("research.builder.layoutName")).font(.caption)
                 TextField("", text: Binding(get: { model.layoutName }, set: { model.layoutName = Self.limit($0) }))
-                    .textFieldStyle(.roundedBorder).focused($focused).disabled(model.isStorageAction)
+                    .textFieldStyle(.vision).focused($focused).disabled(model.isStorageAction)
                     .accessibilityLabel(strings.t("research.builder.layoutName"))
                     .onSubmit { Task { await model.saveAs() } }
             }

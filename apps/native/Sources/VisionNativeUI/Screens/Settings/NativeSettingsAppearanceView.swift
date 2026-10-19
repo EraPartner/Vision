@@ -184,7 +184,7 @@ private struct NativeSettingsAppearanceTimeField: View {
     @State private var text = ""
     @FocusState private var focused: Bool
     var body: some View {
-        TextField("HH:mm", text: $text).textFieldStyle(.roundedBorder).focused($focused).accessibilityLabel(label)
+        TextField("HH:mm", text: $text).textFieldStyle(.vision).focused($focused).accessibilityLabel(label)
             .onAppear { text = value }
             .onChange(of: value) { _, next in if !focused { text = next } }
             .onChange(of: text) { _, next in

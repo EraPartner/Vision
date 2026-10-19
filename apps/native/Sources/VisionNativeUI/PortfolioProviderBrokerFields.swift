@@ -47,7 +47,7 @@ struct PortfolioProviderFields: View {
     private func input(_ key: String, _ path: WritableKeyPath<PortfolioProviderDraft, String>) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(strings.t(key)).font(.callout)
-            TextField("", text: text(path)).textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
+            TextField("", text: text(path)).textFieldStyle(.vision).font(.system(.body, design: .monospaced))
                 .accessibilityLabel(strings.t(key))
         }
     }

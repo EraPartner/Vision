@@ -129,7 +129,7 @@ struct TransactionSearchSuggestionsView: View {
                     : strings.t("search.suggest.amountExact.title", ["currency": currency]))
             HStack(spacing: 6) {
                 TextField(isRange ? strings.t("search.suggest.amount.min") : currency, text: $state.amountA)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .accessibilityLabel(
                         isRange
                             ? strings.t("search.suggest.amount.min")
@@ -137,7 +137,7 @@ struct TransactionSearchSuggestionsView: View {
                     .onSubmit { if let parameters { apply(parameters) } }
                 if isRange {
                     TextField(strings.t("search.suggest.amount.max"), text: $state.amountB)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .accessibilityLabel(strings.t("search.suggest.amount.max"))
                         .onSubmit { if let parameters { apply(parameters) } }
                 }
@@ -165,7 +165,7 @@ struct TransactionSearchSuggestionsView: View {
             formHeader(strings.t("search.suggest.year.title"))
             HStack(spacing: 6) {
                 TextField(String(state.thisYear), text: $state.yearInput)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .accessibilityLabel(strings.t("search.suggest.year.title"))
                     .onSubmit { applyYear() }
                 Button(strings.t("search.suggest.apply"), action: applyYear)

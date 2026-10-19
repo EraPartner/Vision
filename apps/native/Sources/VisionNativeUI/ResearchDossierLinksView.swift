@@ -80,7 +80,7 @@ struct ResearchDossierLinkPicker: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if items.count > 8 {
                         TextField(strings.t("dossiers.searchLinks", ["type": label]), text: $query)
-                            .textFieldStyle(.roundedBorder).accessibilityLabel(
+                            .textFieldStyle(.vision).accessibilityLabel(
                                 strings.t("dossiers.searchLinks", ["type": label]))
                     }
                     ScrollView {

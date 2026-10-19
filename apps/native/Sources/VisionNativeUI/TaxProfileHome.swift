@@ -67,7 +67,7 @@ extension TaxProfileSheet {
                                 $0.set(["home", "mortgageRegion"], nil)
                             }
                         })
-                ).textFieldStyle(.roundedBorder)
+                ).textFieldStyle(.vision)
             }
             number("tax.profile.field.cadastralIncome", path: path + ["cadastralIncome"])
             choice(

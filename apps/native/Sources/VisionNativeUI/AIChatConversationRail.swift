@@ -135,7 +135,7 @@ private struct AIChatRenameSheet: View {
                     strings.t("aiChat.renameLabel"),
                     text: Binding(get: { title }, set: { title = AIChatTextLimit.prefix($0, utf16: 120) })
                 )
-                .textFieldStyle(.roundedBorder).focused($focused).onSubmit(save)
+                .textFieldStyle(.vision).focused($focused).onSubmit(save)
             }
             HStack {
                 Spacer()

@@ -74,7 +74,7 @@ public struct NativeSettingsInsightsView: View {
                 "settings.dashboard.excludedCategories", hint: "settings.dashboard.excludedCategoriesHint",
                 count: model.excludedCategoryIds.count)
             TextField(strings.t("settings.dashboard.searchCategories"), text: $categorySearch)
-                .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("settings.dashboard.searchCategories"))
+                .textFieldStyle(.vision).accessibilityLabel(strings.t("settings.dashboard.searchCategories"))
                 .padding(.horizontal, 16)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
@@ -128,7 +128,7 @@ public struct NativeSettingsInsightsView: View {
                 "settings.dashboard.excludedRecipients", hint: "settings.dashboard.excludedRecipientsHint",
                 count: model.excludedRecipientIds.count)
             TextField(strings.t("settings.dashboard.searchRecipients"), text: $recipientSearch)
-                .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("settings.dashboard.searchRecipients"))
+                .textFieldStyle(.vision).accessibilityLabel(strings.t("settings.dashboard.searchRecipients"))
                 .padding(.horizontal, 16)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {

@@ -116,7 +116,7 @@ struct ResearchMarketActionSheet: View {
             newField("addInv.label.name", \.name, limit: 100)
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("addInv.label.ticker")).font(.caption)
-                TextField("", text: .constant(model.quote?.symbol ?? "")).textFieldStyle(.roundedBorder).disabled(true)
+                TextField("", text: .constant(model.quote?.symbol ?? "")).textFieldStyle(.vision).disabled(true)
             }
             Picker(strings.t("addInv.label.currency"), selection: $model.investment.currency) {
                 ForEach(
@@ -224,7 +224,7 @@ struct ResearchMarketActionSheet: View {
             if path == \.notes {
                 TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key))
             } else {
-                TextField("", text: binding).textFieldStyle(.roundedBorder).accessibilityLabel(strings.t(key))
+                TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(strings.t(key))
             }
         }
     }
@@ -240,7 +240,7 @@ struct ResearchMarketActionSheet: View {
             if path == \.note {
                 TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key, variables))
             } else {
-                TextField("", text: binding).textFieldStyle(.roundedBorder).accessibilityLabel(
+                TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(
                     strings.t(key, variables))
             }
         }

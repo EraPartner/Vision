@@ -65,7 +65,7 @@ public struct NativeReportSheet: View {
             }.pickerStyle(.radioGroup)
             if model.periodPreset == .year {
                 TextField(strings.t("export.period.year.label"), text: $model.customYear)
-                    .textFieldStyle(.roundedBorder).onSubmit { Task { await model.submit() } }
+                    .textFieldStyle(.vision).onSubmit { Task { await model.submit() } }
                 if model.customYearInvalid {
                     Text(strings.t("export.period.year.invalid", ["max": String(model.maxYear)]))
                         .font(.caption).foregroundStyle(theme.destructive)

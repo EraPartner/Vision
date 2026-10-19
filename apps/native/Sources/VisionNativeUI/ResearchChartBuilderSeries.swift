@@ -128,7 +128,7 @@ struct ResearchChartBuilderIndicatorsView: View {
                             set: { raw in
                                 model.setIndicatorPeriod(id: indicator.id, raw: raw)
                             })
-                    ).textFieldStyle(.roundedBorder).multilineTextAlignment(.center).frame(width: 75)
+                    ).textFieldStyle(.vision).multilineTextAlignment(.center).frame(width: 75)
                         .onKeyPress(.upArrow) {
                             model.setIndicatorPeriod(id: indicator.id, raw: String(indicator.period + 1))
                             return .handled

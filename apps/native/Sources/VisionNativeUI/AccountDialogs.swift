@@ -241,7 +241,7 @@ struct AccountFormSheet: View {
                 strings.t("accounts.field.namePlaceholder"),
                 text: Binding(get: { model.form?.name ?? "" }, set: { model.form?.setName($0) })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .focused($focus, equals: .name)
             .onSubmit(submit)
             .accessibilityLabel(strings.t("accounts.field.name"))
@@ -251,7 +251,7 @@ struct AccountFormSheet: View {
                 strings.t("accounts.field.displayNamePlaceholder"),
                 text: Binding(get: { model.form?.displayName ?? "" }, set: { model.form?.setDisplayName($0) })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit(submit)
             .accessibilityLabel(strings.t("accounts.field.displayName"))
         }
@@ -261,7 +261,7 @@ struct AccountFormSheet: View {
                     "",
                     text: Binding(get: { model.form?.institution ?? "" }, set: { model.form?.setInstitution($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("accounts.field.institution"))
             }
@@ -311,7 +311,7 @@ struct AccountFormSheet: View {
                     strings.t("accounts.openingBalance.createPlaceholder"),
                     text: Binding(get: { model.form?.openingBalance ?? "" }, set: { model.form?.setOpeningBalance($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($focus, equals: .openingBalance)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t(form.openingLabelKey))
@@ -489,7 +489,7 @@ struct ReconcileSheet: View {
                             money(draft.statement, draft.selectedCurrency),
                             text: Binding(get: { model.reconcile?.reading ?? "" }, set: { model.reconcile?.setReading($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .disabled(busy)
                         .accessibilityLabel(strings.t("accounts.reconcile.readingLabel"))
                     }
@@ -676,7 +676,7 @@ struct OpeningBalanceSheet: View {
                         LocaleNumber.placeholder(format: settings.numberFormat),
                         text: Binding(get: { model.opening?.balance ?? "" }, set: { model.opening?.balance = $0 })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($amountFocused)
                     .onSubmit(submit)
                     .accessibilityLabel(strings.t("accounts.openingBalance.balanceLabel"))

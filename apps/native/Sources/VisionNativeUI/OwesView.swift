@@ -456,7 +456,7 @@ struct OwesPaymentSheet: View {
                     strings.t("owesPage.recordDialog.placeholder"),
                     text: Binding(get: { model.payment?.amountText ?? "" }, set: { model.setPaymentAmount($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($amountFocused)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("owesPage.recordDialog.amount"))

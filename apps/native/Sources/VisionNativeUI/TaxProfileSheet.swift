@@ -254,7 +254,7 @@ struct TaxProfileNumberField: View {
                         onChange(parsed)
                     }
                 })
-        ).textFieldStyle(.roundedBorder).focused($focused)
+        ).textFieldStyle(.vision).focused($focused)
             .onAppear { text = LocaleNumber.editable(value, format: format) }
             .onChange(of: value) { if !focused { text = LocaleNumber.editable(value, format: format) } }
             .onChange(of: format) { if !focused { text = LocaleNumber.editable(value, format: format) } }

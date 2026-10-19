@@ -68,14 +68,14 @@ struct PlannedPaymentFormSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             field("plannedForm.nameRequired2", error: .name) {
                 TextField(strings.t("plannedForm.namePlaceholder"), text: $form.name)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($focused, equals: .name)
                     .onSubmit(save)
             }
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.amountRequired2", error: .amount) {
                     TextField(form.amountPlaceholder, text: $form.amount)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .amount)
                         .onSubmit(save)
                 }
@@ -150,7 +150,7 @@ struct PlannedPaymentFormSheet: View {
             }
             field("plannedForm.link") {
                 TextField(strings.t("plannedForm.linkPlaceholder"), text: $form.url)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(save)
                 helpText("plannedForm.linkDesc")
             }
@@ -195,13 +195,13 @@ struct PlannedPaymentFormSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.loanPrincipal", error: .loanPrincipal) {
                     TextField("", text: $form.loanPrincipal)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanPrincipal)
                         .onSubmit(save)
                 }
                 field("plannedForm.loanRate", error: .loanRate) {
                     TextField("", text: $form.loanRate)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanRate)
                         .onSubmit(save)
                 }
@@ -209,13 +209,13 @@ struct PlannedPaymentFormSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.loanTermMonths", error: .loanTerm) {
                     TextField("", text: $form.loanTermMonths)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanTerm)
                         .onSubmit(save)
                 }
                 field("plannedForm.loanPaymentDay") {
                     TextField(form.loanPaymentDayPlaceholder, text: $form.loanPaymentDay)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .onSubmit(save)
                 }
             }
@@ -238,7 +238,7 @@ struct PlannedPaymentFormSheet: View {
             if form.showsCustomDays {
                 field("plannedForm.repeatEvery", error: .customDays) {
                     TextField(strings.t("plannedForm.customDaysPlaceholder"), text: $form.customDays)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .customDays)
                         .onSubmit(save)
                 }
@@ -253,7 +253,7 @@ struct PlannedPaymentFormSheet: View {
                 }
                 field("plannedForm.maxOccurrences") {
                     TextField(String("∞"), text: $form.maxOccurrences)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .onSubmit(save)
                 }
             }

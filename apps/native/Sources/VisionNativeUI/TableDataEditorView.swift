@@ -446,7 +446,7 @@ public struct TableDataEditorView: View {
     /// Enter commits, Escape reverts the cell, and leaving the field commits (blur).
     private func inlineEditor(_ cell: TableDataEditorModel.Cell, label: String) -> some View {
         TextField(label, text: editingText)
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .font(.footnote.monospaced())
             .labelsHidden()
             .accessibilityLabel(label)

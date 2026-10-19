@@ -77,7 +77,7 @@ struct PickerList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextField(searchPlaceholder, text: $search)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($searchFocused)
                 .onSubmit {
                     options.first?.pick()

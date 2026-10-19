@@ -306,12 +306,12 @@ struct TransactionInspectorView: View {
             }
         case .comment:
             TextField(label, text: text, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .lineLimit(2...5)
                 .onSubmit { Task { await model.saveDetail() } }
         case .amount, .memo, .currency:
             TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit { Task { await model.saveDetail() } }
         }
     }

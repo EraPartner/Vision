@@ -139,7 +139,7 @@ struct TransactionAddSheet: View {
                 TextField(
                     strings.t("addTxn.descPlaceholder"), text: Binding(get: { draft.memo }, set: { form.setMemo($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
             }
             field("addTxn.commentOptional") {
@@ -193,7 +193,7 @@ struct TransactionAddSheet: View {
                     strings.t("addTxn.currencyPlaceholder"),
                     text: Binding(get: { draft.currency }, set: { form.setCurrency($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .frame(width: 64)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("accounts.field.currency"))

@@ -159,7 +159,7 @@ private struct CustomChartBuilderSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     TextField(strings.t("customChart.builder.name"), text: binding(\.name)).textFieldStyle(
-                        .roundedBorder)
+                        .vision)
                     HStack {
                         Picker(strings.t("customChart.chartType"), selection: binding(\.kind)) {
                             ForEach(CustomChartKind.allCases, id: \.self) { Text(strings.t($0.labelKey)).tag($0) }
@@ -276,7 +276,7 @@ private struct ChartEntityPicker: View {
         Button(title) { isOpen.toggle() }.buttonStyle(.visionOutline)
             .popover(isPresented: $isOpen) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField(strings.t("table.searchAllColumns"), text: $search).textFieldStyle(.roundedBorder)
+                    TextField(strings.t("table.searchAllColumns"), text: $search).textFieldStyle(.vision)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(options.filter { search.isEmpty || $0.name.localizedStandardContains(search) }) {

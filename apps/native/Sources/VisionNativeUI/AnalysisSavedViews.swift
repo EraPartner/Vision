@@ -21,7 +21,7 @@ struct AnalysisReusableView: View {
         AnalysisPanel(title: strings.t("analysis.saveTitle"), description: strings.t("analysis.saveHelp")) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(strings.t("analysis.namePlaceholder")).font(.callout)
-                TextField(strings.t("analysis.namePlaceholder"), text: text(\.name)).textFieldStyle(.roundedBorder)
+                TextField(strings.t("analysis.namePlaceholder"), text: text(\.name)).textFieldStyle(.vision)
                 if nameMissing {
                     Text(strings.t("analysis.nameRequired")).font(.footnote).foregroundStyle(theme.destructive)
                 }
@@ -73,7 +73,7 @@ struct AnalysisReusableView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("analysis.reportingCurrency")).font(.callout)
                 TextField(model.effectivePreferences.currency, text: normalized(\.runCurrency, limit: 3))
-                    .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("analysis.reportingCurrency"))
+                    .textFieldStyle(.vision).accessibilityLabel(strings.t("analysis.reportingCurrency"))
             }
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("analysis.benchmark")).font(.callout)
@@ -81,7 +81,7 @@ struct AnalysisReusableView: View {
                     model.effectivePreferences.benchmark ?? strings.t("analysis.none"),
                     text: normalized(\.runBenchmark, limit: 32)
                 )
-                .textFieldStyle(.roundedBorder).disabled(model.runWithoutBenchmark)
+                .textFieldStyle(.vision).disabled(model.runWithoutBenchmark)
                 .accessibilityLabel(strings.t("analysis.benchmark"))
                 Toggle(
                     strings.t("analysis.noBenchmarkForRun"),

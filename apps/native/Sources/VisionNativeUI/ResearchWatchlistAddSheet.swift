@@ -63,7 +63,7 @@ public struct ResearchWatchlistAddSheet: View {
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             Text(strings.t("addWatchlist.targetPrice")).font(.caption)
-                            TextField(placeholder, text: field(\.targetPrice)).textFieldStyle(.roundedBorder)
+                            TextField(placeholder, text: field(\.targetPrice)).textFieldStyle(.vision)
                                 .accessibilityLabel(strings.t("addWatchlist.targetPrice"))
                                 .focused($targetFocused).onSubmit { Task { await model.submit() } }
                             if let preview = model.preview {
@@ -86,7 +86,7 @@ public struct ResearchWatchlistAddSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(strings.t("addWatchlist.notesOptional")).font(.caption)
                             TextField(strings.t("addWatchlist.notesPlaceholder"), text: field(\.notes), axis: .vertical)
-                                .lineLimit(2...5).textFieldStyle(.roundedBorder)
+                                .lineLimit(2...5).textFieldStyle(.vision)
                                 .accessibilityLabel(strings.t("addWatchlist.notesOptional"))
                         }
                         if model.error != nil {

@@ -172,7 +172,7 @@ struct TransactionSplitSheet: View {
                         strings.t("splitDialog.amountOwed"),
                         text: Binding(get: { entry.amount }, set: { form.setAmount(entry.id, to: $0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(submit)
                     .accessibilityLabel("\(strings.t("splitDialog.amountOwed")) \(number)")
                 }
@@ -180,7 +180,7 @@ struct TransactionSplitSheet: View {
                     strings.t("splitDialog.noteOptional"),
                     text: Binding(get: { entry.note }, set: { form.setNote(entry.id, to: $0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
                 .accessibilityLabel("\(strings.t("splitDialog.noteOptional")) \(number)")
             }

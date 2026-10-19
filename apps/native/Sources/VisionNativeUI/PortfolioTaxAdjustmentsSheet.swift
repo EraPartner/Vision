@@ -112,7 +112,7 @@ struct PortfolioTaxAdjustmentsSheet: View {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(strings.t("tax.reyndersInterestPortion")).font(.callout)
                                     TextField("100", text: binding(row.id, \.interestPortion, default: ""))
-                                        .textFieldStyle(.roundedBorder).focused($interestFocused, equals: row.id)
+                                        .textFieldStyle(.vision).focused($interestFocused, equals: row.id)
                                         .accessibilityLabel(strings.t("tax.reyndersInterestPortion") + ": " + row.name)
                                     if row.hasInvalidInterestPortion {
                                         Text(strings.t("addInv.error.numberInvalid") + " (0–100)")
@@ -137,7 +137,7 @@ struct PortfolioTaxAdjustmentsSheet: View {
             TextField(
                 LocaleNumber.editable(0, format: shell.settings.numberFormat), text: binding(row.id, path, default: "")
             )
-            .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t(title) + ": " + row.name)
+            .textFieldStyle(.vision).accessibilityLabel(strings.t(title) + ": " + row.name)
         }
     }
     private func total(_ title: String, value: Decimal) -> some View {

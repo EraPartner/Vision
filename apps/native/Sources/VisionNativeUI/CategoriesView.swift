@@ -315,7 +315,7 @@ struct CategoryNodeSheet: View {
                     TextField(
                         "", text: Binding(get: { model.form?.name ?? "" }, set: { model.form?.setName($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($nameFocused)
                     .onSubmit(submit)
                     .accessibilityLabel(strings.t("categoriesPage.nodeName"))

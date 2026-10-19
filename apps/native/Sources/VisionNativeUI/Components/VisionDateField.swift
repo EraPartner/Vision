@@ -96,7 +96,7 @@ struct VisionDatePopover: View {
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
                 TextField(format.rawValue, text: $draft)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($inputFocused)
                     .onSubmit(commitDraft)
                     .onChange(of: draft) {

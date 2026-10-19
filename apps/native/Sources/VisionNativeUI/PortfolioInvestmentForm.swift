@@ -202,7 +202,7 @@ struct PortfolioInvestmentForm: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(strings.t(key)).font(.callout)
-            TextField("", text: text(path, field: id)).textFieldStyle(.roundedBorder)
+            TextField("", text: text(path, field: id)).textFieldStyle(.vision)
                 .font(monospaced ? .body.monospaced() : .body)
                 .focused($focused, equals: id).onSubmit(save)
                 .accessibilityLabel(strings.t(key))

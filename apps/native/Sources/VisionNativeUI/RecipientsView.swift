@@ -253,7 +253,7 @@ public struct RecipientsView: View {
                 strings.t("recipientsPage.col.recipient"),
                 text: Binding(get: { model.editing?.name ?? "" }, set: { model.editing?.name = $0 })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit { Task { await model.saveEditing() } }
             .onExitCommand { model.cancelEditing() }
             .accessibilityLabel("\(strings.t("recipientsPage.col.recipient")): \(payee.name)")
@@ -324,7 +324,7 @@ public struct RecipientsView: View {
                 strings.t("recipientsPage.col.notes"),
                 text: Binding(get: { model.editing?.notes ?? "" }, set: { model.editing?.notes = $0 })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit { Task { await model.saveEditing() } }
             .onExitCommand { model.cancelEditing() }
             .accessibilityLabel("\(strings.t("recipientsPage.col.notes")): \(payee.name)")
@@ -493,7 +493,7 @@ struct PayeeAddSheet: View {
                         strings.t("addRec.namePlaceholder"),
                         text: Binding(get: { model.add?.name ?? "" }, set: { model.add?.setName($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($nameFocused)
                     .onSubmit(submit)
                     .accessibilityLabel(strings.t("form.addRecipient.name"))
@@ -904,7 +904,7 @@ struct MatchRuleFormCard: View {
                             text: Binding(
                                 get: { model.rules?.form?.pattern ?? "" }, set: { model.rules?.setPattern($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .font(.body.monospaced())
                         .focused($patternFocused)
                         .onSubmit(save)
@@ -952,7 +952,7 @@ struct MatchRuleFormCard: View {
                             text: Binding(
                                 get: { model.rules?.form?.priorityText ?? "" }, set: { model.rules?.setPriority($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .frame(width: 90)
                         .onSubmit(save)
                         .accessibilityLabel(strings.t("recipientPatterns.priorityLabel"))
@@ -963,7 +963,7 @@ struct MatchRuleFormCard: View {
                         strings.t("recipientPatterns.notesPlaceholder"),
                         text: Binding(get: { model.rules?.form?.notes ?? "" }, set: { model.rules?.setNotes($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(save)
                     .accessibilityLabel(strings.t("recipientPatterns.notesLabel"))
                 }

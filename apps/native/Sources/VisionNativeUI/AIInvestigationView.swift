@@ -250,7 +250,7 @@ struct AIInvestigationView: View {
                 .font(.callout).foregroundStyle(theme.warning)
             HStack(spacing: 10) {
                 TextField(strings.t("aiResearch.clarificationPlaceholder"), text: field(\.clarification))
-                    .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("aiResearch.clarificationNeeded"))
+                    .textFieldStyle(.vision).accessibilityLabel(strings.t("aiResearch.clarificationNeeded"))
                 Button(strings.t("aiResearch.resume")) { Task { await model.resume() } }
                     .disabled(!model.canClarify)
             }
@@ -262,7 +262,7 @@ struct AIInvestigationView: View {
     private func input(_ label: String, placeholder: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(strings.t(label)).font(.caption)
-            TextField(strings.t(placeholder), text: text).textFieldStyle(.roundedBorder).accessibilityLabel(
+            TextField(strings.t(placeholder), text: text).textFieldStyle(.vision).accessibilityLabel(
                 strings.t(label))
         }
     }
