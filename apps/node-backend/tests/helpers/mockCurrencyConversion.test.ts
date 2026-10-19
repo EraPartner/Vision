@@ -20,7 +20,6 @@ describe("mockCurrencyConversion", () => {
     expect(fake.default.loadCurrentRates).toBe(fake.loadCurrentRates);
     expect(fake.default.warmCache).toBe(fake.warmCache);
     expect(fake.default.listLatestStoredRates).toBe(fake.listLatestStoredRates);
-    expect(fake.default.FALLBACK_RATES).toBe(fake.FALLBACK_RATES);
     expect(fake.clearHistoricalIndexCache).toEqual(expect.any(Function));
     expect(fake.getHistoricalRateIndex).toEqual(expect.any(Function));
     expect(fake.listLatestStoredRates).toEqual(expect.any(Function));

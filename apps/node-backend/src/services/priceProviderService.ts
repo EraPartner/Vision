@@ -646,10 +646,11 @@ export async function fetchHistoricalPrices(
         useHistoricalRatesByDate: true,
         dateField: "date",
       });
-      points = converted.map(({ point, amount_eur }) => ({
-        ...point,
-        price: amount_eur,
-      }));
+      // The stored-rate check above means every point converts; a point that
+      // still has no rate is dropped rather than persisted in USD.
+      points = converted.flatMap(({ point, amount_eur }) =>
+        amount_eur === undefined ? [] : [{ ...point, price: amount_eur }],
+      );
     }
 
     return _persistAndResolve(

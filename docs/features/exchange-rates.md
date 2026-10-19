@@ -121,9 +121,10 @@ ECB takes priority on overlap.
 
 ### No built-in rates (2026-10-19)
 
-The `FALLBACK_RATES` constant in
-`[[apps/node-backend/src/services/currency/currencyConversionService.ts]]` no longer feeds any
-conversion helper or this page. Its only remaining readers are the Belgian tax dashboards; see
+The `FALLBACK_RATES` constant was removed from
+`[[apps/node-backend/src/services/currency/currencyConversionService.ts]]`; the Belgian tax
+dashboards, its last readers, now use stored rates too. An amount without a stored rate is left
+out of totals and flagged, never added 1:1; see
 [[docs/integrations/currency-conversion|Currency Conversion]].
 
 ## Data Model

@@ -22,7 +22,6 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
   portfolioTransactionRepository: { getRowsForPortfolioMath: vi.fn() },
 }));
 vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
-  FALLBACK_RATES: { EUR: 1, USD: 0.9 },
   listLatestStoredRates: vi.fn(),
 }));
 import settingsService from "../../src/services/settingsService.ts";
@@ -57,6 +56,8 @@ function months(values: [number, number, number][]) {
         period_start: null,
         period_end: null,
       })),
+      unconverted_count: 0,
+      unconverted_currencies: [] as string[],
       summary: {
         total_income: values.reduce((s, v) => s + v[2], 0),
         total_spending: 0,
@@ -96,6 +97,8 @@ beforeEach(() => {
   );
   vi.mocked(computeCategoryPivot).mockResolvedValue({
     data: {
+      unconverted_count: 0,
+      unconverted_currencies: [],
       categoryPivot: { "2025-01": [cell(1000)], "2025-02": [cell(3000)] },
     },
     meta: { source: "live", computedAt: "fixture" },
@@ -187,6 +190,8 @@ describe("Native Tax dashboard source contract", () => {
     );
     vi.mocked(computeCategoryPivot).mockResolvedValue({
       data: {
+        unconverted_count: 0,
+        unconverted_currencies: [],
         categoryPivot: {
           "2025-01": [cell(100000, { partner: 20000, joint: 20000 })],
         },
@@ -311,6 +316,8 @@ describe("Native Tax dashboard source contract", () => {
     );
     vi.mocked(computeCategoryPivot).mockResolvedValue({
       data: {
+        unconverted_count: 0,
+        unconverted_currencies: [],
         categoryPivot: { "2025-01": [cell(1000)], "2026-01": [cell(9000)] },
       },
       meta: { source: "live", computedAt: "fixture" },
@@ -328,7 +335,7 @@ describe("Native Tax dashboard source contract", () => {
       bodyAt(response, "data", "exportProfile", "taxIncomeCategoryIds"),
     ).toEqual([1]);
   });
-  it("converts recorded portfolio taxes into the requested target and preserves missing-rate fallback", async () => {
+  it("converts recorded portfolio taxes into the requested target and flags a currency without a stored rate", async () => {
     vi.mocked(
       portfolioTransactionRepository.getRowsForPortfolioMath,
     ).mockResolvedValue([
@@ -354,7 +361,15 @@ describe("Native Tax dashboard source contract", () => {
     });
     const response = await api.get(path).query({ currency: "usd" }).expect(200);
     expect(bodyAt(response, "data", "currency")).toBe("USD");
-    expect(bodyAt(response, "data", "portfolioTaxesForYear")).toBe(112);
+    // 80 EUR at 0.8 is 100 USD; the 12 XYZ have no stored rate and are left
+    // out and flagged, never added 1:1.
+    expect(bodyAt(response, "data", "portfolioTaxesForYear")).toBe(100);
+    expect(bodyAt(response, "data", "unconvertedCurrencies")).toEqual(["XYZ"]);
+    expect(bodyAt(response, "data", "incompleteFigures")).toEqual([
+      "portfolioTaxesForYear",
+      "totalTaxIncludingPortfolio",
+      "totalTaxIncludingPropertyEstimate",
+    ]);
     expect(computeMonthlySummary).toHaveBeenCalledWith(
       expect.objectContaining({ targetCurrency: "USD" }),
     );

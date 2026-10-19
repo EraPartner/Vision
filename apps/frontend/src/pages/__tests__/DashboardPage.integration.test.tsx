@@ -224,6 +224,8 @@ describe("DashboardPage (integration)", () => {
                         period_start: "2026-02-01",
                         period_end: "2026-02-28",
                     },
+                    unconverted_count: 0,
+                    unconverted_currencies: [],
                 }),
             ),
             http.get(`${API_BASE}/api/info/transaction-count`, () =>

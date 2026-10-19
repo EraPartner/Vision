@@ -879,6 +879,8 @@ describe.skipIf(!hasTestDatabase())(
           "period_end",
           "period_start",
           "summary",
+          "unconverted_count",
+          "unconverted_currencies",
           "year",
         ]);
         const occurrences = result.daily_data.flatMap((d) => d.transactions);

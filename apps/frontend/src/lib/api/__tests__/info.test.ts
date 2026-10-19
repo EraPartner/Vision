@@ -283,6 +283,7 @@ describe("info API client", () => {
                     },
                     monthlyChange: 0,
                     monthlyChangePercent: 0,
+                    unconvertedCurrencies: [],
                     snapshots: [],
                     snapshotsTotal: 0,
                     snapshotsLimit: 10,

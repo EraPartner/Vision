@@ -82,7 +82,7 @@ router.post("/rebalance", async (req, res) => {
 
   const targetWeights = resolveRebalanceTargetWeights(body);
 
-  const { actualValues, availableCash, cashAccounts } =
+  const { actualValues, availableCash, cashAccounts, unconvertedCurrencies } =
     await assembleRebalanceInputs({ currency });
   // Clamp any user cash cap to [0, availableCash] in the pure core so an API
   // caller can never deploy more than actually exists.
@@ -103,6 +103,7 @@ router.post("/rebalance", async (req, res) => {
     actualValues,
     availableCash: cash,
     cashAccounts,
+    unconvertedCurrencies,
     deployment,
     links: [],
   });

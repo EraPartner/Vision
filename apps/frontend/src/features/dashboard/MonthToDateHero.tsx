@@ -27,7 +27,7 @@ const PAD_Y = 8;
  * "typical month" guide so the pace reads at a glance.
  */
 export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
-    const { t, language } = useLanguage();
+    const { t, tc, language } = useLanguage();
     const { appSettings } = useAppSettings();
     const fmt = useCurrencyFormatter();
     const { data, isLoading } = useMonthToDate(currency);
@@ -138,6 +138,11 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
                         </p>
                     )}
                     <p className="max-w-prose type-callout text-label-secondary">{pace}</p>
+                    {(data?.unconverted_count ?? 0) > 0 && (
+                        <p className="type-footnote text-warning">
+                            {tc("common.fxUnavailableTransactions", data?.unconverted_count ?? 0)}
+                        </p>
+                    )}
                     <dl className="grid grid-cols-3 gap-3 pt-2">
                         {trio.map((item) => (
                             <div key={item.key} className="min-w-0">

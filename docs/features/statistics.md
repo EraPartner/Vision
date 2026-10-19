@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-19
 updated: 2026-10-19
-last_modified: 2026-09-27
+last_modified: 2026-10-19
 tags:
   [
     feature,
@@ -196,7 +196,10 @@ without changing the selected date window.
 
 1. **Bounded default**: Cold page loads request 24 calendar months. All-time history is explicit.
 2. **Server-side aggregation**: PostgreSQL groups the data and conversion uses each transaction
-   date's foreign-exchange rate.
+   date's foreign-exchange rate. A transaction whose currency has no stored rate is left out of
+   every figure, never added 1:1; the endpoints report it in `unconverted_count` and the page shows
+   "N transactions left out: exchange rates unavailable" under its header (the Sankey tab and
+   custom charts show the same note for their own data).
 3. **Dual payloads**: Filtered and unfiltered results are kept separately when exclusions apply.
 4. **Per-graph exclusions**: Each chart independently chooses the filtered or unfiltered payload
    through `GraphExclusions` state.

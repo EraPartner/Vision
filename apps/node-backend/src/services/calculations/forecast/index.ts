@@ -30,6 +30,7 @@ import type {
 import { recordAccuracy, getLatestAccuracyByMethod } from "./accuracyStore.ts";
 import { RowContractError } from "../../../database/rowContracts.ts";
 import type { AccuracyRecord } from "./accuracyStore.ts";
+import { unconvertedFields } from "../../../lib/unconvertedTally.ts";
 import mcCacheRepo from "../../../repositories/cashflowForecastMcRepository.ts";
 import mcRollingCacheRepo from "../../../repositories/cashflowForecastMcRollingRepository.ts";
 import { logger } from "../../../config/logger.ts";
@@ -142,6 +143,12 @@ export interface ForecastPayload {
   diagnostics: DiagnosticsPayload | null;
   history_months: number;
   include_planned: boolean;
+  /**
+   * Transactions and planned rows left out of the inputs for want of a stored
+   * rate. Absent on cache entries written before the field existed.
+   */
+  unconverted_count?: number;
+  unconverted_currencies?: string[];
   category_breakdown?: unknown;
 }
 
@@ -624,6 +631,7 @@ export async function computeCashflowForecast({
     currentActual,
     scheduledActual = [],
     plannedCurrent,
+    unconverted,
   } = await infoRepository.getCashflowForecastData(
     historyMonths,
     excludedCategoryIds,
@@ -729,6 +737,7 @@ export async function computeCashflowForecast({
     diagnostics,
     history_months: historyMonths,
     include_planned: includePlanned,
+    ...unconvertedFields(unconverted),
   };
 
   // Write to cache whenever default MC params used (nightly job + any live compute).
@@ -832,6 +841,7 @@ export async function computeCashflowForecastRolling({
     currentActual,
     scheduledActual = [],
     plannedCurrent,
+    unconverted,
   } = await infoRepository.getCashflowForecastDataRolling(
     historyMonths,
     daysBack,
@@ -925,6 +935,7 @@ export async function computeCashflowForecastRolling({
     diagnostics,
     history_months: historyMonths,
     include_planned: includePlanned,
+    ...unconvertedFields(unconverted),
   };
 
   // Write to cache when default rolling MC params and backtest not requested.

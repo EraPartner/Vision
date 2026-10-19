@@ -178,6 +178,11 @@ Get planned expenses for next month.
 
 ---
 
+Additive (2026-10-19): a planned row whose currency has no stored rate is left out of the totals,
+never added 1:1. `unconverted_count` counts those planned rows and `unconverted_currencies` lists
+their currencies.
+
+
 ### ~~GET /api/info/average-vs-current-spending~~ _(removed — use `/api/aggregations/average-vs-current`)_
 
 > **Removed in Phase G.** Use [[docs/api/aggregations|`GET /api/aggregations/average-vs-current`]] instead.
@@ -467,6 +472,7 @@ Notes:
 - Historical conversion is date-aware for both bank history and portfolio history using each snapshot `day`.
 - FX changes are reflected over time in historical snapshots (instead of applying only latest rates).
 - If historical conversion fails for a snapshot set, conversion retries with latest available rates so net worth data still loads.
+- An account balance whose currency has no stored rate is left out of `liquid`, `liabilities` and the snapshots, never added 1:1. Additive (2026-10-19): `unconvertedCurrencies` lists those currencies; it is empty when every balance converted.
 - When bank-account balance snapshots are unavailable, liquid net worth falls back to cumulative transaction flow (date- and currency-aware) so snapshots remain populated instead of returning empty liquid history.
 - Regression coverage includes a transactions-only (no investments) case to ensure `/api/info/net-worth` still returns non-zero liquid/net worth when transaction data exists ([[apps/node-backend/tests/infoRepository.test.ts]]).
 - Latest snapshot investment value is reconciled from active investment holdings (`units` × `current_price` for unit-based assets, principal-based for savings/bonds, plus appreciation for real estate) so current net worth is not stuck at `0` when historical portfolio aggregation is sparse.

@@ -718,6 +718,8 @@ export function taxDashboardStub(
         suggestions: [],
         householdBreakdownRows: [],
         rules: [],
+        unconvertedCurrencies: [],
+        incompleteFigures: [],
         ...overrides,
     };
 }
@@ -796,6 +798,8 @@ export function portfolioTaxDashboardStub(
                 expected: { exists: false },
             },
         ],
+        unconvertedCurrencies: [],
+        incompleteFigures: [],
         ...overrides,
     };
 }
@@ -960,13 +964,20 @@ export const defaultHandlers = [
                     period_start: "",
                     period_end: "",
                 },
+                unconverted_count: 0,
+                unconverted_currencies: [],
             },
             "2025-01-01T00:00:00.000Z",
         ),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-insights`, () =>
         aggOk(
-            { topMerchants: [], monthOverMonth: [] },
+            {
+                topMerchants: [],
+                monthOverMonth: [],
+                unconverted_count: 0,
+                unconverted_currencies: [],
+            },
             "2025-01-01T00:00:00.000Z",
         ),
     ),
@@ -978,6 +989,8 @@ export const defaultHandlers = [
             year: 2025,
             without_planned: [],
             with_planned: [],
+            unconverted_count: 0,
+            unconverted_currencies: [],
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/cashflow-forecast-accuracy`, () =>
@@ -1016,22 +1029,45 @@ export const defaultHandlers = [
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/category-pivot`, () =>
-        aggOk({ categoryPivot: {} }),
+        aggOk({
+            categoryPivot: {},
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () =>
-        aggOk({ recipientsByYear: {} }),
+        aggOk({
+            recipientsByYear: {},
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-pivot`, () =>
         aggOk({
             recipientPivot: {},
-            conversion: { usedHistoricalFallback: false, affectedCurrencies: [] },
+            conversion: {
+                usedHistoricalFallback: false,
+                affectedCurrencies: [],
+                unconvertedCount: 0,
+                unconvertedCurrencies: [],
+            },
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/sankey`, () =>
-        aggOk({ nodes: [], links: [], year: 2025 }),
+        aggOk({
+            nodes: [],
+            links: [],
+            year: 2025,
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/category-breakdown`, () =>
-        aggOk({ categories: [] }),
+        aggOk({
+            categories: [],
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/bank-balances`, () =>
         aggOk({
@@ -1039,6 +1075,8 @@ export const defaultHandlers = [
             total_net_position: 0,
             history: {},
             total_history: [],
+            unconverted_count: 0,
+            unconverted_currencies: [],
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/average-vs-current`, () =>
@@ -1060,6 +1098,8 @@ export const defaultHandlers = [
                 variance: 0,
                 pace: 0,
             },
+            unconverted_count: 0,
+            unconverted_currencies: [],
         }),
     ),
     http.get(`${API_BASE}/api/aggregations/:name`, () => ok(null)),
@@ -1223,6 +1263,7 @@ export const defaultHandlers = [
             monthlyChange: 0,
             monthlyChangePercent: 0,
             snapshots: [],
+            unconvertedCurrencies: [],
         }),
     ),
     // netWorthByAccount.getNetWorthByAccount with no accounts or holdings.

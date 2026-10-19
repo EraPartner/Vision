@@ -24,9 +24,15 @@ function ok<T>(data: T) {
 
 const AGG_META = { computedAt: "2025-01-01T00:00:00.000Z", source: "live" };
 
-/** The aggregation routes' `{ data, meta }` body (calc modules' buildEnvelope). */
-function agg(data: unknown) {
-    return { data, meta: AGG_META };
+/**
+ * The aggregation routes' `{ data, meta }` body (calc modules' buildEnvelope),
+ * with the additive unconverted-amount fields every converting route returns.
+ */
+function agg(data: Record<string, unknown>) {
+    return {
+        data: { unconverted_count: 0, unconverted_currencies: [], ...data },
+        meta: AGG_META,
+    };
 }
 
 const EMPTY_FORECAST = {
@@ -196,11 +202,14 @@ describe("aggregations — simple wrappers", () => {
                         transaction_count: 12,
                         first_transaction: "2026-01-01",
                         last_transaction: "2026-08-23",
+                        unconverted_currencies: [],
                     },
                 ],
                 total_net_position: 125,
                 history: {},
                 total_history: [],
+                unconverted_count: 0,
+                unconverted_currencies: [],
             },
             meta: {
                 computedAt: "2026-08-23T00:00:00.000Z",
@@ -433,6 +442,8 @@ describe("aggregations exclusion query building", () => {
                             conversion: {
                                 usedHistoricalFallback: false,
                                 affectedCurrencies: [],
+                                unconvertedCount: 0,
+                                unconvertedCurrencies: [],
                             },
                         }),
                     );

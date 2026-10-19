@@ -12,6 +12,16 @@ import { IdSchema } from "./common.ts";
 const CountSchema = z.number().int().nonnegative();
 const DayStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+/**
+ * Additive (ADR-216): amounts without a stored exchange rate are left out of
+ * the figures and reported here, never added 1:1. The count is of transactions
+ * unless the operation says otherwise.
+ */
+export const UnconvertedAmountsShape = {
+  unconverted_count: CountSchema,
+  unconverted_currencies: z.array(z.string()),
+};
+
 export const AggregationMetaSchema = z.looseObject({
   computedAt: z.string(),
   source: z.string(),
@@ -47,6 +57,7 @@ export const MonthlySummarySchema = aggregationEnvelopeOf(
       period_start: z.string().nullable().optional(),
       period_end: z.string().nullable().optional(),
     }),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -73,6 +84,7 @@ export const RecipientInsightsSchema = aggregationEnvelopeOf(
         changePercent: z.number(),
       }),
     ),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -102,6 +114,7 @@ export const AverageVsCurrentSchema = aggregationEnvelopeOf(
       variance: z.number(),
       pace: z.number().nullable(),
     }),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -129,11 +142,15 @@ export const BankBalancesSchema = aggregationEnvelopeOf(
         transaction_count: CountSchema,
         first_transaction: z.string().nullable(),
         last_transaction: z.string().nullable(),
+        /** Partitions left out of `balance` for want of a stored rate. */
+        unconverted_currencies: z.array(z.string()),
       }),
     ),
     total_net_position: z.number(),
     history: z.record(z.string(), z.array(BalancePointSchema)),
     total_history: z.array(BalancePointSchema),
+    /** `unconverted_count` counts currency partitions, not transactions. */
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -155,6 +172,7 @@ export const CategoryPivotSchema = aggregationEnvelopeOf(
         }),
       ),
     ),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -172,6 +190,7 @@ export const RecipientByYearSchema = aggregationEnvelopeOf(
         }),
       ),
     ),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -188,14 +207,23 @@ const periodPivotOf = <S extends z.ZodRawShape>(identity: S) =>
     ),
   );
 
+/**
+ * A period pivot's conversion contract: rows converted at the latest rate for
+ * want of a historical one (`usedHistoricalFallback`), and, additive (ADR-216),
+ * transactions left out because no stored rate converts them.
+ */
+export const PeriodPivotConversionSchema = z.looseObject({
+  usedHistoricalFallback: z.boolean(),
+  affectedCurrencies: z.array(z.string()),
+  unconvertedCount: CountSchema,
+  unconvertedCurrencies: z.array(z.string()),
+});
+
 /** `GET /api/aggregations/recipient-pivot`. */
 export const RecipientPivotSchema = aggregationEnvelopeOf(
   z.looseObject({
     recipientPivot: periodPivotOf({ recipientId: IdSchema, name: z.string() }),
-    conversion: z.looseObject({
-      usedHistoricalFallback: z.boolean(),
-      affectedCurrencies: z.array(z.string()),
-    }),
+    conversion: PeriodPivotConversionSchema,
   }),
 );
 
@@ -203,6 +231,7 @@ export const RecipientPivotSchema = aggregationEnvelopeOf(
 export const TagPivotSchema = aggregationEnvelopeOf(
   z.looseObject({
     tagPivot: periodPivotOf({ tagId: IdSchema, slug: z.string() }),
+    conversion: PeriodPivotConversionSchema,
   }),
 );
 
@@ -220,6 +249,7 @@ export const SankeyFlowSchema = aggregationEnvelopeOf(
       }),
     ),
     year: z.number().int(),
+    ...UnconvertedAmountsShape,
   }),
 );
 
@@ -283,6 +313,9 @@ const forecastPayloadShape = {
   diagnostics: ForecastDiagnosticsSchema.nullable(),
   history_months: z.number().int(),
   include_planned: z.boolean(),
+  /** Absent on cache entries written before the field existed (ADR-216). */
+  unconverted_count: CountSchema.optional(),
+  unconverted_currencies: z.array(z.string()).optional(),
 };
 
 /** `GET /api/aggregations/cashflow-forecast-methods` (live or the MC cache). */
