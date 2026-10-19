@@ -64,6 +64,8 @@ export interface SplashThemeColors {
   foreground: string;
   surface?: string | undefined;
   text?: string | undefined;
+  /** The user's Appearance choice; native menus and dialogs follow it. */
+  themeSource?: "system" | "light" | "dark" | undefined;
 }
 
 export interface RendererFailurePayload {

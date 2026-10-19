@@ -11,12 +11,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  deriveKeyV1,
-  deriveKeyV2,
-  isEncryptedFile,
-  decryptFile,
-} from "./encrypted-file";
+import { isEncryptedFile, decryptFile } from "./encrypted-file";
 
 /** The persisted settings fields this module reads and writes. */
 export interface BackupCryptoSettings {
@@ -186,31 +181,6 @@ export async function getBackupPassphraseStatus(): Promise<PassphraseStatus> {
     hasStoredPassphrase,
     secureStorageAvailable,
   };
-}
-
-export function deriveBackupKeyFromPassphrase(
-  passphrase: string | null | undefined,
-): Buffer | null {
-  return deriveKeyV1(
-    passphrase,
-    `${context().APP_NAME.toLowerCase()}-backup-v1`,
-  );
-}
-
-export function deriveBackupKeyV2(
-  passphrase: string | null | undefined,
-  salt: Buffer,
-): Buffer | null {
-  if (!passphrase || typeof passphrase !== "string") return null;
-  if (!Buffer.isBuffer(salt) || salt.length !== 16) {
-    throw new Error("deriveBackupKeyV2 requires a 16-byte salt");
-  }
-  return deriveKeyV2(passphrase, salt);
-}
-
-export async function getBackupEncryptionKey(): Promise<Buffer | null> {
-  const passphrase = await getBackupPassphrase();
-  return deriveBackupKeyFromPassphrase(passphrase);
 }
 
 // Sentinel error messages used to drive UI passphrase prompts. The renderer

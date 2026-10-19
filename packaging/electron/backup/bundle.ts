@@ -21,7 +21,6 @@ import path from "node:path";
 import type { ZipArchive } from "archiver";
 import type * as Yauzl from "yauzl";
 import {
-  V1_IV_BYTES,
   isEncryptedFile,
   encryptFileV2,
   decryptFile,
@@ -61,9 +60,6 @@ export const BUNDLE_ENC_MAGIC = Buffer.from("VISIONBAK1");
 
 /** Magic bytes for v2 (GCM, AEAD) encrypted bundles. */
 export const BUNDLE_ENC_MAGIC_V2 = Buffer.from("VISIONBAK2");
-
-/** IV length used for legacy AES-256-CBC encryption. */
-export const BUNDLE_ENC_IV_BYTES = V1_IV_BYTES;
 
 // --- Zip-bomb guards for restore (extractZip) ---
 // A legitimate bundle is a DB dump + attachments (each attachment ≤ 10 MB).

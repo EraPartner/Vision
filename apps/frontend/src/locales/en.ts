@@ -1973,7 +1973,6 @@ const en: Record<string, string> = {
   'market.volume': 'Volume',
   'marketLookup.menu': 'More actions',
   'marketLookup.title': 'Market lookup',
-  'menu.about': 'About {app}',
   'menu.appearance': 'Appearance',
   'menu.documentation': 'Documentation',
   'menu.edit': 'Edit',

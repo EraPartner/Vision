@@ -28,7 +28,7 @@ const demoConfig: BuilderConfig = JSON.parse(
 );
 
 // Every compiled shell module ships from out/; no exclusion may drop a
-// runtime module such as main.js, preload.js or badge-image.js.
+// runtime module such as main.js or preload.js.
 function assertCompiledModulePackaged(file: string): void {
   assert.ok(baseConfig.files.includes("out/**/*"));
   const excluded = baseConfig.files.filter(
@@ -41,8 +41,9 @@ function assertCompiledModulePackaged(file: string): void {
   assert.deepEqual(excluded, [], `out/${file} must be packaged`);
 }
 
-test("compiled badge renderer ships with the desktop package", () => {
-  assertCompiledModulePackaged("badge-image.js");
+test("compiled shell entry points ship with the desktop package", () => {
+  assertCompiledModulePackaged("main.js");
+  assertCompiledModulePackaged("preload.js");
 });
 
 test("Electron development cannot reuse packaged Vision data", () => {

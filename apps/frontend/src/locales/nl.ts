@@ -1973,7 +1973,6 @@ const nl: Record<string, string> = {
   'market.volume': 'Volume',
   'marketLookup.menu': 'Meer acties',
   'marketLookup.title': 'Marktopzoeker',
-  'menu.about': 'Over {app}',
   'menu.appearance': 'Weergave',
   'menu.documentation': 'Documentatie',
   'menu.edit': 'Wijzig',

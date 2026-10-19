@@ -12,7 +12,6 @@
     "prepare:chromium": "bun build.ts && node out/scripts/prepare-chromium-runtime.js",
     "prepare:native": "bun build.ts && node out/scripts/prepare-native-runtime.js",
     "dist": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js",
-    "dist:arm64": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js",
     "dist:dir": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --dir",
     "dist:demo": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --demo"
   },
