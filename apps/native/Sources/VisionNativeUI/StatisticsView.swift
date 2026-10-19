@@ -241,7 +241,10 @@ public struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 20) {
             if includes(.categoryPie), model.isVisible("categoryPie") {
                 card("statsPage.widget.categoryPie", graph: "categoryPie") {
-                    yearPicker(Binding(get: { model.categoryYear }, set: { model.categoryYear = $0 }))
+                    HStack {
+                        Spacer()
+                        yearPicker(Binding(get: { model.categoryYear }, set: { model.categoryYear = $0 }))
+                    }
                     let snapshot = model.data(for: "categoryPie")
                     let periods = snapshot?.periods.filter { period in
                         model.categoryYear.map { year in period.hasPrefix(String(year) + "-") } ?? true
@@ -356,9 +359,12 @@ public struct StatisticsView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 0) {
                                 ForEach(displayedPivotPeriods, id: \.self) { period in
-                                    Text(periodShort(period)).frame(width: pivotColumnWidth, height: 32)
+                                    Text(periodShort(period)).padding(.horizontal, 8)
+                                        .frame(width: pivotColumnWidth, height: 32, alignment: .trailing)
+                                        .foregroundStyle(theme.secondaryLabel)
                                 }
-                                Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth, height: 32)
+                                Text(strings.t("statsPage.total")).padding(.horizontal, 8)
+                                    .frame(width: pivotColumnWidth, height: 32, alignment: .trailing)
                             }.font(.caption.weight(.semibold))
                             ForEach(model.pivotGroups) { group in
                                 pivotRow(
@@ -380,10 +386,16 @@ public struct StatisticsView: View {
                                     Text(money(model.pivotGroups.reduce(0) { $0 + $1.total })).frame(
                                         width: pivotColumnWidth, height: 32)
                                 } else {
-                                    Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
+                                    let total = model.pivotGroups.reduce(0) { $0 + $1.total }
+                                    Button {
                                         shell.navigate(to: "/transactions")
+                                    } label: {
+                                        Text(money(total)).lineLimit(1).minimumScaleFactor(0.8)
+                                            .foregroundStyle(pivotColor(total)).padding(.horizontal, 8)
+                                            .frame(width: pivotColumnWidth, height: 32, alignment: .trailing)
+                                            .contentShape(Rectangle())
                                     }
-                                    .buttonStyle(.visionLink).frame(width: pivotColumnWidth, height: 32)
+                                    .buttonStyle(.plain).monospacedDigit()
                                 }
                             }.fontWeight(.semibold)
                         }
@@ -452,16 +464,31 @@ public struct StatisticsView: View {
             if isPrinting {
                 printPivotAmount(value)
             } else {
-                Button(money(value)) {
+                // The web DrillCellLink (`tone="inherit"`): right-aligned foreground figures, not
+                // link green, so a negative net reads as a loss.
+                Button {
                     shell.navigate(
                         to: model.pivotDrill(
                             categoryIds: ids, period: period, label: name, uncategorised: uncategorised
                         ).string
                     )
-                }.buttonStyle(.visionLink).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
-                    .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
+                } label: {
+                    Text(money(value))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .foregroundStyle(pivotColor(value))
+                        .padding(.horizontal, 8)
+                        .frame(width: pivotColumnWidth, height: 32, alignment: .trailing)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).disabled(value == 0).monospacedDigit()
+                .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
             }
         }
+    }
+
+    private func pivotColor(_ value: Decimal) -> Color {
+        if value == 0 { return theme.tertiaryLabel }
+        return model.categoryMetric == .net && value < 0 ? theme.loss : theme.foreground
     }
 
     private var recipients: some View {
@@ -501,7 +528,10 @@ public struct StatisticsView: View {
         VStack(alignment: .leading, spacing: 20) {
             if model.isVisible("topRecipients") {
                 card("statsPage.widget.topRecipients", graph: "topRecipients") {
-                    yearPicker(Binding(get: { model.recipientYear }, set: { model.recipientYear = $0 }))
+                    HStack {
+                        Spacer()
+                        yearPicker(Binding(get: { model.recipientYear }, set: { model.recipientYear = $0 }))
+                    }
                     let snapshot = model.data(for: "topRecipients")
                     let rows = recipientBars(snapshot)
                     InsightRankedChart(
@@ -511,42 +541,104 @@ public struct StatisticsView: View {
                 }
             }
             if let data = model.filtered?.recipients {
-                HStack {
-                    LabeledContent(
-                        strings.t("insights.topRecipient"),
-                        value: data.topMerchants.first?.name ?? strings.t("insights.noDataFallback"))
-                    LabeledContent(
-                        strings.t("insights.top10Total"),
-                        value: money(data.topMerchants.prefix(10).reduce(0) { $0 + $1.totalSpend }))
-                    let transactions = data.topMerchants.prefix(10).reduce(0) { $0 + $1.transactionCount }
-                    LabeledContent(
-                        strings.t("insights.avgTransaction"),
-                        value: money(
-                            transactions > 0
-                                ? data.topMerchants.prefix(10).reduce(0) { $0 + $1.totalSpend } / Decimal(transactions)
-                                : 0))
+                // The web KPI cards (StatCard): a label with its icon, the figure, a footnote.
+                let top10 = Array(data.topMerchants.prefix(10))
+                let total = top10.reduce(Decimal(0)) { $0 + $1.totalSpend }
+                let transactions = top10.reduce(0) { $0 + $1.transactionCount }
+                HStack(alignment: .top, spacing: 16) {
+                    StatisticsStatCard(title: strings.t("insights.topRecipient"), symbol: "storefront") {
+                        Text(top10.first?.name ?? "—").lineLimit(1).truncationMode(.tail)
+                    } subtitle: {
+                        if let first = top10.first {
+                            MoneyText(
+                                amount: first.totalSpend, currency: currency, settings: settings, signed: false,
+                                colored: false)
+                        } else {
+                            Text(strings.t("insights.noDataFallback"))
+                        }
+                    }
+                    StatisticsStatCard(title: strings.t("insights.top10Total"), symbol: "banknote") {
+                        MoneyText(amount: total, currency: currency, settings: settings, signed: false, colored: false)
+                    } subtitle: {
+                        Text("\(transactions) " + strings.t("insights.transactionCount").lowercased())
+                    }
+                    StatisticsStatCard(title: strings.t("insights.avgTransaction"), symbol: "number") {
+                        MoneyText(
+                            amount: transactions > 0 ? total / Decimal(transactions) : 0, currency: currency,
+                            settings: settings, signed: false, colored: false)
+                    } subtitle: {
+                        Text(strings.t("insights.acrossTop10"))
+                    }
                 }
             }
         }
     }
+    /// The web "Month-over-month changes" card: increases (loss arrow) then decreases (gain
+    /// arrow), each a list row "You spent n more at name this month" over "previous → current".
     @ViewBuilder private var recipientMonthChanges: some View {
-        if let data = model.filtered?.recipients {
-            ForEach(data.monthOverMonth) { change in
-                LabeledContent(
-                    change.name,
-                    value: money(change.currentSpend) + " · "
-                        + VisionFormat.decimal(
-                            change.changePercent, fractionDigits: 1, locale: settings.numberFormat.locale) + "%")
+        if let data = model.filtered?.recipients, !data.monthOverMonth.isEmpty {
+            let increases = data.monthOverMonth.filter { $0.changePercent > 0 }
+            let decreases = data.monthOverMonth.filter { $0.changePercent < 0 }
+            AdminCard(padding: VisionPageLayout.padding) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(strings.t("insights.momChanges")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
+                    Text(strings.t("insights.momDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                }
+                if !increases.isEmpty { momList(increases, increase: true) }
+                if !decreases.isEmpty { momList(decreases, increase: false) }
             }
         }
     }
+    private func momList(_ changes: [StatisticsRecipientInsights.Change], increase: Bool) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(changes.enumerated()), id: \.element.id) { position, change in
+                if position > 0 { Divider().padding(.leading, 44) }
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: increase ? "chart.line.uptrend.xyaxis" : "chart.line.downtrend.xyaxis")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(increase ? theme.loss : theme.gain)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            strings.t(
+                                increase ? "insights.spentMoreAt" : "insights.spentLessAt",
+                                [
+                                    "n": VisionFormat.decimal(
+                                        abs(change.changePercent), fractionDigits: 1,
+                                        locale: settings.numberFormat.locale) + "%",
+                                    "name": change.name,
+                                ])
+                        )
+                        .font(.body)
+                        HStack(spacing: 4) {
+                            Text(money(change.previousSpend))
+                            Image(systemName: "arrow.right").font(.system(size: 9, weight: .semibold))
+                                .accessibilityHidden(true)
+                            Text(money(change.currentSpend))
+                        }
+                        .font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                .fill(theme.foreground.opacity(0.03)))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+    }
     private func recipientBars(_ snapshot: StatisticsSnapshot?) -> [CustomChartEntity] {
         if let year = model.recipientYear {
-            return (snapshot?.recipientYears.recipientsByYear[String(year)] ?? []).map {
+            return (snapshot?.recipientYears.recipientsByYear[String(year)] ?? []).prefix(10).map {
                 CustomChartEntity(id: String($0.id), name: $0.name, values: ["total": $0.totalSpend])
             }
         }
-        return (snapshot?.recipients.topMerchants.prefix(20) ?? []).map {
+        return (snapshot?.recipients.topMerchants.prefix(10) ?? []).map {
             CustomChartEntity(id: String($0.id), name: $0.name, values: ["total": $0.totalSpend])
         }
     }
@@ -675,7 +767,10 @@ public struct StatisticsView: View {
                 ForEach((model.unfiltered?.years.map(\.year) ?? []).sorted(by: >), id: \.self) {
                     Text(String($0)).tag(Optional($0))
                 }
-            }.frame(maxWidth: 180)
+            }
+            // The web ChartControls `w-[140px]` select: no visible "Select year" label.
+            .labelsHidden().pickerStyle(.menu).fixedSize()
+            .accessibilityLabel(strings.t("statistics.selectYear"))
         }
     }
     @ViewBuilder private func horizontalContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -914,5 +1009,39 @@ private struct StatisticsWidgetsSheet: View {
                 Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
         }.padding(24).frame(width: 520)
+    }
+}
+
+/// The web `StatCard` (components/shared/StatCard.tsx): label and tertiary icon on one row,
+/// the title-1 figure, a secondary footnote.
+private struct StatisticsStatCard<Value: View, Subtitle: View>: View {
+    let title: String
+    let symbol: String
+    @ViewBuilder let value: () -> Value
+    @ViewBuilder let subtitle: () -> Subtitle
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                Spacer(minLength: 8)
+                Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(theme.tertiaryLabel)
+                    .accessibilityHidden(true)
+            }
+            value()
+                .font(.system(size: 26, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(theme.foreground)
+                .padding(.top, 10)
+            subtitle()
+                .font(.footnote)
+                .foregroundStyle(theme.secondaryLabel)
+                .padding(.top, 8)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .visionCardBackground()
+        .accessibilityElement(children: .combine)
     }
 }

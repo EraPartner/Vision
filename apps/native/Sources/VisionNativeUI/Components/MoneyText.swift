@@ -42,7 +42,9 @@ struct MoneyText: View {
             while end < characters.count, roles[end] == roles[start] { end += 1 }
             let run = Text(verbatim: String(characters[start..<end]))
             switch roles[start] {
-            case .plain: result = result + run
+            // Every run takes `color`: a caller that styled only the fraction showed "+27.000" in
+            // the label colour and ",00 €" in gain gold.
+            case .plain: result = result + run.foregroundStyle(color)
             case .currency:
                 result = result + run.fontWeight(.medium).textScale(.secondary).foregroundStyle(color.opacity(0.85))
             case .minor: result = result + run.textScale(.secondary).foregroundStyle(color.opacity(0.75))

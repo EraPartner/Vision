@@ -38,7 +38,7 @@ struct StatisticsFlowView: View {
                         || hoveredNode == link.target || hoveredLink == link.id
                     context.fill(
                         band(link: link, from: from, to: to, links: layout.links, size: size),
-                        with: .color(color(from.node).opacity(active ? 0.36 : 0.08)))
+                        with: .color(color(to.node).opacity(active ? (hoveredNode == nil && hoveredLink == nil ? 0.25 : 0.6) : 0.1)))
                 }
             }
             .onContinuousHover { phase in
@@ -51,8 +51,8 @@ struct StatisticsFlowView: View {
                         layout.nodes.first { node in
                             let bounds = rect(node, size: size)
                             let label = CGRect(
-                                x: node.column == layout.columnCount - 1 ? bounds.minX - 130 : bounds.maxX,
-                                y: bounds.midY - 20, width: 130, height: 40)
+                                x: bounds.midX > size.width / 2 ? bounds.minX - 6 - Self.labelWidth : bounds.maxX,
+                                y: bounds.midY - 8, width: Self.labelWidth + 6, height: 16)
                             return bounds.union(label).contains(location)
                         }?.id
                     hoveredLink =
@@ -66,24 +66,32 @@ struct StatisticsFlowView: View {
                         }?.id : nil
                 }
             }
+            let labelYs = labelPositions(layout, size: size)
             ForEach(layout.nodes) { node in
                 let bounds = rect(node, size: size)
-                RoundedRectangle(cornerRadius: 4).fill(color(node.node))
-                    .frame(width: bounds.width, height: bounds.height)
+                // The web SankeyChart: labels 6 pt off the node edge, end-anchored in the right
+                // half, one line at 11 pt; spread apart vertically so thin neighbours don't collide.
+                let isRight = bounds.midX > size.width / 2
+                let labelY = labelYs[node.id] ?? bounds.midY
+                RoundedRectangle(cornerRadius: 3).fill(color(node.node).opacity(hoveredNode == node.id ? 1 : 0.85))
+                    .frame(width: bounds.width, height: max(1, bounds.height))
                     .position(x: bounds.midX, y: bounds.midY)
-                    .overlay(alignment: node.column == layout.columnCount - 1 ? .trailing : .leading) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(label(node.node)).font(.caption.weight(.medium)).lineLimit(2)
+                    .overlay {
+                        VStack(alignment: isRight ? .trailing : .leading, spacing: 2) {
+                            Text(label(node.node)).font(.system(size: 11)).foregroundStyle(theme.foreground)
+                                .lineLimit(1).truncationMode(.tail)
                             if hoveredNode == node.id {
                                 MoneyText(
                                     amount: node.node.value, currency: currency, settings: settings, signed: false,
                                     colored: false
-                                ).font(.caption2)
+                                ).font(.system(size: 10)).foregroundStyle(theme.mutedForeground)
                             }
-                        }.frame(width: 125, alignment: .leading)
-                            .position(
-                                x: node.column == layout.columnCount - 1 ? bounds.minX - 65 : bounds.maxX + 70,
-                                y: bounds.midY)
+                        }
+                        .frame(width: Self.labelWidth, alignment: isRight ? .trailing : .leading)
+                        .position(
+                            x: isRight
+                                ? bounds.minX - 6 - Self.labelWidth / 2 : bounds.maxX + 6 + Self.labelWidth / 2,
+                            y: labelY + (hoveredNode == node.id ? 7 : 0))
                     }
                     .accessibilityLabel(label(node.node))
                     .accessibilityValue(
@@ -95,6 +103,32 @@ struct StatisticsFlowView: View {
             .onChange(of: hoveredNode) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
             .onChange(of: hoveredLink) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
     }
+    private static let labelWidth: CGFloat = 132
+    private static let labelSpacing: CGFloat = 14
+
+    /// Label centres per node: the node's middle, pushed apart within each column (top down,
+    /// then back up from the bottom edge) so labels keep at least one line of spacing.
+    private func labelPositions(_ layout: StatisticsFlowLayout, size: CGSize) -> [String: CGFloat] {
+        var positions: [String: CGFloat] = [:]
+        for column in Set(layout.nodes.map(\.column)) {
+            let nodes = layout.nodes.filter { $0.column == column }
+                .map { (id: $0.id, y: rect($0, size: size).midY) }
+                .sorted { $0.y < $1.y }
+            var ys = nodes.map(\.y)
+            for index in ys.indices.dropFirst() where ys[index] < ys[index - 1] + Self.labelSpacing {
+                ys[index] = ys[index - 1] + Self.labelSpacing
+            }
+            if let last = ys.indices.last, ys[last] > size.height - 6 {
+                ys[last] = size.height - 6
+                for index in ys.indices.reversed().dropFirst() where ys[index] > ys[index + 1] - Self.labelSpacing {
+                    ys[index] = ys[index + 1] - Self.labelSpacing
+                }
+            }
+            for (node, y) in zip(nodes, ys) { positions[node.id] = y }
+        }
+        return positions
+    }
+
     private func rect(_ node: StatisticsFlowNodeLayout, size: CGSize) -> CGRect {
         let pad: CGFloat = 145
         let width: CGFloat = 16

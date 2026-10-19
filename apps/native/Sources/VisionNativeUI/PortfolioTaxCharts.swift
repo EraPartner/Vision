@@ -59,22 +59,39 @@ private struct PortfolioTaxBarChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Chart {
-                ForEach(rows) { row in
-                    BarMark(x: .value(title, row.label), y: .value(taxLabel, coordinate(row.taxes)))
-                        .foregroundStyle(by: .value(title, taxLabel)).position(by: .value(title, taxLabel))
-                        .accessibilityLabel(Text(row.label + " · " + taxLabel))
-                        .accessibilityValue(Text(money(row.taxes)))
-                    BarMark(x: .value(title, row.label), y: .value(feeLabel, coordinate(row.fees)))
-                        .foregroundStyle(by: .value(title, feeLabel)).position(by: .value(title, feeLabel))
-                        .accessibilityLabel(Text(row.label + " · " + feeLabel))
-                        .accessibilityValue(Text(money(row.fees)))
+                // Grouped bars on a quantitative index axis: a categorical axis labels every
+                // month whatever ticks it is given, so long ranges overlapped.
+                ForEach(Array(rows.enumerated()), id: \.element.id) { position, row in
+                    RectangleMark(
+                        xStart: .value(title, Double(position) - 0.34), xEnd: .value(title, Double(position) - 0.02),
+                        yStart: .value(taxLabel, 0.0), yEnd: .value(taxLabel, coordinate(row.taxes))
+                    )
+                    .foregroundStyle(by: .value(title, taxLabel)).cornerRadius(3)
+                    .accessibilityLabel(Text(row.label + " · " + taxLabel))
+                    .accessibilityValue(Text(money(row.taxes)))
+                    RectangleMark(
+                        xStart: .value(title, Double(position) + 0.02), xEnd: .value(title, Double(position) + 0.34),
+                        yStart: .value(feeLabel, 0.0), yEnd: .value(feeLabel, coordinate(row.fees))
+                    )
+                    .foregroundStyle(by: .value(title, feeLabel)).cornerRadius(3)
+                    .accessibilityLabel(Text(row.label + " · " + feeLabel))
+                    .accessibilityValue(Text(money(row.fees)))
                 }
-                if let row = selected {
-                    RuleMark(x: .value(title, row.label)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
+                if let row = selected, let position = rows.firstIndex(of: row) {
+                    RuleMark(x: .value(title, Double(position))).foregroundStyle(theme.secondaryLabel.opacity(0.5))
                         .accessibilityHidden(true)
                 }
             }
-            .chartXScale(domain: rows.map(\.label))
+            .chartXScale(domain: -0.5...(Double(max(rows.count, 1)) - 0.5))
+            .chartXAxis {
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(rows.indices.map(Double.init), count: 6)) { value in
+                    AxisValueLabel {
+                        if let position = value.as(Double.self), rows.indices.contains(Int(position.rounded())) {
+                            Text(rows[Int(position.rounded())].label)
+                        }
+                    }
+                }
+            }
             .chartForegroundStyleScale(
                 domain: [taxLabel, feeLabel],
                 range: [Color(token: theme.palette.chart5), Color(token: theme.palette.chart4)]
@@ -140,8 +157,13 @@ private struct PortfolioTaxBarChart: View {
             return
         }
         let frame = geometry[plot]
-        let label = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: String.self)
-        selection = rows.first { $0.label == label }?.id
+        guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self),
+            !rows.isEmpty
+        else {
+            selection = nil
+            return
+        }
+        selection = rows[min(max(Int(position.rounded()), 0), rows.count - 1)].id
     }
     private func move(_ press: KeyPress) -> KeyPress.Result {
         guard !rows.isEmpty else { return .ignored }
