@@ -2,7 +2,7 @@
 title: Categories
 type: feature
 status: active
-date: 2026-10-11
+date: 2026-10-19
 tags: [feature, categories, transactions, organization, hierarchy]
 description: Parent-linked transaction categories with stable IDs, ordered paths, and legacy GENERAL:DETAIL compatibility
 aliases:
@@ -61,6 +61,9 @@ it. If that control has left the tree, focus returns to the **View** menu button
 | `is_active`         | boolean         | Soft-delete flag                                       |
 | `created_at`        | timestamp       | Creation time (UTC)                                    |
 | `updated_at`        | timestamp       | Last modification time (UTC)                           |
+
+A database trigger keeps `path_name` current when a node's name or parent changes, including
+legacy GENERAL/DETAIL renames (migration 0128 fixed renames that left the old path).
 
 ## Ordered paths and the legacy format
 
