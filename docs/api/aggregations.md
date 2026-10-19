@@ -2,9 +2,9 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-11
-updated: 2026-10-11
-last_modified: 2026-09-19
+date: 2026-10-19
+updated: 2026-10-19
+last_modified: 2026-10-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -896,6 +896,7 @@ Monte Carlo rolling cache.
 | `diagnostics.backtest[].rmse`      | number         | Root Mean Squared Error                                                                                                                            |
 | `diagnostics.backtest[].mape`      | number         | Mean Absolute Percentage Error (%)                                                                                                                 |
 | `diagnostics.backtest[].months`    | integer        | Number of backtest windows                                                                                                                         |
+| `diagnostics.ensemble_weights`     | object         | Method id → weight the ensemble applied in this forecast (normalised over the methods that produced a series; added 2026-10-19, non-breaking)                                              |
 | `history_months`                   | integer        | Historical training window (months)                                                                                                                |
 | `include_planned`                  | boolean        | Whether planned transactions are included in response                                                                                              |
 
@@ -1175,6 +1176,7 @@ Real-time cash flow forecast for the current month using eight forecasting metho
 | `diagnostics.backtest[].mape`        | number         | Mean Absolute Percentage Error (%)                                                                                                               |
 | `diagnostics.backtest[].months`      | integer        | Number of months in backtest window                                                                                                              |
 | `diagnostics.backtest[].per_month[]` | array          | Per-month accuracy breakdown                                                                                                                     |
+| `diagnostics.ensemble_weights`       | object         | Method id → weight the ensemble applied in this forecast (normalised over the methods that produced a series; added 2026-10-19, non-breaking). Cached entries without it are recomputed when a backtest is requested |
 | `category_breakdown[]`               | array          | Per-category breakdown with reconciliation (only if `include_breakdown=true`, Phase G)                                                           |
 | `category_breakdown[].category_id`   | number \| null | Category ID; null for uncategorized                                                                                                              |
 | `category_breakdown[].general`       | string         | General category name (e.g., "Groceries")                                                                                                        |

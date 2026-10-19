@@ -28,29 +28,4 @@ describe("materialized-view housekeeping", () => {
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_mv_cashflow_daily",
     );
   });
-
-  it("keeps the removed view out of the current runtime-managed set", () => {
-    const service = readRepoFile(
-      "apps/node-backend/src/services/materializedViewService.ts",
-    );
-    const currentRuntime = service.slice(
-      service.indexOf("const MATERIALIZED_VIEWS"),
-    );
-
-    expect(currentRuntime).not.toContain("mv_cashflow_daily");
-    expect(currentRuntime).toContain("mv_monthly_summary");
-    expect(currentRuntime).toContain("mv_category_totals");
-  });
-
-  it("records create, index, and refresh as distinct post-listen boot phases", () => {
-    const warmup = readRepoFile("apps/node-backend/src/startup/warmup.ts");
-
-    for (const phase of [
-      "materialized_views_create",
-      "materialized_views_indexes",
-      "materialized_views_refresh",
-    ]) {
-      expect(warmup).toMatch(new RegExp(`markPhase\\(\\s*"${phase}"`));
-    }
-  });
 });

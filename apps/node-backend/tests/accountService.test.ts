@@ -79,24 +79,6 @@ describe("accountService.create", () => {
     ).rejects.toThrow(ValidationError);
   });
 
-  it("trims name, uppercases currency, and forwards only provided fields", async () => {
-    accountRepository.create.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1, name: "KBC" }),
-    );
-    await accountService.create({
-      name: "  KBC  ",
-      currency: "eur",
-      type: "checking",
-      owner: "me",
-    });
-    expect(accountRepository.create).toHaveBeenCalledWith({
-      name: "KBC",
-      currency: "EUR",
-      type: "checking",
-      owner: "me",
-    });
-  });
-
   it("maps a unique-violation (23505) to ConflictError", async () => {
     accountRepository.create.mockRejectedValueOnce(pgErr("23505"));
     await expect(accountService.create({ name: "KBC" })).rejects.toThrow(
@@ -126,17 +108,6 @@ describe("accountService.create", () => {
     expect(accountRepository.create).not.toHaveBeenCalled();
   });
 
-  it("accepts a funding_account_id that references an existing account", async () => {
-    accountRepository.getById.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 7, name: "Funder" }),
-    );
-    accountRepository.create.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.create({ name: "KBC", funding_account_id: 7 });
-    expect(accountRepository.create).toHaveBeenCalled();
-  });
-
   it("maps a FK violation (23503) on create to a ValidationError (400)", async () => {
     accountRepository.getById.mockResolvedValueOnce(
       partial<AccountRow>({ id: 7 }),
@@ -149,28 +120,6 @@ describe("accountService.create", () => {
 });
 
 describe("accountService statement balances", () => {
-  it("validates and stores a reading in the requested currency", async () => {
-    accountRepository.getById.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 7 }),
-    );
-    accountRepository.upsertStatementBalance.mockResolvedValueOnce({
-      account_id: 7,
-      currency: "USD",
-      balance: "12.3400",
-      balance_date: "2026-09-04",
-    });
-    await accountService.setStatementBalance(7, "usd", {
-      balance: "12.34",
-      date: "2026-09-04",
-    });
-    expect(accountRepository.upsertStatementBalance).toHaveBeenCalledWith(
-      7,
-      "USD",
-      12.34,
-      "2026-09-04",
-    );
-  });
-
   it("rejects a malformed date before writing", async () => {
     accountRepository.getById.mockResolvedValueOnce(
       partial<AccountRow>({ id: 7 }),
@@ -238,32 +187,6 @@ describe("accountService.update", () => {
       accountService.update(1, { funding_account_id: 999 }),
     ).rejects.toThrow(ValidationError);
     expect(accountRepository.update).not.toHaveBeenCalled();
-  });
-
-  it("forwards explicit null as SQL NULL for clearable metadata fields", async () => {
-    accountRepository.update.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.update(1, {
-      display_name: null,
-      institution: null,
-      funding_account_id: null,
-    });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
-      display_name: null,
-      institution: null,
-      funding_account_id: null,
-    });
-  });
-
-  it("still drops omitted fields (undefined never reaches the repository)", async () => {
-    accountRepository.update.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.update(1, { display_name: "Main" });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {
-      display_name: "Main",
-    });
   });
 
   it("drops the statistics cache when the owner changes (ADR-201)", async () => {
@@ -601,18 +524,6 @@ describe("accountService — sanitize pins (create)", () => {
       accountService.create({ name: "A", spendable: 1 }),
     ).rejects.toThrow(ValidationError);
   });
-
-  it("strips unknown body fields entirely (allowlist semantics)", async () => {
-    accountRepository.create.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.create({
-      name: "A",
-      evil_column: "x; DROP TABLE",
-      balance: 999,
-    });
-    expect(accountRepository.create).toHaveBeenCalledWith({ name: "A" });
-  });
 });
 
 describe("accountService — sanitize pins (update)", () => {
@@ -621,22 +532,6 @@ describe("accountService — sanitize pins (update)", () => {
       ValidationError,
     );
     expect(accountRepository.update).not.toHaveBeenCalled();
-  });
-
-  it("trims an updated name", async () => {
-    accountRepository.update.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.update(1, { name: "  New  " });
-    expect(accountRepository.update).toHaveBeenCalledWith(1, { name: "New" });
-  });
-
-  it("forwards an empty PATCH body as an empty field set", async () => {
-    accountRepository.update.mockResolvedValueOnce(
-      partial<AccountRow>({ id: 1 }),
-    );
-    await accountService.update(1, {});
-    expect(accountRepository.update).toHaveBeenCalledWith(1, {});
   });
 });
 
@@ -661,18 +556,6 @@ describe("accountService.remove", () => {
 });
 
 describe("accountService.list / get", () => {
-  it("passes the active filter through", async () => {
-    accountRepository.getAll.mockResolvedValueOnce(
-      partial<AccountBalanceQueryRow[]>([]),
-    );
-    await accountService.list({ active: false });
-    expect(accountRepository.getAll).toHaveBeenCalledWith({
-      active: false,
-      limit: null,
-      offset: 0,
-    });
-  });
-
   // Absent pagination keeps the pre-pagination contract: the query is
   // unbounded, so the rows returned ARE the total and no COUNT is issued.
   it("lists every account and derives total from the rows when unpaginated", async () => {

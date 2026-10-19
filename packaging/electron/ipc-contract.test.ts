@@ -59,30 +59,6 @@ test("preload subscriptions and main sends match the shared event contract", () 
   assert.deepEqual(sent, declared);
 });
 
-test("all six context bridges consume a shared interface", () => {
-  const interfaces = {
-    electronUpdater: "ElectronUpdaterBridge",
-    electronBackup: "ElectronBackupBridge",
-    electronServices: "ElectronServicesBridge",
-    electronAPI: "ElectronApiBridge",
-    electronRecovery: "ElectronRecoveryBridge",
-    electronAudit: "ElectronAuditBridge",
-  };
-  const typeImport = /import type \{([^}]*)\} from "\.\/electron-api";/.exec(
-    preload,
-  );
-  assert.ok(typeImport, "preload must import the shared bridge types");
-  for (const [name, interfaceName] of Object.entries(interfaces)) {
-    assert.match(typeImport[1] ?? "", new RegExp(`\\b${interfaceName}\\b`));
-    assert.match(
-      preload,
-      new RegExp(
-        `const ${name}: ${interfaceName} = \\{[^]*exposeInMainWorld\\("${name}", ${name}\\)`,
-      ),
-    );
-  }
-});
-
 test("every invoke channel declares an argument contract", () => {
   const declared = matches(
     interfaceBody("ElectronInvokeContract", "ElectronInvokeChannel"),

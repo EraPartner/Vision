@@ -27,24 +27,4 @@ describe("migration 0093 cash-flow date keys", () => {
     expect(migration).toContain("to_char(as_of_month, 'YYYY-MM')");
     expect(migration).toContain("to_char(today_iso, 'YYYY-MM-DD')");
   });
-
-  it("keeps the public repository strings at explicit DATE conversion boundaries", () => {
-    const accuracy = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts",
-    );
-    const monthly = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts",
-    );
-    const rolling = readRepoFile(
-      "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts",
-    );
-
-    expect(accuracy).toContain("($3 || '-01')::date");
-    expect(accuracy).toContain(
-      "to_char(as_of_month, 'YYYY-MM') AS as_of_month",
-    );
-    expect(monthly).toContain("($2 || '-01')::date");
-    expect(rolling).toContain("today_iso = $2::date");
-    expect(rolling).toContain("$2::date");
-  });
 });

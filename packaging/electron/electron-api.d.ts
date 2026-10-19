@@ -1,4 +1,4 @@
-export type ElectronUpdateMode = "native" | "dev";
+export type ElectronUpdateMode = "native" | "source";
 
 export interface ElectronSuccessResult {
   success: boolean;
@@ -14,7 +14,6 @@ export interface UpdateCheckStatus {
   html_url?: string;
   error?: string;
   update_mode: ElectronUpdateMode;
-  source_launcher_available?: boolean;
 }
 
 export interface InstallUpdateResult extends ElectronSuccessResult {
@@ -64,6 +63,8 @@ export interface SplashThemeColors {
   foreground: string;
   surface?: string | undefined;
   text?: string | undefined;
+  /** The user's Appearance choice; native menus and dialogs follow it. */
+  themeSource?: "system" | "light" | "dark" | undefined;
 }
 
 export interface RendererFailurePayload {

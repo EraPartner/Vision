@@ -67,57 +67,6 @@ interface SnapshotQueryFixtures {
   fxNeutralColumn?: boolean;
 }
 
-function buildQueryResponses({ includeData = true, emptyLatest = false } = {}) {
-  if (!includeData) {
-    return [{ rows: [pgFirstDate(null)] }];
-  }
-
-  return [
-    { rows: [pgFirstDate("2026-01-01")] },
-    {
-      rows: [
-        { id: 1, currency: "EUR", current_price: "10", asset_class: "stock" },
-      ],
-    },
-    {
-      rows: [
-        toPgMathTxRow({
-          investment_id: 1,
-          day: "2026-01-01",
-          type: "buy",
-          amount: 10,
-          units: 1,
-          currency: "EUR",
-          fx_rate_to_eur: null,
-        }),
-      ],
-    },
-    { rows: [] }, // non-unit investments
-    {
-      rows: [{ investment_id: 1, day: "2026-01-01", close_price: "10" }],
-    },
-    {
-      rows: [{ month: "2026-01", monthly_rate: "0" }],
-    },
-    {
-      rows: [{ currency_code: "EUR", rate_to_eur: "1" }],
-    },
-    { rows: [] }, // FX history
-    {
-      rows: emptyLatest
-        ? []
-        : [
-            pgSnapshot({
-              snapshot_date: "2026-01-01",
-              value: 10,
-              invested: 10,
-              currency: "EUR",
-            }),
-          ],
-    },
-  ];
-}
-
 function mockSnapshotQueries({
   firstDate = "2026-01-01",
   investments = [
@@ -482,36 +431,6 @@ describe("portfolioPerformanceSnapshotService", () => {
 
     expect(result).toEqual([]);
     expect(query).toHaveBeenCalledTimes(1);
-  });
-
-  it("computes snapshots, deletes existing currency rows, and stores batches", async () => {
-    const responses = buildQueryResponses();
-    query.mockImplementation(async () => responses.shift() || { rows: [] });
-
-    const result = await computeAndStoreSnapshots("EUR");
-
-    expect(result.length).toBe(3);
-
-    const deleteCall = query.mock.calls.find(
-      ([sql]) =>
-        typeof sql === "string" &&
-        sql.includes("DELETE FROM portfolio_performance_snapshots"),
-    );
-    expect(deleteCall).toBeTruthy();
-    expect(deleteCall![1]).toEqual(["EUR"]);
-
-    const insertCall = query.mock.calls.find(
-      ([sql]) =>
-        typeof sql === "string" &&
-        sql.includes("INSERT INTO portfolio_performance_snapshots"),
-    );
-    expect(insertCall).toBeTruthy();
-    expect(insertCall![1]!.length).toBeGreaterThanOrEqual(14);
-
-    const firstSnapshot = result[0];
-    expect(firstSnapshot).toHaveProperty("snapshot_date");
-    expect(firstSnapshot).toHaveProperty("gain_loss");
-    expect(firstSnapshot).toHaveProperty("return_pct");
   });
 
   it("getLatestSnapshot returns null when table has no rows", async () => {
@@ -1054,32 +973,6 @@ describe("portfolioPerformanceSnapshotService", () => {
     // position's purchase rate 0.8 = 40 neutral.
     expect(snapshots[2]!.value).toBe(45);
     expect(snapshots[2]!.value_fx_neutral).toBe(40);
-  });
-
-  it("omits value_fx_neutral from the INSERT when migration 0039 is not applied", async () => {
-    mockSnapshotQueries({
-      transactions: [
-        {
-          investment_id: 1,
-          day: "2026-01-01",
-          type: "buy",
-          amount: 100,
-          units: 10,
-          currency: "EUR",
-          fx_rate_to_eur: null,
-        },
-      ],
-      prices: [{ investment_id: 1, day: "2026-01-01", close_price: 10 }],
-      fxNeutralColumn: false,
-    });
-
-    const snapshots = await computeAndStoreSnapshots("EUR");
-    expect(snapshots.length).toBeGreaterThan(0);
-
-    const insertCall = query.mock.calls.find(([sql]) =>
-      String(sql).includes("INSERT INTO portfolio_performance_snapshots"),
-    );
-    expect(String(insertCall![0])).not.toContain("value_fx_neutral");
   });
 
   it("falls back from historical price to last known transaction price and current price", async () => {

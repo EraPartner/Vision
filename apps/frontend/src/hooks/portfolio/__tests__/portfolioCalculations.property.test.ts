@@ -7,12 +7,19 @@ import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import {
   calculateCostBasis,
-  calculateAccruedInterest,
-  calculateProjectedAnnualInterest,
-} from '../usePortfolioCalculations';
+  calculateAccruedInterest as sharedCalculateAccruedInterest,
+  projectedAnnualInterest as calculateProjectedAnnualInterest,
+} from '@vision/shared-utils/portfolio';
+import { todayYmd } from '@/lib/timezone';
 import type { PortfolioTransaction } from '@/types/api';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+const calculateAccruedInterest = (
+  txns: PortfolioTransaction[],
+  principal: number,
+  interestRate: number,
+) => sharedCalculateAccruedInterest(txns, principal, interestRate, todayYmd());
 
 let idSeq = 0;
 

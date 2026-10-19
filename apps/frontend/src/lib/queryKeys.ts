@@ -299,9 +299,9 @@ export const plannedKeys = {
     upcomingAll: ["upcomingPlannedPayments"] as const,
     upcoming: (dateYmd: string) =>
         ["upcomingPlannedPayments", dateYmd] as const,
-    /** Planned rows from today to the end of the calendar month (Home hero). */
-    restOfMonth: (dateYmd: string) =>
-        ["upcomingPlannedPayments", "restOfMonth", dateYmd] as const,
+    /** Server-computed planned totals (Home hero, planned page). */
+    totals: (currency: string, dateYmd: string) =>
+        ["upcomingPlannedPayments", "totals", currency, dateYmd] as const,
     /**
      * Invalidation prefix for usePlannedPayments' `['plannedTransactions',
      * showInactive]` caches (that hook still keys inline).
@@ -435,6 +435,9 @@ export const portfolioKeys = {
         ["portfolio-transactions", "all", investmentId] as const,
     summaryAll: ["portfolio-summary"] as const,
     summary: (currency: string) => ["portfolio-summary", currency] as const,
+    /** Summary of every holding, archived ones included (`active=false`). */
+    summaryAllHoldings: (currency: string) =>
+        ["portfolio-summary", currency, "all"] as const,
     performanceAll: ["portfolio-performance"] as const,
     performance: (currency: string, period: string) =>
         ["portfolio-performance", currency, period] as const,

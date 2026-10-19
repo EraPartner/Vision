@@ -271,12 +271,43 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Minimal macOS Electron shell hardening; retire v1 backups (accepted)
+
+[[docs/adr/219-minimal-electron-shell-hardening|ADR-219]] makes the shell macOS-only, flips
+packaged Electron fuses before the ad-hoc seal (`NODE_OPTIONS` and inspect arguments off, asar
+integrity and asar-only loading on, RunAsNode kept for the update installer), denies permissions
+in every profile, sandboxes all renderers and refuses webviews. The watchdog pauses during sleep,
+logout or shutdown skips backup-on-quit, native UI follows the Appearance choice, `.csv` files
+offer Vision in Open With, and a banner shows backend loss. Restore refuses retired v1
+(AES-256-CBC) backups. It supersedes ADR-040's v1-readable clause and extends ADR-155.
+
+### 2026-10-19: Retire the source-launcher update channel (accepted)
+
+[[docs/adr/218-retire-source-launcher-update-channel|ADR-218]] removes `launch.command`, the
+`vision-source-launcher-*.zip` release asset with its source SBOM and attestation, and the
+generated shell installer. The packaged app updater is the only in-app install path; development
+runs report `update_mode: "source"` and open the release page. It supersedes the source-launcher
+parts of ADR-023, ADR-116 and ADR-196.
+
 ### 2026-10-19: Compute Belgian tax figures on the server (accepted)
 
 [[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] removes the PIT/household engine, including
 the assessment and the year tables, from the browser bundle. The tax store hydrates from `GET /api/belgian-tax/overview`, the editor's live
 figures come from a debounced `POST /api/belgian-tax/compute`, and freezing, filing and exports
 use server figures. It amends the lazily loaded engine of ADR-200 phase B2.
+
+### 2026-10-19: Domain calculations run on the server (accepted)
+
+[[docs/adr/216-server-owned-domain-calculations|ADR-216]] keeps financial figures on the
+server; the browser only previews unsaved input. It adds `GET /api/planned-transactions/totals`,
+returns the applied forecast `ensemble_weights`, and reads archived holdings from
+`portfolio-summary?active=false` instead of rebuilding them in the browser.
+
+### 2026-10-19: Test behaviour at stable boundaries (accepted)
+
+[[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that
+assert internal structure may be deleted with a one-line reason, and a behaviour they alone
+covered gets a boundary test in the same change.
 
 ### 2026-10-19: Retire the Vision Native Swift port (accepted)
 
@@ -545,7 +576,7 @@ audited mutable tables that lacked them.
 [[docs/adr/116-gated-release-candidate-promotion|ADR-116]] (Accepted) publishes Docker candidates
 without tags, scans and migration-tests the exact digest, and promotes only a passing index. The
 release scan shares CI's accepted-risk file, while the DMG, native ZIP, and source-launcher ZIP gain
-GitHub attestations before the release is created.
+GitHub attestations before the release is created. (Source-launcher ZIP retired by ADR-218.)
 
 ### 2026-08-31: Asynchronous import materialized-view refresh
 

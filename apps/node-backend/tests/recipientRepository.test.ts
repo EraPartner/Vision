@@ -1,6 +1,7 @@
 /**
- * Recipient Repository tests. Mocks the DB and the text-normalization helper to
- * assert the SQL the repository builds and how it shapes rows.
+ * Recipient Repository guards that need no database: the reserved SYSTEM
+ * name, the sort-column allowlist, and row shaping. Filter, create and update
+ * behaviour against real rows lives in catalogRepositoryBoundary.db.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
@@ -59,53 +60,6 @@ describe("recipientRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("getAll", () => {
-    it("uses default sort and pagination params", async () => {
-      const row = enrichedRow({ id: 1 });
-      query.mockResolvedValueOnce({ rows: [row] });
-      const rows = await recipientRepository.getAll();
-      expect(rows).toEqual([row]);
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("ORDER BY r.name ASC");
-      expect(sql).toContain("r.is_active = true"); // active defaults true
-      // [...whereParams, limit, offset]; default limit 50 offset 0
-      expect(params[params.length - 2]).toBe(50);
-      expect(params[params.length - 1]).toBe(0);
-    });
-
-    it("applies name, search and a whitelisted sort column descending", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await recipientRepository.getAll({
-        name: "aldi",
-        search: "food",
-        sortBy: "notes",
-        sortDir: "desc",
-        active: false,
-      });
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("r.name COLLATE pg_catalog.pg_unicode_fast ILIKE");
-      expect(sql).toContain("rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE");
-      expect(sql).toContain("r.notes DESC, r.name ASC");
-      expect(sql).not.toContain("r.is_active = true");
-      expect(params).toContain("%aldi%");
-      expect(params).toContain("%food%");
-    });
-
-    it("uncategorized branch overrides defaultCategoryId filter", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await recipientRepository.getAll({
-        uncategorized: true,
-        defaultCategoryId: 5,
-      });
-      const sql = query.mock.calls[0]![0];
-      // Existence probe now hits transactions directly (agg_recipient_totals
-      // was dropped in migration 0080); assert the equivalent semantics.
-      expect(sql).not.toContain("agg_recipient_totals");
-      expect(sql).toContain("FROM transactions t");
-      expect(sql).toContain("t.is_active = true");
-      expect(sql).toContain("t.is_transfer = false");
-      expect(sql).toContain("r.default_category_id IS NULL");
-      expect(sql).not.toContain("r.default_category_id = $");
-    });
 
     it("ignores an unknown sort column and falls back to name", async () => {
       query.mockResolvedValueOnce({ rows: [] });
@@ -114,20 +68,6 @@ describe("recipientRepository", () => {
         sortDir: "asc",
       });
       expect(query.mock.calls[0]![0]).toContain("ORDER BY r.name ASC");
-    });
-  });
-
-  describe("getCount", () => {
-    it("parses the count and applies the category filter", async () => {
-      query.mockResolvedValueOnce({ rows: [{ count: "42" }] });
-      const n = await recipientRepository.getCount({ defaultCategoryId: 9 });
-      expect(n).toBe(42);
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("count(*)");
-      expect(sql).toContain(
-        "r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
-      );
-      expect(params).toEqual([9]);
     });
   });
 
@@ -143,44 +83,9 @@ describe("recipientRepository", () => {
       expect(await recipientRepository.getById(3)).toBeNull();
     });
 
-    it("getByName normalizes the lookup", async () => {
-      query.mockResolvedValueOnce({ rows: [recipientRow({ id: 4 })] });
-      const r = await recipientRepository.getByName("  Aldi ");
-      expect(r!.id).toBe(4);
-      expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("normalized_name = $1"),
-        ["norm:aldi"],
-      );
-    });
   });
 
   describe("createOrGet", () => {
-    it("returns created=true on a fresh insert", async () => {
-      query
-        .mockResolvedValueOnce({ rows: [] }) // initial lookup misses
-        .mockResolvedValueOnce({ rows: [{ id: 10, created: true }] })
-        .mockResolvedValueOnce({
-          rows: [enrichedRow({ id: 10, name: "ALDI" })],
-        }); // getById
-      const r = await recipientRepository.createOrGet({ name: "aldi" });
-      expect(r.created).toBe(true);
-      expect(r.recipient).toEqual(enrichedRow({ id: 10, name: "ALDI" }));
-      expect(query.mock.calls[1]![1]).toEqual(["ALDI", "norm:aldi"]); // upper + normalized
-      expect(query.mock.calls[1]![0]).toContain(
-        "ON CONFLICT (normalized_name) DO UPDATE",
-      );
-    });
-
-    it("returns created=false when the recipient already exists", async () => {
-      query
-        .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // initial lookup
-        .mockResolvedValueOnce({
-          rows: [enrichedRow({ id: 7, name: "ALDI" })],
-        }); // getById
-      const r = await recipientRepository.createOrGet({ name: "Aldi" });
-      expect(r.created).toBe(false);
-      expect(r.recipient!.id).toBe(7);
-    });
 
     it("returns the winning row after a concurrent insert", async () => {
       query
@@ -207,63 +112,7 @@ describe("recipientRepository", () => {
     });
   });
 
-  describe("getOrCreateSystemId", () => {
-    // The hit path is every call but the first one ever. It must not write: an
-    // ON CONFLICT DO UPDATE no-op fires the updated_at trigger, leaves a dead
-    // tuple, advances xmin (breaking the DB editor's optimistic-concurrency
-    // check on an adopted user recipient) and holds the row exclusively locked
-    // for the rest of the caller's transaction.
-    it("resolves an existing row with a single SELECT and no write", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 900 }] });
-      expect(await recipientRepository.getOrCreateSystemId()).toBe(900);
-      expect(query).toHaveBeenCalledTimes(1);
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toMatch(
-        /^\s*SELECT id FROM recipients WHERE normalized_name/,
-      );
-      expect(params).toEqual(["norm:system"]);
-    });
-
-    it("falls through to a conflict-safe INSERT only when the row is missing", async () => {
-      query
-        .mockResolvedValueOnce({ rows: [] }) // miss
-        .mockResolvedValueOnce({ rows: [{ id: 901 }] });
-      expect(await recipientRepository.getOrCreateSystemId()).toBe(901);
-      const [sql, params] = query.mock.calls[1]!;
-      expect(sql).toMatch(/INSERT INTO recipients/);
-      // Created inactive, and DO UPDATE (not DO NOTHING) so a concurrent
-      // uncommitted insert blocks and still returns an id.
-      expect(sql).toMatch(/VALUES \(\$1, \$2, false\)/);
-      expect(sql).toMatch(/ON CONFLICT \(normalized_name\) DO UPDATE/);
-      expect(params).toEqual(["SYSTEM", "norm:system"]);
-    });
-  });
-
   describe("update", () => {
-    it("builds SET clauses for name (upper + normalized) and other fields", async () => {
-      query.mockResolvedValueOnce({
-        rows: [enrichedRow({ id: 1, name: "NEW" })],
-      });
-      const r = await recipientRepository.update(1, {
-        name: "new",
-        notes: "hi",
-        is_active: false,
-      });
-      expect(r!.name).toBe("NEW");
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("name = $1");
-      expect(sql).toContain("normalized_name = $2");
-      expect(sql).toContain("updated_at = NOW()");
-      expect(params).toEqual(["NEW", "norm:new", "hi", false, 1]);
-    });
-
-    it("falls back to getById when nothing to update", async () => {
-      query.mockResolvedValueOnce({ rows: [enrichedRow({ id: 1 })] });
-      const r = await recipientRepository.update(1, {});
-      expect(r!.id).toBe(1);
-      expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0]![0]).toContain("WHERE r.id = $1");
-    });
 
     it("does not allow a public recipient to be renamed to SYSTEM", async () => {
       await expect(

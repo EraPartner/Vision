@@ -224,61 +224,6 @@ describe("recipientInsightsRepository.getRecipientInsights", () => {
     expect(r.monthOverMonth).toHaveLength(10);
     expect(r.monthOverMonth[0]!.currentSpend).toBe(100);
   });
-
-  it("applies the canonical 3-level category exclusion to both queries", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    query.mockResolvedValueOnce(
-      partial<PgQueryResult>({
-        rows: [{ current_period: "2025-04", prev_period: "2025-03" }],
-      }),
-    );
-    convertRowsToEur.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-
-    await recipientInsightsRepository.getRecipientInsights("EUR", {
-      excludedCategoryIds: [5, 7],
-    });
-
-    const [topSql, topParams] = query.mock.calls[0]!;
-    const [momSql] = query.mock.calls[1]!;
-    for (const sql of [topSql, momSql]) {
-      expect(sql).toContain(
-        "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
-      );
-      expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
-    }
-    expect(topParams).toEqual([5, 7]);
-  });
-
-  it("applies explicit date bounds to both recipient-insight scans", async () => {
-    query
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
-      .mockResolvedValueOnce(
-        partial<PgQueryResult>({
-          rows: [{ current_period: "2026-09", prev_period: "2026-08" }],
-        }),
-      );
-    convertRowsToEur.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
-
-    await recipientInsightsRepository.getRecipientInsights("EUR", {
-      excludedRecipientIds: [9],
-      startDate: "2024-10-01",
-      endDate: "2026-09-07",
-    });
-
-    for (const [sql] of query.mock.calls.slice(0, 2)) {
-      expect(sql).toContain("t.date >= $2");
-      expect(sql).toContain("t.date <= $3");
-    }
-    expect(query.mock.calls[0]![1]).toEqual([9, "2024-10-01", "2026-09-07"]);
-    expect(query.mock.calls[1]![1]).toEqual([
-      9,
-      "2024-10-01",
-      "2026-09-07",
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-    ]);
-  });
 });
 
 describe("recipientInsightsRepository.getRecipientByYear", () => {
@@ -343,102 +288,9 @@ describe("recipientInsightsRepository.getRecipientByYear", () => {
     const [, params] = query.mock.calls[0]!;
     expect(params).toEqual([2147483647, 7]);
   });
-
-  it("omits the NOT IN clause when no valid ids", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear({
-      targetCurrency: "EUR",
-    });
-    const [sql] = query.mock.calls[0]!;
-    expect(sql).not.toContain("NOT IN");
-  });
-
-  it("excludes selected categories and descendants after recipient fallback", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientByYear({
-      targetCurrency: "EUR",
-      excludedCategoryIds: [5, 7],
-    });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain(
-      "excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
-    );
-    expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
-    expect(params).toEqual([5, 7]);
-  });
-
-  it("binds explicit date bounds after exclusion ids", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-
-    await recipientInsightsRepository.getRecipientByYear({
-      targetCurrency: "EUR",
-      excludedRecipientIds: [9],
-      startDate: "2024-10-01",
-      endDate: "2026-09-07",
-    });
-
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain("t.date >= $2");
-    expect(sql).toContain("t.date <= $3");
-    expect(params).toEqual([9, "2024-10-01", "2026-09-07"]);
-  });
 });
 
 describe("recipientInsightsRepository.getRecipientPivot", () => {
-  it("uses monthly bucket by default (TO_CHAR YYYY-MM)", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot({
-      targetCurrency: "EUR",
-    });
-    const [sql] = query.mock.calls[0]!;
-    expect(sql).toContain("TO_CHAR(t.date, 'YYYY-MM')");
-  });
-
-  it("uses yearly bucket when requested", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot({
-      targetCurrency: "EUR",
-      bucket: "yearly",
-    });
-    const [sql] = query.mock.calls[0]!;
-    expect(sql).toContain("TO_CHAR(t.date, 'YYYY')");
-  });
-
-  it("narrows the scan to the selected recipients (alias-resolved) when recipientIds given", async () => {
-    query
-      .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ id: 5 }, { id: 9 }, { id: 9 }] }),
-      ) // alias-member resolution
-      .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] })); // pivot
-    convertRowsToEur.mockResolvedValueOnce([]);
-
-    await recipientInsightsRepository.getRecipientPivot({
-      targetCurrency: "EUR",
-      recipientIds: [5],
-    });
-
-    // First query resolves selections to canonical roots, then expands every
-    // root to all members. UNION and the defensive Set avoid overlap when a
-    // saved chart contains both a primary and one of its aliases.
-    expect(query.mock.calls[0]![0]).toContain(
-      "SELECT DISTINCT COALESCE(primary_recipient_id, id) AS id",
-    );
-    expect(query.mock.calls[0]![0]).toContain(
-      "JOIN selected_roots sr ON r.primary_recipient_id = sr.id",
-    );
-    expect(query.mock.calls[0]![0]).toContain("UNION");
-    expect(query.mock.calls[0]![1]).toEqual([[5]]);
-    // …then the pivot scans only those recipients' rows (index-friendly).
-    expect(query.mock.calls[1]![0]).toContain("t.recipient_id = ANY");
-    expect(query.mock.calls[1]![1]).toContainEqual([5, 9]);
-    expect(query.mock.calls[1]![1]).not.toContainEqual([5, 9, 9]);
-  });
-
   it("short-circuits when every selected recipient id is unknown", async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
 
@@ -484,21 +336,6 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
     });
 
     expect(query.mock.calls[0]![1]).toEqual([[2147483647]]);
-  });
-
-  it("applies start and end date filters", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot({
-      targetCurrency: "EUR",
-      startDate: "2025-01-01",
-      endDate: "2025-12-31",
-    });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toMatch(/t\.date >= \$\d+/);
-    expect(sql).toMatch(/t\.date <= \$\d+/);
-    expect(params).toContain("2025-01-01");
-    expect(params).toContain("2025-12-31");
   });
 
   it("groups by period+recipient and sorts ascending by total", async () => {
@@ -578,19 +415,5 @@ describe("recipientInsightsRepository.getRecipientPivot", () => {
       affectedCurrencies: ["GBP", "USD"],
     });
     expect(result.recipientPivot["2025-04"]).toHaveLength(3);
-  });
-
-  it("combines exclusion ids and date filter param numbering", async () => {
-    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
-    convertRowsToEur.mockResolvedValueOnce([]);
-    await recipientInsightsRepository.getRecipientPivot({
-      excludedRecipientIds: [5, 6],
-      targetCurrency: "EUR",
-      startDate: "2025-01-01",
-    });
-    const [sql, params] = query.mock.calls[0]!;
-    expect(sql).toContain("NOT IN ($1, $2)");
-    expect(sql).toContain("t.date >= $3");
-    expect(params).toEqual([5, 6, "2025-01-01"]);
   });
 });

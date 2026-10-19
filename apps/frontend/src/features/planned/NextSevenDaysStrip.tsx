@@ -38,13 +38,16 @@ import { cn } from "@/lib/utils";
 
 interface NextSevenDaysStripProps {
     payments: PlannedPayment[];
-    /** Net monthly impact of active recurring rows, already converted to the display currency. */
-    estimatedMonthly: number;
+    /**
+     * Net monthly impact of active recurring rows, computed and converted on
+     * the server; undefined while it loads.
+     */
+    estimatedMonthly: number | undefined;
     /** Active recurring rows omitted from the monthly total because an FX rate is unavailable. */
     estimatedMonthlyUnavailableCount: number;
     /** True while the shared FX query is still resolving. */
     currencyRatesLoading: boolean;
-    /** The page's optional FX converter — the same one "Est. monthly" is summed with. */
+    /** The page's optional FX converter for the per-day totals. */
     convertAmount: (
         amount: number,
         fromCurrency?: string,
@@ -172,7 +175,7 @@ export function NextSevenDaysStrip({
                             <Repeat className="h-3 w-3" aria-hidden />
                             {t("plannedPage.estMonthly")}
                         </p>
-                        {currencyRatesLoading ? (
+                        {estimatedMonthly === undefined ? (
                             <div
                                 className="mt-1 flex justify-end"
                                 role="status"
@@ -192,7 +195,7 @@ export function NextSevenDaysStrip({
                                 <Money amount={estimatedMonthly} signed />
                             </p>
                         )}
-                        {!currencyRatesLoading &&
+                        {estimatedMonthly !== undefined &&
                             estimatedMonthlyUnavailableCount > 0 && (
                                 <p className="mt-1 flex items-center justify-end gap-1.5 type-footnote text-warning">
                                     <AlertCircle

@@ -452,12 +452,14 @@ export interface PortfolioSummaryResponse {
         usedFallbackRate: boolean;
         byAccount: Array<{ account_id: number; total: number }>;
     };
-    /** Dated, target-currency income subtotal only; archived ordinary gains stay local. */
+    /** Dated, target-currency in-kind income of archived holdings. */
     archivedInKindIncome?: Array<{ id: number; totalInKindIncome: number }>;
 }
 
 export function getPortfolioSummary(params?: {
     currency?: string | undefined;
+    /** false: summaries for every holding, archived ones included. */
+    active?: boolean | undefined;
 }): Promise<PortfolioSummaryResponse> {
     return requestWithQuery("/api/info/portfolio-summary", params, {
         schema: PortfolioSummarySchema,

@@ -2,8 +2,8 @@
 title: API Client Methods Reference (ARCHIVED)
 type: reference
 status: archived
-date: 2026-08-30
-updated: 2026-08-26
+date: 2026-10-19
+updated: 2026-10-19
 tags: [reference, api-client, frontend, typescript, http, archived, phase-1]
 description: Legacy reference of monolithic api.ts — replaced by modular architecture in Phase 1
 aliases: [api client, HTTP client, fetch methods, apiClient]
@@ -196,7 +196,7 @@ All Electron methods return `null` when called from a browser context.
 | Method                                   | Purpose                                                 |
 | ---------------------------------------- | ------------------------------------------------------- |
 | `checkForUpdates()`                      | Check for app updates                                   |
-| `installShellUpdate()`                   | Install a verified native app or source-launcher update |
+| `installShellUpdate()`                   | Install a verified native app update                    |
 | `isElectron()`                           | Check if running in Electron                            |
 | `runBackup(destDir, frontendStateJson?)` | Create a native `.visionbak` bundle                     |
 | `selectBackupFile()`                     | Open file picker for backup restore                     |

@@ -78,7 +78,7 @@ per investment, and the canonical all-holdings summaries (`active=false`) from
 over fallbacks and retain the existing original-amount display fallback when a currency rate is
 unavailable, even when a transaction stores dated FX. Since 2026-10-19 archived gains and current
 values come from those canonical summaries (dated FX, configured cost-basis method), matching the
-web portfolio; before that they used
+web portfolio ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]); before that they used
 the current-FX `archivedPresentation`. A historical
 selection changes recorded cost/dividend/buy-leg years, manual adjustment keys and annual tax tables;
 realized/unrealized gains and current-value estimates remain the current all-time holdings figures.

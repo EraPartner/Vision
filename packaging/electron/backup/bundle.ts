@@ -8,7 +8,7 @@
  *   frontend-state.json  — localStorage snapshot { keys: { … } }
  *
  * Encryption (optional): new bundles use AES-256-GCM with a per-file salt,
- * nonce, and authentication tag. Legacy AES-256-CBC bundles remain readable.
+ * nonce, and authentication tag. Retired v1 AES-256-CBC bundles are refused.
  * The encrypted file is written as .visionbak.enc.
  *
  * Backwards-compatible read: the magic header is also accepted from the legacy
@@ -21,7 +21,7 @@ import path from "node:path";
 import type { ZipArchive } from "archiver";
 import type * as Yauzl from "yauzl";
 import {
-  V1_IV_BYTES,
+  RETIRED_V1_MESSAGE,
   isEncryptedFile,
   encryptFileV2,
   decryptFile,
@@ -56,14 +56,11 @@ function getYauzl(): typeof Yauzl {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Magic bytes written at the start of every legacy v1 (CBC) encrypted bundle. */
+/** Magic of the retired v1 (CBC) encrypted bundle; restore refuses it by name. */
 export const BUNDLE_ENC_MAGIC = Buffer.from("VISIONBAK1");
 
 /** Magic bytes for v2 (GCM, AEAD) encrypted bundles. */
 export const BUNDLE_ENC_MAGIC_V2 = Buffer.from("VISIONBAK2");
-
-/** IV length used for legacy AES-256-CBC encryption. */
-export const BUNDLE_ENC_IV_BYTES = V1_IV_BYTES;
 
 // --- Zip-bomb guards for restore (extractZip) ---
 // A legitimate bundle is a DB dump + attachments (each attachment ≤ 10 MB).
@@ -264,14 +261,14 @@ async function decryptToTemp(
     encryptedPath: encPath,
     destinationPath: tmpPath,
     keyOrPassphrase: passphrase,
-    v1Magic: BUNDLE_ENC_MAGIC,
+    retiredV1Magic: BUNDLE_ENC_MAGIC,
     v2Magic: BUNDLE_ENC_MAGIC_V2,
-    v1Salt: "vision-backup-v1",
     requiredError: "Invalid passphrase.",
     invalidError:
       "Invalid passphrase: unable to authenticate encrypted bundle.",
     invalidHeaderMessage: "Invalid encrypted bundle header.",
     unsupportedFormatMessage: "Bundle is not in a recognised encrypted format.",
+    retiredFormatMessage: RETIRED_V1_MESSAGE,
   });
 }
 

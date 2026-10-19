@@ -1,8 +1,8 @@
 // ── Backup crypto / passphrase / retention ───────────────────────────────────
 // Extracted verbatim from main.js (TODO.md Wave W6). Owns the backup
-// passphrase lifecycle (safeStorage), key derivation (legacy v1 static-salt
-// scrypt + v2 per-file salt), the v1 (CBC) / v2 (GCM) encrypted-backup file
-// format, and backup retention/cleanup. main.js state (APP_NAME) and its
+// passphrase lifecycle (safeStorage), the v2 (GCM, per-file salt) encrypted
+// backup file format (the retired v1 CBC format is refused by name), and backup
+// retention/cleanup. main.js state (APP_NAME) and its
 // settings accessors are threaded in via init() so the module observes the
 // exact same values the code saw in-file.
 
@@ -12,8 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  deriveKeyV1,
-  deriveKeyV2,
+  RETIRED_V1_MESSAGE,
   isEncryptedFile,
   decryptFile,
 } from "./encrypted-file";
@@ -188,31 +187,6 @@ export async function getBackupPassphraseStatus(): Promise<PassphraseStatus> {
   };
 }
 
-export function deriveBackupKeyFromPassphrase(
-  passphrase: string | null | undefined,
-): Buffer | null {
-  return deriveKeyV1(
-    passphrase,
-    `${context().APP_NAME.toLowerCase()}-backup-v1`,
-  );
-}
-
-export function deriveBackupKeyV2(
-  passphrase: string | null | undefined,
-  salt: Buffer,
-): Buffer | null {
-  if (!passphrase || typeof passphrase !== "string") return null;
-  if (!Buffer.isBuffer(salt) || salt.length !== 16) {
-    throw new Error("deriveBackupKeyV2 requires a 16-byte salt");
-  }
-  return deriveKeyV2(passphrase, salt);
-}
-
-export async function getBackupEncryptionKey(): Promise<Buffer | null> {
-  const passphrase = await getBackupPassphrase();
-  return deriveBackupKeyFromPassphrase(passphrase);
-}
-
 // Sentinel error messages used to drive UI passphrase prompts. The renderer
 // recognises these strings to (re-)open the passphrase modal rather than
 // surfacing a generic restore failure.
@@ -314,13 +288,13 @@ export async function decryptBackupFileToTemp(
     encryptedPath: encryptedFilePath,
     destinationPath: tempSqlPath,
     keyOrPassphrase,
-    v1Magic: BACKUP_ENC_MAGIC,
+    retiredV1Magic: BACKUP_ENC_MAGIC,
     v2Magic: BACKUP_ENC_MAGIC_V2,
-    v1Salt: context().APP_NAME.toLowerCase() + "-backup-v1",
     requiredError: ERR_PASSPHRASE_REQUIRED,
     invalidError: ERR_INVALID_PASSPHRASE,
     invalidHeaderMessage: "Invalid encrypted backup header.",
     unsupportedFormatMessage: "Backup is not in a supported encrypted format.",
+    retiredFormatMessage: RETIRED_V1_MESSAGE,
   });
   return tempSqlPath;
 }

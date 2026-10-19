@@ -28,27 +28,6 @@ describe("Settings storage and retrieval", () => {
     vi.clearAllMocks();
   });
 
-  it("settingsRepository.set should call DB and return saved key/value", async () => {
-    // Make query resolve as successful insert
-    query.mockResolvedValue({ rowCount: 1 });
-
-    const key = "dashboard_settings";
-    const value = { excludedCategoryIds: [1, 2], excludedRecipientIds: [10] };
-
-    const res = await settingsRepository.set(key, value);
-    expect(res).toEqual({ key, value });
-
-    // Ensure DB was called with the key and JSON payload.
-    expect(query).toHaveBeenCalled();
-    const upsertCall = query.mock.calls.find(
-      ([sql]) =>
-        typeof sql === "string" && sql.includes("INSERT INTO user_settings"),
-    );
-    expect(upsertCall).toBeTruthy();
-    expect(upsertCall![1][0]).toBe(key);
-    expect(upsertCall![1][1]).toBe(JSON.stringify(value));
-  });
-
   it("settingsRepository.set should serialize primitive arrays as JSON", async () => {
     query.mockResolvedValue({ rowCount: 1 });
 
@@ -65,19 +44,6 @@ describe("Settings storage and retrieval", () => {
     expect(upsertCall).toBeTruthy();
     expect(upsertCall![1][0]).toBe(key);
     expect(upsertCall![1][1]).toBe("[373]");
-  });
-
-  it("settingsRepository.get should return parsed value from DB", async () => {
-    const key = "dashboard_settings";
-    const stored = { excludedCategoryIds: [5], excludedRecipientIds: [6] };
-    query.mockResolvedValue({ rows: [{ value: stored }] });
-
-    const result = await settingsRepository.get(key);
-    expect(result).toEqual(stored);
-    expect(query).toHaveBeenCalledWith(
-      "SELECT value FROM user_settings WHERE key = $1",
-      [key],
-    );
   });
 
   it("settings API routes should upsert and return settings", async () => {

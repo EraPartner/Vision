@@ -93,21 +93,35 @@ export function forecast({
     return forecastDates.map((date) => ({ date, value: 0 }));
   }
 
-  const useEqualWeights = weights.size === 0;
-  const equalWeight = 1 / eligible.length;
+  const effective = effectiveWeights(
+    weights,
+    eligible.map((m) => m.id),
+  );
 
   return forecastDates.map((date) => {
     let value = 0;
-    let totalWeight = 0;
-
     for (const m of eligible) {
       const point = m.series.find((p) => p.date === date);
-      const v = point?.value ?? 0;
-      const w = useEqualWeights ? equalWeight : (weights.get(m.id) ?? 0);
-      value += w * v;
-      totalWeight += w;
+      value += (effective.get(m.id) ?? 0) * (point?.value ?? 0);
     }
-
-    return { date, value: totalWeight > 0 ? value / totalWeight : 0 };
+    return { date, value };
   });
+}
+
+/**
+ * The weights the ensemble actually applies to the methods that produced a
+ * series: equal weights when no accuracy history exists, otherwise the
+ * accuracy weights renormalised over the eligible methods.
+ */
+export function effectiveWeights(
+  weights: Map<string, number>,
+  eligibleIds: string[],
+): Map<string, number> {
+  if (eligibleIds.length === 0) return new Map();
+  if (weights.size === 0)
+    return new Map(eligibleIds.map((id) => [id, 1 / eligibleIds.length]));
+  const weightSum = eligibleIds.reduce((s, id) => s + (weights.get(id) ?? 0), 0);
+  return new Map(
+    eligibleIds.map((id) => [id, weightSum > 0 ? (weights.get(id) ?? 0) / weightSum : 0]),
+  );
 }

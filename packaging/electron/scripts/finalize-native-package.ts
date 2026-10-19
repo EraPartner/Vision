@@ -6,11 +6,40 @@ import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { verifyRuntimeManifest } from "../runtime/native";
 import { manifestEntries } from "./prepare-native-runtime";
 
+/** The fuse wire @electron/fuses writes (FuseVersion.V1, FuseV1Options indexes). */
+export type ElectronFuseConfig = {
+  version: "1";
+  resetAdHocDarwinSignature: boolean;
+} & Record<number, boolean>;
+
 /** The part of electron-builder's AfterPackContext this hook reads. */
 export interface PackagedAppContext {
   appOutDir?: string;
-  packager?: { appInfo?: { productFilename?: string } };
+  packager?: {
+    appInfo?: { productFilename?: string };
+    addElectronFuses?: (
+      context: PackagedAppContext,
+      fuses: ElectronFuseConfig,
+    ) => Promise<unknown>;
+  };
 }
+
+// Packaged-binary fuses. The flip happens here, before the ad-hoc signature
+// below, because electron-builder's own `electronFuses` step runs after this
+// hook and would invalidate the seal. RunAsNode stays on: the native update
+// installer runs as Node after the app exits.
+export const ELECTRON_FUSES: ElectronFuseConfig = {
+  version: "1",
+  resetAdHocDarwinSignature: false,
+  // EnableNodeOptionsEnvironmentVariable: NODE_OPTIONS cannot inject code.
+  2: false,
+  // EnableNodeCliInspectArguments: --inspect cannot attach a debugger to main.
+  3: false,
+  // EnableEmbeddedAsarIntegrityValidation: app.asar must match Info.plist.
+  4: true,
+  // OnlyLoadAppFromAsar: no loose app/ directory can replace the shell.
+  5: true,
+};
 
 export type CheckedRunner = (
   executable: string,
@@ -95,6 +124,11 @@ export async function finalizePackagedApp(
     "native-runtime",
   );
   await verifyManifest(packagedRuntime, { required: true });
+  const packager = context.packager;
+  if (!packager?.addElectronFuses) {
+    throw new Error("Electron builder cannot flip the packaged app fuses");
+  }
+  await packager.addElectronFuses(context, ELECTRON_FUSES);
   runChecked(
     "/usr/bin/codesign",
     ["--force", "--deep", "--sign", "-", appPath],

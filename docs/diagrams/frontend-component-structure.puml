@@ -197,7 +197,7 @@ package "Feature Components - Dashboard" {
   class CashFlowComparisonChart
   class MonthToDateHero {
     +useMonthToDate (average-vs-current)
-    +useRestOfMonthPlanned
+    +usePlannedTotals (planned-transactions/totals)
   }
   class NeedsAttentionList
   class NetWorthCard

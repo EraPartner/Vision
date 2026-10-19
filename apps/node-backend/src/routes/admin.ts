@@ -2,7 +2,7 @@
  * Admin routes.
  *
  * Update strategy (packaged desktop app):
- *   - Electron shell updates: handled by the Electron wrapper (manual unsigned ZIP install)
+ *   - Electron shell updates: handled by the Electron wrapper (verified packaged-app ZIP install)
  *   - Alembic migrations: run automatically during native backend startup
  *
  * The git-pull based update approach has been removed. The Node backend running
@@ -158,7 +158,7 @@ function buildUpdateCheckPayload(
       // Anything reaching this HTTP route is a non-Electron client: inside the
       // desktop shell the frontend short-circuits to the electronUpdater IPC
       // (apps/frontend/src/lib/api/electron.ts → checkForUpdates), which
-      // supplies its own native/dev mode. HTTP clients are source deployments
+      // supplies its own native/source mode. HTTP clients are source deployments
       // and update from their host environment rather than an in-app installer.
       update_mode: UPDATE_MODE_SOURCE,
     },

@@ -23,6 +23,7 @@ const DashboardSettingsDialog = lazy(() =>
 );
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
+import { BackendConnectionBanner } from "@/components/notifications/BackendConnectionBanner";
 import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
 import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { useOnboarding } from "@/features/onboarding/useOnboarding";
@@ -302,6 +303,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none"
                         >
                             <div data-print-chrome>
+                                <BackendConnectionBanner />
                                 <FxStatusBanner />
                                 <UpcomingPaymentsNotification />
                             </div>

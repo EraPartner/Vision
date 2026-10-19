@@ -18,7 +18,7 @@ const isolated =
   Boolean(process.env.TEST_DATABASE_URL);
 const prior = "0124_portfolio_income_recognition";
 const cashOrigin = "0125_brokerage_cash_origin";
-const target = "0127_bank_chronology";
+const target = "0128_category_path_on_legacy_rename";
 interface ScratchDatabase {
   client: pg.Client;
   connectionString: string;
@@ -214,7 +214,7 @@ describe.skipIf(!isolated)(
         await expect(alembic("downgrade", prior)).rejects.toThrow(
           /before downgrade/,
         );
-        // Each migration commits on its own, so 0127 and 0126 have already stepped down.
+        // Each migration commits on its own, so 0128, 0127 and 0126 have already stepped down.
         expect(await revision(client)).toBe(cashOrigin);
         await client.query(
           "UPDATE transactions SET is_active=false WHERE account_id=$1",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "../../..");
@@ -54,17 +54,16 @@ describe("legacy cleanup contracts", () => {
     expect(sql).toContain("ACCESS EXCLUSIVE");
   });
 
-  it("keeps active import SQL independent of the legacy tx_hash columns", () => {
-    const runtimeFiles = [
-      "apps/node-backend/src/repositories/transactionRepository.ts",
-      "apps/node-backend/src/services/importPipeline/validate.ts",
-      "apps/node-backend/src/services/importPipeline/commit.ts",
-      "apps/node-backend/src/services/portfolioImportPipeline/validate.ts",
-      "apps/node-backend/src/services/portfolioImportPipeline/commit.ts",
-    ];
-    for (const path of runtimeFiles) {
-      expect(read(path), path).not.toContain("tx_hash");
-    }
+  it("keeps backend runtime code independent of the legacy tx_hash columns", () => {
+    // Location-independent: any backend source file may move or split, but
+    // none may reference the columns contract_drop_tx_hash removes.
+    const srcRoot = resolve(root, "apps/node-backend/src");
+    const offenders = readdirSync(srcRoot, { recursive: true, encoding: "utf8" })
+      .filter((file) => /\.(?:ts|js|mjs)$/.test(file))
+      .filter((file) =>
+        readFileSync(resolve(srcRoot, file), "utf8").includes("tx_hash"),
+      );
+    expect(offenders).toEqual([]);
   });
 
   it("proves statement scalar parity and has a collection-backed down path", () => {

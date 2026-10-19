@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -379,7 +379,9 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 
 **Permission Request Denial**
 
-- All permission requests from renderer process are denied at the session level
+- All permission requests from renderer process are denied at the session level, in every profile including Vision Development (since 2026-10-19; previously packaged builds only). Only the CSP and security response headers remain packaged-only
+- The permission check handler allows only app-origin `clipboard-sanitized-write`, `loopback-network` and `local-network-access` (`packaging/electron/runtime/renderer-security.ts`)
+- `app.enableSandbox()` sandboxes every renderer and a `web-contents-created` hook cancels `will-attach-webview`; packaged builds also disable the `NODE_OPTIONS` and `--inspect` fuses and enforce embedded asar integrity and asar-only loading. See [[docs/architecture/electron#Electron Fuses (ADR-219)|Electron fuses]] and [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]
 - Implementation: `session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => { callback(false); })`
 - Denied permissions: `camera`, `microphone`, `geolocation`, `notifications`, `clipboard-read`, `clipboard-write`, custom IPC permissions
 - Impact: Renderer cannot escalate to system resources; even if compromised (XSS), attacker cannot access camera, location, or clipboard without explicit main-process IPC bridge
@@ -566,12 +568,16 @@ This is installation-local evidence, not a complete tamper-evidence guarantee. A
 
 Encrypted backup restore (`.visionbak.enc`) is fully implemented with passphrase-modal UX and upgraded v2 AEAD encryption:
 
-### Format v1 (Legacy, AES-256-CBC)
+### Format v1 (Retired, AES-256-CBC)
 
-- **Encryption**: AES-256-CBC with static 12-byte salt (hardcoded, same across all v1 backups)
+- **Encryption**: AES-256-CBC with a static salt (hardcoded, same across all v1 backups)
 - **KDF**: Scrypt(N=2^14, r=8, p=1) from user passphrase
 - **Confidentiality**: ✅ Provided | **Authenticity**: ❌ Not provided
-- **Status**: Still readable; no longer written (v2 used for new backups as of 2026-04-28)
+- **Status**: Retired on 2026-10-19 by [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
+  Not written since 2026-04-28 and no longer restored: a file starting with `VISIONENC1` or
+  `VISIONBAK1` is refused with "This backup uses the retired v1 encryption format, which Vision no
+  longer restores." before any decryption, and no plaintext is written. To recover such a file,
+  restore it with an older Vision release and create a new backup.
 
 ### Format v2 (Current, AES-256-GCM with Per-Backup Salt)
 
@@ -595,12 +601,12 @@ Users who do store a passphrase may still see macOS Keychain prompts on unsigned
 ### Restore Process
 
 - **Passphrase modal**: When restoring an encrypted backup, users are prompted via modal to enter the passphrase before decryption attempts
-- **Magic header detection**: Backup encryption is detected via file magic header (`VISIONENC1` or `VISIONENC2`) without decryption
-- **Auto-dispatch**: Restore process automatically detects v1 vs v2 format and invokes correct decoder
+- **Magic header detection**: Backup encryption is detected via file magic header (`VISIONENC2`/`VISIONBAK2`, or the retired `VISIONENC1`/`VISIONBAK1`) without decryption
+- **v2 only**: Restore decrypts only v2; a retired v1 file is recognised as encrypted, so the passphrase prompt still appears, and is then refused by name
 - **Fallback sources**: Restore respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) as fallback if no modal input provided
 - **Error recovery**: Wrong passphrase shows clear error message and allows retry (up to 3 attempts typical)
 - **Path validation**: File path must have been returned by prior `backup:select-file` dialog; prevents XSS-in-renderer from passing arbitrary paths
-- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; v1 backups decrypt correctly with old passphrases unchanged
+- **No breaking changes**: Unencrypted backups (`.visionbak`) restore without prompting; v2 backups decrypt with their passphrases unchanged. Retired v1 encrypted backups are refused (ADR-219)
 
 See [[docs/features/backup-coverage-audit|Backup Coverage Audit]], [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], and [[docs/features/settings|Settings Feature]] for full details.
 

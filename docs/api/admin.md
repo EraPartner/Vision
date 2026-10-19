@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - api
   - admin
@@ -576,7 +576,7 @@ Check for application updates via GitHub Releases API.
   "published_at": "2025-03-15T12:00:00Z",
   "release_notes": "Bug fixes and improvements...",
   "html_url": "https://github.com/EraPartner/Vision/releases/tag/v1.2.3",
-  "update_mode": "native"
+  "update_mode": "source"
 }
 ```
 
@@ -588,7 +588,7 @@ Check for application updates via GitHub Releases API.
   "current_version": "1.2.3",
   "error": "No published releases found",
   "latest_version": null,
-  "update_mode": "native"
+  "update_mode": "source"
 }
 ```
 
@@ -605,6 +605,7 @@ Implementation notes:
 
 - Internal route refactor centralized release/version/update payload logic into `hasValidReleaseTag(release)`, `detectCurrentAppVersion()`, and `buildUpdateCheckPayload(release, currentVersion)`.
 - Every successful response uses the same core contract: `up_to_date`, `current_version`, `latest_version`, and `update_mode`. The no-release fallback therefore remains safe for the same frontend type as a normal release response.
+- `update_mode` is `source` | `native`. This HTTP route always answers `source` (browser deployments update from their host); inside Electron the renderer asks the updater bridge instead, which answers `native` for the packaged app and `source` for a development run. `source_launcher_available` and the `dev` value were removed by [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]].
 - The up-to-date comparison remains `latest === current` or `latest === v${current}` ([[apps/node-backend/src/routes/admin.ts]]).
 
 ---

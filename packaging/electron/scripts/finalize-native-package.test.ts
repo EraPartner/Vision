@@ -6,6 +6,7 @@ import test from "node:test";
 
 import finalizeHook, {
   afterPack,
+  ELECTRON_FUSES,
   finalizePackagedApp,
   refreshRuntimeManifest,
 } from "./finalize-native-package";
@@ -15,16 +16,34 @@ test("packaged app hook exports resolve to the finalizer", () => {
   assert.equal(afterPack, finalizePackagedApp);
 });
 
-test("packaged app refreshes integrity after nested signing and seals the bundle", async () => {
+test("packaged app refuses to seal a bundle whose fuses it cannot flip", async () => {
+  await assert.rejects(
+    finalizePackagedApp(
+      { appOutDir: "/tmp", packager: { appInfo: { productFilename: "Vision" } } },
+      {
+        runner: () => assert.fail("must not sign"),
+        async verifyManifest() {},
+      },
+    ),
+    /cannot flip the packaged app fuses/,
+  );
+});
+
+test("packaged app flips fuses, refreshes integrity after nested signing and seals the bundle", async () => {
   const output = fs.mkdtempSync(path.join(os.tmpdir(), "vision-package-sign-"));
-  const calls: [string, string[]][] = [];
+  const calls: [string, unknown][] = [];
   const refreshed: string[] = [];
   const verified: [string, { required: boolean }][] = [];
   try {
     await finalizePackagedApp(
       {
         appOutDir: output,
-        packager: { appInfo: { productFilename: "Vision" } },
+        packager: {
+          appInfo: { productFilename: "Vision" },
+          async addElectronFuses(_context, fuses) {
+            calls.push(["fuses", fuses]);
+          },
+        },
       },
       {
         refreshManifest(runtimeRoot) {
@@ -70,7 +89,9 @@ test("packaged app refreshes integrity after nested signing and seals the bundle
         "native-runtime",
       ),
     ]);
+    // Fuses must be flipped before the ad-hoc seal, or they break it.
     assert.deepEqual(calls, [
+      ["fuses", ELECTRON_FUSES],
       [
         "/usr/bin/codesign",
         ["--force", "--deep", "--sign", "-", path.join(output, "Vision.app")],
