@@ -14,7 +14,11 @@ public struct ShellFXStatusBanner: View {
     public var body: some View {
         if model.shouldShow, let data = model.data {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(theme.warning).accessibilityHidden(true)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.warning)
+                    .frame(width: 16, height: 28)
+                    .accessibilityHidden(true)
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
                         message(data)
@@ -29,13 +33,22 @@ public struct ShellFXStatusBanner: View {
                     model.dismiss()
                 } label: {
                     Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.borderless).foregroundStyle(theme.secondaryLabel)
+                .buttonStyle(.plain).foregroundStyle(theme.secondaryLabel)
                 .accessibilityLabel(shell.strings.t("layout.dismiss"))
             }
-            .padding(14)
-            .background(theme.warning.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.warning.opacity(0.3)))
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.vertical, 10)
+            .background(
+                theme.warning.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                    .strokeBorder(theme.warning.opacity(0.3), lineWidth: 1))
             .accessibilityElement(children: .contain)
         }
     }
