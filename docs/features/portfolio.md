@@ -31,16 +31,25 @@ unmounting stops active reads and queued pages instead of leaving old requests r
 a new mount. Caller cancellation is not retried, including during retry backoff. Overview
 valuation remains server-summary based.
 
-Monthly rent uses the latest rent transaction's currency, then the investment's original currency
-(and EUR only if neither declares one). Missing required conversion rates produce an explicit
-unavailable value and warning. A failed history request does not silently become zero tax or rent.
-See [[docs/features/portfolio-tax]] and [[docs/performance/caching-strategies]].
+Monthly rent is computed on the server since 2026-10-19
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]): each portfolio-summary item carries
+`monthlyRent`, the latest `rent_income` amount converted from its booking currency (then the
+investment's currency, EUR only if neither declares one) at the latest stored rate, and the
+`real_estate` asset-class totals carry `estimatedMonthlyRent` plus `monthlyRentRateMissing`. A
+missing stored rate makes `monthlyRent` `null`; the Real Estate page then shows an explicit
+missing-rate error instead of a partial total. The browser rent conversion
+(`hooks/portfolio/monthlyRent.ts`) was removed. A failed history request does not silently become
+zero tax or rent. See [[docs/features/portfolio-tax]] and [[docs/performance/caching-strategies]].
 
-Real-estate rent error recovery retries the shared exchange-rate query as well as portfolio
-reads when a booking currency has no available rate. Aggregate and per-property monthly rent
-and annual yield use the booking currency once, with the canonical display-currency property
-value as denominator. Rendered page tests cover same-currency, foreign-currency and mixed
-property/booking currencies, plus a missing-rate recovery.
+Aggregate and per-property annual yield use the server's converted rent with the canonical
+display-currency property value as denominator. Rendered page tests
+(`RealEstateRent.integration.test.tsx`, MSW-mocked HTTP) cover server-supplied rent and yield, and
+the missing-rate error with retry recovery.
+
+The Stocks, Crypto, Metals, Real Estate and Savings page totals and the Portfolio allocation chart
+read the server's `byAssetGroup` / `byAssetClass` totals through
+`hooks/portfolio/assetGroupTotals.ts` (`findHoldingTotals`) instead of summing or converting
+holdings in the browser; see [[docs/api/portfolio-summary|Portfolio Summary API]].
 
 
 

@@ -80,6 +80,12 @@ Returns cached exchange rates from the database:
 The data also carries `source` (`database`, or `fallback` when nothing is stored), `is_stale` and
 `last_fetched_at` (the `ExchangeRates` schema in `openapi.yaml`, inside the ADR-026 envelope).
 
+`fallback_rates` feeds the admin page's Fallback tab and count. Since 2026-10-19 the web
+`useCurrencyConverter` hook converts with stored rates only and no longer merges these constants,
+and server-owned display totals convert at the latest stored rates
+([[docs/integrations/currency-conversion|Currency Conversion]],
+[[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
+
 **Auto-refresh logic**: If stored rates are from a previous day, the endpoint clears the memory cache and triggers a background `warmCache()` call to fetch fresh rates. With `db_only=true` (also `1`) it serves the stored rates without that refresh; the admin page asks for it.
 
 **Rate limiting**: 30 requests per minute per IP.

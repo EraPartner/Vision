@@ -6359,7 +6359,7 @@ export interface components {
             unrealizedGainPercent?: number;
             /** @description Latest ordinary rent amount in its booking currency, without FX conversion. The Real Estate page reads monthlyRent instead. */
             estimatedMonthlyRent?: number;
-            /** @description Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate (fallback constants fill currencies without a stored rate). 0 without rent; null when no rate exists. */
+            /** @description Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate. 0 without rent; null when no stored rate exists. */
             monthlyRent?: number | null;
             /** @description totalFees + totalTaxes, from the rounded fields. */
             feesAndTaxes?: number;

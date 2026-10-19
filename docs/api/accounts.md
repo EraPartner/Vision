@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
-related_code: [[apps/node-backend/src/routes/accounts.ts]], [[apps/node-backend/src/services/accountService.ts]], [[apps/node-backend/src/services/accountCloseService.ts]], [[apps/node-backend/src/services/accountMergeService.ts]], [[apps/node-backend/src/repositories/accountRepository.ts]]
+related_code: [[apps/node-backend/src/routes/accounts.ts]], [[apps/node-backend/src/services/accountService.ts]], [[apps/node-backend/src/services/accountCloseService.ts]], [[apps/node-backend/src/services/accountMergeService.ts]], [[apps/node-backend/src/services/accountTotalsService.ts]], [[apps/node-backend/src/repositories/accountRepository.ts]]
 ---
 
 # Accounts API
@@ -46,6 +46,40 @@ Returns `{ items: Account[], total, links }`. Pagination is **opt-in**: send nei
 `limit` nor `offset` and the response holds every matching account (`total` = that
 count, no `limit`/`offset` keys). Send either and the body adds `limit` + `offset`
 while `total` stays the full match count.
+
+### GET /api/accounts/totals
+
+> [!info] Added 2026-10-19 (non-breaking, additive). Registered before `/:id` in the router.
+
+Server-computed hub totals in one display currency
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]), implemented by
+[[apps/node-backend/src/services/accountTotalsService.ts]]. Read by `AccountsPage` (group
+subtotals and the "Net cash" line) and the dashboard `AccountsList` (largest-balance ordering)
+through `useAccountTotals(currency)` in `apps/frontend/src/hooks/useAccounts.ts`.
+
+| Parameter  | Type   | Default | Description                                                     |
+| ---------- | ------ | ------- | --------------------------------------------------------------- |
+| `currency` | string | `EUR`   | 3-letter ISO code; anything else returns `400 VALIDATION_ERROR` |
+
+**Response:** `{ currency, net_cash, groups: { cash, portfolio, liabilities, archived }, accounts[] }`
+(OpenAPI schema `AccountTotals`, contract `AccountTotalsSchema` in
+`packages/types/src/contracts/accounts.ts`).
+
+- Every account (active and archived) converts each `balance_parts` partition on its own at the
+  latest **stored** exchange rate (`services/currency/latestRateConversion.ts`). A partition whose
+  currency has no stored rate is left out, never added 1:1 or at a hard-coded fallback constant;
+  the account lists it in `unconverted_currencies`.
+- Groups: `cash` (checking, savings, pension), `portfolio` (brokerage, crypto_exchange, wallet),
+  `liabilities`, and `archived` (any inactive account). Each group returns `cash` (converted
+  ledger balances, excluding the holdings-only `crypto_exchange` and `wallet` types), `holdings`
+  (portfolio-summary `position` value of its portfolio-type accounts, shared summary cache),
+  `total = cash + holdings`, `holdings_unavailable` (summary could not be computed), and
+  `unconverted_count` / `unconverted_currencies`.
+- `net_cash` sums active, `in_net_worth`, non-portfolio accounts (Cash & Savings plus
+  Liabilities) with the same unconverted counters.
+- `accounts[]` carries `{ id, group, converted_balance, unconverted_currencies }` per account.
+
+Covered on real PostgreSQL by [[apps/node-backend/tests/accountTotals.db.test.ts]].
 
 ### GET /api/accounts/:id
 
@@ -271,6 +305,9 @@ The list response also carries `balance_parts`, `balance_incomplete`, and
 `computed_balance` instead of applying a synthetic 1:1 conversion. The card shows the excluded
 native amount, and the card, group subtotal, and net-cash total are marked incomplete
 ([[docs/adr/127-no-synthetic-fx-for-account-totals|ADR-127]]).
+Since 2026-10-19 the group subtotals and net-cash total come from
+[[docs/api/accounts#GET /api/accounts/totals|GET /api/accounts/totals]] and are marked incomplete from its
+`unconverted_count`; the browser no longer sums converted balances.
 
 ### Drift badge — signed, currency-formatted, dated, age-aware
 

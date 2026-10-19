@@ -3308,7 +3308,7 @@ components:
         monthlyRent:
           type: number
           nullable: true
-          description: Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate (fallback constants fill currencies without a stored rate). 0 without rent; null when no rate exists.
+          description: Latest rent_income amount (by date, then id) converted from its booking currency to the response currency at the latest stored rate. 0 without rent; null when no stored rate exists.
         feesAndTaxes:
           type: number
           description: totalFees + totalTaxes, from the rounded fields.

@@ -2,8 +2,8 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - api
   - splits
@@ -93,6 +93,22 @@ Get a summary of who owes what across all recipients.
 
 Only unsettled splits with a positive remaining balance are included.
 
+**Query Parameters:** `currency` (3-letter ISO code, default `EUR`; anything else returns
+`400 VALIDATION_ERROR`) plus the opt-in `limit`/`offset`.
+
+**Currency conversion (2026-10-19, ADR-216):** a split is denominated in its transaction's
+currency. Each recipient's per-currency owed and paid sums are converted to `currency` at the
+latest **stored** exchange rates before they are added, so mixed-currency groups no longer sum
+raw amounts. A currency without a stored rate is left out of the figures (never added 1:1 or at a
+hard-coded constant); its open splits are counted in the row's `unconverted_count` /
+`unconverted_currencies`. A recipient whose only open splits lack a rate keeps a row with zero
+converted figures after the convertible rows. The body-level `summary`
+(`{ currency, remaining, unconverted_count, unconverted_currencies }`, OpenAPI `OwedTotals`) is the
+total outstanding across every recipient, whatever page is returned. Implemented by
+`getOwedSummary` in [[apps/node-backend/src/services/splitService.ts]].
+Mixed-currency owed totals are covered on real PostgreSQL by
+[[apps/node-backend/tests/owedTotals.db.test.ts]].
+
 **Recipient Alias Grouping (Phase Q+):**
 Linked recipients (those sharing a `primary_recipient_id` via merge operations) are automatically collapsed into a single row. The `recipient_id` returned is the primary recipient's id (or the recipient's own id if not aliased). This ensures the owed view remains consistent with merge operations — two recipients linked via `primary_recipient_id` appear as one logical entity.
 
@@ -107,9 +123,18 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
       "total_owed": 150.0,
       "total_paid": 40.0,
       "remaining": 110.0,
-      "split_count": 3
+      "split_count": 3,
+      "unconverted_count": 0,
+      "unconverted_currencies": []
     }
-  ]
+  ],
+  "total": 1,
+  "summary": {
+    "currency": "EUR",
+    "remaining": 110.0,
+    "unconverted_count": 0,
+    "unconverted_currencies": []
+  }
 }
 ```
 
@@ -134,6 +159,13 @@ If the provided `id` is an alias (has a `primary_recipient_id`), the endpoint ex
 
 This ensures that viewing splits for a recipient shows the complete history even when splits are stored on different recipient ids within the same merge group.
 
+**Query Parameters:** `currency` (default `EUR`) plus the opt-in `limit`/`offset`. Split rows stay
+in their transaction currency (`transaction_currency`); only the body-level `summary`
+(`{ currency, remaining, unconverted_count, unconverted_currencies }`) is converted. It covers
+every unsettled split of the recipient group regardless of the page, converted per transaction
+currency at the latest stored rates (`getOwedRecipientSummary`); open splits without a rate are
+counted, not added.
+
 **Response:** `200 OK`
 
 ```json
@@ -154,7 +186,14 @@ This ensures that viewing splits for a recipient shows the complete history even
       "is_settled": false,
       "created_at": "2025-01-15T10:00:00Z"
     }
-  ]
+  ],
+  "total": 1,
+  "summary": {
+    "currency": "EUR",
+    "remaining": 40.0,
+    "unconverted_count": 0,
+    "unconverted_currencies": []
+  }
 }
 ```
 
@@ -652,13 +691,24 @@ interface OwedDetailItem extends SplitItem {
   remaining: number;
 }
 
-interface OwedSummaryItem {
+interface OwedUnconverted {
+  unconverted_count: number;
+  unconverted_currencies: string[];
+}
+
+interface OwedSummaryItem extends OwedUnconverted {
   recipient_id: number;
   recipient_name: string;
   total_owed: number;
   total_paid: number;
   remaining: number;
   split_count: number;
+}
+
+// `summary` on GET /api/splits/owed and GET /api/splits/owed/:id
+interface OwedTotals extends OwedUnconverted {
+  currency: string;
+  remaining: number;
 }
 
 interface SplitPayment {

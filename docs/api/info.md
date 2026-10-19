@@ -499,13 +499,32 @@ Notes:
 
 ---
 
-### ~~GET /api/info/net-worth/by-account~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
+### GET /api/info/net-worth/by-account
 
-> **Removed.** The Σ-accounts breakdown (ADR-100) was deleted with the per-account holdings
-> machinery: the snapshot builder no longer computes the `value_by_account` split, and the
-> `portfolio_snapshot_accounts` side table (migration 0074) is dormant (kept for a later
-> contraction migration). A per-broker net-worth surface returns later in Track C (WP-C5
-> current-point table from live partitions; WP-C7 persisted per-broker history).
+> [!info] Re-added 2026-10-19 (non-breaking, additive) as the WP-C5 current-point table
+> ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). The earlier snapshot-based
+> Σ-accounts route (ADR-100) was removed on 2026-07-22 (WP-C1 /
+> [[docs/adr/108-portfolio-accounts-v2-broker-tags|ADR-108]]); this route has a different shape
+> and reads live data only.
+
+Current net worth per account, implemented by
+[[apps/node-backend/src/services/info/netWorthByAccount.ts]] and read by the Net Worth page's
+by-account list through `useNetWorthByAccount(currency)` in
+`apps/frontend/src/features/portfolio/usePortfolioQueries.ts`. Accepts `currency` /
+`target_currency` like the other info routes; rate limited to 30 requests per minute; not cached.
+
+**Response:** `{ currency, rows[], total, unconvertedAccountIds }` (OpenAPI schema
+`NetWorthByAccountResponse`, contract `NetWorthByAccountSchema` in `packages/types/src/contracts/info.ts`).
+
+- Each `in_net_worth` account contributes its `computed_balance` as `cash`, converted from the
+  account currency at the latest **stored** rate. Holdings-only types (`crypto_exchange`,
+  `wallet`) contribute cash `0`. Without a stored rate `cash` and `total` are `null` and the row is
+  flagged `unconverted`; nothing is added 1:1 or at a hard-coded fallback constant.
+- `holdings` sums the live portfolio-summary `byAccount` partitions for the account. Holdings not
+  assigned to an account form a final row with `accountId: null`.
+- `total` is the sum of row totals, or `null` while any account is in `unconvertedAccountIds`.
+
+Covered on real PostgreSQL by [[apps/node-backend/tests/netWorthByAccount.db.test.ts]].
 
 ---
 
@@ -555,7 +574,7 @@ Get the latest stored exchange rate per currency from the database
 Notes:
 
 - When the stored rates are stale and `db_only` is not set, the backend clears its in-memory rate cache and starts a background refresh; the response never waits for it.
-- `source` is `database` when stored rates exist and `fallback` when there are none (clients then use `fallback_rates`).
+- `source` is `database` when stored rates exist and `fallback` when there are none. `fallback_rates` carries the server's hard-coded constants; since 2026-10-19 the web app no longer merges them into its client-side converter (`useCurrencyConverter` uses stored rates only, ADR-216), so a currency without a stored rate is shown as unavailable rather than converted at a stale constant.
 - `is_stale` is `true` when the stored rate date is before today, or when nothing is stored.
 - `last_fetched_at` is the latest `fetched_at` of the returned rows as an ISO timestamp, or `null` when there are none.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the response and documents `db_only`, `source`, `is_stale` and `last_fetched_at`, which the route already returned or accepted. It drops the `base` and `month` query parameters, which the route never read.

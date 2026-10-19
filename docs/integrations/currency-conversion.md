@@ -2,8 +2,8 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
 related_code: ["apps/node-backend/src/services/currency/rateFetcher.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
@@ -99,6 +99,24 @@ are persisted with today's date; retained and static fallback rates are not stam
           │ Fallback       │
           └────────────────┘
 ```
+
+### Latest stored rates only for server-owned display totals (2026-10-19)
+
+Server-owned display totals ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]) do not use
+the fallback chain above. `apps/node-backend/src/services/currency/latestRateConversion.ts`
+(`loadLatestRatesToEur`, `convertAtLatestRates`) converts with the latest **stored**
+`exchange_rates` row per currency, the same rates the exchange-rates page shows. A currency
+without a stored rate is unavailable: callers leave the amount out of the total and count or flag
+it, never convert at a `FALLBACK_RATES` constant or 1:1. Consumers:
+`GET /api/planned-transactions/totals`, `GET /api/accounts/totals`, the converted owed figures of
+`GET /api/splits/owed` and `/owed/:id`, `GET /api/info/net-worth/by-account`, and per-holding
+`monthlyRent` in `GET /api/info/portfolio-summary`. Other server paths (for example
+`computed_balance` on account lists and archived portfolio views) still use the chain above,
+including `FALLBACK_RATES`.
+
+The web `useCurrencyConverter` hook likewise builds its rate map from stored rates only and no
+longer merges the response's `fallback_rates`; the unused `useExchangeRates` rate-map hook was
+removed (`useFxStatus` remains for the status banner).
 
 ---
 

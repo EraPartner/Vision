@@ -7,7 +7,7 @@ updated: 2026-10-19
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
-related_code: ["apps/node-backend/src/routes/plannedTransactions.ts", "apps/node-backend/src/services/plannedTransactionService.ts", "apps/node-backend/src/repositories/plannedTransactionRepository.ts", "apps/node-backend/src/services/plannedExecutionService.ts", "apps/node-backend/src/services/plannedMatchService.ts", "apps/node-backend/src/services/calculations/loanSchedule.ts", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.ts", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/plannedCurrencyTotals.ts", "apps/frontend/src/features/planned/usePlannedTotals.ts", "apps/node-backend/src/services/plannedTotalsService.ts", "apps/frontend/src/hooks/useCurrencyConverter.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
+related_code: ["apps/node-backend/src/routes/plannedTransactions.ts", "apps/node-backend/src/services/plannedTransactionService.ts", "apps/node-backend/src/repositories/plannedTransactionRepository.ts", "apps/node-backend/src/services/plannedExecutionService.ts", "apps/node-backend/src/services/plannedMatchService.ts", "apps/node-backend/src/services/calculations/loanSchedule.ts", "apps/node-backend/src/services/calculations/recurrence.js", "apps/node-backend/src/services/recurringDetectionService.ts", "apps/frontend/src/pages/PlannedPaymentsPage.tsx", "apps/frontend/src/features/planned/PlannedPaymentsTable.tsx", "apps/frontend/src/features/planned/PlannedDueBadge.tsx", "apps/frontend/src/features/planned/plannedDueDate.ts", "apps/frontend/src/features/planned/NextSevenDaysStrip.tsx", "apps/frontend/src/features/planned/nextSevenDays.ts", "apps/frontend/src/features/planned/usePlannedTotals.ts", "apps/node-backend/src/services/plannedTotalsService.ts", "apps/frontend/src/features/planned/PlannedPaymentForm.tsx", "apps/frontend/src/features/planned/LinkTransactionDialog.tsx", "apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx", "apps/frontend/src/features/planned/ExecutionHistoryDialog.tsx", "apps/frontend/src/components/notifications/UpcomingPaymentsNotification.tsx", "apps/frontend/src/components/shared/DatePicker.tsx", "apps/frontend/src/lib/dateUtils.ts", "apps/frontend/src/hooks/useUpcomingPlannedPayments.ts", "apps/frontend/src/hooks/usePlannedMatchSuggestions.ts", "apps/frontend/src/components/layout/AppLayout.tsx"]
 ---
 
 # Planned Transactions
@@ -759,15 +759,17 @@ and are lifted verbatim from the "Due this week" tile they replaced:
 The same parser backs `PlannedDueBadge`, so table badges and the next-seven-days
 strip agree on missing, invalid, ISO-timestamp, and local-calendar date handling.
 
-The header also shows the window's net total, converted in the browser with
-`useCurrencyConverter`'s `convertToTargetIfAvailable` and summed through
-`sumConvertedAmounts` in `features/planned/plannedCurrencyTotals.ts`. A payment
-whose source or target rate is unavailable is omitted from that total instead of
-being added in its original currency, and the strip shows a localized count of
-omitted payments. While the shared exchange-rate query is loading, the window
-total remains a skeleton; an unresolved request is never presented as a missing
-rate. Est. Monthly comes from the server (see below) and shows a skeleton until
-`GET /api/planned-transactions/totals` resolves. Individual day items still show their original amount and currency. When
+The header also shows the window's net total. Since 2026-10-19 it is
+`next_days_total.net` from
+[[docs/api/plannedTransactions#GET /api/planned-transactions/totals|GET /api/planned-transactions/totals]],
+passed to the strip as `windowTotal` ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]).
+The server counts every recurring occurrence in the eight-day window and converts at the
+latest stored rates. A payment whose source or target rate is unavailable is omitted from
+that total instead of being added in its original currency, and the strip shows a localized
+count of omitted payments (`next_days_total.unconverted_count`). Until the totals request
+resolves, the window total and Est. Monthly (see below) remain skeletons; an unresolved
+request is never presented as a missing rate. The former browser helper
+`features/planned/plannedCurrencyTotals.ts` was deleted. Individual day items still show their original amount and currency. When
 nothing is due, the day rail still renders (the eight days are visibly clear)
 with an explicit "Nothing due in the next 7 days" note beneath it.
 
@@ -793,8 +795,8 @@ can be positive (net inflow), negative (net outflow), or zero.
 
 > [!info] Previous behavior
 > Before 2026-06-17 "Est. Monthly" summed only outgoing recurring rows with `Math.abs`.
-> From 2026-06-17 until 2026-10-19 the browser computed the net figure in
-> `features/planned/plannedCurrencyTotals.ts` with hard-coded multipliers (daily 30,
+> From 2026-06-17 until 2026-10-19 the browser computed the net figure in the
+> since-deleted `features/planned/plannedCurrencyTotals.ts` with hard-coded multipliers (daily 30,
 > weekly 4.33, biweekly 2.17, custom 30/N) keyed on the `frequency` field.
 
 **Calculation:**

@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-10
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     feature,
@@ -32,6 +32,7 @@ related_code:
     "apps/frontend/src/features/accounts/",
     "apps/frontend/src/hooks/useAccounts.ts",
     "apps/node-backend/src/routes/accounts.ts",
+    "apps/node-backend/src/services/accountTotalsService.ts",
     "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/repositories/transactionRepository.ts",
     "apps/node-backend/src/lib/accountBalanceSql.js",
@@ -96,7 +97,7 @@ or currency with only future rows remains visible with a zero current balance.
 ## The hub (`/accounts`)
 
 - **Groups** (WP-B3, fixed order): _Cash & Savings_ (checking · savings · pension) → _Portfolio accounts_ (brokerage · crypto_exchange · wallet) → _Liabilities_ → _Archived_ (collapsed; any `is_active=false` account regardless of type). Accounts render as `List` rows (one list per group) sorted by display label within a group (`groupAccounts.ts`, unit-tested).
-- **Per-group subtotals** convert each cash-bearing account's computed balance to the display currency. The Portfolio subtotal adds the already partitioned current holdings from the portfolio summary; holdings-only wallet and crypto-exchange accounts contribute no stale ledger cash. The grand **Net cash** line sums active, `in_net_worth` non-portfolio accounts — the same population as the net-worth Liquid + Liabilities figures.
+- **Per-group subtotals** and the grand **Net cash** line are computed on the server by [[docs/api/accounts#GET /api/accounts/totals|GET /api/accounts/totals]] (`services/accountTotalsService.ts`, read through `useAccountTotals(currency)`; [[docs/adr/216-server-owned-domain-calculations|ADR-216]]). Each cash-bearing account's balance partitions convert to the display currency at the latest stored rates; a partition without a stored rate is left out and the subtotal is marked incomplete. The Portfolio subtotal adds the already partitioned current holdings from the portfolio summary; holdings-only wallet and crypto-exchange accounts contribute no stale ledger cash. The **Net cash** line sums active, `in_net_worth` non-portfolio accounts — the same population as the net-worth Liquid + Liabilities figures. The browser helpers `sumConvertedBalances` and `computeNetCash` were removed from `groupAccounts.ts`, which now only groups and orders rows.
 - **Portfolio-type rows** use the portfolio summary's account partition to show current holdings value and broker profit/loss. Brokerage rows compose that with their real ledger cash and balance provenance; wallet and crypto-exchange accounts are holdings-only and omit transaction, cash-drift, and Reconcile affordances. An account with no assigned position says **No assigned holdings** instead of displaying a misleading ledger zero.
 - **Row interactions** (WP-B4, rebuilt on `List`/`ListRow` by [[docs/adr/187-completeness-sweep|ADR-187]]): the row and the ••• menu's **View details** item are real links to `/accounts/:id`. The drift chip and the row menu stop row activation so they do not create nested interaction. The menu also keeps **View transactions** (account-filtered Transactions page) and **Reconcile balance** (only while drift is non-zero). Everything lifecycle-shaped moved to the detail route's header menu.
 - The **drift badge** on a row (statement vs computed disagreement, ADR-094) opens the Reconcile dialog directly.
@@ -201,7 +202,8 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 - `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, row→route navigation, reduced row menu, and retired `?account=` query behavior.
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
 - `apps/node-backend/tests/routes/transactions.test.ts` — `include_balance` threading + `running_balance` on/off the wire.
-- `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.
+- `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — group assignment and ordering.
+- `apps/node-backend/tests/accountTotals.db.test.ts` — real-PostgreSQL group subtotals, Net cash population, and unconverted-currency handling for `GET /api/accounts/totals`.
 - `apps/frontend/src/features/accounts/__tests__/brokerAccountMetrics.test.ts` — position-only holdings value, complete broker P&L, and oversold aggregation from the portfolio-summary partition.
 
 ### Opening-balance correction

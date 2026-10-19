@@ -37,7 +37,7 @@ related_code:
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthChart.tsx
   - apps/frontend/src/pages/portfolio/net-worth/NetWorthByAccountList.tsx
-  - apps/frontend/src/pages/portfolio/net-worth/netWorthByAccount.ts
+  - apps/node-backend/src/services/info/netWorthByAccount.ts
   - apps/frontend/src/components/charts/ChartCard.tsx
   - apps/frontend/src/components/charts/ChartPeriodSelector.tsx
   - apps/frontend/src/components/charts/chartPeriods.ts
@@ -281,14 +281,19 @@ worth" shares and their explanation paragraph are gone.
 
 The **By account** card is a current-point view, not historical per-broker reporting. It is an
 inset `List` of `ListRow`s: the account name, the account type as subtitle (plus the cash and
-holdings split when a row carries both), and the converted balance trailing. It composes today's
-converted `in_net_worth` ledger cash with the live portfolio summary's `byAccount` partitions.
+holdings split when a row carries both), and the converted balance trailing. Since 2026-10-19 the
+rows and their total come from [[docs/api/info|GET /api/info/net-worth/by-account]]
+(`services/info/netWorthByAccount.ts`, ADR-216): the server composes today's `in_net_worth` ledger
+cash, converted at the latest stored rate, with the live portfolio summary's `byAccount`
+partitions. The page only localizes labels and sorts rows (unassigned last). When an account's cash
+currency has no stored rate the server returns `total: null` and the card shows its unavailable
+state instead of mixing currencies.
 Brokerage rows can therefore contain cash and holdings; wallet and crypto-exchange rows contain
 holdings only. The null-account partition is shown as localized **Unassigned** with an **Assign to
 an account** link to `/portfolio`, where each investment's unassigned lots are assigned.
 
-The closing row sums the amounts that are actually displayed and compares that total with the
-current net worth headline. A mismatch remains visible as a warning with a hint below the list.
+The closing row shows the server total of the displayed rows and compares it with the current
+net worth headline. A mismatch remains visible as a warning with a hint below the list.
 This preserves the backend contract: current net worth equals current cash plus the same live
 portfolio total used by Home and Performance.
 
@@ -344,8 +349,8 @@ ADR-108 and WP-C1 removed the experimental **historical** per-account net-worth 
 flag, per-account history grid and chart, frontend hook, endpoint, and the snapshot
 `splitByAccount` / `value_by_account` payloads no longer exist. Net Worth history remains an
 aggregate series backed by `portfolio_performance_snapshots`. The current By Account table above
-uses live account balances and live portfolio partitions; it does not synthesize per-account
-history.
+uses live account balances and live portfolio partitions served by the re-added, current-point
+`GET /api/info/net-worth/by-account`; it does not synthesize per-account history.
 
 Migration 0074's `portfolio_snapshot_accounts` table is intentionally dormant and remains covered
 by the backup manifest. It is not populated or read by the application. The still-open WP-C7 owns
