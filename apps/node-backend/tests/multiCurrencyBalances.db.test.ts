@@ -207,18 +207,23 @@ describe.skipIf(!hasTestDatabase())(
       ).toBe(process.env.TEST_DATABASE_URL);
       // DB suites share one database across parallel vitest workers — serialize.
       await acquireDbSuiteLock();
+      // Net worth also reads portfolio snapshots, which earlier suites can leave behind.
+      await resetNetWorthInputs();
     }, 180_000);
 
-    afterEach(async () => {
+    async function resetNetWorthInputs() {
       const pool = getTestPool()!;
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
       await pool.query("DELETE FROM exchange_rates");
+      await pool.query("DELETE FROM portfolio_performance_snapshots");
       for (const k of Object.keys(rec)) delete rec[k];
       clearMemoryCache();
       clearMvCache();
-    });
+    }
+
+    afterEach(resetNetWorthInputs);
 
     afterAll(async () => {
       await releaseDbSuiteLock();
