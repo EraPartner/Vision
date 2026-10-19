@@ -16,7 +16,6 @@ import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.ts";
 import { nanToZero } from "../lib/math.ts";
-import { validateInt4Ids } from "../lib/filterBuilder.ts";
 
 /**
  * Whether internal transfers (ADR-083) should be counted in cash-flow
@@ -26,77 +25,6 @@ import { validateInt4Ids } from "../lib/filterBuilder.ts";
  */
 export async function getIncludeTransfers(): Promise<boolean> {
   return (await settingsRepository.get("includeTransfers")) === true;
-}
-
-// ── Exclusion predicates ───────────────────────────────────────────────────
-
-/**
- * The r/pr joins that {@link exclusionClauses}' predicates reference:
- * `transactions t` → recipient `r` → primary recipient `pr`.
- */
-export const EXCLUSION_JOINS = sql`LEFT JOIN recipients r ON t.recipient_id = r.id
-LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id`;
-
-export interface ExclusionSql {
-  /** {@link EXCLUSION_JOINS} when a predicate exists, otherwise empty. */
-  joins: RawBuilder<unknown>;
-  /** `AND <predicates>`, or empty when no valid exclusions were supplied. */
-  where: RawBuilder<unknown>;
-  /** True when at least one predicate was emitted. */
-  active: boolean;
-}
-
-/**
- * Exclusion predicates for dashboard/info aggregation queries, as Kysely SQL
- * fragments (lib/filterBuilder.buildExclusionClauses' semantics).
- *
- * Excluding a category excludes every descendant of it under the effective
- * category (own → recipient default → primary default); excluding a primary
- * recipient also excludes its aliases. Predicates reference `t`, `r` and `pr`.
- * @throws {ValidationError} when an id is not a valid int4
- */
-export function exclusionClauses({
-  excludedCategoryIds = [],
-  excludedRecipientIds = [],
-}: {
-  excludedCategoryIds?: readonly unknown[] | undefined;
-  excludedRecipientIds?: readonly unknown[] | undefined;
-}): ExclusionSql {
-  const safeCats = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");
-  const safeRecs = validateInt4Ids(
-    excludedRecipientIds,
-    "excludedRecipientIds",
-  );
-  const clauses: RawBuilder<unknown>[] = [];
-
-  // A selected category excludes its direct assignments and every descendant.
-  // NOT EXISTS keeps uncategorized rows, unlike a nullable NOT IN predicate.
-  if (safeCats.length > 0) {
-    clauses.push(sql`NOT EXISTS (SELECT 1 FROM category_ancestors excluded
-        WHERE excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
-          AND excluded.ancestor_id IN (${sql.join(safeCats)}))`);
-  }
-  // The trailing -1 keeps recipient-less rows when a recipient exclusion is
-  // present: NULL NOT IN would otherwise drop them.
-  if (safeRecs.length > 0) {
-    clauses.push(
-      sql`COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${sql.join(safeRecs)})`,
-    );
-  }
-
-  const active = clauses.length > 0;
-  return {
-    joins: active ? EXCLUSION_JOINS : sql``,
-    where: andClauses(clauses),
-    active,
-  };
-}
-
-/** `AND a AND b ...`, or an empty fragment for no clauses. */
-export function andClauses(
-  clauses: readonly RawBuilder<unknown>[],
-): RawBuilder<unknown> {
-  return clauses.length > 0 ? sql`AND ${sql.join(clauses, sql` AND `)}` : sql``;
 }
 
 // ── Materialized-view cache ────────────────────────────────────────────────

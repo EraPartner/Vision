@@ -2,8 +2,8 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     security,
@@ -327,9 +327,9 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 
 ### SQL-build-time id lists (`validateInt4Ids`)
 
-`apps/node-backend/src/lib/filterBuilder.ts` — the last layer before an id becomes a `$n`
-placeholder. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
-`buildExclusionClauses` (`excludedCategoryIds`, `excludedRecipientIds`),
+`apps/node-backend/src/lib/filterBuilder.ts` — the last layer before an id becomes a bound
+parameter. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
+`exclusionClauses` (`excludedCategoryIds`, `excludedRecipientIds`),
 `resolveBulkSelection`, `bulkTagTransactions`, and the price-history batch loader.
 
 ```javascript

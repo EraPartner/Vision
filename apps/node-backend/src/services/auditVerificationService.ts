@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { query } from "../database/connection.ts";
+import { compileQuery } from "../database/db.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import {
   auditUnlinkedCountsRowSchema,
@@ -97,6 +100,12 @@ function fail(
   return { status: "failed", code, sequence, ...(detail ? { detail } : {}) };
 }
 
+/** Run a `sql` template through a caller-supplied query runner. */
+function runOn(runQuery: typeof query, statement: RawBuilder<unknown>) {
+  const compiled = compileQuery(statement);
+  return runQuery(compiled.sql, [...compiled.parameters]);
+}
+
 async function verifyDomainRow(
   payload: Record<string, unknown>,
   runQuery: typeof query,
@@ -113,13 +122,13 @@ async function verifyDomainRow(
   if (typeof id !== "string" || !/^[1-9]\d*$/.test(id))
     return "invalid_reference";
   if (payload.stream === "db_editor") {
-    const result = await runQuery(
-      `SELECT table_name, op, pk_json::text AS pk_text,
+    const result = await runOn(
+      runQuery,
+      sql`SELECT table_name, op, pk_json::text AS pk_text,
               before_json::text AS before_text, after_json::text AS after_text,
               statement,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
-         FROM db_editor_audit WHERE id = $1`,
-      [id],
+         FROM db_editor_audit WHERE id = ${id}`,
     );
     const rows = checkRows(dbEditorAuditRowSchema, result.rows);
     const row = rows[0];
@@ -142,12 +151,12 @@ async function verifyDomainRow(
     return expected === payload.auditDigest ? null : "domain_digest";
   }
   if (payload.stream === "split") {
-    const result = await runQuery(
-      `SELECT split_id::text AS split_id_text, action, actor,
+    const result = await runOn(
+      runQuery,
+      sql`SELECT split_id::text AS split_id_text, action, actor,
               payload::text AS payload_text,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
-         FROM split_audit WHERE id = $1`,
-      [id],
+         FROM split_audit WHERE id = ${id}`,
     );
     const rows = checkRows(splitAuditRowSchema, result.rows);
     const row = rows[0];
@@ -169,14 +178,14 @@ async function verifyDomainRow(
     return expected === payload.auditDigest ? null : "domain_digest";
   }
   if (payload.stream === "portfolio_retag") {
-    const result = await runQuery(
-      `SELECT id,
+    const result = await runOn(
+      runQuery,
+      sql`SELECT id,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at,
               idempotency_key, request_fingerprint,
               from_account_id, to_account_id, transaction_ids,
               previous_assignments, selected_count, changed_count
-         FROM portfolio_retag_audit WHERE id = $1`,
-      [id],
+         FROM portfolio_retag_audit WHERE id = ${id}`,
     );
     const rows = checkRows(portfolioRetagAuditRowSchema, result.rows);
     const row = rows[0];
@@ -375,8 +384,9 @@ export async function verifyAuditHistory({
 
   if (migrationHeads) {
     // Migrations are linear, so the head is the latest applied migration.
-    const currentRevisions = await runQuery(
-      "SELECT name FROM public.kysely_migration ORDER BY name DESC LIMIT 1",
+    const currentRevisions = await runOn(
+      runQuery,
+      sql`SELECT name FROM public.kysely_migration ORDER BY name DESC LIMIT 1`,
     );
     const actualHeads = checkRows(
       migrationHeadRowSchema,
@@ -405,34 +415,27 @@ export async function verifyAuditHistory({
     split: Math.max(cutover.splitMaxId, retention?.domainMax.split ?? 0),
     retag: Math.max(cutover.retagMaxId, retention?.domainMax.retag ?? 0),
   };
-  const unlinked = await runQuery(
-    `SELECT
-       (SELECT count(*) FROM db_editor_audit d WHERE d.id <= $1::bigint AND NOT EXISTS
+  const unlinked = await runOn(
+    runQuery,
+    sql`SELECT
+       (SELECT count(*) FROM db_editor_audit d WHERE d.id <= ${cutover.dbEditorMaxId}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'db_editor'
              AND e.payload->>'auditRowId' = d.id::text)) AS db_editor_legacy,
-       (SELECT count(*) FROM db_editor_audit d WHERE d.id > $4::bigint AND NOT EXISTS
+       (SELECT count(*) FROM db_editor_audit d WHERE d.id > ${coverageMax.dbEditor}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'db_editor'
              AND e.payload->>'auditRowId' = d.id::text)) AS db_editor_missing,
-       (SELECT count(*) FROM split_audit s WHERE s.id <= $2::bigint AND NOT EXISTS
+       (SELECT count(*) FROM split_audit s WHERE s.id <= ${cutover.splitMaxId}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'split'
              AND e.payload->>'auditRowId' = s.id::text)) AS split_legacy,
-       (SELECT count(*) FROM split_audit s WHERE s.id > $5::bigint AND NOT EXISTS
+       (SELECT count(*) FROM split_audit s WHERE s.id > ${coverageMax.split}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'split'
              AND e.payload->>'auditRowId' = s.id::text)) AS split_missing,
-       (SELECT count(*) FROM portfolio_retag_audit p WHERE p.id <= $3::bigint AND NOT EXISTS
+       (SELECT count(*) FROM portfolio_retag_audit p WHERE p.id <= ${cutover.retagMaxId}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'portfolio_retag'
              AND e.payload->>'receipt_id' = p.id::text)) AS portfolio_retag_legacy,
-       (SELECT count(*) FROM portfolio_retag_audit p WHERE p.id > $6::bigint AND NOT EXISTS
+       (SELECT count(*) FROM portfolio_retag_audit p WHERE p.id > ${coverageMax.retag}::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'portfolio_retag'
              AND e.payload->>'receipt_id' = p.id::text)) AS portfolio_retag_missing`,
-    [
-      cutover.dbEditorMaxId,
-      cutover.splitMaxId,
-      cutover.retagMaxId,
-      coverageMax.dbEditor,
-      coverageMax.split,
-      coverageMax.retag,
-    ],
   );
   const [counts] = checkRows(auditUnlinkedCountsRowSchema, unlinked.rows);
   if (!counts) return fail("coverage_unavailable", sequence);

@@ -25,7 +25,7 @@ const tagRepository = {
    *
    * `limit` is optional and defaults to unbounded — the tag pickers/filters
    * render every tag and have no paging, so only an explicit limit/offset
-   * narrows the list (buildLimitOffset).
+   * narrows the list.
    */
   async getAll({
     active = null,

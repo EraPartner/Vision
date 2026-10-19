@@ -10,7 +10,6 @@
 import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
-import { queryOne } from "../database/rowContracts.ts";
 import {
   accountActiveRowSchema,
   balancePartsRowSchema,
@@ -125,14 +124,12 @@ export async function closeAccount(
 
     let adjustments: CloseAdjustment[] = [];
     if (balanceHandling === "adjustment") {
-      // The shared balance fragment binds the as-of date as positional $2.
-      const balanceRow = await queryOne(
+      const balanceRow = await checkedRow(
         balancePartsRowSchema,
-        `SELECT bp.balance_parts
+        sql`SELECT bp.balance_parts
            FROM accounts a
-           ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
-          WHERE a.id = $1`,
-        [accountId, today],
+           ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}::date` })}
+          WHERE a.id = ${accountId}`,
       );
       adjustments = (balanceRow?.balance_parts ?? [])
         .map((part) => ({

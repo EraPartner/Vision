@@ -7,21 +7,13 @@
  *                                             + bankAccount/date predicates)
  *   - repositories/splitRepository.ts        (primary-recipient COALESCE pattern)
  *
- * `buildTransactionWhere` and `buildExclusionClauses` take the
- * `TransactionWhereOptions` / `ExclusionClauseOptions` interfaces below. This
- * file's third builder, `buildAggregationFilter`, accepts their intersection
- * rather than re-listing every field a third time.
- *
- * Phase 0 is additive: this module is created and unit-tested, but callers are NOT
- * migrated here. Call-site migration happens in Phases 2 (dashboard) and 5 (transactions).
- *
- * Return contract for every builder:
- *   { sql, params, nextParamIdx }
- * where `sql` is a composable fragment (no leading/trailing whitespace guarantees
- * beyond what's shown in tests) and `nextParamIdx` is the first unused $-index so
- * callers can append further predicates.
+ * Every builder returns Kysely `sql` fragments (ADR-226) whose values are bound
+ * parameters, so callers compose them into larger templates without tracking
+ * placeholder numbers.
  */
 
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { validateIntArray } from "./validation.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
@@ -141,28 +133,6 @@ export interface TransactionWhereOptions {
   amountSigned?: boolean | undefined;
   /** OR-match: row must have at least one of these active tags */
   tagSlugs?: string[] | null | undefined;
-  /** first $-index to allocate (default 1) */
-  startParamIdx?: number | undefined;
-}
-
-export interface ExclusionClauseOptions {
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
-  startParamIdx?: number;
-}
-
-export interface WhereFragment {
-  sql: string;
-  params: unknown[];
-  nextParamIdx: number;
-}
-
-export interface JoinedWhereFragment {
-  joinSql: string;
-  /** '' when no valid exclusions were supplied (buildExclusionClauses). */
-  whereSql: string;
-  params: unknown[];
-  nextParamIdx: number;
 }
 
 /**
@@ -181,7 +151,7 @@ export interface JoinedWhereFragment {
  */
 export function buildTransactionWhere(
   opts: TransactionWhereOptions = {},
-): WhereFragment {
+): RawBuilder<unknown> {
   const {
     transactionId = null,
     startDate = null,
@@ -202,36 +172,27 @@ export function buildTransactionWhere(
     amountMax = null,
     amountSigned = false,
     tagSlugs = null,
-    startParamIdx = 1,
   } = opts;
 
-  const clauses = ["1=1"];
-  const params: unknown[] = [];
-  let p = startParamIdx;
+  const clauses: RawBuilder<unknown>[] = [sql`1=1`];
 
-  if (active) clauses.push("t.is_active = true");
+  if (active) clauses.push(sql`t.is_active = true`);
 
   if (transactionId != null) {
-    clauses.push(`t.id = $${p++}`);
-    params.push(transactionId);
+    clauses.push(sql`t.id = ${transactionId}`);
   }
   if (startDate) {
-    clauses.push(`t.date >= $${p++}`);
-    params.push(startDate);
+    clauses.push(sql`t.date >= ${startDate}`);
   }
   if (endDate) {
-    clauses.push(`t.date <= $${p++}`);
-    params.push(endDate);
+    clauses.push(sql`t.date <= ${endDate}`);
   }
   if (accountId != null) {
-    clauses.push(`t.account_id = $${p++}`);
-    params.push(accountId);
+    clauses.push(sql`t.account_id = ${accountId}`);
   } else if (Array.isArray(accountIds) && accountIds.length > 0) {
     const safe = validateInt4Ids(accountIds, "accountIds");
     if (safe.length > 0) {
-      const placeholders = safe.map(() => `$${p++}`).join(", ");
-      clauses.push(`t.account_id IN (${placeholders})`);
-      params.push(...safe);
+      clauses.push(sql`t.account_id IN (${sql.join(safe)})`);
     }
   }
   // Both bank filters resolve through account_id (ADR-088 contract phase): the
@@ -241,20 +202,17 @@ export function buildTransactionWhere(
   // are identical to the old string predicates.
   if (bankAccount) {
     clauses.push(
-      `t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${p++})`,
+      sql`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE ${`%${bankAccount}%`})`,
     );
-    params.push(`%${bankAccount}%`);
   } else if (Array.isArray(bankAccounts) && bankAccounts.length > 0) {
     const safe = bankAccounts
       .slice(0, MAX_LIST_SIZE)
       .map((s) => String(s).trim())
       .filter(Boolean);
     if (safe.length > 0) {
-      const placeholders = safe.map(() => `$${p++}`).join(", ");
       clauses.push(
-        `t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN (${placeholders}))`,
+        sql`t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name IN (${sql.join(safe)}))`,
       );
-      params.push(...safe);
     }
   }
   if (categoryId != null) {
@@ -265,54 +223,34 @@ export function buildTransactionWhere(
     //   own category = X, OR
     //   (own NULL AND recipient default = X), OR
     //   (own NULL AND recipient default NULL AND primary default = X).
-    const idx = p++;
-    const descendants = `(SELECT category_id FROM category_ancestors WHERE ancestor_id = $${idx})`;
-    clauses.push(`(
-      t.category_id IN ${descendants}
-      OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN ${descendants}))
-      OR (t.category_id IS NULL AND t.recipient_id IN (
-        SELECT r2.id FROM recipients r2
-        JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
-        WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN ${descendants}
-      ))
-    )`);
-    params.push(categoryId);
+    clauses.push(
+      effectiveCategoryIn(
+        sql`(SELECT category_id FROM category_ancestors WHERE ancestor_id = ${categoryId})`,
+      ),
+    );
   } else if (Array.isArray(categoryIds) && categoryIds.length > 0) {
     const safe = validateInt4Ids(categoryIds, "categoryIds");
     if (safe.length > 0) {
       // Same effective-category expansion as the single-value branch above,
-      // with each leaf comparing against the id list. The placeholder slots are
-      // allocated once and reused across the three leaves (Postgres allows a
-      // $N to appear multiple times), so the param count/order is unchanged.
-      const startIdx = p;
-      const placeholders = safe.map((_, i) => `$${startIdx + i}`).join(", ");
-      const descendants = `(SELECT category_id FROM category_ancestors WHERE ancestor_id IN (${placeholders}))`;
-      p += safe.length;
-      clauses.push(`(
-        t.category_id IN ${descendants}
-        OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN ${descendants}))
-        OR (t.category_id IS NULL AND t.recipient_id IN (
-          SELECT r2.id FROM recipients r2
-          JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
-          WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN ${descendants}
-        ))
-      )`);
-      params.push(...safe);
+      // with each leaf comparing against the id list.
+      clauses.push(
+        effectiveCategoryIn(
+          sql`(SELECT category_id FROM category_ancestors WHERE ancestor_id IN (${sql.join(safe)}))`,
+        ),
+      );
     }
   }
   if (transactionType === "income") {
-    clauses.push("t.amount > 0");
+    clauses.push(sql`t.amount > 0`);
   } else if (transactionType === "expense") {
-    clauses.push("t.amount < 0");
+    clauses.push(sql`t.amount < 0`);
   }
-  const amountCol = amountSigned ? "t.amount" : "ABS(t.amount)";
+  const amountCol = amountSigned ? sql`t.amount` : sql`ABS(t.amount)`;
   if (amountMin != null && Number.isFinite(Number(amountMin))) {
-    clauses.push(`${amountCol} >= $${p++}`);
-    params.push(Number(amountMin));
+    clauses.push(sql`${amountCol} >= ${Number(amountMin)}`);
   }
   if (amountMax != null && Number.isFinite(Number(amountMax))) {
-    clauses.push(`${amountCol} <= $${p++}`);
-    params.push(Number(amountMax));
+    clauses.push(sql`${amountCol} <= ${Number(amountMax)}`);
   }
   if (recipientId != null) {
     // Semi-join so the planner can use the t.recipient_id index instead of an
@@ -320,10 +258,8 @@ export function buildTransactionWhere(
     // (t.recipient_id = $ OR r.primary_recipient_id = $): the subquery returns
     // the recipient itself plus every alias whose primary is it.
     clauses.push(
-      `t.recipient_id IN (SELECT id FROM recipients WHERE id = $${p} OR primary_recipient_id = $${p})`,
+      sql`t.recipient_id IN (SELECT id FROM recipients WHERE id = ${recipientId} OR primary_recipient_id = ${recipientId})`,
     );
-    p++;
-    params.push(recipientId);
   }
   if (recipientGroupId != null) {
     // Resolve the full primary group: match the recipient itself, any aliases under it,
@@ -339,19 +275,17 @@ export function buildTransactionWhere(
     // only transactions-side column. The branch set is unchanged: `r` is joined on
     // `t.recipient_id = r.id`, so `r.primary_recipient_id` for a row is exactly the
     // `primary_recipient_id` of the recipient whose id equals `t.recipient_id`.
-    clauses.push(`t.recipient_id IN (
+    const g = recipientGroupId;
+    clauses.push(sql`t.recipient_id IN (
       SELECT id FROM recipients
-      WHERE id = $${p}
-         OR primary_recipient_id = $${p}
-         OR id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
-         OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = $${p} AND primary_recipient_id IS NOT NULL)
+      WHERE id = ${g}
+         OR primary_recipient_id = ${g}
+         OR id = (SELECT primary_recipient_id FROM recipients WHERE id = ${g} AND primary_recipient_id IS NOT NULL)
+         OR primary_recipient_id = (SELECT primary_recipient_id FROM recipients WHERE id = ${g} AND primary_recipient_id IS NOT NULL)
     )`);
-    p++;
-    params.push(recipientGroupId);
   }
   if (recipientName) {
-    clauses.push(`r.name ILIKE $${p++}`);
-    params.push(`%${recipientName}%`);
+    clauses.push(sql`r.name ILIKE ${`%${recipientName}%`}`);
   }
   const searchText = search == null ? "" : String(search);
   if (searchText.trim().length >= MIN_SEARCH_LENGTH) {
@@ -367,38 +301,39 @@ export function buildTransactionWhere(
     // self-contained scan the planner can index (pg_trgm on memo/comment and
     // recipients.name, btree on the id hops), and the CAST branches exist only
     // when the term is made of characters the cast text can actually contain.
-    const matchingCategories = `SELECT sc.id FROM categories sc WHERE sc.path_name ILIKE $${p} OR sc.general ILIKE $${p} OR sc.detail ILIKE $${p}`;
-    const branches = [
-      `SELECT st.id FROM transactions st WHERE st.memo ILIKE $${p} OR st.comment ILIKE $${p}`,
+    const term = `%${searchText}%`;
+    const matchingCategories = sql`SELECT sc.id FROM categories sc WHERE sc.path_name ILIKE ${term} OR sc.general ILIKE ${term} OR sc.detail ILIKE ${term}`;
+    const branches: RawBuilder<unknown>[] = [
+      sql`SELECT st.id FROM transactions st WHERE st.memo ILIKE ${term} OR st.comment ILIKE ${term}`,
       // Bank label via the account entity (ADR-088): the search must match the
       // canonical accounts.name through the FK, not the retired string column.
-      `SELECT st.id FROM transactions st WHERE st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $${p})`,
-      `SELECT st.id FROM transactions st WHERE st.currency ILIKE $${p}`,
+      sql`SELECT st.id FROM transactions st WHERE st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE ${term})`,
+      sql`SELECT st.id FROM transactions st WHERE st.currency ILIKE ${term}`,
     ];
     if (/^[0-9.-]+$/.test(searchText)) {
       branches.push(
-        `SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE $${p}`,
+        sql`SELECT st.id FROM transactions st WHERE CAST(st.amount AS TEXT) ILIKE ${term}`,
       );
     }
     if (/^[0-9-]+$/.test(searchText)) {
       branches.push(
-        `SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE $${p}`,
+        sql`SELECT st.id FROM transactions st WHERE CAST(st.date AS TEXT) ILIKE ${term}`,
       );
     }
     branches.push(
       // Recipient name — the transaction's own recipient (r.name) or the
       // primary it aliases (pr.name).
-      `SELECT st.id FROM transactions st WHERE st.recipient_id IN (
-        SELECT sr.id FROM recipients sr WHERE sr.name ILIKE $${p}
+      sql`SELECT st.id FROM transactions st WHERE st.recipient_id IN (
+        SELECT sr.id FROM recipients sr WHERE sr.name ILIKE ${term}
         UNION
         SELECT sr.id FROM recipients sr WHERE sr.primary_recipient_id IN (
-          SELECT srp.id FROM recipients srp WHERE srp.name ILIKE $${p}
+          SELECT srp.id FROM recipients srp WHERE srp.name ILIKE ${term}
         )
       )`,
       // Categories — the transaction's own (c), the recipient's default (rc),
       // and the primary recipient's default (pc).
-      `SELECT st.id FROM transactions st WHERE st.category_id IN (${matchingCategories})`,
-      `SELECT st.id FROM transactions st WHERE st.recipient_id IN (
+      sql`SELECT st.id FROM transactions st WHERE st.category_id IN (${matchingCategories})`,
+      sql`SELECT st.id FROM transactions st WHERE st.recipient_id IN (
         SELECT sr.id FROM recipients sr WHERE sr.default_category_id IN (${matchingCategories})
         UNION
         SELECT sr.id FROM recipients sr WHERE sr.primary_recipient_id IN (
@@ -406,15 +341,11 @@ export function buildTransactionWhere(
         )
       )`,
       // Active tag slugs via the junction table.
-      `SELECT tt.transaction_id FROM transaction_tags tt
+      sql`SELECT tt.transaction_id FROM transaction_tags tt
         JOIN tags tg ON tg.id = tt.tag_id
-        WHERE tg.is_active = true AND tg.slug ILIKE $${p}`,
+        WHERE tg.is_active = true AND tg.slug ILIKE ${term}`,
     );
-    clauses.push(
-      `t.id IN (\n      ${branches.join("\n      UNION\n      ")}\n    )`,
-    );
-    p++;
-    params.push(`%${searchText}%`);
+    clauses.push(sql`t.id IN (${sql.join(branches, sql` UNION `)})`);
   }
   if (Array.isArray(tagSlugs) && tagSlugs.length > 0) {
     const safe = tagSlugs
@@ -422,119 +353,105 @@ export function buildTransactionWhere(
       .map((s) => String(s).trim())
       .filter(Boolean);
     if (safe.length > 0) {
-      clauses.push(`EXISTS (
+      clauses.push(sql`EXISTS (
         SELECT 1 FROM transaction_tags tt
         JOIN tags tg ON tg.id = tt.tag_id
         WHERE tt.transaction_id = t.id
-          AND tg.slug = ANY($${p++}::text[])
+          AND tg.slug = ANY(${safe}::text[])
           AND tg.is_active = true
       )`);
-      params.push(safe);
     }
   }
 
-  return {
-    sql: clauses.join(" AND "),
-    params,
-    nextParamIdx: p,
-  };
+  return sql.join(clauses, sql` AND `);
 }
 
 /**
- * Build exclusion predicates used by dashboard/info aggregation queries.
+ * The effective-category disjunction: own category, else the recipient's
+ * default, else the primary recipient's default, in `descendants`.
+ */
+function effectiveCategoryIn(
+  descendants: RawBuilder<unknown>,
+): RawBuilder<unknown> {
+  return sql`(
+      t.category_id IN ${descendants}
+      OR (t.category_id IS NULL AND t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN ${descendants}))
+      OR (t.category_id IS NULL AND t.recipient_id IN (
+        SELECT r2.id FROM recipients r2
+        JOIN recipients pr2 ON r2.primary_recipient_id = pr2.id
+        WHERE r2.default_category_id IS NULL AND pr2.default_category_id IN ${descendants}
+      ))
+    )`;
+}
+
+// ── Exclusion predicates ───────────────────────────────────────────────────
+
+/**
+ * The r/pr joins that {@link exclusionClauses}' predicates reference:
+ * `transactions t` → recipient `r` → primary recipient `pr`.
+ */
+export const EXCLUSION_JOINS = sql`LEFT JOIN recipients r ON t.recipient_id = r.id
+LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id`;
+
+export interface ExclusionSql {
+  /** {@link EXCLUSION_JOINS} when a predicate exists, otherwise empty. */
+  joins: RawBuilder<unknown>;
+  /** `AND <predicates>`, or empty when no valid exclusions were supplied. */
+  where: RawBuilder<unknown>;
+  /** True when at least one predicate was emitted. */
+  active: boolean;
+}
+
+/**
+ * Exclusion predicates used by dashboard/info aggregation queries.
  *
  * Honors primary-recipient aggregation: excluding a primary recipient also excludes
  * all of its sub-recipients, and excluding a category also excludes transactions
- * whose effective category (explicit → recipient default → primary default) matches.
- *
- * Required joins on caller (emitted verbatim in `joinSql`):
- *   LEFT JOIN recipients r ON t.recipient_id = r.id
- *   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
- *
- * `whereSql` is '' when no valid exclusions were supplied.
+ * whose effective category (explicit → recipient default → primary default)
+ * matches it or any of its descendants. Predicates reference `t`, `r` and `pr`
+ * (see {@link EXCLUSION_JOINS}).
+ * @throws {ValidationError} when an id is not a valid int4
  */
-export function buildExclusionClauses(
-  opts: ExclusionClauseOptions = {},
-): JoinedWhereFragment {
-  const {
-    excludedCategoryIds = [],
-    excludedRecipientIds = [],
-    startParamIdx = 1,
-  } = opts;
-
+export function exclusionClauses({
+  excludedCategoryIds = [],
+  excludedRecipientIds = [],
+}: {
+  excludedCategoryIds?: readonly unknown[] | undefined;
+  excludedRecipientIds?: readonly unknown[] | undefined;
+}): ExclusionSql {
   const safeCats = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");
   const safeRecs = validateInt4Ids(
     excludedRecipientIds,
     "excludedRecipientIds",
   );
-
-  const clauses: string[] = [];
-  const params: unknown[] = [];
-  let p = startParamIdx;
-
-  const joinSql = [
-    "LEFT JOIN recipients r ON t.recipient_id = r.id",
-    "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
-  ].join("\n");
+  const clauses: RawBuilder<unknown>[] = [];
 
   // A selected category excludes its direct assignments and every descendant.
   // NOT EXISTS keeps uncategorized rows, unlike a nullable NOT IN predicate.
   if (safeCats.length > 0) {
-    const placeholders = safeCats.map(() => `$${p++}`).join(", ");
-    clauses.push(
-      `NOT EXISTS (SELECT 1 FROM category_ancestors excluded
+    clauses.push(sql`NOT EXISTS (SELECT 1 FROM category_ancestors excluded
         WHERE excluded.category_id = COALESCE(t.category_id, r.default_category_id, pr.default_category_id)
-          AND excluded.ancestor_id IN (${placeholders}))`,
-    );
-    params.push(...safeCats);
+          AND excluded.ancestor_id IN (${sql.join(safeCats)}))`);
   }
-
+  // The trailing -1 keeps recipient-less rows when a recipient exclusion is
+  // present: NULL NOT IN would otherwise drop them.
   if (safeRecs.length > 0) {
-    // The trailing -1 keeps recipient-less rows when a recipient exclusion is
-    // present: NULL NOT IN would otherwise drop them.
-    const placeholders = safeRecs.map(() => `$${p++}`).join(", ");
     clauses.push(
-      `COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${placeholders})`,
+      sql`COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN (${sql.join(safeRecs)})`,
     );
-    params.push(...safeRecs);
   }
 
+  const active = clauses.length > 0;
   return {
-    joinSql,
-    whereSql: clauses.join(" AND "),
-    params,
-    nextParamIdx: p,
+    joins: active ? EXCLUSION_JOINS : sql``,
+    where: andClauses(clauses),
+    active,
   };
 }
 
-/**
- * Combine a base transaction WHERE with exclusion clauses, sharing a param counter.
- * Convenience wrapper that most aggregation callers will use verbatim.
- *
- * @param opts Union of buildTransactionWhere and buildExclusionClauses options.
- */
-function buildAggregationFilter(
-  opts: TransactionWhereOptions & ExclusionClauseOptions = {},
-): JoinedWhereFragment {
-  const base = buildTransactionWhere({
-    ...opts,
-    startParamIdx: opts.startParamIdx ?? 1,
-  });
-  const excl = buildExclusionClauses({
-    ...opts,
-    startParamIdx: base.nextParamIdx,
-  });
-
-  const combinedWhere = excl.whereSql
-    ? `${base.sql} AND ${excl.whereSql}`
-    : base.sql;
-
-  return {
-    joinSql: excl.joinSql,
-    whereSql: combinedWhere,
-    params: [...base.params, ...excl.params],
-    nextParamIdx: excl.nextParamIdx,
-  };
+/** `AND a AND b ...`, or an empty fragment for no clauses. */
+export function andClauses(
+  clauses: readonly RawBuilder<unknown>[],
+): RawBuilder<unknown> {
+  return clauses.length > 0 ? sql`AND ${sql.join(clauses, sql` AND `)}` : sql``;
 }
-
-export { buildAggregationFilter as __buildAggregationFilter };

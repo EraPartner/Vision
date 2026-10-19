@@ -426,7 +426,7 @@ describe("commitBatch", () => {
     // The transactions INSERT now uses ON CONFLICT ... RETURNING id — a
     // returned row means the insert landed (vs. a tx_hash conflict).
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions"))
+      if (stmt(sql).includes("insert into transactions"))
         return { rows: [{ id: 100 }] };
       return { rows: [] };
     });
@@ -450,13 +450,13 @@ describe("commitBatch", () => {
     mockClient.query.mockImplementation(async (sql, params) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
-      if (sql.includes("INSERT INTO accounts"))
+      if (stmt(sql).includes("insert into accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
       if (sql.includes("dedup_fingerprint IS NULL AND tx_hash"))
         return { rows: [] };
-      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 0 }] };
-      if (sql.includes("INSERT INTO transactions")) {
+      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 0 }] };
+      if (stmt(sql).includes("insert into transactions")) {
         expect(params.slice(11, 14)).toEqual([
           "source-hash-1",
           "fingerprint-1",
@@ -489,10 +489,10 @@ describe("commitBatch", () => {
     mockClient.query.mockImplementation(async (sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
-      if (sql.includes("INSERT INTO accounts"))
+      if (stmt(sql).includes("insert into accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
-      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 1 }] };
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
+      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 1 }] };
       return { rows: [] };
     });
 
@@ -504,7 +504,7 @@ describe("commitBatch", () => {
     });
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        String(sql).includes("COUNT(*)::int AS n"),
+        stmt(sql).includes("count(*)::int as n"),
       ),
     ).toBe(true);
   });
@@ -533,11 +533,11 @@ describe("commitBatch", () => {
     mockClient.query.mockImplementation(async (sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
-      if (sql.includes("INSERT INTO accounts"))
+      if (stmt(sql).includes("insert into accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
-      if (sql.includes("COUNT(*)::int AS n")) return { rows: [{ n: 1 }] };
-      if (sql.includes("INSERT INTO transactions"))
+      if (stmt(sql).includes("where dedup_fingerprint_version")) return { rows: [] };
+      if (stmt(sql).includes("count(*)::int as n")) return { rows: [{ n: 1 }] };
+      if (stmt(sql).includes("insert into transactions"))
         return { rows: [{ id: 100 }] };
       return { rows: [] };
     });
@@ -561,9 +561,9 @@ describe("commitBatch", () => {
     mockClient.query.mockImplementation(async (sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
-      if (sql.includes("INSERT INTO accounts"))
+      if (stmt(sql).includes("insert into accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("WHERE dedup_fingerprint_version"))
+      if (stmt(sql).includes("where dedup_fingerprint_version"))
         return { rows: [{ id: 91 }] };
       return { rows: [] };
     });
@@ -576,7 +576,7 @@ describe("commitBatch", () => {
     });
     expect(
       mockClient.query.mock.calls.some(([sql]) =>
-        String(sql).includes("COUNT(*)::int AS n"),
+        stmt(sql).includes("count(*)::int as n"),
       ),
     ).toBe(false);
   });
@@ -604,7 +604,7 @@ describe("commitBatch", () => {
       return { rows: [] };
     });
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions")) {
+      if (stmt(sql).includes("insert into transactions")) {
         return { rows: [{ id: 100, tx_hash: null }] };
       }
       return { rows: [] };
@@ -666,9 +666,9 @@ describe("commitBatch", () => {
     mockClient.query.mockImplementation(async (sql) => {
       if (stmt(sql).includes("select id, is_active from accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
-      if (sql.includes("INSERT INTO accounts"))
+      if (stmt(sql).includes("insert into accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
-      if (sql.includes("WHERE dedup_fingerprint_version"))
+      if (stmt(sql).includes("where dedup_fingerprint_version"))
         return { rows: [{ id: 91 }] };
       return { rows: [] };
     });
@@ -701,7 +701,7 @@ describe("commitBatch", () => {
     // the staging row marked, exactly as the per-row loop always did.
     setupCommit(matchedRow);
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions"))
+      if (stmt(sql).includes("insert into transactions"))
         throw new Error("constraint violation");
       return { rows: [] };
     });
@@ -765,7 +765,7 @@ describe("commitBatch", () => {
       user_override_recipient_id: 42,
     });
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions"))
+      if (stmt(sql).includes("insert into transactions"))
         return { rows: [{ id: 100, tx_hash: null }] };
       return { rows: [] };
     });
@@ -795,7 +795,7 @@ describe("commitBatch", () => {
       .mockResolvedValueOnce({ rows: [] }) // rows_error checkpoint
       .mockResolvedValueOnce({ rows: [] }); // UPDATE counters
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO transactions")) {
+      if (stmt(sql).includes("insert into transactions")) {
         return {
           rows: [
             { id: 100, tx_hash: "h1" },

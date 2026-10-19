@@ -1,21 +1,44 @@
 /**
  * filterBuilder tests.
  *
- * Covers: validateInt4Ids, buildTransactionWhere, buildExclusionClauses,
- *         buildAggregationFilter. Param-index sharing is exercised so callers
- *         can compose these into larger queries without collision.
+ * Covers: parseAmountFilter, validateInt4Ids, buildTransactionWhere and
+ *         exclusionClauses. The builders return Kysely `sql` fragments; these
+ *         tests read the compiled predicate text and its bound values.
  */
 
 import { describe, it, expect } from "vitest";
+import { db } from "../src/database/db.ts";
 import {
-  buildTransactionWhere,
-  buildExclusionClauses,
-  __buildAggregationFilter as buildAggregationFilter,
+  buildTransactionWhere as transactionWhere,
+  exclusionClauses,
   parseAmountFilter,
   validateInt4Ids,
 } from "../src/lib/filterBuilder.ts";
 import type { TransactionWhereOptions } from "../src/lib/filterBuilder.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
+
+/**
+ * The compiled predicate and its bound values, numbered from $1. `shape` is the
+ * same text with every placeholder written `$`: a value used in several places
+ * binds once per use.
+ */
+function buildTransactionWhere(opts?: TransactionWhereOptions) {
+  const { sql, parameters } = transactionWhere(opts).compile(db);
+  return { sql, shape: sql.replace(/\$\d+/g, "$"), params: [...parameters] };
+}
+
+/** The compiled exclusion predicates (without the leading AND). */
+function buildExclusionClauses(
+  opts: Parameters<typeof exclusionClauses>[0] = {},
+) {
+  const result = exclusionClauses(opts);
+  const where = result.where.compile(db);
+  return {
+    joinSql: result.joins.compile(db).sql,
+    whereSql: where.sql.replace(/^AND /, ""),
+    params: [...where.parameters],
+  };
+}
 
 describe("parseAmountFilter", () => {
   it("returns undefined for missing or unparseable input", () => {
@@ -130,10 +153,9 @@ describe("validateInt4Ids", () => {
 
 describe("buildTransactionWhere", () => {
   it("defaults to active-only filter when given no options", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere();
+    const { sql, params } = buildTransactionWhere();
     expect(sql).toBe("1=1 AND t.is_active = true");
     expect(params).toEqual([]);
-    expect(nextParamIdx).toBe(1);
   });
 
   it("omits active clause when active=false", () => {
@@ -142,7 +164,7 @@ describe("buildTransactionWhere", () => {
   });
 
   it("builds date-range + bank-account filter with sequential $-indices", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { sql, params } = buildTransactionWhere({
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       bankAccount: "BE12",
@@ -156,58 +178,54 @@ describe("buildTransactionWhere", () => {
     );
     expect(sql).not.toContain("t.bank_account");
     expect(params).toEqual(["2026-01-01", "2026-01-31", "%BE12%"]);
-    expect(nextParamIdx).toBe(4);
   });
 
   it("categoryId expands the effective-category chain into an indexable disjunction", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { shape, params } = buildTransactionWhere({
       categoryId: 9,
     });
     // Effective category = own → recipient default → primary default, expanded
     // to semi-joins (replaces the non-indexable COALESCE(...) = $ wrapper).
-    expect(sql).toContain(
-      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
+    expect(shape).toContain(
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $)",
     );
-    expect(sql).toContain(
-      "t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1))",
+    expect(shape).toContain(
+      "t.recipient_id IN (SELECT id FROM recipients WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $))",
     );
-    expect(sql).toContain(
-      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
+    expect(shape).toContain(
+      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $)",
     );
-    expect(sql).toContain("r2.default_category_id IS NULL");
+    expect(shape).toContain("r2.default_category_id IS NULL");
     // COALESCE precedence preserved: recipient/primary fallbacks only apply when
     // the txn's own category is NULL.
-    expect(sql).toContain("t.category_id IS NULL AND t.recipient_id IN");
-    expect(sql).not.toContain("COALESCE(t.category_id");
-    expect(params).toEqual([9]);
-    // Single param slot reused across all three leaves — param count unchanged.
-    expect(nextParamIdx).toBe(2);
+    expect(shape).toContain("t.category_id IS NULL AND t.recipient_id IN");
+    expect(shape).not.toContain("COALESCE(t.category_id");
+    expect([...new Set(params)]).toEqual([9]);
   });
 
   it("recipientId matches both direct and primary-recipient children via a semi-join", () => {
-    const { sql, params } = buildTransactionWhere({ recipientId: 5 });
+    const { shape, params } = buildTransactionWhere({ recipientId: 5 });
     // Semi-join (indexable on t.recipient_id) equivalent to the old
     // (t.recipient_id = $ OR r.primary_recipient_id = $).
-    expect(sql).toContain(
-      "t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)",
+    expect(shape).toContain(
+      "t.recipient_id IN (SELECT id FROM recipients WHERE id = $ OR primary_recipient_id = $)",
     );
-    expect(params).toEqual([5]);
+    expect([...new Set(params)]).toEqual([5]);
   });
 
   it("recipientGroupId resolves full primary group including parent and siblings", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { shape, params } = buildTransactionWhere({
       recipientGroupId: 7,
     });
     // All four group branches, in the same order as the pre-semi-join shape:
     // the recipient itself, its aliases, its own primary, that primary's siblings.
-    expect(sql).toContain("t.recipient_id IN (");
-    expect(sql).toContain("id = $1");
-    expect(sql).toContain("primary_recipient_id = $1");
-    expect(sql).toContain(
-      "SELECT primary_recipient_id FROM recipients WHERE id = $1 AND primary_recipient_id IS NOT NULL",
+    expect(shape).toContain("t.recipient_id IN (");
+    expect(shape).toContain("id = $");
+    expect(shape).toContain("primary_recipient_id = $");
+    expect(shape).toContain(
+      "SELECT primary_recipient_id FROM recipients WHERE id = $ AND primary_recipient_id IS NOT NULL",
     );
-    expect(params).toEqual([7]);
-    expect(nextParamIdx).toBe(2);
+    expect([...new Set(params)]).toEqual([7]);
   });
 
   it("recipientGroupId is a semi-join: t.recipient_id is the only transactions-side column", () => {
@@ -233,20 +251,19 @@ describe("buildTransactionWhere", () => {
     expect(sql).not.toMatch(/\bpr\.\w+/);
   });
 
-  it("recipientGroupId and recipientId can coexist and use sequential $-indices", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+  it("recipientGroupId and recipientId can coexist, each bound to its own value", () => {
+    const { shape, params } = buildTransactionWhere({
       recipientId: 3,
       recipientGroupId: 7,
     });
-    expect(sql).toContain(
-      "t.recipient_id IN (SELECT id FROM recipients WHERE id = $1 OR primary_recipient_id = $1)",
+    expect(shape).toContain(
+      "t.recipient_id IN (SELECT id FROM recipients WHERE id = $ OR primary_recipient_id = $)",
     );
-    expect(sql).toContain("id = $2");
-    expect(sql).toContain(
-      "SELECT primary_recipient_id FROM recipients WHERE id = $2 AND primary_recipient_id IS NOT NULL",
+    expect(shape).toContain("id = $");
+    expect(shape).toContain(
+      "SELECT primary_recipient_id FROM recipients WHERE id = $ AND primary_recipient_id IS NOT NULL",
     );
-    expect(params).toEqual([3, 7]);
-    expect(nextParamIdx).toBe(3);
+    expect([...new Set(params)]).toEqual([3, 7]);
   });
 
   it("recipientName is the only filter that references a join alias", () => {
@@ -280,41 +297,39 @@ describe("buildTransactionWhere", () => {
     expect(withName).not.toMatch(/\b(pr|c|rc|pc|acct)\.\w+/);
   });
 
-  it("search builds an indexable t.id IN (UNION ...) with a single $-slot", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+  it("search builds an indexable t.id IN (UNION ...) over one search term", () => {
+    const { shape, params } = buildTransactionWhere({
       search: "groceries",
     });
     // One id-producing branch per relation instead of an OR chain over the
     // outer join aliases, so each branch can use its own index.
-    expect(sql).toContain("t.id IN (");
-    expect(sql).toContain("st.memo ILIKE $1 OR st.comment ILIKE $1");
+    expect(shape).toContain("t.id IN (");
+    expect(shape).toContain("st.memo ILIKE $ OR st.comment ILIKE $");
     // Bank-label branch goes through the account entity (ADR-088), the
     // currency branch stays on the transaction row.
-    expect(sql).toContain(
-      "st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $1)",
+    expect(shape).toContain(
+      "st.account_id IN (SELECT sa.id FROM accounts sa WHERE sa.name ILIKE $)",
     );
-    expect(sql).toContain("st.currency ILIKE $1");
-    expect(sql).not.toContain("bank_account");
-    expect(sql).toContain("sr.name ILIKE $1");
-    expect(sql).toContain("sc.general ILIKE $1 OR sc.detail ILIKE $1");
-    expect(sql).toContain("sr.default_category_id IN");
-    expect(sql).toContain("srp.default_category_id IN");
-    expect(params).toEqual(["%groceries%"]);
-    expect(nextParamIdx).toBe(2);
+    expect(shape).toContain("st.currency ILIKE $");
+    expect(shape).not.toContain("bank_account");
+    expect(shape).toContain("sr.name ILIKE $");
+    expect(shape).toContain("sc.general ILIKE $ OR sc.detail ILIKE $");
+    expect(shape).toContain("sr.default_category_id IN");
+    expect(shape).toContain("srp.default_category_id IN");
+    expect([...new Set(params)]).toEqual(["%groceries%"]);
   });
 
   it("search also spans the transaction date text and active tag slugs", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { shape, params } = buildTransactionWhere({
       search: "2026-06",
     });
     // Date is matched as ISO text so "2026-06" finds June 2026.
-    expect(sql).toContain("CAST(st.date AS TEXT) ILIKE $1");
+    expect(shape).toContain("CAST(st.date AS TEXT) ILIKE $");
     // Tags are matched via the junction table, reusing the same slot.
-    expect(sql).toContain("FROM transaction_tags tt");
-    expect(sql).toContain("tg.slug ILIKE $1");
-    expect(sql).toContain("tg.is_active = true");
-    expect(params).toEqual(["%2026-06%"]);
-    expect(nextParamIdx).toBe(2);
+    expect(shape).toContain("FROM transaction_tags tt");
+    expect(shape).toContain("tg.slug ILIKE $");
+    expect(shape).toContain("tg.is_active = true");
+    expect([...new Set(params)]).toEqual(["%2026-06%"]);
   });
 
   it("search omits the amount/date CAST branches when the term cannot match them", () => {
@@ -324,33 +339,31 @@ describe("buildTransactionWhere", () => {
   });
 
   it("search includes the amount CAST branch only for numeric-shaped terms", () => {
-    const { sql } = buildTransactionWhere({ search: "12.5" });
-    expect(sql).toContain("CAST(st.amount AS TEXT) ILIKE $1");
+    const { shape } = buildTransactionWhere({ search: "12.5" });
+    expect(shape).toContain("CAST(st.amount AS TEXT) ILIKE $");
     // '.' never appears in date text, so the date branch is skipped.
-    expect(sql).not.toContain("CAST(st.date AS TEXT)");
+    expect(shape).not.toContain("CAST(st.date AS TEXT)");
   });
 
   it("search shorter than MIN_SEARCH_LENGTH after trimming is ignored", () => {
     for (const term of ["a", " a ", "", "  "]) {
-      const { sql, params, nextParamIdx } = buildTransactionWhere({
+      const { sql, params } = buildTransactionWhere({
         search: term,
       });
       expect(sql).not.toContain("t.id IN (");
       expect(sql).not.toContain("ILIKE");
       expect(params).toEqual([]);
-      expect(nextParamIdx).toBe(1);
     }
   });
 
   it("amountMin/amountMax filter on magnitude (sign-agnostic) with sequential slots", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { sql, params } = buildTransactionWhere({
       amountMin: 10,
       amountMax: 50,
     });
     expect(sql).toContain("ABS(t.amount) >= $1");
     expect(sql).toContain("ABS(t.amount) <= $2");
     expect(params).toEqual([10, 50]);
-    expect(nextParamIdx).toBe(3);
   });
 
   it("amount bounds are skipped when null or non-finite", () => {
@@ -374,25 +387,18 @@ describe("buildTransactionWhere", () => {
     expect(params).toEqual([-50, -50]);
   });
 
-  it("respects startParamIdx so it can be composed into a bigger query", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
-      startDate: "2026-01-01",
-      startParamIdx: 5,
-    });
-    expect(sql).toContain("t.date >= $5");
-    expect(params).toEqual(["2026-01-01"]);
-    expect(nextParamIdx).toBe(6);
-  });
 });
 
 describe("buildExclusionClauses", () => {
-  it("returns empty whereSql and no params when exclusions are absent", () => {
+  it("returns no predicate, joins or params when exclusions are absent", () => {
     const result = buildExclusionClauses();
     expect(result.whereSql).toBe("");
     expect(result.params).toEqual([]);
-    expect(result.nextParamIdx).toBe(1);
-    expect(result.joinSql).toContain("LEFT JOIN recipients r");
-    expect(result.joinSql).toContain("LEFT JOIN recipients pr");
+    // No predicate needs the recipient joins, so none are emitted.
+    expect(result.joinSql).toBe("");
+    const active = buildExclusionClauses({ excludedRecipientIds: [1] });
+    expect(active.joinSql).toContain("LEFT JOIN recipients r");
+    expect(active.joinSql).toContain("LEFT JOIN recipients pr");
   });
 
   // Was: the same input asserted whereSql === '' and params === []. That is the
@@ -402,14 +408,12 @@ describe("buildExclusionClauses", () => {
   it("rejects a malformed exclusion list instead of emitting no predicate", () => {
     expect(() =>
       buildExclusionClauses({
-        // @ts-expect-error -- malformed ids exercise runtime validation
         excludedCategoryIds: [null, 0, "oops", 2147483647],
         excludedRecipientIds: [-1, NaN],
       }),
     ).toThrow(ValidationError);
 
     expect(() =>
-      // @ts-expect-error -- a non-numeric id exercises runtime validation
       buildExclusionClauses({ excludedCategoryIds: [1, "oops"] }),
     ).toThrow("excludedCategoryIds contains invalid value: oops");
     expect(() =>
@@ -435,7 +439,6 @@ describe("buildExclusionClauses", () => {
     );
     expect(result.whereSql).toContain("excluded.ancestor_id IN ($1, $2, $3)");
     expect(result.params).toEqual([1, 2, 3]);
-    expect(result.nextParamIdx).toBe(4);
   });
 
   it("builds NOT IN predicate for recipients using primary-first COALESCE", () => {
@@ -444,7 +447,6 @@ describe("buildExclusionClauses", () => {
       "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($1, $2)",
     );
     expect(result.params).toEqual([7, 8]);
-    expect(result.nextParamIdx).toBe(3);
   });
 
   it("keeps uncategorized and recipient-less rows on exclusions", () => {
@@ -454,63 +456,27 @@ describe("buildExclusionClauses", () => {
     expect(rec.whereSql).toContain(", -1) NOT IN");
   });
 
-  it("combines both exclusion lists with AND and sequential $-indices", () => {
+  it("combines both exclusion lists with AND and sequential placeholders", () => {
     const result = buildExclusionClauses({
       excludedCategoryIds: [10, 11],
       excludedRecipientIds: [20],
-      startParamIdx: 4,
     });
-    expect(result.whereSql).toContain("excluded.ancestor_id IN ($4, $5)");
+    expect(result.whereSql).toContain("excluded.ancestor_id IN ($1, $2)");
     expect(result.whereSql).toContain(
-      "AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($6)",
+      "AND COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($3)",
     );
     expect(result.params).toEqual([10, 11, 20]);
-    expect(result.nextParamIdx).toBe(7);
-  });
-});
-
-describe("buildAggregationFilter", () => {
-  it("merges base where with exclusions and shares the param counter", () => {
-    const { joinSql, whereSql, params, nextParamIdx } = buildAggregationFilter({
-      startDate: "2026-01-01",
-      endDate: "2026-01-31",
-      excludedCategoryIds: [10],
-      excludedRecipientIds: [20, 21],
-    });
-
-    expect(joinSql).toContain("LEFT JOIN recipients r");
-    expect(whereSql).toContain("t.is_active = true");
-    expect(whereSql).toContain("t.date >= $1");
-    expect(whereSql).toContain("t.date <= $2");
-    expect(whereSql).toContain("excluded.ancestor_id IN ($3)");
-    expect(whereSql).toContain(
-      "COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($4, $5)",
-    );
-    expect(params).toEqual(["2026-01-01", "2026-01-31", 10, 20, 21]);
-    expect(nextParamIdx).toBe(6);
-  });
-
-  it("omits exclusion clauses when lists are empty, keeping base where intact", () => {
-    const { whereSql, params, nextParamIdx } = buildAggregationFilter({
-      bankAccount: "BE12",
-    });
-    expect(whereSql).toBe(
-      "1=1 AND t.is_active = true AND t.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $1)",
-    );
-    expect(params).toEqual(["%BE12%"]);
-    expect(nextParamIdx).toBe(2);
   });
 });
 
 describe("buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)", () => {
   it("builds an exact account_id predicate", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { sql, params } = buildTransactionWhere({
       accountId: 7,
       active: false,
     });
     expect(sql).toContain("t.account_id = $1");
     expect(params).toEqual([7]);
-    expect(nextParamIdx).toBe(2);
   });
 
   it("builds an IN clause for accountIds", () => {
@@ -557,7 +523,7 @@ describe("buildTransactionWhere — accountId / accountIds (FK filter, ADR-088)"
 
 describe("buildTransactionWhere — bankAccounts (plural IN clause)", () => {
   it("builds an exact accounts.name match resolved through account_id (ADR-088)", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { sql, params } = buildTransactionWhere({
       bankAccounts: ["NL12INGB0001234567", "BE68539007547034"],
       active: false,
     });
@@ -566,7 +532,6 @@ describe("buildTransactionWhere — bankAccounts (plural IN clause)", () => {
     );
     expect(sql).not.toContain("bank_account");
     expect(params).toEqual(["NL12INGB0001234567", "BE68539007547034"]);
-    expect(nextParamIdx).toBe(3);
   });
 
   it("skips clause when array is empty", () => {
@@ -607,16 +572,6 @@ describe("buildTransactionWhere — bankAccounts (plural IN clause)", () => {
     expect(params).toHaveLength(50);
   });
 
-  it("respects startParamIdx offset", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
-      bankAccounts: ["NL12INGB0001234567"],
-      active: false,
-      startParamIdx: 4,
-    });
-    expect(sql).toContain("IN ($4)");
-    expect(params).toEqual(["NL12INGB0001234567"]);
-    expect(nextParamIdx).toBe(5);
-  });
 });
 
 describe("buildTransactionWhere — transactionType", () => {
@@ -647,35 +602,33 @@ describe("buildTransactionWhere — transactionType", () => {
   });
 
   it("transactionType does not consume $-params", () => {
-    const { params, nextParamIdx } = buildTransactionWhere({
+    const { params } = buildTransactionWhere({
       transactionType: "income",
       active: false,
     });
     expect(params).toHaveLength(0);
-    expect(nextParamIdx).toBe(1);
   });
 });
 
 describe("buildTransactionWhere — categoryIds (plural IN clause)", () => {
   it("builds effective-category disjunction with the id list in every leaf", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
+    const { shape, params } = buildTransactionWhere({
       categoryIds: [2, 5, 9],
       active: false,
     });
-    // Same placeholder slots ($1,$2,$3) reused across own / recipient-default /
+    // Same placeholder slots ($,$,$) reused across own / recipient-default /
     // primary-default leaves — params allocated once, count unchanged.
-    expect(sql).toContain(
-      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    expect(shape).toContain(
+      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($, $, $))",
     );
-    expect(sql).toContain(
-      "WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    expect(shape).toContain(
+      "WHERE default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($, $, $))",
     );
-    expect(sql).toContain(
-      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2, $3))",
+    expect(shape).toContain(
+      "pr2.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($, $, $))",
     );
-    expect(sql).not.toContain("COALESCE(t.category_id");
-    expect(params).toEqual([2, 5, 9]);
-    expect(nextParamIdx).toBe(4);
+    expect(shape).not.toContain("COALESCE(t.category_id");
+    expect([...new Set(params)]).toEqual([2, 5, 9]);
   });
 
   // Was: `[0, -1, null, 1.5]` asserted to emit no clause at all — the filter
@@ -695,28 +648,16 @@ describe("buildTransactionWhere — categoryIds (plural IN clause)", () => {
   });
 
   it("categoryId (singular) takes precedence over categoryIds", () => {
-    const { sql, params } = buildTransactionWhere({
+    const { shape, params } = buildTransactionWhere({
       categoryId: 3,
       categoryIds: [1, 2],
       active: false,
     });
-    expect(sql).toContain("ancestor_id = $1");
-    expect(sql).not.toContain("ancestor_id IN (");
-    expect(params).toEqual([3]);
+    expect(shape).toContain("ancestor_id = $");
+    expect(shape).not.toContain("ancestor_id IN (");
+    expect([...new Set(params)]).toEqual([3]);
   });
 
-  it("respects startParamIdx offset", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
-      categoryIds: [4, 7],
-      active: false,
-      startParamIdx: 3,
-    });
-    expect(sql).toContain(
-      "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($3, $4))",
-    );
-    expect(params).toEqual([4, 7]);
-    expect(nextParamIdx).toBe(5);
-  });
 });
 
 describe("buildTransactionWhere — tagSlugs", () => {
@@ -797,14 +738,4 @@ describe("buildTransactionWhere — tagSlugs", () => {
     expect(params[0]).toHaveLength(50);
   });
 
-  it("respects startParamIdx offset", () => {
-    const { sql, params, nextParamIdx } = buildTransactionWhere({
-      tagSlugs: ["rome-2020"],
-      active: false,
-      startParamIdx: 5,
-    });
-    expect(sql).toContain("ANY($5::text[])");
-    expect(params).toEqual([["rome-2020"]]);
-    expect(nextParamIdx).toBe(6);
-  });
 });

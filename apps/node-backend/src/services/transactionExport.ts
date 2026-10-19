@@ -6,6 +6,7 @@
  */
 
 import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { getClient, query as dbQuery } from "../database/connection.ts";
 import { compileQuery, db } from "../database/db.ts";
 import { logger } from "../config/logger.ts";
@@ -40,22 +41,13 @@ export type ExportQuery = (
   params?: unknown[],
 ) => Promise<{ rows: unknown[] }>;
 
-/** An explicit WHERE model, as `buildIdListWhere` produces. */
-interface ExportWhere {
-  whereSql: string;
-  params: unknown[];
-  nextParamIdx: number;
-}
-
 /**
- * Either the route's validated filter model or the legacy explicit WHERE
- * shape (see `resolveExportWhere`).
+ * Either the route's validated filter model or an explicit WHERE predicate
+ * over `transactions t` (see `resolveExportWhere`).
  */
 interface ExportWhereArgs {
   filters?: TransactionWhereOptions;
-  whereSql?: string;
-  params?: unknown[];
-  nextParamIdx?: number;
+  where?: RawBuilder<unknown>;
 }
 
 /**
@@ -78,8 +70,8 @@ function buildNdjsonFilename() {
   return `transactions_export_${buildExportTimestamp()}.ndjson`;
 }
 
-function buildExportProbeSql(whereSql: string): string {
-  return `SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${whereSql} LIMIT 1`;
+function buildExportProbeSql(where: RawBuilder<unknown>): RawBuilder<unknown> {
+  return sql`SELECT 1 ${EXPORT_JOINS_SQL} WHERE ${where} LIMIT 1`;
 }
 
 /**
@@ -99,21 +91,18 @@ function writeWithBackpressure(
 }
 
 function buildExportChunkSql(
-  whereSql: string,
-  limitParamIdx: number,
-  cursorDateParamIdx?: number,
-  cursorIdParamIdx?: number,
-): string {
+  where: RawBuilder<unknown>,
+  cursor?: { date: string; id: number },
+): RawBuilder<unknown> {
   // Keyset pagination: each chunk continues strictly after the previous chunk's
   // last (date, id) instead of OFFSET. OFFSET across separate pool queries (new
   // snapshot each time) silently dropped/duplicated rows when a concurrent
   // insert/delete shifted the result set mid-export. (date, id) is unique
   // (t.id) so the cursor is exact and the scan is index-friendly.
-  const keyset =
-    cursorDateParamIdx != null
-      ? `AND (t.date, t.id) > ($${cursorDateParamIdx}::date, $${cursorIdParamIdx}::bigint)`
-      : "";
-  return `
+  const keyset = cursor
+    ? sql`AND (t.date, t.id) > (${cursor.date}::date, ${cursor.id}::bigint)`
+    : sql``;
+  return sql`
     SELECT t.id, t.date, acct.name AS bank_account, t.account_id,
            COALESCE(pr.name, r.name) AS recipient_name, t.memo,
            t.amount, t.currency, t.balance,
@@ -140,10 +129,10 @@ function buildExportChunkSql(
       WHERE tg.is_active = true
       GROUP BY tt.transaction_id
     ) tag_agg ON tag_agg.transaction_id = t.id
-    WHERE ${whereSql}
+    WHERE ${where}
       ${keyset}
     ORDER BY t.date ASC, t.id ASC
-    LIMIT $${limitParamIdx}
+    LIMIT ${EXPORT_CHUNK_SIZE}
   `;
 }
 
@@ -194,16 +183,15 @@ function buildNdjsonRow(row: ExportTransactionRow): string {
 async function streamExport(
   res: ExpressResponse,
   {
-    whereSql,
-    params,
-    nextParamIdx,
+    where,
     contentType,
     filename,
     writeHeader,
     formatRow,
     label,
     query = dbQuery,
-  }: ExportWhere & {
+  }: {
+    where: RawBuilder<unknown>;
     contentType: string;
     filename: string;
     writeHeader?: (res: ExpressResponse) => void;
@@ -212,7 +200,11 @@ async function streamExport(
     query?: ExportQuery | undefined;
   },
 ): Promise<{ rowCount: number }> {
-  const probe = await query(buildExportProbeSql(whereSql), params);
+  const run = (built: RawBuilder<unknown>) => {
+    const compiled = compileQuery(built);
+    return query(compiled.sql, [...compiled.parameters]);
+  };
+  const probe = await run(buildExportProbeSql(where));
   if (probe.rows.length === 0) {
     throw new NotFoundError("No transactions found matching filters");
   }
@@ -228,21 +220,14 @@ async function streamExport(
   let rowCount = 0;
   try {
     while (true) {
-      const chunk: { rows: unknown[] } =
-        cursorDate == null
-          ? await query(buildExportChunkSql(whereSql, nextParamIdx), [
-              ...params,
-              EXPORT_CHUNK_SIZE,
-            ])
-          : await query(
-              buildExportChunkSql(
-                whereSql,
-                nextParamIdx,
-                nextParamIdx + 1,
-                nextParamIdx + 2,
-              ),
-              [...params, EXPORT_CHUNK_SIZE, cursorDate, cursorId],
-            );
+      const chunk: { rows: unknown[] } = await run(
+        buildExportChunkSql(
+          where,
+          cursorDate == null || cursorId == null
+            ? undefined
+            : { date: cursorDate, id: cursorId },
+        ),
+      );
       const rows = checkRows(exportTransactionRowSchema, chunk.rows);
       const last = rows.at(-1);
       if (!last) break;
@@ -276,25 +261,14 @@ async function streamExport(
  * both export formats. The legacy explicit WHERE shape remains accepted for
  * focused service tests and the bulk-id helper.
  */
-function resolveExportWhere(args: ExportWhereArgs): ExportWhere {
-  if (args.filters) {
-    const { sql, params, nextParamIdx } = buildTransactionWhere(args.filters);
-    return { whereSql: sql, params, nextParamIdx };
-  }
-  if (
-    typeof args.whereSql !== "string" ||
-    args.nextParamIdx === undefined ||
-    args.nextParamIdx === 0
-  ) {
+function resolveExportWhere(args: ExportWhereArgs): RawBuilder<unknown> {
+  if (args.filters) return buildTransactionWhere(args.filters);
+  if (args.where === undefined) {
     throw new TypeError(
       "Export filters or an explicit WHERE model are required",
     );
   }
-  return {
-    whereSql: args.whereSql,
-    params: args.params ?? [],
-    nextParamIdx: args.nextParamIdx,
-  };
+  return args.where;
 }
 
 export async function streamCsvExport(
@@ -305,7 +279,7 @@ export async function streamCsvExport(
   },
 ): Promise<{ rowCount: number }> {
   const { includeBalance = false, query } = args;
-  const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
+  const where = resolveExportWhere(args);
   // Partitioned by account_id (ADR-088): the list endpoint's window partitions
   // by account because a stream spanning multiple accounts otherwise sums them
   // into one meaningless cross-account total. Kept as Decimals across the whole
@@ -313,9 +287,7 @@ export async function streamCsvExport(
   // into the next step's running balance.
   const runningBalances = new Map<number | null, Decimal>();
   return streamExport(res, {
-    whereSql,
-    params,
-    nextParamIdx,
+    where,
     contentType: "text/csv",
     filename: buildCsvFilename(),
     writeHeader(target) {
@@ -345,11 +317,9 @@ export async function streamNdjsonExport(
   args: ExportWhereArgs & { query?: ExportQuery | undefined },
 ): Promise<{ rowCount: number }> {
   const { query } = args;
-  const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
+  const where = resolveExportWhere(args);
   return streamExport(res, {
-    whereSql,
-    params,
-    nextParamIdx,
+    where,
     contentType: "application/x-ndjson",
     filename: buildNdjsonFilename(),
     formatRow(row) {
@@ -361,20 +331,11 @@ export async function streamNdjsonExport(
 }
 
 /**
- * Helper used by the POST /bulk-export route: builds a WHERE clause that
- * targets a fixed list of ids while leaving the param numbering compatible
- * with the chunk-SQL builder (which appends LIMIT/OFFSET).
+ * Helper used by the POST /bulk-export route: a WHERE predicate that targets a
+ * fixed list of ids.
  */
-function buildIdListWhere(ids: number[]): {
-  whereSql: string;
-  params: [number[]];
-  nextParamIdx: number;
-} {
-  return {
-    whereSql: "t.id = ANY($1::int[])",
-    params: [ids],
-    nextParamIdx: 2,
-  };
+function buildIdListWhere(ids: number[]): { where: RawBuilder<unknown> } {
+  return { where: sql`t.id = ANY(${ids}::int[])` };
 }
 
 /**

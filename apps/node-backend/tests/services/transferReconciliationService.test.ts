@@ -153,7 +153,11 @@ describe("suggestion page input", () => {
       nextCursor: null,
       items: [{ outflow: { id: 1 }, candidates: [{ id: 3 }] }],
     });
-    expect(vi.mocked(query).mock.calls[2]?.[1]).toEqual([3, 1, 2, 2]);
+    // The window (3 days) binds once per use; besides it, the second page
+    // continues after (1, 2) and asks for limit + 1 = 2 rows.
+    const pageParams = vi.mocked(query).mock.calls[2]?.[1] ?? [];
+    expect(pageParams).toContain(3);
+    expect(pageParams.filter((value) => value !== 3)).toEqual([1, 2, 2]);
   });
 
   it.each([

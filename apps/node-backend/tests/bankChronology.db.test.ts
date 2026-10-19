@@ -12,6 +12,8 @@ import {
   computedBalanceByCurrencyLateral,
   computedBalanceSeriesCtes,
 } from "../src/repositories/accountBalanceSql.ts";
+import { sql } from "kysely";
+import { compileQuery } from "../src/database/db.ts";
 import {
   asAccountId,
   asCurrencyCode,
@@ -68,17 +70,21 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
     });
   }
   async function balances() {
-    const current = await getTestPool()!.query(
-      `SELECT bal.balance FROM accounts a ${computedBalanceByCurrencyLateral({ account: "a.id", asOfDate: "DATE '2026-07-02'" })} WHERE a.id = $1`,
-      [accountId],
+    const current = compileQuery(
+      sql`SELECT bal.balance FROM accounts a ${computedBalanceByCurrencyLateral({ account: sql`a.id`, asOfDate: sql`DATE '2026-07-02'` })} WHERE a.id = ${accountId}`,
     );
-    const series = await getTestPool()!.query(
-      `WITH account_list AS (SELECT $1::integer AS account_id), days AS (SELECT DATE '2026-07-01' AS day UNION ALL SELECT DATE '2026-07-02'), ${computedBalanceSeriesCtes({ byCurrency: true })} SELECT balance FROM balance_series ORDER BY day`,
-      [accountId],
+    const series = compileQuery(
+      sql`WITH account_list AS (SELECT ${accountId}::integer AS account_id), days AS (SELECT DATE '2026-07-01' AS day UNION ALL SELECT DATE '2026-07-02'), ${computedBalanceSeriesCtes({ byCurrency: true })} SELECT balance FROM balance_series ORDER BY day`,
     );
+    const currentRows = await getTestPool()!.query(current.sql, [
+      ...current.parameters,
+    ]);
+    const seriesRows = await getTestPool()!.query(series.sql, [
+      ...series.parameters,
+    ]);
     return [
-      Number(current.rows[0].balance),
-      ...series.rows.map((row) => Number(row.balance)),
+      Number(currentRows.rows[0].balance),
+      ...seriesRows.rows.map((row) => Number(row.balance)),
     ];
   }
   it.each([

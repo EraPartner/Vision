@@ -221,14 +221,14 @@ describe("recipient merge atomicity (ADR-014)", () => {
     client.query.mockImplementation(async (sql) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT")
         return { rows: [] };
-      if (sql.includes("FOR UPDATE"))
+      if (norm(sql).includes("for update"))
         return { rows: [{ id: 1, primary_recipient_id: null }] };
-      if (sql.includes("information_schema")) return { rows: [] };
+      if (norm(sql).includes("information_schema")) return { rows: [] };
       // Last statement of the merge — fails after every FK has been reassigned.
-      if (sql.includes("WHERE primary_recipient_id = ANY")) {
+      if (norm(sql).includes("where primary_recipient_id = any")) {
         throw new Error("deadlock detected");
       }
-      if (sql.includes("RETURNING id"))
+      if (norm(sql).includes("returning id"))
         return { rows: [{ id: 3 }], rowCount: 1 };
       return { rows: [], rowCount: 1 };
     });
@@ -242,19 +242,20 @@ describe("recipient merge atomicity (ADR-014)", () => {
     expect(
       sqls.some(
         (s) =>
-          s.includes("UPDATE transactions") && s.includes("recipient_id = $1"),
+          norm(s).includes("update transactions") &&
+          norm(s).includes("recipient_id = $1"),
       ),
     ).toBe(true);
-    expect(sqls.some((s) => s.includes("UPDATE transaction_splits"))).toBe(
+    expect(sqls.some((s) => norm(s).includes("update transaction_splits"))).toBe(
       true,
     );
     expect(
-      sqls.some((s) => s.includes("DELETE FROM recipient_bank_accounts")),
+      sqls.some((s) => norm(s).includes("delete from recipient_bank_accounts")),
     ).toBe(true);
-    expect(sqls.some((s) => s.includes("UPDATE recipient_bank_accounts"))).toBe(
+    expect(sqls.some((s) => norm(s).includes("update recipient_bank_accounts"))).toBe(
       true,
     );
-    expect(sqls.some((s) => s.includes("RETURNING id"))).toBe(true);
+    expect(sqls.some((s) => norm(s).includes("returning id"))).toBe(true);
   });
 });
 

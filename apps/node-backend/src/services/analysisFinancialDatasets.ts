@@ -1,6 +1,9 @@
 /** Bounded service datasets with canonical portfolio replay and stored FX only. */
 import type Decimal from "decimal.js";
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { query } from "../database/connection.ts";
+import { compileQuery } from "../database/db.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 import type { CostBasisMethod } from "@vision/shared-utils/portfolio";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
@@ -345,12 +348,13 @@ async function localRows(
   plan: FinancialAnalysisPlan,
   deps: FinancialAnalysisDeps,
 ): Promise<FinancialRow[]> {
-  const run: FinancialQuery = deps.query ?? query;
-  const bounded = async <R = FinancialRow>(
-    sql: string,
-    values: unknown[] = [],
-  ) => {
-    const rows = (await run<R>(`${sql} LIMIT ${MAX_ROWS + 1}`, values)).rows;
+  const runner: FinancialQuery = deps.query ?? query;
+  const run = <R>(statement: RawBuilder<unknown>) => {
+    const compiled = compileQuery(statement);
+    return runner<R>(compiled.sql, [...compiled.parameters]);
+  };
+  const bounded = async <R = FinancialRow>(statement: RawBuilder<unknown>) => {
+    const rows = (await run<R>(sql`${statement} LIMIT ${sql.lit(MAX_ROWS + 1)}`)).rows;
     if (rows.length > MAX_ROWS)
       throw new Error("Financial dataset exceeds source row limit");
     return rows;
@@ -372,8 +376,7 @@ async function localRows(
     throw new Error("Invalid financial date range");
   if (plan.datasetId === "fx-history")
     return bounded(
-      "SELECT to_char(rate_date,'YYYY-MM-DD') AS date, currency_code AS currency, rate_to_eur FROM exchange_rates WHERE rate_date BETWEEN $1 AND $2 ORDER BY rate_date,currency_code",
-      [from, to],
+      sql`SELECT to_char(rate_date,'YYYY-MM-DD') AS date, currency_code AS currency, rate_to_eur FROM exchange_rates WHERE rate_date BETWEEN ${from} AND ${to} ORDER BY rate_date,currency_code`,
     );
   if (plan.datasetId.endsWith("history")) {
     const broker = plan.datasetId === "broker-history";
@@ -381,14 +384,19 @@ async function localRows(
       broker &&
       !(
         await run<{ relation: string | null }>(
-          "SELECT to_regclass('public.portfolio_broker_snapshots') AS relation",
+          sql`SELECT to_regclass('public.portfolio_broker_snapshots') AS relation`,
         )
       ).rows[0]?.relation
     )
       return [];
+    const columns = broker
+      ? sql`CASE WHEN invested <> 0 THEN gain_loss/invested*100 ELSE NULL END AS return_pct, account_key, account_id, account_name`
+      : sql`return_pct`;
+    const table = broker
+      ? sql`portfolio_broker_snapshots`
+      : sql`portfolio_performance_snapshots`;
     return bounded(
-      `SELECT to_char(snapshot_date,'YYYY-MM-DD') AS date, currency, value, invested, gain_loss, ${broker ? "CASE WHEN invested <> 0 THEN gain_loss/invested*100 ELSE NULL END AS return_pct, account_key, account_id, account_name" : "return_pct"} FROM ${broker ? "portfolio_broker_snapshots" : "portfolio_performance_snapshots"} WHERE currency=$1 AND snapshot_date BETWEEN $2 AND $3 ORDER BY snapshot_date${broker ? ",account_key" : ""}`,
-      [currency, from, to],
+      sql`SELECT to_char(snapshot_date,'YYYY-MM-DD') AS date, currency, value, invested, gain_loss, ${columns} FROM ${table} WHERE currency=${currency} AND snapshot_date BETWEEN ${from} AND ${to} ORDER BY snapshot_date${broker ? sql`,account_key` : sql``}`,
     );
   }
   if (plan.from || plan.to)
@@ -397,8 +405,7 @@ async function localRows(
     ? undefined
     : (
         await run<{ value: string | null }>(
-          "SELECT value FROM user_settings WHERE key=$1",
-          ["cost_basis_method"],
+          sql`SELECT value FROM user_settings WHERE key=${"cost_basis_method"}`,
         )
       ).rows[0]?.value;
   const costBasisMethod =
@@ -408,13 +415,13 @@ async function localRows(
     throw new Error("Unsupported cost basis method");
   const [investments, events, rates] = await Promise.all([
     bounded<FinancialInvestmentRow>(
-      "SELECT id,name,symbol,asset_class,currency,current_price,interest_rate FROM investments WHERE is_active=true ORDER BY id",
+      sql`SELECT id,name,symbol,asset_class,currency,current_price,interest_rate FROM investments WHERE is_active=true ORDER BY id`,
     ),
     bounded<FinancialEventRow>(
-      "SELECT p.id,p.investment_id,p.account_id,p.type,to_char(p.date,'YYYY-MM-DD') AS date,p.amount,p.units,p.fees,p.taxes,p.currency,p.fx_rate_to_eur FROM portfolio_transactions p JOIN investments i ON i.id=p.investment_id WHERE i.is_active=true ORDER BY p.date,p.id",
+      sql`SELECT p.id,p.investment_id,p.account_id,p.type,to_char(p.date,'YYYY-MM-DD') AS date,p.amount,p.units,p.fees,p.taxes,p.currency,p.fx_rate_to_eur FROM portfolio_transactions p JOIN investments i ON i.id=p.investment_id WHERE i.is_active=true ORDER BY p.date,p.id`,
     ),
     bounded<RateRow>(
-      "SELECT currency_code,to_char(rate_date,'YYYY-MM-DD') AS rate_date,rate_to_eur FROM exchange_rates ORDER BY rate_date,currency_code",
+      sql`SELECT currency_code,to_char(rate_date,'YYYY-MM-DD') AS rate_date,rate_to_eur FROM exchange_rates ORDER BY rate_date,currency_code`,
     ),
   ]);
   const eventsByInvestment = new Map<number, FinancialEventRow[]>();

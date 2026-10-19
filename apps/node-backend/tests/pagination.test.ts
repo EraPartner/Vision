@@ -9,7 +9,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { listBody, parseOptionalPagination } from '../src/lib/pagination.ts';
-import { buildLimitOffset } from '../src/lib/sqlClauses.ts';
 
 describe('parseOptionalPagination', () => {
   it('returns null when neither limit nor offset is present', () => {
@@ -60,19 +59,5 @@ describe('listBody', () => {
   it('carries the page cursor and the FULL total when it did', () => {
     expect(listBody([2], 9, { limit: 1, offset: 1 }))
       .toEqual({ items: [2], total: 9, limit: 1, offset: 1 });
-  });
-});
-
-describe('buildLimitOffset', () => {
-  it('adds nothing and touches no params when limit is null', () => {
-    const params = ['x'];
-    expect(buildLimitOffset(params, { limit: null })).toBe('');
-    expect(params).toEqual(['x']);
-  });
-
-  it('numbers placeholders after the params already collected', () => {
-    const params = ['x'];
-    expect(buildLimitOffset(params, { limit: 5, offset: 10 })).toBe(' LIMIT $2 OFFSET $3');
-    expect(params).toEqual(['x', 5, 10]);
   });
 });

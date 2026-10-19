@@ -1,19 +1,37 @@
-/** Aliases are fixed repository identifiers, never request input. */
-export const openTransferRow = (alias: string) => `${alias}.is_active
-  AND ${alias}.is_transfer = false AND ${alias}.transfer_source IS NULL
-  AND ${alias}.account_id IS NOT NULL`;
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 
-export const transferCandidate = (a: string, b: string) => `
-  ${openTransferRow(b)} AND ${b}.amount = -${a}.amount
-  AND COALESCE(${b}.currency, 'EUR') = COALESCE(${a}.currency, 'EUR')
-  AND ${b}.account_id <> ${a}.account_id
-  AND ${b}.date BETWEEN ${a}.date - $1::int AND ${a}.date + $1::int
+/** Aliases are fixed repository identifiers, emitted as quoted identifiers. */
+export const openTransferRow = (alias: string): RawBuilder<unknown> => {
+  const t = sql.id(alias);
+  return sql`${t}.is_active
+  AND ${t}.is_transfer = false AND ${t}.transfer_source IS NULL
+  AND ${t}.account_id IS NOT NULL`;
+};
+
+export const transferCandidate = (
+  a: string,
+  b: string,
+  windowDays: number,
+): RawBuilder<unknown> => {
+  const ta = sql.id(a);
+  const tb = sql.id(b);
+  return sql`
+  ${openTransferRow(b)} AND ${tb}.amount = -${ta}.amount
+  AND COALESCE(${tb}.currency, 'EUR') = COALESCE(${ta}.currency, 'EUR')
+  AND ${tb}.account_id <> ${ta}.account_id
+  AND ${tb}.date BETWEEN ${ta}.date - ${windowDays}::int AND ${ta}.date + ${windowDays}::int
   AND NOT EXISTS (SELECT 1 FROM transfer_dismissals d
-    WHERE d.txn_a_id = LEAST(${a}.id, ${b}.id)
-      AND d.txn_b_id = GREATEST(${a}.id, ${b}.id))`;
+    WHERE d.txn_a_id = LEAST(${ta}.id, ${tb}.id)
+      AND d.txn_b_id = GREATEST(${ta}.id, ${tb}.id))`;
+};
 
 // A count capped at two distinguishes unique from ambiguous without materializing
 // a dense graph. The reverse probe sees the full corpus, never a suggestion page.
-export const candidateCount = (a: string, b: string) => `
-  (SELECT count(*) FROM (SELECT ${b}.id FROM transactions ${b}
-    WHERE ${transferCandidate(a, b)} LIMIT 2) candidates)`;
+export const candidateCount = (
+  a: string,
+  b: string,
+  windowDays: number,
+): RawBuilder<unknown> => sql`
+  (SELECT count(*) FROM (SELECT ${sql.id(b)}.id FROM transactions ${sql.id(b)}
+    WHERE ${transferCandidate(a, b, windowDays)} LIMIT 2) candidates)`;

@@ -17,14 +17,10 @@ import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
 
 import { sql } from "kysely";
 import type { RawBuilder } from "kysely";
-import {
-  query,
-  queryPrepared,
-  withTransaction,
-} from "../database/connection.ts";
+import { queryPrepared, withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
 import type { BuiltQuery } from "../database/db.ts";
-import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { checkRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
   enrichedTransactionDbRowSchema,
@@ -177,7 +173,7 @@ export interface TransactionFilters {
 // `acct` carries the canonical account label (ADR-088): read paths derive
 // `bank_account` from accounts.name over the FK — see ACCOUNT_LABEL_SQL —
 // so nothing here depends on the retired string column, which no longer exists.
-const TRANSACTION_JOINS = `
+const TRANSACTION_JOINS = sql`
   LEFT JOIN recipients r ON t.recipient_id = r.id
   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
   LEFT JOIN categories c ON t.category_id = c.id
@@ -191,7 +187,7 @@ const TRANSACTION_JOINS = `
 // keeps the LAST duplicate field), which both survives the out-of-band column
 // drop and stays byte-identical pre-drop under the dual-write parity
 // invariant (sync trigger + rename propagation keep string == accounts.name).
-const ACCOUNT_LABEL_SQL = "acct.name AS bank_account";
+const ACCOUNT_LABEL_SQL = sql`acct.name AS bank_account`;
 
 // Reduced join set for count-only queries over a buildTransactionWhere clause.
 // `r` is the sole join alias that builder's predicates reference (recipientName's
@@ -201,7 +197,7 @@ const ACCOUNT_LABEL_SQL = "acct.name AS bank_account";
 // categories.id, accounts.id), so each matches at most one row and none can drop
 // or duplicate a transaction. Keeping `r` means a filter that DOES reference an
 // unjoined alias fails loudly at the database rather than silently miscounting.
-const COUNT_JOINS = `
+const COUNT_JOINS = sql`
   LEFT JOIN recipients r ON t.recipient_id = r.id
 `;
 
@@ -230,11 +226,11 @@ export function clearTransactionCountCache(): void {
 }
 
 function getCachedTransactionCount(
-  sql: string,
-  params: unknown[],
+  countQuery: RawBuilder<unknown>,
 ): Promise<number> {
   const now = Date.now();
-  const key = JSON.stringify([sql, params]);
+  const compiled = compileQuery(countQuery);
+  const key = JSON.stringify([compiled.sql, compiled.parameters]);
   const cached = transactionCountCache.get(key);
   // A pending full count remains the single-flight authority regardless of
   // how long PostgreSQL needs. The short TTL starts only after it resolves.
@@ -255,10 +251,9 @@ function getCachedTransactionCount(
     if (resolvedKey) transactionCountCache.delete(resolvedKey);
   }
 
-  const promise: Promise<number> = queryRows(
+  const promise: Promise<number> = checkedRows(
     transactionTotalRowSchema,
-    sql,
-    params,
+    countQuery,
   )
     .then((rows) => {
       const entry = transactionCountCache.get(key);
@@ -286,8 +281,7 @@ function getCachedTransactionCount(
 // (3-level, alias-aware). Requires TRANSACTION_JOINS. Shared so the single-row
 // getById/create paths resolve categories identically to the list paths — an
 // alias recipient must not show categorized in lists but uncategorized on GET.
-const EFFECTIVE_CATEGORY_ID_SQL =
-  "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)";
+const EFFECTIVE_CATEGORY_ID_SQL = sql`COALESCE(t.category_id, r.default_category_id, pr.default_category_id)`;
 // Displayed name for exactly the category EFFECTIVE_CATEGORY_ID_SQL resolves,
 // so the two can never denote different categories. The branch order therefore
 // mirrors that COALESCE: own (c) → recipient default (rc) → primary-recipient
@@ -297,20 +291,23 @@ const EFFECTIVE_CATEGORY_ID_SQL =
 // surfaces, which follow the id, then disagreed with this list's label.
 // (The same CASE is inlined at the sort-column map and in getAll /
 // getAllWithCount below; all four copies share this order.)
-const CATEGORY_NAME_SQL = `CASE
+const CATEGORY_NAME_SQL = sql`CASE
                WHEN c.id IS NOT NULL THEN c.path_name
                WHEN rc.id IS NOT NULL THEN rc.path_name
                WHEN pc.id IS NOT NULL THEN pc.path_name
                ELSE NULL
              END`;
-const RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
+const RECIPIENT_NAME_SQL = sql`COALESCE(pr.name, r.name)`;
 
 /** Carry stamped balances over the same filtered rows used by the list. */
-function runningBalanceCtes(where: string, joins: string): string {
+function runningBalanceCtes(
+  where: RawBuilder<unknown>,
+  joins: RawBuilder<unknown>,
+): RawBuilder<unknown> {
   // Same identity as accountBalanceSql's daily series: cumulative amount plus
   // the latest stamp's (balance - cumulative amount). A zero-amount opening
   // row resets the balance, and later unstamped rows advance it normally.
-  return `
+  return sql`
     ledger_amounts AS (
       SELECT t.id, t.date, t.account_id, ${bankChronologySql("t")} AS chronology,
              COALESCE(t.currency, 'EUR') AS currency, t.balance,
@@ -345,34 +342,88 @@ async function runOn(client: QueryRunner, builder: BuiltQuery) {
 function enrichedSelect(source: RawBuilder<unknown>) {
   return sql`
     SELECT t.*,
-           ${sql.raw(ACCOUNT_LABEL_SQL)},
-           ${sql.raw(RECIPIENT_NAME_SQL)} AS recipient_name,
-           ${sql.raw(EFFECTIVE_CATEGORY_ID_SQL)} AS effective_category_id,
-           ${sql.raw(CATEGORY_NAME_SQL)} AS category_name
+           ${ACCOUNT_LABEL_SQL},
+           ${RECIPIENT_NAME_SQL} AS recipient_name,
+           ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+           ${CATEGORY_NAME_SQL} AS category_name
     FROM ${source} t
-    ${sql.raw(TRANSACTION_JOINS)}
+    ${TRANSACTION_JOINS}
   `;
 }
 
 function enrichedById(id: TransactionId) {
-  return sql`${enrichedSelect(sql.raw("transactions"))} WHERE t.id = ${id}`;
+  return sql`${enrichedSelect(sql.id("transactions"))} WHERE t.id = ${id}`;
 }
 
 // Allowed sort columns for transactions (maps frontend key -> SQL expression)
-const TRANSACTION_SORT_COLUMNS: Record<string, string> = {
-  date: "t.date",
-  amount: "t.amount",
-  memo: "t.memo",
-  recipient: "COALESCE(pr.name, r.name)",
-  category: `CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END`,
-  bank: "acct.name",
-  currency: "t.currency",
+const TRANSACTION_SORT_COLUMNS: Record<string, RawBuilder<unknown>> = {
+  date: sql`t.date`,
+  amount: sql`t.amount`,
+  memo: sql`t.memo`,
+  recipient: RECIPIENT_NAME_SQL,
+  category: CATEGORY_NAME_SQL,
+  bank: sql`acct.name`,
+  currency: sql`t.currency`,
 };
+
+/**
+ * ORDER BY list for a list page. Falls back to date DESC when no valid sort is
+ * supplied. The secondary date DESC keeps rows stable when the primary column
+ * ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages cannot
+ * duplicate or skip same-date rows across separate query executions.
+ */
+function transactionOrderBy(
+  sortBy: string | null | undefined,
+  sortDir: string | null | undefined,
+): RawBuilder<unknown> {
+  const sortCol =
+    sortBy && Object.hasOwn(TRANSACTION_SORT_COLUMNS, sortBy)
+      ? TRANSACTION_SORT_COLUMNS[sortBy]
+      : undefined;
+  if (!sortCol) return sql`t.date DESC, t.id DESC`;
+  const direction = sortDir === "asc" ? sql`ASC` : sql`DESC`;
+  return sql`${sortCol} ${direction}, t.date DESC, t.id DESC`;
+}
+
+/**
+ * One page of enriched list rows over a buildTransactionWhere predicate.
+ *
+ * The running balance is partitioned by account and currency: adding unlike
+ * currencies is never a meaningful ledger balance. The window is evaluated
+ * over the full filtered set, before LIMIT/OFFSET, so each currency balance
+ * stays correct across pages. Legacy NULL currency rows are treated as EUR
+ * consistently with the rest of the transaction API.
+ */
+function enrichedPage(
+  where: RawBuilder<unknown>,
+  {
+    includeBalance,
+    sortBy,
+    sortDir,
+    limit,
+    offset,
+  }: {
+    includeBalance: boolean;
+    sortBy: string | null | undefined;
+    sortDir: string | null | undefined;
+    limit: number;
+    offset: number;
+  },
+): RawBuilder<unknown> {
+  return sql`
+      ${includeBalance ? sql`WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : sql``}
+      SELECT t.*,
+             ${ACCOUNT_LABEL_SQL},
+             ${RECIPIENT_NAME_SQL} AS recipient_name,
+             ${EFFECTIVE_CATEGORY_ID_SQL} AS effective_category_id,
+             ${CATEGORY_NAME_SQL} AS category_name${includeBalance ? sql`, lb.running_balance` : sql``}
+      FROM transactions t
+      ${TRANSACTION_JOINS}
+      ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
+      WHERE ${where}
+      ORDER BY ${transactionOrderBy(sortBy, sortDir)} LIMIT ${limit} OFFSET ${offset}
+    `;
+}
 
 /**
  * Attach the `tags` sub-collection to transaction rows in one extra round-trip,
@@ -470,11 +521,7 @@ export const transactionRepository = {
     includeBalance = false,
     tagSlugs = null,
   }: TransactionFilters = {}): Promise<EnrichedTransactionRow[]> {
-    const {
-      sql: where,
-      params,
-      nextParamIdx: p,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -488,47 +535,10 @@ export const transactionRepository = {
       active,
       tagSlugs,
     });
-
-    // Build ORDER BY — fall back to default date DESC when no valid sort supplied
-    // (String(): the old untyped lookup coerced a null sortBy the same way).
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    // Secondary sort by date DESC keeps rows stable when primary column has
-    // ties; t.id DESC is the unique final tiebreaker so LIMIT/OFFSET pages can't
-    // duplicate or skip same-date rows across separate query executions.
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : `t.date DESC, t.id DESC`;
-
-    // Partition by account and currency: adding unlike currencies is never a
-    // meaningful ledger balance. The window is evaluated over the full filtered
-    // set, before LIMIT/OFFSET, so each currency balance stays correct across
-    // pages. Legacy NULL currency rows are treated as EUR consistently with the
-    // rest of the transaction API.
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
-
-    const sql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             COALESCE(pr.name, r.name) AS recipient_name,
-             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END AS category_name${runningBalanceCol}
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
-      WHERE ${where}
-      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
-    `;
-    params.push(limit, offset);
-
-    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    const rows = await checkedRows(
+      enrichedTransactionDbRowSchema,
+      enrichedPage(where, { includeBalance, sortBy, sortDir, limit, offset }),
+    );
     return attachTagsToRows(rows);
   },
 
@@ -556,7 +566,7 @@ export const transactionRepository = {
     amountSigned = false,
     tagSlugs = null,
   }: TransactionFilters = {}): Promise<number> {
-    const { sql: where, params } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -576,13 +586,14 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const sql = `
-      SELECT count(*) FROM transactions t
-      ${COUNT_JOINS}
-      WHERE ${where}
-    `;
-
-    const [row] = await queryRows(countRowSchema, sql, params);
+    const [row] = await checkedRows(
+      countRowSchema,
+      sql`
+        SELECT count(*) FROM transactions t
+        ${COUNT_JOINS}
+        WHERE ${where}
+      `,
+    );
     // COUNT(*) without GROUP BY always returns exactly one row.
     if (!row) throw new Error("transaction count returned no row");
     return parseInt(row.count, 10);
@@ -613,11 +624,7 @@ export const transactionRepository = {
     // category, the recipient default, AND the primary-recipient default. Joining
     // pr (and using EFFECTIVE_CATEGORY_ID_SQL) stops alias-recipient rows whose
     // primary carries a category from wrongly appearing in the queue.
-    const {
-      sql: where,
-      params,
-      nextParamIdx: paramIdx,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -634,19 +641,19 @@ export const transactionRepository = {
       amountSigned,
       tagSlugs,
     });
-    const sql = `
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             r.name AS recipient_name,
-             NULL AS category_name
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      WHERE ${where}
-        AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
-      ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
-    params.push(limit, offset);
-
-    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    const rows = await checkedRows(
+      enrichedTransactionDbRowSchema,
+      sql`
+        SELECT t.*,
+               ${ACCOUNT_LABEL_SQL},
+               r.name AS recipient_name,
+               NULL AS category_name
+        FROM transactions t
+        ${TRANSACTION_JOINS}
+        WHERE ${where}
+          AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL
+        ORDER BY t.date DESC, t.id DESC LIMIT ${limit} OFFSET ${offset}`,
+    );
     return attachTagsToRows(rows);
   },
 
@@ -686,11 +693,7 @@ export const transactionRepository = {
   }> {
     // Build the predicate once for both the page and its count. The queue is an
     // active-rows worklist, exactly as getUncategorised.
-    const {
-      sql: rowsWhere,
-      params: rowsParams,
-      nextParamIdx: rowsNextParam,
-    } = buildTransactionWhere({
+    const rowsWhere = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -708,31 +711,22 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const params = [...rowsParams];
-
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : "t.date DESC, t.id DESC";
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
+    const orderBy = transactionOrderBy(sortBy, sortDir);
+    const runningBalanceCol = includeBalance
+      ? sql`, lb.running_balance`
+      : sql``;
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join in both CTEs below.
-    const uncategorisedWhere = `${rowsWhere}
+    const uncategorisedWhere = sql`${rowsWhere}
       AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL`;
-    const uncategorisedJoins = `
+    const uncategorisedJoins = sql`
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
-    const limitParam = rowsNextParam;
-    const offsetParam = rowsNextParam + 1;
-    params.push(limit, offset);
-
-    const sql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},` : "WITH"} total_cte AS (
+    const pageQuery = sql`
+      ${includeBalance ? sql`WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},` : sql`WITH`} total_cte AS (
         SELECT count(*)::int AS total
         FROM transactions t
         ${COUNT_JOINS}
@@ -747,10 +741,10 @@ export const transactionRepository = {
                ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
         FROM transactions t
         ${uncategorisedJoins}
-        ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
+        ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
         WHERE ${uncategorisedWhere}
         ORDER BY ${orderBy}
-        LIMIT $${limitParam} OFFSET $${offsetParam}
+        LIMIT ${limit} OFFSET ${offset}
       )
       SELECT u.*,
              tc.total AS total_count
@@ -762,16 +756,16 @@ export const transactionRepository = {
     // The LEFT JOIN onto total_cte yields one all-NULL row when the page is
     // empty, so only `total_count` is guaranteed on every row; the page rows
     // are checked once that sentinel is filtered out.
-    const result = await query(sql, params);
+    const { rows: pageRows } = await pageQuery.execute(db);
     const [totalRow] = checkRows(
       uncategorisedTotalRowSchema,
-      result.rows.slice(0, 1),
+      pageRows.slice(0, 1),
     );
     // String(): total_count is COUNT(*)::int; parseInt coerced it the same way.
     const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
     const rows = checkRows(
       uncategorisedPageRowSchema,
-      result.rows.filter((row) => (row as { id: unknown }).id != null),
+      pageRows.filter((row) => (row as { id: unknown }).id != null),
     ).map(({ total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
@@ -834,7 +828,7 @@ export const transactionRepository = {
                       ${category_id}, ${comment}, true)
               RETURNING *
             )
-            ${enrichedSelect(sql.raw("inserted"))}
+            ${enrichedSelect(sql.id("inserted"))}
           `,
           client,
         );
@@ -886,11 +880,7 @@ export const transactionRepository = {
     rows: EnrichedTransactionRow[];
     total: number;
   }> {
-    const {
-      sql: where,
-      params,
-      nextParamIdx: p,
-    } = buildTransactionWhere({
+    const where = buildTransactionWhere({
       transactionId,
       startDate,
       endDate,
@@ -910,18 +900,6 @@ export const transactionRepository = {
       tagSlugs,
     });
 
-    const sortCol = TRANSACTION_SORT_COLUMNS[String(sortBy)] || "t.date";
-    const sortDirection = sortDir === "asc" ? "ASC" : "DESC";
-    // t.id DESC is the unique final tiebreaker — without it LIMIT/OFFSET pages
-    // can duplicate or skip same-date rows across separate query executions.
-    const orderBy =
-      sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
-        ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
-        : `t.date DESC, t.id DESC`;
-
-    // Partition by account and currency — see getAll for the rationale.
-    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
-
     // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window
     // function forced the planner to fully materialize + sort the whole filtered
     // 6-way join before LIMIT on every page (paid even on the unfiltered page-1
@@ -931,30 +909,14 @@ export const transactionRepository = {
     // byte-identical: it uses the same WHERE and retains its sole referenced
     // join (`r`); the omitted LEFT JOINs target primary keys and therefore
     // cannot drop or multiply transaction rows.
-    const dataSql = `
-      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
-      SELECT t.*,
-             ${ACCOUNT_LABEL_SQL},
-             COALESCE(pr.name, r.name) AS recipient_name,
-             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             CASE
-               WHEN c.id IS NOT NULL THEN c.path_name
-               WHEN rc.id IS NOT NULL THEN rc.path_name
-               WHEN pc.id IS NOT NULL THEN pc.path_name
-               ELSE NULL
-             END AS category_name${runningBalanceCol}
-      FROM transactions t
-      ${TRANSACTION_JOINS}
-      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
-      WHERE ${where}
-      ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
-    `;
-    const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`;
-
-    const dataParams = [...params, limit, offset];
     const [rows, total] = await Promise.all([
-      queryRows(enrichedTransactionDbRowSchema, dataSql, dataParams),
-      getCachedTransactionCount(countSql, params),
+      checkedRows(
+        enrichedTransactionDbRowSchema,
+        enrichedPage(where, { includeBalance, sortBy, sortDir, limit, offset }),
+      ),
+      getCachedTransactionCount(
+        sql`SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`,
+      ),
     ]);
     return { rows: await attachTagsToRows(rows), total };
   },
@@ -1200,28 +1162,28 @@ export const transactionRepository = {
 
   /** Return only mutually unique pairs; directional probes stop at two matches. */
   async listUniqueTransferPairs(windowDays: number): Promise<TransferCandidatePairRow[]> {
-    return queryRows(transferCandidatePairRowSchema, `
+    return checkedRows(transferCandidatePairRowSchema, sql`
       SELECT a.id AS "outId", first_match.id AS "inId"
       FROM transactions a
       CROSS JOIN LATERAL (
         SELECT min(candidate.id) AS id, count(*) AS n
-        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b")} LIMIT 2) candidate
+        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b", windowDays)} LIMIT 2) candidate
       ) first_match
       JOIN transactions b ON b.id = first_match.id
       WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out")} = 1`, [windowDays]);
+        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out", windowDays)} = 1`);
   },
 
   /** Candidate edges are paged independently of the full-corpus uniqueness probes. */
   async listTransferSuggestionPairs(windowDays: number, after: [number, number], limit: number): Promise<TransferCandidatePairRow[]> {
-    return queryRows(transferCandidatePairRowSchema, `
+    return checkedRows(transferCandidatePairRowSchema, sql`
       SELECT a.id AS "outId", b.id AS "inId"
-      FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b")}
+      FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b", windowDays)}
       WHERE ${openTransferRow("a")} AND a.amount < 0
-        AND (a.id, b.id) > ($2::int, $3::int)
-        AND (${candidateCount("a", "other_in")} = 2
-          OR ${candidateCount("b", "other_out")} = 2)
-      ORDER BY a.id, b.id LIMIT $4::int`, [windowDays, ...after, limit]);
+        AND (a.id, b.id) > (${after[0]}::int, ${after[1]}::int)
+        AND (${candidateCount("a", "other_in", windowDays)} = 2
+          OR ${candidateCount("b", "other_out", windowDays)} = 2)
+      ORDER BY a.id, b.id LIMIT ${limit}::int`);
   },
 
   /**

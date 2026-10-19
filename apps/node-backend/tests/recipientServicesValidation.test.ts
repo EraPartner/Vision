@@ -96,7 +96,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     expect(lock![1]).toEqual([[2, 4, 9]]);
     const lockIndex = mockClient.query.mock.calls.indexOf(lock!);
     const writeIndex = mockClient.query.mock.calls.findIndex(([sql]) =>
-      sql.includes("UPDATE transactions"),
+      /update "?transactions"? set/i.test(sql),
     );
     expect(lockIndex).toBeLessThan(writeIndex);
   });
@@ -169,7 +169,7 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     );
 
     const transactionUpdate = paramsBySql.find(([sql]) =>
-      sql.includes("UPDATE transactions"),
+      /update "?transactions"? set/i.test(sql),
     );
     expect(transactionUpdate![1]).toEqual([1, [3, 3]]);
   });

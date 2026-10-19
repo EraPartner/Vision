@@ -36,7 +36,7 @@ export const categoryRepository = {
   /**
    * `limit` is optional and defaults to unbounded — the category pickers/pages
    * render every row and have no paging, so only an explicit limit/offset
-   * narrows the list (buildLimitOffset).
+   * narrows the list.
    */
   async getAll({
     limit = null,

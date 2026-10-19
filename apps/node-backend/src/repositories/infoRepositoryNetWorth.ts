@@ -4,7 +4,6 @@
 
 import { sql } from "kysely";
 import { checkedRows } from "../database/db.ts";
-import { queryRows } from "../database/rowContracts.ts";
 import {
   firstDataDateRowSchema,
   netWorthCurrentBalanceRowSchema,
@@ -41,7 +40,6 @@ import { currencyOrEur } from "../lib/currencyCode.ts";
 
 // Two spellings of one list: the queries that splice accountBalanceSql's
 // string fragments still need the text form.
-const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
 const HOLDINGS_ONLY_ACCOUNT_TYPES = sql`'crypto_exchange', 'wallet'`;
 
 // ── Shared row-level resolution ────────────────────────────────────────────
@@ -262,11 +260,11 @@ export const netWorthRepository = {
     // History walk and the unified current-point balances (the same
     // anchor+delta definition bounded at app-timezone today) are independent.
     const [bankHistoryRows, currentBalancesRows] = await Promise.all([
-      queryRows(
+      checkedRows(
         netWorthHistoryRowSchema,
-        `
+        sql`
       WITH bounds AS (
-        SELECT $1::date AS start_date, $2::date AS end_date
+        SELECT ${firstDataDateYmd}::date AS start_date, ${todayYmd}::date AS end_date
       ),
       days AS (
         SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
@@ -282,7 +280,7 @@ export const netWorthRepository = {
                a.currency AS account_currency
         FROM accounts a
         WHERE a.in_net_worth = true
-          AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
+          AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES})
           AND a.id IN (
             SELECT t.account_id FROM transactions t
              WHERE t.is_active = true AND t.account_id IS NOT NULL
@@ -315,7 +313,6 @@ export const netWorthRepository = {
       JOIN account_list a ON a.account_id = s.account_id
       ORDER BY s.day, s.account_id
     `,
-        [firstDataDateYmd, todayYmd],
       ),
       // Unified current balance per in-net-worth account (WP-A1): the shared
       // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
@@ -332,19 +329,18 @@ export const netWorthRepository = {
       // per account) form keeps SQL output at one row per account. After empty
       // partitions are removed, the `.length > 0` guard below means at least
       // one account has an as-of balance that can safely replace the fallback.
-      queryRows(
+      checkedRows(
         netWorthCurrentBalanceRowSchema,
-        `
+        sql`
       SELECT a.name AS bank_account,
              (a.type = 'liability') AS is_liability,
              COALESCE(a.currency, 'EUR') AS account_currency,
              bp.balance_parts
       FROM accounts a
-      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+      ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayYmd}::date` })}
       WHERE a.in_net_worth = true
-        AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
+        AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES})
     `,
-        [todayYmd],
       ),
     ]);
 

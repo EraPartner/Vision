@@ -349,25 +349,15 @@ describeDb(
 
         // Unfiltered: both rows, labels from accounts.name.
         const resAll = captureRes();
-        const whereAll = buildTransactionWhere({});
-        await streamCsvExport(resAll, {
-          whereSql: whereAll.sql,
-          params: whereAll.params,
-          nextParamIdx: whereAll.nextParamIdx,
-        });
+        await streamCsvExport(resAll, { where: buildTransactionWhere({}) });
         expect(resAll.body()).toContain("KBC Renamed");
         expect(resAll.body()).toContain("Wise USD");
         expect(resAll.body()).not.toContain("KBC Current");
 
         // The label filter resolves names to canonical account IDs.
         const resKbc = captureRes();
-        const whereKbc = buildTransactionWhere({
-          bankAccounts: ["KBC Renamed"],
-        });
         await streamCsvExport(resKbc, {
-          whereSql: whereKbc.sql,
-          params: whereKbc.params,
-          nextParamIdx: whereKbc.nextParamIdx,
+          where: buildTransactionWhere({ bankAccounts: ["KBC Renamed"] }),
         });
         expect(resKbc.body()).toContain("RENT JANUARY");
         expect(resKbc.body()).not.toContain("US SUBSCRIPTION");

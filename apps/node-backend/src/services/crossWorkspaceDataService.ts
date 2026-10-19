@@ -9,7 +9,8 @@
  *    balances, FX-converted).
  */
 
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows } from "../database/db.ts";
 import { rebalanceCashAccountRowSchema } from "../database/rows/info.ts";
 import {
   convertToCurrency,
@@ -99,14 +100,13 @@ export async function assembleRebalanceInputs({
   // aggregated (one row per account) form keeps `cashAccounts` one entry per
   // account, including a spendable account with no ledger rows at all (NULL
   // parts → a 0 entry, as before).
-  const rows = await queryRows(
+  const rows = await checkedRows(
     rebalanceCashAccountRowSchema,
-    `SELECT a.id, a.name, a.currency, bp.balance_parts
+    sql`SELECT a.id, a.name, a.currency, bp.balance_parts
        FROM accounts a
-       ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+       ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${todayAppDateString()}::date` })}
       WHERE a.spendable = true AND a.is_active = true
       ORDER BY a.name`,
-    [todayAppDateString()],
   );
 
   const cashAccounts: CashAccountEntry[] = [];

@@ -86,7 +86,7 @@ async function waitForRetagAccountLock() {
       `SELECT count(*)::int AS count
                FROM pg_stat_activity
               WHERE wait_event_type = 'Lock'
-                AND query LIKE '%FROM accounts%FOR UPDATE%'`,
+                AND query ~* 'from "?accounts"? .*for update'`,
     );
     if (result.rows[0].count > 0) return;
     await new Promise((resolve) => setTimeout(resolve, 20));

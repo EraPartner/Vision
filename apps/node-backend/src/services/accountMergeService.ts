@@ -34,7 +34,6 @@ import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { BuiltQuery } from "../database/db.ts";
-import { queryOne } from "../database/rowContracts.ts";
 import {
   accountCurrencyRowSchema,
   balancePartsRowSchema,
@@ -425,16 +424,17 @@ export async function previewMerge(
     // Per-currency anchor+delta over the union set, via the shared hub builder:
     // within each currency the most recent stamped row across BOTH accounts
     // anchors and every active row of that currency after it is the delta. The
-    // account expression is the LITERAL `ANY($1::int[])` (never user input), so
-    // the builder's `t.account_id = ${account}` becomes the union predicate —
-    // which is exactly what the merged account's rows will look like. The
-    // fragment binds positional $1/$2, so it stays a positional query.
-    queryOne(
+    // account expression is `ANY(<union ids>::int[])`, so the builder's
+    // `t.account_id = <account>` becomes the union predicate — which is
+    // exactly what the merged account's rows will look like.
+    checkedRow(
       balancePartsRowSchema,
-      `SELECT bp.balance_parts
+      sql`SELECT bp.balance_parts
          FROM (SELECT 1) merge_drv
-         ${computedBalanceByCurrencyAggLateral({ account: "ANY($1::int[])", asOfDate: "$2::date" })}`,
-      [unionIds, todayAppDateString()],
+         ${computedBalanceByCurrencyAggLateral({
+           account: sql`ANY(${unionIds}::int[])`,
+           asOfDate: sql`${todayAppDateString()}::date`,
+         })}`,
     ),
     // One table of the latest stored rates for every partition; these are
     // CURRENT balances, so each converts at the latest rate, exactly as the

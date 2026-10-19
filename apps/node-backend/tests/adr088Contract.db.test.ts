@@ -34,6 +34,45 @@ const describeDb =
     : describe.skip;
 const pool = getTestPool()!;
 
+const CONTRACT_ACCOUNTS = [
+  "Contract Cash",
+  "Contract Moved",
+  "Contract Detach",
+  "Contract Planned",
+  "Contract Planned Moved",
+  "Contract Imported",
+  "Contract Survivor",
+  "Contract Renamed",
+];
+const CONTRACT_RECIPIENT = "adr088 contract recipient";
+
+/** Remove every row this suite creates, so later suites see a clean ledger. */
+async function cleanupContractRows(): Promise<void> {
+  const recipients = `(SELECT id FROM recipients WHERE normalized_name = '${CONTRACT_RECIPIENT}')`;
+  const accounts = `(SELECT id FROM accounts WHERE name = ANY($1::text[]))`;
+  await pool.query(
+    `DELETE FROM transactions
+      WHERE recipient_id IN ${recipients} OR account_id IN ${accounts}`,
+    [CONTRACT_ACCOUNTS],
+  );
+  await pool.query(
+    `DELETE FROM planned_transactions
+      WHERE recipient_id IN ${recipients} OR account_id IN ${accounts}`,
+    [CONTRACT_ACCOUNTS],
+  );
+  await pool.query(
+    `DELETE FROM import_batches
+      WHERE id IN (SELECT batch_id FROM import_staging_rows
+                    WHERE resolved_recipient_id IN ${recipients})`,
+  );
+  await pool.query(`DELETE FROM accounts WHERE name = ANY($1::text[])`, [
+    CONTRACT_ACCOUNTS,
+  ]);
+  await pool.query(
+    `DELETE FROM recipients WHERE normalized_name = '${CONTRACT_RECIPIENT}'`,
+  );
+}
+
 describeDb("ADR-088 contract schema", () => {
   beforeAll(async () => {
     await acquireDbSuiteLock();
@@ -45,9 +84,11 @@ describeDb("ADR-088 contract schema", () => {
           AND column_name = 'bank_account'`,
     );
     expect(rows.length).toBe(0);
+    await cleanupContractRows();
   }, 180_000);
 
   afterAll(async () => {
+    await cleanupContractRows();
     await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();

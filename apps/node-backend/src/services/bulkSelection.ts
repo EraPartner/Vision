@@ -11,7 +11,10 @@
  * filter-mode requests so a mistyped filter cannot delete the whole table.
  */
 
+import { sql } from "kysely";
+import type { RawBuilder } from "kysely";
 import { query as dbQuery } from "../database/connection.ts";
+import { compileQuery } from "../database/db.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import { transactionKeyRowSchema } from "../database/rowSchemas.ts";
 import { asTransactionId } from "@vision/types/brands";
@@ -50,8 +53,7 @@ export type BulkWhereOptions = TransactionWhereOptions & {
  * 3-level effective category is NULL. Needs the `r` and `pr` joins of
  * EXPORT_JOINS_SQL.
  */
-const UNCATEGORISED_SQL =
-  "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL";
+const UNCATEGORISED_SQL = sql`COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL`;
 const DEFAULT_FILTER_CAP = 5000;
 
 /**
@@ -432,14 +434,15 @@ export async function resolveBulkSelection(
   if (selection.mode === "ids") return selection.ids;
 
   const { uncategorised, ...normalized } = selection.filter;
-  const { sql: builtSql, params } = buildTransactionWhere(normalized);
-  const whereSql = uncategorised
-    ? `${builtSql} AND ${UNCATEGORISED_SQL}`
-    : builtSql;
+  const built = buildTransactionWhere(normalized);
+  const where = uncategorised ? sql`${built} AND ${UNCATEGORISED_SQL}` : built;
+  const run = (statement: RawBuilder<unknown>) => {
+    const compiled = compileQuery(statement);
+    return query(compiled.sql, [...compiled.parameters]);
+  };
 
-  const countResult = await query(
-    `SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${whereSql}`,
-    params,
+  const countResult = await run(
+    sql`SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${where}`,
   );
   const [countRow] = checkRows(intCountRowSchema, countResult.rows);
   const matched = countRow?.n ?? 0;
@@ -453,9 +456,8 @@ export async function resolveBulkSelection(
     );
   }
 
-  const idsResult = await query(
-    `SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${whereSql} ORDER BY t.id`,
-    params,
+  const idsResult = await run(
+    sql`SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${where} ORDER BY t.id`,
   );
   return checkRows(transactionKeyRowSchema, idsResult.rows).map(
     (row) => row.id,

@@ -28,10 +28,10 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
+import { sql } from "kysely";
 import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 import { withTransaction } from "../database/connection.ts";
 import { checkedRow, db } from "../database/db.ts";
-import { queryOne } from "../database/rowContracts.ts";
 import {
   adjustmentRowSchema,
   reconcileDriftRowSchema,
@@ -114,19 +114,19 @@ export async function reconcileAccount(
     // Statement figure + the live computed balance, per currency partition (the
     // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
     // SELECT — the lateral aggregates, so the lock is taken separately above.
-    const row = await queryOne(
+    const selectedCurrency = sql`COALESCE(${requestedCurrency ?? null}::varchar(3), a.currency)`;
+    const row = await checkedRow(
       reconcileDriftRowSchema,
-      `SELECT a.currency AS account_currency,
-              COALESCE($3::varchar(3), a.currency) AS reconcile_currency,
+      sql`SELECT a.currency AS account_currency,
+              ${selectedCurrency} AS reconcile_currency,
               s.balance AS statement_balance,
               bp.balance_parts
          FROM accounts a
-         ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
+         ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate: sql`${today}::date` })}
          LEFT JOIN account_statement_balances s
            ON s.account_id = a.id
-          AND s.currency = COALESCE($3::varchar(3), a.currency)
-        WHERE a.id = $1`,
-      [accountId, today, requestedCurrency ?? null],
+          AND s.currency = ${selectedCurrency}
+        WHERE a.id = ${accountId}`,
     );
     if (!row) throw new NotFoundError(`Account ${accountId} not found`);
 

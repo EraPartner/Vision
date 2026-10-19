@@ -17,13 +17,15 @@ import { sql } from 'kysely';
 import type { RawBuilder } from 'kysely';
 import { checkedRows } from '../database/db.ts';
 import { tagPivotRowSchema } from '../database/rows/info.ts';
-import { validateInt4Ids } from '../lib/filterBuilder.ts';
+import {
+  validateInt4Ids,
+  andClauses,
+} from '../lib/filterBuilder.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
 import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
 import { periodPivotConversion } from './infoRepositoryRecipients.ts';
 import type { PeriodPivotConversion } from './infoRepositoryRecipients.ts';
 import {
-  andClauses,
   buildPeriodPivot,
   mapRowsForAmountConversion,
 } from './infoRepositoryHelpers.ts';

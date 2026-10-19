@@ -13,7 +13,6 @@
 import { sql } from "kysely";
 import { query } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
-import { queryRows } from "../database/rowContracts.ts";
 import {
   accountBalanceQueryRowSchema,
   accountKeyRowSchema,
@@ -29,7 +28,6 @@ import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
 } from "./accountBalanceSql.ts";
-import { buildLimitOffset } from "../lib/sqlClauses.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 
@@ -69,7 +67,7 @@ const COLUMN_LIST = [
   "updated_at",
 ] as const;
 
-const COLUMNS = COLUMN_LIST.join(", ");
+const COLUMNS = sql.join(COLUMN_LIST.map((column) => sql.id(column)));
 
 // Columns a caller may set on create/update. `name` is handled explicitly on
 // create; everything else is optional and falls back to the DB default.
@@ -181,7 +179,7 @@ export const accountRepository = {
    *
    * `limit` is optional and defaults to unbounded — the accounts list has always
    * served every row and the hub UI has no paging, so only an explicit
-   * limit/offset narrows it (buildLimitOffset). The per-currency lateral is the
+   * limit/offset narrows it. The per-currency lateral is the
    * aggregated (one row per account) form precisely so LIMIT keeps counting
    * accounts rather than currency partitions.
    */
@@ -194,10 +192,18 @@ export const accountRepository = {
     limit?: number | null;
     offset?: number;
   } = {}): Promise<AccountBalanceQueryRow[]> {
-    const asOfDate = todayAppDateString();
-    // The shared balance fragments bind the as-of date as positional $1, so
-    // this stays a positional query.
-    let text = `
+    const asOfDate = sql`${todayAppDateString()}::date`;
+    const activeFilter =
+      active === true
+        ? sql` AND a.is_active = true`
+        : active === false
+          ? sql` AND a.is_active = false`
+          : sql``;
+    const page =
+      limit == null ? sql`` : sql` LIMIT ${limit} OFFSET ${offset ?? 0}`;
+    return checkedRows(
+      accountBalanceQueryRowSchema,
+      sql`
       SELECT ${COLUMNS},
              lb.anchor_date,
              lb.post_anchor_count,
@@ -212,8 +218,8 @@ export const accountRepository = {
       -- fields only: "as of {date} statement + {n} entries since" describes the
       -- account's stamping history, not a currency's. The balance and drift
       -- below come from the per-currency partitions.
-      ${balanceProvenanceLateral({ asOfDate: "$1::date" })}
-      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+      ${balanceProvenanceLateral({ asOfDate })}
+      ${computedBalanceByCurrencyAggLateral({ account: sql`a.id`, asOfDate })}
       LEFT JOIN LATERAL (
         SELECT json_agg(
                  json_build_object(
@@ -225,13 +231,8 @@ export const accountRepository = {
           FROM account_statement_balances s
          WHERE s.account_id = a.id
       ) sb ON TRUE
-      WHERE 1=1`;
-    if (active === true) text += ` AND a.is_active = true`;
-    else if (active === false) text += ` AND a.is_active = false`;
-    text += ` ORDER BY a.name`;
-    const params: unknown[] = [asOfDate];
-    text += buildLimitOffset(params, { limit, offset });
-    return queryRows(accountBalanceQueryRowSchema, text, params);
+      WHERE 1=1${activeFilter} ORDER BY a.name${page}`,
+    );
   },
 
   /**

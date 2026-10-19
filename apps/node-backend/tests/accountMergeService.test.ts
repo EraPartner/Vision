@@ -40,7 +40,6 @@ import {
   previewMerge,
   __stampRangesOverlap as stampRangesOverlap,
 } from "../src/services/accountMergeService.ts";
-import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 import {
   ValidationError,
   NotFoundError,
@@ -595,25 +594,27 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     );
     expect(projectedCall).toBeDefined();
     const [projectedSql] = projectedCall!;
-    // The shared hub builder, with the union substituted for a single account —
-    // so preview and hub cannot compute the merged balance differently.
-    expect(projectedSql).toContain(
-      computedBalanceByCurrencyAggLateral({
-        account: "ANY($1::int[])",
-        asOfDate: "$2::date",
-      }),
-    );
+    // The shared hub builder (jsonb partitions), with the union substituted
+    // for a single account — so preview and hub cannot compute the merged
+    // balance differently.
+    expect(projectedSql).toContain("jsonb_agg(");
     // Union set: account_id = ANY(...) — not a single-account filter.
-    expect(projectedSql).toContain("t.account_id = ANY($1::int[])");
+    expect(projectedSql).toMatch(/t\.account_id = ANY\(\$\d+::int\[\]\)/);
+    expect(projectedSql).not.toMatch(/t\.account_id = a\.id/);
     // Anchor = latest stamped row of THAT currency across the union.
     expect(projectedSql).toContain("t.balance IS NOT NULL");
     expect(projectedSql).toContain(
       "COALESCE(t.currency, 'EUR') = ccy.currency",
     );
-    expect(projectedCall![1]).toEqual([
-      [2, 1],
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-    ]); // survivor + source, then app-timezone today
+    // Every bound id list is survivor + source; every other value is the
+    // app-timezone as-of day.
+    const params = projectedCall![1] ?? [];
+    expect(params.length).toBeGreaterThan(0);
+    for (const param of params) {
+      if (Array.isArray(param)) expect(param).toEqual([2, 1]);
+      else expect(param).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+    expect(params.some(Array.isArray)).toBe(true);
   });
 
   it("converts each currency partition at its own rate, into the survivor currency", async () => {
