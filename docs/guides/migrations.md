@@ -77,6 +77,8 @@ A database still carrying `alembic_version` is refused and left unchanged
 4. Run `bun run db:migrate`, then `bun run db:migrate:down` and `bun run db:migrate` again on a
    disposable database.
 5. Run `bun run db:codegen` and commit the regenerated `schema.generated.ts` with the migration.
+   A new money amount, id or currency column first gets an override line in
+   `apps/node-backend/.kysely-codegenrc.json` ([[docs/adr/226-kysely-query-builder|ADR-226]]).
 6. Run `bun run db:lint` and the relevant backend tests.
 
 ## Destructive DDL

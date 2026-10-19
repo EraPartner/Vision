@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Kysely query builder over query() (accepted)
+
+[[docs/adr/226-kysely-query-builder|ADR-226]] builds backend queries with Kysely against the
+generated schema types. The driver runs compiled SQL through `query()`, so ambient transactions,
+the slow-query log and row contracts keep working. Generated types brand ids and currencies and
+type money amount columns as `MoneyAmount`.
+
 ### 2026-10-19: Static checks for agents (accepted)
 
 [[docs/adr/225-static-checks-for-agents|ADR-225]] makes `bun run lint` run frontend ESLint,

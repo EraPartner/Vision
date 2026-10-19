@@ -99,6 +99,17 @@ schemas in `database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `audit`, `catal
 [[docs/adr/193-zod-runtime-contracts|ADR-193]] and
 [[docs/adr/194-runtime-contracts-completion|ADR-194]].
 
+### Query builder (ADR-226)
+
+**Files:** [[apps/node-backend/src/database/db.ts]], [[apps/node-backend/src/database/schema.generated.ts]], `apps/node-backend/.kysely-codegenrc.json`
+
+Queries are built with Kysely's `db` against the generated `DB` types. The driver sends each
+compiled query through `query()`, so a built query runs inside the ambient `withTransaction()`
+transaction and shows up in the slow-query log. `checkedRows(schema, builder)` and
+`checkedRow(...)` add the row-contract check. Analytical SQL uses Kysely's `sql` tag with bound
+parameters, and `db.transaction()` is not used. The SQL patterns below describe what the builder
+and the `sql` templates produce. See [[docs/adr/226-kysely-query-builder|ADR-226]].
+
 ---
 
 ## Query Patterns

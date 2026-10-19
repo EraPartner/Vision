@@ -644,14 +644,25 @@ against what node-postgres really returns ([[docs/adr/193-zod-runtime-contracts|
 [[docs/adr/194-runtime-contracts-completion|ADR-194]]):
 
 ```ts
-import { queryOne, queryRows, requireRow } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import { requireRow } from "../database/rowContracts.ts";
 import { accountRowSchema, countRowSchema } from "../database/rowSchemas.ts";
 
-const rows = await queryRows(accountRowSchema, sql, params);
-const account = await queryOne(accountRowSchema, sqlById, [id], client); // first row or undefined
-const [row] = await queryRows(countRowSchema, countSql, []);
+const rows = await checkedRows(accountRowSchema, db.selectFrom("accounts").selectAll());
+const account = await checkedRow( // first row or undefined
+  accountRowSchema,
+  db.selectFrom("accounts").selectAll().where("id", "=", id),
+);
+const row = await checkedRow(
+  countRowSchema,
+  db.selectFrom("accounts").select(sql<string>`COUNT(*)`.as("count")),
+);
 return parseInt(requireRow(row, "account count").count, 10);
 ```
+
+Queries are built with Kysely's `db` ([[docs/adr/226-kysely-query-builder|ADR-226]]); analytical
+SQL uses the `sql` tag, and `queryRows`/`queryOne` remain for SQL strings that stay raw.
 
 | Rule             | Detail                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
