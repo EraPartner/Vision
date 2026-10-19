@@ -269,9 +269,13 @@ struct InsightTimelineChart: View {
         guard parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]),
             let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1))
         else { return key }
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = "MMM yyyy"
+        // Built once per locale: axis ticks format on every layout pass.
+        let formatter = FormatterCache.shared("insight.period|\(locale.identifier)") {
+            let made = DateFormatter()
+            made.locale = locale
+            made.dateFormat = "MMM yyyy"
+            return made
+        }
         return formatter.string(from: date)
     }
     private func coordinate(_ value: Decimal) -> Double {
