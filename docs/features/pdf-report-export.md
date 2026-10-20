@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -17,7 +17,7 @@ tags:
     phase-6,
     phase-7,
     phase-8,
-    puppeteer,
+    electron-print,
     export-dialog,
     ui,
     pdf-polish,
@@ -52,6 +52,7 @@ related_code:
   - apps/node-backend/src/routes/reports.ts
   - apps/frontend/src/lib/api/reports.ts
   - apps/frontend/src/features/reports/ExportDialog.tsx
+  - packaging/electron/report-pdf.ts
   - apps/frontend/src/pages/StatisticsPage.tsx
   - apps/frontend/src/pages/TaxOverviewPage.tsx
   - apps/frontend/src/pages/portfolio/StocksPage.tsx
@@ -60,7 +61,9 @@ related_code:
 # PDF Financial Report Export
 
 > [!abstract] Overview
-> Phase 3: Comprehensive PDF financial report generation with Puppeteer rendering, modular section architecture, theme-aware styling, and period filtering.
+> Phase 3: Comprehensive PDF financial report generation with modular section architecture, theme-aware styling, and period filtering.
+>
+> 2026-10-20 ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]): the backend returns a print-ready document and the Electron shell prints it to PDF with its own Chromium (`webContents.printToPDF`) in a hidden, sandboxed, script-free window. Puppeteer and the bundled Chrome Headless Shell are gone. In a plain browser the export opens the browser print dialog instead; that path has no page-number footer. Historical Puppeteer notes below describe the earlier renderer.
 >
 > Phase 4 (April 2026): Unified ExportDialog UI component for report configuration, deployed to Statistics, Tax Overview, and Stocks pages. Supports report type selection, five period presets (YTD, rolling 3/12, calendar year, custom range), per-type section toggles, and currency selection.
 >
@@ -484,7 +487,7 @@ export.comingSoon                     → "This report type is not yet available
 
 The PDF report system is a three-layer architecture:
 
-1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.ts` — routes by report type, assembles cover + content, invokes Puppeteer renderer
+1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.ts` — routes by report type, assembles cover + content and the footer template into a `ReportDocument`; `packaging/electron/report-pdf.ts` prints it
 2. **Modular sections** — `apps/node-backend/src/services/reports/sections/` — seven financial section renderers (executiveSummary, cashflowTrend, categoryBreakdown, topRecipients, bankBalances, plannedOutlook, rollingAverages)
 3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.ts` — parallel selected-source loading; requested source failures abort the export
 4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
@@ -504,7 +507,7 @@ The PDF contains:
 
 ### POST /api/reports/financial
 
-Generate a theme-aware financial PDF report with Puppeteer rendering.
+Generate a theme-aware financial report document that the desktop shell prints to PDF.
 
 **Request Body (JSON):**
 
@@ -649,12 +652,11 @@ const pdf = await renderHtmlToPdf(html, {
 1. **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`)
    - Validates report type + period + sections
    - Builds HTML document from theme tokens + CSS + body sections
-   - Invokes Puppeteer renderer → PDF buffer
-   - Returns `{ pdf, filename }` to the route without depending on Express
+   - Builds the theme-aware footer template
+   - Returns `{ filename, html, footerTemplate }` to the route without depending on Express
 
 2. **HTTP route** (`apps/node-backend/src/routes/reports.ts`)
-   - Writes the PDF content type, download filename, and byte length
-   - Ends the response with the raw PDF buffer
+   - Sends the document in the success envelope (`res.ok`)
 
 3. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`)
    - Parallel `Promise.allSettled` loads only the sources needed by selected sections
@@ -676,11 +678,15 @@ const pdf = await renderHtmlToPdf(html, {
    - Shared formatters: `fmtCurrency()`, `fmtDate()`, `fmtPct()`, `fmtMonthLabel()`
    - SVG chart builders: `svgGroupedBarChart()`, `svgHorizontalBars()`
 
-6. **Puppeteer Renderer** (`apps/node-backend/src/services/reports/puppeteerRenderer.ts`)
-   - `renderHtmlToPdf(html, opts)` → Promise<Buffer>
-   - Accepts optional `opts.footerTemplate`, `opts.headerTemplate`, `opts.margin` (Phase 5)
-   - Uses Puppeteer headless Chrome with print-to-PDF
-   - Singleton browser instance for efficiency
+6. **Electron printer** (`packaging/electron/report-pdf.ts`, ADR-234; replaced the Puppeteer renderer)
+   - The frontend passes `{ html, footerTemplate }` to `window.electronReports.printToPdf`
+     (`report:print-pdf`); only the application document may call it
+   - A hidden `BrowserWindow` with `sandbox`, `contextIsolation`, no Node integration, no preload
+     and `javascript: false` loads the document from memory on the in-memory
+     `vision-report-print` session; network requests and permissions are denied and the document
+     is served with `default-src 'none'; style-src 'unsafe-inline'`
+   - `webContents.printToPDF` prints A4 with backgrounds, a 28px bottom margin and the footer
+     template; one report prints at a time, with a 60 s timeout, and the window is destroyed after
 
 ### Report Types
 
@@ -907,9 +913,8 @@ Partial-period reports omit annual PIT. The rules section explains the omission 
 annual profile or calculation is unavailable.
 
 Two complete report jobs can run at once, with eight queued before data fetching or HTML creation.
-Overflow returns HTTP 503; disconnected queued clients release their place. Active cancellation
-closes the owned Chromium page, while its slot remains held until rendering and cleanup settle.
-These are memory and
+Overflow returns HTTP 503; disconnected queued clients release their place. An active cancelled
+job keeps its slot until its source work settles. These are memory and
 concurrency bounds, not a measured elapsed-time improvement. See [[docs/api/reports|Reports API]]
 and [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 
@@ -918,8 +923,8 @@ and [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 - **Parallel loading**: Selected sources fetch concurrently, including only needed portfolio datasets
 - **Source failures**: A requested source failure aborts the report rather than presenting incomplete totals
 - **Missing exchange rates**: A dividend or recorded tax without a stored rate is left out, never added 1:1, and the section says so with an "Incomplete" warning
-- **Puppeteer rendering**: Chrome headless print-to-PDF (memory-efficient)
-- **No streaming chunking**: Entire PDF buffered; suitable for typical reports (< 20 pages)
+- **Electron printing**: the desktop app's own Chromium prints the document; no second browser is bundled or launched
+- **No streaming chunking**: Entire document buffered; suitable for typical reports (< 20 pages)
 
 ## Section Details
 
@@ -1002,6 +1007,8 @@ remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-
 - [[docs/api/index|API Documentation]]
 - [[docs/features/statistics|Statistics Feature]]
 - [[docs/api/reports|Reports API]]
+- [[docs/adr/234-electron-report-pdf-printing|ADR-234: Electron prints report PDFs]]
+- [[docs/architecture/electron|Electron Desktop Architecture]]
 
 ### Export setup clarity
 

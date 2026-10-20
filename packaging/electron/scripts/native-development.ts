@@ -90,7 +90,6 @@ export async function main(): Promise<void> {
     repoRoot,
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: nativePayloadRoot,
-    browserRuntimeRoot: nativePayloadRoot,
     allowExternalPostgres:
       process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
     runtimeId: "vision_dev",
@@ -118,7 +117,6 @@ export async function main(): Promise<void> {
         paths: runtime.paths,
         runtimeRoot: repoRoot,
         repoRoot,
-        tools,
       }),
       NODE_ENV: "development",
       ENVIRONMENT: "development",

@@ -654,9 +654,10 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for full cont
 The repository's `install.sh` builds the native macOS application from a local
 checkout. It does not download or install host package managers or build toolchains. It fails
 closed when the required build tools or exact
-migration-package versions are unavailable. Locked Bun dependencies, the pinned
-Chrome Headless Shell version, PostgreSQL 18.6 validation, payload hashing, and
-post-build code-signature checks protect the generated application resources.
+migration-package versions are unavailable. Locked Bun dependencies, PostgreSQL 18.6
+validation, payload hashing, and post-build code-signature checks protect the generated
+application resources. Report PDFs print with Electron's own Chromium; no separate browser is
+bundled (ADR-234).
 
 The installed application starts only its private loopback PostgreSQL cluster.
 

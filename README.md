@@ -90,8 +90,9 @@ Feature details live in [`docs/features/`](docs/features/index.md).
 
 ### Install the macOS app
 
-Install the release DMG. It contains PostgreSQL 18, the migrations, the backend, the frontend,
-and the browser used for PDF reports. You do not need a separate PostgreSQL service.
+Install the release DMG. It contains PostgreSQL 18, the migrations, the backend and the frontend.
+PDF reports print with the desktop app's own Electron Chromium. You do not need a separate
+PostgreSQL service.
 
 Vision creates its database under its macOS application-data directory on first launch. See
 [`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for data migration
@@ -128,7 +129,7 @@ repository's `dist` directory.
 
 ```bash
 bun install
-bun run native:prepare   # one-time: private PostgreSQL and PDF payload
+bun run native:prepare   # one-time: private PostgreSQL payload
 bun run dev              # private PostgreSQL + watched backend + Vite
 ```
 

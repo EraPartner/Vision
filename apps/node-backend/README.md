@@ -16,7 +16,7 @@ bun run dev
 
 This starts Vision's private PostgreSQL 18.6 development cluster, the backend in watch mode, and
 Vite. It does not require a running Homebrew PostgreSQL service. The native preparation step needs
-PostgreSQL 18.6 build files and the pinned Chrome Headless Shell download. See
+PostgreSQL 18.6 build files. PDF reports are printed by the Electron shell, not the backend. See
 [`docs/guides/native-macos-runtime.md`](../../docs/guides/native-macos-runtime.md).
 
 To run only the backend, provide a real `DATABASE_URL` and, for schema changes,

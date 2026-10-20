@@ -6,8 +6,7 @@
  * and research/adapters/yahooAdapter) used to import it statically, so it loaded
  * as part of the pre-`listen()` import graph on every boot — before /health
  * could go green — even though most requests never touch Yahoo. This defers both
- * the dynamic import and the client construction to first actual use, mirroring
- * the puppeteer lazy pattern in services/reports/puppeteerRenderer.ts.
+ * the dynamic import and the client construction to first actual use.
  *
  * The client is created once and shared: `getYahooClient()` returns the same
  * cached promise on every call.

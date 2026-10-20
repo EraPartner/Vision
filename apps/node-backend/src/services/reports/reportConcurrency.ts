@@ -1,6 +1,6 @@
 import { AppError } from "../../middleware/errorHandler.ts";
 
-// Admit work before database reads and HTML allocation, not only Chromium pages.
+// Admit work before database reads and HTML allocation.
 const ACTIVE_LIMIT = 2;
 const QUEUED_LIMIT = 8;
 let active = 0;

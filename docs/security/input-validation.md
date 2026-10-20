@@ -829,7 +829,7 @@ TOCTOU DNS rebinding (address changes between our lookup and Node's own TCP conn
 
 ## CSS Injection Prevention (2026-05-29)
 
-Report theme tokens are interpolated into a Puppeteer-rendered `:root {}` CSS block. Without constraints, a crafted value could inject arbitrary CSS or trigger a `url()`-based SSRF.
+Report theme tokens are interpolated into the report document's `:root {}` CSS block, which Electron's Chromium prints (ADR-234). Without constraints, a crafted value could inject arbitrary CSS or trigger a `url()`-based request. The print window also denies all network access and serves the document with `default-src 'none'`.
 
 **Protection:** Each theme token is validated against `HSL_COMPONENT_RE` at both the Zod route boundary and the `themeCss.js` sink (defense-in-depth). Invalid tokens fall back to the mode default; the raw value is never interpolated.
 

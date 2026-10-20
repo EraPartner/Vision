@@ -163,13 +163,12 @@ const envSchema = z
     ATTACHMENT_MAX_SIZE_MB: intEnv(10),
 
     // ── Declared for discoverability (ADR-030) ───────────────────────────────
-    // These are read at their own call sites (logger, migrate, puppeteer,
+    // These are read at their own call sites (logger, migrate,
     // boot-trace) rather than via `env`, but are listed here so every env var the
     // app reads is documented and validated in one place. Kept as loose strings —
     // the reading sites own their parsing/defaults.
     LOG_LEVEL: optionalStringEnv, // config/logger.ts
     ENABLE_LOGGING: optionalStringEnv, // config/logger.ts
-    PUPPETEER_EXECUTABLE_PATH: optionalStringEnv, // services/reports/puppeteerRenderer.js
     VISION_BOOT_TRACE: optionalStringEnv, // main.ts (disabled when '0')
     VISION_MIGRATE_TIMEOUT_MS: optionalStringEnv, // database/migrate.ts
     VISION_RUNTIME_ROOT: optionalStringEnv, // packaged native runtime resources

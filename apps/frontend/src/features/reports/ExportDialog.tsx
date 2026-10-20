@@ -53,6 +53,7 @@ import {
     downloadFinancialReport,
     downloadPortfolioReport,
     downloadTaxReport,
+    type ReportExportResult,
     type ReportPeriod,
 } from "@/lib/api/reports";
 import {
@@ -244,10 +245,11 @@ export function ExportDialog({
 
         setIsSubmitting(true);
         try {
+            let result: ReportExportResult;
             if (reportType === "financial") {
-                await downloadFinancialReport(baseOpts);
+                result = await downloadFinancialReport(baseOpts);
             } else if (reportType === "portfolio") {
-                await downloadPortfolioReport(baseOpts);
+                result = await downloadPortfolioReport(baseOpts);
             } else {
                 // The figures of the tax year the period describes (the same year the backend
                 // puts in the section heading), so the PIT and household blocks match the
@@ -257,7 +259,7 @@ export function ExportDialog({
                 // has its own saved snapshot, or has a frozen calculation (the same years that
                 // can be filed).
                 const taxYear = reportTaxYear(period, todayYmd());
-                await downloadTaxReport({
+                result = await downloadTaxReport({
                     ...baseOpts,
                     ...(await taxReportContext(
                         taxState,
@@ -267,7 +269,9 @@ export function ExportDialog({
                     )),
                 });
             }
-            toast.success(t("statsPage.report.downloadSuccess"));
+            // The browser print dialog is its own confirmation (ADR-234).
+            if (result === "downloaded")
+                toast.success(t("statsPage.report.downloadSuccess"));
             setOpen(false);
         } catch (err: unknown) {
             toast.error(t("statsPage.report.downloadError"), {

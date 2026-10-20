@@ -288,6 +288,34 @@ function splashThemeArguments(args: IpcArguments) {
   ];
 }
 
+// Report documents are self-contained HTML built by the backend (ADR-234). The
+// limits only bound what one renderer call can make the main process hold.
+export const MAX_REPORT_HTML_CHARS = 32 * 1024 * 1024;
+export const MAX_REPORT_FOOTER_CHARS = 16 * 1024;
+
+function reportPrintArguments(
+  args: IpcArguments,
+): [{ html: string; footerTemplate: string }] {
+  expectArity(args, 1);
+  const request = fieldsOf(args[0]);
+  const html = request?.html;
+  const footerTemplate = request?.footerTemplate;
+  if (
+    typeof html !== "string" ||
+    html.length > MAX_REPORT_HTML_CHARS ||
+    !/^<!DOCTYPE html>/i.test(html)
+  ) {
+    throw invalidArguments("Invalid report document");
+  }
+  if (
+    typeof footerTemplate !== "string" ||
+    footerTemplate.length > MAX_REPORT_FOOTER_CHARS
+  ) {
+    throw invalidArguments("Invalid report footer");
+  }
+  return [{ html, footerTemplate }];
+}
+
 const errorResult = (error: IpcArgumentError) => ({
   success: false,
   error: error.message,
@@ -394,6 +422,10 @@ export function createIpcArgumentContracts({
     "theme:persist-splash": {
       validate: splashThemeArguments,
       invalidResult: { success: false },
+    },
+    "report:print-pdf": {
+      validate: reportPrintArguments,
+      invalidResult: errorResult,
     },
   });
 }

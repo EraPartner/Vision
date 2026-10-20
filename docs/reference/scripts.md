@@ -63,7 +63,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `build:dev`      | Build the development frontend                                            |
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
-| `native:prepare` | Prepare the pinned PostgreSQL and report-browser development payload      |
+| `native:prepare` | Prepare the pinned PostgreSQL development payload                         |
 
 ## Static and generated checks
 

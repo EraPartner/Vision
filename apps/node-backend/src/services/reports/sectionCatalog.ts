@@ -5,7 +5,7 @@
  * This is deliberately a dependency-free data leaf — it imports no render
  * functions, so the FE↔BE drift guard (tests/reportSectionCatalog.test.ts) and
  * (transitively) the frontend export dialog can pin the section contract
- * without loading the heavy Puppeteer/HTML render graph. index.ts zips these
+ * without loading the HTML render graph. index.ts zips these
  * catalogs with its renderer maps and throws at module load if the two ever
  * disagree (a section with no renderer, or a renderer with no catalog entry),
  * so identity lives here and rendering lives there, cross-checked on boot.

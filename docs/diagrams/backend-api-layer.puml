@@ -20,7 +20,7 @@ package "Middleware" {
     +adminRateLimiter: 500/min observability reads
     +adminMutateLimiter: 30/min destructive ops
     +importRateLimiter: 20/min
-    +reportRateLimiter: 30/min (Puppeteer)
+    +reportRateLimiter: 30/min (report documents)
     +marketRateLimiter: 90/min (Yahoo Finance proxy)
     +investmentRateLimiter: 300/min
     +aggregationRateLimiter: 600/min
@@ -343,9 +343,9 @@ package "Routes" {
   }
 
   class ReportsRouter <<Phase 3-8>> {
-    +POST /financial : PDF financial report (7 sections, Puppeteer)
-    +POST /portfolio : PDF portfolio report (6 sections, Phase 8)
-    +POST /tax : PDF tax report (7 sections, Phase 8)
+    +POST /financial : financial report document (7 sections; Electron prints PDF)
+    +POST /portfolio : portfolio report document (6 sections, Phase 8)
+    +POST /tax : tax report document (7 sections, Phase 8)
   }
 
   class AiRouter <<ADR-024>> {

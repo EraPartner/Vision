@@ -2,7 +2,7 @@
 title: ExportDialog Component
 type: component
 status: active
-date: 2026-09-27
+date: 2026-10-20
 tags:
   [
     component,
@@ -37,7 +37,7 @@ related_code:
 
 ## Purpose
 
-Provides a unified interface for end-users to configure PDF report parameters before triggering a server-side Puppeteer render. Deployed to three key pages:
+Provides a unified interface for end-users to configure PDF report parameters. The backend builds the report document and the Electron shell prints it to PDF ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]); in a plain browser the browser print dialog opens instead. Deployed to three key pages:
 
 - **Statistics Page** — Financial reports (default)
 - **Tax Overview Page** — Tax reports
@@ -213,7 +213,7 @@ When the user clicks "Download PDF":
    - `downloadPortfolioReport(opts)` if portfolio
    - `downloadTaxReport(opts)` if tax
 5. Show loading state while request is in flight
-6. On success: Close dialog + toast "PDF downloaded"
+6. On success: Close dialog; toast "PDF downloaded" only when the helper resolved `"downloaded"` (Electron). A `"print-dialog"` result (plain browser) shows no toast because the print dialog is the confirmation.
 7. On error: Toast with error message + stay open
 
 ## Loading and Error Handling

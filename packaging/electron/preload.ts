@@ -7,6 +7,7 @@ import type {
   ElectronBackupBridge,
   ElectronEventContract,
   ElectronRecoveryBridge,
+  ElectronReportsBridge,
   ElectronServicesBridge,
   ElectronUpdaterBridge,
   RendererFailurePayload,
@@ -255,6 +256,15 @@ const electronAPI: ElectronApiBridge = {
   },
 };
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);
+
+/**
+ * Print a report document to PDF with Electron's own Chromium in a hidden,
+ * sandboxed, script-free window (ADR-234). Returns the PDF bytes.
+ */
+const electronReports: ElectronReportsBridge = {
+  printToPdf: (request) => ipcRenderer.invoke("report:print-pdf", request),
+};
+contextBridge.exposeInMainWorld("electronReports", electronReports);
 
 /**
  * Expose startup-recovery controls used by error.html when backend health

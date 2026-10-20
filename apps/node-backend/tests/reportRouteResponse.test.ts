@@ -19,14 +19,26 @@ function routeHandler(path: string): DirectHandler {
   return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
 }
 
+function responseStub() {
+  return {
+    writableEnded: false,
+    once: vi.fn(),
+    removeListener: vi.fn(),
+    ok: vi.fn(),
+    setHeader: vi.fn(),
+    end: vi.fn(),
+  };
+}
+
 describe('report route response', () => {
-  it('owns the PDF download headers and sends the raw service buffer', async () => {
-    const pdf = Buffer.from('pdf-bytes');
-    generateReport.mockResolvedValue({ pdf, filename: 'vision-financial-2026-08-26.pdf' });
-    const res = {
-      setHeader: vi.fn(),
-      end: vi.fn(),
+  it('sends the print-ready document in the success envelope', async () => {
+    const document = {
+      filename: 'vision-financial-2026-08-26.pdf',
+      html: '<!DOCTYPE html><html></html>',
+      footerTemplate: '<div></div>',
     };
+    generateReport.mockResolvedValue(document);
+    const res = responseStub();
 
     await routeHandler('/financial')({ body: {} }, res);
 
@@ -35,27 +47,22 @@ describe('report route response', () => {
       currency: 'EUR',
     }));
     expect(generateReport.mock.calls[0]![0]).not.toHaveProperty('res');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
-    expect(res.setHeader).toHaveBeenCalledWith(
-      'Content-Disposition',
-      'attachment; filename="vision-financial-2026-08-26.pdf"',
-    );
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Length', pdf.length);
-    expect(res.end).toHaveBeenCalledWith(pdf);
+    expect(res.ok).toHaveBeenCalledWith(document);
+    expect(res.end).not.toHaveBeenCalled();
   });
 });
 
 
-it('does not send a PDF or forward an error after the requesting client disconnects', async () => {
+it('does not send a document or forward an error after the requesting client disconnects', async () => {
   let close!: () => void;
-  const res = { writableEnded: false, once: vi.fn((_event, callback) => { close = callback; }), removeListener: vi.fn(), setHeader: vi.fn(), end: vi.fn() };
+  const res = { ...responseStub(), once: vi.fn((_event, callback) => { close = callback; }) };
   generateReport.mockImplementationOnce(async (options) => {
     close();
     expect(options.signal?.aborted).toBe(true);
-    throw new Error('Page closed on cancellation');
+    throw new Error('Cancelled while fetching report data');
   });
   await expect(routeHandler('/financial')({ body: {} }, res)).resolves.toBeUndefined();
+  expect(res.ok).not.toHaveBeenCalled();
   expect(res.end).not.toHaveBeenCalled();
-  expect(res.setHeader).not.toHaveBeenCalled();
   expect(res.removeListener).toHaveBeenCalledWith('close', close);
 });

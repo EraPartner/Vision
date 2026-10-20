@@ -13,9 +13,10 @@ Postgres.app or a separately installed Chrome.
 | `README.md`                        | This file                                         |
 | `*.sha256`                         | SHA-256 checksums for each release artifact       |
 
-The application contains PostgreSQL 18.6, the Vision backend, the production frontend, the
-migration runner, and Chrome Headless Shell for PDF reports. PostgreSQL data and attachments are
-stored outside the application bundle so replacing `Vision.app` does not replace user data.
+The application contains PostgreSQL 18.6, the Vision backend, the production frontend and the
+migration runner. PDF reports print with the application's own Electron Chromium. PostgreSQL data
+and attachments are stored outside the application bundle so replacing `Vision.app` does not
+replace user data.
 
 ## Requirements
 

@@ -3048,7 +3048,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate financial report PDF */
+        /**
+         * Generate a print-ready financial report document
+         * @description Returns the financial report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generateFinancialReport"];
         delete?: never;
         options?: never;
@@ -3065,7 +3068,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate portfolio report PDF */
+        /**
+         * Generate a print-ready portfolio report document
+         * @description Returns the portfolio report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generatePortfolioReport"];
         delete?: never;
         options?: never;
@@ -3082,7 +3088,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate tax report PDF */
+        /**
+         * Generate a print-ready tax report document
+         * @description Returns the tax report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generateTaxReport"];
         delete?: never;
         options?: never;
@@ -4395,6 +4404,15 @@ export interface components {
                 taxableIncome: number;
                 totalPIT: number;
             }[];
+        };
+        /** @description A print-ready report (ADR-234): a self-contained HTML document with inline styles and no scripts, the Chromium print footer template that fills the reserved 28px bottom margin with page numbers, and the PDF filename. */
+        ReportDocument: {
+            /** @description PDF filename in the form vision-<type>-YYYY-MM-DD.pdf (app timezone date). */
+            filename: string;
+            /** @description Complete A4 report document starting with <!DOCTYPE html>. */
+            html: string;
+            /** @description Chromium printToPDF footerTemplate using pageNumber and totalPages spans. */
+            footerTemplate: string;
         };
         /** @description Shared validated request for all three existing report routes. An empty object is valid. Unknown fields are stripped, including the obsolete top-level start_date/end_date/year; select a window through period instead. Tax context fields are accepted by all routes but forwarded to rendering only for the tax report. Null is not an omitted field. */
         ReportRequest: {
@@ -15731,17 +15749,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw financial PDF bytes; no JSON envelope. */
+            /** @description Print-ready financial report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-financial-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
@@ -15791,17 +15807,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw portfolio PDF bytes; no JSON envelope. */
+            /** @description Print-ready portfolio report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
@@ -15851,17 +15865,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw tax PDF bytes; no JSON envelope. */
+            /** @description Print-ready tax report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-tax-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */

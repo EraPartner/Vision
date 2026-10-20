@@ -16,15 +16,16 @@ related_code:
 > [!tip] Desktop startup and readiness
 > [Open the journey](../flow-visualizer.html#native-startup). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
-Vision for macOS bundles PostgreSQL 18.6, the compiled Bun backend with its `db/` migration files,
-and Chrome Headless Shell. Electron owns their lifecycle. A host database service is neither used nor required.
+Vision for macOS bundles PostgreSQL 18.6 and the compiled Bun backend with its `db/` migration
+files. Electron owns their lifecycle and prints report PDFs with its own Chromium
+([[docs/adr/234-electron-report-pdf-printing|ADR-234]]). A host database service is neither used
+nor required.
 
 ## Build inputs
 
 The native payload builder requires:
 
-- the reviewed PostgreSQL 18.6 build source;
-- the Puppeteer-pinned Chrome Headless Shell; and
+- the reviewed PostgreSQL 18.6 build source; and
 - the Bun runtime and production frontend.
 
 Prepare development payloads with:
@@ -154,8 +155,9 @@ passphrase at rest, while the backup key itself is derived with scrypt.
 ## Updates and reports
 
 Native updates create a backup, verify the selected release artifact and checksum, install it, and
-retain rollback state until the updated app opens successfully. Reports use the bundled Chrome
-Headless Shell. Ollama remains an optional host integration and defaults to its loopback endpoint;
+retain rollback state until the updated app opens successfully. Report PDFs print in a hidden,
+sandboxed, script-free Electron window with no network access (ADR-234). Ollama remains an
+optional host integration and defaults to its loopback endpoint;
 see [[docs/integrations/ollama|Ollama Integration]].
 
 ## Recovery boundary

@@ -92,6 +92,8 @@ aliases:
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 >
+> **2026-10-20 — reports return print-ready documents (ADR-234, BREAKING, operation count unchanged):** `POST /api/reports/financial`, `/portfolio` and `/tax` keep their request bodies but now answer `200` with the success envelope `{ ok: true, data: { filename, html, footerTemplate } }` instead of `application/pdf` bytes with `Content-Disposition`/`Content-Length`. The backend no longer bundles or launches a browser. The Electron shell prints `html` to PDF through the new `report:print-pdf` invoke channel (`window.electronReports.printToPdf`); a plain browser opens its print dialog on the document. Breaking for any client that expected PDF bytes; the shipped frontend is updated. See [[docs/adr/234-electron-report-pdf-printing|ADR-234]].
+>
 > **2026-10-20 — audit history removed (ADR-231, BREAKING, count 299 → 293):** the six private `POST /api/internal/audit/{verify,read,retention-plan,retention-prune,checkpoint,update-decision}` operations, the `AuditBridgeToken` security scheme and the `Audit*` schemas are gone. `PUT /api/investments/transactions/broker` no longer stores receipts: its receipt drops `receipt_id` and `created_at`, a request whose rows already sit on `to_account_id` returns `replayed: true` with `changed_count: 0` and no write, and reusing an `idempotency_key` with a different body is no longer `409`. Split routes ignore `x-actor`; the database editor no longer returns `403` for audit tables. The `electronAudit` bridge and its six `audit:*` IPC channels are removed. See [[docs/adr/231-remove-audit-history|ADR-231]].
 >
 > **2026-10-20 — import rate-limit scope narrowed (non-breaking, operation count unchanged):** `importRateLimiter` (20 req/min, shared `import` bucket) now covers only uploads, the portfolio probe, and commits under `/api/import` and `/api/portfolio/import`. Batch previews, row and investment overrides, batch list/detail/rollback, saved parsers, and reconciliation preview are limited only by the global API limiter. Clients previously throttled during review no longer receive those `429` responses. See [[docs/security/rate-limiting]].
@@ -607,7 +609,7 @@ in ascending order and preserves source order within a date. See
 
 ## Reports — Phase 3 / Phase 5 / Phase 7
 
-Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
+Server-side report document generation (Phase 3) with PDF printing by the Electron shell's own Chromium ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns the `ReportDocument` envelope (`filename`, script-free `html`, `footerTemplate`); the backend renders no PDF.
 
 The 2026-10-13 OpenAPI correction declares the existing binary PDF response and shared request
 `currency`, `period`, `sections`, `theme`, exclusion IDs and optional tax context. It removes stale
@@ -620,9 +622,9 @@ correction is breaking for them, while runtime-compatible callers retain existin
 
 | Method | Path                     | Description                                                                                                                                                                                                                                    | Rate Limit | Doc                                                    |
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
-| POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/financial` | Generate financial report document (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/portfolio` | Generate portfolio report document (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/tax`       | Generate tax report document (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
 ## Aggregations — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
@@ -701,9 +703,9 @@ share mutation invalidation. This query scope adds no operation. See [[docs/api/
 
 **Streaming Lifecycle:** Frontend pre-creates conversation via POST `/api/ai/conversations`, then streams via POST `/api/ai/chat/stream`. Stream lives in module-level `aiChatStreamStore`; user can navigate away and stream continues. On completion, TanStack Query cache invalidates to hydrate persisted messages. Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`.
 
-## IPC Contract — Electron Desktop (23 invoke channels, 6 event channels)
+## IPC Contract — Electron Desktop (24 invoke channels, 6 event channels)
 
-Electron-specific inter-process communication is grouped into five context bridges. The complete
+Electron-specific inter-process communication is grouped into six context bridges. The complete
 argument and result types are owned by `packaging/electron/electron-api.d.ts` and re-exported as
 `@vision/types/electron`.
 
@@ -714,6 +716,13 @@ argument and result types are owned by `packaging/electron/electron-api.d.ts` an
 | `electronServices` |               2 |              0 |
 | `electronAPI`      |               7 |              4 |
 | `electronRecovery` |               2 |              2 |
+| `electronReports`  |               1 |              0 |
+
+`report:print-pdf` (`electronReports.printToPdf({ html, footerTemplate })`) prints a report
+document from `POST /api/reports/*` in a hidden, sandboxed window with JavaScript disabled, no
+preload, denied permissions and no network, on a dedicated in-memory session. Only the
+application document may call it. It returns `{ success: true, pdf: Uint8Array }` or
+`{ success: false, error }` ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]).
 
 The backup operations remain:
 

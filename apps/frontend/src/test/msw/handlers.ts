@@ -1657,27 +1657,15 @@ export const defaultHandlers = [
         ok({ matchCount: 0, recipientIds: [] }),
     ),
 
-    // Reports
-    http.post(
-        `${API_BASE}/api/reports/financial`,
-        () =>
-            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
-                status: 200,
+    // Reports — routes/reports.ts (`res.ok(document)`, ADR-234).
+    ...(["financial", "portfolio", "tax"] as const).map((type) =>
+        http.post(`${API_BASE}/api/reports/${type}`, () =>
+            ok({
+                filename: `vision-${type}-2026-06-22.pdf`,
+                html: "<!DOCTYPE html><html><body>Report</body></html>",
+                footerTemplate: "<div></div>",
             }),
-    ),
-    http.post(
-        `${API_BASE}/api/reports/portfolio`,
-        () =>
-            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
-                status: 200,
-            }),
-    ),
-    http.post(
-        `${API_BASE}/api/reports/tax`,
-        () =>
-            new Response(new Blob(["PDF"], { type: "application/pdf" }), {
-                status: 200,
-            }),
+        ),
     ),
 
     // Saved charts

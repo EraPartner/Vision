@@ -148,6 +148,24 @@ components:
               grossIncome: { type: number }
               taxableIncome: { type: number }
               totalPIT: { type: number }
+    ReportDocument:
+      type: object
+      description: >-
+        A print-ready report (ADR-234): a self-contained HTML document with inline
+        styles and no scripts, the Chromium print footer template that fills the
+        reserved 28px bottom margin with page numbers, and the PDF filename.
+      required: [filename, html, footerTemplate]
+      properties:
+        filename:
+          type: string
+          pattern: "^vision-(financial|portfolio|tax)-\\d{4}-\\d{2}-\\d{2}\\.pdf$"
+          description: PDF filename in the form vision-<type>-YYYY-MM-DD.pdf (app timezone date).
+        html:
+          type: string
+          description: Complete A4 report document starting with <!DOCTYPE html>.
+        footerTemplate:
+          type: string
+          description: Chromium printToPDF footerTemplate using pageNumber and totalPages spans.
     ReportRequest:
       type: object
       description: >-
@@ -15131,7 +15149,12 @@ paths:
 
   /api/reports/financial:
     post:
-      summary: Generate financial report PDF
+      summary: Generate a print-ready financial report document
+      description: >-
+        Returns the financial report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generateFinancialReport
       tags: [Reports]
       requestBody:
@@ -15142,17 +15165,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw financial PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-financial-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready financial report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
@@ -15172,7 +15195,12 @@ paths:
 
   /api/reports/portfolio:
     post:
-      summary: Generate portfolio report PDF
+      summary: Generate a print-ready portfolio report document
+      description: >-
+        Returns the portfolio report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generatePortfolioReport
       tags: [Reports]
       requestBody:
@@ -15183,17 +15211,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw portfolio PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready portfolio report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
@@ -15213,7 +15241,12 @@ paths:
 
   /api/reports/tax:
     post:
-      summary: Generate tax report PDF
+      summary: Generate a print-ready tax report document
+      description: >-
+        Returns the tax report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generateTaxReport
       tags: [Reports]
       requestBody:
@@ -15224,17 +15257,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw tax PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-tax-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready tax report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:

@@ -243,9 +243,9 @@ export const spaRateLimiter = rateLimiter({
 });
 
 /**
- * Strict limiter for report generation. Each POST forks a Puppeteer/Chromium
- * render (heavy CPU + memory); without a cap a single client on the LAN can
- * fork-bomb the host. 30/min is far above any human's "generate PDF" cadence.
+ * Strict limiter for report generation. Each POST runs report aggregation
+ * queries and builds a full HTML document; without a cap one client could
+ * monopolise the database. 30/min is far above any human's "generate PDF" cadence.
  */
 export const reportRateLimiter = rateLimiter({
   windowMs: 60_000,

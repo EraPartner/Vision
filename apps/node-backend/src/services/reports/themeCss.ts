@@ -6,9 +6,9 @@
  * matching the app's Tailwind CSS convention.
  *
  * SECURITY: every token value is interpolated verbatim into a `:root { ... }`
- * block that Puppeteer renders. An unconstrained value would allow CSS
+ * block that Chromium prints. An unconstrained value would allow CSS
  * injection — e.g. closing the rule and adding `background: url(...)` to make
- * the backend issue an arbitrary outbound request (SSRF). `HSL_COMPONENT_RE`
+ * the printing browser issue an arbitrary outbound request. `HSL_COMPONENT_RE`
  * pins the value to a hue/saturation%/lightness% triple; anything else is
  * dropped and falls through to the mode-aware defaults. The report route
  * validates with the same pattern, so this is defense-in-depth at the sink.

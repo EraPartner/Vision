@@ -7,7 +7,6 @@ REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 ELECTRON_DIR="$REPO_PATH/packaging/electron"
 APP_NAME="Vision Demo"
 APP_DEST="/Applications/$APP_NAME.app"
-CHROMIUM_VERSION="150.0.7871.24"
 
 # shellcheck source=scripts/lib/mac-install.sh
 source "$REPO_PATH/scripts/lib/mac-install.sh"

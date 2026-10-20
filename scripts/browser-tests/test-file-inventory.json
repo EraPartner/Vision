@@ -2,16 +2,16 @@
   "generatedOn": "2026-10-20",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 927,
+  "totalFiles": 925,
   "counts": {
     "simulated-dom": 259,
     "unit-script-or-contract-needs-review": 305,
     "property-test": 12,
-    "mocked-unit-or-service": 199,
+    "mocked-unit-or-service": 198,
     "live-http-contract": 2,
     "source-or-file-contract": 17,
     "database-test": 101,
-    "native-runtime-or-filesystem-test": 32
+    "native-runtime-or-filesystem-test": 31
   },
   "identicalSourceGroups": [],
   "files": [
@@ -3773,21 +3773,10 @@
     {
       "path": "apps/node-backend/tests/reportDateLabels.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/reportGeneration.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/reportRendererCancellation.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -4602,10 +4591,7 @@
     {
       "path": "apps/node-backend/tests/unconvertedPortfolioFigures.db.test.ts",
       "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/unconvertedStatistics.db.test.ts",
@@ -4826,6 +4812,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "packaging/electron/report-pdf.test.ts",
+      "inferredBoundary": "native-runtime-or-filesystem-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "packaging/electron/runtime/database-stats.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4900,16 +4891,6 @@
     },
     {
       "path": "packaging/electron/scripts/native-smoke.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/scripts/prepare-chromium-runtime.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/scripts/prepare-development-runtime.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

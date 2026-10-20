@@ -111,7 +111,6 @@ export async function buildDemoSeed({
     repoRoot,
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: payloadRoot,
-    browserRuntimeRoot: payloadRoot,
     runtimeId: `vision_demo_seed_${process.pid}`,
     postgresPort,
     appPort: 0,

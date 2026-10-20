@@ -158,7 +158,7 @@ promotion remain open.
 forward-only audit-chain cutover and backup coverage. ADR-157 adds the later
 installation-local receipt and lifecycle checks.
 
-[[docs/adr/155-evidence-led-electron-surface|ADR-155]] (Accepted) keeps the required
+[[docs/adr/155-evidence-led-electron-surface|ADR-155]] (Accepted; partly superseded by ADR-234) keeps the required
 native desktop journeys while narrowing renderer navigation and IPC trust and
 removing measured package-only assets.
 
@@ -270,6 +270,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > The Vision Native ADRs written on the native branch as ADR-206 to ADR-210 are ADR-209 to
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
+
+### 2026-10-20: Print report PDFs with Electron's own Chromium (accepted)
+
+[[docs/adr/234-electron-report-pdf-printing|ADR-234]] returns a print-ready report document from
+`POST /api/reports/*` and prints it in the Electron main process with `webContents.printToPDF`
+in a hidden, sandboxed, script-free window without network access. Puppeteer and the bundled
+Chrome Headless Shell are removed. A plain browser opens its print dialog instead. This is a
+breaking API change. It supersedes the PDF-browser part of ADR-155.
 
 ### 2026-10-20: Remove the Life scenario panel (accepted)
 

@@ -145,7 +145,7 @@ assignments and quick review sessions. The scope is covered by
 
 #### Report Rate Limiter
 
-Restrictive for Puppeteer/Chromium PDF render, which forks a headless Chrome process — prevents fork-bomb scenarios:
+Restrictive for report generation, which runs report aggregation queries and builds a full HTML document per request (PDF printing happens later in the Electron shell, ADR-234):
 
 ```javascript
 // 30 requests per minute per IP
@@ -241,7 +241,7 @@ Certain routes have additional custom rate limits beyond the global presets:
 
 | Route group           | Limit   | Limiter                  | Reason                                                   |
 | --------------------- | ------- | ------------------------ | -------------------------------------------------------- |
-| `/api/reports/*`      | 30/min  | `reportRateLimiter`      | Puppeteer forks headless Chrome; prevents fork-bomb      |
+| `/api/reports/*`      | 30/min  | `reportRateLimiter`      | Bounds report aggregation and HTML document building     |
 | `/api/market/*`       | 90/min  | `marketRateLimiter`      | Proxies Yahoo Finance; bounds upstream hammering         |
 | `/api/investments/*`  | 300/min | `investmentRateLimiter`  | refresh-prices hits external providers                   |
 | `/api/aggregations/*` | 600/min | `aggregationRateLimiter` | GET-heavy dashboard; Monte-Carlo endpoints are CPU-bound |

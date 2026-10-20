@@ -3,7 +3,6 @@ set -euo pipefail
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 APP_DEST="/Applications/Vision.app"
-CHROMIUM_VERSION="150.0.7871.24"
 
 # shellcheck source=scripts/lib/mac-install.sh
 source "$REPO_PATH/scripts/lib/mac-install.sh"

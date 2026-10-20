@@ -135,7 +135,8 @@ related_code:
 ## Overview
 
 Vision runs as an Electron desktop application, bundling the React frontend, compiled Bun backend,
-PostgreSQL 18.6, the `db/` migration files, and Chrome Headless Shell into one distributable package.
+PostgreSQL 18.6 and the `db/` migration files into one distributable package. Report PDFs print
+with Electron's own Chromium ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]).
 Electron manages a private PostgreSQL cluster in the durable Vision application-data directory.
 The desktop product has one runtime and does not require an external database service.
 
@@ -566,7 +567,6 @@ platform would need those branches back ([[docs/adr/219-minimal-electron-shell-h
 - PostgreSQL 18.6 server and version-matched client tools
 - `db/migrations/` SQL files and `db/schema-inventory.sql`, applied in-process by the compiled
   backend (no separate migration executable)
-- Chrome Headless Shell pinned to the Electron workspace's Puppeteer version
 - Native runtime provider and checksum manifest
 - Vision Demo's deterministic seed dump and validation manifest in Demo packages
 
@@ -595,7 +595,7 @@ The new surface sits alongside the existing `window.electronUpdater` and `window
 | `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
 | `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with a boolean fullscreen state         |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while `preload.ts` imports the canonical types directly with type-only imports. `ipc-contract.test.ts` checks the 29 main handlers, 29 preload invokes, and 6 renderer events against it, and checks that every invoke channel has an argument contract in `runtime/ipc-schemas.ts`. `bun run typecheck:electron` type-checks the main process and preload against these types.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while `preload.ts` imports the canonical types directly with type-only imports. `ipc-contract.test.ts` checks the 30 main handlers, 30 preload invokes, and 6 renderer events against it, and checks that every invoke channel has an argument contract in `runtime/ipc-schemas.ts`. `bun run typecheck:electron` type-checks the main process and preload against these types.
 
 **IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. Handlers are registered only through `registerHandler` in `main.ts`, which throws at startup when a channel has no argument contract in `packaging/electron/runtime/ipc-schemas.ts`. After the sender check, the channel's `validate` function checks the raw renderer arguments (arity, types, ranges, backup paths) and the handler receives only the normalized result. Invalid arguments get the failure shape that channel's renderer caller already handles, or a rejected invoke for the channels marked `REJECT_INVALID`. The log line names the channel and a fixed reason, never the renderer values. The validators are plain functions because the Electron package ships without zod ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
 
@@ -1009,13 +1009,37 @@ and the before/after disposable Demo measurements. The current matrix is:
 
 | Capability                                                                               | Decision                                  | Current journey or boundary                                              |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
-| Sandboxed single window, preload, 29 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
+| Sandboxed single window, preload, 30 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
+| Hidden report print window (ADR-234)                                                     | Add; no preload, no JavaScript, no network | `report:print-pdf` prints the backend's report document to PDF           |
 | Native dialogs and `safeStorage`                                                         | Keep in main process                      | Backup and restore selection and optional encrypted passphrase           |
 | Main-process updater and verified downloads                                              | Keep                                      | Explicit native update, checksum and rollback                           |
 | Notifications, menu and dock, Finder CSV, window bounds                                  | Keep                                      | Local reminders, native commands, import handoff, and relaunch state     |
 | macOS accent and tier-gated vibrancy                                                     | Keep                                      | Existing appearance controls; vibrancy is inactive outside enhanced tier |
 | `update:get-mode`, packaged tests/maps/foreign prebuilds, duplicate Demo art             | Remove                                    | No shipped caller or runtime need                                        |
 | General web views, arbitrary downloads, protocol deep links, renderer file-system access | Do not add                                | No current journey that warrants the added privileged surface            |
+| Bundled Chrome Headless Shell and Puppeteer                                              | Removed (ADR-234)                         | Electron's Chromium prints report PDFs                                   |
+
+### Report PDF printing
+
+[[docs/adr/234-electron-report-pdf-printing|ADR-234]] moves PDF rendering from a bundled Chrome
+Headless Shell driven by Puppeteer in the backend to the Electron main process. The renderer
+fetches a `ReportDocument` (`filename`, `html`, `footerTemplate`) from `POST /api/reports/*` and
+calls `window.electronReports.printToPdf({ html, footerTemplate })`. `report:print-pdf` accepts
+only the application document as sender, a document starting with `<!DOCTYPE html>` of at most
+32 MiB characters and a footer of at most 16 KiB. `packaging/electron/report-pdf.ts` then:
+
+- creates a hidden `BrowserWindow` with `sandbox`, `contextIsolation`, no Node integration, no
+  preload and `javascript: false`, on the in-memory `vision-report-print` partition;
+- serves the document from memory through the `vision-report:` scheme registered only on that
+  session, with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src
+  data:; font-src data:`;
+- cancels every other request on that session, denies permission requests and checks, denies
+  window creation and in-page navigation;
+- calls `webContents.printToPDF` (A4, backgrounds, 28px bottom margin, footer template), returns
+  the bytes, and destroys the window. Prints run one at a time with a 60-second timeout.
+
+The renderer downloads the bytes with the existing blob download. Nothing is written to disk
+before the download, and the application session, CSP and permission handlers are unchanged.
 
 Both audited bundles used the same native runtime manifest. The final Demo
 package was 4,392 KiB smaller (686,196 to 681,804 KiB), with `app.asar` down
@@ -1155,8 +1179,8 @@ icon.
 
 The Demo app uses `~/Library/Application Support/Vision Demo/native/vision_demo`, PostgreSQL port
 `54330`, and a dedicated role/database namespace. Production Vision uses `native/vision` and port
-`54329`. The package contains the same native PostgreSQL, migration, Bun backend, frontend, and
-Chrome Headless Shell payload as production plus the deterministic `demo-seed` resource. First
+`54329`. The package contains the same native PostgreSQL, migration, Bun backend and frontend
+payload as production plus the deterministic `demo-seed` resource. First
 launch and seed updates use a staged database-name switch with rollback until detailed readiness
 passes. The seed manifest records its build reference date; all application
 dates are shifted from the canonical scenario anchor so historical rows end at
