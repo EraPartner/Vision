@@ -1,14 +1,16 @@
 ---
 title: ADR-163 - Audit Transfer Recovery Journal
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, electron, backup]
 description: Recover an interrupted audit transfer only by comparing both local checkpoints with the independent Keychain witness.
 aliases: [audit transfer recovery]
 ---
 
 # ADR-163: Audit Transfer Recovery Journal
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 

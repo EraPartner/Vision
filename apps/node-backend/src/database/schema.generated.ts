@@ -269,35 +269,6 @@ export interface Attachments {
   transaction_id: TransactionId;
 }
 
-export interface AuditChainCheckpoints {
-  anchor_kind: string;
-  created_at: Generated<Timestamp>;
-  head_hash: string;
-  id: Generated<Int8>;
-  receipt_hash: string;
-  receipt_id: string;
-  sequence: Int8;
-}
-
-export interface AuditChainEntries {
-  created_at: Generated<Timestamp>;
-  entry_hash: string;
-  payload: Json;
-  previous_hash: string;
-  sequence: Int8;
-  version: number;
-}
-
-export interface AuditChainHead {
-  last_hash: Generated<string>;
-  last_sequence: Generated<Int8>;
-  legacy_db_editor_max_id: Int8;
-  legacy_retag_max_id: Int8;
-  legacy_split_max_id: Int8;
-  singleton: Generated<boolean>;
-  updated_at: Generated<Timestamp>;
-}
-
 export interface BelgianInflationRates {
   fetched_at: Generated<Timestamp>;
   id: Generated<number>;
@@ -436,17 +407,6 @@ export interface CustomParserConfigs {
   kind: Generated<string>;
   name: string;
   updated_at: Generated<Timestamp>;
-}
-
-export interface DbEditorAudit {
-  after_json: Json | null;
-  before_json: Json | null;
-  created_at: Generated<Timestamp>;
-  id: Generated<Int8>;
-  op: string;
-  pk_json: Json | null;
-  statement: string;
-  table_name: string;
 }
 
 export interface ExchangeRates {
@@ -943,19 +903,6 @@ export interface PortfolioPerformanceSnapshots {
   value_fx_neutral: MoneyColumn | null;
 }
 
-export interface PortfolioRetagAudit {
-  changed_count: number;
-  created_at: Generated<Timestamp>;
-  from_account_id: number | null;
-  id: Generated<Int8>;
-  idempotency_key: string;
-  previous_assignments: Json;
-  request_fingerprint: string;
-  selected_count: number;
-  to_account_id: number | null;
-  transaction_ids: Json;
-}
-
 export interface PortfolioSnapshotAccounts {
   account_key: string;
   computed_at: Generated<Timestamp>;
@@ -1149,15 +1096,6 @@ export interface SavedChartTags {
   tag_id: TagId;
 }
 
-export interface SplitAudit {
-  action: string;
-  actor: string | null;
-  created_at: Generated<Timestamp>;
-  id: Generated<Int8>;
-  payload: Json | null;
-  split_id: number | null;
-}
-
 export interface SplitPayments {
   amount: MoneyColumn;
   created_at: Generated<Timestamp>;
@@ -1335,9 +1273,6 @@ export interface DB {
   analysis_monitors: AnalysisMonitors;
   asset_price_history: AssetPriceHistory;
   attachments: Attachments;
-  audit_chain_checkpoints: AuditChainCheckpoints;
-  audit_chain_entries: AuditChainEntries;
-  audit_chain_head: AuditChainHead;
   belgian_inflation_rates: BelgianInflationRates;
   cash_flows_v1: CashFlowsV1;
   cash_flows_v2: CashFlowsV2;
@@ -1350,7 +1285,6 @@ export interface DB {
   category_paths: CategoryPaths;
   category_root_aliases: CategoryRootAliases;
   custom_parser_configs: CustomParserConfigs;
-  db_editor_audit: DbEditorAudit;
   exchange_rates: ExchangeRates;
   holding_events_v1: HoldingEventsV1;
   import_batches: ImportBatches;
@@ -1380,7 +1314,6 @@ export interface DB {
   portfolio_import_reconciliation_journal: PortfolioImportReconciliationJournal;
   portfolio_import_staging_rows: PortfolioImportStagingRows;
   portfolio_performance_snapshots: PortfolioPerformanceSnapshots;
-  portfolio_retag_audit: PortfolioRetagAudit;
   portfolio_snapshot_accounts: PortfolioSnapshotAccounts;
   portfolio_transactions: PortfolioTransactions;
   provider_api_keys: ProviderApiKeys;
@@ -1399,7 +1332,6 @@ export interface DB {
   saved_chart_recipients: SavedChartRecipients;
   saved_chart_tags: SavedChartTags;
   saved_charts: SavedCharts;
-  split_audit: SplitAudit;
   split_payments: SplitPayments;
   tags: Tags;
   transaction_source_links: TransactionSourceLinks;

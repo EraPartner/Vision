@@ -2,7 +2,7 @@
  * The production migrator (src/database/migrate.ts) against real, disposable
  * PostgreSQL 18 databases: fresh install, idempotent re-run, fail-closed
  * refusals (unversioned objects, a database from before the baseline), and a later
- * reversible migration with its audit events.
+ * reversible migration.
  */
 
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -76,11 +76,14 @@ async function loadMigrator(runtimeRoot?: string): Promise<MigrateModule> {
   }
 }
 
-async function auditEvents(client: pg.Client) {
+/** Application tables, without the migrator's own bookkeeping. */
+async function publicTables(client: pg.Client) {
   const result = await client.query(
-    "SELECT payload FROM audit_chain_entries ORDER BY sequence",
+    `SELECT tablename FROM pg_tables
+      WHERE schemaname = 'public' AND tablename NOT LIKE 'kysely_migration%'
+      ORDER BY tablename`,
   );
-  return result.rows.map((row) => row.payload as Record<string, unknown>);
+  return result.rows.map((row) => row.tablename as string);
 }
 
 async function appliedNames(client: pg.Client) {
@@ -148,15 +151,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
 
       await withClient(db.url, async (client) => {
         expect(await appliedNames(client)).toEqual(["0001_baseline"]);
-        expect(await auditEvents(client)).toEqual([
-          {
-            stream: "schema_migration",
-            event: "baseline_installed",
-            direction: "bootstrap",
-            revision: "0001_baseline",
-            heads: ["0001_baseline"],
-          },
-        ]);
       });
 
       const second = await withMigrationTarget(db.url, () =>
@@ -171,9 +165,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       );
       expect(status.map((m) => m.name)).toEqual(["0001_baseline"]);
       expect(status[0]?.executedAt).toBeInstanceOf(Date);
-      await withClient(db.url, async (client) => {
-        expect(await auditEvents(client)).toHaveLength(1);
-      });
 
       await expect(
         withMigrationTarget(db.url, () => migrator.revertLatestMigration()),
@@ -203,17 +194,17 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
     it("refuses a database from before the baseline without changing anything", async () => {
       const migrator = await loadMigrator();
       const db = await preBaselineDatabase();
-      const before = await withClient(db.url, auditEvents);
+      const before = await withClient(db.url, publicTables);
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),
       ).rejects.toThrow("no migration marker");
       await withClient(db.url, async (client) => {
         expect(await appliedNames(client)).toEqual([]);
-        expect(await auditEvents(client)).toEqual(before);
+        expect(await publicTables(client)).toEqual(before);
       });
     }, 180_000);
 
-    it("applies and reverts a later migration with audited revision events", async () => {
+    it("applies and reverts a later migration", async () => {
       const root = mkdtempSync(path.join(tmpdir(), "vision-migrator-"));
       tempRoots.push(root);
       mkdirSync(path.join(root, "db", "migrations"), { recursive: true });
@@ -249,13 +240,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
         expect(await regclass(client, "public.migrator_probe")).toBe(
           "migrator_probe",
         );
-        expect((await auditEvents(client)).at(-1)).toEqual({
-          stream: "schema_migration",
-          event: "revision_applied",
-          direction: "upgrade",
-          revision: "0002_migrator_probe",
-          heads: ["0002_migrator_probe"],
-        });
       });
 
       const reverted = await withMigrationTarget(db.url, () =>
@@ -265,15 +249,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       await withClient(db.url, async (client) => {
         expect(await regclass(client, "public.migrator_probe")).toBeNull();
         expect(await appliedNames(client)).toEqual(["0001_baseline"]);
-        const events = await auditEvents(client);
-        expect(events).toHaveLength(3);
-        expect(events.at(-1)).toEqual({
-          stream: "schema_migration",
-          event: "revision_applied",
-          direction: "downgrade",
-          revision: "0002_migrator_probe",
-          heads: ["0001_baseline"],
-        });
       });
     }, 180_000);
   },

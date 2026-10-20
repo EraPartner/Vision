@@ -42,12 +42,12 @@ when set, is the owner role that runs DDL.
 
 - `db/migrations/0001_baseline.sql` is the full PostgreSQL 18 schema at the former Alembic head
   `0128_category_path_on_legacy_rename`, with reference rows and one `baseline_installed` audit
-  event. Never edit it.
+  event. Never edit it. Migration `0004_remove_audit_history` later drops that audit chain
+  ([[docs/adr/231-remove-audit-history|ADR-231]]).
 - Every later `NNNN_name.sql` is one migration. An optional `NNNN_name.down.sql` makes it
   reversible; without one, `db:migrate:down` refuses and recovery is a backup restore.
 - `runMigrations()` in `apps/node-backend/src/database/migrate.ts` runs all pending files in one
-  transaction under Kysely's `kysely_migration_lock`. A failure rolls back the whole run. Each file
-  appends a `schema_migration` audit event in the same transaction.
+  transaction under Kysely's `kysely_migration_lock`. A failure rolls back the whole run.
 - Applied migrations are recorded in `public.kysely_migration`. The highest name is the schema
   revision that backups record.
 - After a run that applied something, the migrator ANALYZEs `transactions` and

@@ -37,8 +37,6 @@ export interface RestoreResult extends ElectronSuccessResult {
   file?: string;
   frontendState?: FrontendStateSnapshot | null;
   warning?: string;
-  /** "unavailable" when the user confirmed a restore whose audit continuity could not be verified. */
-  auditStatus?: "unavailable";
 }
 
 export interface ElectronMenuAction {
@@ -73,41 +71,6 @@ export interface RendererFailurePayload {
   source: string;
   line: number;
 }
-
-export interface ElectronAuditEntry {
-  sequence: number;
-  version: number;
-  previousHash: string;
-  hash: string;
-  payload: Record<string, unknown>;
-  createdAt: string;
-  anchorStatus: "anchored" | "pending_anchor";
-}
-
-export interface ElectronAuditVerification {
-  status: "verified" | "partially_verified";
-  sequence: number;
-  hash: string;
-  anchoredThrough: number;
-  retentionThrough?: number;
-  enrollmentSequence?: number;
-  legacyCutover?: Record<string, number>;
-  legacyUnverified?: Record<string, string>;
-}
-
-export type ElectronAuditReadResult =
-  | {
-      success: true;
-      verification: ElectronAuditVerification;
-      entries: ElectronAuditEntry[];
-      hasMore: boolean;
-    }
-  | {
-      success: false;
-      status: "failed" | "unavailable";
-      reason?: "no_trusted_anchor";
-      error?: string;
-    };
 
 export interface ElectronInvokeContract {
   "update:check-github": { args: []; result: UpdateCheckStatus };
@@ -154,51 +117,6 @@ export interface ElectronInvokeContract {
   "services:load-settings": {
     args: [];
     result: { keepServicesOnQuit: boolean };
-  };
-  "audit:enroll": {
-    args: [];
-    result: ElectronSuccessResult & {
-      status?: "failed" | "unavailable";
-      cancelled?: boolean;
-      enrollmentSequence?: number;
-    };
-  };
-  "audit:read": {
-    args: [options?: { afterSequence?: number; limit?: number }];
-    result: ElectronAuditReadResult;
-  };
-  "audit:export": {
-    args: [];
-    result: ElectronSuccessResult & {
-      status?: "failed" | "unavailable";
-      cancelled?: boolean;
-      file?: string;
-    };
-  };
-  "audit:transfer-export": {
-    args: [password: string];
-    result: ElectronSuccessResult & {
-      status?: "failed" | "unavailable";
-      cancelled?: boolean;
-      reason?: string;
-    };
-  };
-  "audit:transfer-import": {
-    args: [password: string];
-    result: ElectronSuccessResult & {
-      status?: "failed" | "unavailable";
-      cancelled?: boolean;
-      reason?: string;
-    };
-  };
-  "audit:rotate-key": {
-    args: [];
-    result: ElectronSuccessResult & {
-      status?: "failed" | "unavailable";
-      cancelled?: boolean;
-      reason?: string;
-      sequence?: number;
-    };
   };
   "recovery:retry": { args: []; result: ElectronSuccessResult };
   "recovery:open-logs": {
@@ -271,15 +189,6 @@ export interface ElectronServicesBridge {
   loadSettings: ElectronInvoke<"services:load-settings">;
 }
 
-export interface ElectronAuditBridge {
-  enroll: ElectronInvoke<"audit:enroll">;
-  read: ElectronInvoke<"audit:read">;
-  exportSnapshot: ElectronInvoke<"audit:export">;
-  exportTransfer: ElectronInvoke<"audit:transfer-export">;
-  importTransfer: ElectronInvoke<"audit:transfer-import">;
-  rotateKey: ElectronInvoke<"audit:rotate-key">;
-}
-
 export interface ElectronApiBridge {
   platform: string;
   ready: ElectronInvoke<"app:renderer-ready">;
@@ -307,7 +216,6 @@ export interface ElectronBridges {
   electronServices?: ElectronServicesBridge;
   electronAPI?: ElectronApiBridge;
   electronRecovery?: ElectronRecoveryBridge;
-  electronAudit?: ElectronAuditBridge;
 }
 
 declare global {

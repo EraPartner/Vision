@@ -32,10 +32,7 @@ import {
   NotFoundError,
 } from "../middleware/errorHandler.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
-import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import type { QueryRunner } from "../types/rows.ts";
-import { checkRows } from "../database/rowContracts.ts";
-import { dbEditorAuditRowSchema } from "../database/rows/admin.ts";
 
 /**
  * Column metadata for one table column, as introspected from
@@ -95,20 +92,6 @@ export interface MutationCtx {
   index: number;
 }
 
-/**
- * One row of the `db_editor_audit` sink (both the DB table and the
- * structured-logger mirror) — mirrors whatever table/row was edited, so
- * `pk`/`before`/`after` are the same dynamic row shape as `Change`.
- */
-export interface AuditEntry {
-  table: string;
-  op: string;
-  pk: Record<string, unknown> | undefined;
-  before: Record<string, unknown> | undefined;
-  after: Record<string, unknown> | undefined;
-  statement: string;
-}
-
 /** A row of `information_schema.columns` as `getTableMeta` selects it. */
 export type RawColumnRow = {
   column_name: string;
@@ -155,18 +138,6 @@ const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 500;
 const READ_TIMEOUT_MS = 15_000;
 const WRITE_TIMEOUT_MS = 30_000;
-
-// The editor bypasses domain services and has no authenticated external audit
-// receipt. Keep audit history out of its generic read and write paths until a
-// dedicated viewer verifies the exact history before showing it.
-const PROTECTED_AUDIT_TABLES = new Set([
-  "audit_chain_entries",
-  "audit_chain_head",
-  "audit_chain_checkpoints",
-  "db_editor_audit",
-  "split_audit",
-  "portfolio_retag_audit",
-]);
 
 // Base tables whose rows feed the dashboard materialized views. Editing any of
 // these leaves the views stale until refreshed (see materializedViewService).
@@ -285,9 +256,6 @@ async function resolveEditableTable(table: unknown): Promise<string> {
  * Column + primary-key metadata for a public table.
  */
 export async function getTableMeta(table: string): Promise<TableMeta> {
-  if (PROTECTED_AUDIT_TABLES.has(table)) {
-    throw new ForbiddenError("Audit tables require verified audit history");
-  }
   // `safeTable` is the catalog's string, not the caller's — see resolveIdent.
   // Everything downstream (meta.table, and through it every quoteIdent call in
   // this module) is built from it.
@@ -744,26 +712,15 @@ async function applyOne(
   ctx: MutationCtx,
 ): Promise<{
   op: string;
+  pk: Record<string, unknown> | undefined;
   after?: Record<string, unknown> | undefined;
-  audit: AuditEntry;
 }> {
   // INSERT: no row to lock; structural constraints enforced by Postgres.
   if (change.op === "insert") {
     const { sql, params } = buildMutationSql(table, change, ctx);
     const res = await client.query(sql, params);
     const after = res.rows[0] as Record<string, unknown> | undefined;
-    return {
-      op: "insert",
-      after,
-      audit: {
-        table,
-        op: "insert",
-        pk: pickPk(after, ctx.primaryKey),
-        before: undefined,
-        after,
-        statement: renderPreview(sql, params),
-      },
-    };
+    return { op: "insert", pk: pickPk(after, ctx.primaryKey), after };
   }
 
   // UPDATE / DELETE: lock the row, verify its version, then mutate.
@@ -790,11 +747,7 @@ async function applyOne(
       },
     );
   }
-  const before: Record<string, unknown> = {
-    ...(cur.rows[0] as Record<string, unknown>),
-  };
-  const currentXmin = before.__xmin;
-  delete before.__xmin;
+  const currentXmin = (cur.rows[0] as Record<string, unknown>).__xmin;
   if (
     change.xmin !== undefined &&
     String(change.xmin) !== String(currentXmin)
@@ -811,96 +764,22 @@ async function applyOne(
   const res = await client.query(sql, params);
 
   if (change.op === "delete") {
-    return {
-      op: "delete",
-      audit: {
-        table,
-        op: "delete",
-        pk: change.pk,
-        before,
-        after: undefined,
-        statement: renderPreview(sql, params),
-      },
-    };
+    return { op: "delete", pk: change.pk };
   }
   const after = res.rows[0] as Record<string, unknown> | undefined;
-  return {
-    op: "update",
-    after,
-    audit: {
-      table,
-      op: "update",
-      pk: change.pk,
-      before,
-      after,
-      statement: renderPreview(sql, params),
-    },
-  };
-}
-
-async function writeAuditRows(
-  client: QueryRunner,
-  audit: AuditEntry[],
-): Promise<void> {
-  for (const a of audit) {
-    const result = await client.query(
-      `INSERT INTO db_editor_audit (table_name, op, pk_json, before_json, after_json, statement)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, pk_json::text AS pk_text, before_json::text AS before_text,
-                 after_json::text AS after_text, statement,
-                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
-      [
-        a.table,
-        a.op,
-        a.pk ?? undefined,
-        a.before ?? undefined,
-        a.after ?? undefined,
-        a.statement,
-      ],
-    );
-    const [row] = checkRows(dbEditorAuditRowSchema, result.rows);
-    if (!row) throw new Error("DB editor audit insert did not return a row");
-    const auditDigest = crypto
-      .createHash("sha256")
-      .update(
-        JSON.stringify([
-          a.table,
-          a.op,
-          row.pk_text,
-          row.before_text,
-          row.after_text,
-          row.statement,
-          row.occurred_at,
-        ]),
-      )
-      .digest("hex");
-    await appendAuditEvent(
-      {
-        stream: "db_editor",
-        event: a.op,
-        auditRowId: String(row.id),
-        table: a.table,
-        occurred_at: row.occurred_at,
-        auditDigest,
-      },
-      client,
-    );
-  }
+  return { op: "update", pk: change.pk, after };
 }
 
 /**
  * Apply a batch of changes. With dryRun, returns the statements that *would*
  * run without touching the DB. Otherwise executes the whole batch in one
- * transaction (all-or-nothing) and writes an audit row per change.
+ * transaction (all-or-nothing) and logs each committed change.
  */
 export async function applyMutations(
   table: string,
   changes: Change[],
   { dryRun = false }: { dryRun?: boolean } = {},
 ) {
-  if (PROTECTED_AUDIT_TABLES.has(table)) {
-    throw new ForbiddenError("Audit tables cannot be edited");
-  }
   const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
   if (primaryKey.length === 0) {
     throw new ValidationError(
@@ -929,7 +808,8 @@ export async function applyMutations(
   }
 
   const client = await getClient();
-  const audit: AuditEntry[] = [];
+  const committed: Array<{ op: string; pk: Record<string, unknown> | undefined }> =
+    [];
   try {
     await client.query("BEGIN");
     await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
@@ -952,18 +832,16 @@ export async function applyMutations(
       const ctx = { colMeta, primaryKey, index };
       const result = await applyOne(client, safeTable, change, ctx);
       results.push({ op: result.op, after: result.after });
-      audit.push(result.audit);
+      committed.push({ op: result.op, pk: result.pk });
     }
 
-    await writeAuditRows(client, audit);
     await client.query("COMMIT");
 
-    // Structured-logger audit sink (in addition to the db_editor_audit table).
-    for (const a of audit) {
+    for (const change of committed) {
       logger.info("db-editor mutation committed", {
-        table: a.table,
-        op: a.op,
-        pk: a.pk,
+        table: safeTable,
+        op: change.op,
+        pk: change.pk,
       });
     }
 

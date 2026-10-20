@@ -2,12 +2,16 @@
 title: "ADR-207: Coordinated native backup and restore recovery"
 type: adr
 status: accepted
-date: 2026-10-11
+date: 2026-10-20
 tags: [adr, architecture, backup, recovery, electron]
 description: Quiesce the native writer for a consistent bundle and recover interrupted database and attachment switches before startup.
 ---
 
 # ADR-207: Coordinated native backup and restore recovery
+
+> [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
+> there is no audit closure or trusted audit session to pause. Writer quiescence and interrupted
+> switch recovery stay in force.
 
 ## Status
 
@@ -48,4 +52,4 @@ separate verification requirements.
 - [[docs/adr/index|All ADRs]]
 - [[docs/features/backup-coverage-audit|Backup coverage and recovery]]
 - [[docs/architecture/electron|Electron architecture]]
-- [[docs/api/internal-audit|Private audit bridge]]
+- Private audit bridge (deleted by [[docs/adr/231-remove-audit-history|ADR-231]])

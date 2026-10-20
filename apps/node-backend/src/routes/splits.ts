@@ -116,8 +116,8 @@ const batchSplitRowSchema = z.object({
   note: z.unknown().optional(),
 });
 
-// POST body: raw values are forwarded to the repository unchanged (only the
-// audit payload coerces amount), so the checks refine without transforming.
+// POST body: raw values are forwarded to the service unchanged, so the checks
+// refine without transforming.
 const createSplitSchema = z.looseObject({}).superRefine((data, ctx) => {
   if (!data.transaction_id || !data.recipient_id || data.amount == null) {
     ctx.addIssue({
@@ -263,12 +263,6 @@ interface PayBody {
   paid_at?: string | null;
 }
 
-function resolveActor(req: {
-  get: (name: string) => string | undefined;
-}): string | null {
-  return req.get("x-actor") || null;
-}
-
 /** `?currency=` for the converted owed figures; EUR when absent. */
 function owedCurrency(query: Record<string, unknown>): CurrencyCode {
   return assertCurrency(optionalQueryString(query, "currency")) ?? EUR;
@@ -347,7 +341,6 @@ router.post("/", async (req, res) => {
     recipient_id,
     amount,
     note,
-    actor: resolveActor(req),
   });
   res.status(201);
   res.ok(split);
@@ -367,7 +360,6 @@ router.post("/batch", async (req, res) => {
   const created = await splitService.createSplitsBatchAtomic({
     transaction_id,
     splits: preparedSplits,
-    actor: resolveActor(req),
   } as Parameters<typeof splitService.createSplitsBatchAtomic>[0]);
   res.status(201);
   res.ok({ items: created, total: created.length });
@@ -392,7 +384,6 @@ router.post(
       recipient_id,
       mode,
       note,
-      actor: resolveActor(req),
     });
     res.status(201);
     res.ok(result);
@@ -415,7 +406,6 @@ router.post("/:id/pay", async (req, res) => {
     amount,
     note,
     paid_at,
-    actor: resolveActor(req),
   });
   res.status(201);
   res.ok(payment);
@@ -433,23 +423,20 @@ router.get("/:id/payments", async (req, res) => {
 
 router.post("/:id/settle", async (req, res) => {
   const splitId = parseSplitId(req);
-  const split = await splitService.settleSplit(splitId, resolveActor(req));
+  const split = await splitService.settleSplit(splitId);
   if (!split) throw new NotFoundError("Split not found");
   res.ok(split);
 });
 
 router.post("/owed/:id/settle-all", async (req, res) => {
   const recipientId = parseRecipientId(req);
-  const result = await splitService.settleAllByRecipient(
-    recipientId,
-    resolveActor(req),
-  );
+  const result = await splitService.settleAllByRecipient(recipientId);
   res.ok(result);
 });
 
 router.delete("/:id", async (req, res) => {
   const splitId = parseSplitId(req);
-  const deleted = await splitService.deleteSplit(splitId, resolveActor(req));
+  const deleted = await splitService.deleteSplit(splitId);
   if (!deleted) throw new NotFoundError("Split not found");
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

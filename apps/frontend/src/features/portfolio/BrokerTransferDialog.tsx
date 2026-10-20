@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Account, PortfolioBrokerRetagReceipt } from "@/types/api";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { retagMovedCount } from "@/lib/api/portfolio";
 import { invalidateAccountRepoint } from "@/lib/queryKeys";
 import { useAccounts } from "@/hooks/useAccounts";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
@@ -88,7 +89,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
             invalidateAccountRepoint(queryClient);
             toast.success(t("portfolio.brokerTransfer.done"), {
                 description: t("portfolio.brokerTransfer.doneHint", {
-                    count: String(result.changed_count),
+                    count: String(retagMovedCount(result)),
                 }),
             });
         },
@@ -134,12 +135,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
                             </p>
                             <p>
                                 {t("portfolio.brokerTransfer.receiptCount", {
-                                    count: String(receipt.changed_count),
-                                })}
-                            </p>
-                            <p className="type-caption text-label-secondary">
-                                {t("portfolio.brokerTransfer.receiptId", {
-                                    id: String(receipt.receipt_id),
+                                    count: String(retagMovedCount(receipt)),
                                 })}
                             </p>
                         </AlertDescription>

@@ -1,13 +1,10 @@
-import crypto from "node:crypto";
 import { withTransaction } from "../../database/connection.ts";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.ts";
 import repository from "../../repositories/portfolioBrokerRetagRepository.ts";
 import type {
-  PortfolioRetagAuditRow,
   RetagCustodyEventRow,
   RetagTransactionEventRow,
 } from "../../repositories/portfolioBrokerRetagRepository.ts";
-import { appendAuditEvent } from "../../repositories/auditChainRepository.ts";
 import {
   buildInvestmentSummaryCorePartitioned,
   partitionOversellDeficits,
@@ -60,7 +57,11 @@ type HistoricalRateRow = {
 
 type RateIndex = Map<string, { date: string; rate: number }[]>;
 
-/** A broker re-tag request (validated by the route). */
+/**
+ * A broker re-tag request (validated by the route). The client's
+ * idempotency_key is echoed in the receipt but not stored: a repeated request
+ * is recognised from the current assignments instead.
+ */
 export interface RetagRequest {
   transaction_ids: PortfolioTransactionId[];
   from_account_id: AccountId | null;
@@ -92,24 +93,6 @@ function rateOnOrBefore(
     if (Number.isFinite(entry.rate) && entry.rate > 0) match = entry.rate;
   }
   return match ?? entries.at(-1)?.rate;
-}
-
-function fingerprintRetagRequest(
-  value: Pick<
-    RetagRequest,
-    "transaction_ids" | "from_account_id" | "to_account_id"
-  >,
-): string {
-  return crypto
-    .createHash("sha256")
-    .update(
-      JSON.stringify({
-        transaction_ids: [...value.transaction_ids].sort((a, b) => a - b),
-        from_account_id: value.from_account_id,
-        to_account_id: value.to_account_id,
-      }),
-    )
-    .digest("hex");
 }
 
 /**
@@ -261,41 +244,36 @@ async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   }
 }
 
-function mapReceipt(row: PortfolioRetagAuditRow, replayed: boolean) {
+/**
+ * The receipt of one call. previous_assignments is each selected row's broker
+ * before this call, so a replay reports the destination it already sits on.
+ */
+function buildReceipt(
+  request: RetagRequest,
+  transactionIds: PortfolioTransactionId[],
+  previousAccountId: AccountId | null,
+  changedCount: number,
+  replayed: boolean,
+) {
   return {
-    receipt_id: Number(row.id),
-    idempotency_key: row.idempotency_key,
-    from_account_id: row.from_account_id,
-    to_account_id: row.to_account_id,
-    transaction_ids: row.transaction_ids,
-    previous_assignments: row.previous_assignments,
-    selected_count: Number(row.selected_count),
-    changed_count: Number(row.changed_count),
-    created_at: row.created_at,
+    idempotency_key: request.idempotency_key,
+    from_account_id: request.from_account_id,
+    to_account_id: request.to_account_id,
+    transaction_ids: transactionIds,
+    previous_assignments: transactionIds.map((id) => ({
+      transaction_id: id,
+      account_id: previousAccountId,
+    })),
+    selected_count: transactionIds.length,
+    changed_count: changedCount,
     replayed,
   };
 }
 
 async function retagPortfolioTransactions(request: RetagRequest) {
   const transactionIds = [...request.transaction_ids].sort((a, b) => a - b);
-  const fingerprint = fingerprintRetagRequest({
-    ...request,
-    transaction_ids: transactionIds,
-  });
 
   return withTransaction(async () => {
-    const replay = await repository.getAuditByIdempotencyKey(
-      request.idempotency_key,
-    );
-    if (replay) {
-      if (replay.request_fingerprint !== fingerprint) {
-        throw new ConflictError(
-          "idempotency_key was already used for a different broker re-tag request",
-        );
-      }
-      return mapReceipt(replay, true);
-    }
-
     // Account lifecycle operations lock the account row before touching
     // portfolio transactions. Keep the same order so close-vs-retag cannot
     // deadlock and destination eligibility cannot change before commit.
@@ -313,26 +291,31 @@ async function retagPortfolioTransactions(request: RetagRequest) {
     // portfolio writes for the short set-based operation.
     await repository.lockPortfolioTransactionWrites();
 
-    // A same-key request may have committed while this transaction waited for
-    // either lock, so repeat the audit lookup after serialization.
-    const priorAudit = await repository.getAuditByIdempotencyKey(
-      request.idempotency_key,
-    );
-    if (priorAudit) {
-      if (priorAudit.request_fingerprint !== fingerprint) {
-        throw new ConflictError(
-          "idempotency_key was already used for a different broker re-tag request",
-        );
-      }
-      return mapReceipt(priorAudit, true);
-    }
-
     const selected = await repository.lockTransactions(transactionIds);
     const selectedById = new Map(selected.map((row) => [row.id, row]));
-    const stale = transactionIds.filter((id) => {
+    const isOn = (id: PortfolioTransactionId, accountId: AccountId | null) => {
       const row = selectedById.get(id);
-      return !row || (row.account_id ?? null) !== request.from_account_id;
-    });
+      return row !== undefined && (row.account_id ?? null) === accountId;
+    };
+
+    // A repeated request finds every row already on the destination. Under the
+    // locks above that state cannot change, so report it without writing.
+    if (
+      request.from_account_id !== request.to_account_id &&
+      transactionIds.every((id) => isOn(id, request.to_account_id))
+    ) {
+      return buildReceipt(
+        request,
+        transactionIds,
+        request.to_account_id,
+        0,
+        true,
+      );
+    }
+
+    const stale = transactionIds.filter(
+      (id) => !isOn(id, request.from_account_id),
+    );
     if (stale.length > 0) {
       throw new ConflictError(
         "selected portfolio transactions are missing or no longer have the expected broker assignment",
@@ -378,34 +361,13 @@ async function retagPortfolioTransactions(request: RetagRequest) {
       );
     }
 
-    const audit = await repository.insertAudit({
-      idempotency_key: request.idempotency_key,
-      request_fingerprint: fingerprint,
-      from_account_id: request.from_account_id,
-      to_account_id: request.to_account_id,
-      transaction_ids: transactionIds,
-      previous_assignments: transactionIds.map((id) => ({
-        transaction_id: id,
-        account_id: request.from_account_id,
-      })),
-      selected_count: transactionIds.length,
-      changed_count: changedIds.length,
-    });
-    await appendAuditEvent({
-      stream: "portfolio_retag",
-      event: "receipt_created",
-      receipt_id: String(audit.id),
-      occurred_at: audit.occurred_at,
-      idempotency_key: audit.idempotency_key,
-      request_fingerprint: audit.request_fingerprint,
-      from_account_id: audit.from_account_id,
-      to_account_id: audit.to_account_id,
-      transaction_ids: audit.transaction_ids,
-      previous_assignments: audit.previous_assignments,
-      selected_count: audit.selected_count,
-      changed_count: audit.changed_count,
-    });
-    return mapReceipt(audit, false);
+    return buildReceipt(
+      request,
+      transactionIds,
+      request.from_account_id,
+      changedIds.length,
+      false,
+    );
   });
 }
 
@@ -414,6 +376,5 @@ export default { retagPortfolioTransactions };
 export {
   assertRetagPreservesPartitionUnits as __assertRetagPreservesPartitionUnits,
   assertRetagPreservesPortfolioEconomics as __assertRetagPreservesPortfolioEconomics,
-  fingerprintRetagRequest as __fingerprintRetagRequest,
   retagPortfolioTransactions as __retagPortfolioTransactions,
 };

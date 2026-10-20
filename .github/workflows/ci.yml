@@ -453,7 +453,6 @@ jobs:
       - name: Run backend tests with coverage
         env:
           VISION_RUN_PERFORMANCE_PROBES: "1"
-          VISION_RUN_AUDIT_PERFORMANCE: "1"
           # Fails when src/database/schema.generated.ts drifts from the migrated schema.
           VISION_TEST_DB_VERIFY_CODEGEN: "1"
         run: scripts/with-test-db.sh --coverage

@@ -25,7 +25,6 @@ import {
 import { cn } from "@/lib/utils";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useAdminOverviewQueries } from "@/features/admin/useAdminQueries";
-import { AuditHistoryCard } from "./AuditHistoryCard";
 
 function OverviewCard({
     label,
@@ -248,7 +247,6 @@ export default function AdminOverviewPage() {
             </div>
 
             <AdminTokenCard />
-            <AuditHistoryCard />
         </PageShell>
     );
 }

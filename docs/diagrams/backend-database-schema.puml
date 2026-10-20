@@ -850,65 +850,6 @@ entity "agg_split_outstanding" as agg_split_outstanding {
   trigger-maintained (Phase 1)
 }
 
-entity "db_editor_audit" as db_editor_audit {
-  * id : bigserial <<PK>>
-  * table_name : text
-  * op : text
-  pk_json : jsonb
-  before_json : jsonb
-  after_json : jsonb
-  * statement : text
-  * created_at : timestamptz
-}
-
-entity "split_audit" as split_audit {
-  * id : bigserial <<PK>>
-  split_id : integer <<retained ID, no FK>>
-  * action : varchar(50)
-  actor : text
-  payload : jsonb
-  * created_at : timestamptz
-}
-
-entity "audit_chain_head" as audit_chain_head {
-  * singleton : boolean <<PK>>
-  * last_sequence : bigint
-  * last_hash : char(64)
-  * legacy_db_editor_max_id : bigint
-  * legacy_split_max_id : bigint
-  * legacy_retag_max_id : bigint
-  * updated_at : timestamptz
-}
-
-entity "audit_chain_entries" as audit_chain_entries {
-  * sequence : bigint <<PK>>
-  * version : smallint
-  * previous_hash : char(64)
-  * entry_hash : char(64)
-  * payload : jsonb
-  * created_at : timestamptz
-}
-
-entity "audit_chain_checkpoints" as audit_chain_checkpoints {
-  * id : bigint <<PK>>
-  * sequence : bigint
-  * head_hash : char(64)
-  * anchor_kind : text
-  * receipt_id : text
-  * receipt_hash : char(64)
-  * created_at : timestamptz
-  ---
-  UNIQUE(anchor_kind, receipt_id)
-}
-
-note bottom of audit_chain_head
-  The baseline captures the highest legacy audit IDs.
-  The head serializes appends; entries and checkpoints
-  have no foreign key to it. Electron holds the separate
-  Keychain-backed receipt. Retention can prune a
-  signed complete year-old entry prefix.
-end note
-
 note bottom of provider_health
   Rolling-window admin observability hub (ADR-034).
   See providerHealthRepository.ts for query patterns.
@@ -935,12 +876,6 @@ note bottom of portfolio_import_batches
   Portfolio CSV/Saxo XLSX statement batches (ADR-078, ADR-177).
   Mirrors import_batches but portfolio-shaped.
   Included in BACKUP_COVERED_TABLES.
-end note
-
-note bottom of db_editor_audit
-  Committed-SQL audit trail for the admin DB data editor (ADR-101).
-  One row per committed statement; written inside the same transaction as the change.
-  Indexed on (table_name, created_at DESC).
 end note
 
 ' Materialized views (read-only projections — listed for reference)
@@ -1121,15 +1056,6 @@ entity "provider_quota" as provider_quota {
   * provider : text <<PK>>
   * window_date : date <<PK>>
   * count : integer
-}
-
-entity "portfolio_retag_audit" as portfolio_retag_audit {
-  * id : bigint <<PK>>
-  * idempotency_key : uuid
-  * request_fingerprint : char(64)
-  from_account_id : integer
-  to_account_id : integer
-  * transaction_ids : jsonb
 }
 
 entity "portfolio_snapshot_accounts" as portfolio_snapshot_accounts {

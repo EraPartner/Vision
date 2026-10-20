@@ -17,13 +17,6 @@ servers:
 
 # ─── Shared envelope & list wrappers ─────────────────────────────────────────
 components:
-  securitySchemes:
-    AuditBridgeToken:
-      type: http
-      scheme: bearer
-      description: >
-        Per-launch token supplied only by the Electron main process to its native
-        backend. A loopback socket peer is also required. This is not ADMIN_AUTH_TOKEN.
   parameters:
     # Opt-in pagination for list endpoints that historically returned every row.
     # Both are optional and, when neither is sent, the response carries the full
@@ -186,121 +179,6 @@ components:
         Auto rejects values with conflicting valid decimal/grouping interpretations.
         Choose decimal_dot or decimal_comma to disambiguate. Ambiguity rejects
         the complete import with a row/column diagnostic before staging.
-    AuditTrustedCheckpoint:
-      type: object
-      additionalProperties: false
-      required: [sequence, hash]
-      properties:
-        sequence: { type: integer, minimum: 0 }
-        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-        retention: { $ref: "#/components/schemas/AuditRetentionBoundary" }
-    AuditRetentionBoundary:
-      type: object
-      additionalProperties: false
-      required: [through, hash, domainMax, migrationHeads]
-      properties:
-        through: { type: integer, minimum: 1 }
-        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-        domainMax: { $ref: "#/components/schemas/AuditRetentionDomainMax" }
-        migrationHeads:
-          type: array
-          maxItems: 16
-          items: { type: string, pattern: "^[0-9a-z_]{1,64}$" }
-    AuditRetentionDomainMax:
-      type: object
-      additionalProperties: false
-      required: [dbEditor, split, retag]
-      properties:
-        dbEditor: { type: integer, minimum: 0 }
-        split: { type: integer, minimum: 0 }
-        retag: { type: integer, minimum: 0 }
-    AuditLegacyCutover:
-      type: object
-      required: [dbEditorMaxId, splitMaxId, retagMaxId]
-      properties:
-        dbEditorMaxId: { type: integer, minimum: 0 }
-        splitMaxId: { type: integer, minimum: 0 }
-        retagMaxId: { type: integer, minimum: 0 }
-    AuditVerificationResult:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
-          enum: [verified, partially_verified, unavailable, failed]
-        code:
-          { type: string, description: Failure reason when status is failed }
-        reason:
-          {
-            type: string,
-            description: Unavailability reason when status is unavailable,
-          }
-        sequence: { type: integer, minimum: 0 }
-        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-        anchoredThrough: { type: integer, minimum: 0 }
-        retentionThrough: { type: integer, minimum: 1 }
-        legacyCutover: { $ref: "#/components/schemas/AuditLegacyCutover" }
-        legacyUnverified:
-          type: object
-          description: Decimal-string counts of pre-cutover audit rows outside the chain.
-          properties:
-            dbEditor: { type: string, pattern: "^[0-9]+$" }
-            split: { type: string, pattern: "^[0-9]+$" }
-            portfolioRetag: { type: string, pattern: "^[0-9]+$" }
-    AuditReadPage:
-      type: object
-      required: [verification, entries, hasMore]
-      properties:
-        verification: { $ref: "#/components/schemas/AuditVerificationResult" }
-        entries:
-          type: array
-          items:
-            type: object
-            required:
-              [
-                sequence,
-                version,
-                previousHash,
-                hash,
-                payload,
-                createdAt,
-                anchorStatus,
-              ]
-            properties:
-              sequence: { type: integer, minimum: 1 }
-              version: { type: integer, minimum: 1 }
-              previousHash: { type: string, pattern: "^[0-9a-f]{64}$" }
-              hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-              payload: { type: object, additionalProperties: true }
-              createdAt: { type: string, format: date-time }
-              anchorStatus: { type: string, enum: [anchored, pending_anchor] }
-        hasMore: { type: boolean }
-    AuditCheckpointMetadata:
-      type: object
-      additionalProperties: false
-      required: [sequence, headHash, anchorKind, receiptId, receiptHash]
-      properties:
-        sequence: { type: integer, minimum: 0 }
-        headHash: { type: string, pattern: "^[0-9a-f]{64}$" }
-        anchorKind: { type: string, minLength: 1, maxLength: 100 }
-        receiptId: { type: string, minLength: 1, maxLength: 300 }
-        receiptHash: { type: string, pattern: "^[0-9a-f]{64}$" }
-    AuditUpdateDecision:
-      type: object
-      additionalProperties: false
-      required: [decision, mode, version]
-      properties:
-        decision:
-          type: string
-          enum:
-            [
-              checksum_verified,
-              checksum_failed,
-              install_requested,
-              install_failed,
-            ]
-        mode: { type: string, enum: [native, dev] }
-        version: { type: string, pattern: "^v?[0-9][0-9A-Za-z.+-]{0,63}$" }
     # Shared TypeScript tax engine (ADR-204); existing web calculations remain compatible.
     BelgianTaxHouseholdTaxResult:
       type: object
@@ -6608,7 +6486,6 @@ components:
     PortfolioBrokerRetagReceipt:
       type: object
       required:
-        - receipt_id
         - idempotency_key
         - from_account_id
         - to_account_id
@@ -6616,12 +6493,8 @@ components:
         - previous_assignments
         - selected_count
         - changed_count
-        - created_at
         - replayed
       properties:
-        receipt_id:
-          type: integer
-          format: int64
         idempotency_key:
           type: string
           format: uuid
@@ -6655,9 +6528,6 @@ components:
           type: integer
         changed_count:
           type: integer
-        created_at:
-          type: string
-          format: date-time
         replayed:
           type: boolean
 
@@ -9891,7 +9761,7 @@ paths:
       description: >-
         Returns the exact buy, gift, and sell row count assigned to the account.
         Transaction IDs are returned only when the complete selection fits the
-        500-row audited bulk broker re-tag limit; a partial ID list is never returned.
+        500-row bulk broker re-tag limit; a partial ID list is never returned.
       responses:
         "200":
           description: Account portfolio lot preview
@@ -13835,8 +13705,10 @@ paths:
       tags: [Portfolio]
       description: >-
         Applies one compare-and-set update. Every selected row must still have
-        from_account_id. Replaying the same UUID with the same semantic request
-        returns the durable receipt; reusing it for another request returns 409.
+        from_account_id. When every selected row already sits on to_account_id,
+        nothing is written and the receipt is returned with replayed true and
+        changed_count 0, so a repeated request is safe. The replay check is
+        stateless: idempotency_key is accepted and echoed but not stored.
       requestBody:
         required: true
         content:
@@ -13876,7 +13748,7 @@ paths:
                   format: uuid
       responses:
         "200":
-          description: Durable re-tag receipt or idempotent replay
+          description: Re-tag receipt, or a no-op replay receipt when every selected row already sits on to_account_id
           content:
             application/json:
               schema:
@@ -13889,7 +13761,7 @@ paths:
         "400":
           description: Invalid request shape, destination, or projected partition
         "409":
-          description: Stale source assignment or conflicting idempotency key
+          description: Stale source assignment
         "403":
           description: Request failed the application's mutation access policy
         "429":
@@ -17230,256 +17102,6 @@ paths:
                                 type: string
                                 pattern: "^[a-f0-9]{64}$"
 
-  # ─── Private Electron audit bridge ────────────────────────────────────────────
-  /api/internal/audit/verify:
-    post:
-      summary: Verify the audit chain against a main-process checkpoint
-      operationId: internalAuditVerify
-      tags: [Internal Audit Bridge]
-      description: >
-        Private native Electron endpoint. The server requires both a loopback
-        socket peer and the per-launch bearer token. The optional checkpoint
-        must first be authenticated outside PostgreSQL by the Electron main
-        process. HTTP 200 reports the verification result, including failed
-        and unavailable statuses; it does not imply audit success.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              properties:
-                trustedCheckpoint:
-                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
-      responses:
-        "200":
-          description: Verification status in the response data
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data: { $ref: "#/components/schemas/AuditVerificationResult" }
-        "400": { description: Invalid or oversized request body }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-
-  /api/internal/audit/read:
-    post:
-      summary: Read a bounded audit page from a verified database snapshot
-      operationId: internalAuditRead
-      tags: [Internal Audit Bridge]
-      description: >
-        Private native Electron endpoint. The per-launch bearer and loopback
-        socket checks match verify. The main process supplies an externally
-        authenticated checkpoint. The server verifies the full history and
-        reads the page under one repeatable-read transaction. Failed or
-        unavailable verification returns an empty entries array. A verified
-        prefix does not authenticate a pending tail.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              properties:
-                trustedCheckpoint:
-                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
-                afterSequence: { type: integer, minimum: 0 }
-                limit: { type: integer, minimum: 1, maximum: 500 }
-      responses:
-        "200":
-          description: Verification result and bounded audit page
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data: { $ref: "#/components/schemas/AuditReadPage" }
-        "400": { description: Invalid or oversized request body }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-
-  /api/internal/audit/retention-plan:
-    post:
-      summary: Plan an eligible one-year audit prefix after full verification
-      operationId: internalAuditRetentionPlan
-      tags: [Internal Audit Bridge]
-      description: >
-        Private Electron endpoint with loopback and per-launch bearer checks.
-        The caller supplies an externally authenticated checkpoint. The plan
-        is advisory; Electron must sign its boundary outside PostgreSQL before
-        invoking retention-prune. A non-eligible plan does not delete rows.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [trustedCheckpoint]
-              properties:
-                trustedCheckpoint:
-                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
-      responses:
-        "200":
-          description: Eligible boundary or bounded reason for no deletion
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data:
-                    type: object
-                    required: [eligible]
-                    properties:
-                      eligible: { type: boolean }
-                      reason: { type: string }
-                      through: { type: integer, minimum: 1 }
-                      hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-                      domainMax:
-                        { $ref: "#/components/schemas/AuditRetentionDomainMax" }
-                      migrationHeads:
-                        type: array
-                        items: { type: string }
-        "400": { description: Invalid or missing authenticated checkpoint }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-
-  /api/internal/audit/retention-prune:
-    post:
-      summary: Prune a complete old prefix bound by a signed receipt
-      operationId: internalAuditRetentionPrune
-      tags: [Internal Audit Bridge]
-      description: >
-        Private Electron endpoint. The signed retention boundary must already
-        be present in the externally authenticated checkpoint. Full retained
-        history is verified before the guarded database function runs.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [trustedCheckpoint]
-              properties:
-                trustedCheckpoint:
-                  $ref: "#/components/schemas/AuditTrustedCheckpoint"
-      responses:
-        "200":
-          description: Number of deleted rows; zero on an exact retry
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data:
-                    type: object
-                    required: [removed]
-                    properties:
-                      removed: { type: integer, minimum: 0 }
-        "400": { description: Invalid or missing signed retention boundary }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-
-  /api/internal/audit/checkpoint:
-    post:
-      summary: Record metadata for an already persisted Electron receipt
-      operationId: internalAuditCheckpoint
-      tags: [Internal Audit Bridge]
-      description: >
-        Private native Electron endpoint with the same loopback and per-launch
-        token checks as verify. This records database metadata only. The
-        receipt itself is kept in Electron application data outside PostgreSQL.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AuditCheckpointMetadata"
-      responses:
-        "200":
-          description: Inserted checkpoint metadata identifier and creation time
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data:
-                    type: object
-                    required: [id, createdAt]
-                    properties:
-                      id: { type: string }
-                      createdAt: { type: string, format: date-time }
-        "400": { description: Invalid or oversized request body }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-        "409":
-          {
-            description: Checkpoint sequence or hash conflicts with the stored chain,
-          }
-
-  /api/internal/audit/update-decision:
-    post:
-      summary: Append a local Electron updater decision to the audit chain
-      operationId: internalAuditUpdateDecision
-      tags: [Internal Audit Bridge]
-      description: >
-        Private native Electron endpoint with loopback and per-launch Bearer
-        checks. Records a bounded decision, update mode, and version as a
-        release_update audit event. It does not prove release signature or
-        publisher provenance.
-      security:
-        - AuditBridgeToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AuditUpdateDecision"
-      responses:
-        "200":
-          description: Appended audit sequence and hash
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, data]
-                properties:
-                  ok: { type: boolean, enum: [true] }
-                  data:
-                    type: object
-                    required: [sequence, hash]
-                    properties:
-                      sequence: { type: integer, minimum: 1 }
-                      hash: { type: string, pattern: "^[0-9a-f]{64}$" }
-        "400": { description: Invalid or oversized request body }
-        "401": { description: Missing or invalid per-launch bearer token }
-        "403": { description: Socket peer is not loopback }
-
   # ─── Admin ────────────────────────────────────────────────────────────────────
   /api/admin:
     get:
@@ -17596,7 +17218,6 @@ paths:
         description: Table name (validated against the live catalog)
     get:
       summary: Get a table's column metadata (Data Editor, ADR-101)
-      description: The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
       operationId: adminGetTableSchema
       tags: [Admin]
       responses:
@@ -17611,8 +17232,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/DbEditorTableSchema"
-        "403":
-          description: Protected audit table cannot be opened in the generic data editor
         "404":
           description: Unknown table
 
@@ -17625,7 +17244,6 @@ paths:
           type: string
     get:
       summary: Read paginated rows from a table (Data Editor, ADR-101)
-      description: The six protected audit tables require a dedicated viewer that authenticates audit history and return 403 here.
       operationId: adminGetTableRows
       tags: [Admin]
       parameters:
@@ -17662,8 +17280,6 @@ paths:
                         $ref: "#/components/schemas/DbEditorRows"
         "400":
           description: Invalid filters or query parameter
-        "403":
-          description: Protected audit table cannot be opened in the generic data editor
         "404":
           description: Unknown table
 
@@ -17676,7 +17292,7 @@ paths:
           type: string
     post:
       summary: Apply row mutations to a table (Data Editor, ADR-101)
-      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying. The six protected audit tables return 403 even for dry runs.
+      description: Rate-limited (adminMutateLimiter). Identifiers are validated against the live catalog and double-quoted; values are parameterised. Updates/deletes are optimistic-locked on xmin. Pass dryRun to preview statements without applying.
       operationId: adminMutateTableRows
       tags: [Admin]
       requestBody:
@@ -17727,8 +17343,6 @@ paths:
                         $ref: "#/components/schemas/DbEditorMutationResult"
         "400":
           description: Malformed change set or non-boolean dryRun
-        "403":
-          description: Protected audit table cannot be edited in the generic data editor
         "404":
           description: Unknown table
         "409":

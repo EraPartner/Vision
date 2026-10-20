@@ -281,34 +281,6 @@ export const batchIdRowSchema = z
 // Broker re-tag
 // ---------------------------------------------------------------------------
 
-/** A `portfolio_retag_audit` row as the repository projects it. */
-export const portfolioRetagAuditRowSchema = z
-  .object({
-    id: pgBigint,
-    /** UUID */
-    idempotency_key: z.string(),
-    request_fingerprint: z.string(),
-    from_account_id: pgAccountId.nullable(),
-    to_account_id: pgAccountId.nullable(),
-    /** jsonb array (CHECK jsonb_typeof = 'array') of transaction ids. */
-    transaction_ids: z.array(z.number()),
-    previous_assignments: z.array(
-      z.object({
-        transaction_id: pgPortfolioTransactionId,
-        account_id: pgAccountId.nullable(),
-      }),
-    ),
-    selected_count: pgInt,
-    changed_count: pgInt,
-    created_at: pgTimestamptz,
-  })
-  .describe("portfolio_retag_audit row");
-
-/** `insertAudit`'s RETURNING list adds a formatted UTC timestamp. */
-export const portfolioRetagAuditInsertedRowSchema = portfolioRetagAuditRowSchema
-  .extend({ occurred_at: z.string() })
-  .describe("portfolio_retag_audit inserted row");
-
 /** `lockEligibleDestinationAccount`. */
 export const retagDestinationAccountRowSchema = z
   .object({
@@ -850,9 +822,6 @@ export type PortfolioUnitEventDbRow = z.output<
 export type PortfolioMathTxDbRow = z.output<typeof portfolioMathTxRowSchema>;
 export type IncomeRecognitionJournalDbRow = z.output<
   typeof incomeRecognitionJournalRowSchema
->;
-export type PortfolioRetagAuditDbRow = z.output<
-  typeof portfolioRetagAuditRowSchema
 >;
 export type RetagTransactionEventDbRow = z.output<
   typeof retagTransactionEventRowSchema

@@ -2,8 +2,7 @@
  * Split Repository - data access for transaction_splits and split_payments tables.
  *
  * Owed-summary reads from agg_split_outstanding (trigger-maintained by
- * migration 0026) instead of a live aggregate join. Audit events are
- * written via writeAudit; route/service layer owns when to emit them.
+ * migration 0026) instead of a live aggregate join.
  */
 
 import { sql } from "kysely";
@@ -21,11 +20,9 @@ import {
   transactionSplitRowSchema,
 } from "../database/rowSchemas.ts";
 import {
-  splitAuditRowSchema,
   splitPaidRowSchema,
   splitPaymentLockRowSchema,
 } from "../database/rows/ledger.ts";
-import type { SplitAuditRow } from "../database/rows/ledger.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import type { SplitOutstandingRow } from "../lib/calculations/splits.ts";
@@ -717,49 +714,6 @@ export const splitRepository = {
     // An aggregate without GROUP BY always returns exactly one row.
     if (!row) throw new Error("split paid sum returned no row");
     return toNumber(toDecimal(row.paid));
-  },
-
-  /**
-   * Append a split_audit row. Accepts an optional pg client so the caller
-   * can write the audit inside the same transaction as the mutation.
-   *
-   * @returns `split_audit.id` is BIGSERIAL — a string
-   */
-  async writeAudit({
-    split_id,
-    action,
-    actor = null,
-    payload = null,
-    client = null,
-  }: {
-    split_id: SplitId | null;
-    action: string;
-    actor?: string | null;
-    payload?: object | null;
-    client?: QueryRunner | null;
-  }): Promise<SplitAuditRow> {
-    const row = await checkedRow(
-      splitAuditRowSchema,
-      db
-        .insertInto("split_audit")
-        .values({
-          split_id,
-          action,
-          actor,
-          payload: payload ? JSON.stringify(payload) : null,
-        })
-        .returning([
-          "id",
-          sql<string>`payload::text`.as("payload_text"),
-          sql<string>`to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
-            "occurred_at",
-          ),
-        ]),
-      client ?? undefined,
-    );
-    // A plain INSERT ... RETURNING yields exactly one row or throws.
-    if (!row) throw new Error("split audit INSERT returned no row");
-    return row;
   },
 
   /**

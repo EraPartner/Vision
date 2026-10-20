@@ -4,14 +4,11 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 
 const mocks = vi.hoisted(() => ({
   lockPortfolioTransactionWrites: vi.fn(),
-  getAuditByIdempotencyKey: vi.fn(),
   lockEligibleDestinationAccount: vi.fn(),
   lockTransactions: vi.fn(),
   getUnitEventsForInvestments: vi.fn(),
   getHistoricalRates: vi.fn(),
   compareAndSetAccount: vi.fn(),
-  insertAudit: vi.fn(),
-  appendAuditEvent: vi.fn(),
   getSetting: vi.fn(),
 }));
 
@@ -23,10 +20,6 @@ vi.mock("../src/repositories/portfolioBrokerRetagRepository.ts", () => ({
   default: mocks,
 }));
 
-vi.mock("../src/repositories/auditChainRepository.ts", () => ({
-  appendAuditEvent: mocks.appendAuditEvent,
-}));
-
 vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: mocks.getSetting },
 }));
@@ -34,7 +27,6 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
 import {
   __assertRetagPreservesPortfolioEconomics as assertRetagPreservesPortfolioEconomics,
   __assertRetagPreservesPartitionUnits as assertRetagPreservesPartitionUnits,
-  __fingerprintRetagRequest as fingerprintRetagRequest,
   __retagPortfolioTransactions as retagPortfolioTransactions,
 } from "../src/services/portfolio/portfolioBrokerRetagService.ts";
 import {
@@ -84,20 +76,11 @@ const histories = [
 describe("portfolioBrokerRetagService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getAuditByIdempotencyKey.mockResolvedValue(undefined);
     mocks.lockEligibleDestinationAccount.mockResolvedValue({ id: 7 });
     mocks.lockTransactions.mockResolvedValue(selected);
     mocks.getUnitEventsForInvestments.mockResolvedValue(histories);
     mocks.getHistoricalRates.mockResolvedValue([]);
     mocks.compareAndSetAccount.mockResolvedValue([11, 12]);
-    mocks.appendAuditEvent.mockResolvedValue({ sequence: 1 });
-    mocks.insertAudit.mockImplementation(async (value) => ({
-      id: "91",
-      ...value,
-      idempotency_key: value.idempotency_key.toLowerCase(),
-      created_at: "2026-09-07T12:00:00.000Z",
-      occurred_at: "2026-09-07T12:00:00.000000Z",
-    }));
     mocks.getSetting.mockResolvedValue("weighted_avg");
   });
 
@@ -110,23 +93,10 @@ describe("portfolioBrokerRetagService", () => {
       mocks.lockPortfolioTransactionWrites.mock.invocationCallOrder[0]!,
     );
     expect(mocks.lockPortfolioTransactionWrites).toHaveBeenCalledOnce();
-    expect(mocks.getAuditByIdempotencyKey).toHaveBeenCalledTimes(2);
     expect(mocks.lockTransactions).toHaveBeenCalledWith([11, 12]);
     expect(mocks.compareAndSetAccount).toHaveBeenCalledWith([11, 12], 4, 7);
-    expect(mocks.insertAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transaction_ids: [11, 12],
-        selected_count: 2,
-        changed_count: 2,
-      }),
-    );
-    expect(mocks.appendAuditEvent).toHaveBeenCalledWith({
-      stream: "portfolio_retag",
-      event: "receipt_created",
-      receipt_id: "91",
-      occurred_at: "2026-09-07T12:00:00.000000Z",
+    expect(result).toEqual({
       idempotency_key: request.idempotency_key,
-      request_fingerprint: fingerprintRetagRequest(request),
       from_account_id: 4,
       to_account_id: 7,
       transaction_ids: [11, 12],
@@ -136,75 +106,26 @@ describe("portfolioBrokerRetagService", () => {
       ],
       selected_count: 2,
       changed_count: 2,
+      replayed: false,
     });
-    expect(mocks.insertAudit.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.appendAuditEvent.mock.invocationCallOrder[0]!,
-    );
-    expect(result).toEqual(
-      expect.objectContaining({
-        receipt_id: 91,
-        transaction_ids: [11, 12],
-        changed_count: 2,
-        replayed: false,
-      }),
-    );
   });
 
-  it("chains the UUID value normalized by PostgreSQL", async () => {
-    const uppercaseRequest = {
-      ...request,
-      idempotency_key: request.idempotency_key.toUpperCase(),
-    };
-    await retagPortfolioTransactions(uppercaseRequest);
-    expect(mocks.appendAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ idempotency_key: request.idempotency_key }),
+  it("returns a replay receipt when every row is already on the destination", async () => {
+    mocks.lockTransactions.mockResolvedValue(
+      selected.map((row) => ({ ...row, account_id: 7 })),
     );
-  });
-
-  it("returns the durable receipt without repeating validation or mutation", async () => {
-    mocks.getAuditByIdempotencyKey.mockResolvedValue({
-      id: "91",
-      idempotency_key: request.idempotency_key,
-      request_fingerprint: fingerprintRetagRequest(request),
-      from_account_id: 4,
-      to_account_id: 7,
-      transaction_ids: [11, 12],
-      previous_assignments: [],
-      selected_count: 2,
-      changed_count: 2,
-      created_at: "2026-09-07T12:00:00.000Z",
-    });
 
     const result = await retagPortfolioTransactions(request);
 
-    expect(result.replayed).toBe(true);
-    expect(mocks.lockEligibleDestinationAccount).not.toHaveBeenCalled();
-    expect(mocks.lockPortfolioTransactionWrites).not.toHaveBeenCalled();
-    expect(mocks.lockTransactions).not.toHaveBeenCalled();
-    expect(mocks.compareAndSetAccount).not.toHaveBeenCalled();
-    expect(mocks.appendAuditEvent).not.toHaveBeenCalled();
-  });
-
-  it("fails the retag transaction when the chain append fails", async () => {
-    mocks.appendAuditEvent.mockRejectedValue(
-      new Error("audit chain unavailable"),
-    );
-
-    await expect(retagPortfolioTransactions(request)).rejects.toThrow(
-      "audit chain unavailable",
-    );
-    expect(mocks.compareAndSetAccount).toHaveBeenCalledOnce();
-    expect(mocks.insertAudit).toHaveBeenCalledOnce();
-    expect(mocks.appendAuditEvent).toHaveBeenCalledOnce();
-  });
-
-  it("rejects reuse of an idempotency key with a different body", async () => {
-    mocks.getAuditByIdempotencyKey.mockResolvedValue({
-      request_fingerprint: "different",
+    expect(result).toMatchObject({
+      replayed: true,
+      changed_count: 0,
+      selected_count: 2,
+      previous_assignments: [
+        { transaction_id: 11, account_id: 7 },
+        { transaction_id: 12, account_id: 7 },
+      ],
     });
-    await expect(retagPortfolioTransactions(request)).rejects.toBeInstanceOf(
-      ConflictError,
-    );
   });
 
   it("rejects inactive or non-portfolio destinations", async () => {
@@ -578,9 +499,4 @@ describe("portfolioBrokerRetagService", () => {
     expect(mocks.getSetting).toHaveBeenCalledWith("cost_basis_method");
   });
 
-  it("treats transaction IDs as a set when fingerprinting", () => {
-    expect(fingerprintRetagRequest(request)).toBe(
-      fingerprintRetagRequest({ ...request, transaction_ids: [asPortfolioTransactionId(11), asPortfolioTransactionId(12)] }),
-    );
-  });
 });

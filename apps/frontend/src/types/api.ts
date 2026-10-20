@@ -602,7 +602,6 @@ export interface PortfolioBrokerRetagRequest {
 }
 
 export interface PortfolioBrokerRetagReceipt {
-    receipt_id: number;
     idempotency_key: string;
     from_account_id: AccountId | null;
     to_account_id: AccountId | null;
@@ -613,7 +612,6 @@ export interface PortfolioBrokerRetagReceipt {
     }>;
     selected_count: number;
     changed_count: number;
-    created_at: string;
     replayed: boolean;
 }
 

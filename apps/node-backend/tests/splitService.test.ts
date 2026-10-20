@@ -13,11 +13,6 @@ const { mockClient, mockWithTransaction, mockRepository, mockPrimitives } =
       mockClient: client,
       mockWithTransaction: vi.fn(async (fn) => fn(client)),
       mockRepository: {
-        writeAudit: vi.fn(),
-        settleSplit: vi.fn(),
-        settleAllByRecipient: vi.fn(),
-        deleteSplit: vi.fn(),
-        getSplitById: vi.fn(),
         getOwedSummaryRows: vi.fn(),
         getOwedByRecipientRows: vi.fn(),
       },
@@ -45,17 +40,10 @@ vi.mock("../src/repositories/splitRepository.ts", () => ({
   default: mockRepository,
   ...mockPrimitives,
 }));
-vi.mock("../src/repositories/auditChainRepository.ts", () => ({
-  appendAuditEvent: vi.fn(),
-}));
-
-import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 
 import splitService, {
   addPayment,
   createSplitAtomic,
-  deleteSplit,
-  settleSplit,
 } from "../src/services/splitService.ts";
 
 // Production reaches the bulk path through the default service object.
@@ -63,15 +51,10 @@ const { createBulkSplitsAtomic } = splitService;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockRepository.writeAudit.mockResolvedValue({
-    id: "42",
-    payload_text: '{"test":true}',
-    occurred_at: "2026-09-20T00:00:00.123456Z",
-  });
 });
 
 describe("splitService transaction orchestration", () => {
-  it("creates and audits a split with the same transaction client", async () => {
+  it("creates a split with its normalized amount in the locking transaction", async () => {
     mockPrimitives.lockAndGetTotals.mockResolvedValue({
       transaction_total: 50,
       current_split_total: 0,
@@ -87,32 +70,15 @@ describe("splitService transaction orchestration", () => {
       transaction_id: asTransactionId(1),
       recipient_id: asRecipientId(2),
       amount: "20",
-      actor: "test",
     });
 
     expect(mockPrimitives.insertSplitInTransaction).toHaveBeenCalledWith(
       mockClient,
       expect.objectContaining({ amount: 20 }),
     );
-    expect(mockRepository.writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        split_id: 9,
-        action: "create",
-        actor: "test",
-        client: mockClient,
-      }),
-    );
-    expect(appendAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        stream: "split",
-        event: "create",
-        auditRowId: "42",
-        splitId: "9",
-      }),
-    );
   });
 
-  it("rejects an overpayment before insert or audit", async () => {
+  it("rejects an overpayment before insert", async () => {
     mockPrimitives.lockSplitForPayment.mockResolvedValue({
       id: 7,
       amount: "30.0000",
@@ -124,49 +90,8 @@ describe("splitService transaction orchestration", () => {
       /exceed split outstanding balance/,
     );
     expect(mockPrimitives.insertPaymentInTransaction).not.toHaveBeenCalled();
-    expect(mockRepository.writeAudit).not.toHaveBeenCalled();
-    expect(appendAuditEvent).not.toHaveBeenCalled();
-  });
-
-  it("settles and audits with the same transaction client", async () => {
-    mockRepository.settleSplit.mockResolvedValue({ id: 7 });
-
-    await expect(settleSplit(asSplitId(7), "test")).resolves.toEqual({ id: 7 });
-    expect(mockRepository.settleSplit).toHaveBeenCalledWith(7, mockClient);
-    expect(mockRepository.writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        split_id: 7,
-        action: "settle",
-        actor: "test",
-        client: mockClient,
-      }),
-    );
-  });
-
-  it("deletes from a captured snapshot and audits in one transaction", async () => {
-    mockRepository.getSplitById.mockResolvedValue({
-      id: 7,
-      transaction_id: 3,
-      recipient_id: 2,
-      amount: 12,
-    });
-    mockRepository.deleteSplit.mockResolvedValue(true);
-
-    await expect(deleteSplit(asSplitId(7), "test")).resolves.toBe(true);
-    expect(mockRepository.getSplitById).toHaveBeenCalledWith(7, mockClient);
-    expect(mockRepository.deleteSplit).toHaveBeenCalledWith(7, mockClient);
-    expect(mockRepository.writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        split_id: null,
-        action: "delete",
-        actor: "test",
-        client: mockClient,
-        payload: expect.objectContaining({ transaction_id: 3 }),
-      }),
-    );
   });
 });
-
 
 describe("splitService.createBulkSplitsAtomic", () => {
   beforeEach(() => {
@@ -193,7 +118,6 @@ describe("splitService.createBulkSplitsAtomic", () => {
       transaction_ids: [asTransactionId(5), asTransactionId(1), asTransactionId(2), asTransactionId(1)],
       recipient_id: asRecipientId(3),
       mode: "equal",
-      actor: "tor",
     });
 
     // Deduplicated and sorted: a second overlapping bulk call takes the same
@@ -219,16 +143,6 @@ describe("splitService.createBulkSplitsAtomic", () => {
       skipped_missing: 0,
     });
     expect(result.items).toHaveLength(3);
-    expect(mockRepository.writeAudit).toHaveBeenCalledTimes(3);
-    expect(mockRepository.writeAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        split_id: 10,
-        action: "create",
-        actor: "tor",
-        client: mockClient,
-        payload: expect.objectContaining({ bulk: true, mode: "equal" }),
-      }),
-    );
   });
 
   it("full mode gives the other person the whole amount", async () => {
@@ -294,6 +208,5 @@ describe("splitService.createBulkSplitsAtomic", () => {
     ).rejects.toThrow(/Recipient not found/);
     expect(mockPrimitives.lockAndGetTotals).not.toHaveBeenCalled();
     expect(mockPrimitives.insertSplitInTransaction).not.toHaveBeenCalled();
-    expect(mockRepository.writeAudit).not.toHaveBeenCalled();
   });
 });

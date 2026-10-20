@@ -2,13 +2,17 @@
 title: "ADR-222: TypeScript migrations with Kysely and one squashed baseline"
 type: adr
 status: accepted
-date: 2026-10-19
+date: 2026-10-20
 tags: [adr, database, migrations, kysely, alembic, python, baseline, backup, ci, packaging]
 description: "Accepted on 2026-10-19. Vision drops Python. Alembic, its 128 revisions, the PyInstaller migration runner and every Python script are removed. db/migrations/0001_baseline.sql holds the complete schema at the former head 0128; Kysely's Migrator applies numbered SQL files in-process. The single existing database is adopted only when it is at Alembic 0128 and its catalog fingerprint equals the baseline's. Only backups taken after the switch restore. kysely-codegen generates the DB types. Supersedes ADR-027, ADR-165, ADR-166 and ADR-184."
 aliases: [adr-222, kysely migrations, squashed baseline, remove python, drop alembic]
 ---
 
 # ADR-222: TypeScript migrations with Kysely and one squashed baseline
+
+> [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
+> the migrator no longer appends `schema_migration` audit events, and migration 0004 drops the
+> audit chain. The Kysely migrator and the SQL baseline stay in force.
 
 ## Status
 

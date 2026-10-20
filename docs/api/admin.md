@@ -283,7 +283,7 @@ The route always runs `VACUUM ANALYZE`.
 
 ---
 
-The generic data editor refuses all three operations below for `audit_chain_head`, `audit_chain_entries`, `audit_chain_checkpoints`, `db_editor_audit`, `split_audit`, and `portfolio_retag_audit` with `403 Forbidden`. This includes schema and row reads as well as dry-run and committed mutations. The editor cannot authenticate the separate Electron audit receipt. The native Admin Overview audit card uses the [[docs/api/internal-audit|private verification flow]] and labels any unanchored tail; a browser deployment cannot use that card. Database table-health statistics and backup bytes are separate from verified audit evidence.
+The generic data editor has no protected-table list: since [[docs/adr/231-remove-audit-history|ADR-231]] removed the audit tables, every public user table goes through the same catalog validation, primary-key, and optimistic-concurrency rules below.
 
 ### GET /api/admin/database/tables/:table/schema (ADR-101)
 
@@ -523,13 +523,13 @@ objects whose `op` is `insert`, `update`, or `delete`; `values`, `set`, and `pk`
 | Status | Scenario                                                                                                                                     |
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `400`  | Malformed body (`changes`/`dryRun` shape), unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
-| `403`  | Protected audit table is inaccessible through the generic data editor                                                                        |
+| `403`  | Insufficient database privileges for the operation (SQLSTATE `42501`)                                                                        |
 | `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                                                             |
 | `500`  | Unexpected database error (rolled back)                                                                                                      |
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
-**Audit trail:** Every permitted committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) and linked to the hash chain in the same transaction. It is also emitted on the structured logger. Audit tables themselves are excluded from the generic editor. Migration: `0059_db_editor_audit` and [[docs/adr/157-electron-local-audit-receipt|ADR-157]].
+**Change log:** After commit, each applied change is emitted on the structured logger as `db-editor mutation committed` with the table, operation, and primary key. No database table records editor changes; migration `0004_remove_audit_history` dropped `db_editor_audit` ([[docs/adr/231-remove-audit-history|ADR-231]]).
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[docs/adr/101-db-data-editor|ADR-101]] for full safety model.
 

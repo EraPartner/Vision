@@ -1,14 +1,16 @@
 ---
 title: ADR-160 - Explicit Audit Enrollment Baseline
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, electron, keychain]
 description: Let an existing native installation deliberately establish a forward-looking audit checkpoint while labeling earlier history as an accepted baseline.
 aliases: [audit enrollment baseline]
 ---
 
 # ADR-160: Explicit Audit Enrollment Baseline
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 

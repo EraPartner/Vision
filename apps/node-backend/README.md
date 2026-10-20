@@ -49,8 +49,8 @@ The authoritative variable inventory is
 
 `db/migrations/` holds the schema. `0001_baseline.sql` is the full schema; each later
 `NNNN_name.sql` is one migration, and an optional `NNNN_name.down.sql` makes it reversible.
-`src/database/migrate.ts` applies them with Kysely's migrator, records them in
-`public.kysely_migration`, and appends a `schema_migration` audit event for each step:
+`src/database/migrate.ts` applies them with Kysely's migrator and records them in
+`public.kysely_migration`:
 
 ```bash
 bun run db:migrate                                   # apply pending migrations

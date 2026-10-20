@@ -1,8 +1,6 @@
-/** Split lifecycle, validation, projection, and audit orchestration. */
+/** Split lifecycle, validation and projection. */
 
-import crypto from "node:crypto";
 import { withTransaction } from "../database/connection.ts";
-import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import type { BulkSplitMode } from "../lib/calculations/splits.ts";
 import {
   computeBulkSplitAmount,
@@ -50,43 +48,13 @@ import type {
   TransactionId,
 } from "@vision/types/brands";
 
-type SplitAuditInput = Parameters<typeof splitRepository.writeAudit>[0];
-
-async function writeSplitAudit(input: SplitAuditInput) {
-  const row = await splitRepository.writeAudit(input);
-  if (row == null) throw new Error("Split audit insert did not return a row");
-  const auditDigest = crypto
-    .createHash("sha256")
-    .update(
-      JSON.stringify([
-        input.split_id === null ? null : String(input.split_id),
-        input.action,
-        input.actor ?? null,
-        row.payload_text ?? null,
-        row.occurred_at,
-      ]),
-    )
-    .digest("hex");
-  await appendAuditEvent({
-    stream: "split",
-    event: input.action,
-    auditRowId: String(row.id),
-    splitId: input.split_id === null ? null : String(input.split_id),
-    actor: input.actor ?? null,
-    occurred_at: row.occurred_at,
-    auditDigest,
-  });
-  return row;
-}
-
 export async function createSplitAtomic(input: {
   transaction_id: TransactionId;
   recipient_id: RecipientId;
   amount: number | string;
   note?: string | null | undefined;
-  actor?: string | null | undefined;
 }) {
-  const { transaction_id, recipient_id, amount, note, actor = null } = input;
+  const { transaction_id, recipient_id, amount, note } = input;
   return withTransaction(async (client) => {
     const totals = await lockAndGetTotals(client, transaction_id);
     if (!totals) throw new NotFoundError("Transaction not found");
@@ -97,32 +65,18 @@ export async function createSplitAtomic(input: {
       currentSplitTotal: totals.current_split_total,
     });
     if (!check.ok) throw new ValidationError(check.error);
-    const split = await insertSplitInTransaction(client, {
+    return insertSplitInTransaction(client, {
       transaction_id,
       recipient_id,
       amount: normalizedAmount,
       note,
     });
-    await writeSplitAudit({
-      split_id: split.id,
-      action: "create",
-      actor,
-      payload: {
-        transaction_id,
-        recipient_id,
-        amount: normalizedAmount,
-        note: note || null,
-      },
-      client,
-    });
-    return split;
   });
 }
 
 export async function createSplitsBatchAtomic({
   transaction_id,
   splits,
-  actor = null,
 }: {
   transaction_id: TransactionId;
   splits: Array<{
@@ -130,7 +84,6 @@ export async function createSplitsBatchAtomic({
     amount: number | string;
     note?: string | null;
   }>;
-  actor?: string | null;
 }) {
   if (!Array.isArray(splits) || splits.length === 0) return [];
   return withTransaction(async (client) => {
@@ -147,27 +100,7 @@ export async function createSplitsBatchAtomic({
       currentSplitTotal: totals.current_split_total,
     });
     if (!check.ok) throw new ValidationError(check.error);
-    const created = await insertSplitsBatchInTransaction(
-      client,
-      transaction_id,
-      prepared,
-    );
-    for (const split of created) {
-      await writeSplitAudit({
-        split_id: split.id,
-        action: "create",
-        actor,
-        payload: {
-          transaction_id,
-          recipient_id: split.recipient_id,
-          amount: split.amount,
-          note: split.note || null,
-          batch: true,
-        },
-        client,
-      });
-    }
-    return created;
+    return insertSplitsBatchInTransaction(client, transaction_id, prepared);
   });
 }
 
@@ -188,13 +121,11 @@ export async function createBulkSplitsAtomic({
   recipient_id,
   mode,
   note,
-  actor = null,
 }: {
   transaction_ids: TransactionId[];
   recipient_id: RecipientId;
   mode: BulkSplitMode;
   note?: string | null | undefined;
-  actor?: string | null | undefined;
 }) {
   const ids = Array.from(new Set(transaction_ids)).sort((a, b) => a - b);
   const requested = transaction_ids.length;
@@ -241,20 +172,6 @@ export async function createBulkSplitsAtomic({
         recipient_id,
         amount,
         note,
-      });
-      await writeSplitAudit({
-        split_id: split.id,
-        action: "create",
-        actor,
-        payload: {
-          transaction_id,
-          recipient_id,
-          amount,
-          note: note || null,
-          bulk: true,
-          mode,
-        },
-        client,
       });
       result.items.push(split);
       result.split += 1;
@@ -441,9 +358,8 @@ export async function addPayment(input: {
   amount: number | string;
   note?: string | null | undefined;
   paid_at?: string | null | undefined;
-  actor?: string | null | undefined;
 }) {
-  const { split_id, amount, note, paid_at, actor = null } = input;
+  const { split_id, amount, note, paid_at } = input;
   return withTransaction(async (client) => {
     const split = await lockSplitForPayment(client, split_id);
     if (!split) throw new NotFoundError("Split not found");
@@ -463,88 +379,21 @@ export async function addPayment(input: {
       note,
       paid_at: paid_at || toAppDateString(new Date()),
     });
-    const autoSettled = await markSettledIfCovered(client, split_id);
-    await writeSplitAudit({
-      split_id,
-      action: "payment",
-      actor,
-      payload: {
-        payment_id: payment.id,
-        amount: normalizedAmount,
-        paid_at: payment.paid_at,
-        note: note || null,
-        auto_settled: autoSettled,
-      },
-      client,
-    });
+    await markSettledIfCovered(client, split_id);
     return payment;
   });
 }
 
-export async function settleSplit(
-  splitId: SplitId,
-  actor: string | null = null,
-) {
-  return withTransaction(async (client) => {
-    const split = await splitRepository.settleSplit(splitId, client);
-    if (!split) return null;
-    await writeSplitAudit({
-      split_id: splitId,
-      action: "settle",
-      actor,
-      payload: { manual: true },
-      client,
-    });
-    return split;
-  });
+export async function settleSplit(splitId: SplitId) {
+  return splitRepository.settleSplit(splitId);
 }
 
-export async function settleAllByRecipient(
-  recipientId: RecipientId,
-  actor: string | null = null,
-) {
-  return withTransaction(async (client) => {
-    const result = await splitRepository.settleAllByRecipient(
-      recipientId,
-      client,
-    );
-    if (result.settled_count > 0)
-      await writeSplitAudit({
-        split_id: null,
-        action: "settle_all",
-        actor,
-        payload: {
-          recipient_id: recipientId,
-          settled_count: result.settled_count,
-        },
-        client,
-      });
-    return result;
-  });
+export async function settleAllByRecipient(recipientId: RecipientId) {
+  return splitRepository.settleAllByRecipient(recipientId);
 }
 
-export async function deleteSplit(
-  splitId: SplitId,
-  actor: string | null = null,
-) {
-  return withTransaction(async (client) => {
-    const split = await splitRepository.getSplitById(splitId, client);
-    if (!split) return false;
-    if (!(await splitRepository.deleteSplit(splitId, client))) return false;
-    await writeSplitAudit({
-      split_id: null,
-      action: "delete",
-      actor,
-      payload: {
-        split_id: splitId,
-        transaction_id: split.transaction_id,
-        recipient_id: split.recipient_id,
-        amount: split.amount,
-      },
-      client,
-    });
-    return true;
-  });
+export async function deleteSplit(splitId: SplitId) {
+  return splitRepository.deleteSplit(splitId);
 }
 
 export default {

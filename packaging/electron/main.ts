@@ -10,7 +10,6 @@ import {
   ipcMain,
   session,
   systemPreferences,
-  safeStorage,
   nativeTheme,
   powerMonitor,
 } from "electron";
@@ -30,18 +29,16 @@ import type {
   WebContentsWillFrameNavigateEventParams,
   WebContentsWillRedirectEventParams,
 } from "electron";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { appRoot } from "./paths";
 import { createSettingsWriter } from "./settings-conflicts";
+import { cleanupLegacyAuditArtifacts } from "./legacy-audit-cleanup";
 import { isBundleEncrypted } from "./backup/bundle";
 import * as backupCrypto from "./backup/crypto";
 import * as backupRestore from "./backup/restore";
-import { restoreWithAuditRecovery } from "./backup/native-transport";
-import { MAX_PAGE_SIZE, validateSnapshot, buildExport } from "./audit-viewer";
 import {
   REJECT_INVALID,
   createIpcArgumentContracts,
@@ -49,7 +46,6 @@ import {
 } from "./runtime/ipc-schemas";
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
-import { recordUpdateDecisionThroughNativeRuntime } from "./runtime/native";
 import {
   isAllowedPermissionCheck,
   isTrustedRendererUrl,
@@ -574,31 +570,9 @@ updater.init({
   IS_DEMO: __IS_DEMO,
   t,
   notify,
-  recordAuditUpdateDecision: async (
-    payload: Parameters<typeof recordUpdateDecisionThroughNativeRuntime>[1],
-  ) => {
-    try {
-      const result = await recordUpdateDecisionThroughNativeRuntime(
-        activeRuntime,
-        payload,
-      );
-      if (isRecord(result) && result.auditStatus === "unavailable") {
-        reportAuditStatus("unavailable");
-      }
-    } catch (error) {
-      reportAuditStatus("unavailable");
-      // The updater still raises its checksum mismatch after this callback.
-      // Keep that primary failure visible even if audit recording also failed.
-      if (payload?.decision === "checksum_failed") {
-        return;
-      }
-      throw error;
-    }
-  },
   stopRuntime: async () => {
     if (nativeMaintenance) throw new Error("Native maintenance is in progress");
     if (activeRuntime?.mode === "native") {
-      activeRuntime.endAuditSession?.();
       await activeRuntime.stop();
     }
   },
@@ -868,150 +842,11 @@ async function logStartupDiagnostics(): Promise<void> {
 
 // Drive health polling → app load with watchdog once healthy. Safe to call
 // more than once (e.g. from the retry button).
-// Audit statuses come from the native runtime's untyped audit records:
-// "verified" clears the notice; "failed" and anything else is reported.
-type AuditNoticeStatus = unknown;
-
-function isOneOf(value: unknown, allowed: readonly string[]): boolean {
-  return typeof value === "string" && allowed.includes(value);
-}
-
 let healthWatchdogTimer: NodeJS.Timeout | null = null;
 let watchdogFailureCount = 0;
 let backendReportedLost = false;
-let lastAuditNotice: AuditNoticeStatus | undefined;
-let auditNotification: Notification | undefined;
-let auditClosureTimer: NodeJS.Timeout | null = null;
-let auditStartupRetries = 0;
-const MAX_AUDIT_STARTUP_RETRIES = 5;
-
-function reportAuditStatus(status: AuditNoticeStatus, reason?: unknown): void {
-  if (status === "verified") {
-    lastAuditNotice = undefined;
-    auditNotification?.close();
-    auditNotification = undefined;
-    return;
-  }
-  const notice =
-    reason === "no_trusted_anchor" ? "enrollment_required" : status;
-  if (lastAuditNotice === notice) return;
-  lastAuditNotice = notice;
-  const showAuditNotice = (body: string) => {
-    auditNotification?.close();
-    if (Notification.isSupported()) {
-      auditNotification = new Notification({ title: APP_NAME, body });
-      auditNotification.show();
-    }
-  };
-  if (status === "failed") {
-    showAuditNotice(
-      t(
-        "app.auditFailed",
-        null,
-        "Audit integrity check failed. Open Admin > Audit before trusting recent changes. Preserve your backup and audit checkpoint.",
-      ),
-    );
-  } else if (notice === "enrollment_required") {
-    showAuditNotice(
-      t(
-        "app.auditEnrollmentRequired",
-        null,
-        "Audit protection has not been started. Open Admin > Audit to review the history and explicitly start protection.",
-      ),
-    );
-  } else if (status === "partially_verified") {
-    showAuditNotice(
-      t(
-        "app.auditPartial",
-        null,
-        "Recent changes are not independently verified. Open Admin > Audit to review the checkpoint before trusting them.",
-      ),
-    );
-  } else {
-    showAuditNotice(
-      t(
-        "app.auditUnavailable",
-        null,
-        "Audit integrity protection is unavailable. Open Admin > Audit to check its status. Your data remains accessible; no checkpoint has been reset.",
-      ),
-    );
-  }
-}
-
-async function checkAuditIntegrity({ establishSession = false } = {}): Promise<
-  AuditNoticeStatus | undefined
-> {
-  if (activeRuntime?.mode !== "native") return;
-  let status: AuditNoticeStatus;
-  let reason: unknown;
-  try {
-    const result = await activeRuntime.verifyAuditHistory({ establishSession });
-    status = result.status;
-    reason = result.reason;
-    if (status !== "verified") {
-      console.warn("Audit verification", {
-        status,
-        reason: result.reason,
-      });
-    }
-  } catch {
-    // Do not log the request or exception: either may contain bridge secrets.
-    console.warn("Audit verification unavailable: bridge request failed");
-    status = "unavailable";
-  }
-  reportAuditStatus(status, reason);
-  return status;
-}
-
-function stopAuditClosureTimer() {
-  if (auditClosureTimer) clearInterval(auditClosureTimer);
-  auditClosureTimer = null;
-}
-
-function startAuditClosureTimer() {
-  stopAuditClosureTimer();
-  auditStartupRetries = 0;
-  if (
-    !activeRuntime?.auditClosureEnabled?.() &&
-    !activeRuntime?.auditSessionPending?.()
-  )
-    return;
-  auditClosureTimer = setInterval(async () => {
-    if (!activeRuntime?.auditClosureEnabled?.()) {
-      if (
-        !activeRuntime?.auditSessionPending?.() ||
-        auditStartupRetries >= MAX_AUDIT_STARTUP_RETRIES
-      ) {
-        stopAuditClosureTimer();
-        return;
-      }
-      auditStartupRetries += 1;
-      await checkAuditIntegrity({ establishSession: true });
-      return;
-    }
-    try {
-      const result = await activeRuntime.closeAuditCheckpoint();
-      if (result.reason !== "live_closure_not_active") {
-        reportAuditStatus(result.status, result.reason);
-      }
-      if (result.status === "verified") {
-        try {
-          await activeRuntime.runAuditRetentionIfDue?.();
-        } catch (error) {
-          console.warn(
-            "Audit retention pass unavailable",
-            errorField(error, "code") || "unknown",
-          );
-        }
-      }
-    } catch {
-      reportAuditStatus("unavailable");
-    }
-  }, 30_000);
-}
 
 function stopHealthWatchdog() {
-  stopAuditClosureTimer();
   if (healthWatchdogTimer) {
     clearInterval(healthWatchdogTimer);
     healthWatchdogTimer = null;
@@ -1027,14 +862,11 @@ let systemSuspended = false;
 
 function startHealthWatchdog() {
   stopHealthWatchdog();
-  startAuditClosureTimer();
   healthWatchdogTimer = setInterval(async () => {
     if (systemSuspended) return;
     const healthy = await pingHealth(3000);
     if (healthy) {
       if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
-        await checkAuditIntegrity({ establishSession: true });
-        startAuditClosureTimer();
         mainWindow.webContents.send("backend:restored");
       }
       watchdogFailureCount = 0;
@@ -1049,8 +881,6 @@ function startHealthWatchdog() {
       !mainWindow.isDestroyed()
     ) {
       backendReportedLost = true;
-      stopAuditClosureTimer();
-      activeRuntime?.endAuditSession?.();
       mainWindow.webContents.send("backend:lost", {
         message: t("app.backendLost"),
       });
@@ -1147,9 +977,6 @@ function startRendererBootWatchdog(): void {
 
 async function loadApplicationPage(): Promise<boolean> {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
-  const endAudit = bootMark("audit_verify");
-  await checkAuditIntegrity({ establishSession: true });
-  endAudit();
   stopRendererBootWatchdog({ resetRetry: true });
   rendererReady = false;
   const endDocument = bootMark("load_document");
@@ -1794,7 +1621,6 @@ interface IpcArgumentContract {
 // renderer arguments. Channels absent here receive the shared contract's
 // argument list unchanged.
 interface NormalizedInvokeArgs {
-  "audit:read": [range: { afterSequence: number; limit: number }];
   "backup:run": [destDir: string, frontendStateJson: string | null];
   "backup:restore": [filePath: string, opts: { passphrase?: string }];
 }
@@ -1890,280 +1716,6 @@ registerHandler(
   async () => await checkForShellUpdate(),
   { senderFailure: REJECT_SENDER },
 );
-
-registerHandler("audit:enroll", async () => {
-  if (
-    activeRuntime?.mode !== "native" ||
-    !activeRuntime.enrollExistingAuditHistory
-  ) {
-    return { success: false, status: "unavailable" };
-  }
-  try {
-    const current = await activeRuntime.verifyAuditHistory();
-    if (
-      current.status !== "unavailable" ||
-      current.reason !== "no_trusted_anchor"
-    ) {
-      return { success: false, status: current.status };
-    }
-    const { response } = await showMessageBoxOverMainWindow({
-      type: "warning",
-      buttons: [
-        t("admin.audit.enrollConfirm", null, "Start protection"),
-        t("settings.restore.cancelButton", null, "Cancel"),
-      ],
-      defaultId: 1,
-      cancelId: 1,
-      title: t("admin.audit.enrollTitle", null, "Start audit protection"),
-      message: t(
-        "admin.audit.enrollWarning",
-        null,
-        "The current history will be checked for internal consistency and saved as a starting point. This cannot prove that older entries were unchanged before enrollment.",
-      ),
-    });
-    if (response !== 0) return { success: false, cancelled: true };
-    const result = await activeRuntime.enrollExistingAuditHistory();
-    reportAuditStatus(result.status, result.reason);
-    if (!isOneOf(result.status, ["verified", "partially_verified"])) {
-      return { success: false, status: result.status };
-    }
-    startAuditClosureTimer();
-    return { success: true, enrollmentSequence: result.enrollmentSequence };
-  } catch (error) {
-    reportAuditStatus("failed");
-    return {
-      success: false,
-      status: "failed",
-      error: errorField(error, "message") || String(error),
-    };
-  }
-});
-
-registerHandler("audit:read", async (_event, range) => {
-  if (
-    activeRuntime?.mode !== "native" ||
-    !activeRuntime.readVerifiedAuditEntries
-  ) {
-    return { success: false, status: "unavailable" };
-  }
-  try {
-    const raw = await activeRuntime.readVerifiedAuditEntries(range);
-    if (isOneOf(raw?.verification?.status, ["failed", "unavailable"])) {
-      reportAuditStatus(raw.verification.status, raw.verification.reason);
-      return {
-        success: false,
-        status: raw.verification.status,
-        ...(raw.verification.reason === "no_trusted_anchor"
-          ? { reason: "no_trusted_anchor" }
-          : {}),
-      };
-    }
-    const snapshot = validateSnapshot(raw, range);
-    reportAuditStatus(snapshot.verification.status);
-    return { success: true, ...snapshot };
-  } catch (error) {
-    reportAuditStatus("failed");
-    return {
-      success: false,
-      status: "failed",
-      error: errorField(error, "message") || String(error),
-    };
-  }
-});
-
-registerHandler("audit:export", async () => {
-  if (
-    activeRuntime?.mode !== "native" ||
-    !activeRuntime.readVerifiedAuditEntries
-  ) {
-    return { success: false, status: "unavailable" };
-  }
-  try {
-    const range = { afterSequence: 0, limit: MAX_PAGE_SIZE };
-    const raw = await activeRuntime.readVerifiedAuditEntries(range);
-    if (isOneOf(raw?.verification?.status, ["failed", "unavailable"])) {
-      reportAuditStatus(raw.verification.status, raw.verification.reason);
-      return { success: false, status: raw.verification.status };
-    }
-    const snapshot = validateSnapshot(raw, range);
-    const content = buildExport(snapshot);
-    const selected = await showSaveDialogOverMainWindow({
-      title: "Export audit snapshot",
-      defaultPath: "vision-audit-snapshot.json",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (selected.canceled || !selected.filePath) {
-      return { success: false, cancelled: true };
-    }
-    const target = selected.filePath;
-    const temporary = `${target}.${crypto.randomBytes(8).toString("hex")}.tmp`;
-    try {
-      await fs.promises.writeFile(temporary, content, {
-        encoding: "utf8",
-        mode: 0o600,
-        flag: "wx",
-      });
-      await fs.promises.rename(temporary, target);
-    } finally {
-      await fs.promises.unlink(temporary).catch(() => {});
-    }
-    return { success: true, file: target };
-  } catch (error) {
-    return {
-      success: false,
-      status: "failed",
-      error: errorField(error, "message") || String(error),
-    };
-  }
-});
-
-registerHandler("audit:transfer-export", async (_event, password) => {
-  if (
-    activeRuntime?.mode !== "native" ||
-    !activeRuntime.exportProtectedAuditTransfer
-  ) {
-    return { success: false, status: "unavailable" };
-  }
-  let bytes;
-  try {
-    bytes = await activeRuntime.exportProtectedAuditTransfer(password);
-    const selected = await showSaveDialogOverMainWindow({
-      title: t(
-        "admin.audit.transferExport",
-        null,
-        "Export protected audit transfer",
-      ),
-      defaultPath: "vision-audit-transfer.vat",
-      filters: [{ name: "Vision audit transfer", extensions: ["vat"] }],
-    });
-    if (selected.canceled || !selected.filePath)
-      return { success: false, cancelled: true };
-    const temporary = `${selected.filePath}.${crypto.randomBytes(8).toString("hex")}.tmp`;
-    try {
-      await fs.promises.writeFile(temporary, bytes, {
-        mode: 0o600,
-        flag: "wx",
-      });
-      await fs.promises.rename(temporary, selected.filePath);
-    } finally {
-      await fs.promises.unlink(temporary).catch(() => {});
-    }
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      status: "failed",
-      reason: errorField(error, "code") || "transfer_failed",
-    };
-  } finally {
-    bytes?.fill(0);
-  }
-});
-
-registerHandler("audit:transfer-import", async (_event, password) => {
-  if (
-    activeRuntime?.mode !== "native" ||
-    !activeRuntime.importProtectedAuditTransfer
-  ) {
-    return { success: false, status: "unavailable" };
-  }
-  const selected = await showOpenDialogOverMainWindow({
-    title: t(
-      "admin.audit.transferImport",
-      null,
-      "Import protected audit transfer",
-    ),
-    properties: ["openFile"],
-    filters: [{ name: "Vision audit transfer", extensions: ["vat"] }],
-  });
-  const [file] = selected.filePaths;
-  if (
-    selected.canceled ||
-    selected.filePaths.length !== 1 ||
-    file === undefined
-  ) {
-    return { success: false, cancelled: true };
-  }
-  const { response } = await showMessageBoxOverMainWindow({
-    type: "warning",
-    buttons: [
-      t("admin.audit.transferImportConfirm", null, "Import transfer"),
-      t("settings.restore.cancelButton", null, "Cancel"),
-    ],
-    defaultId: 1,
-    cancelId: 1,
-    title: t(
-      "admin.audit.transferImport",
-      null,
-      "Import protected audit transfer",
-    ),
-    message: t(
-      "admin.audit.transferImportWarning",
-      null,
-      "Import only on a new Mac before restoring the matching backup. The current fresh audit checkpoint will be replaced.",
-    ),
-  });
-  if (response !== 0) return { success: false, cancelled: true };
-  try {
-    const handle = await fs.promises.open(
-      file,
-      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW,
-    );
-    let bytes: Buffer | undefined;
-    try {
-      const stat = await handle.stat();
-      if (!stat.isFile() || stat.size > 16 * 1024) {
-        return { success: false, status: "failed", reason: "transfer_invalid" };
-      }
-      bytes = await handle.readFile();
-      await activeRuntime.importProtectedAuditTransfer(bytes, password);
-    } finally {
-      bytes?.fill(0);
-      await handle.close();
-    }
-    reportAuditStatus("unavailable");
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      status: "failed",
-      reason: errorField(error, "code") || "transfer_failed",
-    };
-  }
-});
-
-registerHandler("audit:rotate-key", async () => {
-  if (activeRuntime?.mode !== "native" || !activeRuntime.rotateAuditKey) {
-    return { success: false, status: "unavailable" };
-  }
-  const { response } = await showMessageBoxOverMainWindow({
-    type: "warning",
-    buttons: [
-      t("admin.audit.rotateConfirm", null, "Rotate key"),
-      t("settings.restore.cancelButton", null, "Cancel"),
-    ],
-    defaultId: 1,
-    cancelId: 1,
-    title: t("admin.audit.rotate", null, "Rotate audit key"),
-    message: t(
-      "admin.audit.rotateWarning",
-      null,
-      "Vision will replace this device's protected audit key after checking the full history. An interrupted rotation can make audit verification unavailable.",
-    ),
-  });
-  if (response !== 0) return { success: false, cancelled: true };
-  try {
-    const result = await activeRuntime.rotateAuditKey();
-    return { success: true, sequence: result.sequence };
-  } catch (error) {
-    reportAuditStatus("failed");
-    return {
-      success: false,
-      status: "failed",
-      reason: errorField(error, "code") || "rotation_failed",
-    };
-  }
-});
 
 registerHandler(
   "update:install-shell",
@@ -2268,51 +1820,9 @@ registerHandler(
       const lower = resolved.toLowerCase();
       const isBundle =
         lower.endsWith(".visionbak") || lower.endsWith(".visionbak.enc");
-      const restoreSelected = (allowUnverifiedAudit = false) =>
-        isBundle
-          ? runBundleRestore(resolved, { passphrase, allowUnverifiedAudit })
-          : runRestore(resolved, { passphrase, allowUnverifiedAudit });
-      const outcome = await restoreWithAuditRecovery(
-        restoreSelected,
-        async (error: unknown) => {
-          const reported = isObjectLike(error) ? error.auditStatus : undefined;
-          const auditStatus =
-            typeof reported === "string" &&
-            ["failed", "unavailable", "partially_verified"].includes(reported)
-              ? reported
-              : "unavailable";
-          const confirmation = await showMessageBoxOverMainWindow({
-            type: "warning",
-            buttons: [
-              t("settings.restore.runNow", null, "Restore"),
-              t("settings.restore.cancelButton", null, "Cancel"),
-            ],
-            defaultId: 1,
-            cancelId: 1,
-            title: t(
-              "settings.restore.auditContinuityTitle",
-              null,
-              "Audit continuity cannot be verified",
-            ),
-            message: t(
-              "settings.restore.auditContinuityWarning",
-              null,
-              "This backup does not match this device's trusted audit checkpoint. Restoring it will leave audit continuity unverified.",
-            ),
-            detail: `${path.basename(resolved)} (${auditStatus})`,
-          });
-          return confirmation.response === 0;
-        },
-      );
-      if (outcome.cancelled) {
-        return { success: false, error: "Restore cancelled by user" };
-      }
-      if (outcome.recovered) {
-        activeRuntime?.endAuditSession?.();
-        reportAuditStatus("unavailable");
-        return { ...outcome.result, auditStatus: "unavailable" };
-      }
-      return outcome.result;
+      return isBundle
+        ? await runBundleRestore(resolved, { passphrase })
+        : await runRestore(resolved, { passphrase });
     } catch (err) {
       return { success: false, error: String(err) };
     } finally {
@@ -2984,6 +2494,14 @@ async function launch(): Promise<void> {
   setupDockMenu();
   subscribeAccentColorChanges();
 
+  // Remove the retired audit-history receipt folder and Keychain item once.
+  // Fire-and-forget: it logs its own outcome and never throws.
+  void cleanupLegacyAuditArtifacts({
+    userDataDir: app.getPath("userData"),
+    runtimeName: NATIVE_RUNTIME_ID,
+    log: { info: console.log, warn: console.warn },
+  });
+
   {
     const endNative = bootMark("native_runtime_start");
     const repoRoot = path.resolve(appRoot, "..", "..");
@@ -3010,11 +2528,6 @@ async function launch(): Promise<void> {
           postgresPort: __IS_DEMO ? DEMO_POSTGRES_PORT : undefined,
           appPort: () => appPort,
           requireRuntimeManifest: app.isPackaged,
-          auditBridgeToken: crypto.randomBytes(32).toString("hex"),
-          auditSafeStorage: safeStorage,
-          auditKeychainHelper: app.isPackaged
-            ? path.join(process.resourcesPath, "audit-keychain")
-            : undefined,
         },
       });
       await activeRuntime.ensureLayout();
@@ -3186,7 +2699,6 @@ app.on("will-quit", (e) => {
         // Drop the watchdog's idle keep-alive socket so the backend's
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();
-        activeRuntime?.endAuditSession?.();
         try {
           healthAgent.destroy();
         } catch {

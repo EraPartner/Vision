@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -179,7 +179,7 @@ decision (`PATCH { in_net_worth: true }`).
 ### GET /api/accounts/:id/portfolio-lot-retag-preview
 
 Returns the exact count of `buy`, `gift`, and `sell` rows assigned to the account. When the whole
-selection fits the audited 500-row broker re-tag limit, `transaction_ids` contains every ID in
+selection fits the 500-row broker re-tag limit, `transaction_ids` contains every ID in
 ascending order. Above that limit the array is empty, never truncated. The close and standalone
 broker-transfer dialogs use this read-only contract so investment-list pagination cannot hide
 assigned lots.
@@ -196,12 +196,13 @@ assigned lots.
 `transfer_source='adjustment'` row per non-zero currency partition and then closes the account.
 These rows do not count as income or spending. `preserve` closes without changing the ledger.
 Repeating a completed close is safe and does not create duplicate adjustments. Before closing a
-portfolio account, the dialog can submit the complete previewed lot selection to the audited bulk
+portfolio account, the dialog can submit the complete previewed lot selection to the bulk
 broker re-tag endpoint, moving it to another active portfolio account or Unassigned. It never
 chunks an over-limit selection. The re-tag transaction rejects a move that would change global
 units, invested basis, or realized profit/loss under the configured cost-basis method. A failed
 re-tag prevents close; if close fails after a successful
-re-tag, the UI reports that partial state and reuses the idempotency key on retry. Choosing to keep
+re-tag, the UI reports that partial state and reuses the idempotency key on retry; the repeated
+re-tag finds the lots already on the destination and returns a no-write replay receipt. Choosing to keep
 the lots preserves them on the closed account. Planned transactions and ledger history are always
 preserved.
 

@@ -50,8 +50,7 @@ tags:
     trigger-lookup-only,
     split-guard,
     migration-0062,
-    db-editor-audit,
-    audit-chain,
+    adr-231,
     migration-0117,
     migration-0118,
     migration-0119,
@@ -724,27 +723,6 @@ Migration 0091 normalizes dangling recipient ids to `NULL` and protects the acti
 
 ---
 
-### SplitAudit
-
-**Purpose:** Audit log for split-related operations (`create`, `payment`, `settle`, `settle_all`, and `delete`). `splitService` writes it through the repository's parameterized `writeAudit()` primitive in the mutation transaction.
-
-| Field        | Type        | Constraints                                   | Description                                       |
-| ------------ | ----------- | --------------------------------------------- | ------------------------------------------------- |
-| `id`         | BIGSERIAL   | PK                                            | Unique audit entry identifier                     |
-| `split_id`   | INTEGER     | NULLABLE; no foreign key after migration 0117 | Original split ID retained after split deletion   |
-| `action`     | VARCHAR(50) | NOT NULL                                      | Action name (e.g., `create`, `payment`, `settle`) |
-| `actor`      | TEXT        | NULLABLE                                      | Who performed the action                          |
-| `payload`    | JSONB       | NULLABLE                                      | Action-specific data                              |
-| `created_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                       | When the action occurred                          |
-
-**Indexes:** `idx_split_audit_split_id`
-
-Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL` action changed an audit row when a split was deleted. A retained ID may therefore point to a deleted split. Downgrade re-adds the foreign key only under the narrow 0117 rollback guard (sole matching 0117 upgrade entry and no checkpoint); it also requires every retained non-null split ID to have a matching split, or PostgreSQL rejects the constraint restoration.
-
-**Related:** migration `0021_split_audit`
-
----
-
 ### ProviderHealth
 
 **Purpose:** Tracks per-provider health state for the admin observability hub. Stores last success/error timestamps and consecutive failure count.
@@ -765,48 +743,20 @@ Migration 0117 drops `split_audit_split_id_fkey`: its former `ON DELETE SET NULL
 
 ---
 
-### db_editor_audit (June 2026, migration 0059)
+### Removed audit history (migration 0004)
 
-**Purpose:** Audit log for the admin DB data-editor (ADR-101). Every committed insert/update/delete made through the JetBrains-style raw table editor is recorded here — table, operation, before/after row images, and the exact SQL executed — inside the same transaction as the mutation, so the audit trail is atomic with the change.
-
-| Field         | Type        | Constraints                                              | Description                                  |
-| ------------- | ----------- | -------------------------------------------------------- | -------------------------------------------- |
-| `id`          | BIGSERIAL   | PK                                                       | Unique audit entry identifier                |
-| `table_name`  | TEXT        | NOT NULL                                                 | Table the change was applied to              |
-| `op`          | TEXT        | NOT NULL, CHECK (`op IN ('insert', 'update', 'delete')`) | Operation type                               |
-| `pk_json`     | JSONB       | NULLABLE                                                 | Primary key of the affected row              |
-| `before_json` | JSONB       | NULLABLE                                                 | Row image before the change (NULL on insert) |
-| `after_json`  | JSONB       | NULLABLE                                                 | Row image after the change (NULL on delete)  |
-| `statement`   | TEXT        | NOT NULL                                                 | The SQL statement that was executed          |
-| `created_at`  | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                                  | When the change was committed                |
-
-**Indexes:** `idx_db_editor_audit_table_time` on `(table_name, created_at DESC)` — renamed from `db_editor_audit_table_time_idx` by migration 0090. Its CHECK constraint (`db_editor_audit_op_check`) was left as-is by 0090 (already named per convention).
-
-**Note:** The generic Admin data editor returns `403` for schema, rows, and mutations on `db_editor_audit` and the other five protected audit tables. It has no authenticated external receipt and cannot present a verified audit history. Permitted editor mutations write a domain audit row and a linked chain entry in the same transaction.
-
-**Related:** [[docs/features/database-maintenance|Database Maintenance UI]], [[docs/api/admin|Admin API]], [[docs/adr/101-db-data-editor|ADR-101]], migration `0059_db_editor_audit`
+Migration 0004 (`db/migrations/0004_remove_audit_history.sql`) drops the audit-history schema:
+the hash-chain tables `audit_chain_head`, `audit_chain_entries` and `audit_chain_checkpoints`
+(added by pre-squash migration 0117), the functions `audit_chain_prune_prefix` (0118) and
+`audit_chain_reject_mutation` with the append-only triggers, and the plain change tables
+`db_editor_audit` (0059), `split_audit` (0021) and `portfolio_retag_audit` (0100). The baseline
+still creates them, so a fresh install creates and then drops them. Its rollback,
+`0004_remove_audit_history.down.sql`, recreates the empty tables, functions and triggers with an
+empty genesis chain head; deleted rows are not restored. The database editor now only logs
+committed changes, split mutations keep no history, and the broker re-tag recognises a repeat
+from current assignments. See [[docs/adr/231-remove-audit-history|ADR-231]].
 
 ---
-
-### Audit chain foundation (migration 0117)
-
-Migration `0117_audit_chain` adds three tables and removes `split_audit`'s mutating foreign key. It does not hash or rewrite existing `db_editor_audit`, `split_audit`, or `portfolio_retag_audit` rows. The singleton `audit_chain_head` captures each table's maximum ID at upgrade (`legacy_db_editor_max_id`, `legacy_split_max_id`, `legacy_retag_max_id`) as a forward-only cutover marker.
-
-| Table                     | Key fields                                                                                  | Role                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `audit_chain_head`        | `singleton` PK, `last_sequence`, `last_hash`, three legacy maximum IDs, `updated_at`        | Serializes application appends with a row lock and records the current internal head.                                 |
-| `audit_chain_entries`     | `sequence` PK, `version`, `previous_hash`, `entry_hash`, `payload` JSONB, `created_at`      | Stores versioned chain entries after the cutover. Index: `(created_at, sequence)`.                                    |
-| `audit_chain_checkpoints` | `id` PK, `sequence`, `head_hash`, `anchor_kind`, `receipt_id`, `receipt_hash`, `created_at` | Stores metadata for a separately persisted receipt. Unique `(anchor_kind, receipt_id)` and descending sequence index. |
-
-The migration blocks updates, deletes, and truncation of entries and checkpoint rows; it blocks deleting or truncating the head. A database administrator can still alter the schema or restore an older backup. `appendAuditEvent` in `auditChainRepository.ts` locks the head and appends in the caller's transaction. All three tables are in `BACKUP_COVERED_TABLES`. A database-local checkpoint is not an independent witness. The later Electron receipt described in [[docs/adr/157-electron-local-audit-receipt|ADR-157]] binds the head and legacy cutover outside PostgreSQL for startup and restore checks, subject to the installation-local rollback and enrollment limits in [[docs/security/data-protection|Data Protection]]. Migration 0117 permits downgrade only with its sole matching deterministic 0117 upgrade entry, a matching head, unchanged legacy high-water IDs, and no checkpoint; any later entry or checkpoint refuses downgrade. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]].
-
-Post-cutover editor, split, and broker retag chain entries bind the persisted domain row and its exact UTC microsecond `created_at`. The writers use values returned by PostgreSQL for the chain payload; broker retag also uses the returned, normalized UUID and receipt fields. Verification recomputes editor and split digests and compares the broker retag payload against stored rows, so changing a linked row or its timestamp breaks the domain link. This does not make the pre-cutover rows verified.
-
-Each migration the Kysely migrator applies appends a `schema_migration` chain entry (`revision_applied`, direction `upgrade`) in the same transaction (databases adopted from Alembic before ADR-224 also carry one `version_changed`/`stamp` entry); the baseline itself starts the chain with one `baseline_installed` event (`apps/node-backend/src/database/migrate.ts`). The payload records direction, revision ID, and resulting `heads`. The verifier compares the latest chained `heads` with the highest name in `public.kysely_migration` (`auditVerificationService.ts`). This is a database-local consistency check and still needs the separate Electron receipt to detect a coordinated rewrite.
-
----
-
-Migration `0118_audit_retention_pruner` adds a guarded function for one-year retention without changing the three tables. Once Electron signs the boundary into its separate receipt and Keychain witness, `audit_chain_prune_prefix` removes only a contiguous, complete, year-old prefix behind an existing version 3 checkpoint. It preserves the next entry and its `previous_hash`. The signed boundary carries the deleted predecessor hash, linked domain high-water IDs, and migration heads so verification can continue across the missing prefix. Audit domain rows and checkpoint metadata remain; only chain entries are pruned. A downgrade of 0118 is refused after any prefix was removed. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
 
 ### provider_api_keys (June 2026, ADR-079, migration 0043)
 
@@ -1494,7 +1444,7 @@ to user data requires explicit approval. See [[docs/adr/188-proved-in-kind-incom
 
 **Purpose:** Immutable before/after receipts for adopting existing real transactions and restoring
 them. Adoption preserves the financial transaction ID, notes, and unsupported metadata. The
-journal is domain evidence; it is not linked to the independently witnessed audit chain.
+journal is domain evidence.
 
 | Field | Type | Constraints / meaning |
 | ----- | ---- | --------------------- |

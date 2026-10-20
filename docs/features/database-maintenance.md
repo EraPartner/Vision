@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -15,9 +15,9 @@ tags:
     vacuum,
     db-data-editor,
     adr-101,
-    audit,
+    adr-231,
   ]
-description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a committed-SQL audit trail.
+description: Administrative interface for monitoring database statistics, running VACUUM ANALYZE operations, and (ADR-101) browsing/editing raw table data with optimistic concurrency, dry-run preview, and a log line per committed change.
 aliases:
   [
     db maintenance,
@@ -39,7 +39,7 @@ related_code:
 # Database Maintenance UI (Phase 7 + ADR-101)
 
 > [!abstract] Overview
-> The Database Maintenance page provides administrators with real-time visibility into PostgreSQL table health and the ability to execute VACUUM ANALYZE operations for performance optimization. Phase 7 addition. ADR-101 (2026-06-18) extends it with a JetBrains-style **data editor** for permitted tables: browse, filter, sort, and edit/insert/delete rows with optimistic-concurrency protection, a SQL dry-run preview, and a committed-SQL audit trail. Protected audit tables cannot be opened through the generic editor.
+> The Database Maintenance page provides administrators with real-time visibility into PostgreSQL table health and the ability to execute VACUUM ANALYZE operations for performance optimization. Phase 7 addition. ADR-101 (2026-06-18) extends it with a JetBrains-style **data editor** for permitted tables: browse, filter, sort, and edit/insert/delete rows with optimistic-concurrency protection, a SQL dry-run preview, and a log line per committed change.
 
 ## Feature Overview
 
@@ -248,18 +248,17 @@ Tables that lack a primary key are **read-only** in the data editor — the Comm
 
 ### Safety model summary
 
-| Concern                                               | Mitigation                                                                                                                         |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| SQL injection via table/column identifiers            | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted                            |
-| SQL injection via values                              | Always parameterized                                                                                                               |
-| Read queries causing mutations                        | All reads run in a `READ ONLY` transaction                                                                                         |
-| Hung read queries                                     | `SET LOCAL statement_timeout = '10s'`                                                                                              |
-| Raw WHERE clause abuse                                | Semicolons rejected; runs inside READ ONLY transaction                                                                             |
-| Silent concurrent overwrites                          | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch                                                                    |
-| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages                                                    |
-| Partial batch application                             | Entire batch runs in one transaction; any failure rolls back all changes                                                           |
-| No audit trail                                        | Every committed statement written to `db_editor_audit` inside the same transaction + structured logger                             |
-| Unverified audit-table access                         | Generic schema, row, and mutation requests for all six audit tables return `403`; the editor has no authenticated external receipt |
+| Concern                                               | Mitigation                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| SQL injection via table/column identifiers            | Names validated against `pg_stat_user_tables` / `information_schema.columns`; identifiers double-quoted |
+| SQL injection via values                              | Always parameterized                                                                                    |
+| Read queries causing mutations                        | All reads run in a `READ ONLY` transaction                                                              |
+| Hung read queries                                     | `SET LOCAL statement_timeout = '10s'`                                                                   |
+| Raw WHERE clause abuse                                | Semicolons rejected; runs inside READ ONLY transaction                                                  |
+| Silent concurrent overwrites                          | `xmin` optimistic-concurrency token; `409 Conflict` on mismatch                                         |
+| Constraint violations surfaced as raw Postgres errors | SQLSTATEs (`23502/23503/23505/23514/22P02`) mapped to friendly 400/409 messages                         |
+| Partial batch application                             | Entire batch runs in one transaction; any failure rolls back all changes                                |
+| Untraceable edits                                     | Each committed change is written to the structured logger (no database change table since ADR-231)      |
 
 ### Bypass-domain-validation caveat
 
@@ -276,25 +275,12 @@ remains responsible for preserving those invariants.
 
 After a successful commit to `transactions`, `recipients`, or `categories` (the base tables for the dashboard materialized views), the service calls the existing debounced `scheduleRefresh()` from `materializedViewService`. The commit response includes `refreshScheduled: true` when this happens. Edits to other tables skip the refresh.
 
-### Audit table
+### Change log
 
-Migration `0059_db_editor_audit` creates:
-
-```sql
-CREATE TABLE db_editor_audit (
-  id          BIGSERIAL PRIMARY KEY,
-  table_name  TEXT NOT NULL,
-  op          TEXT NOT NULL,          -- 'insert' | 'update' | 'delete'
-  pk_json     JSONB,
-  before_json JSONB,
-  after_json  JSONB,
-  statement   TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX idx_db_editor_audit_table_time ON db_editor_audit (table_name, created_at DESC);
-```
-
-Audit rows and their hash-chain links are written inside the same transaction as the change, so a rollback removes both. The generic editor now refuses schema, row, and mutation requests for `db_editor_audit`, `split_audit`, `portfolio_retag_audit`, `audit_chain_head`, `audit_chain_entries`, and `audit_chain_checkpoints` with `403`. It cannot authenticate the separate Electron receipt before displaying evidence. The native Admin audit view uses a separate verified bridge and labels a pending tail; browser deployments without that bridge cannot use it. PostgreSQL table-health statistics can still include these tables, but they are not verified audit evidence. There is no automatic 180-day audit-row purge in the current backend. Removing chained domain rows would break audit verification.
+After commit, the service emits one structured log line per applied change
+(`db-editor mutation committed`, with table, operation, and primary key). No database table
+records editor changes: migration `0004_remove_audit_history` dropped `db_editor_audit`, which
+migration `0059_db_editor_audit` had created ([[docs/adr/231-remove-audit-history|ADR-231]]).
 
 ### API endpoints
 
@@ -314,7 +300,7 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 - [[docs/adr/101-db-data-editor|ADR-101: Admin DB data editor]]
 - [[docs/features/settings|Settings & Administration]]
 - [[docs/performance/index|Performance Optimization]]
-- [[docs/reference/data-model#db_editor_audit (June 2026, migration 0059)|Data Model — db_editor_audit]] — schema reference for the audit table
+- [[docs/adr/231-remove-audit-history|ADR-231: Remove audit history]] — why `db_editor_audit` was dropped
 
 ## Related Code
 

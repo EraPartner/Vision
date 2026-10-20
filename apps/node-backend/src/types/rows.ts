@@ -88,8 +88,7 @@ import type { CategoryRow as CatalogCategoryRow } from "../database/rows/catalog
 
 /**
  * The slice of a `pg` client the repositories actually use — the callback
- * argument of `withTransaction()`, and the `{ query }` stand-in `writeAudit`
- * falls back to.
+ * argument of `withTransaction()`, or the pool's `{ query }`.
  *
  * Structural rather than `import('pg').PoolClient`: written when a legacy
  * checkJs program still saw `pg` as `any` (ADR-191).

@@ -4,7 +4,6 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { IpcRendererEvent } from "electron";
 import type {
   ElectronApiBridge,
-  ElectronAuditBridge,
   ElectronBackupBridge,
   ElectronEventContract,
   ElectronRecoveryBridge,
@@ -159,18 +158,6 @@ const electronBackup: ElectronBackupBridge = {
     ipcRenderer.invoke("backup:set-passphrase", passphrase),
 };
 contextBridge.exposeInMainWorld("electronBackup", electronBackup);
-
-const electronAudit: ElectronAuditBridge = {
-  enroll: () => ipcRenderer.invoke("audit:enroll"),
-  read: (options) => ipcRenderer.invoke("audit:read", options),
-  exportSnapshot: () => ipcRenderer.invoke("audit:export"),
-  exportTransfer: (password) =>
-    ipcRenderer.invoke("audit:transfer-export", password),
-  importTransfer: (password) =>
-    ipcRenderer.invoke("audit:transfer-import", password),
-  rotateKey: () => ipcRenderer.invoke("audit:rotate-key"),
-};
-contextBridge.exposeInMainWorld("electronAudit", electronAudit);
 
 /**
  * Expose service-lifecycle controls (currently the opt-in "keep services running

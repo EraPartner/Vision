@@ -687,8 +687,7 @@
     "authoredExisting": [
       "actual backend stop/start around snapshot and mutation, with API readiness/readback",
       "encrypted bundle restore replaces mutated transaction/account/settings and attachment bytes",
-      "restore to a second synthetic runtime verifies transferred audit checkpoint",
-      "tampered audit restore is rejected and original runtime audit remains verified"
+      "restore to a second synthetic runtime (device move) restores the backup data"
     ],
     "execution": "Not executed in this session: disposable PostgreSQL initialization is blocked. Native fault-injection tests are separately executed evidence, not live smoke coverage.",
     "faultSuites": [

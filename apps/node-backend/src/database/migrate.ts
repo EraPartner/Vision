@@ -6,7 +6,6 @@ import { Migrator } from "kysely/migration";
 import type { Migration, MigrationResult } from "kysely/migration";
 import pg from "pg";
 import { logger } from "../config/logger.ts";
-import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import { readSchemaInventory, schemaFingerprint } from "./schemaInventory.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -85,19 +84,6 @@ function createMigrationDb(): Db {
   });
 }
 
-/** The audit repository speaks `{ query(text, params) }`; adapt a Kysely transaction. */
-function auditClient(db: Db) {
-  return {
-    query: async (text: string, params: unknown[] = []) => {
-      const result = await db.executeQuery(CompiledQuery.raw(text, params));
-      return {
-        rows: result.rows as never[],
-        rowCount: Number(result.numAffectedRows ?? result.rows.length),
-      };
-    },
-  };
-}
-
 async function rows<R>(db: Db, text: string): Promise<R[]> {
   const result = await db.executeQuery<R>(CompiledQuery.raw(text, []));
   return [...result.rows];
@@ -115,25 +101,6 @@ async function currentFingerprint(db: Db): Promise<string> {
 async function restoreSearchPath(db: Db) {
   await sql`SELECT pg_catalog.set_config('search_path', '"$user", public', true)`.execute(
     db,
-  );
-}
-
-async function appendMigrationAudit(
-  db: Db,
-  event: "revision_applied" | "version_changed",
-  direction: "upgrade" | "downgrade" | "stamp",
-  revision: string,
-  heads: string[],
-) {
-  await appendAuditEvent(
-    {
-      stream: "schema_migration",
-      event,
-      direction,
-      revision,
-      heads,
-    },
-    auditClient(db),
   );
 }
 
@@ -180,8 +147,7 @@ async function baselineUp(db: Db, baselineSql: string) {
 
 /**
  * Every `db/migrations/NNNN_name.sql` is one migration; an optional
- * `NNNN_name.down.sql` makes it reversible. Each step appends a
- * `schema_migration` audit event in the same transaction.
+ * `NNNN_name.down.sql` makes it reversible.
  */
 export function loadMigrations(
   dir = MIGRATIONS_DIR,
@@ -196,7 +162,7 @@ export function loadMigrations(
     throw new Error(`The first migration must be ${BASELINE_MIGRATION}`);
   }
   const migrations: Record<string, Migration> = {};
-  names.forEach((name, index) => {
+  names.forEach((name) => {
     if (!MIGRATION_NAME.test(name)) {
       throw new Error(`Invalid migration file name: ${name}.sql`);
     }
@@ -205,15 +171,11 @@ export function loadMigrations(
       migrations[name] = { up: (db) => baselineUp(db, upSql) };
       return;
     }
-    const previous = names[index - 1] ?? BASELINE_MIGRATION;
     const downFile = path.join(dir, `${name}.down.sql`);
     const migration: Migration = {
       up: async (db) => {
         await sql.raw(upSql).execute(db);
         await restoreSearchPath(db);
-        await appendMigrationAudit(db, "revision_applied", "upgrade", name, [
-          name,
-        ]);
       },
     };
     if (existsSync(downFile)) {
@@ -221,9 +183,6 @@ export function loadMigrations(
       migration.down = async (db) => {
         await sql.raw(downSql).execute(db);
         await restoreSearchPath(db);
-        await appendMigrationAudit(db, "revision_applied", "downgrade", name, [
-          previous,
-        ]);
       };
     }
     migrations[name] = migration;

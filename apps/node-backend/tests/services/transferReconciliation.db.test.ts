@@ -157,7 +157,7 @@ describe.skipIf(!hasTestDatabase())(
     afterEach(async () => {
       const pool = getTestPool()!;
       // Targeted DELETEs, deliberately NOT `TRUNCATE ... CASCADE`: the cascade off
-      // `transactions` reaches a dozen unrelated tables (split_audit,
+      // `transactions` reaches a dozen unrelated tables (transaction_splits,
       // planned_transaction_tags, portfolio_import_staging_rows, ...) and costs
       // ~350ms per test in ACCESS EXCLUSIVE locks and file truncation, versus ~3ms
       // here at these row counts. Order follows the FKs: transactions before

@@ -8,7 +8,7 @@ last_modified: 2026-10-20
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 299
+api_operation_count: 293
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 299 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 293 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **299 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **293 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -91,6 +91,8 @@ aliases:
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
+>
+> **2026-10-20 — audit history removed (ADR-231, BREAKING, count 299 → 293):** the six private `POST /api/internal/audit/{verify,read,retention-plan,retention-prune,checkpoint,update-decision}` operations, the `AuditBridgeToken` security scheme and the `Audit*` schemas are gone. `PUT /api/investments/transactions/broker` no longer stores receipts: its receipt drops `receipt_id` and `created_at`, a request whose rows already sit on `to_account_id` returns `replayed: true` with `changed_count: 0` and no write, and reusing an `idempotency_key` with a different body is no longer `409`. Split routes ignore `x-actor`; the database editor no longer returns `403` for audit tables. The `electronAudit` bridge and its six `audit:*` IPC channels are removed. See [[docs/adr/231-remove-audit-history|ADR-231]].
 >
 > **2026-10-20 — import rate-limit scope narrowed (non-breaking, operation count unchanged):** `importRateLimiter` (20 req/min, shared `import` bucket) now covers only uploads, the portfolio probe, and commits under `/api/import` and `/api/portfolio/import`. Batch previews, row and investment overrides, batch list/detail/rollback, saved parsers, and reconciliation preview are limited only by the global API limiter. Clients previously throttled during review no longer receive those `429` responses. See [[docs/security/rate-limiting]].
 
@@ -227,7 +229,7 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | GET    | `/api/accounts/:id`                              | Get single account                                                                                                                                               | —          | [[docs/api/accounts\|Accounts]] |
 | PATCH  | `/api/accounts/:id`                              | Update account (partial)                                                                                                                                         | —          | [[docs/api/accounts\|Accounts]] |
 | DELETE | `/api/accounts/:id`                              | Delete account (409 if still referenced — archive instead)                                                                                                       | —          | [[docs/api/accounts\|Accounts]] |
-| GET    | `/api/accounts/:id/portfolio-lot-retag-preview`  | Count assigned buy/gift/sell rows and return their complete ID selection only when it fits the 500-row audited re-tag limit                                      | —          | [[docs/api/accounts\|Accounts]] |
+| GET    | `/api/accounts/:id/portfolio-lot-retag-preview`  | Count assigned buy/gift/sell rows and return their complete ID selection only when it fits the 500-row re-tag limit                                              | —          | [[docs/api/accounts\|Accounts]] |
 | POST   | `/api/accounts/:id/close`                        | Atomically close; optionally add one zero-out adjustment per non-zero native currency partition                                                                  | —          | [[docs/api/accounts\|Accounts]] |
 | GET    | `/api/accounts/:id/merge-preview`                | Read-only dry-run of merging `:id` into `?into=`: reassigned row counts, projected post-merge computed balance over the union, `stampsInterleaved` (§1 F2 guard) | —          | [[docs/api/accounts\|Accounts]] |
 | POST   | `/api/accounts/:id/merge`                        | Merge source accounts into this survivor; repoints all references + deletes sources (ADR-088)                                                                    | —          | [[docs/api/accounts\|Accounts]] |
@@ -404,7 +406,7 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/investments/exposure`            | Issuer, sector, and issuer-country exposure with uncovered weight  | —          | [[docs/api/investments\|Investments]] |
 | PUT    | `/api/investments/exposure/sources`    | Upsert explicit classifications and typed fund-holdings documents  | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/transactions`        | Bulk portfolio transactions                                        | —          | [[docs/api/investments\|Investments]] |
-| PUT    | `/api/investments/transactions/broker` | Audited idempotent bulk broker re-tag                              | 30 req/min | [[docs/api/investments\|Investments]] |
+| PUT    | `/api/investments/transactions/broker` | Bulk broker re-tag; a repeat is a no-write replay                  | 30 req/min | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id/price-history`   | Historical price data (db_only=true by default for offline safety) | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id`                 | Get single                                                         | —          | [[docs/api/investments\|Investments]] |
 | PATCH  | `/api/investments/:id`                 | Update                                                             | —          | [[docs/api/investments\|Investments]] |
@@ -572,22 +574,7 @@ in ascending order and preserves source order within a date. See
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
 
-## Private Electron Audit Bridge
-
-These routes are for the native Electron main process. They require a loopback socket peer and a per-launch Bearer token that differs from `ADMIN_AUTH_TOKEN`. An HTTP 200 verification response can contain a failed or unavailable audit status.
-
-| Method | Path                                  | Description                                                               | Access                   | Doc                                       |
-| ------ | ------------------------------------- | ------------------------------------------------------------------------- | ------------------------ | ----------------------------------------- |
-| POST   | `/api/internal/audit/verify`          | Verify full chain and domain links against an authenticated local receipt | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-| POST   | `/api/internal/audit/read`            | Read one bounded page from the same verified database snapshot            | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-| POST   | `/api/internal/audit/retention-plan`  | Plan a complete one-year-old prefix behind a trusted checkpoint           | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-| POST   | `/api/internal/audit/retention-prune` | Prune a signed eligible prefix with atomic database guards                | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-| POST   | `/api/internal/audit/checkpoint`      | Record metadata for an already persisted receipt                          | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-| POST   | `/api/internal/audit/update-decision` | Append bounded Electron checksum or install decision; no publisher proof  | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
-
 ## Admin
-
-The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` editor operations return `403` for the six protected audit tables, including read requests. Database statistics and backup coverage do not imply authenticated audit evidence.
 
 | Method | Path                                              | Description                                                                                                                                  | Rate Limit         | Doc                       |
 | ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
@@ -602,7 +589,7 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | POST   | `/api/admin/database/vacuum`                      | Run VACUUM ANALYZE on one or all tables (Phase 7)                                                                                            | admin              | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/database/tables/:table/schema`        | Table column schema + primary key discovery; composite-PK aware (ADR-101)                                                                    | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/database/tables/:table/rows`          | Keyset-paginated, filtered, sorted table read without an unbounded count; runs inside READ ONLY transaction with statement timeout (ADR-101) | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, audit trail, matview auto-refresh (ADR-101)                    | adminMutateLimiter | [[docs/api/admin\|Admin]] |
+| POST   | `/api/admin/database/tables/:table/mutate`        | Batch insert/update/delete with xmin optimistic concurrency, dry-run preview, change log, matview auto-refresh (ADR-101)                     | adminMutateLimiter | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/providers/health`                     | List all provider health records                                                                                                             | —                  | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
@@ -714,9 +701,9 @@ share mutation invalidation. This query scope adds no operation. See [[docs/api/
 
 **Streaming Lifecycle:** Frontend pre-creates conversation via POST `/api/ai/conversations`, then streams via POST `/api/ai/chat/stream`. Stream lives in module-level `aiChatStreamStore`; user can navigate away and stream continues. On completion, TanStack Query cache invalidates to hydrate persisted messages. Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`.
 
-## IPC Contract — Electron Desktop (25 invoke channels, 6 event channels)
+## IPC Contract — Electron Desktop (23 invoke channels, 6 event channels)
 
-Electron-specific inter-process communication is grouped into six context bridges. The complete
+Electron-specific inter-process communication is grouped into five context bridges. The complete
 argument and result types are owned by `packaging/electron/electron-api.d.ts` and re-exported as
 `@vision/types/electron`.
 
@@ -727,14 +714,13 @@ argument and result types are owned by `packaging/electron/electron-api.d.ts` an
 | `electronServices` |               2 |              0 |
 | `electronAPI`      |               7 |              4 |
 | `electronRecovery` |               2 |              2 |
-| `electronAudit`    |               2 |              0 |
 
 The backup operations remain:
 
 | Handler                        | Arguments                                               | Returns                                                                                                                                                                 | Description                                                                                                                                                                                                                                           |
 | ------------------------------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backup:run`                   | `(destDir: string, frontendStateJson?: string \| null)` | `Promise<{ success: boolean; file?: string; encrypted?: boolean; cleanupRemoved?: number; warning?: string; error?: string }>`                                          | Create `.visionbak` bundle; optionally encrypt to `.visionbak.enc`. Includes DB dump, attachments tree, and serialized frontend state (theme, dismissed toasts, etc.).                                                                                |
-| `backup:restore`               | `(bundlePath: string, opts?: { passphrase?: string })`  | `Promise<{ success: boolean; file?: string; frontendState?: { keys: Record<string, string> } \| null; warning?: string; auditStatus?: "unavailable"; error?: string }>` | Restore from `.visionbak` or `.visionbak.enc` bundle. Validates schema head, drops DB, loads SQL, atomically swaps attachments, returns frontend state for localStorage hydration. Blocks if bundle schema is newer (user must upgrade Vision first). |
+| `backup:restore`               | `(bundlePath: string, opts?: { passphrase?: string })`  | `Promise<{ success: boolean; file?: string; frontendState?: { keys: Record<string, string> } \| null; warning?: string; error?: string }>`                               | Restore from `.visionbak` or `.visionbak.enc` bundle. Validates schema head, drops DB, loads SQL, atomically swaps attachments, returns frontend state for localStorage hydration. Blocks if bundle schema is newer (user must upgrade Vision first). |
 | `backup:select-file`           | `()`                                                    | `Promise<string \| null>`                                                                                                                                               | Show native file picker dialog; returns the selected backup path or null when cancelled.                                                                                                                                                              |
 | `backup:select-dir`            | `()`                                                    | `Promise<string \| null>`                                                                                                                                               | Show native folder picker dialog; returns the selected directory or null when cancelled.                                                                                                                                                              |
 | `backup:is-encrypted`          | `(bundlePath: string)`                                  | `Promise<boolean>`                                                                                                                                                      | Detect encryption for a path previously selected through the file picker.                                                                                                                                                                             |
@@ -742,8 +728,6 @@ The backup operations remain:
 | `backup:load-settings`         | `()`                                                    | `Promise<{ backupDir: string; backupOnQuit: boolean }>`                                                                                                                 | Load backup settings from `settings.json` with fallback to default `~/Vision/backups`.                                                                                                                                                                |
 | `backup:get-encryption-status` | `()`                                                    | `Promise<{ success: boolean; secureStorageAvailable: boolean; hasStoredPassphrase: boolean; hasEnvPassphrase: boolean }>`                                               | Check secure-storage availability and stored/environment passphrase presence.                                                                                                                                                                         |
 | `backup:set-passphrase`        | `(passphrase: string)`                                  | `Promise<{ success: boolean; available: boolean; error?: string }>`                                                                                                     | Set or update backup encryption passphrase (stored encrypted in `settings.json` via `safeStorage`). Empty string clears passphrase.                                                                                                                   |
-
-`electronAudit.read` requests a bounded verified page from the native main process. `electronAudit.exportSnapshot` saves a complete verified snapshot of at most 500 entries through the native save dialog. The renderer receives neither the private backend bearer nor direct access to the local receipt. A newer tail is labeled pending authentication; the export states that its local receipt and macOS Keychain checkpoint do not make it a signed report or remote attestation.
 
 `packaging/electron/ipc-contract.test.ts` requires the shared invoke channels to equal both the
 main-process registrations and preload invokes. It also requires all shared event channels to

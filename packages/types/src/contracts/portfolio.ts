@@ -159,7 +159,6 @@ export const PortfolioTransactionListSchema = z.looseObject({
 
 /** `PUT /api/investments/transactions/broker` — portfolioBrokerRetagService.mapReceipt. */
 export const PortfolioBrokerRetagReceiptSchema = z.looseObject({
-  receipt_id: IdSchema,
   idempotency_key: z.string(),
   from_account_id: AccountIdSchema.nullable(),
   to_account_id: AccountIdSchema.nullable(),
@@ -172,7 +171,6 @@ export const PortfolioBrokerRetagReceiptSchema = z.looseObject({
   ),
   selected_count: CountSchema,
   changed_count: CountSchema,
-  created_at: TimestampSchema,
   replayed: z.boolean(),
 });
 

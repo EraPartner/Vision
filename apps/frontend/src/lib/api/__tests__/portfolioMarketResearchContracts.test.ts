@@ -446,7 +446,6 @@ const ROWS: Row[] = [
         method: "put",
         path: "/api/investments/transactions/broker",
         body: {
-            receipt_id: 1,
             idempotency_key: "key-1",
             from_account_id: null,
             to_account_id: 2,
@@ -454,7 +453,6 @@ const ROWS: Row[] = [
             previous_assignments: [{ transaction_id: 1, account_id: null }],
             selected_count: 1,
             changed_count: 1,
-            created_at: TS,
             replayed: false,
         },
         call: () => bulkRetagPortfolioTransactions({} as never),

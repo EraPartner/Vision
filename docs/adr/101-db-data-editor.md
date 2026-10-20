@@ -2,13 +2,17 @@
 title: ADR-101 - Admin DB data editor (raw table view/edit)
 type: adr
 status: accepted
-date: 2026-06-18
+date: 2026-10-20
 tags: [adr, admin, database, maintenance, data-editor, audit, security, adr-026]
 description: Add a JetBrains-style table browser/editor to the admin DB Maintenance UI — browse, filter, sort, and edit/insert/delete rows with changes committed straight to PostgreSQL behind admin auth, optimistic concurrency, a constraint-aware safety model, and a committed-SQL audit trail.
 aliases: [db data editor, raw table editor, admin sql data grid]
 ---
 
 # ADR-101: Admin DB data editor (raw table view/edit)
+
+> [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
+> migration 0004 drops `db_editor_audit`; committed edits are logged only. The editor, its
+> optimistic concurrency and dry-run preview stay in force.
 
 ## Status
 

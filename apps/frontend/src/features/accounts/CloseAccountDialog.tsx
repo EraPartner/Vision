@@ -27,6 +27,7 @@ import { apiClient } from "@/lib/api";
 import { invalidateAccountRepoint } from "@/lib/queryKeys";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import { retagMovedCount } from "@/lib/api/portfolio";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { toast } from "sonner";
 import type { Account } from "@/types/api";
@@ -144,7 +145,7 @@ export function CloseAccountDialog({
                             to_account_id: destination,
                             idempotency_key: idempotencyRef.current.key,
                         });
-                    movedCount = receipt.changed_count;
+                    movedCount = retagMovedCount(receipt);
                 }
 
                 await apiClient.closeAccount(

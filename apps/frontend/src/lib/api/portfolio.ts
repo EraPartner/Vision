@@ -231,6 +231,15 @@ export async function deletePortfolioTransaction(txnId: PortfolioTransactionId):
     });
 }
 
+/**
+ * Lots the re-tag left on the destination. A replay writes nothing, so its
+ * changed_count is 0 although every selected lot was moved by the earlier
+ * identical attempt.
+ */
+export function retagMovedCount(receipt: PortfolioBrokerRetagReceipt): number {
+    return receipt.replayed ? receipt.selected_count : receipt.changed_count;
+}
+
 export function bulkRetagPortfolioTransactions(
     data: PortfolioBrokerRetagRequest,
 ): Promise<PortfolioBrokerRetagReceipt> {

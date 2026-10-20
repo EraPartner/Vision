@@ -24,5 +24,6 @@ Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledge
 The October codebase audit, walkthrough remediation and selective test cleanup implementation
 are delivered under the user's explicit waiver of further optional verification. Implementation
 results and unexecuted acceptance checks are preserved in
-[the implementation delivery ledger](docs/testing/codebase-audit-delivery.md). The original audit warning's cause remains unconfirmed;
-no unexecuted live check is recorded as passed.
+[the implementation delivery ledger](docs/testing/codebase-audit-delivery.md). The original native audit warning's cause was never
+confirmed; the audit-history feature that raised it was removed on 2026-10-20
+([ADR-231](docs/adr/231-remove-audit-history.md)). No unexecuted live check is recorded as passed.

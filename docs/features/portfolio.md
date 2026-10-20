@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-19
-last_modified: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+last_modified: 2026-10-20
+updated: 2026-10-20
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -1017,8 +1017,8 @@ adjustments do not trigger it because they do not affect `fullyAssigned`.
 
 The nudge first pages the instrument's complete transaction history, then selects an active
 portfolio account and reviews the instrument name, broker, and exact lot count before calling the
-audited bulk re-tag endpoint. It never treats the overview's bounded shared cache as complete. One
-request moves the complete selected set; the success toast reports the server receipt's changed count. An ambiguous retry reuses the
+bulk re-tag endpoint. It never treats the overview's bounded shared cache as complete. One
+request moves the complete selected set; the success toast reports the moved count (`changed_count`, or `selected_count` for a replay). An ambiguous retry reuses the
 same UUID while the transaction-ID and destination fingerprint is unchanged. A successful request
 clears it. The UI refuses more than 500 selected rows instead of silently truncating or partially
 batching an atomic whole-instrument action.
@@ -1046,15 +1046,16 @@ Manual changes and re-tags validate complete custody history alongside partition
 
 `CloseAccountDialog` first loads an exact server-side count of assigned `buy`, `gift`, and `sell`
 rows. The user can keep them on the closed account, move the complete set to another active
-portfolio account, or move them to Unassigned. The audited re-tag runs before close and carries
+portfolio account, or move them to Unassigned. The re-tag runs before close and carries
 whole transaction histories without cost-basis surgery. Before updating, the server compares the
 production partitioned totals under the configured weighted-average, FIFO, or LIFO method. It
 rejects any move that would change global units, invested basis, or realized profit/loss. Selections
 above 500 are never split; the keep option remains available. The cash residual choice is independent.
 
 The active portfolio account detail menu also exposes **Transfer portfolio lots** without closing
-the source account. It uses the same exact preview and destination selector, submits one audited
-re-tag, and then shows the immutable receipt ID and changed-row count. The operation changes only
+the source account. It uses the same exact preview and destination selector, submits one re-tag,
+and then shows the moved-row count (`selected_count` when the server reports a replay). The
+receipt is not stored and has no ID ([[docs/adr/231-remove-audit-history|ADR-231]]). The operation changes only
 `account_id`; the same transactional economics guard rejects unsafe broker-history merges.
 
 Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[apps/frontend/src/features/portfolio/BrokerTransferDialog.tsx]], [[apps/frontend/src/features/portfolio/PortfolioLotRetagChoice.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]]

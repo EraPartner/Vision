@@ -231,16 +231,6 @@ package "Storage & Performance" {
 }
 
 package "AI & Observability" {
-  class AuditVerificationService <<ADR-156>> {
-    +verifyAuditHistory({trustedCheckpoint?}): Promise<Report>
-    note bottom: Scans domain links and the latest chained migration head\n(highest public.kysely_migration name).\nWithout an authenticated external checkpoint,\nreport is unavailable for tamper evidence.
-  }
-
-  class AuditRetentionService <<ADR-162>> {
-    +planAuditRetention(trustedCheckpoint): Promise<Plan>
-    +pruneAuditRetention(trustedCheckpoint): Promise<Count>
-  }
-
   class AiChatService {
     +runChatTurn(conversationId, message, {streaming}): Promise<Turn>
     +listConversations() / getConversationWithMessages(id)
@@ -304,9 +294,9 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +getOwedSummary(): Promise<OwedSummary[]>
     +getOwedByRecipient(id, page): Promise<OwedData>
     +addPayment(input): Promise<Payment>
-    +settleSplit(id, actor): Promise<Split>
-    +settleAllByRecipient(id, actor): Promise<Count>
-    +deleteSplit(id, actor): Promise<boolean>
+    +settleSplit(id): Promise<Split>
+    +settleAllByRecipient(id): Promise<Count>
+    +deleteSplit(id): Promise<boolean>
   }
   class WatchlistService
   class AttachmentRecordService
@@ -428,9 +418,6 @@ CommitmentAwareCashService --> CrossWorkspaceDataService : spendable computed ba
 CommitmentAwareCashService --> CurrencyConversionService : stored recent FX
 CommitmentAwareCashService --> RecurrenceCalc : expand bounded occurrences
 PortfolioProjection --> PortfolioPerformanceSnapshotService : NAV history
-AuditVerificationService --> AuditChainRepository : scan local chain and cutover
-AuditRetentionService --> AuditVerificationService : verify signed boundary
-AuditRetentionService --> AuditChainRepository : read head and chain
 
 PriceProviderService --> InvestmentRepository
 PriceProviderService --> ProviderHealthService
