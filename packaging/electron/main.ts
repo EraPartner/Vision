@@ -1147,12 +1147,17 @@ function startRendererBootWatchdog(): void {
 
 async function loadApplicationPage(): Promise<boolean> {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const endAudit = bootMark("audit_verify");
   await checkAuditIntegrity({ establishSession: true });
+  endAudit();
   stopRendererBootWatchdog({ resetRetry: true });
   rendererReady = false;
+  const endDocument = bootMark("load_document");
   try {
     await mainWindow.loadURL(appUrl());
+    endDocument();
   } catch (error) {
+    endDocument();
     console.error(
       "[renderer] application document failed to load:",
       redactStartupDiagnostics(errorMessage(error)),
@@ -2524,6 +2529,7 @@ registerHandler("recovery:open-logs", async () => {
 // app:renderer-ready. The renderer side lives in ElectronBridge.
 
 let rendererReady = false;
+let firstRendererReadyLogged = false;
 type PendingAppMessage = {
   [C in ElectronEventChannel]: [channel: C, payload: ElectronEventContract[C]];
 }[ElectronEventChannel];
@@ -2569,6 +2575,10 @@ registerHandler(
 registerHandler(
   "app:renderer-ready",
   () => {
+    if (!firstRendererReadyLogged) {
+      firstRendererReadyLogged = true;
+      bootSummary("renderer_ready");
+    }
     rendererReady = true;
     stopRendererBootWatchdog({ resetRetry: true });
     let next: PendingAppMessage | undefined;

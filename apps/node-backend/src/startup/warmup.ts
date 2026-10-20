@@ -331,7 +331,10 @@ export async function runWarmupTasks({
   // failure is reported exactly like the refresh failure it replaces: the flag
   // settles 'failed', /health/detailed reports `degraded: true`, and every read
   // falls back to the live query.
-  const markPhase = (phase: string, operation: () => Promise<unknown>) => {
+  const markPhase = <T>(
+    phase: string,
+    operation: () => Promise<T>,
+  ): Promise<T> => {
     const end = bootMark?.(phase);
     return operation().finally(() => end?.());
   };
@@ -431,10 +434,10 @@ export async function runWarmupTasks({
     exchangeRateWarmPromise,
     fxBackfillPromise,
   ])
-    .then(() => computeAndStoreSnapshots())
+    .then(() => markPhase("portfolio_snapshots", computeAndStoreSnapshots))
     .then(() => {
       warmupStatus.portfolioSnapshots = "ready";
-      return warmInfoCaches()
+      return markPhase("info_caches", warmInfoCaches)
         .then(() => {
           warmupStatus.infoCaches = "ready";
         })
@@ -503,7 +506,10 @@ export async function runWarmupTasks({
 
   const refreshDailyForecast = createDailyJob("cashflow_forecast", async () => {
     await portfolioWarmPromise;
-    const result = await refreshCashflowForecastMc();
+    const result = await markPhase(
+      "cashflow_forecast_job",
+      refreshCashflowForecastMc,
+    );
     return result.failed === 0;
   });
   const backfillDailyGaps = createDailyJob("holding_gaps", async () => {

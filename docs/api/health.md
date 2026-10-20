@@ -2,8 +2,8 @@
 title: Health API
 type: api
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     api,
@@ -148,7 +148,8 @@ The Electron shell (`packaging/electron/main.ts`) uses `GET /health/detailed` vi
 
 - Frontend can poll `/health/detailed` to display warmup status (e.g., "Loading exchange rates…")
 - Electron can show a detailed error page if a specific cache failed
-- Observability: check which caches are taking longest to warm
+- Observability: check which caches are taking longest to warm; the backend boot trace also
+  records `portfolio_snapshots`, `info_caches` and `cashflow_forecast_job` durations
 
 ## Error Responses
 
