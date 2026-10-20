@@ -2,12 +2,12 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-20
+last_modified: 2026-10-20
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
-related_code: ["apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/priceProviderService.ts"]
+related_code: ["apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/priceProviderService.ts", "apps/node-backend/src/services/calculations/forecast/index.ts"]
 ---
 
 # Caching Strategies
@@ -168,7 +168,26 @@ Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService
 
 ---
 
-### 7. HTTP Cache Headers
+### 7. Month Cash-Flow Forecast Payload Memo
+
+**Route:** `GET /api/aggregations/cashflow-forecast-methods`  
+**Storage:** In-process `Map`, at most 8 payloads, oldest evicted first; no TTL
+
+**Features:**
+- Keyed by a SHA-256 of the forecast's actual inputs: filter hash, month, day, MC params, backtest
+  flag, loaded series, and accuracy rows. A ledger or accuracy change therefore misses the memo
+  instead of needing invalidation.
+- A hit skips about a second of event-loop-blocking Monte Carlo simulation and backtest. It covers
+  the dashboard's non-default `mc_paths=500` / `mc_percentiles=[25,75]` request, which the
+  six-hour `cashflow_forecast_mc` table never stores.
+- Bypassed by the nightly `_forceCache` refresh. The rolling forecast is not memoized.
+
+Code link: [[apps/node-backend/src/services/calculations/forecast/index.ts]]; details in
+[[docs/features/cash-flow-forecast]].
+
+---
+
+### 8. HTTP Cache Headers
 
 Static assets use long-lived caching:
 

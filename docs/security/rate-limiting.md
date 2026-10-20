@@ -2,8 +2,8 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - security
   - rate-limiting
@@ -126,7 +126,22 @@ export const importRateLimiter = rateLimiter({
 });
 ```
 
-Applied to `POST /api/import/*` endpoints.
+Applied in `main.ts` with `app.use(IMPORT_RATE_LIMITED_PATHS, importRateLimiter)`, before the
+`/api/import` and `/api/portfolio/import` routers. `IMPORT_RATE_LIMITED_PATHS`
+([[apps/node-backend/src/middleware/rateLimiter.ts]]) covers only uploads and whole-batch commits.
+These paths share one `import` bucket per client:
+
+- `/api/import/csv` (including `/csv/custom` and `/csv/stream`), `/api/import/recipients`,
+  `/api/import/categories`, and `/api/import/batches/:id/commit`
+- `/api/portfolio/import/csv` (`/csv/custom`, `/csv/stream`), `/api/portfolio/import/probe`,
+  `/api/portfolio/import/batches/:id/commit`, and `/api/portfolio/import/reconciliation/commit`
+
+Since 2026-10-20, review and management traffic falls under `globalRateLimiter` only. That
+covers batch preview reads, row recipient, category, and investment overrides, batch
+list/detail/rollback, saved-parser CRUD, and reconciliation preview. Each review edit is a POST
+plus a preview refetch, so the earlier router-wide 20/min limit returned `429` during group
+assignments and quick review sessions. The scope is covered by
+[[apps/node-backend/tests/importRateLimitScope.test.ts]].
 
 #### Report Rate Limiter
 

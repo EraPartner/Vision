@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-13
-updated: 2026-10-13
-last_modified: 2026-10-13
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags:
   [
     api,
@@ -584,8 +584,14 @@ Commit a reviewed batch. Honours all recipient and category overrides set above.
 
 ## Rate Limits
 
-- Standard imports: General rate limits apply
-- Streaming imports: Progress callbacks are not rate-limited
+Every route passes the global API limiter. Since 2026-10-20, `importRateLimiter` (20 req/min,
+shared `import` bucket with portfolio import uploads and commits) applies only to the uploads
+(`/csv`, `/csv/custom`, `/csv/stream`, `/recipients`, `/categories`) and to
+`POST /batches/:id/commit`. Batch preview reads, recipient and category row overrides, batch
+list/detail/rollback, and saved-parser CRUD use only the global limiter, so a review session or
+group assignment cannot exhaust the import budget. SSE progress events of a streaming import
+belong to its one upload request and are not counted separately. See
+[[docs/security/rate-limiting|Rate Limiting]].
 
 > **Note:** CSV export (`GET /api/transactions/export/csv`) is on the [[docs/api/transactions|Transactions API]], not the imports API. It has a rate limit of 30 requests per minute.
 

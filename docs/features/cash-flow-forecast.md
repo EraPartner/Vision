@@ -2,9 +2,9 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
@@ -747,6 +747,17 @@ Modular forecast orchestrator with 7 pluggable methods:
 - After computing: always writes to cache asynchronously (non-blocking) if default MC params
   - Response envelope includes `source: 'live'` in meta
 - Fallback: cache read/write errors logged but don't abort computation
+- In-process payload memo (2026-10-20): after the DB cache check and the input load, the month
+  forecast keeps up to eight base payloads (oldest evicted first). Each is keyed by a SHA-256 of
+  its inputs: user, filter hash, month, day, MC params, backtest flag, loaded history, current,
+  scheduled, and planned series, unconverted tally, and each accuracy row's `methodId`, `rmse`,
+  and `sampleDays`. The seed derives from the filter hash, so identical inputs give an identical
+  payload. A hit skips about a second of event-loop-blocking simulation and backtest, still reports
+  `source: 'live'`, and does not re-record backtest accuracy. Any data change misses the memo. This
+  serves the dashboard's month request (`mc_paths=500`, `mc_percentiles=[25,75]`), which the DB
+  cache never stores. `_forceCache` bypasses it, the memo does not survive a restart, and the
+  rolling forecast does not use it. Covered by
+  [[apps/node-backend/tests/cashflowForecastMemo.db.test.ts]].
 
 **Response Envelope Changes:**
 

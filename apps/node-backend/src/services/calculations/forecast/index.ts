@@ -5,6 +5,7 @@
  * Backtest runs on demand; accuracy persisted for future ensemble.
  */
 
+import { createHash } from "node:crypto";
 import { infoRepository } from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "../aggregation/_envelope.ts";
 import { fnv1aHash } from "./prng.ts";
@@ -255,6 +256,7 @@ async function runForecastEngine({
   mcPercentiles,
   seed,
   userId,
+  accuracyRows: preloadedAccuracyRows,
 }: {
   history: DailyNetPoint[];
   currentActual: DailyNetPoint[];
@@ -269,6 +271,7 @@ async function runForecastEngine({
   mcPercentiles: number[];
   seed: number | string;
   userId: string;
+  accuracyRows?: AccuracyRecord[];
 }): Promise<{
   actualDaily: ActualPoint[];
   methods: MethodResult[];
@@ -317,14 +320,8 @@ async function runForecastEngine({
 
   // Ensemble: inverse-MSE weighted combination of point methods.
   let ensembleWeights: Record<string, number> = {};
-  let accuracyRows: AccuracyRecord[] = [];
-  try {
-    accuracyRows = await getLatestAccuracyByMethod({ userId });
-  } catch (err) {
-    // A contract violation is a data fault, not an unavailable DB: surface it.
-    if (err instanceof RowContractError) throw err;
-    // DB unavailable — equal-weight fallback
-  }
+  const accuracyRows =
+    preloadedAccuracyRows ?? (await loadLatestAccuracy(userId));
   try {
     const weights = ensemble.computeWeights(
       accuracyRows,
@@ -518,6 +515,41 @@ function filterHash({
   return `cumulative-bands-v2|${currency}|${cats}|${recs}|${includePlanned ? 1 : 0}|h${historyMonths}|d${effectiveDate}|t${includeTransfers ? 1 : 0}`;
 }
 
+async function loadLatestAccuracy(userId: string): Promise<AccuracyRecord[]> {
+  try {
+    return await getLatestAccuracyByMethod({ userId });
+  } catch (err) {
+    // A contract violation is a data fault, not an unavailable DB: surface it.
+    if (err instanceof RowContractError) throw err;
+    // DB unavailable — equal-weight fallback
+    return [];
+  }
+}
+
+// The simulation and backtest take about a second of CPU and block the event
+// loop, while loading their inputs takes milliseconds. The month forecast is
+// deterministic in those inputs (the seed derives from the filter hash), so a
+// payload computed from identical inputs is reused instead of re-simulated.
+// The key covers the loaded data itself, so any write that changes the
+// forecast misses the memo. This also serves the dashboard, which asks for
+// non-default MC params that the database cache never stores.
+const PAYLOAD_MEMO_MAX = 8;
+const payloadMemo = new Map<string, ForecastPayload>();
+
+function payloadMemoKey(inputs: unknown): string {
+  return createHash("sha256").update(JSON.stringify(inputs)).digest("hex");
+}
+
+function rememberPayload(key: string, payload: ForecastPayload) {
+  payloadMemo.delete(key);
+  payloadMemo.set(key, payload);
+  while (payloadMemo.size > PAYLOAD_MEMO_MAX) {
+    const oldest = payloadMemo.keys().next().value;
+    if (oldest === undefined) break;
+    payloadMemo.delete(oldest);
+  }
+}
+
 function isDefaultMcParams(mcPaths: number, mcPercentiles: number[]) {
   if (mcPaths !== DEFAULT_MC_PATHS) return false;
   if (mcPercentiles.length !== DEFAULT_MC_PERCENTILES.length) return false;
@@ -647,98 +679,129 @@ export async function computeCashflowForecast({
   const todayIso =
     effectiveTodayDay > 0 ? dateAt(all, effectiveTodayDay - 1) : "";
 
-  const {
-    actualDaily,
-    methods,
-    planned: plannedArr,
-    scheduled,
-    trainHistory,
-    ensembleWeights,
-  } = await runForecastEngine({
+  const accuracyRows = await loadLatestAccuracy(userId);
+  const memoKey = payloadMemoKey({
+    userId,
+    hash,
+    yyyymm,
+    todayDay,
+    mcPaths,
+    mcPercentiles,
+    includeBacktest,
     history,
     currentActual,
     scheduledActual,
     plannedCurrent,
-    all,
-    future: effectiveFuture,
-    todayIndex: effectiveTodayDay,
-    todayIso,
-    includePlanned,
-    mcPaths,
-    mcPercentiles,
-    seed,
-    userId,
+    unconverted,
+    // Only these fields feed the ensemble weights; recordedAt moves on every
+    // backtest write and would defeat the memo.
+    accuracy: accuracyRows
+      .map(({ methodId, rmse, sampleDays }) => [methodId, rmse, sampleDays])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   });
 
-  let diagnostics: DiagnosticsPayload | null = null;
-  if (includeBacktest) {
-    const backtestMethods: BacktestMethod[] = [
-      ...POINT_METHODS,
-      ...MC_METHODS,
-    ].map((mod) => ({
-      id: mod.id,
-      label: mod.label,
-      forecast: (ctx: { history: DailyNetPoint[]; forecastDates: string[] }) => {
-        const fullCtx = { ...ctx, seed };
-        const out = mod.forecast(fullCtx);
-        return Array.isArray(out) ? out : out.series;
-      },
-    }));
-    const backtest = walkForwardBacktest({
-      history: trainHistory,
-      methods: backtestMethods,
-      asOfMonth: yyyymm,
+  const simulate = async (): Promise<ForecastPayload> => {
+    const {
+      actualDaily,
+      methods,
+      planned: plannedArr,
+      scheduled,
+      trainHistory,
+      ensembleWeights,
+    } = await runForecastEngine({
+      history,
+      currentActual,
+      scheduledActual,
+      plannedCurrent,
+      all,
+      future: effectiveFuture,
+      todayIndex: effectiveTodayDay,
+      todayIso,
+      includePlanned,
+      mcPaths,
+      mcPercentiles,
+      seed,
+      userId,
+      accuracyRows,
     });
-    diagnostics = {
-      history_months: historyMonths,
-      ensemble_weights: ensembleWeights,
-      backtest: backtest.map((b) => ({
-        method_id: b.id,
-        label: b.label,
-        mae: b.aggregate.mae,
-        rmse: b.aggregate.rmse,
-        mape: b.aggregate.mape,
-        months: b.aggregate.months,
-        per_month: b.perMonth.map(
-          ({ month, mae, rmse, mape, sampleDays }) => ({
-            month,
-            mae,
-            rmse,
-            mape,
-            sample_days: sampleDays,
-          }),
-        ),
-      })),
-    };
-    await Promise.all(
-      backtest.map((b) =>
-        recordAccuracy({
-          userId,
-          methodId: b.id,
-          asOfMonth: yyyymm,
+
+    let diagnostics: DiagnosticsPayload | null = null;
+    if (includeBacktest) {
+      const backtestMethods: BacktestMethod[] = [
+        ...POINT_METHODS,
+        ...MC_METHODS,
+      ].map((mod) => ({
+        id: mod.id,
+        label: mod.label,
+        forecast: (ctx: {
+          history: DailyNetPoint[];
+          forecastDates: string[];
+        }) => {
+          const fullCtx = { ...ctx, seed };
+          const out = mod.forecast(fullCtx);
+          return Array.isArray(out) ? out : out.series;
+        },
+      }));
+      const backtest = walkForwardBacktest({
+        history: trainHistory,
+        methods: backtestMethods,
+        asOfMonth: yyyymm,
+      });
+      diagnostics = {
+        history_months: historyMonths,
+        ensemble_weights: ensembleWeights,
+        backtest: backtest.map((b) => ({
+          method_id: b.id,
+          label: b.label,
           mae: b.aggregate.mae,
           rmse: b.aggregate.rmse,
           mape: b.aggregate.mape,
-          sampleDays: b.perMonth.reduce((s, r) => s + r.sampleDays, 0),
-        }),
-      ),
-    );
-  }
+          months: b.aggregate.months,
+          per_month: b.perMonth.map(
+            ({ month, mae, rmse, mape, sampleDays }) => ({
+              month,
+              mae,
+              rmse,
+              mape,
+              sample_days: sampleDays,
+            }),
+          ),
+        })),
+      };
+      await Promise.all(
+        backtest.map((b) =>
+          recordAccuracy({
+            userId,
+            methodId: b.id,
+            asOfMonth: yyyymm,
+            mae: b.aggregate.mae,
+            rmse: b.aggregate.rmse,
+            mape: b.aggregate.mape,
+            sampleDays: b.perMonth.reduce((s, r) => s + r.sampleDays, 0),
+          }),
+        ),
+      );
+    }
 
-  const basePayload: ForecastPayload = {
-    month: yyyymm,
-    currency: targetCurrency,
-    days_in_month: daysInMonth,
-    current_day: todayDay,
-    actual: actualDaily,
-    scheduled_actual: scheduled,
-    planned: plannedArr,
-    methods,
-    diagnostics,
-    history_months: historyMonths,
-    include_planned: includePlanned,
-    ...unconvertedFields(unconverted),
+    return {
+      month: yyyymm,
+      currency: targetCurrency,
+      days_in_month: daysInMonth,
+      current_day: todayDay,
+      actual: actualDaily,
+      scheduled_actual: scheduled,
+      planned: plannedArr,
+      methods,
+      diagnostics,
+      history_months: historyMonths,
+      include_planned: includePlanned,
+      ...unconvertedFields(unconverted),
+    };
   };
+
+  const memoized = _forceCache ? undefined : payloadMemo.get(memoKey);
+  const basePayload = memoized ? structuredClone(memoized) : await simulate();
+  if (!memoized) rememberPayload(memoKey, structuredClone(basePayload));
 
   // Write to cache whenever default MC params used (nightly job + any live compute).
   // Cache stores the base payload without breakdown (breakdown is always computed on demand).

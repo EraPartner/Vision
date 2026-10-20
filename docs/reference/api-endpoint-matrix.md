@@ -4,7 +4,7 @@ type: reference
 status: active
 date: 2026-10-20
 updated: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -89,6 +89,8 @@ aliases:
 > **2026-10-11 — Belgian tax partner attribution (ADR-201, non-breaking, count 300 → 301):** `GET /api/info/deduction-candidates` was served but missing from `openapi.yaml` and this matrix; it is now declared, and each `byDeductionType` group gains an additive `byOwner` (`me` / `partner` / `joint`) split of its total. `GET /api/aggregations/category-pivot` cells gain an optional `incomeByOwner` (`partner` / `joint`). `POST /api/reports/tax` accepts optional `household` (validated like the household setting) and `precomputedHousehold` and renders per-partner rows for two partners. No field is removed or renamed.
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
+>
+> **2026-10-20 — import rate-limit scope narrowed (non-breaking, operation count unchanged):** `importRateLimiter` (20 req/min, shared `import` bucket) now covers only uploads, the portfolio probe, and commits under `/api/import` and `/api/portfolio/import`. Batch previews, row and investment overrides, batch list/detail/rollback, saved parsers, and reconciliation preview are limited only by the global API limiter. Clients previously throttled during review no longer receive those `429` responses. See [[docs/security/rate-limiting]].
 
 > **2026-10-08 — request input parsed with zod at the route edge (runtime validation; operation count unchanged):** routes parse `req.params`, `req.query`, and `req.body` with `parseInput` (`apps/node-backend/src/lib/zodInput.ts`), and every failure is `400 VALIDATION_ERROR` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Accounts, Attachments, Investments, Recipients, Recipient Bank Accounts, Splits, Tags, Transactions, and Watchlist no longer use `validateIdParam`/`validateIntParam`; their ids go through `idParams`/`idSchema` (`routes/_requestSchemas.ts`) or `idParamsSchema` (`routes/_inputBridges.ts`) with the same accept set. Categories (legacy and `/tree`), Planned Transactions, Research (`DELETE /mappings/:id`), Saved Charts, and the saved-parser routes still use `validateIdParam`. Some 400 texts now carry a field path (for example `id: must be a positive integer`). Newly rejected inputs include mistyped body fields that used to reach the database as `500`s, `withBaselines` values other than `true`/`false`, malformed `by-broker` `from`/`to` dates, repeated `currency` keys on `/api/info/*`, an admin `dryRun` sent as a string, an unknown `/api/market/chart` `interval`, and JSON array bodies on import overrides. `openapi.yaml` also corrects request parameters that never matched the routes: `range` (not `period`) on `/api/market/chart`, `symbols`/`count` on `/api/market/news`, `active` (not `is_active`) on `GET /api/tags` and `GET /api/recipients`, `period` on `/api/info/portfolio-performance`, `start_month`/`end_month`/`db_only` on `/api/info/inflation-rates`, and the recipient-pattern and bank-account update fields. Breaking only for clients that sent the now-rejected inputs.
 >
@@ -463,28 +465,28 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 
 ## Import
 
-| Method | Path                                                    | Description                                                                  | Rate Limit | Doc                           |
-| ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------------------- |
-| POST   | `/api/import/csv`                                       | Import CSV; `bank_name` is a required multipart body field                   | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/csv/custom`                                | Import with custom mapping                                                   | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/csv/stream`                                | SSE streaming import; `bank_name` is a required multipart body field         | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/recipients`                                | Bulk import recipients; options are multipart body fields                    | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/categories`                                | Bulk import categories; options are multipart body fields                    | —          | [[docs/api/imports\|Imports]] |
-| GET    | `/api/import/batches`                                   | List import batches                                                          | —          | [[docs/api/imports\|Imports]] |
-| GET    | `/api/import/batches/:id`                               | Get import batch                                                             | —          | [[docs/api/imports\|Imports]] |
-| DELETE | `/api/import/batches/:id`                               | Rollback import batch                                                        | —          | [[docs/api/imports\|Imports]] |
-| GET    | `/api/import/batches/:id/preview`                       | Review preview (groups + categories)                                         | ADR-046    | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/batches/:id/rows/:rowId/override`          | Override recipient on staged row                                             | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row                                              | ADR-046    | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch; derived materialized views refresh asynchronously     | ADR-115    | [[docs/api/imports\|Imports]] |
-| GET    | `/api/import/parsers`                                   | List saved custom parser configs (ADR-066)                                   | —          | [[docs/api/imports\|Imports]] |
-| POST   | `/api/import/parsers`                                   | Create saved parser; 409 on duplicate name; 400 if required columns missing  | —          | [[docs/api/imports\|Imports]] |
-| PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —          | [[docs/api/imports\|Imports]] |
-| DELETE | `/api/import/parsers/:id`                               | Delete saved parser; 204 on success; 404 if missing                          | —          | [[docs/api/imports\|Imports]] |
+| Method | Path                                                    | Description                                                                  | Rate Limit                 | Doc                           |
+| ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------- | ----------------------------- |
+| POST   | `/api/import/csv`                                       | Import CSV; `bank_name` is a required multipart body field                   | importRateLimiter          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/csv/custom`                                | Import with custom mapping                                                   | importRateLimiter          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/csv/stream`                                | SSE streaming import; `bank_name` is a required multipart body field         | importRateLimiter          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/recipients`                                | Bulk import recipients; options are multipart body fields                    | importRateLimiter          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/categories`                                | Bulk import categories; options are multipart body fields                    | importRateLimiter          | [[docs/api/imports\|Imports]] |
+| GET    | `/api/import/batches`                                   | List import batches                                                          | —                          | [[docs/api/imports\|Imports]] |
+| GET    | `/api/import/batches/:id`                               | Get import batch                                                             | —                          | [[docs/api/imports\|Imports]] |
+| DELETE | `/api/import/batches/:id`                               | Rollback import batch                                                        | —                          | [[docs/api/imports\|Imports]] |
+| GET    | `/api/import/batches/:id/preview`                       | Review preview (groups + categories)                                         | ADR-046                    | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/batches/:id/rows/:rowId/override`          | Override recipient on staged row                                             | —                          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/batches/:id/rows/:rowId/category-override` | Override category on staged row                                              | ADR-046                    | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/batches/:id/commit`                        | Commit reviewed batch; derived materialized views refresh asynchronously     | importRateLimiter; ADR-115 | [[docs/api/imports\|Imports]] |
+| GET    | `/api/import/parsers`                                   | List saved custom parser configs (ADR-066)                                   | —                          | [[docs/api/imports\|Imports]] |
+| POST   | `/api/import/parsers`                                   | Create saved parser; 409 on duplicate name; 400 if required columns missing  | —                          | [[docs/api/imports\|Imports]] |
+| PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —                          | [[docs/api/imports\|Imports]] |
+| DELETE | `/api/import/parsers/:id`                               | Delete saved parser; 204 on success; 404 if missing                          | —                          | [[docs/api/imports\|Imports]] |
 
 ## Portfolio Import — ADR-078
 
-All routes mounted at `/api/portfolio/import` with `importRateLimiter`. The pipeline stages,
+All routes mounted at `/api/portfolio/import`; `importRateLimiter` applies to uploads, probe, and commits only. The pipeline stages,
 validates, and matches CSV history or supported Saxo XLSX. Maintained formats always require review.
 Non-brokerage generic imports auto-commit only with no name matches, unresolved rows, or errors;
 exact symbols and explicit provider aliases use `match_source='symbol'`. Commit processes dates
@@ -494,7 +496,7 @@ in ascending order and preserves source order within a date. See
 
 | Method | Path                                                                | Description                                                                                                        | Rate Limit        | Doc                                               |
 | ------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------- |
-| POST   | `/api/portfolio/import/probe` | Read-only full-file maintained detection and bounded CSV header preview; no batch writes | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/probe`                                       | Read-only full-file maintained detection and bounded CSV header preview; no batch writes                           | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/maintained workbook portfolio import; multipart options; returns 201 or 202                           | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/csv/stream`                                  | CSV/maintained workbook import; workbook preflight before SSE progress/review/terminal events                      | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
@@ -507,9 +509,9 @@ in ascending order and preserves source order within a date. See
 | GET    | `/api/portfolio/import/batches/:id/preview`                         | Rows grouped by investment; unresolved rows per distinct raw symbol/name                                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                                        | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments — Phase 5A
 
