@@ -123,7 +123,7 @@ export async function main(): Promise<void> {
       VISION_DEV: "true",
     };
     const frontendEnv = safeChildEnv({
-      VITE_API_URL: `http://127.0.0.1:${appPort}`,
+      VISION_DEV_API_TARGET: `http://127.0.0.1:${appPort}`,
     });
     const bun = tools.bun;
     // Discovery leaves bun unset when no candidate exists; spawn() used to

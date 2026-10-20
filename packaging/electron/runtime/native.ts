@@ -37,7 +37,6 @@ export const NATIVE_APPLICATION_ENV_KEYS = Object.freeze([
   "FMP_API_KEY",
   "ALPHA_VANTAGE_API_KEY",
   "FRED_API_KEY",
-  "ADMIN_AUTH_TOKEN",
 ]);
 
 const CHILD_ENV_ALLOWLIST = [
@@ -721,7 +720,6 @@ export function buildNativeBackendEnv({
     VISION_NATIVE_ENV_FILE: paths.env,
     VISION_DIST_DIR: path.join(resolvedRuntimeRoot, "dist"),
     OLLAMA_URL: "http://127.0.0.1:11434",
-    ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
     VISION_SYNTHETIC_SMOKE_OFFLINE: syntheticOffline ? "1" : undefined,
   });
 }

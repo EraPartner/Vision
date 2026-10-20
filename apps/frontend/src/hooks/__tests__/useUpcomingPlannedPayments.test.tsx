@@ -62,8 +62,8 @@ function listOf(items: PlannedTransaction[]) {
     return { items, total: items.length, limit: 100, offset: 0, links: [] };
 }
 
-// window.localStorage is unavailable under the sandboxed jsdom runner (see the
-// long-standing adminToken.test.ts note) — back it with an in-memory stub.
+// window.localStorage is unavailable under the sandboxed jsdom runner, so
+// back it with an in-memory stub.
 function installMemoryLocalStorage() {
     const backing = new Map<string, string>();
     const stub: Pick<Storage, "getItem" | "setItem" | "removeItem" | "clear"> = {

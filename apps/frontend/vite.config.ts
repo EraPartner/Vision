@@ -63,14 +63,16 @@ export default defineConfig(({ mode }) => ({
     __APP_VERSION__: JSON.stringify(rootPackage.version),
   },
   server: {
-    // The API proxy is unauthenticated. Keep host development on loopback;
-    // containers explicitly opt in to a wildcard behind loopback port mappings.
-    host: process.env.VISION_VITE_BIND_HOST || "127.0.0.1",
+    // The API proxy is unauthenticated, so the dev server only listens on
+    // loopback. The browser talks to it same-origin; the proxy forwards /api
+    // to the backend (packaging/electron/scripts/native-development.ts sets
+    // VISION_DEV_API_TARGET to the backend's loopback URL).
+    host: "127.0.0.1",
     port: 8080,
     strictPort: false, // auto-pick next free port if 8080 is taken
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL || "http://localhost:3002",
+        target: process.env.VISION_DEV_API_TARGET || "http://localhost:3002",
         changeOrigin: true,
         secure: false,
       },

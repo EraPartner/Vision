@@ -1108,7 +1108,7 @@ test("native application environment accepts only fixed keys and single-line val
   assert.deepEqual(
     validateApplicationEnv({
       FRED_API_KEY: "key",
-      ADMIN_AUTH_TOKEN: "existing-admin-token",
+      ADMIN_AUTH_TOKEN: "retired-admin-token",
       OPENAI_API_ENABLED: "true",
       OPENAI_API_KEY: "synthetic-openai-key",
       ADMIN_TOKEN: "wrong-contract",
@@ -1116,7 +1116,6 @@ test("native application environment accepts only fixed keys and single-line val
     }),
     {
       FRED_API_KEY: "key",
-      ADMIN_AUTH_TOKEN: "existing-admin-token",
     },
   );
   assert.throws(
@@ -1290,7 +1289,6 @@ test("packaged backend environment pins native data, migration, and loopback pat
   assert.equal(env.VISION_RUNTIME_ROOT, runtimeRoot);
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
-  assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
   assert.equal(
     env.VISION_NATIVE_ENV_FILE,
     "/Users/test/Library/Application Support/Vision/native/vision/runtime.env",
