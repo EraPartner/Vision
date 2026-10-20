@@ -82,6 +82,51 @@ export function signCompiledBackend(binary: string): void {
   }
 }
 
+// Bun writes `.<hash>-00000000.bun-build` scratch executables into its
+// working directory and renames them to --outfile only on success. The
+// working directory stays the repository root because Bun names the bundled
+// modules relative to it, so remove the scratch files this run created.
+const bunScratchFile = /^\.[0-9a-f]+-[0-9]+\.bun-build$/;
+
+function bunScratchFiles(directory: string): Set<string> {
+  return new Set(
+    fs.readdirSync(directory).filter((name) => bunScratchFile.test(name)),
+  );
+}
+
+export function compileBackend(
+  bun: string,
+  entry: string,
+  outfile: string,
+  cwd: string = repoRoot,
+): void {
+  const existingScratch = bunScratchFiles(cwd);
+  try {
+    const compile = spawnSync(
+      bun,
+      [
+        "build",
+        "--compile",
+        // Precompiled bytecode skips parsing ~1,500 bundled modules on every
+        // launch: the backend answers /health ~0.35 s sooner.
+        "--bytecode",
+        entry,
+        "--outfile",
+        outfile,
+      ],
+      { cwd, stdio: "inherit" },
+    );
+    if (compile.error) throw compile.error;
+    if (compile.status !== 0)
+      throw new Error(`Native backend compilation exited ${compile.status}`);
+  } finally {
+    for (const name of bunScratchFiles(cwd)) {
+      if (!existingScratch.has(name))
+        fs.rmSync(path.join(cwd, name), { force: true });
+    }
+  }
+}
+
 function copyTree(source: string, destination: string): void {
   fs.cpSync(source, destination, {
     recursive: true,
@@ -161,23 +206,11 @@ export function run(): void {
   );
 
   try {
-    const compile = spawnSync(
+    compileBackend(
       bun,
-      [
-        "build",
-        "--compile",
-        // Precompiled bytecode skips parsing ~1,500 bundled modules on every
-        // launch: the backend answers /health ~0.35 s sooner.
-        "--bytecode",
-        path.join(repoRoot, "apps", "node-backend", "src", "main.ts"),
-        "--outfile",
-        path.join(stagingRoot, "vision-backend"),
-      ],
-      { cwd: repoRoot, stdio: "inherit" },
+      path.join(repoRoot, "apps", "node-backend", "src", "main.ts"),
+      path.join(stagingRoot, "vision-backend"),
     );
-    if (compile.error) throw compile.error;
-    if (compile.status !== 0)
-      throw new Error(`Native backend compilation exited ${compile.status}`);
     fs.chmodSync(path.join(stagingRoot, "vision-backend"), 0o755);
     signCompiledBackend(path.join(stagingRoot, "vision-backend"));
 

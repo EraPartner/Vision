@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   assertSafeNativeDestination,
+  compileBackend,
   manifestEntries,
   signCompiledBackend,
 } from "./prepare-native-runtime";
@@ -54,3 +55,31 @@ test(
     }
   },
 );
+
+for (const exitCode of [0, 1]) {
+  test(`backend compile removes Bun scratch files it created (exit ${exitCode})`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "vision-compile-test-"));
+    try {
+      const earlier = ".1111111111111111-00000000.bun-build";
+      fs.writeFileSync(path.join(root, earlier), "");
+      // Stands in for `bun build --compile`: leaves a scratch file in its
+      // working directory, as Bun does when a compile does not finish.
+      const fakeBun = path.join(root, "fake-bun");
+      fs.writeFileSync(
+        fakeBun,
+        `#!/bin/sh\ntouch .2222222222222222-00000000.bun-build\nexit ${exitCode}\n`,
+        { mode: 0o755 },
+      );
+      const compile = () =>
+        compileBackend(fakeBun, "main.ts", path.join(root, "out"), root);
+      if (exitCode === 0) compile();
+      else assert.throws(compile, /compilation exited 1/);
+      assert.deepEqual(
+        fs.readdirSync(root).filter((name) => name.endsWith(".bun-build")),
+        [earlier],
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
