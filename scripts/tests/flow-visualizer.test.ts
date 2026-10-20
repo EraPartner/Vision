@@ -49,7 +49,11 @@ interface DomWindow {
   requestAnimationFrame: (callback: () => void) => number;
   eval(source: string): void;
   close(): void;
-  setTimeout(callback: () => void, delay: number): unknown;
+  addEventListener(
+    type: string,
+    listener: () => void,
+    options: { once: boolean },
+  ): void;
   dispatchEvent(event: DomEvent): boolean;
 }
 
@@ -365,10 +369,15 @@ test("deep links, clear, controls and keyboard focus preserve selection", async 
     byId(doc, "view-architecture").click();
     byId(doc, "btn-restart").click();
     assert.equal(doc.querySelectorAll(".token").length, 0);
-    dom.window.location.hash = "split-shared-expense";
-    await new Promise<void>((resolve) =>
-      dom.window.setTimeout(() => resolve(), 0),
+    // The page's own hashchange listener was registered first, so it has
+    // run by the time this one resolves.
+    const hashChanged = new Promise<void>((resolve) =>
+      dom.window.addEventListener("hashchange", () => resolve(), {
+        once: true,
+      }),
     );
+    dom.window.location.hash = "split-shared-expense";
+    await hashChanged;
     assert.equal(
       query(doc, '[data-flow="split-shared-expense"]').getAttribute(
         "aria-pressed",

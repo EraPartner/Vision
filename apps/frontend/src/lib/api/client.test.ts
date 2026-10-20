@@ -611,10 +611,12 @@ describe("caller cancellation", () => {
         });
         await vi.advanceTimersByTimeAsync(0);
         expect(transport).toHaveBeenCalledTimes(1);
-        expect(vi.getTimerCount()).toBe(1);
+        // Compare counts across the abort only: the keep-alive timers of the
+        // connections msw 3 mocked for earlier tests also wake up above.
+        const pendingTimers = vi.getTimerCount();
         controller.abort();
         await outcome;
-        expect(vi.getTimerCount()).toBe(0);
+        expect(vi.getTimerCount()).toBe(pendingTimers - 1);
         await vi.runAllTimersAsync();
         expect(transport).toHaveBeenCalledTimes(1);
     });

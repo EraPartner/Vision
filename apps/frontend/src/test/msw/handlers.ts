@@ -1311,7 +1311,7 @@ export const defaultHandlers = [
     ),
 
     // ── Mutation stubs ───────────────────────────────────────────────────────
-    // These prevent onUnhandledRequest:"error" and are validated by contract
+    // These prevent onUnhandledFrame:"error" and are validated by contract
     // tests. Integration tests override them per-flow via server.use().
 
     // 201: routes/transactions.js:576.
