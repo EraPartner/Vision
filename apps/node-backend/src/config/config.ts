@@ -7,7 +7,6 @@
  */
 
 import { env } from "./env.ts";
-import { parseOpenAiModelCatalog } from "./openAiModelCatalog.ts";
 
 function deepFreeze<T extends object>(object: T): T {
   Object.freeze(object);
@@ -39,14 +38,6 @@ function defaultAnalysisDatabaseUrl(databaseUrl: string): string | undefined {
     return undefined;
   }
 }
-
-const openAiModels = parseOpenAiModelCatalog({
-  catalogJson: env.OPENAI_API_MODELS_JSON,
-  legacyModel: env.OPENAI_API_MODEL,
-  legacyInputMicrosPerMillion: env.OPENAI_API_INPUT_MICROS_PER_MILLION,
-  legacyOutputMicrosPerMillion: env.OPENAI_API_OUTPUT_MICROS_PER_MILLION,
-});
-const defaultOpenAiModel = env.OPENAI_API_MODEL || openAiModels[0]?.id;
 
 const settings = deepFreeze({
   server: {
@@ -117,30 +108,11 @@ const settings = deepFreeze({
   },
 
   aiResearch: {
-    referenceMappingKey: env.AI_REFERENCE_MAPPING_KEY,
-    agentCloak: {
-      enabled: env.AGENTCLOAK_PREFLIGHT_ENABLED,
-      mode: env.AGENTCLOAK_PREFLIGHT_MODE,
-      url: env.AGENTCLOAK_MCP_URL,
-      apiKey: env.AGENTCLOAK_MCP_API_KEY,
-      desktopUrl: env.AGENTCLOAK_DESKTOP_URL || "http://127.0.0.1:8787/detect",
-      timeoutMs: env.AGENTCLOAK_TIMEOUT_MS,
-    },
     web: {
       enabled: env.AI_WEB_RESEARCH_ENABLED,
       maxSearches: env.AI_WEB_RESEARCH_MAX_SEARCHES,
       maxPages: env.AI_WEB_RESEARCH_MAX_PAGES,
       braveApiKey: env.BRAVE_SEARCH_API_KEY,
-    },
-    openai: {
-      enabled: env.OPENAI_API_ENABLED,
-      model: defaultOpenAiModel,
-      models: openAiModels,
-      maxRetries: env.OPENAI_API_MAX_RETRIES,
-      timeoutMs: env.OPENAI_API_TIMEOUT_MS,
-      monthlyBudgetMicros: env.OPENAI_API_MONTHLY_BUDGET_MICROS,
-      inputMicrosPerMillion: env.OPENAI_API_INPUT_MICROS_PER_MILLION,
-      outputMicrosPerMillion: env.OPENAI_API_OUTPUT_MICROS_PER_MILLION,
     },
   },
 

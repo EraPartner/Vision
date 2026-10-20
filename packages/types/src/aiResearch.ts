@@ -35,9 +35,8 @@ export interface AiInvestigationScope {
 }
 export interface AiInvestigationRequest {
   question: string;
-  route: "local" | "openai-api";
+  route: "local";
   researchMode: "local-only" | "public-providers" | "public-web";
-  publicQuestion: string | null;
   publicWebQuery: string | null;
   publicSymbols: string[];
   publicMacroQueries: string[];
@@ -46,10 +45,6 @@ export interface AiInvestigationRequest {
   depth: "quick" | "detailed";
   language: "en" | "nl";
   scope: AiInvestigationScope;
-  grantId: string | null;
-  selectedSummary: string | null;
-  selectedEvidence: string | null;
-  referenceScopeId: string | null;
   savedAnalysisId: string | null;
 }
 export interface AiPlanStep {
@@ -69,40 +64,6 @@ export interface AiInvestigationPlan {
   answerDepth: "quick" | "detailed";
   language: "en" | "nl";
 }
-export interface AiCloudAnalysisPlan {
-  schemaVersion: 1;
-  catalogVersion: number;
-  datasetId: "transactions" | "accounts" | "holdings" | "cash-flows";
-  fields: string[];
-  filters: Array<{
-    fieldId: string;
-    operator:
-      | "eq"
-      | "neq"
-      | "lt"
-      | "lte"
-      | "gt"
-      | "gte"
-      | "contains"
-      | "starts-with"
-      | "is-null"
-      | "is-not-null";
-    value?: string | number | boolean | undefined;
-  }>;
-  groups: string[];
-  measures: string[];
-  joins: string[];
-  orderBy: Array<{ id: string; direction: "asc" | "desc" }>;
-  limit: number;
-  formulas: Array<{
-    id: string;
-    label: string;
-    expression: string;
-    scope: "row" | "summary";
-    resultType: "decimal" | "integer" | "boolean" | "string";
-    dependencies: string[];
-  }>;
-}
 export interface AiAnalysisEditProposal {
   schemaVersion: 1;
   savedAnalysisId: string;
@@ -114,21 +75,6 @@ export interface AiAnalysisEditProposal {
     value?: unknown | undefined;
   }>;
 }
-export interface AiDisclosureGrant {
-  route: "openai-api";
-  mode: "cloud-plan-public" | "selected-summary" | "cloud-synthesis-selected";
-  purpose: string;
-  previewHash: string;
-  allowedFields: string[];
-  maxRequests: number;
-  maxInputCharacters: number;
-  maxOutputTokens: number;
-  maxCostMicros: number;
-  maxDisclosureUnits: number;
-  expiresAt: string;
-  retainExactPayload: boolean;
-}
-
 export const AI_INVESTIGATION_STATUSES = Object.freeze([
   "queued",
   "running",
@@ -137,25 +83,6 @@ export const AI_INVESTIGATION_STATUSES = Object.freeze([
   "completed",
   "failed",
   "cancelled",
-] as const);
-
-export const AI_DISCLOSURE_MODES = Object.freeze([
-  "local-only",
-  "cloud-plan-public",
-  "selected-summary",
-  "cloud-synthesis-selected",
-] as const);
-
-export const AI_REVERSIBLE_REFERENCE_TYPES = Object.freeze([
-  "account",
-  "recipient",
-  "investment",
-  "holding",
-  "category",
-  "document",
-  "subject",
-  "amount",
-  "date",
 ] as const);
 
 export const aiEvidenceReferenceSchema: z.ZodType<AiEvidenceReference> =
@@ -274,11 +201,10 @@ export const aiInvestigationScopeSchema: z.ZodType<AiInvestigationScope> = z
 export const aiInvestigationRequestSchema: z.ZodType<AiInvestigationRequest> = z
   .strictObject({
     question: z.string().min(1).max(8000),
-    route: z.enum(["local", "openai-api"]).default("local"),
+    route: z.literal("local").default("local"),
     researchMode: z
       .enum(["local-only", "public-providers", "public-web"])
       .default("local-only"),
-    publicQuestion: z.string().min(1).max(1000).nullable().default(null),
     publicWebQuery: z.string().min(1).max(300).nullable().default(null),
     publicSymbols: z
       .array(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,19}$/))
@@ -290,42 +216,9 @@ export const aiInvestigationRequestSchema: z.ZodType<AiInvestigationRequest> = z
     depth: z.enum(["quick", "detailed"]).default("quick"),
     language: z.enum(["en", "nl"]).default("en"),
     scope: aiInvestigationScopeSchema,
-    grantId: z.string().uuid().nullable().default(null),
-    selectedSummary: z.string().max(8000).nullable().default(null),
-    selectedEvidence: z.string().max(24000).nullable().default(null),
-    referenceScopeId: z.string().uuid().nullable().default(null),
     savedAnalysisId: z.string().max(100).nullable().default(null),
   })
   .superRefine((request, ctx) => {
-    const cloudInputCount = [
-      request.publicQuestion,
-      request.selectedSummary,
-      request.selectedEvidence,
-    ].filter(Boolean).length;
-    if (request.route === "openai-api" && cloudInputCount === 0)
-      ctx.addIssue({
-        code: "custom",
-        path: ["publicQuestion"],
-        message:
-          "OpenAI requires a public question, selected summary, or selected evidence",
-      });
-    if (request.route === "openai-api" && cloudInputCount > 1)
-      ctx.addIssue({
-        code: "custom",
-        path: ["selectedEvidence"],
-        message: "Select exactly one OpenAI disclosure mode",
-      });
-    if (
-      request.referenceScopeId &&
-      (request.route !== "openai-api" ||
-        (!request.selectedSummary && !request.selectedEvidence))
-    )
-      ctx.addIssue({
-        code: "custom",
-        path: ["referenceScopeId"],
-        message:
-          "A reversible reference scope belongs to one selected-summary or selected-evidence cloud request",
-      });
     if (request.researchMode === "public-web" && !request.publicWebQuery)
       ctx.addIssue({
         code: "custom",
@@ -376,90 +269,6 @@ export const aiInvestigationPlanSchema: z.ZodType<AiInvestigationPlan> =
     language: z.enum(["en", "nl"]),
   });
 
-const cloudAnalysisValueSchema = z.union([
-  z.string().max(500),
-  z.number().finite(),
-  z.boolean(),
-]);
-const cloudAnalysisFilterSchema = z
-  .strictObject({
-    fieldId: z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/),
-    operator: z.enum([
-      "eq",
-      "neq",
-      "lt",
-      "lte",
-      "gt",
-      "gte",
-      "contains",
-      "starts-with",
-      "is-null",
-      "is-not-null",
-    ]),
-    value: cloudAnalysisValueSchema.optional(),
-  })
-  .superRefine((filter, ctx) => {
-    const unary = ["is-null", "is-not-null"].includes(filter.operator);
-    if (unary === (filter.value !== undefined))
-      ctx.addIssue({
-        code: "custom",
-        path: ["value"],
-        message: unary
-          ? "Unary filters cannot carry a value"
-          : "This filter requires a scalar value",
-      });
-  });
-
-export const aiCloudAnalysisPlanSchema: z.ZodType<AiCloudAnalysisPlan> =
-  z.strictObject({
-    schemaVersion: z.literal(1),
-    catalogVersion: z.number().int().positive(),
-    datasetId: z.enum(["transactions", "accounts", "holdings", "cash-flows"]),
-    fields: z
-      .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
-      .max(24)
-      .default([]),
-    filters: z.array(cloudAnalysisFilterSchema).max(24).default([]),
-    groups: z
-      .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
-      .max(12)
-      .default([]),
-    measures: z
-      .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
-      .max(12)
-      .default([]),
-    joins: z
-      .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
-      .max(4)
-      .default([]),
-    orderBy: z
-      .array(
-        z.strictObject({
-          id: z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/),
-          direction: z.enum(["asc", "desc"]),
-        }),
-      )
-      .max(8)
-      .default([]),
-    limit: z.number().int().min(1).max(500).default(100),
-    formulas: z
-      .array(
-        z.strictObject({
-          id: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/),
-          label: z.string().min(1).max(120),
-          expression: z.string().min(1).max(1000),
-          scope: z.enum(["row", "summary"]).default("row"),
-          resultType: z.enum(["decimal", "integer", "boolean", "string"]),
-          dependencies: z
-            .array(z.string().regex(/^[a-z][a-z0-9_.-]{0,63}$/))
-            .max(24)
-            .default([]),
-        }),
-      )
-      .max(12)
-      .default([]),
-  });
-
 export const aiAnalysisEditProposalSchema: z.ZodType<AiAnalysisEditProposal> =
   z.strictObject({
     schemaVersion: z.literal(1),
@@ -478,40 +287,6 @@ export const aiAnalysisEditProposalSchema: z.ZodType<AiAnalysisEditProposal> =
       )
       .min(1)
       .max(30),
-  });
-
-export const aiDisclosureGrantSchema: z.ZodType<AiDisclosureGrant> =
-  z.strictObject({
-    route: z.literal("openai-api"),
-    mode: z.enum([
-      "cloud-plan-public",
-      "selected-summary",
-      "cloud-synthesis-selected",
-    ]),
-    purpose: z.string().min(1).max(500),
-    previewHash: z.string().regex(/^[0-9a-f]{64}$/),
-    allowedFields: z
-      .array(
-        z.enum([
-          "question",
-          "publicSchema",
-          "language",
-          "depth",
-          "constraints",
-          "selectedSummary",
-          "selectedEvidence",
-          "citations",
-        ]),
-      )
-      .min(1)
-      .max(8),
-    maxRequests: z.number().int().min(1).max(50),
-    maxInputCharacters: z.number().int().min(100).max(200000),
-    maxOutputTokens: z.number().int().min(64).max(32000),
-    maxCostMicros: z.number().int().min(0).max(100000000),
-    maxDisclosureUnits: z.number().int().min(1).max(10000),
-    expiresAt: z.string().datetime(),
-    retainExactPayload: z.boolean().default(false),
   });
 
 export function assertAiAnswer(value: unknown): AiAnswer {

@@ -45,58 +45,25 @@ describe("AI research contracts", () => {
       }).success,
     ).toBe(true);
   });
-  it("requires a separately authored public question for cloud planning", () => {
-    const request = {
-      question: "Private SECRET_CANARY_7F3A question",
-      route: "openai-api",
+  it("rejects the removed OpenAI route and its cloud-only fields", () => {
+    const base = {
+      question: "Private question",
       scope: { workspaces: ["research"] },
     };
-    expect(aiInvestigationRequestSchema.safeParse(request).success).toBe(false);
-    const parsed = aiInvestigationRequestSchema.parse({
-      ...request,
-      publicQuestion: "Public inflation outlook",
-    });
-    expect(parsed.publicQuestion).toBe("Public inflation outlook");
-    expect(parsed.question).toContain("SECRET_CANARY_7F3A");
-  });
-  it("accepts one selected-evidence cloud input and rejects mixed modes", () => {
-    const base = {
-      question: "Private recipient question",
-      route: "openai-api",
-      scope: { workspaces: ["budgeting"] },
-    };
-    const parsed = aiInvestigationRequestSchema.parse({
-      ...base,
-      selectedEvidence:
-        "Question: Which recipient cost most? Evidence: Recipient A totalled EUR 1200.",
-    });
-    expect(parsed.selectedEvidence).toContain("Recipient A");
     expect(
-      aiInvestigationRequestSchema.safeParse({
-        ...base,
-        publicQuestion: "Public recipient analysis",
-        selectedEvidence: "Approved evidence",
-      }).success,
+      aiInvestigationRequestSchema.safeParse({ ...base, route: "openai-api" })
+        .success,
     ).toBe(false);
-  });
-  it("binds a reversible reference scope to a selected cloud representation", () => {
-    const scopeId = "11111111-1111-4111-8111-111111111111";
-    expect(
-      aiInvestigationRequestSchema.safeParse({
-        question: "Local question",
-        scope: { workspaces: ["research"] },
-        referenceScopeId: scopeId,
-      }).success,
-    ).toBe(false);
-    expect(
-      aiInvestigationRequestSchema.safeParse({
-        question: "Private question",
-        route: "openai-api",
-        selectedSummary: "[[VR1:subject:AAAAAAAAAAAAAAAAAAAAAAAA]]",
-        referenceScopeId: scopeId,
-        scope: { workspaces: ["research"] },
-      }).success,
-    ).toBe(true);
+    for (const field of [
+      { publicQuestion: "Public question" },
+      { selectedEvidence: "Evidence" },
+      { selectedSummary: "Summary" },
+      { grantId: "11111111-1111-4111-8111-111111111111" },
+      { referenceScopeId: "11111111-1111-4111-8111-111111111111" },
+    ])
+      expect(
+        aiInvestigationRequestSchema.safeParse({ ...base, ...field }).success,
+      ).toBe(false);
   });
   it("rejects impossible and reversed scope dates", () => {
     const base = {

@@ -39,8 +39,6 @@ export const NATIVE_APPLICATION_ENV_KEYS = Object.freeze([
   "ALPHA_VANTAGE_API_KEY",
   "FRED_API_KEY",
   "ADMIN_AUTH_TOKEN",
-  "OPENAI_API_ENABLED",
-  "OPENAI_API_KEY",
 ]);
 
 const CHILD_ENV_ALLOWLIST = [
@@ -757,13 +755,8 @@ export function buildNativeBackendEnv({
   if (!resolvedRuntimeRoot) {
     throw new Error("Native backend runtime root is unavailable");
   }
-  const openAiEnabled =
-    runtimeEnv.OPENAI_API_ENABLED === "true" &&
-    Boolean(runtimeEnv.OPENAI_API_KEY);
   return safeChildEnv({
     ...runtimeEnv,
-    OPENAI_API_ENABLED: openAiEnabled ? "true" : "false",
-    OPENAI_API_KEY: openAiEnabled ? runtimeEnv.OPENAI_API_KEY : undefined,
     SERVER_HOST: LOOPBACK_HOST,
     PORT: String(port),
     NODE_ENV: "production",

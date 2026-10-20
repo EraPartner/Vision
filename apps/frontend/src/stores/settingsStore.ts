@@ -79,7 +79,6 @@ export interface AppSettings {
     showDecimalPlaces: number;
     language: Language;
     aiDefaultModel?: string;
-    openAiDefaultModel?: string;
     /** Explicit local analysis answer preference; absence uses the product default. */
     aiAnswerDepth?: "quick" | "detailed" | undefined;
     /** Explicit comparison symbol or catalog identifier; never inferred. */
@@ -192,7 +191,6 @@ const storedAppSettingsSchema = z.looseObject({
         .enum(["en", "nl"] as const satisfies readonly Language[])
         .catch(DEFAULT_APP_SETTINGS.language),
     aiDefaultModel: z.string().optional().catch(undefined),
-    openAiDefaultModel: z.string().min(1).max(200).optional().catch(undefined),
     aiAnswerDepth: z.enum(["quick", "detailed"]).optional().catch(undefined),
     analysisBenchmark: z
         .string()
@@ -248,15 +246,14 @@ export function migrateAppSettings(raw: unknown): AppSettings {
     if (!parsed.success) return DEFAULT_APP_SETTINGS;
     const {
         aiDefaultModel,
-        openAiDefaultModel,
         aiAnswerDepth,
         analysisBenchmark,
+        // Retired with the OpenAI route (ADR-229); not carried forward.
+        openAiDefaultModel: _openAiDefaultModel,
         ...rest
-    } = parsed.data;
+    } = parsed.data as typeof parsed.data & { openAiDefaultModel?: unknown };
     const merged: AppSettings = { ...DEFAULT_APP_SETTINGS, ...rest };
     if (aiDefaultModel !== undefined) merged.aiDefaultModel = aiDefaultModel;
-    if (openAiDefaultModel !== undefined)
-        merged.openAiDefaultModel = openAiDefaultModel;
     if (aiAnswerDepth !== undefined) merged.aiAnswerDepth = aiAnswerDepth;
     if (analysisBenchmark !== undefined)
         merged.analysisBenchmark = analysisBenchmark;

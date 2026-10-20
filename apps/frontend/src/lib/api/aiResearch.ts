@@ -7,16 +7,8 @@ import {
     unwrapEnvelope,
 } from "@/lib/api/client";
 import {
-    AgentCloakDesktopStatusSchema,
-    AiDisclosureDeleteSchema,
-    AiDisclosureGrantListSchema,
-    AiDisclosureGrantSchema,
-    AiDisclosurePreviewSchema,
-    AiDisclosureRecordListSchema,
-    AiDisclosureRevokeSchema,
     AiInvestigationDetailSchema,
     AiInvestigationSchema,
-    AiResearchStatusSchema,
     ResearchDocumentListSchema,
     ResearchDocumentSchema,
 } from "@vision/types/contracts";
@@ -64,7 +56,7 @@ export interface AiAnswer {
 export interface AiInvestigation {
     id: string;
     question: string;
-    route: "local" | "openai-api";
+    route: "local";
     depth: "quick" | "detailed";
     language: "en" | "nl";
     state: string;
@@ -75,41 +67,10 @@ export interface AiInvestigation {
     error?: { code?: string; message?: string } | null;
     steps?: Array<{ stepId: string; state: string }>;
 }
-export interface OpenAiResearchModel {
-    id: string;
-    label: string;
-    inputMicrosPerMillion: number;
-    outputMicrosPerMillion: number;
-    isDefault: boolean;
-}
-export interface AiResearchStatus {
-    openai: {
-        enabled: boolean;
-        model: string | null;
-        models: OpenAiResearchModel[];
-        reversibleReferences?: {
-            configured: boolean;
-            markerSyntax: string;
-            classification: "pseudonymized-not-anonymous";
-        };
-        agentCloakPreflight?: {
-            enabled: boolean;
-            mode: "block-on-change" | "protect-and-block";
-            location: "operator-managed-loopback" | "desktop-loopback";
-        };
-    };
-}
-export interface AgentCloakDesktopStatus {
-    enabled: boolean;
-    available: boolean;
-    mappingKeyConfigured: boolean;
-    openAiEnabled: boolean;
-}
 export interface InvestigationInput {
     question: string;
-    route: "local" | "openai-api";
+    route: "local";
     researchMode: "local-only" | "public-providers" | "public-web";
-    publicQuestion: string | null;
     publicWebQuery: string | null;
     publicSymbols: string[];
     publicMacroQueries: string[];
@@ -126,29 +87,8 @@ export interface InvestigationInput {
         currency: CurrencyCode;
         constraints: string[];
     };
-    grantId: string | null;
-    selectedSummary: string | null;
-    selectedEvidence: string | null;
-    referenceScopeId: string | null;
     savedAnalysisId: null;
 }
-
-export const getAiResearchStatus = () =>
-    apiRequest<AiResearchStatus>("/api/ai-research/status", {
-        schema: AiResearchStatusSchema,
-    });
-
-export const getAgentCloakDesktopStatus = () =>
-    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop", {
-        schema: AgentCloakDesktopStatusSchema,
-    });
-
-export const setAgentCloakDesktopEnabled = (enabled: boolean) =>
-    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop", {
-        method: "PUT",
-        body: JSON.stringify({ enabled }),
-        schema: AgentCloakDesktopStatusSchema,
-    });
 
 export const createInvestigation = (body: InvestigationInput) =>
     apiRequest<AiInvestigation>("/api/ai-research/investigations", {
@@ -184,52 +124,6 @@ export const resumeInvestigation = (
             schema: AiInvestigationSchema,
         },
     );
-export const previewDisclosure = (body: InvestigationInput) =>
-    apiRequest<{
-        payload: Record<string, unknown>;
-        payloadSha256: string;
-        payloadBytes: number;
-        fieldManifest: string[];
-        disclosureUnits: string[];
-        referenceScope: {
-            id: string;
-            expiresAt: string;
-            count: number;
-        } | null;
-        outboundRequest: InvestigationInput;
-        agentCloakPreflight: { enabled: boolean; status?: "passed" };
-    }>("/api/ai-research/disclosures/preview", {
-        method: "POST",
-        body: JSON.stringify(body),
-        schema: AiDisclosurePreviewSchema,
-    });
-export const createDisclosureGrant = (body: Record<string, unknown>) =>
-    apiRequest<{ id: string }>("/api/ai-research/disclosures/grants", {
-        method: "POST",
-        body: JSON.stringify(body),
-        schema: AiDisclosureGrantSchema,
-    });
-export const listDisclosureGrants = () =>
-    apiRequest<{ items: Array<Record<string, unknown>>; total: number }>(
-        "/api/ai-research/disclosures/grants",
-        { schema: AiDisclosureGrantListSchema },
-    );
-export const revokeDisclosureGrant = (id: string) =>
-    apiRequest<{ revoked: boolean }>(
-        `/api/ai-research/disclosures/grants/${encodeURIComponent(id)}/revoke`,
-        { method: "POST", schema: AiDisclosureRevokeSchema },
-    );
-export const listDisclosureRecords = () =>
-    apiRequest<{ items: Array<Record<string, unknown>>; total: number }>(
-        "/api/ai-research/disclosures/records",
-        { schema: AiDisclosureRecordListSchema },
-    );
-export const deleteDisclosureRecords = () =>
-    apiRequest<{ deleted: { records: number; grants: number } }>(
-        "/api/ai-research/disclosures/records",
-        { method: "DELETE", schema: AiDisclosureDeleteSchema },
-    );
-
 export const listResearchDocuments = async () =>
     (
         await apiRequest<{ items: ResearchDocument[] }>(

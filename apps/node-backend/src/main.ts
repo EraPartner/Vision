@@ -57,7 +57,6 @@ import plannedTransactionsRouter from "./routes/plannedTransactions.ts";
 import infoRouter from "./routes/info.ts";
 import aggregationsRouter from "./routes/aggregations.ts";
 import adminRouter from "./routes/admin.ts";
-import codexExperimentalRouter from "./routes/codexExperimental.ts";
 import importRouter from "./routes/importRoutes.ts";
 import portfolioImportRouter from "./routes/portfolioImportRoutes.ts";
 import investmentsRouter from "./routes/investments.ts";
@@ -267,14 +266,6 @@ mountRouter(
   aggregationsRouter,
 );
 mountRouter(app, "/api/ai-research", aggregationRateLimiter, aiResearchRouter);
-mountRouter(
-  app,
-  "/api/admin/codex-experimental",
-  adminRateLimiter,
-  adminCsrfGuard,
-  adminAuthMiddleware,
-  codexExperimentalRouter,
-);
 mountRouter(
   app,
   "/api/admin",

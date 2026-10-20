@@ -2134,26 +2134,6 @@ components:
         error:
           $ref: "#/components/schemas/ErrorPayload"
 
-    AgentCloakDesktopStatus:
-      type: object
-      additionalProperties: false
-      required: [enabled, available, mappingKeyConfigured, openAiEnabled]
-      properties:
-        enabled:
-          { type: boolean, description: Effective Desktop preference and mode }
-        available:
-          { type: boolean, description: Fresh bounded loopback detection probe }
-        mappingKeyConfigured:
-          {
-            type: boolean,
-            description: Valid local reference mapping key exists,
-          }
-        openAiEnabled:
-          {
-            type: boolean,
-            description: Effective OpenAI API route availability,
-          }
-
     ErrorPayload:
       type: object
       required: [message]
@@ -3105,17 +3085,11 @@ components:
       required: [question, scope]
       properties:
         question: { type: string, minLength: 1, maxLength: 8000 }
-        route: { type: string, enum: [local, openai-api], default: local }
+        route: { type: string, enum: [local], default: local }
         researchMode:
           type: string
           enum: [local-only, public-providers, public-web]
           default: local-only
-        publicQuestion:
-          type: string
-          minLength: 1
-          maxLength: 1000
-          nullable: true
-          description: Separately authored public-only cloud planning question; never derived from question.
         publicWebQuery:
           type: string
           minLength: 1
@@ -3137,7 +3111,7 @@ components:
           minLength: 1
           maxLength: 200
           nullable: true
-          description: OpenAI model selected from the server-configured allowlist, or the configured default when omitted.
+          description: Ollama model name, or the configured default when omitted.
         depth: { type: string, enum: [quick, detailed], default: quick }
         language: { type: string, enum: [en, nl], default: en }
         scope:
@@ -3167,18 +3141,6 @@ components:
               type: array
               maxItems: 30
               items: { type: string, minLength: 1, maxLength: 500 }
-        grantId: { type: string, format: uuid, nullable: true }
-        selectedSummary: { type: string, maxLength: 8000, nullable: true }
-        selectedEvidence:
-          type: string
-          maxLength: 24000
-          nullable: true
-          description: Exact manually selected task and evidence for consent-bound cloud final synthesis; never populated from local records by the server.
-        referenceScopeId:
-          type: string
-          format: uuid
-          nullable: true
-          description: One-use local scope returned by disclosure preview for typed reversible references.
         savedAnalysisId: { type: string, format: uuid, nullable: true }
 
     UpdateCheck:
@@ -9509,67 +9471,15 @@ paths:
   # ─── Bounded AI research ──────────────────────────────────────────────────
   /api/ai-research/status:
     get:
-      summary: Inspect local, web, and optional cloud route capabilities
+      summary: Inspect local model, web research, and document capabilities
       operationId: getAiResearchStatus
       tags: [AIResearch]
       responses:
         "200":
-          description: Configured capabilities without credentials, including optional AgentCloak mode and location. Desktop mode reports protect-and-block; MCP mode reports block-on-change.
+          description: Configured capabilities without credentials.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-
-  /api/ai-research/agentcloak-desktop:
-    get:
-      summary: Inspect AgentCloak Desktop availability and protection state
-      operationId: getAgentCloakDesktopStatus
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Effective Desktop preference, fresh availability probe, mapping key state, and OpenAI route state; no secret values
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        { $ref: "#/components/schemas/AgentCloakDesktopStatus" }
-    put:
-      summary: Enable or disable AgentCloak Desktop protection
-      description: Enabling probes the Desktop loopback endpoint and ensures a local encrypted-reference mapping key before saving the boolean preference. Disabling saves the preference without deleting the key.
-      operationId: configureAgentCloakDesktop
-      tags: [AIResearch]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [enabled]
-              properties:
-                enabled: { type: boolean }
-      responses:
-        "200":
-          description: Updated Desktop status; no secret values
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        { $ref: "#/components/schemas/AgentCloakDesktopStatus" }
-        "400": { description: Invalid request body }
-        "409": { description: Existing local mapping key is invalid }
-        "502":
-          { description: AgentCloak Desktop is unavailable during enablement }
-        "503": { description: Local mapping key could not be stored }
 
   /api/ai-research/investigations:
     get:
@@ -9795,101 +9705,6 @@ paths:
           {
             description: "VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer",
           }
-
-  /api/ai-research/disclosures/preview:
-    post:
-      summary: Protect selected text when Desktop mode is enabled, then preview the exact canonical cloud payload and run AgentCloak preflight
-      operationId: previewAiDisclosure
-      tags: [AIResearch]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AiInvestigationRequest" }
-      responses:
-        "200":
-          description: Payload, digest, field manifest, disclosure units, any encrypted local reference scope including Desktop-detected values, and AgentCloak preflight status
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-        "400":
-          {
-            description: Invalid or non-cloud request,
-            or AgentCloak flagged public or remaining cloud text,
-          }
-        "502":
-          {
-            description: Enabled AgentCloak detection or preflight was unavailable or returned an invalid response,
-          }
-        "503": { description: Reversible-reference key unavailable }
-
-  /api/ai-research/disclosures/grants:
-    get:
-      summary: List local disclosure grants and revocation state
-      operationId: listAiDisclosureGrants
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Disclosure grants without payloads or credentials
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-    post:
-      summary: Grant bounded egress for one inspected payload digest
-      operationId: createAiDisclosureGrant
-      tags: [AIResearch]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { type: object, additionalProperties: false }
-      responses:
-        "201":
-          description: Persisted, expiring grant
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid grant or retention request }
-
-  /api/ai-research/disclosures/grants/{id}/revoke:
-    parameters:
-      - in: path
-        name: id
-        required: true
-        schema: { type: string, format: uuid }
-    post:
-      summary: Revoke a grant before any queued request or retry
-      operationId: revokeAiDisclosureGrant
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Grant revoked
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-        "404": { description: Grant not found }
-
-  /api/ai-research/disclosures/records:
-    get:
-      summary: Inspect minimal local disclosure metadata and usage
-      operationId: listAiDisclosureRecords
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Metadata-only disclosure records
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-    delete:
-      summary: Delete all local disclosure records and grants
-      operationId: deleteAiDisclosureRecords
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Deleted record and grant counts; deleting grants revokes unused consent
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/cross-workspace/commitment-aware-cash:
     post:
@@ -17766,92 +17581,6 @@ paths:
         "403": { description: Socket peer is not loopback }
 
   # ─── Admin ────────────────────────────────────────────────────────────────────
-  /api/admin/codex-experimental/status:
-    get:
-      summary: Read disposable experimental Codex session status
-      description: Disabled unless VISION_EXPERIMENTAL_CODEX=1 and a binary path and ADMIN_AUTH_TOKEN are configured. Requires loopback peer and admin bearer token. Never returns credentials.
-      operationId: adminCodexExperimentalStatus
-      tags: [Admin]
-      responses:
-        "200":
-          {
-            description: Session and ChatGPT account status,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: "#/components/schemas/Envelope" } },
-              },
-          }
-        "503":
-          { description: Experimental route disabled or session unavailable }
-  /api/admin/codex-experimental/session:
-    post:
-      summary: Start disposable experimental Codex App Server
-      description: Creates a synthetic workspace and a macOS Seatbelt confined App Server. No financial data is mounted. Request body must be empty.
-      operationId: adminCodexExperimentalSession
-      tags: [Admin]
-      responses:
-        "200":
-          {
-            description: Session started,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: "#/components/schemas/Envelope" } },
-              },
-          }
-        "503": { description: Disabled or sandbox startup failed }
-  /api/admin/codex-experimental/login:
-    post:
-      summary: Begin isolated ChatGPT device-code login
-      description: Returns a device verification URL and short user code. Request body must be empty. No API-key login or host Codex credential import is allowed.
-      operationId: adminCodexExperimentalLogin
-      tags: [Admin]
-      responses:
-        "200":
-          {
-            description: Device login instructions,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: "#/components/schemas/Envelope" } },
-              },
-          }
-        "503": { description: Session or provider login unavailable }
-  /api/admin/codex-experimental/synthetic-turn:
-    post:
-      summary: Run one fixed fictional prompt through isolated subscription Codex
-      description: No request payload or private prompt is accepted. Refuses unauthenticated accounts and unavailable rate limits. Never falls back to API billing.
-      operationId: adminCodexExperimentalSyntheticTurn
-      tags: [Admin]
-      responses:
-        "200":
-          {
-            description: Fixed question and bounded answer,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: "#/components/schemas/Envelope" } },
-              },
-          }
-        "503": { description: Subscription or safety gate unavailable }
-  /api/admin/codex-experimental/logout:
-    post:
-      summary: Log out and dispose of isolated Codex session
-      description: Closes App Server and proxy, and deletes disposable runtime state. Request body must be empty.
-      operationId: adminCodexExperimentalLogout
-      tags: [Admin]
-      responses:
-        "200":
-          {
-            description: Session disposed,
-            content:
-              {
-                application/json:
-                  { schema: { $ref: "#/components/schemas/Envelope" } },
-              },
-          }
-        "503": { description: Logout failed after local disposal }
   /api/admin:
     get:
       summary: Admin overview / health

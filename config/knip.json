@@ -51,7 +51,6 @@
     "apps/node-backend": {
       "entry": [
         "scripts/*.ts",
-        "src/integrations/openai/egress-helper.mjs",
         "src/database/schema.generated.ts"
       ],
       "project": [

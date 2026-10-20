@@ -8,7 +8,6 @@ import type {
     AiAnswer,
     AiInvestigation,
     InvestigationInput,
-    OpenAiResearchModel,
     ResearchDocument,
 } from "@/lib/api/aiResearch";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -29,23 +28,10 @@ import {
     SegmentedControl,
     SegmentedControlItem,
 } from "@/components/ui/segmented-control";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { resolveOpenAiModel } from "@/features/ai-chat/openAiModelSelection";
-import { useAiResearchStatus } from "@/hooks/useAiResearchStatus";
 import { resolveAnalysisPreferences } from "@/lib/analysisPreferences";
 
-const EMPTY_OPENAI_MODELS: OpenAiResearchModel[] = [];
-
-const codeBlockClass =
-    "max-h-40 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60 p-3 type-footnote leading-snug text-foreground/80";
 function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
     const { t } = useLanguage();
     const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(
@@ -172,7 +158,6 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
 export function AIInvestigationPanel() {
     const { t, language } = useLanguage();
     const { appSettings } = useAppSettings();
-    const { data: aiResearchStatus } = useAiResearchStatus();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const [question, setQuestion] = useState("");
     const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -180,20 +165,10 @@ export function AIInvestigationPanel() {
     const [depthOverride, setDepthOverride] = useState<
         "quick" | "detailed" | null
     >(null);
-    const [route, setRoute] = useState<"local" | "openai-api">("local");
-    const [openAiModelOverride, setOpenAiModelOverride] = useState<
-        string | null
-    >(null);
-    const [disclosureMode, setDisclosureMode] = useState<
-        "cloud-plan-public" | "selected-summary" | "cloud-synthesis-selected"
-    >("cloud-plan-public");
-    const [selectedSummary, setSelectedSummary] = useState("");
-    const [selectedEvidence, setSelectedEvidence] = useState("");
     const [researchMode, setResearchMode] = useState<
         "local-only" | "public-providers" | "public-web"
     >("local-only");
     const [publicWebQuery, setPublicWebQuery] = useState("");
-    const [publicQuestion, setPublicQuestion] = useState("");
     const [publicSymbols, setPublicSymbols] = useState("");
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
@@ -201,42 +176,15 @@ export function AIInvestigationPanel() {
     const [job, setJob] = useState<AiInvestigation | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [preview, setPreview] = useState<Awaited<
-        ReturnType<typeof apiClient.previewAiDisclosure>
-    > | null>(null);
-    const [grantId, setGrantId] = useState<string | null>(null);
-    const [recordCount, setRecordCount] = useState<number | null>(null);
-    const [disclosureRecords, setDisclosureRecords] = useState<
-        Array<Record<string, unknown>>
-    >([]);
-    const [disclosureGrants, setDisclosureGrants] = useState<
-        Array<Record<string, unknown>>
-    >([]);
     const [documents, setDocuments] = useState<ResearchDocument[]>([]);
-    const openAiEnabled = Boolean(aiResearchStatus?.openai.enabled);
     const resolvedPreferences = resolveAnalysisPreferences({ appSettings });
     const depth = depthOverride ?? resolvedPreferences.answerDepth;
-    const openAiModels = aiResearchStatus?.openai.models ?? EMPTY_OPENAI_MODELS;
-    const openAiServerDefault = aiResearchStatus?.openai.model ?? "";
-    const openAiModel = resolveOpenAiModel({
-        override: openAiModelOverride,
-        userDefault: appSettings.openAiDefaultModel,
-        serverDefault: openAiServerDefault,
-        models: openAiModels,
-    });
-    const selectedOpenAiModel = openAiModels.find(
-        (model) => model.id === openAiModel,
-    );
     const failureMessage = (cause: unknown) =>
         cause instanceof Error ? cause.message : t("aiResearch.failed");
     const input = (): InvestigationInput => ({
         question: question.trim(),
-        route,
+        route: "local",
         researchMode,
-        publicQuestion:
-            route === "openai-api" && disclosureMode === "cloud-plan-public"
-                ? publicQuestion.trim()
-                : null,
         publicWebQuery:
             researchMode === "public-web" ? publicWebQuery.trim() : null,
         publicSymbols:
@@ -249,7 +197,7 @@ export function AIInvestigationPanel() {
                 : [],
         publicMacroQueries: [],
         clarification: null,
-        model: route === "openai-api" ? openAiModel || null : null,
+        model: null,
         depth,
         language: language === "nl" ? "nl" : "en",
         scope: {
@@ -263,17 +211,6 @@ export function AIInvestigationPanel() {
                 ? [`benchmark:${resolvedPreferences.benchmark}`]
                 : [],
         },
-        grantId: null,
-        selectedSummary:
-            route === "openai-api" && disclosureMode === "selected-summary"
-                ? selectedSummary.trim()
-                : null,
-        selectedEvidence:
-            route === "openai-api" &&
-            disclosureMode === "cloud-synthesis-selected"
-                ? selectedEvidence.trim()
-                : null,
-        referenceScopeId: null,
         savedAnalysisId: null,
     });
     useEffect(() => {
@@ -300,54 +237,11 @@ export function AIInvestigationPanel() {
         );
         return () => window.clearInterval(timer);
     }, [job]);
-    useEffect(() => {
-        setPreview(null);
-    }, [
-        dateFrom,
-        dateTo,
-        depth,
-        disclosureMode,
-        language,
-        openAiModel,
-        publicSymbols,
-        publicQuestion,
-        publicWebQuery,
-        researchMode,
-        route,
-        selectedEvidence,
-        selectedSummary,
-    ]);
     const run = async () => {
         setBusy(true);
         setError(null);
         try {
-            let request = input();
-            if (route === "openai-api") {
-                if (!preview) {
-                    setPreview(await apiClient.previewAiDisclosure(request));
-                    return;
-                }
-                const grant = await apiClient.createAiDisclosureGrant({
-                    route: "openai-api",
-                    mode: disclosureMode,
-                    purpose:
-                        disclosureMode === "cloud-synthesis-selected"
-                            ? "Synthesize an answer from this inspected selected evidence"
-                            : "Plan this inspected investigation question",
-                    previewHash: preview.payloadSha256,
-                    allowedFields: preview.fieldManifest,
-                    maxRequests: 3,
-                    maxInputCharacters: Math.max(100, preview.payloadBytes * 2),
-                    maxOutputTokens: depth === "detailed" ? 7200 : 2700,
-                    maxCostMicros: 2_000_000,
-                    maxDisclosureUnits: preview.disclosureUnits.length,
-                    expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
-                    retainExactPayload: false,
-                });
-                setGrantId(grant.id);
-                request = { ...preview.outboundRequest, grantId: grant.id };
-            }
-            setJob(await apiClient.createInvestigation(request));
+            setJob(await apiClient.createInvestigation(input()));
         } catch (cause) {
             setError(failureMessage(cause));
         } finally {
@@ -386,19 +280,9 @@ export function AIInvestigationPanel() {
         busy ||
         !question.trim() ||
         (researchMode === "public-web" && !publicWebQuery.trim()) ||
-        (researchMode === "public-providers" && !publicSymbols.trim()) ||
-        (route === "openai-api" && (!openAiEnabled || !openAiModel)) ||
-        (route === "openai-api" &&
-            disclosureMode === "cloud-plan-public" &&
-            !publicQuestion.trim()) ||
-        (route === "openai-api" &&
-            disclosureMode === "selected-summary" &&
-            !selectedSummary.trim()) ||
-        (route === "openai-api" &&
-            disclosureMode === "cloud-synthesis-selected" &&
-            !selectedEvidence.trim());
+        (researchMode === "public-providers" && !publicSymbols.trim());
     const settingsSummary = [
-        t(route === "local" ? "aiResearch.localModel" : "aiResearch.openAi"),
+        t("aiResearch.localModel"),
         t(depth === "quick" ? "aiResearch.quick" : "aiResearch.detailed"),
         t(
             researchMode === "local-only"
@@ -424,7 +308,6 @@ export function AIInvestigationPanel() {
                     value={question}
                     onChange={(event) => {
                         setQuestion(event.target.value);
-                        setPreview(null);
                     }}
                     placeholder={t("aiResearch.question")}
                 />
@@ -446,7 +329,6 @@ export function AIInvestigationPanel() {
                                             `aiResearch.starter.${topic}.question`,
                                         ),
                                     );
-                                    setPreview(null);
                                     questionRef.current?.focus();
                                 }}
                             >
@@ -467,26 +349,6 @@ export function AIInvestigationPanel() {
                             </span>
                         </DisclosureSummary>
                         <DisclosureContent className="grid gap-4 pt-0 sm:grid-cols-2">
-                            <SegmentedControl
-                                label={t("aiResearch.route")}
-                                wrapperClassName="space-y-1.5"
-                                className="w-full"
-                                value={route}
-                                onValueChange={(value) => {
-                                    setRoute(value as typeof route);
-                                    setPreview(null);
-                                }}
-                            >
-                                <SegmentedControlItem value="local">
-                                    {t("aiResearch.localModel")}
-                                </SegmentedControlItem>
-                                <SegmentedControlItem
-                                    value="openai-api"
-                                    disabled={!openAiEnabled}
-                                >
-                                    {t("aiResearch.openAi")}
-                                </SegmentedControlItem>
-                            </SegmentedControl>
                             <SegmentedControl
                                 label={t("aiResearch.depth")}
                                 wrapperClassName="space-y-1.5"
@@ -510,11 +372,6 @@ export function AIInvestigationPanel() {
                                 wrapperClassName="space-y-1.5 sm:col-span-2"
                                 className="w-full"
                                 value={researchMode}
-                                disabled={
-                                    route === "openai-api" &&
-                                    disclosureMode ===
-                                        "cloud-synthesis-selected"
-                                }
                                 onValueChange={(value) =>
                                     setResearchMode(
                                         value as typeof researchMode,
@@ -695,203 +552,14 @@ export function AIInvestigationPanel() {
                     </DisclosureContent>
                 </Disclosure>
             </Card>
-            {route === "openai-api" && (
-                <div className="space-y-3">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="ai-openai-model">
-                            {t("aiResearch.openAiModel")}
-                        </Label>
-                        <Select
-                            {...(openAiModel ? { value: openAiModel } : {})}
-                            disabled={
-                                !openAiEnabled || openAiModels.length === 0
-                            }
-                            onValueChange={(value) => {
-                                setOpenAiModelOverride(value);
-                                setPreview(null);
-                            }}
-                        >
-                            <SelectTrigger id="ai-openai-model">
-                                <SelectValue
-                                    placeholder={t("aiResearch.noOpenAiModels")}
-                                />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {openAiModels.map((model) => (
-                                    <SelectItem key={model.id} value={model.id}>
-                                        {model.label} ({model.id})
-                                        {model.isDefault
-                                            ? ` — ${t("aiResearch.defaultModel")}`
-                                            : ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {selectedOpenAiModel && (
-                            <p className="type-footnote text-label-secondary">
-                                {t("aiResearch.modelRates", {
-                                    input: (
-                                        selectedOpenAiModel.inputMicrosPerMillion /
-                                        1_000_000
-                                    ).toLocaleString(language, {
-                                        maximumFractionDigits: 6,
-                                    }),
-                                    output: (
-                                        selectedOpenAiModel.outputMicrosPerMillion /
-                                        1_000_000
-                                    ).toLocaleString(language, {
-                                        maximumFractionDigits: 6,
-                                    }),
-                                })}
-                            </p>
-                        )}
-                        <p className="type-footnote text-label-secondary">
-                            {t("aiResearch.apiOnlyBilling")}
-                        </p>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="ai-disclosure-mode">
-                            {t("aiResearch.disclosureMode")}
-                        </Label>
-                        <Select
-                            value={disclosureMode}
-                            onValueChange={(value) => {
-                                const nextMode = value as typeof disclosureMode;
-                                setDisclosureMode(nextMode);
-                                if (nextMode === "cloud-synthesis-selected")
-                                    setResearchMode("local-only");
-                                setPreview(null);
-                            }}
-                        >
-                            <SelectTrigger id="ai-disclosure-mode">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="cloud-plan-public">
-                                    {t("aiResearch.cloudPublic")}
-                                </SelectItem>
-                                <SelectItem value="selected-summary">
-                                    {t("aiResearch.selectedSummary")}
-                                </SelectItem>
-                                <SelectItem value="cloud-synthesis-selected">
-                                    {t("aiResearch.cloudSynthesisSelected")}
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {disclosureMode === "selected-summary" && (
-                        <Textarea
-                            className="min-h-16"
-                            aria-label={t("aiResearch.selectedSummary")}
-                            value={selectedSummary}
-                            onChange={(event) => {
-                                setSelectedSummary(event.target.value);
-                                setPreview(null);
-                            }}
-                            placeholder={t(
-                                "aiResearch.selectedSummaryPlaceholder",
-                            )}
-                        />
-                    )}
-                    {disclosureMode === "cloud-plan-public" && (
-                        <Textarea
-                            className="min-h-16"
-                            aria-label={t("aiResearch.cloudPublic")}
-                            value={publicQuestion}
-                            onChange={(event) => {
-                                setPublicQuestion(event.target.value);
-                                setPreview(null);
-                            }}
-                            placeholder={t(
-                                "aiResearch.publicQuestionPlaceholder",
-                            )}
-                        />
-                    )}
-                    {disclosureMode === "cloud-synthesis-selected" && (
-                        <Textarea
-                            className="min-h-28"
-                            aria-label={t("aiResearch.cloudSynthesisSelected")}
-                            value={selectedEvidence}
-                            onChange={(event) => {
-                                setSelectedEvidence(event.target.value);
-                                setPreview(null);
-                            }}
-                            placeholder={t(
-                                "aiResearch.selectedEvidencePlaceholder",
-                            )}
-                        />
-                    )}
-                    <div className="space-y-1 type-footnote text-label-secondary">
-                        <p>
-                            {t(
-                                disclosureMode === "cloud-synthesis-selected"
-                                    ? "aiResearch.summary.reviewEvidence"
-                                    : "aiResearch.summary.reviewPayload",
-                            )}
-                        </p>
-                        {aiResearchStatus?.openai.agentCloakPreflight
-                            ?.enabled && (
-                            <p>
-                                {t(
-                                    aiResearchStatus.openai.agentCloakPreflight
-                                        .location === "desktop-loopback"
-                                        ? "aiResearch.agentCloakDesktopPreflight"
-                                        : "aiResearch.agentCloakPreflight",
-                                )}
-                            </p>
-                        )}
-                        {(disclosureMode === "selected-summary" ||
-                            disclosureMode === "cloud-synthesis-selected") && (
-                            <p>{t("aiResearch.reversibleReferenceHint")}</p>
-                        )}
-                    </div>
-                </div>
-            )}
-            {route === "openai-api" && preview && (
-                <div className="space-y-2">
-                    {preview.agentCloakPreflight.enabled && (
-                        <p className="type-footnote text-label-secondary">
-                            {t("aiResearch.agentCloakPassed")}
-                        </p>
-                    )}
-                    {preview.referenceScope && (
-                        <p className="type-footnote text-warning">
-                            {t("aiResearch.reversibleReferenceWarning", {
-                                count: preview.referenceScope.count,
-                            })}
-                        </p>
-                    )}
-                    <pre className={codeBlockClass}>
-                        {JSON.stringify(preview.payload, null, 2)}
-                    </pre>
-                </div>
-            )}
             <InvestigationPrivacySummary
-                route={route}
-                disclosureMode={disclosureMode}
                 researchMode={researchMode}
                 depth={depth}
             />
             <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-4">
                 <Button onClick={run} disabled={runDisabled}>
-                    {route === "openai-api"
-                        ? preview
-                            ? t("aiResearch.consentRun")
-                            : t("aiResearch.preview")
-                        : t("aiResearch.run")}
+                    {t("aiResearch.run")}
                 </Button>
-                {grantId && (
-                    <Button
-                        variant="outline"
-                        onClick={() =>
-                            void apiClient
-                                .revokeAiDisclosureGrant(grantId)
-                                .then(() => setGrantId(null))
-                        }
-                    >
-                        {t("aiResearch.revoke")}
-                    </Button>
-                )}
                 {job &&
                     !["completed", "failed", "cancelled", "partial"].includes(
                         job.state,
@@ -949,118 +617,6 @@ export function AIInvestigationPanel() {
                         : t("aiResearch.localDefault")}
                 </span>
             </div>
-            <Card asChild className="rounded-none border-x-0 border-t-0 bg-transparent shadow-none">
-                <Disclosure>
-                    <DisclosureSummary
-                        padded
-                        className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
-                    >
-                        {t("aiResearch.disclosureHistory")}
-                    </DisclosureSummary>
-                    <DisclosureContent className="space-y-3 pt-0">
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                    void Promise.all([
-                                        apiClient.listAiDisclosureRecords(),
-                                        apiClient.listAiDisclosureGrants(),
-                                    ]).then(([records, grants]) => {
-                                        setRecordCount(records.total);
-                                        setDisclosureRecords(records.items);
-                                        setDisclosureGrants(grants.items);
-                                    })
-                                }
-                            >
-                                {recordCount == null
-                                    ? t("aiResearch.inspectRecords")
-                                    : t("aiResearch.recordCount", {
-                                          count: recordCount,
-                                      })}
-                            </Button>
-                            {recordCount != null && (
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive hover:text-destructive"
-                                    onClick={() =>
-                                        void apiClient
-                                            .deleteAiDisclosureRecords()
-                                            .then(() => {
-                                                setRecordCount(0);
-                                                setDisclosureRecords([]);
-                                                setDisclosureGrants([]);
-                                                setGrantId(null);
-                                            })
-                                    }
-                                >
-                                    {t("aiResearch.deleteRecords")}
-                                </Button>
-                            )}
-                        </div>
-                        {disclosureGrants.length > 0 && (
-                            <List>
-                                {disclosureGrants.map((grant) => (
-                                    <ListRow
-                                        key={String(grant.id)}
-                                        title={
-                                            <code className="type-footnote">
-                                                {String(grant.mode)} ·{" "}
-                                                {String(grant.id)}
-                                            </code>
-                                        }
-                                        trailing={
-                                            !grant.revoked_at ? (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() =>
-                                                        void apiClient
-                                                            .revokeAiDisclosureGrant(
-                                                                String(
-                                                                    grant.id,
-                                                                ),
-                                                            )
-                                                            .then(() =>
-                                                                setDisclosureGrants(
-                                                                    (items) =>
-                                                                        items.map(
-                                                                            (
-                                                                                item,
-                                                                            ) =>
-                                                                                item.id ===
-                                                                                grant.id
-                                                                                    ? {
-                                                                                          ...item,
-                                                                                          revoked_at:
-                                                                                              new Date().toISOString(),
-                                                                                      }
-                                                                                    : item,
-                                                                        ),
-                                                                ),
-                                                            )
-                                                    }
-                                                >
-                                                    {t("aiResearch.revoke")}
-                                                </Button>
-                                            ) : undefined
-                                        }
-                                    />
-                                ))}
-                            </List>
-                        )}
-                        {disclosureRecords.map((record) => (
-                            <pre
-                                key={String(record.id)}
-                                className={codeBlockClass}
-                            >
-                                {JSON.stringify(record, null, 2)}
-                            </pre>
-                        ))}
-                    </DisclosureContent>
-                </Disclosure>
-            </Card>
             {error && (
                 <Alert variant="destructive">
                     <AlertDescription>{error}</AlertDescription>

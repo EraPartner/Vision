@@ -19,14 +19,14 @@ afterAll(async () => {
   await closeTestPool();
 });
 
-describe("cloud investigation cancellation at the database boundary", () => {
+describe("investigation cancellation at the database boundary", () => {
   it.skipIf(!pool)(
     "keeps a cancelled job cancelled when a provider answer arrives afterward",
     async () => {
       const inserted = await pool!.query(
         `INSERT INTO ai_investigation_jobs
            (question, route, depth, language, state, scope_json)
-         VALUES ('Fictional question', 'openai-api', 'quick', 'en', 'running', '{}'::jsonb)
+         VALUES ('Fictional question', 'local', 'quick', 'en', 'running', '{}'::jsonb)
          RETURNING id`,
       );
       const id = inserted.rows[0].id;

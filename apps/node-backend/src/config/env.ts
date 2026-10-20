@@ -149,24 +149,6 @@ const envSchema = z
     AI_WEB_RESEARCH_MAX_PAGES: intEnv(5),
     BRAVE_SEARCH_API_KEY: optionalStringEnv,
 
-    AI_REFERENCE_MAPPING_KEY: optionalStringEnv,
-    AGENTCLOAK_PREFLIGHT_ENABLED: booleanEnv(false),
-    AGENTCLOAK_PREFLIGHT_MODE: z.enum(["mcp", "desktop"]).default("mcp"),
-    AGENTCLOAK_MCP_URL: optionalStringEnv,
-    AGENTCLOAK_MCP_API_KEY: optionalStringEnv,
-    AGENTCLOAK_DESKTOP_URL: optionalStringEnv,
-    AGENTCLOAK_TIMEOUT_MS: intEnv(10000),
-
-    OPENAI_API_ENABLED: booleanEnv(false),
-    OPENAI_API_KEY: optionalStringEnv,
-    OPENAI_API_MODEL: optionalStringEnv,
-    OPENAI_API_MODELS_JSON: optionalStringEnv,
-    OPENAI_API_MAX_RETRIES: intEnv(2),
-    OPENAI_API_TIMEOUT_MS: intEnv(60000),
-    OPENAI_API_MONTHLY_BUDGET_MICROS: intEnv(0),
-    OPENAI_API_INPUT_MICROS_PER_MILLION: intEnv(0),
-    OPENAI_API_OUTPUT_MICROS_PER_MILLION: intEnv(0),
-
     APP_TIMEZONE: stringEnv("Europe/Brussels"),
 
     APP_VERSION: optionalStringEnv,
@@ -242,5 +224,3 @@ function enforceDatabaseUrlPolicy(data: z.infer<typeof envSchema>) {
 }
 
 export const env = Object.freeze(parseEnv());
-
-export default env;

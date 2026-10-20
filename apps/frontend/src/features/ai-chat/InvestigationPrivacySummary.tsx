@@ -1,47 +1,18 @@
-import { Cloud, HardDrive, Search, ShieldCheck } from "lucide-react";
+import { HardDrive, Search, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface InvestigationPrivacySummaryProps {
-    route: "local" | "openai-api";
-    disclosureMode:
-        "cloud-plan-public" | "selected-summary" | "cloud-synthesis-selected";
     researchMode: "local-only" | "public-providers" | "public-web";
     depth: "quick" | "detailed";
 }
 
 export function InvestigationPrivacySummary({
-    route,
-    disclosureMode,
     researchMode,
     depth,
 }: InvestigationPrivacySummaryProps) {
     const { t } = useLanguage();
-    const local = route === "local";
-    const modelCopies = {
-        local: [
-            "aiResearch.summary.localTitle",
-            "aiResearch.summary.localBody",
-            "aiResearch.modeLocalProfile",
-        ],
-        "cloud-plan-public": [
-            "aiResearch.summary.publicTitle",
-            "aiResearch.summary.publicBody",
-            "aiResearch.modeCloudPublicProfile",
-        ],
-        "selected-summary": [
-            "aiResearch.summary.summaryTitle",
-            "aiResearch.summary.summaryBody",
-            "aiResearch.modeSelectedSummaryProfile",
-        ],
-        "cloud-synthesis-selected": [
-            "aiResearch.summary.evidenceTitle",
-            "aiResearch.summary.evidenceBody",
-            "aiResearch.modeCloudSynthesisProfile",
-        ],
-    } as const;
-    const modelCopy = modelCopies[local ? "local" : disclosureMode];
     const researchProfiles = {
         "local-only": [
             "aiResearch.localOnly",
@@ -59,15 +30,7 @@ export function InvestigationPrivacySummary({
             "aiResearch.researchWebProfile",
         ],
     } as const;
-    const researchCopy =
-        !local && disclosureMode === "cloud-synthesis-selected"
-            ? ([
-                  "aiResearch.summary.selectedOnlyTitle",
-                  "aiResearch.summary.selectedOnlyBody",
-                  "aiResearch.modeCloudSynthesisProfile",
-              ] as const)
-            : researchProfiles[researchMode];
-    const ModelIcon = local ? ShieldCheck : Cloud;
+    const researchCopy = researchProfiles[researchMode];
     return (
         <Card asChild>
             <section aria-label={t("aiResearch.summary.title")}>
@@ -75,9 +38,9 @@ export function InvestigationPrivacySummary({
                     <div className="grid gap-4 sm:grid-cols-3">
                         {[
                             {
-                                Icon: ModelIcon,
-                                title: modelCopy[0],
-                                body: modelCopy[1],
+                                Icon: ShieldCheck,
+                                title: "aiResearch.summary.localTitle",
+                                body: "aiResearch.summary.localBody",
                             },
                             {
                                 Icon: Search,
@@ -87,9 +50,7 @@ export function InvestigationPrivacySummary({
                             {
                                 Icon: HardDrive,
                                 title: "aiResearch.summary.savedTitle",
-                                body: local
-                                    ? "aiResearch.summary.savedLocal"
-                                    : "aiResearch.summary.savedCloud",
+                                body: "aiResearch.summary.savedLocal",
                             },
                         ].map(({ Icon, title, body }) => (
                             <div
@@ -121,18 +82,14 @@ export function InvestigationPrivacySummary({
                                 <dt className="type-footnote font-medium text-foreground">
                                     {t("aiResearch.route")}
                                 </dt>
-                                <dd>{t(modelCopy[2])}</dd>
+                                <dd>{t("aiResearch.modeLocalProfile")}</dd>
                             </div>
-                            {(local ||
-                                disclosureMode !==
-                                    "cloud-synthesis-selected") && (
-                                <div>
-                                    <dt className="type-footnote font-medium text-foreground">
-                                        {t("aiResearch.researchProfilesTitle")}
-                                    </dt>
-                                    <dd>{t(researchCopy[2])}</dd>
-                                </div>
-                            )}
+                            <div>
+                                <dt className="type-footnote font-medium text-foreground">
+                                    {t("aiResearch.researchProfilesTitle")}
+                                </dt>
+                                <dd>{t(researchCopy[2])}</dd>
+                            </div>
                             <div>
                                 <dt className="type-footnote font-medium text-foreground">
                                     {t("aiResearch.depthProfilesTitle")}
@@ -145,21 +102,6 @@ export function InvestigationPrivacySummary({
                                     )}
                                 </dd>
                             </div>
-                            {!local && (
-                                <div>
-                                    <dt className="type-footnote font-medium text-foreground">
-                                        {t("aiResearch.summary.savedTitle")}
-                                    </dt>
-                                    <dd>
-                                        {t(
-                                            disclosureMode ===
-                                                "cloud-synthesis-selected"
-                                                ? "aiResearch.cloudSynthesisWarning"
-                                                : "aiResearch.cloudRetention",
-                                        )}
-                                    </dd>
-                                </div>
-                            )}
                         </dl>
                     </Disclosure>
                 </CardContent>

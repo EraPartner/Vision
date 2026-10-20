@@ -5,10 +5,7 @@ import {
   __buildRetryPlan,
   __planInvestigation,
   __shouldReuseStep,
-  __usesCloudSynthesis,
-  __applyPlannerOrdering,
   __resolveProviderAnswer,
-  __shouldPreserveProviderCheckpoint,
   resumeRecoverableInvestigations,
 } from "../src/services/aiInvestigationService.ts";
 import type {
@@ -81,79 +78,6 @@ describe("AI investigation orchestration", () => {
     );
   });
 
-  it("uses only explicitly selected evidence for cloud synthesis", () => {
-    const plan = __planInvestigation({
-      ...request,
-      route: "openai-api",
-      selectedEvidence:
-        "Question: Which recipient cost most? Evidence: Recipient A totalled EUR 1200.",
-    });
-    expect(plan.steps).toEqual([
-      expect.objectContaining({
-        id: "selected-evidence",
-        tool: "useSelectedEvidence",
-        args: {},
-      }),
-    ]);
-    expect(plan.steps).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ tool: "searchLocalResearchDocuments" }),
-      ]),
-    );
-    expect(
-      __usesCloudSynthesis({
-        route: "openai-api",
-        selectedEvidence: "Approved evidence",
-      }),
-    ).toBe(true);
-    expect(
-      __usesCloudSynthesis(
-        partial<AiInvestigationRequest>({
-          route: "openai-api",
-          selectedSummary: "Planning summary",
-          selectedEvidence: null,
-        }),
-      ),
-    ).toBe(false);
-  });
-
-  it("adds only validated cloud catalog plans to the local execution queue", () => {
-    const cloudRequest: AiInvestigationRequest = {
-      ...request,
-      route: "openai-api",
-      scope: { ...request.scope, workspaces: ["budgeting"] },
-    };
-    const baseline = __planInvestigation(cloudRequest);
-    const plan = __applyPlannerOrdering(
-      JSON.stringify({
-        stepIds: [],
-        analysisPlans: [
-          {
-            schemaVersion: 1,
-            catalogVersion: 1,
-            datasetId: "cash-flows",
-            fields: ["month", "currency"],
-            filters: [],
-            groups: ["month", "currency"],
-            measures: ["sum_spending"],
-            joins: [],
-            orderBy: [{ id: "month", direction: "asc" }],
-            limit: 100,
-            formulas: [],
-          },
-        ],
-      }),
-      baseline,
-      "openai",
-      cloudRequest,
-    );
-    expect(plan.steps.at(-1)).toMatchObject({
-      tool: "executeCatalogAnalysis",
-      args: { analysisPlan: { datasetId: "cash-flows" } },
-    });
-    expect(plan.steps.at(-1)!.args).not.toHaveProperty("sql");
-  });
-
   it("pauses a materially ambiguous comparison plan", () => {
     const plan = __planInvestigation({
       ...request,
@@ -197,27 +121,6 @@ describe("AI investigation orchestration", () => {
     });
   });
 
-  it("renders selected cloud evidence as one bounded citation", () => {
-    const evidence = __evidenceFromSteps(
-      partial<AiInvestigationStepRow[]>([
-        {
-          stepId: "selected-evidence",
-          state: "completed",
-          result: {
-            data: { text: "Recipient A totalled EUR 1200." },
-          },
-        },
-      ]),
-    );
-    expect(evidence).toEqual([
-      expect.objectContaining({
-        id: "selected-evidence",
-        locator: "cloud-disclosure:selected-evidence",
-        excerpt: "Recipient A totalled EUR 1200.",
-      }),
-    ]);
-  });
-
   it("localizes an abstention when no valid synthesis is available", () => {
     const answer = __fallbackAnswer({ ...request, language: "nl" }, []);
     expect(answer.status).toBe("abstained");
@@ -237,28 +140,21 @@ describe("AI investigation orchestration", () => {
 
   it("restores a checkpointed provider-form answer after restart without another model call", async () => {
     const checkpointed = __fallbackAnswer(request, []);
-    const generateProvider = vi.fn();
-    const generateLocal = vi.fn();
+    const generate = vi.fn();
     const store = vi.fn();
     const resolved = await __resolveProviderAnswer({
       job: partial<AiInvestigationJobRow>({
         id: "job-1",
         checkpoint: { providerResult: checkpointed },
       }),
-      request: {
-        ...request,
-        route: "openai-api",
-        selectedEvidence: "[[VR1:account:AAAAAAAAAAAAAAAAAAAAAAAA]]",
-      },
+      request,
       stepRows: [],
-      synthesisInput: partial<ProviderGenerationInput & { jobId: string }>({}),
-      generateProvider,
-      generateLocal,
+      synthesisInput: partial<ProviderGenerationInput>({}),
+      generate,
       store,
     });
     expect(resolved).toEqual(checkpointed);
-    expect(generateProvider).not.toHaveBeenCalled();
-    expect(generateLocal).not.toHaveBeenCalled();
+    expect(generate).not.toHaveBeenCalled();
     expect(store).not.toHaveBeenCalled();
   });
 
@@ -271,53 +167,21 @@ describe("AI investigation orchestration", () => {
           id: "job-cancelled",
           checkpoint: {},
         }),
-        request: {
-          ...request,
-          route: "openai-api",
-          selectedEvidence: "Fictional selected evidence",
-        },
+        request,
         stepRows: [],
-        synthesisInput: partial<ProviderGenerationInput & { jobId: string }>({
+        synthesisInput: partial<ProviderGenerationInput>({
           signal: controller.signal,
         }),
-        generateProvider: async () => {
+        generate: async () => {
           controller.abort();
           return partial<ProviderGeneration>({
             text: JSON.stringify(__fallbackAnswer(request, [])),
           });
         },
-        generateLocal: vi.fn(),
         store,
       }),
     ).rejects.toMatchObject({ code: "CANCELLED" });
     expect(store).not.toHaveBeenCalled();
-  });
-
-  it("preserves a provider checkpoint when retrying local reference restoration", () => {
-    expect(
-      __shouldPreserveProviderCheckpoint(
-        partial<AiInvestigationJobRow>({
-          state: "failed",
-          error: { code: "REFERENCE_KEY_UNAVAILABLE" },
-        }),
-      ),
-    ).toBe(true);
-    expect(
-      __shouldPreserveProviderCheckpoint(
-        partial<AiInvestigationJobRow>({
-          state: "failed",
-          error: { code: "SYNTHESIS_FAILED" },
-        }),
-      ),
-    ).toBe(false);
-    expect(
-      __shouldPreserveProviderCheckpoint(
-        partial<AiInvestigationJobRow>({
-          state: "partial",
-          error: { code: "REFERENCE_KEY_UNAVAILABLE" },
-        }),
-      ),
-    ).toBe(false);
   });
 
   it("adds at most one bounded retry pass for failed local tools", () => {

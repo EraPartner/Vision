@@ -1,6 +1,6 @@
 /**
  * Row schemas for the AI repositories (ADR-193): chat, investigations,
- * disclosure grants, research documents and reversible references.
+ * research documents.
  *
  * Like `../rowSchemas.ts`, each schema describes what node-postgres returns
  * with its default parsers and only checks; callers receive pg's own objects.
@@ -114,7 +114,6 @@ export const aiInvestigationJobRowSchema = z
     result: z.unknown(),
     /** `error_json`: usually `{ code, message }`. */
     error: z.unknown(),
-    grantId: pgUuid.nullable(),
     cancelRequestedAt: pgTimestamptz.nullable(),
     startedAt: pgTimestamptz.nullable(),
     completedAt: pgTimestamptz.nullable(),
@@ -161,81 +160,6 @@ export const aiInvestigationStepTableRowSchema = z
 export type AiInvestigationStepTableRow = z.output<
   typeof aiInvestigationStepTableRowSchema
 >;
-
-// ---------------------------------------------------------------------------
-// AI disclosure (ai_disclosure_grants + ai_disclosure_records)
-// ---------------------------------------------------------------------------
-
-/** An `ai_disclosure_grants` row (`SELECT *` / `RETURNING *`). */
-export const aiDisclosureGrantRowSchema = z
-  .object({
-    id: pgUuid,
-    route: z.string(),
-    mode: z.string(),
-    purpose: z.string(),
-    preview_payload_sha256: z.string(),
-    /** JSONB array of approved field names. */
-    allowed_fields_json: z.array(z.string()),
-    max_requests: pgInt,
-    max_input_characters: pgInt,
-    max_output_tokens: pgInt,
-    max_cost_micros: pgBigint,
-    max_disclosure_units: pgInt,
-    used_requests: pgInt,
-    used_input_characters: pgBigint,
-    used_output_tokens: pgBigint,
-    used_cost_micros: pgBigint,
-    policy_version: pgInt,
-    retain_exact_payload: z.boolean(),
-    expires_at: pgTimestamptz,
-    revoked_at: pgTimestamptz.nullable(),
-    created_at: pgTimestamptz,
-    updated_at: pgTimestamptz,
-  })
-  .describe("ai_disclosure_grants row");
-export type AiDisclosureGrantRow = z.output<typeof aiDisclosureGrantRowSchema>;
-
-/** An `ai_disclosure_records` row (`SELECT *` / `RETURNING *`). */
-export const aiDisclosureRecordRowSchema = z
-  .object({
-    id: pgUuid,
-    grant_id: pgUuid,
-    job_id: pgUuid.nullable(),
-    route: z.string(),
-    mode: z.string(),
-    purpose: z.string(),
-    /** JSONB array of disclosed field names. */
-    field_manifest_json: z.array(z.string()),
-    /** JSONB array of disclosure unit ids. */
-    disclosure_units_json: z.array(z.string()),
-    payload_sha256: z.string(),
-    payload_bytes: pgInt,
-    reserved_output_tokens: pgInt,
-    reserved_cost_micros: pgBigint,
-    actual_input_tokens: pgInt.nullable(),
-    actual_output_tokens: pgInt.nullable(),
-    actual_cost_micros: pgBigint.nullable(),
-    status: z.string(),
-    provider_request_id: z.string().nullable(),
-    policy_snapshot_json: z.unknown(),
-    error_code: z.string().nullable(),
-    created_at: pgTimestamptz,
-    completed_at: pgTimestamptz.nullable(),
-  })
-  .describe("ai_disclosure_records row");
-export type AiDisclosureRecordRow = z.output<
-  typeof aiDisclosureRecordRowSchema
->;
-
-/** `reserveDisclosure`'s prior-units read. */
-export const disclosureUnitsRowSchema = aiDisclosureRecordRowSchema
-  .pick({ disclosure_units_json: true })
-  .describe("ai_disclosure_records units row");
-
-/** `COALESCE(SUM(bigint), 0)` is NUMERIC: a string. */
-export const disclosureMonthlyTotalRowSchema = z
-  .object({ total: z.string() })
-  .describe("ai disclosure monthly total row");
 
 // ---------------------------------------------------------------------------
 // Research documents (ai_research_documents + ai_research_passages)
@@ -297,28 +221,3 @@ export const scoredResearchPassageRowSchema = researchPassageRowSchema
 export type ScoredResearchPassageRow = z.output<
   typeof scoredResearchPassageRowSchema
 >;
-
-// ---------------------------------------------------------------------------
-// Reversible references (ai_reference_scopes + ai_reference_entries)
-// ---------------------------------------------------------------------------
-
-export const aiReferenceScopeRowSchema = z
-  .object({
-    id: pgUuid,
-    jobId: pgUuid.nullable(),
-    expiresAt: pgTimestamptz,
-  })
-  .describe("ai_reference_scopes row");
-export type AiReferenceScopeRow = z.output<typeof aiReferenceScopeRowSchema>;
-
-/** BYTEA columns arrive as Buffers. */
-export const aiReferenceEntryRowSchema = z
-  .object({
-    token: z.string(),
-    referenceType: z.string(),
-    ciphertext: z.instanceof(Buffer),
-    nonce: z.instanceof(Buffer),
-    authTag: z.instanceof(Buffer),
-  })
-  .describe("ai_reference_entries row");
-export type AiReferenceEntry = z.output<typeof aiReferenceEntryRowSchema>;

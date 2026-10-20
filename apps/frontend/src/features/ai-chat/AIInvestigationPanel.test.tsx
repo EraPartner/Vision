@@ -5,11 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
 import { AIInvestigationPanel } from "./AIInvestigationPanel";
 
-vi.mock("@/hooks/useAiResearchStatus", () => ({
-    useAiResearchStatus: () => ({
-        data: { openai: { enabled: true, models: [], model: "" } },
-    }),
-}));
 vi.mock("@/lib/api", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/api")>();
     return {
@@ -38,7 +33,7 @@ describe("AIInvestigationPanel progressive controls", () => {
             .closest("details")!;
         expect(settings).not.toHaveAttribute("open");
         expect(
-            within(settings).getByRole("radio", { name: "Local model" }),
+            within(settings).getByRole("radio", { name: "Quick" }),
         ).not.toBeVisible();
         await user.click(within(settings).getByText("Research settings"));
         await user.click(
@@ -53,24 +48,13 @@ describe("AIInvestigationPanel progressive controls", () => {
         await user.click(screen.getByText("Documents and date range"));
         expect(screen.getByLabelText("From")).toBeVisible();
     });
-    it("keeps cloud disclosure inputs visible after closing settings", async () => {
+    it("offers no cloud route", async () => {
         const user = userEvent.setup();
         renderWithApp(<AIInvestigationPanel />);
         await user.click(await screen.findByText("Research settings"));
-        await user.click(screen.getByRole("radio", { name: /OpenAI API/ }));
-        await user.click(screen.getByText("Research settings"));
         expect(
-            screen.getByText("Research settings").closest("summary"),
-        ).toHaveTextContent("OpenAI API");
-        expect(
-            screen.getByPlaceholderText(
-                /Write a separate public-only planning question/,
-            ),
-        ).toBeVisible();
-        expect(
-            screen.getByRole("button", { name: "Preview cloud payload" }),
-        ).toBeDisabled();
-        await user.click(screen.getByText("Research settings"));
-        expect(screen.getByRole("radio", { name: /OpenAI API/ })).toBeChecked();
+            screen.queryByRole("radio", { name: /OpenAI/ }),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByText(/OpenAI/)).not.toBeInTheDocument();
     });
 });
