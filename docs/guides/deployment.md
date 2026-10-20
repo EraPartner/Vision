@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [
     guide,
@@ -128,12 +128,6 @@ backup. Source deployments are operator-managed. See
 - Probe `GET /health/detailed` during startup and before switching a staged database live.
 - Keep backend and PostgreSQL logs under the deployment supervisor.
 - Alert on migration failure, repeated restarts, backup failure, and low disk space.
-
-## Legacy installations
-
-Vision fails closed when it finds a saved marker from the retired runtime. Users must migrate with
-Vision 1.0.2 before installing the native-only release. The current package contains no importer
-or alternate writer. See [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]].
 
 ## Related
 

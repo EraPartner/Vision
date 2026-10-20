@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [
     guide,
@@ -104,13 +104,6 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 
 Schema changes go through the Kysely migrator (`bun run db:migrate`, `bun run db:status`); no
 Python toolchain is needed. See [[docs/guides/migrations|Database Migrations]].
-
-## Legacy installation boundary
-
-The current release does not contain the retired runtime or its importer. If existing settings or
-runtime state identify a legacy provider, startup fails closed. Migrate that installation with
-Vision 1.0.2 before installing a native-only release. Do not delete the legacy data while deciding
-how to recover it. See [[docs/adr/133-native-only-runtime-and-delivery|ADR-133]].
 
 ## Related
 

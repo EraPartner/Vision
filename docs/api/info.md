@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -841,7 +841,7 @@ The following endpoints were removed in Phase G (April 2026) as they are now han
 5. **`GET /api/info/bank-balances`** → Use [[docs/api/aggregations#bank-balances|`GET /api/aggregations/bank-balances`]]
 6. **`GET /api/info/recipient-insights`** → Use [[docs/api/aggregations#recipient-insights|`GET /api/aggregations/recipient-insights`]]
 
-**Frontend impact:** Four of these have `apiClient` method equivalents (`getMonthlyFinancialSummary()`, `getCashflowComparison()`, `getBankBalances()`, `getRecipientInsights()`) which now proxy to aggregations and unwrap the response envelope transparently. See [[docs/reference/api-client-methods#info--statistics-phase-g-aggregation-migration|API Client Methods]] for details.
+**Frontend impact:** Four of these have `apiClient` method equivalents (`getMonthlyFinancialSummary()`, `getCashflowComparison()`, `getBankBalances()`, `getRecipientInsights()`) which now proxy to aggregations and unwrap the response envelope transparently. See [[docs/reference/frontend-api-client|Frontend API Client]].
 
 **Historical note:** Earlier sections still document the deprecated endpoints with their response schema for reference. These routes return 404 in production after Phase G.
 

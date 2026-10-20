@@ -2,8 +2,8 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last_modified: 2026-10-19
 tags:
   [
@@ -204,7 +204,6 @@ LIMIT 20
 | [[docs/reference/database-query-patterns | 🗄️ Database Query Patterns]]          | PostgreSQL patterns, indexes, optimization                       |
 | [[docs/reference/agent-navigation-map    | 🗺️ Agent Navigation Map]]             | File navigation by feature, layer, task                          |
 | [[docs/reference/frontend-api-client     | 🔌 Frontend API Client]]              | Transport, types, and facade layers of the HTTP client (Phase 1) |
-| [[docs/reference/schema-initialization   | 🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization                    |
 | [[docs/reference/api-endpoint-matrix     | 📊 API Endpoint Matrix]]              | HTTP operations checked against OpenAPI, plus native IPC contracts   |
 
 ## Recent Updates
@@ -631,7 +630,7 @@ See [[docs/components/export-dialog|ExportDialog]], [[docs/components/shared-com
 
 Surfaces accidental writes; prevents RCE-to-root escalation; attachments persist across rebuilds; CI blocks releases on critical CVEs.
 
-See [[docs/adr/039-docker-container-hardening|ADR-039]], [[docs/security/container-hardening|Container Hardening]]
+See [[docs/adr/039-docker-container-hardening|ADR-039]].
 
 ### 2026-04-24 Feature Flags Removed
 

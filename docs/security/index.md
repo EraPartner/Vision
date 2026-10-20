@@ -2,8 +2,8 @@
 title: Security Documentation Index
 type: security-index
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     security,
@@ -48,7 +48,6 @@ SORT title ASC
 - [[docs/security/data-protection|Data Protection & CSP]] - Content Security Policy, path traversal prevention, data protection, privacy, backup encryption, Phase 7 restore safety, Electron permission hardening, error-page strict CSP
 - [[docs/security/ai-data-access|AI Data Access Policy]] - Tool allowlist, rate limits, no-external-calls guarantee, audit logging
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]] - Local reliability thresholds, serialized cloud traffic tests, and release blockers
-- [[docs/security/container-hardening|Retired Product Container Hardening]] - Historical product boundary and current native replacements
 - [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] - Workspace dependency hardening and validation outcomes
 - Admin auth model (token-or-open + CSRF guard) is documented in [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] and [[docs/security/data-protection|Data Protection]]. The superseded RFC1918 fallback is [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]].
 
@@ -65,7 +64,7 @@ SORT title ASC
 
 - **Admin auth: token-or-open + CSRF guard** — [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] replaces the RFC1918 IP-allowlist admin fallback (ADR-037) with two co-operating guards: `adminAuth.js` is now token-or-open (no IP check; timing-safe Bearer when `ADMIN_AUTH_TOKEN` is set, open otherwise), and new `csrfGuard.js` blocks cross-site state-changing browser requests via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `same-site`/`cross-site`) with an `Origin` allowlist fallback. Mounted before `adminAuthMiddleware` on `/api/admin`. See [[docs/security/data-protection#admin-auth-token-or-open--csrf-guard-2026-05-29|Data Protection — Admin Auth]].
 - **SSRF guard for outbound price-provider URLs** — New `lib/urlSafety.ts` module (`assertPublicHttpUrl`, `isBlockedIpv4`, `isBlockedIpv6`, `BlockedUrlError`) blocks private/loopback/link-local/CGNAT/unspecified addresses at both the write boundary (investment create/update → 400) and the fetch boundary (custom provider `_fetchJson` + redirect hops, 5 MB response cap). See [[docs/security/input-validation#outbound-request-guard-ssrf-2026-05-29|Input Validation — SSRF guard]] and [[docs/integrations/price-providers#custom-provider-url-constraints-2026-05-29|Price Providers — Custom URL constraints]].
-- **Electron release build `--ignore-scripts`** — `release.yml` packaging resolves the separate Electron lockfile with `bun install --frozen-lockfile --ignore-scripts`, blocking dependency lifecycle scripts during `.dmg` signing. See [[docs/security/container-hardening#electron-release-build-supply-chain-hardening-2026-05-29|Container Hardening — Electron supply chain]].
+- **Electron release build `--ignore-scripts`** — `release.yml` packaging resolves the separate Electron lockfile with `bun install --frozen-lockfile --ignore-scripts`, blocking dependency lifecycle scripts during `.dmg` signing. Source: `.github/workflows/release.yml` (`package-mac` job).
 
 ## Past Hardening
 

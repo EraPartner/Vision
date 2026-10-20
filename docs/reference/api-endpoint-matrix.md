@@ -2,8 +2,8 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last_modified: 2026-10-19
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
@@ -782,7 +782,7 @@ Six `/api/info/*` endpoints were removed as they are now superseded by `/api/agg
 | `GET /api/info/bank-balances`               | `GET /api/aggregations/bank-balances`       | `apiClient.getBankBalances()`            | Unwrapped         |
 | `GET /api/info/recipient-insights`          | `GET /api/aggregations/recipient-insights`  | `apiClient.getRecipientInsights()`       | Unwrapped         |
 
-**Unwrapped methods:** Frontend methods proxy to aggregations and unwrap the [[docs/adr/026-unified-api-response-envelope|unified response envelope]] to preserve backward-compatible signatures for call sites. See [[docs/reference/api-client-methods#info--statistics-phase-g-aggregation-migration|API Client Methods]] for details.
+**Unwrapped methods:** Frontend methods proxy to aggregations and unwrap the [[docs/adr/026-unified-api-response-envelope|unified response envelope]] to preserve backward-compatible signatures for call sites. See [[docs/reference/frontend-api-client|Frontend API Client]].
 
 **Aggregations-only:** Some removed endpoints have no direct frontend method and are consumed only via aggregation API internals (e.g., `average-vs-current`, `category-breakdown`).
 
