@@ -206,6 +206,24 @@ export const importRateLimiter = rateLimiter({
 });
 
 /**
+ * Where {@link importRateLimiter} applies: the expensive import operations,
+ * multipart uploads spooled to disk and whole-batch commits. Review traffic
+ * (preview reads and per-row overrides) stays under the global limiter. Each
+ * review edit is a small row update plus a preview refetch, so 20/min across
+ * the whole router rejected a quick review session or a group assignment.
+ */
+export const IMPORT_RATE_LIMITED_PATHS = [
+  "/api/import/csv",
+  "/api/import/recipients",
+  "/api/import/categories",
+  "/api/import/batches/:id/commit",
+  "/api/portfolio/import/csv",
+  "/api/portfolio/import/probe",
+  "/api/portfolio/import/batches/:id/commit",
+  "/api/portfolio/import/reconciliation/commit",
+];
+
+/**
  * Rate limiter for attachment upload/download endpoints.
  */
 export const attachmentRateLimiter = rateLimiter({

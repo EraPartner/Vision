@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags:
   [
     api,
@@ -91,7 +91,8 @@ Source support does not establish completeness of the supplied historical export
 Kinesis Money import is distinct from Vision's existing Kinesis market-price provider. Users may
 configure other broker mappings, but those formats are not maintained compatibility targets.
 
-All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
+All routes are mounted at `/api/portfolio/import`. Uploads, probe, and commits also pass
+`importRateLimiter`; see [[docs/api/portfolio-imports#Rate Limits|Rate Limits]].
 
 > [!info] Auto-commit policy
 > Non-brokerage generic imports auto-commit (return 201) only when there are zero errors, unresolved
@@ -1166,8 +1167,12 @@ partial behavior. API support does not prove real-source completeness.
 
 ## Rate Limits
 
-The entire `/api/portfolio/import` router is mounted with `importRateLimiter`, in addition to the
-global API limiter. This covers uploads, batch/review operations, reconciliation, and saved parsers.
+Every route passes the global API limiter. Since 2026-10-20, `importRateLimiter` (20 req/min,
+shared `import` bucket with the budgeting import uploads and commits) applies only to
+`/csv/custom`, `/csv/stream`, `/probe`, `/batches/:id/commit`, and `/reconciliation/commit`.
+Batch preview, investment overrides, batch list/detail/rollback, saved parsers, and
+reconciliation preview no longer share that budget, so a review session or group assignment
+cannot exhaust it. See [[docs/security/rate-limiting|Rate Limiting]].
 
 ---
 

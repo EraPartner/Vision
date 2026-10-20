@@ -88,6 +88,7 @@ import {
   globalRateLimiter,
   adminRateLimiter,
   importRateLimiter,
+  IMPORT_RATE_LIMITED_PATHS,
   attachmentRateLimiter,
   spaRateLimiter,
   reportRateLimiter,
@@ -282,13 +283,9 @@ mountRouter(
   adminAuthMiddleware,
   adminRouter,
 );
-mountRouter(app, "/api/import", importRateLimiter, importRouter);
-mountRouter(
-  app,
-  "/api/portfolio/import",
-  importRateLimiter,
-  portfolioImportRouter,
-);
+app.use(IMPORT_RATE_LIMITED_PATHS, importRateLimiter);
+mountRouter(app, "/api/import", importRouter);
+mountRouter(app, "/api/portfolio/import", portfolioImportRouter);
 mountRouter(app, "/api/investments", investmentRateLimiter, investmentsRouter);
 mountRouter(app, "/api/settings", settingsRouter);
 mountRouter(app, "/api/belgian-tax", aggregationRateLimiter, belgianTaxRouter);
