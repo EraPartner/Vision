@@ -297,11 +297,15 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 5. **Native initialization**:
    - choose and persist an available loopback backend port;
-   - verify the packaged PostgreSQL 18.6, compiled backend, `db/` migration files, Chrome Headless
-     Shell, and full checksum manifest. `runtime/runtime-manifest.ts` validates the complete
-     manifest in a worker thread and hashes files in 64 KiB chunks, keeping synchronous filesystem
-     and SHA-256 work off the Electron main event loop. Missing, extra, changed, and symlinked
-     entries still fail validation; this does not skip hashes or cache trust;
+   - verify the packaged PostgreSQL 18.6, compiled backend and `db/` migration files against the
+     checksum manifest ([[docs/adr/235-launch-runtime-verification-marker|ADR-235]]). The first
+     launch of an installed payload hashes every file in a worker thread (64 KiB chunks, off the
+     Electron main event loop) and records the manifest's SHA-256, app version and payload path
+     in `<userData>/native/<runtimeId>/runtime-verification.json`. Later launches with the same
+     manifest only check that exactly the listed regular files exist with their recorded sizes;
+     missing, extra, resized and symlinked entries fall back to the full hash check, which fails
+     closed. An update or reinstall changes the manifest and re-hashes once. The boot trace reports
+     `runtime_manifest_full` or `runtime_manifest_cached` with its duration;
    - create restricted runtime directories and initialize or reuse the private PostgreSQL cluster;
    - require PostgreSQL `listen_addresses` to be loopback-only, disable Unix sockets, and verify its
      exact data directory;

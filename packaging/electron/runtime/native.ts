@@ -1,4 +1,4 @@
-import { verifyRuntimeManifest } from "./runtime-manifest";
+import { verifyRuntimeManifestOnLaunch } from "./runtime-manifest";
 export {
   verifyRuntimeManifest,
 } from "./runtime-manifest";
@@ -18,6 +18,8 @@ import {
 export const POSTGRES_MAJOR = 18;
 export const POSTGRES_MINOR = 6;
 export const DEFAULT_POSTGRES_PORT = 54329;
+/** Records the last full payload verification, below the runtime's nativeRoot. */
+export const RUNTIME_VERIFICATION_MARKER = "runtime-verification.json";
 const DEFAULT_APP_PORT = 3002;
 export const LOOPBACK_HOST = "127.0.0.1";
 export const RUNTIME_MANAGED_MATERIALIZED_VIEWS = Object.freeze([
@@ -1089,6 +1091,8 @@ export interface NativeRuntimeOptions {
   allowExternalPostgres?: boolean | undefined;
   bunPath?: string | undefined;
   requireRuntimeManifest?: boolean | undefined;
+  /** Receives named startup timings, e.g. the runtime payload verification. */
+  recordBootPhase?: ((phase: string, ms: number) => void) | undefined;
   syntheticOffline?: boolean | undefined;
   runFile?: RunFile | undefined;
   spawnProcess?: SpawnProcess | undefined;
@@ -1271,10 +1275,20 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   async function discover(): Promise<
     NativeTools & { postgresVersion: number }
   > {
-    if (runtimeRoot)
-      await verifyRuntimeManifest(runtimeRoot, {
+    if (runtimeRoot) {
+      // Full hashing once per installed payload; a size check afterwards (ADR-235).
+      const started = Date.now();
+      const verification = await verifyRuntimeManifestOnLaunch(runtimeRoot, {
         required: options.requireRuntimeManifest === true,
+        markerPath: path.join(paths.nativeRoot, RUNTIME_VERIFICATION_MARKER),
       });
+      if (verification.status === "verified") {
+        options.recordBootPhase?.(
+          `runtime_manifest_${verification.mode}`,
+          Date.now() - started,
+        );
+      }
+    }
     const postgres = await discoverPostgres18({
       binDir: options.postgresBinDir,
       runtimeRoot: postgresRuntimeRoot,

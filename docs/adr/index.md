@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-20: Hash the native runtime payload once per installed version (accepted)
+
+[[docs/adr/235-launch-runtime-verification-marker|ADR-235]] hashes the native runtime payload in
+full on the first launch of each installed manifest and records a marker in the application data
+directory. Later launches check only the file set and sizes and fall back to the full hash on any
+mismatch. The boot trace shows `runtime_manifest_full` or `runtime_manifest_cached`.
+
 ### 2026-10-20: Print report PDFs with Electron's own Chromium (accepted)
 
 [[docs/adr/234-electron-report-pdf-printing|ADR-234]] returns a print-ready report document from

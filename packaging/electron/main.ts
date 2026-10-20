@@ -359,14 +359,17 @@ const RENDERER_READY_TIMEOUT_MS =
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== "0";
 const _bootT0 = Date.now();
 const _bootMarks: { phase: string; ms: number }[] = [];
+function recordBootPhase(phase: string, ms: number): void {
+  _bootMarks.push({ phase, ms });
+  if (BOOT_TRACE_ENABLED) {
+    console.error(`[startup] ${JSON.stringify({ phase, ms })}`);
+  }
+}
 function bootMark(phase: string): () => number {
   const t0 = Date.now();
   return () => {
     const ms = Date.now() - t0;
-    _bootMarks.push({ phase, ms });
-    if (BOOT_TRACE_ENABLED) {
-      console.error(`[startup] ${JSON.stringify({ phase, ms })}`);
-    }
+    recordBootPhase(phase, ms);
     return ms;
   };
 }
@@ -2554,6 +2557,7 @@ async function launch(): Promise<void> {
           allowExternalPostgres:
             process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
           runtimeId: NATIVE_RUNTIME_ID,
+          recordBootPhase,
           postgresPort: __IS_DEMO ? DEMO_POSTGRES_PORT : undefined,
           appPort: () => appPort,
           requireRuntimeManifest: app.isPackaged,

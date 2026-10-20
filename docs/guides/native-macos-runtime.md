@@ -152,6 +152,16 @@ AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) are refused by name before dec
 ([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]). The macOS Keychain-backed `safeStorage` protects the
 passphrase at rest, while the backup key itself is derived with scrypt.
 
+## Payload verification
+
+The first launch of each installed payload hashes every file listed in
+`Contents/Resources/native-runtime/manifest.json` and records the result in
+`~/Library/Application Support/Vision/native/vision/runtime-verification.json`. Later launches
+with the same manifest only check the file set and sizes and re-hash on any mismatch
+([[docs/adr/235-launch-runtime-verification-marker|ADR-235]]). Delete that file to force a full
+check on the next launch. The `[startup]` log shows `runtime_manifest_full` or
+`runtime_manifest_cached` with the time taken.
+
 ## Updates and reports
 
 Native updates create a backup, verify the selected release artifact and checksum, install it, and
