@@ -2,8 +2,8 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     components,
@@ -87,7 +87,7 @@ function App() {
 
 ### Features (Liquid Glass v2)
 
-- **Atmosphere layer**: Fixed `liquid-canvas` layer with two slow-drifting aurora blobs (compositor-only `transform`, 64s/76s alternate) + radial wash + SVG grain. Drift pauses under `prefers-reduced-motion`. Colors derive from `--primary`/`--accent`.
+- **Atmosphere layer**: Fixed `liquid-canvas` layer with two slow-drifting aurora blobs (compositor-only `transform`, 64s/76s alternate, advanced in 100ms `steps()` so every `backdrop-filter` surface re-blurs 10 times a second at rest instead of on every vsync; the keyframes sample `--ease-in-out-quart`) + radial wash + SVG grain. Drift pauses under `prefers-reduced-motion`. Colors derive from `--primary`/`--accent`.
 - **Scroll-linked topbar**: `::before` pseudo-element fades with `[data-scrolled]` attribute; passive scroll listener; gradients cannot `transition` directly so the material lives in the pseudo-element.
 - **CommandPalette**: Mounted here, triggered by topbar ⌘K button or keyboard shortcut.
 - **New-transaction shortcut**: bare `N` navigates to `/transactions?new=1`, which opens the Add Transaction sheet ([[docs/components/form-dialogs#AddTransactionSheet]]). Browsers keep ⌘N, so the web shortcut is the bare key; it is inert while typing in an input and while a dialog or alert-dialog overlay is open (`isShortcutSafeTarget`) and ignores modified keys. The desktop menu keeps ⌘N through the same deep link ([[docs/components/layout#ElectronBridge]]).

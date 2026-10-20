@@ -649,8 +649,7 @@
             hsl(var(--primary) / var(--aurora-primary-alpha)),
             transparent 72%
         );
-        animation: aurora-drift-a 64s var(--ease-in-out-quart) infinite
-            alternate;
+        animation: aurora-drift-a 64s steps(40) infinite alternate;
     }
 
     /* Champagne aurora — lower right, counter-drifts */
@@ -666,28 +665,60 @@
             hsl(var(--accent) / var(--aurora-accent-alpha)),
             transparent 72%
         );
-        animation: aurora-drift-b 76s var(--ease-in-out-quart) infinite
-            alternate;
+        animation: aurora-drift-b 76s steps(40) infinite alternate;
     }
 
+    /* At most ~15px/s, the drift moves the blobs a fraction of a pixel per
+       frame, which changes their soft gradients by less than one 8-bit colour
+       step. Yet every moved frame makes each backdrop-filter surface in front
+       of them (sidebar, top bar, glass cards) blur again. So the drift
+       advances in 100ms steps: the keyframes sample the --ease-in-out-quart
+       curve (cubic-bezier(0.77, 0, 0.175, 1)) every 4s, and steps(40) holds
+       each 4s segment for 100ms at a time. Both drifts step on the same
+       100ms grid, so at rest the window redraws 10 times a second instead of
+       on every vsync. The sampled path stays within ~4px of the eased curve,
+       under one colour step on these gradients. */
     @keyframes aurora-drift-a {
-        from {
-            transform: translate3d(0, 0, 0) scale(1);
-        }
-
-        to {
-            transform: translate3d(14vw, 9vh, 0) scale(1.18);
-        }
+        0% { transform: translate3d(0, 0, 0) scale(1); }
+        6.25% { transform: translate3d(0.03vw, 0.02vh, 0) scale(1); }
+        12.5% { transform: translate3d(0.15vw, 0.09vh, 0) scale(1.002); }
+        18.75% { transform: translate3d(0.37vw, 0.24vh, 0) scale(1.005); }
+        25% { transform: translate3d(0.74vw, 0.48vh, 0) scale(1.01); }
+        31.25% { transform: translate3d(1.35vw, 0.87vh, 0) scale(1.017); }
+        37.5% { transform: translate3d(2.4vw, 1.54vh, 0) scale(1.031); }
+        43.75% { transform: translate3d(4.44vw, 2.86vh, 0) scale(1.057); }
+        50% { transform: translate3d(8.34vw, 5.36vh, 0) scale(1.107); }
+        56.25% { transform: translate3d(10.89vw, 7vh, 0) scale(1.14); }
+        62.5% { transform: translate3d(12.16vw, 7.82vh, 0) scale(1.156); }
+        68.75% { transform: translate3d(12.91vw, 8.3vh, 0) scale(1.166); }
+        75% { transform: translate3d(13.39vw, 8.61vh, 0) scale(1.172); }
+        81.25% { transform: translate3d(13.69vw, 8.8vh, 0) scale(1.176); }
+        87.5% { transform: translate3d(13.87vw, 8.92vh, 0) scale(1.178); }
+        93.75% { transform: translate3d(13.97vw, 8.98vh, 0) scale(1.18); }
+        100% { transform: translate3d(14vw, 9vh, 0) scale(1.18); }
     }
 
     @keyframes aurora-drift-b {
-        from {
-            transform: translate3d(0, 0, 0) scale(1.12);
-        }
-
-        to {
-            transform: translate3d(-11vw, -7vh, 0) scale(0.96);
-        }
+        0% { transform: translate3d(0, 0, 0) scale(1.12); }
+        5.2632% { transform: translate3d(-0.02vw, -0.01vh, 0) scale(1.12); }
+        10.5263% { transform: translate3d(-0.08vw, -0.05vh, 0) scale(1.119); }
+        15.7895% { transform: translate3d(-0.19vw, -0.12vh, 0) scale(1.117); }
+        21.0526% { transform: translate3d(-0.38vw, -0.24vh, 0) scale(1.114); }
+        26.3158% { transform: translate3d(-0.66vw, -0.42vh, 0) scale(1.11); }
+        31.5789% { transform: translate3d(-1.1vw, -0.7vh, 0) scale(1.104); }
+        36.8421% { transform: translate3d(-1.77vw, -1.13vh, 0) scale(1.094); }
+        42.1053% { transform: translate3d(-2.94vw, -1.87vh, 0) scale(1.077); }
+        47.3684% { transform: translate3d(-5.19vw, -3.3vh, 0) scale(1.045); }
+        52.6316% { transform: translate3d(-7.59vw, -4.83vh, 0) scale(1.01); }
+        57.8947% { transform: translate3d(-8.88vw, -5.65vh, 0) scale(0.991); }
+        63.1579% { transform: translate3d(-9.63vw, -6.13vh, 0) scale(0.98); }
+        68.4211% { transform: translate3d(-10.12vw, -6.44vh, 0) scale(0.973); }
+        73.6842% { transform: translate3d(-10.45vw, -6.65vh, 0) scale(0.968); }
+        78.9474% { transform: translate3d(-10.68vw, -6.8vh, 0) scale(0.965); }
+        84.2105% { transform: translate3d(-10.84vw, -6.9vh, 0) scale(0.962); }
+        89.4737% { transform: translate3d(-10.93vw, -6.96vh, 0) scale(0.961); }
+        94.7368% { transform: translate3d(-10.98vw, -6.99vh, 0) scale(0.96); }
+        100% { transform: translate3d(-11vw, -7vh, 0) scale(0.96); }
     }
 
     /* Area-aware hue: the Wealth pages lead with champagne gold, the rest
