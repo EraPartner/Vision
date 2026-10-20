@@ -23,8 +23,6 @@ interface CsvDropzoneProps {
     label?: string;
     /** Portfolio imports also accept maintained XLSX statements. */
     allowWorkbook?: boolean;
-    /** Only portfolio imports with native IBKR funding detection allow legacy XLS. */
-    allowLegacyWorkbook?: boolean;
 }
 
 export function CsvDropzone({
@@ -33,7 +31,6 @@ export function CsvDropzone({
     compact = false,
     label,
     allowWorkbook = false,
-    allowLegacyWorkbook = false,
 }: CsvDropzoneProps) {
     const { t } = useLanguage();
     const [dragOver, setDragOver] = useState(false);
@@ -44,12 +41,11 @@ export function CsvDropzone({
             if (
                 f &&
                 !isCsvFile(f) &&
-                !(allowWorkbook && f.name.toLowerCase().endsWith(".xlsx")) &&
-                !(allowLegacyWorkbook && f.name.toLowerCase().endsWith(".xls"))
+                !(allowWorkbook && f.name.toLowerCase().endsWith(".xlsx"))
             ) {
                 toast.error(
                     t(
-                        allowWorkbook || allowLegacyWorkbook
+                        allowWorkbook
                             ? "portfolioImport.invalidFile"
                             : "importPage.toast.noFile",
                     ),
@@ -58,7 +54,7 @@ export function CsvDropzone({
             }
             onFileSelect(f);
         },
-        [allowWorkbook, allowLegacyWorkbook, onFileSelect, t],
+        [allowWorkbook, onFileSelect, t],
     );
 
     const pad = compact ? "p-8" : "p-10";
@@ -76,7 +72,7 @@ export function CsvDropzone({
                 role="button"
                 tabIndex={0}
                 aria-label={t(
-                    allowWorkbook || allowLegacyWorkbook
+                    allowWorkbook
                         ? "portfolioImport.chooseFile"
                         : "importPage.dropzoneAria",
                 )}
@@ -110,15 +106,7 @@ export function CsvDropzone({
                 <input
                     ref={inputRef}
                     type="file"
-                    accept={
-                        allowLegacyWorkbook
-                            ? allowWorkbook
-                                ? ".csv,.xlsx,.xls"
-                                : ".csv,.xls"
-                            : allowWorkbook
-                              ? ".csv,.xlsx"
-                              : ".csv"
-                    }
+                    accept={allowWorkbook ? ".csv,.xlsx" : ".csv"}
                     className="sr-only"
                     tabIndex={-1}
                     onChange={(e) => accept(e.target.files?.[0] ?? null)}

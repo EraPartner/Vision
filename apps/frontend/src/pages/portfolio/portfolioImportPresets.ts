@@ -24,21 +24,6 @@ export const DEFAULT_PORTFOLIO_IMPORT_CONFIG: PortfolioCustomConfig = {
 };
 
 const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
-    native_receipts: {
-        ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
-        dateColumn: "Date",
-        typeColumn: "Type",
-        symbolColumn: "Symbol",
-        unitsColumn: "Units",
-        amountColumn: "Amount",
-        currencyColumn: "Currency",
-        sourceIdColumn: "Source_ID",
-        sourceAccountColumn: "Source_Account",
-        noteColumn: "Note",
-        number_format: "decimal_dot",
-        defaultAssetClass: "metals",
-        defaultType: "gift",
-    },
     ibkr: {
         ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
         format: "ibkr_transaction_history",
@@ -53,18 +38,6 @@ const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
         fxRateColumn: "Exchange Rate",
         noteColumn: "Description",
         typeMapping: { "Foreign Tax Withholding": "tax" },
-    },
-    ibkr_funding_history: {
-        ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
-        format: "ibkr_funding_history",
-        dateColumn: "Request Date",
-        typeColumn: "Method",
-        symbolColumn: "Reference Number",
-        amountColumn: "Amount",
-        sourceIdColumn: "Reference Number",
-        sourceAccountColumn: "Account ID",
-        noteColumn: "Method",
-        number_format: "decimal_dot",
     },
     kinesis: {
         ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
@@ -127,7 +100,6 @@ const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
 
 type SpecializedHintKey =
     | "portfolioImport.ibkrParserHint"
-    | "portfolioImport.ibkrFundingParserHint"
     | "portfolioImport.kinesisParserHint"
     | "portfolioImport.nexoParserHint"
     | "portfolioImport.nexoProParserHint"
@@ -137,7 +109,6 @@ const SPECIALIZED_HINT_KEYS: Partial<
     Record<NonNullable<PortfolioCustomConfig["format"]>, SpecializedHintKey>
 > = {
     ibkr_transaction_history: "portfolioImport.ibkrParserHint",
-    ibkr_funding_history: "portfolioImport.ibkrFundingParserHint",
     kinesis_transaction_history: "portfolioImport.kinesisParserHint",
     nexo_transaction_history: "portfolioImport.nexoParserHint",
     nexo_pro_spot_history: "portfolioImport.nexoProParserHint",

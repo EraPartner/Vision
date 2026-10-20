@@ -3566,7 +3566,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation across a complete portfolio statement scope
-         * @description Read-only plan across up to 100 staged batches. Detects source duplicates, unique existing transactions, corrections, duplicate repairs, dated transfers, asset fees, zero-basis yield reversals and blockers. Omitted policy allows only exact adoption. Explicit policies require a subsequent commit bound to this plan's fingerprint. No history is changed. Explicit prefer_source may correct an unchanged prior Saxo workbook adoption only when the same verified literal source and active receipt after-image prove identity; the fingerprint binds that original batch and receipt context. Literal Saxo CSV events may be duplicate_source companions of uniquely matching selected detailed workbook events, including net-only dividend errors. Missing, ambiguous or conflicting source context remains blocked. Authenticated IBKR header and statement-currency context may prove currency or separate-withholding corrections for imported-copy repairs and standalone legacy sales. Unique same-date economic claims can narrow copy candidates; other proved copies remain duplicates. Matching windows remain unchanged. Optional reconciliation_scope=adopt_existing_only derives proven existing buy/gift adoptions and receipt-proven duplicate/settled actions from complete freshly captured unfiltered Kinesis sources under explicit preserve_existing. The full source is classified before selection. Narrow review never plans inserts, repairs, cash, custody or adjustments; paired yield income remains deferred. Source/receipt ambiguity still blocks. Pending progress describes excluded unsettled events. Full history may record proved zero-basis paired income after the distinct selected Gift insert/adoption or exact existing unit is proved. incomeProof.unitRowId binds that Gift action; unitTransactionId is present for canonical existing units and repeated income. Source roles retain included-in-units income without adding acquisitions or gains again. Complete already-retained original-document evidence may prove closed yield-group membership through independent positive-basis deposit boundaries, complete interval closure, same-file settled yield anchors and globally unique eight-decimal unit pairing. Members select together or block together, without changing original recorded dates or other canonical fields. Broker payment dates remain source evidence. Grouped actions retain one distinct source row and existing record per adopt; the response shape is unchanged. Optional correct_existing_only uses explicit prefer_source to select only proved financial corrections of unique existing Kinesis buy/gift records plus strict receipt-proven retries. Literal primary purchase fees replace recorded fees. Meaningful gift basis/currency require validated original Portfolio Performance recorded-native evidence and an existing meaningful positive gift basis. Currency changes without literal original FX require usable stored historical-date rate evidence, bound in the fingerprint; corrections use the normal historical cache, and rates at most seven days before the transaction date qualify. Unavailable gifts defer without blocking independent literal-fee corrections. Today's rate never authorizes correction and canonical source FX stays unstamped. Ordinary financial corrections retain dates, types, units, notes and IDs; unknown original FX is not invented. A proved closed yield group may instead produce date-only adopt actions with typed dateProof and corrections exactly [date]. Its changed members use the literal broker payment date together; quantities, type, financial values, notes and IDs stay unchanged. memberCount includes unchanged anchors rather than only correction actions. The server binds complete group closure, original reference and all before/after dates in the fingerprint. This does not permit ordinary nearby-date corrections. The same selected-only progress and deferred lifecycle applies. record_in_kind_income_only requires explicit preserve_existing and zero yield interpretation on complete original unfiltered Kinesis primary source. It selects literal paired income only when a unique proved existing zero-basis acquisition and retained source/receipt after-image agree. Actions use record_income with typed incomeProof; source type is dividend, income_recognition_role is included_in_units, units/price are null, and fees/taxes are zero. Positive literal income is rounded at canonical precision without an invented minimum; the retained raw value may round to zero. No new gift, cash movement, custody, adjustment or financial/date correction is selected. Literal amount is retained separately and not added to gains again. Stored historical proof remains readable; no reference upload is available. Preview and locked commit warm normal historical rates automatically. Conversion requires a usable stored income-date rate within seven days, bound in the fingerprint; unresolved dates defer and current rates do not authorize recording. Canonical source FX stays null. record_cash_only requires complete original unfiltered Kinesis source, explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer. The server proves complete cash balance chains and selects cash/duplicate/settled with typed cashProof. New cashValues carry signed amount, date, currency, account, brokerage origin and null peer; trade quotes and confirmed funding are internal, while card payments remain expenses. imported equals recordedCash; adopted, repaired and recordedIncome are zero. No portfolio, income, custody or adjustment drain runs, no opposite bank row is invented, and other source events stay pending. XML is not applied in this scope; retained reference context remains intact. Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required; confirmed cash-only review is required. Unchanged source-owned settled repeats remain compatible with full review. A separately quoted same-currency funding withdrawal fee produces a second cashFeeValues expense component; the main transfer is net of that fee. cashProof.componentCount is one or two, and two-component repeats identify a distinct existingCashFeeTransactionId. Card spending includes its fee once. Source actions and ledger component counts are distinct. The zero-opening complete source requires no unrelated active ledger rows or routed-account statement balance readings, including zero readings; statement and ledger state are fingerprint-bound and rechecked under locks. Historical date-rate readiness is prepared automatically and fingerprint-bound; unresolved readiness defers the whole group rather than using a current rate.
+         * @description Read-only plan across up to 100 staged batches. Detects source duplicates, unique existing transactions to adopt, corrections, dated transfers, asset fees, zero-basis yield reversals and blockers. Omitted policy allows only exact adoption; a difference between source and existing facts needs an explicit global or per-batch policy. A repeated source identity is a duplicate. Kinesis fiat cash and IBKR deposits and withdrawals are ordinary cash actions. A zero yield-basis Kinesis distribution is an insert of its literal income with income_recognition_role=included_in_units beside its zero-basis units. No history is changed. ADR-236 removed the bounded reconciliation scopes, cash funding confirmation and plan fingerprints.
          */
         post: operations["previewPortfolioImportReconciliation"];
         delete?: never;
@@ -3586,7 +3586,7 @@ export interface paths {
         put?: never;
         /**
          * Atomically commit a reviewed portfolio statement scope
-         * @description Locks and rechecks the complete source scope and projected history against the reviewed fingerprint. Adopts existing records with permanent before and after receipts, inserts missing events in global chronological order, and records dated custody transfers and asset adjustments. Proven imported copies of manual transactions are repaired with permanent dual-row receipts. Any blocker or row failure rolls back the whole operation. Adopted records retain their identity and notes. A proved prior Saxo adoption correction locks the original batch and writes a new reversible receipt without changing original counters or cash records. Proved Saxo CSV companions settle as duplicates before financial inserts; their errors and counters update atomically without inventing gross income. With reconciliation_scope=adopt_existing_only, the same reviewed scope and fingerprint apply only proven Kinesis adoptions and newly settled receipted duplicates. Imported and repaired are zero. The writer returns before any general event drain. Deferred source rows remain unsettled; while pending is nonzero all selected batches remain awaiting_review without completion timestamps, even if individual source progress is complete. Existing guarded immutable adoption/restore receipts support rollback after after-image checks. With correct_existing_only and explicit prefer_source, only proved existing financial corrections, proved whole-group yield payment-date corrections and strict receipted retries are applied. Ordinary financial corrections retain dates; grouped date-only corrections require typed dateProof and unchanged financials. Types, units, notes and IDs stay unchanged. Imported and repaired remain zero; pending source events retain the same review lifecycle and guarded immutable adoption receipt rollback. Full history composes literal paired income with its selected zero-basis Gift insert/adoption or already-proved existing unit in one atomic commit. Output-only incomeProof.unitRowId binds the Gift row; unitTransactionId identifies an existing canonical unit. The actual unit after-image is proved before income is written. recordedIncome and recordedCash are additive subsets of imported at batch and aggregate level; repeated income/cash writes neither again. record_in_kind_income_only records only the reviewed literal paired income as canonical included_in_units dividends. imported equals recordedIncome; adopted/repaired are zero. It creates no acquisitions or cash/custody events and returns before the general event drain. Immutable paired-income receipts bind source and unchanged unit acquisition for repeat and guarded rollback. Other source events retain the same pending review lifecycle. record_cash_only requires complete original unfiltered Kinesis source, explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer. The server proves complete cash balance chains and selects cash/duplicate/settled with typed cashProof. New cashValues carry signed amount, date, currency, account, brokerage origin and null peer; trade quotes and confirmed funding are internal, while card payments remain expenses. imported equals recordedCash; adopted, repaired and recordedIncome are zero. No portfolio, income, custody or adjustment drain runs, no opposite bank row is invented, and other source events stay pending. XML is not applied in this scope; retained reference context remains intact. Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required; confirmed cash-only review is required. Unchanged source-owned settled repeats remain compatible with full review. A separately quoted same-currency funding withdrawal fee produces a second cashFeeValues expense component; the main transfer is net of that fee. cashProof.componentCount is one or two, and two-component repeats identify a distinct existingCashFeeTransactionId. Card spending includes its fee once. Source actions and ledger component counts are distinct. The zero-opening complete source requires no unrelated active ledger rows or routed-account statement balance readings, including zero readings; statement and ledger state are fingerprint-bound and rechecked under locks. Historical date-rate readiness is prepared automatically and fingerprint-bound; unresolved readiness defers the whole group rather than using a current rate.
+         * @description Locks the selected batches and their accounts, rebuilds the plan from the current history and commits it in one transaction. Adopts existing records with permanent before and after receipts, inserts missing events in global chronological order, and records dated custody transfers and asset adjustments. Any blocker or row failure rolls back the whole operation. Adopted records retain their identity and notes. The commit adopts the history as it stands at commit time; an existing transaction that changed or disappeared since it was planned is rejected with a conflict.
          */
         post: operations["commitReviewedPortfolioImports"];
         delete?: never;
@@ -7525,92 +7525,37 @@ export interface components {
             defaultModel: string;
             enabled: boolean;
         };
-        /** @description Present only on a correct_existing_only prefer_source date-only adoption of a proved closed Kinesis yield group. Existing and source dates equal recordedDate and paymentDate respectively. Quantities, type and all financial values are unchanged. memberCount includes unchanged yield anchors, which need not be selected correction actions; complete group closure and atomic selection are proved by the server and bound in the reviewed fingerprint. */
-        PortfolioImportReconciliationDateProof: {
-            /** @enum {string} */
-            kind: "closed_kinesis_yield_group";
-            groupKey: string;
-            /** Format: date */
-            recordedDate: string;
-            /** Format: date */
-            paymentDate: string;
-            memberCount: number;
-        };
-        /** @description Present on proved record_income, duplicate or settled paired-income actions in full history or record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full scope requires unitRowId binding the distinct selected Gift action in the same batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do repeated income actions. Repeats also identify the distinct existing income through existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis income/units identity and immutable receipt images, binds proof into the fingerprint, and writes income only after its unit is proved. Each income and unit identity is unique; the proof cannot record income again or add another acquisition. */
-        PortfolioImportReconciliationIncomeProof: {
-            /** @enum {string} */
-            kind: "paired_kinesis_income";
+        /** @description Shared preview and commit body. Unknown fields, including the removed reconciliation_scope, cash_funding_policy and expected_plan_fingerprint, are rejected with 400. */
+        PortfolioImportReconciliationRequest: {
+            batch_ids: number[];
             /**
-             * Format: int64
-             * @description Required only in full history; output-only staged Gift row ID selected in this review.
+             * @description Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
+             * @enum {string}
              */
-            unitRowId?: number;
-            /** Format: int64 */
-            unitTransactionId?: number;
-        } | unknown | unknown;
-        /** @description Signed cash ledger values for a proved source event. Required for a new cash action, optional on proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A separately quoted own-account withdrawal fee is retained as a second negative expense component; the transfer component is net of that fee. Card spending already includes its quoted fee and creates no extra fee row. */
-        PortfolioImportReconciliationCashValues: {
-            /** Format: date */
-            date: string;
-            amount: string;
-            currency: string;
-            /** Format: int64 */
-            accountId: number;
-            isTransfer: boolean;
-            /** @enum {string} */
-            transferSource: "brokerage";
-            /** @enum {integer|null} */
-            transferPeerId: null;
-        };
-        /** @description Present only in record_cash_only on every cash, duplicate or settled action. The complete original source and all cash balance chains are proved before selection; every group member selects together. memberCount includes new and repeated cash actions, and equals selected group action count. Event identities are unique, and fileHash is common within a source batch/group. Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to the reviewed fingerprint and confirmed own-account funding policy; it does not authorize portfolio or custody actions. */
-        PortfolioImportReconciliationCashProof: {
-            /** @enum {string} */
-            kind: "closed_kinesis_cash";
-            groupKey: string;
-            eventKey: string;
-            /** @enum {string} */
-            eventKind: "trade_quote" | "own_account_funding" | "card_expense";
-            fileHash: string;
-            memberCount: number;
-            /**
-             * @description One ledger component
-             * @enum {integer}
-             */
-            componentCount: 1 | 2;
+            adopt_policy?: "preserve_existing" | "prefer_source";
+            /** @description Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. */
+            batch_policies?: {
+                /** Format: int64 */
+                batch_id: number;
+                /** @enum {string} */
+                adopt_policy: "preserve_existing" | "prefer_source";
+            }[];
         };
         PortfolioImportReconciliationCounts: {
+            /** @description Newly recorded transactions, including in-kind income recorded with the included_in_units role. */
             imported: number;
+            /** @description Settled source rows, including adopted rows. */
             duplicates: number;
             adopted: number;
-            repaired: number;
             errors: number;
-            /** @description Additive aggregate and batch subtotal of newly recorded cash ledger components. In full history it is a subset of imported alongside recordedIncome and ordinary records. In record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be smaller. Repeated settlement records no new cash. */
-            recordedCash?: number;
-            /** @description Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In full history it is a subset of imported; the paired Gift is recorded or adopted once in the same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is zero. Missing subtotals remain valid for older full responses. */
-            recordedIncome?: number;
         };
-        PortfolioImportReconciliationCommitResult: components["schemas"]["PortfolioImportReconciliationCounts"] & components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
-            /** @description Present for every bounded scope; server-derived staging IDs, never caller-selectable. Already settled actions need not add to duplicates. */
-            selectedRowIds?: number[];
-            batches: (components["schemas"]["PortfolioImportReconciliationCounts"] & components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
+        PortfolioImportReconciliationCommitResult: components["schemas"]["PortfolioImportReconciliationCounts"] & {
+            batches: (components["schemas"]["PortfolioImportReconciliationCounts"] & {
                 /** Format: int64 */
                 batch_id: number;
             })[];
         };
-        /** @description All four fields are emitted for adopt_existing_only, correct_existing_only, record_in_kind_income_only and record_cash_only plans, commit results, and commit batch entries. Preview batchProgress entries use pending, complete and deferredCounts with their batchId, without reconciliationScope. Full-scope responses retain their existing shape and omit these fields. Complete describes source settlement, not the batch lifecycle: every selected batch stays awaiting_review while the overall session has pending events. */
-        PortfolioImportReconciliationScopeProgress: {
-            /** @enum {string} */
-            reconciliationScope?: "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-            /** @description Excluded unsettled source rows after selected actions; per-batch counts sum to the session total. */
-            pending?: number;
-            /** @description True exactly when pending is zero. */
-            complete?: boolean;
-            /** @description Pending rows grouped by staged event kind, including dividend, gift, sell, cash, asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum to pending. */
-            deferredCounts?: {
-                [key: string]: number;
-            };
-        };
-        PortfolioImportReconciliationPlan: components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
+        PortfolioImportReconciliationPlan: {
             batchIds: number[];
             /** @enum {string|null} */
             adoptPolicy: "preserve_existing" | "prefer_source" | null;
@@ -7620,50 +7565,32 @@ export interface components {
                 /** @enum {string} */
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
-            planFingerprint: string;
             ready: boolean;
-            /** @description Full-scope reviewed actions; attachment/correction selects adopt/duplicate/settled, record_in_kind_income_only selects record_income/duplicate/settled, and record_cash_only selects cash/duplicate/settled only. */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. */
             actions: ({
-                /**
-                 * Format: int64
-                 * @description Resolved investment identity; required on full paired income and its selected Gift action, including bodyless repeats.
-                 */
+                /** Format: int64 */
+                batchId: number;
+                /** Format: int64 */
+                rowId: number;
+                rowOrdinal: number;
+                action: string;
+                /** Format: int64 */
                 investmentId?: number | null;
                 /**
                  * Format: int64
-                 * @description Existing canonical identity for adoption or owned duplicate/settled actions. Full paired income requires distinct existing income and unit identities on repeats.
+                 * @description Existing canonical transaction for an adoption or an owned duplicate.
                  */
                 existingTransactionId?: number;
-                /** @description True for proven native IBKR funding corrections. existingTransactionId identifies the cash ledger; investmentId is null. Only amount and currency can change, retaining the original date, notes and financial provenance. */
-                isCash?: boolean;
-                dateProof?: components["schemas"]["PortfolioImportReconciliationDateProof"];
-                incomeProof?: components["schemas"]["PortfolioImportReconciliationIncomeProof"];
-                cashProof?: components["schemas"]["PortfolioImportReconciliationCashProof"];
-                cashValues?: components["schemas"]["PortfolioImportReconciliationCashValues"];
-                /** @description Required on new componentCount=2 own-account withdrawals. Negative same-date/currency/account fee expense with isTransfer=false, brokerage origin and null peer. Main cashValues is the net withdrawal and isTransfer=true; no separate fee is invented for card payments. Optional alongside main values on repeats. */
-                cashFeeValues?: components["schemas"]["PortfolioImportReconciliationCashValues"];
-                /**
-                 * Format: int64
-                 * @description Required on duplicate/settled componentCount=2 repeats; a distinct existing fee transaction whose complete after-image is guarded. Forbidden for single-component actions.
-                 */
-                existingCashFeeTransactionId?: number;
             } & {
                 [key: string]: unknown;
             })[];
             blockers: {
                 [key: string]: unknown;
             }[];
-            /** @description Counts of actions in this plan; narrow scope excludes deferred events. */
+            /** @description Counts of actions in this plan by action kind. */
             summary: {
                 [key: string]: number;
             };
-            /** @description Present for every bounded scope; exactly the distinct row IDs in selected actions, derived by the server. */
-            selectedRowIds?: number[];
-            /** @description Present only in narrow preview; commit reports progress within batches instead. */
-            batchProgress?: (components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
-                /** Format: int64 */
-                batchId: number;
-            })[];
         };
         PortfolioImportBatch: {
             id: string;
@@ -7685,7 +7612,7 @@ export interface components {
         PortfolioImportUpload: {
             /**
              * Format: binary
-             * @description CSV history, detailed Saxo XLSX, or original IBKR funding XLS/XLSX, maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. IBKR funding requires portfolio_format=ibkr_funding_history and original Deposit and Withdrawal sheet headers. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS is accepted only for native IBKR funding history.
+             * @description CSV history or detailed Saxo XLSX, maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS workbooks are rejected.
              */
             file: string;
             /** @description Display label for the import source */
@@ -7702,10 +7629,10 @@ export interface components {
              */
             yield_basis_policy?: "zero";
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. IBKR Transaction History funding values are statement-base amounts; the native funding workbook proves original amounts and currencies. A separate funding correction scope with prefer_source updates exact existing cash matches and creates no new financial records. Unproved new Transaction History funding records cannot be committed. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. IBKR Transaction History deposits and withdrawals are recorded as ordinary sleeve cash in the statement base currency. Kinesis fiat deposits, withdrawals, card payments and trade cash legs are recorded as ordinary signed sleeve cash whose amount is the literal balance movement, fees included. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history" | "ibkr_funding_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
+            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -16217,10 +16144,8 @@ export interface operations {
                         data?: {
                             detected: {
                                 /** @enum {string} */
-                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
+                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
                                 sourceAccountIdentities: string[];
-                                /** @enum {string} */
-                                presetKey?: "ibkr_funding_history";
                             } | null;
                             /** @enum {string|null} */
                             detectionError: "parse_error" | null;
@@ -16687,36 +16612,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    batch_ids: number[];
-                    /**
-                     * @description Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
-                     * @enum {string}
-                     */
-                    adopt_policy?: "preserve_existing" | "prefer_source";
-                    /**
-                     * @description Optional additive scope. adopt_existing_only requires Kinesis sources, explicit global preserve_existing, no conflicting overrides, no included_symbols/skipped source rows, and verified complete source capture. Row IDs cannot be supplied by callers. correct_existing_only instead requires explicit global prefer_source and either complete Kinesis financial/date proof or a separate native IBKR funding scope proving exact existing base-currency cash corrections. record_in_kind_income_only requires explicit global preserve_existing, zero yield basis and a proved existing zero-basis income/units pair; retained source proof remains readable and other events remain pending. record_cash_only requires complete unfiltered Kinesis source, explicit preserve_existing and cash_funding_policy=own_account_transfer; only the complete proved cash chain is selected, with no XML application.
-                     * @default full
-                     * @enum {string}
-                     */
-                    reconciliation_scope?: "full" | "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-                    /**
-                     * @description Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                     * @enum {string}
-                     */
-                    cash_funding_policy?: "own_account_transfer";
-                    /** @description Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides. */
-                    batch_policies?: {
-                        /** Format: int64 */
-                        batch_id: number;
-                        /** @enum {string} */
-                        adopt_policy: "preserve_existing" | "prefer_source";
-                    }[];
-                };
+                "application/json": components["schemas"]["PortfolioImportReconciliationRequest"];
             };
         };
         responses: {
-            /** @description Review plan; blocked plans still return 200. Narrow scope adds reconciliationScope, selectedRowIds, pending, complete, deferredCounts and batchProgress; actions/summary contain only the selected records. Full response may additionally include proved paired income actions. */
+            /** @description Review plan; blocked plans still return 200. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -16727,7 +16627,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Malformed scope or policy, missing batch, or non-reviewable scope */
+            /** @description Malformed or unknown field, missing batch, or non-reviewable scope */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16745,35 +16645,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    batch_ids: number[];
-                    /** @enum {string} */
-                    adopt_policy?: "preserve_existing" | "prefer_source";
-                    /**
-                     * @description Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis sources and the matching explicit policy (preserve_existing for attachment/income, prefer_source for corrections). Income requires zero yield basis and already proved units; excluded events remain pending.
-                     * @default full
-                     * @enum {string}
-                     */
-                    reconciliation_scope?: "full" | "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-                    /**
-                     * @description Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                     * @enum {string}
-                     */
-                    cash_funding_policy?: "own_account_transfer";
-                    /** @description Exact selected per-batch overrides used by the reviewed preview. */
-                    batch_policies?: {
-                        /** Format: int64 */
-                        batch_id: number;
-                        /** @enum {string} */
-                        adopt_policy: "preserve_existing" | "prefer_source";
-                    }[];
-                    /** @description Exact fingerprint returned by preview for this source/reconciliation scope, global policy and per-batch overrides; narrow fingerprints also bind selected records, full source proof, receipt context and deferred counts. */
-                    expected_plan_fingerprint: string;
-                };
+                "application/json": components["schemas"]["PortfolioImportReconciliationRequest"];
             };
         };
         responses: {
-            /** @description Aggregate and per-batch counts. Narrow scope adds reconciliationScope, pending, complete and deferredCounts at both levels plus top-level selectedRowIds; imported/repaired are zero and partial sessions stay awaiting_review. Full response adds optional recordedIncome/recordedCash subtotals within imported; older responses remain compatible. errors is zero on success and repaired is always emitted. */
+            /** @description Aggregate and per-batch counts; errors is zero on success. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -16784,7 +16660,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Malformed request or non-reviewable scope */
+            /** @description Malformed request, unknown field or non-reviewable scope */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16798,7 +16674,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Stale preview, ambiguous existing history, unresolved source facts, invalid projected history or atomic row failure; no changes retained */
+            /** @description Blocked plan (reconciliation_required), changed existing history, unpaired in-kind income, invalid projected history or atomic row failure; no changes retained */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16870,7 +16746,6 @@ export interface operations {
                                 blockers?: {
                                     [key: string]: unknown;
                                 }[];
-                                planFingerprint?: string;
                             };
                         };
                     };
