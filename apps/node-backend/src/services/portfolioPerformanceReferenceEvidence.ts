@@ -102,8 +102,25 @@ export type LegacyPortfolioFacts = Pick<
     >
   >;
 
-const parseEnvelope = (rawData: string | null) =>
-  JSON.parse(String(rawData)) as PortfolioPerformanceEnvelope | null;
+const UNPARSABLE = Symbol("unparsable envelope");
+
+// Ordinary CSV rows are not JSON. The reconciliation planner asks about the
+// same staged row once per history row, so remember the last text that failed
+// to parse instead of throwing and catching a SyntaxError for each pair.
+let lastUnparsableEnvelope: string | undefined;
+
+const parseEnvelope = (
+  rawData: string | null,
+): PortfolioPerformanceEnvelope | null | typeof UNPARSABLE => {
+  const text = String(rawData);
+  if (text === lastUnparsableEnvelope) return UNPARSABLE;
+  try {
+    return JSON.parse(text) as PortfolioPerformanceEnvelope | null;
+  } catch {
+    lastUnparsableEnvelope = text;
+    return UNPARSABLE;
+  }
+};
 
 /**
  * Hashing, CSV parsing and Decimal arithmetic all throw on a NULL column; every
@@ -291,12 +308,8 @@ export function portfolioPerformanceTradeFacts(
 function readVerifiedPortfolioPerformanceBasisReference(
   row: ReconciliationSourceRow,
 ): VerifiedPortfolioPerformanceBasisReference | undefined {
-  let envelope;
-  try {
-    envelope = parseEnvelope(row.raw_data);
-  } catch {
-    return undefined;
-  }
+  const envelope = parseEnvelope(row.raw_data);
+  if (envelope === UNPARSABLE) return undefined;
   const proof = envelope?.__portfolioPerformanceReference;
   if (
     typeof envelope?.primaryRawData !== "string" ||
@@ -359,13 +372,10 @@ function readVerifiedPortfolioPerformanceBasisReference(
 export function portfolioPrimaryRawData<T extends string | null>(
   rawData: T,
 ): string | T {
-  try {
-    const envelope = parseEnvelope(rawData);
-    if (typeof envelope?.primaryRawData === "string")
-      return envelope.primaryRawData;
-  } catch {
-    /* Ordinary CSV source. */
-  }
+  const envelope = parseEnvelope(rawData);
+  // An ordinary CSV source is not an envelope.
+  if (envelope !== UNPARSABLE && typeof envelope?.primaryRawData === "string")
+    return envelope.primaryRawData;
   return rawData;
 }
 
@@ -439,12 +449,8 @@ function readPortfolioPerformanceReferenceIdentifiesLegacy(
   row: ReconciliationSourceRow,
   current: LegacyPortfolioFacts,
 ): boolean {
-  let envelope;
-  try {
-    envelope = parseEnvelope(row.raw_data);
-  } catch {
-    return false;
-  }
+  const envelope = parseEnvelope(row.raw_data);
+  if (envelope === UNPARSABLE) return false;
   const reference = envelope?.__portfolioPerformanceReference;
   const literal = reference?.literal;
   if (
@@ -807,7 +813,9 @@ export function verifiedPortfolioPerformanceCustodyAnnotation(
   row: ReconciliationSourceRow,
 ): boolean {
   try {
-    const proof = parseEnvelope(row.raw_data)?.__portfolioPerformanceReference;
+    const envelope = parseEnvelope(row.raw_data);
+    if (envelope === UNPARSABLE) return false;
+    const proof = envelope?.__portfolioPerformanceReference;
     return (
       proof?.basisPolicy === "paired_custody" &&
       /^[a-f0-9]{64}$/.test(proof.sourceHash || "") &&
