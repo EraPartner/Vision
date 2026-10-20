@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     architecture,
@@ -105,21 +105,16 @@ Located in `docs/diagrams/`:
 | Recurring Detection    | Automatic recurring transaction detection                             | `recurring-detection-flow.puml`          |
 | Materialized Views     | View refresh on startup and schedules                                 | `materialized-view-flow.puml`            |
 | AI Chat Tool Loop      | Ollama tool-call loop with repository dispatch                        | `ai-chat-tool-loop.puml`                 |
-| AI Research            | Recoverable evidence, cloud planning, and selected-evidence synthesis | `ai-research-investigation-flow.puml`    |
+| AI Research            | Recoverable local evidence, public research, and Ollama synthesis     | `ai-research-investigation-flow.puml`    |
 | Backup AEAD Encryption | AES-256-GCM v2 bundle create + restore (ADR-040)                      | `backup-aead-encryption.puml`            |
 | Dev Observability      | API event bus → ring buffer → Cmd+Shift+A Inspector                   | `dev-observability-flow.puml`            |
 | Commitment-aware Cash  | Stored-rate bill projection and reserve floor before rebalance        | `commitment-aware-cash-flow.puml`        |
 | Life Scenario          | Saved inputs and paired portfolio forecasts                           | `life-scenario-flow.puml`                |
 | Electron Audit Receipt | Local signed witness, private bridge, live closure, and restore gate  | `electron-audit-verification-flow.puml`  |
-| Codex Isolation        | Synthetic App Server, macOS Seatbelt, and bounded CONNECT proxy       | `codex-experimental-isolation-flow.puml` |
 
 ## Interactive Flow Visualizer
 
-Open [the interactive visualizer](../flow-visualizer.html#api-request) for 84 components and 49 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
-
-The system and backend service diagrams include the optional AgentCloak dependency. Desktop mode
-detects selected-text spans before Vision creates encrypted reference tokens; MCP mode keeps the
-block-on-change gate. The loopback endpoint is a connection boundary, not a retention guarantee.
+Open [the interactive visualizer](../flow-visualizer.html#api-request) for 75 components and 45 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
 
 ![[docs/diagrams/system-architecture.puml]]
 

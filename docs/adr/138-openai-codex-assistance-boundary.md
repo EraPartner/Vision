@@ -1,8 +1,8 @@
 ---
 title: ADR-138 - OpenAI API and Codex Assistance Boundary
 type: adr
-status: Accepted
-date: 2026-09-12
+status: superseded
+date: 2026-10-20
 tags:
   [
     adr,
@@ -21,6 +21,8 @@ aliases:
 ---
 
 # ADR-138: OpenAI API and Codex Assistance Boundary
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 
@@ -102,7 +104,7 @@ require separate cumulative-disclosure controls.
 | Real financial payload before a matching grant            | Unsupported                                                                        | Synthetic-only gate remains closed                                                                    |
 
 The detailed dated evidence and operational profiles live in
-[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]].
+OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]).
 
 ## Privacy Interpretation
 
@@ -167,7 +169,7 @@ for that explicitly granted route. ADR-024 continues to govern the local AI path
 
 ## Related
 
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/adr/024-local-llm-chat|ADR-024: Local LLM Chat Integration]]
 - [[docs/adr/137-shared-analysis-definition-and-result-contract|ADR-137: Shared Analysis Contract]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]

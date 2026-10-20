@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -46,8 +46,6 @@ related_code:
   - apps/frontend/src/features/settings/sections/BackupSection.tsx
   - apps/frontend/src/features/settings/sections/AboutSection.tsx
   - apps/frontend/src/features/settings/AIChatSettingsSection.tsx
-  - apps/frontend/src/features/settings/OpenAiSettingsSection.tsx
-  - apps/frontend/src/features/settings/AgentCloakDesktopSettingsSection.tsx
   - apps/frontend/src/stores/hydration/AppSettingsHydration.tsx
   - apps/frontend/src/stores/hydration/SettingsHydration.tsx
   - apps/frontend/src/contexts/SettingsPreloadContext.tsx
@@ -137,7 +135,7 @@ SettingsPreloadContext → SettingsHydration/AppSettingsHydration/ThemeHydration
 The persisted `app_settings` and `dashboard_settings` blobs are untrusted JSON from the settings API. Both are validated at the store boundary during hydration, in `[[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]]`:
 
 - `migrateDashboardSettings` (ZOD-11) parses the blob with `storedDashboardSettingsSchema` — a Zod `looseObject` (unknown keys survive and are persisted back) with per-field `.catch` to the default, so one malformed field never poisons the merge.
-- `migrateAppSettings` does the same via `storedAppSettingsSchema`. It validates the canonical `visualEffects` tier directly; the retired `enhancedEffects` boolean no longer changes hydration. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20, and `numberFormat` one of `eu`, `us`, `ch`, or `in`. `dateFormat` is limited to the five values offered by Settings; malformed or hand-edited values recover to `DD/MM/YYYY` instead of reaching a locale-sensitive fallback. The optional `openAiDefaultModel` is a non-empty string of at most 200 characters and is checked against the live approved model catalog before use. A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
+- `migrateAppSettings` does the same via `storedAppSettingsSchema`. It validates the canonical `visualEffects` tier directly; the retired `enhancedEffects` boolean no longer changes hydration. The money-formatting fields get value-level bounds because bad values make `Intl.NumberFormat` throw `RangeError` (crashing pages into the error boundary, or degrading guarded money surfaces to raw unlocalised numbers): `defaultCurrency` must be a well-formed 3-letter ISO-4217 code, `showDecimalPlaces` an integer 0–20, and `numberFormat` one of `eu`, `us`, `ch`, or `in`. `dateFormat` is limited to the five values offered by Settings; malformed or hand-edited values recover to `DD/MM/YYYY` instead of reaching a locale-sensitive fallback. A retired `openAiDefaultModel` field in an older blob is dropped and not carried forward ([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). A blob that is not an object at all falls back to `DEFAULT_APP_SETTINGS` wholesale.
 
 Since the 2026-09-11 compatibility cutoff, dashboard hydration reads only the server-backed
 `dashboard_settings` value and otherwise uses defaults. It no longer imports
@@ -167,7 +165,6 @@ A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...
 | `startupSection`               | `StartupSection`       | `'budgeting'`                          | Section the app navigates to at launch (field within the `app_settings` JSONB blob)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `autoClearPlannedOnMatch`      | boolean                | `true`                                 | When `true`, automatically links and executes a planned payment when an ingested transaction unambiguously matches it. When `false`, auto-link is disabled entirely (no suggestions surface either). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026\|Planned Transactions: Auto-Link on Ingest]].                                                                                                                                                                                                                                 |
 | `colorblindGainLoss`           | boolean                | `false`                                | When `true`, applies the Okabe-Ito colorblind-safe gain/loss palette (green gain / orange loss, `.skin-v2` root class). When `false` (default), uses the classic gold gain (`--gain`) / red loss (`--loss: var(--destructive)`) palette. Controlled via **Settings → Appearance → Accessibility → Gain & loss colors**. Persisted in the `app_settings` JSONB blob; `AppSettingsProvider` calls `setSkinV2(appSettings.colorblindGainLoss)` on hydration and on change. See [[docs/adr/104-skin-v2-dense-fintech-visual-redesign\|ADR-104 addendum]].                |
-| `openAiDefaultModel`           | string                 | _(operator default)_                   | Preferred approved OpenAI API model for new investigations. An explicit per-investigation choice wins; stale catalog entries fall back safely. See [[docs/adr/148-user-default-openai-model\|ADR-148]].                                                                                                                                                                                                                                                                                                                                                              |
 | `aiAnswerDepth`                | `quick \| detailed`    | `'quick'`                              | Visible default investigation depth. Run and saved-analysis parameters override it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `analysisBenchmark`            | string                 | _(none)_                               | Optional explicit benchmark identifier. Vision does not infer one from holdings or risk.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
@@ -364,20 +361,12 @@ Copy follows [[docs/adr/182-ui-copy-plain-words|ADR-182]]: sentence case (the se
 | Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt, **Sidebar** (Labels / Icons only, [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180]]); **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
 | Insights      | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
 | Behavior      | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                 |
-| AI & research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
+| AI & research | `sections/AiSection.tsx`         | Analysis defaults, Ollama default model, and research provider keys                                                                                                  |
 
 | Backup | `sections/BackupSection.tsx` | Directory, backup-on-quit, passphrase, run/restore (Electron only) |
 | About & maintenance | `sections/AboutSection.tsx` | Identity card (Vision mark, canonical build version, AGPL-3.0-only license, source/documentation links), updates (the shared `useUpdateStatus` result as a row with a Release notes link, Check for updates, Install update), Setup assistant restart, Admin mode switch, Reset all settings |
 
 Admin and Monitors remain sidebar sections of their own (ADR-180) rather than Settings sections.
-
-The AgentCloak Desktop group shows a fresh availability check, effective protection state, local
-reference-key state, and whether the OpenAI route is enabled. Check Again repeats the probe.
-Enable probes the Desktop loopback interface and creates a Vision reference mapping key when none
-exists, then saves the enabled preference. It works even when OpenAI is not configured. Disable
-leaves the key in place for existing token-bearing investigations. See
-[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] and
-[[docs/api/ai-research|AI Research API]].
 
 ### Instant-Apply Model
 
@@ -449,8 +438,7 @@ local mirror does not authorize overwriting database state.
 ## Related Features
 
 - [[docs/adr/084-settings-instant-apply-sidebar|ADR-084: Settings dialog sidebar + instant-apply]]
-- [[docs/adr/148-user-default-openai-model|ADR-148: User default OpenAI model]]
-- [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171: Explicitly configured packaged OpenAI API route]]
+- [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229: Remove cloud AI, Codex and AgentCloak]] — removed the OpenAI default-model and AgentCloak Desktop settings
 - [[docs/features/appearance|Appearance]] — Theme variant, color palette mode, and schedule settings
 - [[docs/features/statistics|Insights]] — Uses exclusions and currency settings
 - [[docs/features/portfolio-tax|Portfolio Tax]] — Uses tax adjustments stored as settings

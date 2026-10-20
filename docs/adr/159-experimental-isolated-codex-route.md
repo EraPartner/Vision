@@ -1,13 +1,15 @@
 ---
 title: Experimental Isolated Codex Route
 type: adr
-status: accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, codex, ai, privacy, sandbox]
 description: Permit a disabled-by-default synthetic App Server experiment behind an isolated macOS process and a bounded local proxy.
 ---
 
 # ADR-159: Experimental Isolated Codex Route
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 
@@ -48,5 +50,5 @@ repeated after a restart.
 ## Related
 
 - [[docs/adr/index|All ADRs]]
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/api/admin|Admin API]]

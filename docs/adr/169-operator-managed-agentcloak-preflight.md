@@ -1,8 +1,8 @@
 ---
 title: ADR-169 - Operator-managed AgentCloak preflight
 type: adr
-status: Accepted
-date: 2026-09-25
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, privacy, security, agentcloak, openai]
 description: Add an optional check through an operator-managed AgentCloak loopback endpoint after Vision reference tokenization, while preserving the exact consent-bound OpenAI payload.
 aliases: [ADR-169, AgentCloak preflight]
@@ -15,6 +15,8 @@ related_code:
 ---
 
 # ADR-169: Operator-managed AgentCloak preflight
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 

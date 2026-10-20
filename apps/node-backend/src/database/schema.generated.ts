@@ -115,54 +115,6 @@ export interface AiConversations {
   updated_at: Generated<Timestamp>;
 }
 
-export interface AiDisclosureGrants {
-  allowed_fields_json: Json;
-  created_at: Generated<Timestamp>;
-  expires_at: Timestamp;
-  id: Generated<string>;
-  max_cost_micros: Int8;
-  max_disclosure_units: number;
-  max_input_characters: number;
-  max_output_tokens: number;
-  max_requests: number;
-  mode: string;
-  policy_version: Generated<number>;
-  preview_payload_sha256: string;
-  purpose: string;
-  retain_exact_payload: Generated<boolean>;
-  revoked_at: Timestamp | null;
-  route: string;
-  updated_at: Generated<Timestamp>;
-  used_cost_micros: Generated<Int8>;
-  used_input_characters: Generated<Int8>;
-  used_output_tokens: Generated<Int8>;
-  used_requests: Generated<number>;
-}
-
-export interface AiDisclosureRecords {
-  actual_cost_micros: Int8 | null;
-  actual_input_tokens: number | null;
-  actual_output_tokens: number | null;
-  completed_at: Timestamp | null;
-  created_at: Generated<Timestamp>;
-  disclosure_units_json: Generated<Json>;
-  error_code: string | null;
-  field_manifest_json: Json;
-  grant_id: string;
-  id: Generated<string>;
-  job_id: string | null;
-  mode: string;
-  payload_bytes: number;
-  payload_sha256: string;
-  policy_snapshot_json: Json;
-  provider_request_id: string | null;
-  purpose: string;
-  reserved_cost_micros: Int8;
-  reserved_output_tokens: number;
-  route: string;
-  status: string;
-}
-
 export interface AiInvestigationJobs {
   cancel_requested_at: Timestamp | null;
   checkpoint_json: Generated<Json>;
@@ -171,7 +123,6 @@ export interface AiInvestigationJobs {
   created_at: Generated<Timestamp>;
   depth: string;
   error_json: Json | null;
-  grant_id: string | null;
   id: Generated<string>;
   language: string;
   model: string | null;
@@ -207,24 +158,6 @@ export interface AiMessages {
   tool_args: Json | null;
   tool_name: string | null;
   tool_result: Json | null;
-}
-
-export interface AiReferenceEntries {
-  auth_tag: Buffer;
-  ciphertext: Buffer;
-  created_at: Generated<Timestamp>;
-  nonce: Buffer;
-  reference_type: string;
-  scope_id: string;
-  token: string;
-}
-
-export interface AiReferenceScopes {
-  claimed_at: Timestamp | null;
-  created_at: Generated<Timestamp>;
-  expires_at: Timestamp;
-  id: string;
-  job_id: string | null;
 }
 
 export interface AiResearchDocuments {
@@ -1392,13 +1325,9 @@ export interface DB {
   adr109_legacy_cleanup_marker: Adr109LegacyCleanupMarker;
   agg_split_outstanding: AggSplitOutstanding;
   ai_conversations: AiConversations;
-  ai_disclosure_grants: AiDisclosureGrants;
-  ai_disclosure_records: AiDisclosureRecords;
   ai_investigation_jobs: AiInvestigationJobs;
   ai_investigation_steps: AiInvestigationSteps;
   ai_messages: AiMessages;
-  ai_reference_entries: AiReferenceEntries;
-  ai_reference_scopes: AiReferenceScopes;
   ai_research_documents: AiResearchDocuments;
   ai_research_passages: AiResearchPassages;
   analysis_monitor_notifications: AnalysisMonitorNotifications;

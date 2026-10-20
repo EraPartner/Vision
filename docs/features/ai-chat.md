@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-13
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags:
   [
     feature,
@@ -52,9 +52,9 @@ related_code:
 > [!abstract] Overview
 > Natural-language chat uses the configured Ollama endpoint, which defaults to local on desktop.
 > An explicitly configured remote `OLLAMA_URL` receives prompts and tool results. The separate investigation panel adds recoverable,
-> evidence-backed local work. The packaged OpenAI API investigation route is code-capable only with
-> explicit private runtime configuration. Live synthetic route acceptance is still pending; see
-> [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]]. The Codex experiment is synthetic-only.
+> evidence-backed work on the same Ollama endpoint. Vision has no cloud model route: the OpenAI API
+> route, the Codex experiment and AgentCloak were removed in
+> [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 
 ## Feature Overview
 
@@ -80,22 +80,11 @@ related_code:
 - Quick or detailed EN/NL investigations across Budgeting, Portfolio, and Research.
 - Structured facts, deterministic calculations, interpretations, gaps, conflicts, and evidence.
 - Local documents plus separately enabled public-provider or public-web research.
-- Exact cloud-payload preview, revocable grants, and deletable local disclosure metadata.
-- Optional scoped reversible references replace explicitly marked selected-text literals with
-  one-job random tokens and restore allowlisted answer text locally.
-- Optional AgentCloak protection uses Desktop detection to replace selected-text findings with
-  Vision's encrypted scoped tokens before preview. The MCP mode remains a block-on-change check.
-  Both modes recheck user-authored cloud text before each OpenAI send.
-- Four model privacy profiles: fully local, public-question cloud planning, selected-summary cloud
-  planning, and final cloud synthesis from exact selected evidence. Three concise summaries show
-  the selected model boundary, research behavior, and local retention; expanded details explain
-  the selected profile rather than showing every mode at once.
-- The selected profile still states its capability, exact cloud data, privacy boundary, and local
-  retention. A visible delete action removes the recoverable investigation and its selected evidence.
+- Three concise privacy summaries show the local model boundary, research behavior, and local
+  retention; expanded details explain the selected research and depth profiles.
+- A visible delete action removes the recoverable investigation.
 - Quick and detailed depth profiles state their compute/output difference and explicitly do not
-  widen the selected model or research disclosure boundary.
-- The OpenAI route offers a server-approved API model picker. Each model has its own configured
-  prices, and the selected identifier is visible in the payload preview and consent digest.
+  widen the research boundary.
 - Durable partial jobs that resume without repeating completed tool steps.
 
 ## Choosing a workflow
@@ -103,7 +92,7 @@ related_code:
 The page shows one workflow at a time through a **Chat** | **Investigation** `SegmentedControl` in the page header ([[docs/adr/187-completeness-sweep|ADR-187]]). Chat is the
 default; `?mode=investigation` restores the investigation view. The conversation selection remains
 in the separate `c` query parameter. The conversation rail and its mobile drawer button appear
-only in Chat. The Ollama status banner is also limited to Chat. Investigation checks availability for its own selected local or cloud route.
+only in Chat. The Ollama status banner is also limited to Chat.
 
 Both panels stay mounted while the inactive panel is hidden. Switching modes therefore preserves
 investigation inputs and the investigation panel's current job state, along with the chat draft while its composer remains available.
@@ -112,96 +101,29 @@ The page subtitle describes the active mode's purpose; the two question forms ar
 ## Investigation controls
 
 The investigation question uses the full panel width. Research settings collapse into a summary
-of the selected model route, answer depth, and research access. Expanding it reveals the labeled
+of the local model, answer depth, and research access. Expanding it reveals the depth and research
 selectors. Documents and date range share a separate optional disclosure, with document count and
-active dates visible when closed. Public/cloud inputs remain visible when required. The privacy summary uses
-icons with text, and its keyboard-accessible disclosure retains the full selected model, research,
-depth, and cloud-retention explanation. Selected-evidence cloud synthesis explicitly says that it
-performs no automatic lookup; it does not describe local or public retrieval as active. Cloud
-preview and consent remain separate actions before sending the selected payload.
+active dates visible when closed. Public web query and provider symbol inputs remain visible when
+the selected research mode needs them. The privacy summary uses icons with text, and its
+keyboard-accessible disclosure retains the full model, research, and depth explanation.
 
-The primary footer groups investigation lifecycle actions. Active grant revocation remains directly available. Disclosure record inspection, deletion and historical grants are grouped under the separate Disclosure history section, which is available before records are loaded.
+The primary footer groups investigation lifecycle actions.
 
 The optional investigation date range uses the shared themed date picker. Each bound can be cleared independently; selected dates are submitted as date-only `YYYY-MM-DD` values.
 
 ## Investigation resource profile
 
 Only one investigation executes at a time. It receives bounded tool results and passages, not the
-complete database. Local work reuses the backend and Ollama. Optional cloud work creates one
-short-lived macOS Seatbelt-sandboxed process and removes its empty temporary directory afterward.
-The backend checks that process's JSON output against a zod schema before it stores the request id
-or prices the token usage; output that is not JSON or breaks the schema fails with
-`BROKER_INVALID_OUTPUT` ([[docs/adr/194-runtime-contracts-completion|ADR-194]]).
-Public web queries and provider symbols are entered separately. The two cloud-planning profiles keep
-evidence and final synthesis local. The distinct selected-evidence profile skips local planning,
-retrieval, and model inference, then asks OpenAI for the final structured answer using only the exact
-manually selected evidence shown in the consent preview. Containers are not required for the accepted
-realistic threat model; see [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+complete database. Work reuses the backend and the configured Ollama endpoint.
+Public web queries and provider symbols are entered separately. Containers are not required for the
+accepted realistic threat model; see [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
+(its OpenAI egress parts are superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]).
 Investigation inputs, checkpoints, and results remain in the recoverable local job until it is
-deleted. Disclosure history is separate and retains only the payload digest and policy metadata.
-Quick local investigations use the deterministic plan and one synthesis call. Detailed local work
-adds one bounded planning call. This avoids doubling local model CPU for routine questions.
-The picker is API-only. ChatGPT subscriptions and ChatGPT usage credits do not fund Responses API
-requests and are not reused as authentication.
-The AI settings page stores a preferred OpenAI model for new investigations. An explicit choice in
-the investigation panel overrides that preference. If the saved model is no longer in the server
-catalog, Vision falls back to the operator default and never sends the stale identifier. See
-[[docs/adr/148-user-default-openai-model|ADR-148]].
-
-### Scoped reversible references
-
-Selected-summary planning and selected-evidence synthesis show an optional marker hint. A user can
-write `[[vision-ref:type|value]]` in the selected summary or selected evidence. Types are `account`,
-`recipient`, `investment`, `holding`, `category`, `document`, `subject`, `amount`, and `date`.
-Preview replaces each marker with a typed random token, warns with the number of scoped references,
-and returns the tokenized `outboundRequest` used for both the grant and investigation. When
-AgentCloak Desktop mode is enabled, detected literals in selected summary or evidence become
-`subject` tokens in the same scope. A clean Desktop scan needs no mapping key unless the text
-contains explicit markers.
-
-The mapping stays in PostgreSQL as AES-256-GCM ciphertext under the installation's
-`AI_REFERENCE_MAPPING_KEY`. An unclaimed preview is usable for 15 minutes and can be claimed by one
-job only; a claimed map expires after 30 days. The provider-form answer is checkpointed before local
-restoration. If Vision restarts at that point, it validates the checkpoint and restores from it
-without repeating cloud or local generation. Successful `result_json` contains the restored local
-answer. Deleting the investigation also deletes its reference scope and encrypted entries.
-
-Only answer display text is restored. Evidence IDs, labels, locators, kinds, dates, availability,
-and schema structure stay provider-authored and token-free. An unknown, malformed, expired,
-cross-job, or undecryptable token fails the job visibly. Vision never shows a partly restored answer.
-The feature is pseudonymization, not anonymity: unmarked amounts, dates, holdings, and behavioral
-patterns still cross the exact selected disclosure boundary. See
-[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
-
-### Optional AgentCloak protection
-
-An operator can enable `desktop` or `mcp` mode on the OpenAI route. Desktop mode calls the installed
-AgentCloak Desktop app's experimental loopback `/detect` endpoint during preview. For selected
-summary or evidence, Vision validates detected spans and replaces their literals with encrypted,
-job-scoped reference tokens. The preview and grant bind the resulting exact OpenAI payload. A
-public question is checked but is not automatically changed. Desktop checks the tokenized payload
-again before preview completes and before each OpenAI send; any remaining finding blocks cloud
-disclosure. Vision locally restores answer display text from its own encrypted map. It does not use
-Desktop's `/protect` or `/reveal` mapping. Desktop mode needs the backend on the same host as the
-Desktop app, and the undocumented interface may change.
-
-MCP mode keeps the operator-managed loopback `cloak` check from
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]]. It checks the user-authored
-`question`, `selectedSummary`, and `selectedEvidence` after Vision's explicit marker replacement,
-using `REFERENCE` in place of token identifiers. A proposed change blocks the request; Vision never
-applies that rewrite. In either mode, an unavailable or invalid enabled check stops cloud work.
-Neither a clean scan nor tokenization proves anonymity. Local Ollama chat and local-only
-investigations are unaffected. See [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]]
-and [[docs/security/ai-data-access|AI Data Access Policy]].
+deleted.
+Quick investigations use the deterministic plan and one synthesis call. Detailed work adds one
+bounded planning call. This avoids doubling local model CPU for routine questions.
 
 ![[docs/diagrams/ai-research-investigation-flow.puml]]
-
-AI settings also shows a fresh AgentCloak Desktop availability probe and an enable or disable
-control. Enabling can happen before OpenAI is configured: Vision first probes Desktop, then creates
-a local reference mapping key if none exists. The control saves only the enabled preference in the
-settings database. See [[docs/features/settings|Settings]] and
-[[docs/api/ai-research|AI Research API]].
 
 ## Architecture
 
@@ -381,7 +303,6 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 | Setting                     | Type   | Default                  | Description                                              |
 | --------------------------- | ------ | ------------------------ | -------------------------------------------------------- |
 | `aiDefaultModel`            | string | Operator Ollama default  | Model pre-selected on new local conversations            |
-| `openAiDefaultModel`        | string | Operator OpenAI default  | Approved model pre-selected on new OpenAI investigations |
 | `aiChat.ollamaUrl`          | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
 | `ollama.numCtx`             | number | `8192`                   | Ollama context window passed to every chat request       |
 | `aiChat.contextBudgetChars` | number | `24000`                  | Approximate prompt-history character budget              |
@@ -467,13 +388,9 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/integrations/ollama|Ollama Integration]] — HTTP client and patterns
 - [[docs/security/ai-data-access|AI Data Access Policy]] — tool allowlist, rate limits
 - [[docs/api/ai|AI API]] — endpoint contracts
-- [[docs/api/ai-research|AI Research API]] — investigations, documents, and disclosure records
+- [[docs/api/ai-research|AI Research API]] — investigations and documents
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145: Bounded AI Research Orchestration]]
-- [[docs/adr/147-allowlisted-openai-model-selection|ADR-147: Allowlisted OpenAI Model Selection]]
-- [[docs/adr/151-scoped-reversible-ai-references|ADR-151: Scoped Reversible AI References]]
-- [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]
-- [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170: AgentCloak Desktop Detection with Scoped Vision Protection]]
-- [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171: Explicitly Configured Packaged OpenAI API Route]]
+- [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229: Remove Cloud AI, Codex and AgentCloak]] — removed the OpenAI API route, Codex experiment and AgentCloak
 - [[docs/features/transactions|Transactions]] — data surfaced by expense tools
 - [[docs/features/portfolio|Portfolio & Investments]] — data surfaced by portfolio tools
 - [[docs/features/plannedTransactions|Planned Transactions]] — data surfaced by planned tools

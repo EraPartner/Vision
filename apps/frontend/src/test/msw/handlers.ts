@@ -1189,56 +1189,6 @@ export const defaultHandlers = [
             enabled: false,
         }),
     ),
-    // routes/aiResearch.ts GET /status with Ollama and OpenAI unavailable.
-    http.get(`${API_BASE}/api/ai-research/status`, () =>
-        ok({
-            defaultRoute: "local",
-            providers: [
-                {
-                    id: "ollama",
-                    route: "local",
-                    status: "unavailable",
-                    models: [],
-                    configuredContextTokens: 8192,
-                    supportsTools: true,
-                    supportsEmbeddings: false,
-                },
-                {
-                    id: "openai-api",
-                    route: "openai-api",
-                    status: "disabled",
-                    models: [],
-                    supportsTools: false,
-                    supportsEmbeddings: false,
-                },
-            ],
-            openai: {
-                enabled: false,
-                model: null,
-                models: [],
-                storageRequested: false,
-                hostedToolsEnabled: false,
-                disclosureModes: [],
-                monthlyBudgetMicros: 0,
-                reversibleReferences: {
-                    configured: false,
-                    markerSyntax: "[[vision-ref:type|value]]",
-                    classification: "pseudonymized-not-anonymous",
-                },
-                agentCloakPreflight: {
-                    enabled: false,
-                    mode: "block-on-change",
-                    location: "operator-managed-loopback",
-                },
-            },
-            web: { enabled: false, searchLimitPerJob: 0, pageLimitPerJob: 0 },
-            localDocuments: {
-                supportedMediaTypes: ["text/plain", "text/markdown", "text/html"],
-                pdfSupported: false,
-            },
-            orchestration: { maxConcurrentJobs: 1 },
-        }),
-    ),
     // Always paginated (`parsePagination` defaults to limit 50).
     http.get(`${API_BASE}/api/ai/conversations`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0 }),

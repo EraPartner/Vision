@@ -4,7 +4,7 @@ type: index
 status: active
 date: 2026-10-20
 updated: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 tags:
   [
     knowledge-base,
@@ -64,8 +64,7 @@ aliases: [KB, docs, documentation, knowledge base, home]
 Recent cross-cutting implementation: [[docs/features/analysis-workspace|Analysis Workspace]],
 [[docs/api/analysis|Analysis API]], [[docs/reference/analysis-contract|Analysis Contract]],
 [[docs/reference/analysis-datasets|Analysis Datasets]],
-[[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]], and
-[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]], plus
+[[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]], plus
 [[docs/features/ai-chat|AI Investigations]] and [[docs/api/ai-research|AI Research API]]. The
 current evidence gates are in [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]].
 Import history is defined by
@@ -178,7 +177,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> [Open the visualizer](flow-visualizer.html#api-request) for 84 components and 49 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
+> [Open the visualizer](flow-visualizer.html#api-request) for 75 components and 45 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |

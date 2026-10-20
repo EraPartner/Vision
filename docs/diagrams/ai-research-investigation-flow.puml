@@ -2,151 +2,44 @@
 title Bounded AI Research Investigation
 
 actor User
-participant "AI settings" as SettingsUI
 participant "Investigation client\nReact panel / native AIInvestigationModel" as UI
 participant "AI research routes" as API
-participant "AgentCloak Desktop setup\n(Vision service)" as Setup
 participant "Investigation service\n(serial queue)" as Orchestrator
-participant "Reference service\n(scoped local restoration)" as References
-participant "AgentCloak preflight\n(Vision service)" as Preflight
-participant "AgentCloak endpoint\n(Desktop /detect or MCP /mcp)" as AgentCloak
-database "PostgreSQL\njobs, passages, disclosure metadata,\nencrypted reference maps" as DB
-participant "Bounded typed tools" as Tools
-participant "Restricted analysis runtime" as Analysis
-participant "Local Ollama" as Ollama
-participant "Egress helper\n(short-lived process)" as Egress
-participant "OpenAI Responses API" as OpenAI
-collections "Private runtime env\n(reference key, provider config)" as Env
+database "PostgreSQL\njobs, steps, passages" as DB
+participant "Bounded typed tools\n(local data, documents,\noptional public research)" as Tools
+participant "Configured Ollama" as Ollama
 
-opt User enables AgentCloak Desktop in AI settings
-  SettingsUI -> API: GET /agentcloak-desktop\nread effective state and fresh probe
-  API -> Setup: Probe /detect and read preference
-  Setup -> AgentCloak: Bounded loopback detection probe
-  Setup --> API: enabled, available, mappingKeyConfigured, openAiEnabled
-  API --> SettingsUI: Status without secrets
-  SettingsUI -> API: PUT /agentcloak-desktop {enabled:true}
-  API -> Setup: Probe then ensure reference key
-  Setup -> AgentCloak: Bounded loopback detection probe
-  Setup -> Env: Fill missing or blank key; preserve nonblank invalid key
-  Setup -> DB: Save enabled boolean only
-  Setup --> API: Updated status without secrets
-  API --> SettingsUI: Status response
-end
-
-User -> UI: Select scope, depth, language,\nresearch mode, route, and approved API model
-opt Selected summary or evidence contains explicit private literals
-  User -> UI: Wrap literals as\n[[vision-ref:type|value]]
-end
-opt Cloud route selected; first Run inspects the preview
-UI -> API: POST /disclosures/preview\nwith full investigation request
-opt Selected text has markers or Desktop mode is enabled
-  API -> References: Parse supported typed markers
-  opt Desktop mode
-    References -> Preflight: Detect selected-summary and evidence spans\nwith token identifiers masked
-    Preflight -> AgentCloak: POST /detect over loopback
-    AgentCloak --> Preflight: Validated spans or block
-    References -> References: Replace findings with scoped subject tokens
-  end
-  References -> References: Create scope UUID and\n18-byte CSPRNG tokens
-  opt Markers or detections created tokens
-    References -> DB: Store 15-minute unclaimed scope +\nAES-256-GCM ciphertext, nonce, and tag
-  end
-  References --> API: Tokenized outboundRequest +\nscope id, expiry, and count
-end
-opt AgentCloak preflight enabled
-  API -> Preflight: Present user-authored cloud fields\nafter Vision tokenization
-  alt Desktop mode
-    Preflight -> AgentCloak: POST /detect with token identifiers masked
-    AgentCloak --> Preflight: No spans or remaining finding
-  else MCP mode
-    Preflight -> AgentCloak: MCP cloak with token identifiers replaced by REFERENCE
-    AgentCloak --> Preflight: Unchanged text or proposed change
-  end
-  alt Finding, changed text, unavailable, or invalid response
-    Preflight --> API: Block cloud preview
-  end
-end
-API --> UI: Exact tokenized payload, digest,\nreference warning, and preflight status
-User -> UI: Consent to the inspected cloud payload
-UI -> API: POST /disclosures/grants\npreviewHash, allowed fields, source caps and expiry
-API -> DB: Persist digest-bound grant
-API --> UI: Grant id
-end
-UI -> API: POST /investigations\nlocal request or frozen preview.outboundRequest + grantId
+User -> UI: Select scope, depth, language,\nand research mode
+UI -> API: POST /investigations\nroute "local" (strict request)
 API -> Orchestrator: Strict typed request
 Orchestrator -> DB: Persist queued job
-opt Request has a reference scope
-  Orchestrator -> References: Validate every token; claim scope
-  References -> DB: Bind scope atomically to one job;\nset 30-day expiry
-end
 API --> UI: Queued job id / state; orchestration continues locally
 alt Material ambiguity
   Orchestrator -> DB: Persist waiting plan
   UI --> User: Request clarification and typed date scope
 else Scope is sufficient
-  alt Selected-evidence cloud synthesis
-    Orchestrator -> DB: Checkpoint selected evidence
-  else Local planning
+  opt Detailed mode
     Orchestrator -> Ollama: Candidate step identifiers
     Ollama --> Orchestrator: Prioritized identifiers
-  else Opt-in OpenAI planning
-    opt AgentCloak preflight enabled, for each send attempt
-      Orchestrator -> Preflight: Check canonical user-authored cloud text
-      Preflight -> AgentCloak: Desktop /detect or MCP cloak on token-safe text
-      AgentCloak --> Preflight: Clean or block; no payload rewrite
-    end
-    Orchestrator -> DB: Reserve disclosure and spend budgets
-    Orchestrator -> Egress: Canonical allowlisted planning payload\nwith selected model and its price
-    Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
-    OpenAI --> Egress: Prioritized identifiers, catalog plans, and usage
-    Egress --> Orchestrator: Bounded response
   end
   Orchestrator -> DB: Persist constrained plan
 end
-alt Selected-evidence cloud synthesis
-  opt AgentCloak preflight enabled, for each send attempt
-    Orchestrator -> Preflight: Check canonical selected evidence
-    Preflight -> AgentCloak: Desktop /detect or MCP cloak on token-safe text
-    AgentCloak --> Preflight: Clean or block; no payload rewrite
-  end
-  Orchestrator -> DB: Reserve disclosure and spend budgets
-  Orchestrator -> Egress: Canonical selected-evidence payload\nwith selected model and its price
-  Egress -> OpenAI: POST /v1/responses\nstore=false, tools=[]
-  OpenAI --> Egress: Structured final answer and usage
-  Egress --> Orchestrator: Bounded response
-else Local evidence workflow
-  loop Each incomplete step
-    alt Cloud-authored catalog analysis step
-      Orchestrator -> Analysis: Validate catalog and workspace; inject trusted scope
-      Analysis --> Orchestrator: Private local rows or explicit failure
-    else Locally authored tool step
-      Orchestrator -> Tools: Dispatch allowlisted tool with caps
-      Tools --> Orchestrator: Evidence or explicit partial failure
-    end
-    Orchestrator -> DB: Checkpoint step result
-  end
-
-  opt Detailed mode has failed local steps
-    Orchestrator -> Ollama: Inspect partial evidence and failed local candidates
-    Ollama --> Orchestrator: Select up to three retry identifiers
-    Orchestrator -> Tools: One serial local retry pass
-    Orchestrator -> DB: Checkpoint revised plan and retry results
-  end
-
-  Orchestrator -> Ollama: Selected local evidence only
-  Ollama --> Orchestrator: Structured answer candidate
+loop Each incomplete step
+  Orchestrator -> Tools: Dispatch allowlisted tool with caps
+  Tools --> Orchestrator: Evidence or explicit partial failure
+  Orchestrator -> DB: Checkpoint step result
 end
 
-Orchestrator -> DB: Persist validated provider-form answer\nin checkpoint_json before restoration
-Orchestrator -> References: Restore only allowlisted answer text
-References -> DB: Load same-job encrypted map
-References -> References: Authenticate and decrypt with\ninstallation-held key
-alt Unknown, malformed, expired, cross-job, or undecryptable token
-  References --> Orchestrator: Explicit restoration failure
-  Orchestrator -> DB: Mark job failed; do not expose\npartly restored provider answer
-else Safe local answer
-  References --> Orchestrator: Locally restored display text
+opt Detailed mode has failed local steps
+  Orchestrator -> Ollama: Inspect partial evidence and failed local candidates
+  Ollama --> Orchestrator: Select up to three retry identifiers
+  Orchestrator -> Tools: One serial local retry pass
+  Orchestrator -> DB: Checkpoint revised plan and retry results
 end
+
+Orchestrator -> Ollama: Selected evidence only
+Ollama --> Orchestrator: Structured answer candidate
+Orchestrator -> DB: Persist validated answer\nin checkpoint_json.providerResult
 Orchestrator -> Orchestrator: Validate citations and answer schema
 Orchestrator -> DB: Complete, partial, failed, or cancelled
 loop Mounted pending job; manual 1.2-second interval
@@ -160,30 +53,18 @@ UI --> User: Inspectable evidence-backed answer
 note right of Orchestrator
 One active job bounds CPU and RAM.
 External checkpoints are never replayed by the retry loop.
-No automatic cloud fallback.
 Financial calculations use deterministic services.
-Cloud synthesis receives only manually selected evidence.
-Cloud planning receives identifiers, never relations, SQL, private scope IDs, or rows.
-Cloud-authored analysis rows remain private and are synthesized locally.
-Selected models come from the server allowlist.
-Per-model prices drive spend reservation.
-Explicit markers become typed one-job tokens; this is pseudonymization, not anonymity.
-Optional Desktop detection protects selected text before preview and blocks remaining findings.
-The MCP option blocks changed or unverified text. Vision performs local restoration.
-It never rewrites the digest-bound OpenAI payload. Local chat is untouched.
-The AES-256-GCM key is installation state outside PostgreSQL and database backup.
-Restart validates the provider-form checkpoint and restores locally without another model call.
-Job deletion cascades to its claimed scope and encrypted entries.
+Public web and provider research use separately authored
+public queries and symbols only.
+There is no cloud model route (ADR-229).
+Restart validates the answer checkpoint without another model call.
+Job deletion cascades to its steps.
 end note
 
 note over UI, API
   Native /ai-chat mode switches retain both workflows.
-  Form / resolved-context changes retire obsolete previews.
-  Consent submits the frozen inspected request, not changed live fields.
   Manual job polls can overlap slow reads; current snapshots retire older replies.
   Polling stops on completed, failed, cancelled, partial or waiting.
-  Status alone uses 60-second focus / reconnect freshness:
-  online initial mount runs even in background; later refresh is foreground-gated.
   Documents are mount-only reads; uploads keep original multipart file bytes.
   Real route exit clears local job/forms without deleting the backend job.
   macOS package and Demo parity review remain pending.

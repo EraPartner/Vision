@@ -610,30 +610,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inspect local, web, and optional cloud route capabilities */
+        /** Inspect local model, web research, and document capabilities */
         get: operations["getAiResearchStatus"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/agentcloak-desktop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Inspect AgentCloak Desktop availability and protection state */
-        get: operations["getAgentCloakDesktopStatus"];
-        /**
-         * Enable or disable AgentCloak Desktop protection
-         * @description Enabling probes the Desktop loopback endpoint and ensures a local encrypted-reference mapping key before saving the boolean preference. Disabling saves the preference without deleting the key.
-         */
-        put: operations["configureAgentCloakDesktop"];
         post?: never;
         delete?: never;
         options?: never;
@@ -767,78 +746,6 @@ export interface paths {
         /** Retrieve cited keyword, semantic, or hybrid local passages */
         post: operations["searchAiResearchPassages"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/disclosures/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Protect selected text when Desktop mode is enabled, then preview the exact canonical cloud payload and run AgentCloak preflight */
-        post: operations["previewAiDisclosure"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/disclosures/grants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List local disclosure grants and revocation state */
-        get: operations["listAiDisclosureGrants"];
-        put?: never;
-        /** Grant bounded egress for one inspected payload digest */
-        post: operations["createAiDisclosureGrant"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/disclosures/grants/{id}/revoke": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Revoke a grant before any queued request or retry */
-        post: operations["revokeAiDisclosureGrant"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/disclosures/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Inspect minimal local disclosure metadata and usage */
-        get: operations["listAiDisclosureRecords"];
-        put?: never;
-        post?: never;
-        /** Delete all local disclosure records and grants */
-        delete: operations["deleteAiDisclosureRecords"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3912,106 +3819,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/codex-experimental/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read disposable experimental Codex session status
-         * @description Disabled unless VISION_EXPERIMENTAL_CODEX=1 and a binary path and ADMIN_AUTH_TOKEN are configured. Requires loopback peer and admin bearer token. Never returns credentials.
-         */
-        get: operations["adminCodexExperimentalStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/codex-experimental/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Start disposable experimental Codex App Server
-         * @description Creates a synthetic workspace and a macOS Seatbelt confined App Server. No financial data is mounted. Request body must be empty.
-         */
-        post: operations["adminCodexExperimentalSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/codex-experimental/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Begin isolated ChatGPT device-code login
-         * @description Returns a device verification URL and short user code. Request body must be empty. No API-key login or host Codex credential import is allowed.
-         */
-        post: operations["adminCodexExperimentalLogin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/codex-experimental/synthetic-turn": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run one fixed fictional prompt through isolated subscription Codex
-         * @description No request payload or private prompt is accepted. Refuses unauthenticated accounts and unavailable rate limits. Never falls back to API billing.
-         */
-        post: operations["adminCodexExperimentalSyntheticTurn"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/admin/codex-experimental/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Log out and dispose of isolated Codex session
-         * @description Closes App Server and proxy, and deletes disposable runtime state. Request body must be empty.
-         */
-        post: operations["adminCodexExperimentalLogout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/admin": {
         parameters: {
             query?: never;
@@ -5602,16 +5409,6 @@ export interface components {
             data?: unknown;
             error?: components["schemas"]["ErrorPayload"];
         };
-        AgentCloakDesktopStatus: {
-            /** @description Effective Desktop preference and mode */
-            enabled: boolean;
-            /** @description Fresh bounded loopback detection probe */
-            available: boolean;
-            /** @description Valid local reference mapping key exists */
-            mappingKeyConfigured: boolean;
-            /** @description Effective OpenAI API route availability */
-            openAiEnabled: boolean;
-        };
         ErrorPayload: {
             message: string;
             code?: string;
@@ -6209,20 +6006,18 @@ export interface components {
              * @default local
              * @enum {string}
              */
-            route: "local" | "openai-api";
+            route: "local";
             /**
              * @default local-only
              * @enum {string}
              */
             researchMode: "local-only" | "public-providers" | "public-web";
-            /** @description Separately authored public-only cloud planning question; never derived from question. */
-            publicQuestion?: string | null;
             /** @description Explicit public-only search text; never derived from question. */
             publicWebQuery?: string | null;
             publicSymbols?: string[];
             publicMacroQueries?: string[];
             clarification?: string | null;
-            /** @description OpenAI model selected from the server-configured allowlist, or the configured default when omitted. */
+            /** @description Ollama model name, or the configured default when omitted. */
             model?: string | null;
             /**
              * @default quick
@@ -6246,16 +6041,6 @@ export interface components {
                 currency: string;
                 constraints?: string[];
             };
-            /** Format: uuid */
-            grantId?: string | null;
-            selectedSummary?: string | null;
-            /** @description Exact manually selected task and evidence for consent-bound cloud final synthesis; never populated from local records by the server. */
-            selectedEvidence?: string | null;
-            /**
-             * Format: uuid
-             * @description One-use local scope returned by disclosure preview for typed reversible references.
-             */
-            referenceScopeId?: string | null;
             /** Format: uuid */
             savedAnalysisId?: string | null;
         };
@@ -10373,7 +10158,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured capabilities without credentials, including optional AgentCloak mode and location. Desktop mode reports protect-and-block; MCP mode reports block-on-change. */
+            /** @description Configured capabilities without credentials. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10381,84 +10166,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
-            };
-        };
-    };
-    getAgentCloakDesktopStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Effective Desktop preference, fresh availability probe, mapping key state, and OpenAI route state; no secret values */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data: components["schemas"]["AgentCloakDesktopStatus"];
-                    };
-                };
-            };
-        };
-    };
-    configureAgentCloakDesktop: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    enabled: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Updated Desktop status; no secret values */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data: components["schemas"]["AgentCloakDesktopStatus"];
-                    };
-                };
-            };
-            /** @description Invalid request body */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Existing local mapping key is invalid */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description AgentCloak Desktop is unavailable during enablement */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Local mapping key could not be stored */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -10798,171 +10505,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    previewAiDisclosure: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AiInvestigationRequest"];
-            };
-        };
-        responses: {
-            /** @description Payload, digest, field manifest, disclosure units, any encrypted local reference scope including Desktop-detected values, and AgentCloak preflight status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Invalid or non-cloud request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Enabled AgentCloak detection or preflight was unavailable or returned an invalid response */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Reversible-reference key unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    listAiDisclosureGrants: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Disclosure grants without payloads or credentials */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
-    createAiDisclosureGrant: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": Record<string, never>;
-            };
-        };
-        responses: {
-            /** @description Persisted, expiring grant */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Invalid grant or retention request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    revokeAiDisclosureGrant: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Grant revoked */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Grant not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    listAiDisclosureRecords: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Metadata-only disclosure records */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
-    deleteAiDisclosureRecords: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted record and grant counts; deleting grants revokes unused consent */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
             };
         };
     };
@@ -18491,141 +18033,6 @@ export interface operations {
             };
             /** @description Socket peer is not loopback */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    adminCodexExperimentalStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session and ChatGPT account status */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Experimental route disabled or session unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    adminCodexExperimentalSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session started */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Disabled or sandbox startup failed */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    adminCodexExperimentalLogin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Device login instructions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Session or provider login unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    adminCodexExperimentalSyntheticTurn: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Fixed question and bounded answer */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Subscription or safety gate unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    adminCodexExperimentalLogout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Session disposed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description Logout failed after local disposal */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };

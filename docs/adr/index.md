@@ -108,16 +108,16 @@ SORT date DESC
 
 ## Active Decisions
 
-[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] (Accepted for implementation)
+[[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]] (Accepted for implementation; superseded by ADR-229)
 permits the packaged OpenAI API route only with explicit private runtime configuration. It
 supersedes ADR-167's unconditional packaged disablement; live synthetic route acceptance is
 still pending review.
 
-[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]] (Accepted) adds
+[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]] (Accepted; superseded by ADR-229) adds
 experimental AgentCloak Desktop detection. Vision protects selected findings with encrypted scoped
 tokens before consent and restores answer text locally; the MCP gate remains available.
 
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] (Accepted) adds an optional
+[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] (Accepted; superseded by ADR-229) adds an optional
 operator-managed loopback AgentCloak check before cloud preview and send. It blocks a changed
 result while preserving Vision's exact OpenAI payload and grant.
 
@@ -126,7 +126,7 @@ release process as the desktop update trust root, without a separately managed s
 The updater still requires matching ZIP and checksum assets; a new malicious GitHub release
 remains a trusted-publisher risk.
 
-[[docs/adr/164-disposable-codex-session-cleanup|ADR-164]] (Accepted) removes
+[[docs/adr/164-disposable-codex-session-cleanup|ADR-164]] (Accepted; superseded by ADR-229) removes
 abandoned marked synthetic Codex session roots on the next start while leaving
 active and unrelated temporary files alone.
 
@@ -174,7 +174,7 @@ guarded downgrade and complete JSON export.
 adds ordered parent-linked paths and ancestor rollups, and preserves the old two-field contract as
 compatibility aliases with a guarded downgrade.
 
-[[docs/adr/151-scoped-reversible-ai-references|ADR-151]] (Accepted) replaces explicitly marked
+[[docs/adr/151-scoped-reversible-ai-references|ADR-151]] (Accepted; superseded by ADR-229) replaces explicitly marked
 private literals with one-job cryptographic tokens for cloud disclosure, then restores allowlisted
 answer text locally under an installation-held key. It is pseudonymization, not anonymity.
 
@@ -182,19 +182,19 @@ answer text locally under an installation-held key. It is pseudonymization, not 
 supported fund holdings only through explicit classifications and exact share-class identifiers,
 while preserving uncovered weight and excluding inferred economic foreign-exchange exposure.
 
-[[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]] (Accepted) lets the cloud planner
+[[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]] (Accepted; superseded by ADR-229) lets the cloud planner
 propose strict identifier-only analysis plans while trusted scope injection, SQL compilation,
 execution, private results, and final synthesis remain local.
 
-[[docs/adr/148-user-default-openai-model|ADR-148]] (Accepted) persists a user-selected default
+[[docs/adr/148-user-default-openai-model|ADR-148]] (Accepted; superseded by ADR-229) persists a user-selected default
 OpenAI API model in AI settings. Per-investigation selection still overrides it, while removed or
 unapproved models fall back to the operator-approved catalog.
 
-[[docs/adr/147-allowlisted-openai-model-selection|ADR-147]] (Accepted) exposes a server-approved
+[[docs/adr/147-allowlisted-openai-model-selection|ADR-147]] (Accepted; superseded by ADR-229) exposes a server-approved
 OpenAI API model picker with per-model prices. The selected model is bound into the exact preview,
 consent digest, and spend reservation; ChatGPT subscriptions remain a separate unsupported route.
 
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]] (Accepted) adds a separate
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]] (Accepted; superseded by ADR-229) adds a separate
 consent profile where OpenAI writes the final answer from only the exact user-selected evidence in
 the approved payload, without tools, hidden context, or automatic local fallback.
 
@@ -217,7 +217,7 @@ deny-by-default financial analysis datasets and their reconciliation rules.
 [[docs/adr/139-fund-holdings-source-and-import-contract|ADR-139]] (Accepted) defines the
 user-supplied fund-holdings baseline, provenance, coverage, and fail-closed import contract.
 
-[[docs/adr/138-openai-codex-assistance-boundary|ADR-138]] (Accepted) separates OpenAI API and
+[[docs/adr/138-openai-codex-assistance-boundary|ADR-138]] (Accepted; superseded by ADR-229) separates OpenAI API and
 Codex subscription assistance and keeps both behind an explicit local disclosure boundary.
 
 [[docs/adr/137-shared-analysis-definition-and-result-contract|ADR-137]] (Accepted) defines the
@@ -270,6 +270,15 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > The Vision Native ADRs written on the native branch as ADR-206 to ADR-210 are ADR-209 to
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
+
+### 2026-10-20: Remove cloud AI, the Codex experiment and AgentCloak (accepted)
+
+[[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] removes the OpenAI API investigation
+route with its disclosure preview, grants, records, model allowlist and budget, the experimental
+Codex route, AgentCloak, and the scoped reversible references. Investigations run only on the
+configured Ollama endpoint; public web and provider research stay. Migration 0002 drops the
+disclosure and reference tables and deletes non-local jobs. It supersedes ADR-138, 146, 147, 148,
+149, 151, 159, 164, 167, 169, 170 and 171, and the OpenAI egress parts of ADR-145.
 
 ### 2026-10-20: TypeScript navigation MCP server (accepted)
 
@@ -798,15 +807,15 @@ dismissal gate. Migration 0106 removes only proven-equal persisted tax aliases. 
 that the recurrence release gate and centrally unknowable browser-profile census were explicitly
 overridden rather than completed.
 
-[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] (Accepted) — Adds provider-neutral,
+[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] (Accepted; partly superseded by ADR-229) — Adds provider-neutral,
 recoverable AI investigations, bounded local document and public-web research, structured evidence
 answers, and an opt-in consent-bound OpenAI Responses egress helper without requiring a container.
 
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]] (Accepted) — Preserves the two
+[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]] (Accepted; superseded by ADR-229) — Preserves the two
 cloud-planning modes and adds explicit final synthesis from a manually selected, previewed evidence
 bundle. The cloud receives no tools, database access, or implicit local context.
 
-[[docs/adr/159-experimental-isolated-codex-route|ADR-159]] (Accepted for synthetic experimentation) —
+[[docs/adr/159-experimental-isolated-codex-route|ADR-159]] (Accepted for synthetic experimentation; superseded by ADR-229) —
 Adds an opt-in, admin-only Codex App Server session with disposable state, macOS Seatbelt, a local
 allowlisted proxy, device-code login, and a fixed fictional turn. Private input remains blocked.
 
@@ -820,7 +829,7 @@ maintenance window. Old timestamps are interpreted as UTC; the 390-row archive i
 verified. A full backup, retained prior database, and guarded rollback remain available.
 
 [[docs/adr/167-packaged-openai-api-release-gate|ADR-167]] (Accepted historical decision;
-packaged disablement superseded by ADR-171) — Kept the OpenAI API investigation route disabled
+packaged disablement superseded by ADR-171; superseded by ADR-229) — Kept the OpenAI API investigation route disabled
 when live synthetic acceptance had been declined. Its evaluation evidence remains historical.
 
 [[docs/adr/173-conditional-settings-replacement|ADR-173]] (Accepted) — Requires loaded persistence

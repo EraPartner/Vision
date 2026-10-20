@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - api
   - admin
@@ -23,7 +23,6 @@ aliases:
   - initialization
 related_code:
   - apps/node-backend/src/routes/admin.ts
-  - apps/node-backend/src/routes/codexExperimental.ts
   - apps/node-backend/src/services/dbEditor.ts
   - apps/node-backend/src/main.ts
   - apps/node-backend/src/config/config.ts
@@ -36,26 +35,6 @@ related_code:
 # Admin API
 
 System administration endpoints for database management, health checks, provider health tracking, and endpoint liveness metrics. Includes the [[docs/features/database-maintenance|DB data editor]] (ADR-101) for raw table inspection and editing.
-
-## Experimental Codex session
-
-`/api/admin/codex-experimental` is disabled by default. It requires
-`VISION_EXPERIMENTAL_CODEX=1`, `VISION_EXPERIMENTAL_CODEX_BINARY` pointing to the Codex executable,
-`ADMIN_AUTH_TOKEN`, a loopback connection, and the usual admin bearer and CSRF checks. This is an
-additive experimental API. It accepts no financial data or caller-supplied prompt.
-
-| Method | Path              | Result                                                                 |
-| ------ | ----------------- | ---------------------------------------------------------------------- |
-| GET    | `/status`         | Disposable session and account type; no credential material            |
-| POST   | `/session`        | Start the private App Server and local proxy                           |
-| POST   | `/login`          | Begin ChatGPT device-code login; return verification URL and user code |
-| POST   | `/synthetic-turn` | Send one fixed fictional question after account and rate-limit checks  |
-| POST   | `/logout`         | Log out, close the process, and remove private state                   |
-
-POST bodies must be empty objects. A session expires after ten minutes and is lost when the
-backend exits. The route is available only on macOS because it requires Seatbelt. See
-[[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]] for the
-privacy and release limits.
 
 ## Base URL
 

@@ -1,14 +1,16 @@
 ---
 title: ADR-148 - User Default OpenAI Model
 type: adr
-status: Accepted
-date: 2026-09-14
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, openai, settings, models, preferences]
 description: Persist a user-selected default OpenAI API model while retaining the server allowlist and operator default as the security and recovery boundary.
 aliases: [OpenAI default model preference]
 ---
 
 # ADR-148: User Default OpenAI Model
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 

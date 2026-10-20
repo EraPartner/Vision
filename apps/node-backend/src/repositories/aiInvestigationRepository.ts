@@ -1,6 +1,5 @@
 import type { AiInvestigationRequest } from "@vision/types/aiResearch";
 import { sql } from "kysely";
-import { withTransaction } from "../database/connection.ts";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { Json } from "../database/schema.generated.ts";
 import {
@@ -36,7 +35,6 @@ const COLUMNS = [
   "checkpoint_json as checkpoint",
   "result_json as result",
   "error_json as error",
-  "grant_id as grantId",
   "cancel_requested_at as cancelRequestedAt",
   "started_at as startedAt",
   "completed_at as completedAt",
@@ -60,64 +58,33 @@ function selectJobs() {
 
 export async function createJob(
   request: AiInvestigationRequest & { conversationId?: string | null },
-  referenceExpiresAt: string | null = null,
 ): Promise<AiInvestigationJobRow> {
-  return withTransaction(async () => {
-    const job = await checkedRow(
-      aiInvestigationJobRowSchema,
-      db
-        .insertInto("ai_investigation_jobs")
-        .values({
-          conversation_id: request.conversationId ?? null,
-          question: request.question,
-          route: request.route,
-          model: request.model,
-          depth: request.depth,
-          language: request.language,
-          state: "queued",
-          scope_json: jsonb({
-            scope: request.scope,
-            researchMode: request.researchMode,
-            publicQuestion: request.publicQuestion,
-            publicWebQuery: request.publicWebQuery,
-            publicSymbols: request.publicSymbols,
-            publicMacroQueries: request.publicMacroQueries,
-            clarification: request.clarification,
-            selectedSummary: request.selectedSummary,
-            selectedEvidence: request.selectedEvidence,
-            referenceScopeId: request.referenceScopeId,
-            savedAnalysisId: request.savedAnalysisId,
-          }),
-          grant_id: request.grantId,
-        })
-        .returning(COLUMNS),
-    );
-    if (!job) throw new Error("ai_investigation_jobs insert returned no row");
-    if (request.referenceScopeId) {
-      const claimed = await checkedRow(
-        uuidIdRowSchema,
-        db
-          .updateTable("ai_reference_scopes")
-          .set({
-            job_id: job.id,
-            claimed_at: now(),
-            expires_at: sql<Date>`${referenceExpiresAt}::timestamptz`,
-          })
-          .where("id", "=", request.referenceScopeId)
-          .where("job_id", "is", null)
-          .where("expires_at", ">", now())
-          .returning("id"),
-      );
-      if (!claimed)
-        throw Object.assign(
-          new Error(
-            "The reversible reference preview expired or was already used",
-          ),
-          { code: "REFERENCE_SCOPE_INACTIVE", status: 409 },
-        );
-    }
-    return job;
-  });
+  const job = await checkedRow(
+    aiInvestigationJobRowSchema,
+    db
+      .insertInto("ai_investigation_jobs")
+      .values({
+        conversation_id: request.conversationId ?? null,
+        question: request.question,
+        route: request.route,
+        model: request.model,
+        depth: request.depth,
+        language: request.language,
+        state: "queued",
+        scope_json: jsonb({
+          scope: request.scope,
+          researchMode: request.researchMode,
+          publicWebQuery: request.publicWebQuery,
+          publicSymbols: request.publicSymbols,
+          publicMacroQueries: request.publicMacroQueries,
+          clarification: request.clarification,
+          savedAnalysisId: request.savedAnalysisId,
+        }),
+      })
+      .returning(COLUMNS),
+  );
+  if (!job) throw new Error("ai_investigation_jobs insert returned no row");
+  return job;
 }
 export async function listJobs(): Promise<AiInvestigationJobRow[]> {
   return checkedRows(

@@ -96,6 +96,22 @@ async function regclass(client: pg.Client, name: string) {
     .rows[0].name as string | null;
 }
 
+/** A runtime root whose db/migrations holds only the baseline. */
+function baselineOnlyRoot() {
+  const root = mkdtempSync(path.join(tmpdir(), "vision-migrator-"));
+  tempRoots.push(root);
+  mkdirSync(path.join(root, "db", "migrations"), { recursive: true });
+  cpSync(
+    path.join(repoRoot, "db", "migrations", "0001_baseline.sql"),
+    path.join(root, "db", "migrations", "0001_baseline.sql"),
+  );
+  cpSync(
+    path.join(repoRoot, "db", "schema-inventory.sql"),
+    path.join(root, "db", "schema-inventory.sql"),
+  );
+  return root;
+}
+
 /** A full schema without the Kysely ledger, as before the TypeScript baseline. */
 async function preBaselineDatabase() {
   const db = await track(createMigratedDatabase("c_prebaseline"));
@@ -117,7 +133,7 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
     });
 
     it("installs the baseline into an empty database, then re-runs as a no-op", async () => {
-      const migrator = await loadMigrator();
+      const migrator = await loadMigrator(baselineOnlyRoot());
       const db = await track(createEmptyDatabase("c_fresh"));
       // The owner URL wins over an unusable application URL.
       const first = await withMigrationTarget(
@@ -187,12 +203,13 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
     it("refuses a database from before the baseline without changing anything", async () => {
       const migrator = await loadMigrator();
       const db = await preBaselineDatabase();
+      const before = await withClient(db.url, auditEvents);
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),
       ).rejects.toThrow("no migration marker");
       await withClient(db.url, async (client) => {
         expect(await appliedNames(client)).toEqual([]);
-        expect(await auditEvents(client)).toHaveLength(1);
+        expect(await auditEvents(client)).toEqual(before);
       });
     }, 180_000);
 

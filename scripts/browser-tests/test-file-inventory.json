@@ -1,16 +1,16 @@
 {
-  "generatedOn": "2026-10-19",
+  "generatedOn": "2026-10-20",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 949,
+  "totalFiles": 938,
   "counts": {
-    "simulated-dom": 262,
-    "unit-script-or-contract-needs-review": 317,
+    "simulated-dom": 261,
+    "unit-script-or-contract-needs-review": 310,
     "property-test": 12,
-    "mocked-unit-or-service": 206,
+    "mocked-unit-or-service": 200,
     "live-http-contract": 2,
-    "source-or-file-contract": 20,
-    "database-test": 97,
+    "source-or-file-contract": 18,
+    "database-test": 102,
     "native-runtime-or-filesystem-test": 33
   },
   "identicalSourceGroups": [],
@@ -373,11 +373,6 @@
     },
     {
       "path": "apps/frontend/src/features/ai-chat/__tests__/toolPresentation.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/features/ai-chat/openAiModelSelection.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -767,11 +762,6 @@
     },
     {
       "path": "apps/frontend/src/features/settings/__tests__/AISettingsBehavior.test.tsx",
-      "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/features/settings/__tests__/AgentCloakDesktopSettingsSection.test.tsx",
       "inferredBoundary": "simulated-dom",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -2123,27 +2113,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/agentCloakDesktopSetupService.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/agentCloakPreflight.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/agentCloakProviderGate.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
       "path": "apps/node-backend/tests/aggregationDateRange.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2217,11 +2186,6 @@
       ]
     },
     {
-      "path": "apps/node-backend/tests/aiDisclosureReservation.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/aiInvestigationCancellation.db.test.ts",
       "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2229,26 +2193,10 @@
     {
       "path": "apps/node-backend/tests/aiInvestigationRepository.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/aiInvestigationService.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/aiReferenceKeySetup.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/aiReferenceService.test.ts",
+      "path": "apps/node-backend/tests/aiInvestigationService.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -2336,6 +2284,11 @@
     {
       "path": "apps/node-backend/tests/analysisPivotService.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
+      "path": "apps/node-backend/tests/analysisRoleBootstrap.db.test.ts",
+      "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -2455,6 +2408,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/cashflowForecastMemo.db.test.ts",
+      "inferredBoundary": "database-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/cashflowForecastRepositories.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2485,6 +2443,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/categoryService.db.test.ts",
+      "inferredBoundary": "database-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/categoryService.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise",
@@ -2496,44 +2459,6 @@
       "path": "apps/node-backend/tests/chartRanges.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/cloudAnalysisPlan.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/cloudDisclosurePolicy.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/cloudPrivacyEvaluation.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/codexConnectProxy.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/codexExperimentalRoute.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/codexExperimentalSession.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/codexSyntheticProbe.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
     },
     {
       "path": "apps/node-backend/tests/commitmentAwareCash.test.ts",
@@ -2697,10 +2622,7 @@
     {
       "path": "apps/node-backend/tests/deduplication.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/electronSettingsConflicts.test.ts",
@@ -2906,6 +2828,11 @@
     {
       "path": "apps/node-backend/tests/importProgress.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
+      "path": "apps/node-backend/tests/importRateLimitScope.test.ts",
+      "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -3153,6 +3080,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/mathHelpers.test.ts",
+      "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/migrate.db.test.ts",
       "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -3200,32 +3132,6 @@
     {
       "path": "apps/node-backend/tests/ollamaClient.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/openAiBrokerChildPrivacy.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/openAiEgressHelper.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/openAiModelCatalog.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/openAiProductionTrafficEvaluation.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise",
       "reviewFlags": [
         "call-order-review"
@@ -3359,6 +3265,11 @@
     {
       "path": "apps/node-backend/tests/portfolioCustodyPrecision.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
+      "path": "apps/node-backend/tests/portfolioCustodyRollbackIds.test.ts",
+      "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -3904,10 +3815,7 @@
     {
       "path": "apps/node-backend/tests/recurringDetectionService.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/reportConcurrency.test.ts",
@@ -4131,11 +4039,6 @@
     },
     {
       "path": "apps/node-backend/tests/routes/categories.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/routes/codexExperimental.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -4763,6 +4666,19 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/unconvertedPortfolioFigures.db.test.ts",
+      "inferredBoundary": "database-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise",
+      "reviewFlags": [
+        "call-order-review"
+      ]
+    },
+    {
+      "path": "apps/node-backend/tests/unconvertedStatistics.db.test.ts",
+      "inferredBoundary": "database-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/urlSafety.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4908,6 +4824,11 @@
     },
     {
       "path": "packages/shared-utils/tests/belgianTax/taxYears.test.ts",
+      "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
+      "path": "packages/shared-utils/tests/money.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     reference,
@@ -88,10 +88,8 @@ type and the runtime shape cannot drift. Field documentation for these rows live
 `query<R>()` (`src/database/connection.ts`) and `QueryRunner` (`src/types/rows.ts`) default to
 `unknown` rows; a type argument on `query<R>()` is an unchecked claim. No explicit `any` remains
 in backend source. Backend `tsconfig.json` and `tsconfig.tests.json` turn on
-`noUncheckedIndexedAccess`, so indexed access is `T | undefined`. The OpenAI egress helper
-`src/integrations/openai/egress-helper.mjs` stays JavaScript (it runs inside a macOS Seatbelt
-sandbox) and is type-checked through `// @ts-check` and JSDoc as part of the backend
-`tsconfig.json`. See [[docs/adr/194-runtime-contracts-completion|ADR-194]].
+`noUncheckedIndexedAccess`, so indexed access is `T | undefined`. See
+[[docs/adr/194-runtime-contracts-completion|ADR-194]].
 
 The frontend (`apps/frontend/tsconfig.json`, inherited by `tsconfig.app.json` and
 `tsconfig.node.json`) adds `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`,

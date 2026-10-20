@@ -2,9 +2,7 @@ import { memo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { AIChatSettingsSection } from "@/features/settings/AIChatSettingsSection";
-import { OpenAiSettingsSection } from "@/features/settings/OpenAiSettingsSection";
 import { ResearchKeysSection } from "@/features/settings/ResearchKeysSection";
-import { AgentCloakDesktopSettingsSection } from "@/features/settings/AgentCloakDesktopSettingsSection";
 import { AnalysisPreferencesSettings } from "@/features/settings/AnalysisPreferencesSettings";
 import { SettingsSection } from "../SettingsPrimitives";
 
@@ -20,13 +18,6 @@ export const AiSection = memo(function AiSection() {
                     updateAppSettings({ aiDefaultModel: model })
                 }
             />
-            <OpenAiSettingsSection
-                value={appSettings.openAiDefaultModel}
-                onChange={(model) =>
-                    updateAppSettings({ openAiDefaultModel: model })
-                }
-            />
-            <AgentCloakDesktopSettingsSection />
             <AnalysisPreferencesSettings
                 value={appSettings}
                 onChange={updateAppSettings}

@@ -12,10 +12,7 @@ import type {
   AiPlanStep,
 } from "@vision/types/aiResearch";
 import { dispatchTool } from "./aiChat/tools/index.ts";
-import {
-  generateWithProvider,
-  generateLocalSynthesis,
-} from "./aiProviderAdapters.ts";
+import { generateLocal } from "./aiProviderAdapters.ts";
 import type { ProviderGenerationInput } from "./aiProviderAdapters.ts";
 import * as jobs from "../repositories/aiInvestigationRepository.ts";
 import type {
@@ -24,15 +21,6 @@ import type {
 } from "../repositories/aiInvestigationRepository.ts";
 import type { ResearchDocumentCitation } from "./aiResearchDocuments.ts";
 import type { PublicWebSearchResult } from "./webResearch.ts";
-import {
-  executeCloudAnalysisPlan,
-  parseCloudAnalysisPlans,
-} from "./cloudAnalysisPlan.ts";
-import {
-  claimedReferenceExpiry,
-  restoreAnswerForJob,
-  validateReferenceRequest,
-} from "./aiReferenceService.ts";
 import { nanToZero } from "../lib/math.ts";
 
 type InvestigationOutcome = AiInvestigationJobRow | null | undefined;
@@ -63,28 +51,6 @@ function errorProperty(error: unknown, key: "code" | "message"): unknown {
 function planInvestigation(
   request: AiInvestigationRequest,
 ): AiInvestigationPlan {
-  if (request.route === "openai-api" && request.selectedEvidence)
-    return aiInvestigationPlanSchema.parse({
-      schemaVersion: 1,
-      resolvedScope: request.scope,
-      assumptions: [
-        "Only the explicitly selected evidence is available to cloud synthesis.",
-        "Vision did not retrieve or disclose additional private records for this mode.",
-      ],
-      ambiguity: { material: false, question: null },
-      steps: [
-        {
-          id: "selected-evidence",
-          tool: "useSelectedEvidence",
-          args: {},
-          purpose: "Use the exact evidence approved in the disclosure preview",
-          dependsOn: [],
-          canRunInParallel: false,
-        },
-      ],
-      answerDepth: request.depth,
-      language: request.language,
-    });
   const steps: AiPlanStep[] = [];
   if (request.savedAnalysisId)
     steps.push({
@@ -248,7 +214,6 @@ function applyPlannerOrdering(
   text: string,
   baseline: AiInvestigationPlan,
   provider: string,
-  request: AiInvestigationRequest,
 ): AiInvestigationPlan {
   try {
     const start = text.indexOf("{");
@@ -268,30 +233,13 @@ function applyPlannerOrdering(
     for (const step of baseline.steps) {
       if (!seen.has(step.id)) selected.push(step);
     }
-    const analysisPlans =
-      request.route === "openai-api"
-        ? parseCloudAnalysisPlans(text, {
-            workspaces: request.scope.workspaces,
-          })
-        : [];
-    const analysisSteps = analysisPlans.map(
-      (analysisPlan: unknown, index: number) => ({
-        id: `cloud-analysis-${index + 1}`,
-        tool: "executeCatalogAnalysis",
-        args: { analysisPlan },
-        purpose:
-          "Execute a cloud-authored typed catalog plan inside Vision's local restricted analysis boundary",
-        dependsOn: [],
-        canRunInParallel: false,
-      }),
-    );
     return aiInvestigationPlanSchema.parse({
       ...baseline,
       assumptions: [
         ...baseline.assumptions,
         `Step priority was proposed by ${provider} and constrained to the locally generated candidate plan.`,
       ],
-      steps: [...selected, ...analysisSteps].slice(0, 24),
+      steps: selected.slice(0, 24),
     });
   } catch {
     return baseline;
@@ -389,12 +337,6 @@ function selectedStepIds(text: string): string[] {
   }
 }
 
-function usesCloudSynthesis(
-  request: Pick<AiInvestigationRequest, "route" | "selectedEvidence">,
-) {
-  return request.route === "openai-api" && Boolean(request.selectedEvidence);
-}
-
 async function executeSteps({
   id,
   steps,
@@ -421,31 +363,6 @@ async function executeSteps({
     if (shouldReuseStep(existing, step, skipAttemptedExternal)) continue;
     await jobs.startStep(id, step.id);
     try {
-      if (step.tool === "useSelectedEvidence") {
-        await jobs.finishStep(id, step.id, {
-          ok: true,
-          data: { text: request.selectedEvidence },
-          meta: { source: "user-selected", disclosed: true },
-        });
-        continue;
-      }
-      if (step.tool === "executeCatalogAnalysis") {
-        const data = await executeCloudAnalysisPlan(
-          step.args.analysisPlan,
-          request.scope,
-          { requestId: `${id}-${step.id}`.slice(0, 128) },
-        );
-        await jobs.finishStep(id, step.id, {
-          ok: true,
-          data,
-          meta: {
-            source: "vision-local-analysis-executor",
-            private: true,
-            disclosed: false,
-          },
-        });
-        continue;
-      }
       let args = step.args;
       if (step.tool === "fetchPublicResearchPage") {
         const dependency = (await jobs.getSteps(id)).find(
@@ -495,18 +412,6 @@ function evidenceFromSteps(
     if (step.state !== "completed") return [];
     const result = step.result;
     const data = field(result, "data");
-    if (step.stepId === "selected-evidence" && field(data, "text"))
-      return [
-        {
-          id: "selected-evidence",
-          kind: "calculation",
-          label: "Explicitly selected cloud evidence",
-          sourceDate: null,
-          locator: "cloud-disclosure:selected-evidence",
-          excerpt: String(field(data, "text")).slice(0, 2000),
-          available: true,
-        },
-      ];
     // The documents and web steps store the tool's own result arrays.
     if (step.stepId === "documents" && Array.isArray(data))
       return (data as ResearchDocumentCitation[]).map((passage) => ({
@@ -653,37 +558,24 @@ function parseModelAnswer(
   }
 }
 
-function errorCodeStartsWith(error: unknown, prefix: string) {
-  const code = field(error, "code");
-  return typeof code === "string" && code.startsWith(prefix);
-}
-
-function shouldPreserveProviderCheckpoint(job: AiInvestigationJobRow) {
-  return job.state === "failed" && errorCodeStartsWith(job.error, "REFERENCE_");
-}
-
 async function resolveProviderAnswer({
   job,
   request,
   stepRows,
   synthesisInput,
-  generateProvider = generateWithProvider,
-  generateLocal = generateLocalSynthesis,
+  generate = generateLocal,
   store = jobs.setProviderResult,
 }: {
   job: AiInvestigationJobRow | null;
   request: AiInvestigationRequest;
   stepRows: AiInvestigationStepRow[];
-  synthesisInput: ProviderGenerationInput & { jobId: string };
-  generateProvider?: typeof generateWithProvider;
-  generateLocal?: typeof generateLocalSynthesis;
+  synthesisInput: ProviderGenerationInput;
+  generate?: typeof generateLocal;
   store?: (id: string, result: unknown) => Promise<unknown>;
 }): Promise<AiAnswer> {
   if (job?.checkpoint?.providerResult)
     return aiAnswerSchema.parse(job.checkpoint.providerResult);
-  const response = usesCloudSynthesis(request)
-    ? await generateProvider(synthesisInput)
-    : await generateLocal(synthesisInput);
+  const response = await generate(synthesisInput);
   if (synthesisInput.signal?.aborted)
     throw Object.assign(new Error("Investigation was cancelled"), {
       code: "CANCELLED",
@@ -716,33 +608,23 @@ export async function runInvestigationJob(
         : {
             scope: job.scope,
             researchMode: "local-only",
-            publicQuestion: null,
             publicWebQuery: null,
             publicSymbols: [],
             publicMacroQueries: [],
             clarification: null,
-            selectedSummary: null,
-            selectedEvidence: null,
-            referenceScopeId: null,
             savedAnalysisId: null,
           };
       const request = aiInvestigationRequestSchema.parse({
         question: job.question,
-        route: job.route,
         model: job.model,
         depth: job.depth,
         language: job.language,
         scope: stored.scope,
         researchMode: stored.researchMode,
-        publicQuestion: stored.publicQuestion ?? null,
         publicWebQuery: stored.publicWebQuery ?? null,
         publicSymbols: stored.publicSymbols ?? [],
         publicMacroQueries: stored.publicMacroQueries ?? [],
         clarification: stored.clarification ?? null,
-        grantId: job.grantId,
-        selectedSummary: stored.selectedSummary ?? null,
-        selectedEvidence: stored.selectedEvidence ?? null,
-        referenceScopeId: stored.referenceScopeId ?? null,
         savedAnalysisId: stored.savedAnalysisId ?? null,
       });
       let plan: AiInvestigationPlan;
@@ -752,30 +634,24 @@ export async function runInvestigationJob(
         if (baseline.ambiguity.material) {
           return jobs.setWaiting(id, baseline);
         }
-        if (
-          (request.route === "local" && request.depth === "quick") ||
-          usesCloudSynthesis(request)
-        ) {
+        if (request.depth === "quick") {
           plan = aiInvestigationPlanSchema.parse({
             ...baseline,
             assumptions: [
               ...baseline.assumptions,
-              request.selectedEvidence
-                ? "Selected-evidence mode skipped cloud planning so the approved payload is sent only for final synthesis."
-                : "Quick mode used the deterministic bounded plan to avoid an extra local model pass.",
+              "Quick mode used the deterministic bounded plan to avoid an extra local model pass.",
             ],
           });
         } else
           try {
-            const planning = await generateWithProvider({
-              jobId: id,
+            const planning = await generateLocal({
               request,
               signal: controller.signal,
               messages: [
                 {
                   role: "system",
                   content:
-                    "Return JSON only as {stepIds:string[],analysisPlans:CloudAnalysisPlan[]}. Prioritize supplied candidate step ids and optionally propose typed catalog plans that match the supplied public schema. Do not answer the question, emit SQL, or invent tools.",
+                    "Return JSON only as {stepIds:string[]}. Prioritize supplied candidate step ids. Do not answer the question, emit SQL, or invent tools.",
                 },
                 {
                   role: "user",
@@ -794,7 +670,6 @@ export async function runInvestigationJob(
               planning.text,
               baseline,
               planning.provider,
-              request,
             );
           } catch (error) {
             plan = aiInvestigationPlanSchema.parse({
@@ -843,7 +718,7 @@ export async function runInvestigationJob(
             )
             .map((step) => ({ id: step.stepId, error: step.error }));
           if (candidates.length > 0) {
-            const inspection = await generateLocalSynthesis({
+            const inspection = await generateLocal({
               request,
               signal: controller.signal,
               messages: [
@@ -892,7 +767,6 @@ export async function runInvestigationJob(
       }
       try {
         const synthesisInput = {
-          jobId: id,
           request,
           signal: controller.signal,
           messages: [
@@ -918,29 +792,12 @@ export async function runInvestigationJob(
             },
           ],
         };
-        const providerAnswer = await resolveProviderAnswer({
+        const answer = await resolveProviderAnswer({
           job: await jobs.getJob(id),
           request,
           stepRows,
           synthesisInput,
         });
-        let answer;
-        try {
-          answer = await restoreAnswerForJob(id, providerAnswer);
-        } catch (restoreError) {
-          return jobs.finishJob(
-            id,
-            "failed",
-            fallbackAnswer(request, [], restoreError),
-            {
-              code:
-                errorProperty(restoreError, "code") ||
-                "REFERENCE_RESTORE_FAILED",
-              message:
-                "The cloud response could not be safely restored from local references.",
-            },
-          );
-        }
         return jobs.finishJob(
           id,
           stepRows.some((step) => step.state === "failed") ||
@@ -973,11 +830,7 @@ export async function runInvestigationJob(
 
 export async function createInvestigation(input: unknown) {
   const request = aiInvestigationRequestSchema.parse(input);
-  await validateReferenceRequest(request);
-  const job = await jobs.createJob(
-    request,
-    request.referenceScopeId ? claimedReferenceExpiry() : null,
-  );
+  const job = await jobs.createJob(request);
   void runInvestigationJob(job.id);
   return job;
 }
@@ -1041,13 +894,11 @@ export async function resumeInvestigation(
   )
     return job;
   if (["partial", "failed"].includes(job.state) && job.plan) {
-    if (!shouldPreserveProviderCheckpoint(job)) {
-      const refreshIds = job.plan.steps
-        .filter((step) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
-        .map((step) => step.id);
-      await jobs.resetSteps(id, refreshIds);
-      await jobs.clearProviderResult(id);
-    }
+    const refreshIds = job.plan.steps
+      .filter((step) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
+      .map((step) => step.id);
+    await jobs.resetSteps(id, refreshIds);
+    await jobs.clearProviderResult(id);
   }
   void runInvestigationJob(id, { skipAttemptedExternal: true });
   return job;
@@ -1071,8 +922,5 @@ export {
   fallbackAnswer as __fallbackAnswer,
   buildRetryPlan as __buildRetryPlan,
   shouldReuseStep as __shouldReuseStep,
-  usesCloudSynthesis as __usesCloudSynthesis,
-  applyPlannerOrdering as __applyPlannerOrdering,
   resolveProviderAnswer as __resolveProviderAnswer,
-  shouldPreserveProviderCheckpoint as __shouldPreserveProviderCheckpoint,
 };

@@ -1199,8 +1199,6 @@ test("native application environment accepts only fixed keys and single-line val
     {
       FRED_API_KEY: "key",
       ADMIN_AUTH_TOKEN: "existing-admin-token",
-      OPENAI_API_ENABLED: "true",
-      OPENAI_API_KEY: "synthetic-openai-key",
     },
   );
   assert.throws(
@@ -1358,8 +1356,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
       DATABASE_URL: "postgresql://vision_app:redacted@127.0.0.1:5432/vision",
       DATABASE_URL_MIGRATIONS:
         "postgresql://vision_owner:redacted@127.0.0.1:5432/vision",
-      OPENAI_API_ENABLED: "true",
-      OPENAI_API_KEY: "synthetic-key",
     },
     port: 43123,
     paths: {
@@ -1382,8 +1378,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
   assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
-  assert.equal(env.OPENAI_API_ENABLED, "true");
-  assert.equal(env.OPENAI_API_KEY, "synthetic-key");
   assert.equal(
     env.VISION_NATIVE_ENV_FILE,
     "/Users/test/Library/Application Support/Vision/native/vision/runtime.env",
@@ -1393,27 +1387,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
     env.PUPPETEER_EXECUTABLE_PATH,
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   );
-});
-
-test("packaged OpenAI drops its key unless explicitly enabled", () => {
-  const common = {
-    port: 43123,
-    paths: {
-      env: "/tmp/vision-runtime.env",
-      attachments: "/tmp/attachments",
-      cache: "/tmp/cache",
-    },
-    runtimeRoot: "/tmp/native-runtime",
-    tools: { chrome: "/tmp/chrome" },
-  };
-  for (const runtimeEnv of [
-    { OPENAI_API_ENABLED: "false", OPENAI_API_KEY: "synthetic-key" },
-    { OPENAI_API_ENABLED: "true" },
-  ]) {
-    const env = buildNativeBackendEnv({ ...common, runtimeEnv });
-    assert.equal(env.OPENAI_API_ENABLED, "false");
-    assert.equal(env.OPENAI_API_KEY, undefined);
-  }
 });
 
 test("native audit verification rejects a changed legacy cutover even with the same chain head", async (t) => {

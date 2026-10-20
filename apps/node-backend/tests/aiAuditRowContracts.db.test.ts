@@ -6,11 +6,8 @@
  * returns fails here with a RowContractError.
  */
 import { bodyAt } from "./helpers/responseBody.ts";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type {
-  AiDisclosureGrant,
-  AiInvestigationRequest,
-} from "@vision/types/aiResearch";
+import { createHash, randomUUID } from "node:crypto";
+import type { AiInvestigationRequest } from "@vision/types/aiResearch";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   acquireDbSuiteLock,
@@ -29,9 +26,7 @@ import {
 } from "../src/services/analysisExecutor.ts";
 import aiChatRepository from "../src/repositories/aiChatRepository.ts";
 import * as investigations from "../src/repositories/aiInvestigationRepository.ts";
-import * as disclosure from "../src/repositories/aiDisclosureRepository.ts";
 import * as documents from "../src/repositories/aiResearchDocumentRepository.ts";
-import * as references from "../src/repositories/aiReferenceRepository.ts";
 import {
   appendAuditEvent,
   readAuditHead,
@@ -159,27 +154,7 @@ describe.skipIf(!hasTestDatabase())(
       );
     });
 
-    it("reads investigation jobs, steps and reference scopes", async () => {
-      const scopeId = randomUUID();
-      const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
-      await references.createScope({
-        id: scopeId,
-        expiresAt,
-        entries: [
-          {
-            token: `[[VR1:account:${randomBytes(18).toString("base64url")}]]`,
-            referenceType: "account",
-            ciphertext: randomBytes(16),
-            nonce: randomBytes(12),
-            authTag: randomBytes(16),
-          },
-        ],
-      });
-      onCleanup("DELETE FROM ai_reference_scopes WHERE id=$1", scopeId);
-      const scope = await references.getScope(scopeId);
-      expect(scope).toMatchObject({ id: scopeId, jobId: null });
-      expect(scope!.entries[0]!.ciphertext).toBeInstanceOf(Buffer);
-
+    it("reads investigation jobs and steps", async () => {
       const request = {
         question: "Synthetic investigation",
         route: "local",
@@ -188,16 +163,10 @@ describe.skipIf(!hasTestDatabase())(
         language: "en",
         scope: { months: 3 },
         researchMode: "local-only",
-        grantId: null,
-        referenceScopeId: scopeId,
       } as unknown as AiInvestigationRequest;
-      const job = await investigations.createJob(request, expiresAt);
+      const job = await investigations.createJob(request);
       onCleanup("DELETE FROM ai_investigation_jobs WHERE id=$1", job.id);
       expect(job).toMatchObject({ state: "queued", plan: null });
-      expect(await references.getScopeForJob(job.id)).toMatchObject({
-        id: scopeId,
-        jobId: job.id,
-      });
 
       expect((await investigations.listJobs()).map((row) => row.id)).toContain(
         job.id,
@@ -241,103 +210,6 @@ describe.skipIf(!hasTestDatabase())(
         await investigations.finishJob(job.id, "completed", { answer: "x" }),
       ).toMatchObject({ state: "completed", result: { answer: "x" } });
       expect(await investigations.requestCancel(job.id)).toBe(null);
-    });
-
-    it("reads disclosure grants and records through a reservation", async () => {
-      const grant = await disclosure.createGrant({
-        route: "openai-api",
-        mode: "cloud-plan-public",
-        purpose: "Synthetic grant",
-        previewHash: HASH,
-        allowedFields: ["question"],
-        maxRequests: 2,
-        maxInputCharacters: 1000,
-        maxOutputTokens: 1000,
-        maxCostMicros: 1000,
-        maxDisclosureUnits: 5,
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-        retainExactPayload: false,
-      } satisfies AiDisclosureGrant);
-      onCleanup("DELETE FROM ai_disclosure_grants WHERE id=$1", grant.id);
-      expect(grant).toMatchObject({
-        max_cost_micros: "1000",
-        used_requests: 0,
-      });
-
-      const job = await investigations.createJob({
-        question: "Synthetic cloud question",
-        route: "openai-api",
-        model: null,
-        depth: "quick",
-        language: "en",
-        scope: {},
-        grantId: grant.id,
-      } as unknown as AiInvestigationRequest);
-      onCleanup("DELETE FROM ai_investigation_jobs WHERE id=$1", job.id);
-      onCleanup(
-        "DELETE FROM ai_disclosure_records WHERE grant_id=$1",
-        grant.id,
-      );
-
-      const record = await disclosure.reserveDisclosure({
-        grantId: grant.id,
-        jobId: job.id,
-        expectedMode: "cloud-plan-public",
-        preview: {
-          payloadSha256: HASH,
-          fieldManifest: ["question"],
-          disclosureUnits: ["unit-1"],
-          inputCharacters: 10,
-          payloadBytes: 10,
-        },
-        outputTokens: 10,
-        costMicros: 10,
-        monthlyBudgetMicros: 1_000_000_000,
-      });
-      expect(record).toMatchObject({
-        status: "authorized",
-        reserved_cost_micros: "10",
-      });
-      expect(
-        await disclosure.updateDisclosureRecord(record.id, {
-          status: "sent",
-          providerRequestId: "req-synthetic",
-        }),
-      ).toMatchObject({ status: "sent" });
-      expect(await disclosure.findUncertainDisclosure(job.id)).toEqual({
-        id: record.id,
-      });
-      expect(
-        await disclosure.updateDisclosureRecord(record.id, {
-          status: "completed",
-          inputTokens: 5,
-          outputTokens: 5,
-          costMicros: 7,
-        }),
-      ).toMatchObject({ actual_cost_micros: "7" });
-      expect(
-        (await disclosure.listGrants()).find((row) => row.id === grant.id),
-      ).toMatchObject({ used_requests: 1, used_cost_micros: "10" });
-      expect((await disclosure.listRecords()).map((row) => row.id)).toContain(
-        record.id,
-      );
-
-      // A second reservation reads the prior units and the monthly total.
-      await disclosure.reserveDisclosure({
-        grantId: grant.id,
-        jobId: job.id,
-        expectedMode: "cloud-plan-public",
-        preview: {
-          payloadSha256: HASH,
-          fieldManifest: ["question"],
-          disclosureUnits: ["unit-2"],
-          inputCharacters: 10,
-          payloadBytes: 10,
-        },
-        outputTokens: 10,
-        costMicros: 10,
-        monthlyBudgetMicros: 1_000_000_000,
-      });
     });
 
     it("reads research documents and passages", async () => {

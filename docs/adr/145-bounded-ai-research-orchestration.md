@@ -2,13 +2,17 @@
 title: ADR-145 - Bounded AI Research Orchestration
 type: adr
 status: Accepted
-date: 2026-09-13
+date: 2026-10-20
 tags: [adr, ai, research, ollama, openai, privacy, jobs, evidence, web]
 description: Use provider-neutral recoverable investigation jobs, bounded typed tools, local evidence retrieval, and a consent-bound short-lived process for optional OpenAI API egress.
 aliases: [AI research orchestration, cloud egress helper, AI investigations]
 ---
 
 # ADR-145: Bounded AI Research Orchestration
+
+> [!note] Superseded in part by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on
+> 2026-10-20: the `openai-api` route, the Seatbelt egress helper, disclosure records and grants are
+> removed. Recoverable local jobs, bounded tools, local documents and public research stay in force.
 
 ## Status
 

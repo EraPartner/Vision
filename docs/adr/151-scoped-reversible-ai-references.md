@@ -1,8 +1,8 @@
 ---
 title: ADR-151 - Scoped reversible AI references
 type: adr
-status: Accepted
-date: 2026-09-14
+status: superseded
+date: 2026-10-20
 tags:
   [
     adr,
@@ -24,6 +24,8 @@ aliases:
 ---
 
 # ADR-151: Scoped reversible AI references
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 

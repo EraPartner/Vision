@@ -19,14 +19,14 @@ file, without a build or network calls.
 are folded into the right panel. Each flow links to its fuller notes.
 
 Use the **Learning path** selector to narrow the list and follow its suggested order. The paths
-cover the most important concepts; **All flows** also includes specialist and experimental flows.
+cover the most important concepts; **All flows** also includes specialist flows.
 
 | Learning path          | Start with                                                                                                                                                                                                                                                                                | What to understand                                                           |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | Start here             | [Page request](../flow-visualizer.html#api-request), [dashboard totals](../flow-visualizer.html#dashboard-summary), [desktop startup](../flow-visualizer.html#native-startup)                                                                                                             | Where data lives and which layer does what                                   |
 | Everyday money         | [Import](../flow-visualizer.html#csv-import), [review](../flow-visualizer.html#import-commit), [transfers](../flow-visualizer.html#internal-transfer-reconciliation), [splits](../flow-visualizer.html#split-shared-expense), [plans](../flow-visualizer.html#planned-payment-completion) | Posted records, debt and expectations have different meanings                |
 | Portfolio and planning | [Prices](../flow-visualizer.html#refresh-prices), [performance](../flow-visualizer.html#portfolio-valuation), [cash commitments](../flow-visualizer.html#commitment-aware-cash)                                                                                                           | Current prices, historical snapshots and future projections are separate     |
-| Research and AI        | [Manual analysis](../flow-visualizer.html#manual-analysis), [Ollama chat](../flow-visualizer.html#ai-chat), [catalog plans](../flow-visualizer.html#cloud-catalog-analysis), [evidence disclosure](../flow-visualizer.html#cloud-evidence-disclosure)                                     | Which calculations are local and which selected information can leave Vision |
+| Research and AI        | [Manual analysis](../flow-visualizer.html#manual-analysis), [Ollama chat](../flow-visualizer.html#ai-chat), [investigations](../flow-visualizer.html#ai-research-investigation)                                                                                                           | Which calculations are local and which public queries can leave Vision       |
 | Backup and trust       | [Backup](../flow-visualizer.html#backup-create), [restore](../flow-visualizer.html#backup-restore), [audit receipt](../flow-visualizer.html#native-audit-receipt)                                                                                                                         | Backup coverage, rollback and external continuity checks                     |
 
 ## How a page gets data
@@ -134,23 +134,17 @@ flowchart TD
     Chat --> Ollama[Configured Ollama endpoint]
     Ollama --> Tools[Validated local financial tools]
     Tools --> Ollama
-    Choice --> Catalog[Cloud-authored catalog plan]
-    Catalog --> Public[Cloud receives public catalog identifiers]
-    Public --> Restricted
-    Restricted --> LocalAnswer[Local result and synthesis]
-    Choice --> Evidence[Selected-evidence cloud answer]
-    Evidence --> Preview[Protect and preview exact evidence]
-    Preview --> Grant[Explicit bounded disclosure grant]
-    Grant --> Cloud[OpenAI receives approved evidence]
-    Cloud --> Checkpoint[Validate and checkpoint provider answer]
-    Checkpoint --> Restore[Restore same-job references locally]
+    Choice --> Investigation[Recoverable investigation]
+    Investigation --> Tools
+    Investigation --> Public[Optional public web or provider research]
+    Investigation --> Ollama
 ```
 
 These paths have different disclosure rules. Ollama is local in the default desktop setup, but a
 configured remote URL sends prompts and tool results to that host. Its tool loop has at most six
-iterations. Catalog-only cloud planning keeps private execution and synthesis local.
-Selected-evidence cloud synthesis sends the approved evidence and skips cloud planning and Ollama
-synthesis. An uncertain disclosure remains recorded as sent and is not automatically replayed.
+iterations. Investigations use the same Ollama endpoint; optional public research sends only
+separately authored public queries or symbols. Vision has no cloud model route
+([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]).
 
 See [[docs/security/ai-data-access|AI Data Access]], [[docs/features/ai-chat|AI Chat]], and
 [[docs/features/analysis-workspace|Analysis Workspace]].

@@ -1665,21 +1665,11 @@
           {
             "id": "sv.airesearch",
             "label": "AI research orchestration",
-            "sub": "jobs · typed tools · disclosure · local restoration",
+            "sub": "jobs · typed tools · cited evidence",
             "kind": "service",
             "path": "apps/node-backend/src/services/aiInvestigationService.ts",
-            "desc": "ADR-145, ADR-146, ADR-149, and ADR-151: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer. Provider-form answers are checkpointed before local reversible-reference restoration.",
+            "desc": "ADR-145 and ADR-229: serial, recoverable investigations compose bounded local tools and cited evidence, and the configured Ollama endpoint writes the answer. Optional public web or provider research uses separately authored public queries. There is no cloud model route.",
             "x": 940,
-            "y": 960
-          },
-          {
-            "id": "sv.aireference",
-            "label": "AI reference boundary",
-            "sub": "typed tokens · AES-256-GCM · allowlisted restore",
-            "kind": "service",
-            "path": "apps/node-backend/src/services/aiReferenceService.ts",
-            "desc": "ADR-151: converts explicit selected-text markers to one-job CSPRNG tokens, stores only authenticated ciphertext, validates scope claims, and restores known tokens only in allowlisted answer text. The installation key stays outside PostgreSQL and database backup. This is pseudonymization, not anonymity.",
-            "x": 1120,
             "y": 960
           },
           {
@@ -1749,82 +1739,6 @@
             "kind": "external",
             "x": 1320,
             "y": 1220
-          },
-          {
-            "id": "ex.openai",
-            "label": "OpenAI Responses API",
-            "sub": "opt-in · store:false · no hosted tools",
-            "kind": "external",
-            "x": 1320,
-            "y": 1310
-          },
-          {
-            "id": "sv.agentcloaksetup",
-            "label": "AgentCloak setup",
-            "sub": "Desktop probe · private key",
-            "kind": "service",
-            "path": "apps/node-backend/src/services/agentCloakDesktopSetupService.ts",
-            "desc": "ADR-171: AI settings probes Desktop /detect, creates a missing or blank Vision reference key in the private runtime environment, and stores only the enabled preference in PostgreSQL. Setup can precede OpenAI configuration.",
-            "x": 760,
-            "y": 1310
-          },
-          {
-            "id": "sv.agentcloak",
-            "label": "AgentCloak preflight",
-            "sub": "Desktop detect · MCP gate",
-            "kind": "service",
-            "path": "apps/node-backend/src/services/agentCloakPreflight.ts",
-            "desc": "ADR-169/170: Desktop detects selected-text spans before Vision creates encrypted scoped tokens, then checks for remaining findings at preview and before each OpenAI attempt. MCP mode blocks changed results. Neither mode rewrites the consent-bound send payload.",
-            "x": 940,
-            "y": 1310
-          },
-          {
-            "id": "ex.agentcloak",
-            "label": "AgentCloak endpoint",
-            "sub": "Desktop /detect or MCP /mcp",
-            "kind": "external",
-            "desc": "Optional Desktop /detect receives selected text on experimental unauthenticated loopback; MCP /mcp receives checked user-authored text through an operator-managed endpoint. Loopback alone does not prove forwarding or retention behavior.",
-            "x": 1120,
-            "y": 1310
-          },
-          {
-            "id": "sv.codexsession",
-            "label": "Codex experiment",
-            "sub": "synthetic-only · disposable",
-            "kind": "service",
-            "x": 220,
-            "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/experimentalSession.ts",
-            "desc": "ADR-159: a ten-minute admin-only session accepts no user prompt, checks ChatGPT account and limits, and sends one fixed fictional question."
-          },
-          {
-            "id": "sv.codexchild",
-            "label": "Codex App Server",
-            "sub": "private home · Seatbelt",
-            "kind": "service",
-            "x": 400,
-            "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/appServerTransport.ts",
-            "desc": "App Server runs in a disposable root with ephemeral auth and a restrictive macOS Seatbelt profile. Effective configuration is checked before use."
-          },
-          {
-            "id": "sv.codexproxy",
-            "label": "Codex CONNECT proxy",
-            "sub": "two hosts · byte caps",
-            "kind": "service",
-            "x": 580,
-            "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/connectProxy.ts",
-            "desc": "A local-only CONNECT proxy permits exact provider hosts and port 443, bounds transfer bytes, and does not decrypt TLS."
-          },
-          {
-            "id": "ex.codex",
-            "label": "ChatGPT / Codex",
-            "sub": "experimental subscription route",
-            "kind": "external",
-            "x": 1120,
-            "y": 1160,
-            "desc": "Official Codex App Server provider route; the integration is currently experimental and not supported for production workloads."
           },
           {
             "id": "sv.dbeditor",
@@ -1996,22 +1910,6 @@
           [
             "sv.auditretention",
             "db.postgres"
-          ],
-          [
-            "be.routes",
-            "sv.codexsession"
-          ],
-          [
-            "sv.codexsession",
-            "sv.codexchild"
-          ],
-          [
-            "sv.codexchild",
-            "sv.codexproxy"
-          ],
-          [
-            "sv.codexproxy",
-            "ex.codex"
           ],
           [
             "sv.auditverify",
@@ -2238,47 +2136,7 @@
             "sv.airesearch"
           ],
           [
-            "be.routes",
-            "sv.aireference"
-          ],
-          [
-            "be.routes",
-            "sv.agentcloak"
-          ],
-          [
-            "be.routes",
-            "sv.agentcloaksetup"
-          ],
-          [
-            "sv.agentcloaksetup",
-            "ex.agentcloak"
-          ],
-          [
-            "sv.agentcloaksetup",
-            "db.postgres"
-          ],
-          [
             "sv.airesearch",
-            "be.repos"
-          ],
-          [
-            "sv.airesearch",
-            "sv.aireference"
-          ],
-          [
-            "sv.aireference",
-            "sv.agentcloak"
-          ],
-          [
-            "sv.airesearch",
-            "sv.agentcloak"
-          ],
-          [
-            "sv.agentcloak",
-            "ex.agentcloak"
-          ],
-          [
-            "sv.aireference",
             "be.repos"
           ],
           [
@@ -2292,10 +2150,6 @@
           [
             "sv.airesearch",
             "ex.brave"
-          ],
-          [
-            "sv.airesearch",
-            "ex.openai"
           ],
           [
             "sv.portfolioimport",
@@ -2962,62 +2816,6 @@
               {
                 "path": "features/analysis-monitors.md",
                 "label": "Analysis Monitors"
-              }
-            ]
-          },
-          {
-            "id": "cloud-catalog-analysis",
-            "name": "Execute a cloud-authored catalog analysis locally",
-            "category": "AI",
-            "summary": "Optional Desktop detection protects selected summary text before consent, while MCP mode blocks proposed changes. Both modes check again before send. OpenAI receives public catalog identifiers only; Vision executes and synthesizes private results locally.",
-            "steps": [
-              {
-                "from": "sv.airesearch",
-                "to": "sv.agentcloak",
-                "payload": "optional preflight of user-authored cloud text before each send attempt",
-                "annotation": "aiProviderAdapters.js invokes checkAgentCloakPreflight() inside the OpenAI retry loop before reservation. The gate does not rewrite the exact consent-bound payload."
-              },
-              {
-                "from": "sv.agentcloak",
-                "to": "ex.agentcloak",
-                "payload": "Desktop /detect or MCP cloak check over loopback",
-                "annotation": "agentCloakPreflight.js blocks residual Desktop findings or MCP changes, and fails closed on invalid responses. The operator must verify endpoint forwarding and retention."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "ex.openai",
-                "payload": "public question or selected summary plus identifier-only analysis catalog",
-                "annotation": "aiProviderAdapters.js omits relation names, private account or investment IDs, local rows, SQL, and result callbacks from the digest-bound planning payload."
-              },
-              {
-                "from": "ex.openai",
-                "to": "sv.airesearch",
-                "payload": "up to three strict CloudAnalysisPlan objects",
-                "annotation": "aiInvestigationService.js accepts only the shared schema and keeps the deterministic local plan when parsing fails."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "sv.analysis",
-                "payload": "catalog identifiers plus trusted local account, investment, and date scope",
-                "annotation": "cloudAnalysisPlan.js checks catalog version and workspace, compiles through analysisCatalog.js, and adds trusted scope as SQL parameters."
-              },
-              {
-                "from": "sv.analysis",
-                "to": "db.postgres",
-                "payload": "read-only SELECT on approved vision_analysis views",
-                "annotation": "analysisExecutor.js enforces the dedicated role, timeout, row, byte, and cancellation boundaries."
-              },
-              {
-                "from": "sv.analysis",
-                "to": "sv.airesearch",
-                "payload": "private local rows and bounded formula output",
-                "annotation": "The investigation step is marked private and undisclosed; final synthesis uses the local model and never returns rows to the planning provider."
-              }
-            ],
-            "docs": [
-              {
-                "path": "security/ai-data-access.md",
-                "label": "AI Data Access Policy"
               }
             ]
           },
@@ -4719,144 +4517,34 @@
             ]
           },
           {
-            "id": "agentcloak-desktop-setup",
-            "name": "Enable AgentCloak Desktop in AI settings",
-            "category": "AI",
-            "summary": "The user enables Desktop protection. Vision probes the loopback detector, ensures a private reference key, and stores only the preference in PostgreSQL; OpenAI configuration is optional at setup time.",
-            "steps": [
-              {
-                "from": "browser",
-                "to": "fe.pages",
-                "payload": "Open AI settings and review AgentCloak Desktop status",
-                "annotation": "apps/frontend/src/features/settings/AgentCloakDesktopSettingsSection.tsx presents the Desktop control and the current enabled, available, mappingKeyConfigured, and openAiEnabled values."
-              },
-              {
-                "from": "fe.pages",
-                "to": "fe.apiclient",
-                "payload": "GET /api/ai-research/agentcloak-desktop, then PUT {enabled:true}",
-                "annotation": "apps/frontend/src/lib/api/aiResearch.ts requests a fresh status and sends only the requested boolean when the user enables protection."
-              },
-              {
-                "from": "fe.apiclient",
-                "to": "be.routes",
-                "payload": "Authenticated Desktop setup request",
-                "annotation": "apps/node-backend/src/routes/aiResearch.ts validates the strict boolean body and delegates to configureAgentCloakDesktop()."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.agentcloaksetup",
-                "payload": "Probe Desktop, ensure reference key, save enabled preference",
-                "annotation": "apps/node-backend/src/services/agentCloakDesktopSetupService.ts performs the enable sequence; an unavailable detector, invalid existing key, or storage error fails closed."
-              },
-              {
-                "from": "sv.agentcloaksetup",
-                "to": "ex.agentcloak",
-                "payload": "Bounded loopback POST /detect probe",
-                "annotation": "The Desktop probe checks current reachability. A loopback address alone does not prove that upstream processing or retention stays local."
-              },
-              {
-                "from": "sv.agentcloaksetup",
-                "to": "db.postgres",
-                "payload": "Persist enabled boolean only",
-                "annotation": "The setup service stores the preference in settings after aiReferenceKeySetup.js creates or validates the installation-held key in backend .env.local or native private runtime.env. No key material enters PostgreSQL."
-              },
-              {
-                "from": "be.routes",
-                "to": "fe.apiclient",
-                "payload": "{enabled,available,mappingKeyConfigured,openAiEnabled}",
-                "annotation": "The response contains booleans only. OpenAI can still be unconfigured; live packaged synthetic API acceptance remains pending under ADR-171."
-              }
-            ],
-            "docs": [
-              {
-                "path": "security/ai-data-access.md",
-                "label": "AI Data Access Policy"
-              }
-            ]
-          },
-          {
             "id": "ai-research-investigation",
             "name": "Run a bounded AI research investigation",
             "category": "AI",
-            "summary": "A user selects scope, evidence access, depth, a privacy profile, and an approved API model. In Desktop mode, detected selected text becomes encrypted one-job tokens before consent; MCP mode blocks proposed changes. Vision restores answer text locally.",
+            "summary": "A user selects scope, evidence access and depth. Vision runs bounded local tools, optional public research and Ollama synthesis as a recoverable job.",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.apiclient",
-                "payload": "POST /api/ai-research/disclosures/preview · optional [[vision-ref:type|value]] markers",
-                "annotation": "AIInvestigationPanel.tsx sends the full selected disclosure request for exact preview. Only selectedSummary and selectedEvidence support explicit reversible markers. The UI warns that replacement is pseudonymization, not anonymity."
+                "payload": "question · scope · research mode · depth · language",
+                "annotation": "apps/frontend/src/features/ai-chat/AIInvestigationPanel.tsx builds a request with route \"local\" and the selected research mode, depth, language and optional date range."
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "strict AiInvestigationRequest preview",
-                "annotation": "routes/aiResearch.ts validates the cloud-only preview request, then delegates reference preparation before computing the digest-bound disclosure payload."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.aireference",
-                "payload": "selected text with explicit markers or Desktop detection enabled",
-                "annotation": "aiReferenceService.js accepts supported explicit typed markers and, in Desktop mode, protects validated selected-text spans with scoped subject tokens before disclosurePayload() computes the digest."
-              },
-              {
-                "from": "sv.aireference",
-                "to": "sv.agentcloak",
-                "payload": "optional selected-summary and evidence scan before scope creation",
-                "annotation": "aiReferenceService.js calls detectAgentCloakDesktopSpans() during preview, after explicit marker tokenization and before storing the mapping. Token identifiers are masked with spaces."
-              },
-              {
-                "from": "sv.agentcloak",
-                "to": "ex.agentcloak",
-                "payload": "experimental Desktop POST /detect on selected text",
-                "annotation": "agentCloakPreflight.js validates span offsets and text. Vision stores detected originals only in its encrypted scoped mapping, not in Desktop's protect/reveal map."
-              },
-              {
-                "from": "sv.aireference",
-                "to": "db.postgres",
-                "payload": "15-minute scope + typed token + AES-256-GCM ciphertext, nonce, and tag",
-                "annotation": "aiReferenceRepository.ts stores a random scope UUID and 18-byte CSPRNG token payloads. Scope, token, and type are authenticated additional data; AI_REFERENCE_MAPPING_KEY stays outside PostgreSQL and database backup."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.agentcloak",
-                "payload": "optional preview check of present user-authored cloud fields",
-                "annotation": "routes/aiResearch.ts calls checkAgentCloakPreflight() on the exact payload after Vision finishes selected-text protection; the final check never alters its digest."
-              },
-              {
-                "from": "sv.agentcloak",
-                "to": "ex.agentcloak",
-                "payload": "Desktop /detect with masked tokens or MCP cloak with REFERENCE",
-                "annotation": "agentCloakPreflight.js checks present user-authored cloud fields. Remaining Desktop spans, MCP changes, invalid responses, or an unavailable endpoint block preview."
-              },
-              {
-                "from": "be.routes",
-                "to": "fe.apiclient",
-                "payload": "tokenized outboundRequest + referenceScope + preflight status",
-                "annotation": "previewDisclosure() returns the exact request used for the grant and job only after the optional check passes. A request without markers or Desktop findings has a null scope."
-              },
-              {
-                "from": "fe.apiclient",
-                "to": "be.routes",
-                "payload": "POST /api/ai-research/investigations · preview outboundRequest",
-                "annotation": "The request carries explicit scope, EN/NL language, quick/detailed depth, research mode, model route, optional approved OpenAI model, grant, and optional one-use referenceScopeId."
+                "payload": "POST /api/ai-research/investigations · strict AiInvestigationRequest",
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts parses the strict request schema from @vision/types/aiResearch; route accepts only \"local\" and unknown fields return 400."
               },
               {
                 "from": "be.routes",
                 "to": "sv.airesearch",
                 "payload": "strict request · bounded plan · serial execution queue",
-                "annotation": "aiInvestigationService.js rejects raw markers and unknown, cross-scope, expired, or already used tokens before persistence. It creates a bounded baseline and keeps one investigation and tool run active at a time."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "sv.aireference",
-                "payload": "atomically claim optional preview scope for one job",
-                "annotation": "claimReferenceScope() extends a valid unclaimed scope to a 30-day claimed expiry. A unique job relationship prevents reuse by another investigation."
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts creates the job and keeps one investigation and tool run active at a time."
               },
               {
                 "from": "sv.airesearch",
                 "to": "db.postgres",
                 "payload": "job + step checkpoints",
-                "annotation": "Queued, running, waiting, partial, completed, failed and cancelled states survive navigation and backend restart. Job deletion cascades to its claimed reference scope and entries."
+                "annotation": "Queued, running, waiting, partial, completed, failed and cancelled states survive navigation and backend restart. Deleting a job cascades to its steps."
               },
               {
                 "from": "sv.airesearch",
@@ -4868,55 +4556,25 @@
                 "from": "sv.airesearch",
                 "to": "ex.brave",
                 "payload": "optional public-only query",
-                "annotation": "Private-looking queries are rejected. Search and page fetches have destination, redirect, media-type, byte and per-run limits."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "sv.agentcloak",
-                "payload": "fresh optional check before each OpenAI send attempt and budget reservation",
-                "annotation": "aiProviderAdapters.js calls checkAgentCloakPreflight() inside the retry loop. The checked text is derived from the canonical disclosed payload; AgentCloak output is never used as the provider payload."
-              },
-              {
-                "from": "sv.agentcloak",
-                "to": "ex.agentcloak",
-                "payload": "present user-authored cloud text only",
-                "annotation": "agentCloakPreflight.js calls Desktop /detect or authenticated MCP /mcp over loopback and fails closed on remaining findings, proposed changes, or errors."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "ex.openai",
-                "payload": "optional preview-hash-bound payload with scoped tokens, never marked literals",
-                "annotation": "Only an unexpired mode-specific grant matching exact request bytes and budgets can cross the short-lived Seatbelt sandbox. Tokens hide marked literals and optional Desktop-detected spans; surrounding context can still identify the subject."
+                "annotation": "apps/node-backend/src/services/webResearch.ts rejects private-looking queries. Search and page fetches have destination, redirect, media-type, byte and per-run limits."
               },
               {
                 "from": "sv.airesearch",
                 "to": "ex.ollama",
-                "payload": "local synthesis for local and planning profiles",
-                "annotation": "Local Ollama produces the final structured answer for the local route and both OpenAI planning profiles. The selected-evidence cloud-synthesis profile skips this hop and never silently falls back to it."
+                "payload": "bounded evidence for structured synthesis",
+                "annotation": "apps/node-backend/src/services/aiProviderAdapters.ts generateLocal() asks the configured Ollama endpoint for the final structured answer."
               },
               {
                 "from": "sv.airesearch",
                 "to": "db.postgres",
-                "payload": "schema-validated provider-form answer checkpoint",
-                "annotation": "aiInvestigationRepository.setProviderResult() persists checkpoint_json.providerResult before restoration. Startup reuses and validates it without another cloud or local model call."
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "sv.aireference",
-                "payload": "restore same-job tokens only in allowlisted answer text",
-                "annotation": "restoreAnswerForJob() can replace summary, fact/calculation/interpretation text, assumptions, missing information, conflict descriptions, and evidence excerpts. It never replaces evidence IDs, labels, locators, kinds, dates, availability, or schema structure."
-              },
-              {
-                "from": "sv.aireference",
-                "to": "sv.airesearch",
-                "payload": "locally restored answer or explicit restoration failure",
-                "annotation": "Unknown, malformed, expired, cross-job, fabricated, or undecryptable tokens fail the job visibly. The provider-form checkpoint is never exposed as a partly restored success."
+                "payload": "schema-validated answer checkpoint",
+                "annotation": "aiInvestigationRepository.setProviderResult() persists checkpoint_json.providerResult. Startup reuses and validates it without another model call."
               },
               {
                 "from": "sv.airesearch",
                 "to": "fe.apiclient",
                 "payload": "local structured result or visible failed state",
-                "annotation": "result_json stores the restored answer on success. A completed result remains readable after backup restore; an in-flight token-bearing checkpoint additionally needs the original installation key and unexpired map."
+                "annotation": "result_json stores the cited answer; facts, calculations and interpretations need at least one valid evidence identifier."
               }
             ],
             "docs": [
@@ -5233,50 +4891,6 @@
               {
                 "path": "features/backup-coverage-audit.md",
                 "label": "Backup Coverage Audit"
-              }
-            ]
-          },
-          {
-            "id": "experimental-codex-synthetic",
-            "name": "Experimental Codex synthetic turn",
-            "category": "Security",
-            "summary": "An opt-in admin session isolates Codex App Server in a disposable macOS sandbox and sends only a fixed fictional question through a bounded provider proxy.",
-            "steps": [
-              {
-                "from": "browser",
-                "to": "be.routes",
-                "payload": "admin bearer, CSRF, loopback, empty request",
-                "annotation": "apps/node-backend/src/routes/codexExperimental.ts requires the explicit enable flag, binary path, admin token, and loopback peer."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.codexsession",
-                "payload": "start or use one disposable synthetic session",
-                "annotation": "apps/node-backend/src/integrations/codex/experimentalSession.ts permits one fixed fictional question and expires after ten minutes."
-              },
-              {
-                "from": "sv.codexsession",
-                "to": "sv.codexchild",
-                "payload": "private root, ephemeral auth, validated effective config",
-                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.ts runs the process under the Seatbelt profile in seatbelt.ts."
-              },
-              {
-                "from": "sv.codexchild",
-                "to": "sv.codexproxy",
-                "payload": "only local proxy-port network access",
-                "annotation": "apps/node-backend/src/integrations/codex/seatbelt.ts permits the exact local proxy port; no general outbound socket access."
-              },
-              {
-                "from": "sv.codexproxy",
-                "to": "ex.codex",
-                "payload": "bounded TLS tunnel to exact allowed host",
-                "annotation": "apps/node-backend/src/integrations/codex/connectProxy.ts validates CONNECT host and port, with byte caps; encrypted payload content remains opaque."
-              }
-            ],
-            "docs": [
-              {
-                "path": "security/ai-data-access.md",
-                "label": "AI Data Access Policy"
               }
             ]
           },
@@ -5823,121 +5437,6 @@
             ]
           },
           {
-            "id": "cloud-evidence-disclosure",
-            "name": "Approve selected evidence for a cloud answer",
-            "category": "AI",
-            "summary": "Preview exact selected evidence, grant one bounded disclosure, and restore the answer locally.",
-            "takeaway": "This profile sends approved evidence to OpenAI and skips cloud planning and Ollama synthesis. Uncertain sends stay recorded as sent and are not automatically replayed.",
-            "steps": [
-              {
-                "from": "fe.pages",
-                "to": "be.routes",
-                "title": "Preview selected evidence",
-                "note": "Choose exact evidence and an approved model.",
-                "payload": "POST /api/ai-research/disclosures/preview",
-                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.ts"
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.aireference",
-                "title": "Protect selected identifiers",
-                "note": "Replace explicit markers and optional Desktop detections.",
-                "payload": "prepareReferencePreview",
-                "annotation": "apps/node-backend/src/services/aiReferenceService.ts"
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.agentcloak",
-                "title": "Check the final payload",
-                "note": "Optional preflight checks exact text and digest.",
-                "payload": "disclosurePayload",
-                "annotation": "apps/node-backend/src/services/aiDisclosureService.ts; apps/node-backend/src/services/agentCloakPreflight.ts"
-              },
-              {
-                "from": "fe.pages",
-                "to": "be.routes",
-                "title": "Grant the bounded disclosure",
-                "note": "The user approves a mode-specific grant.",
-                "payload": "POST /api/ai-research/disclosures/grants",
-                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.ts"
-              },
-              {
-                "from": "be.routes",
-                "to": "db.postgres",
-                "title": "Persist the approved grant",
-                "note": "The disclosure service writes the grant through its repository.",
-                "payload": "createDisclosureGrant",
-                "annotation": "apps/node-backend/src/services/aiDisclosureService.ts; apps/node-backend/src/repositories/aiDisclosureRepository.ts"
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.airesearch",
-                "title": "Create the investigation",
-                "note": "Claim the optional reference scope for the job.",
-                "payload": "investigation and disclosure grant",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "db.postgres",
-                "title": "Reserve permission before sending",
-                "note": "Check mode, expiry, hash, fields and budgets; record sent before egress.",
-                "payload": "reserveDisclosure",
-                "annotation": "apps/node-backend/src/repositories/aiDisclosureRepository.ts"
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "ex.openai",
-                "title": "Send the approved payload",
-                "note": "Fixed Responses broker, no tools, response storage disabled (store:false), rejected redirects and macOS sandbox.",
-                "payload": "generateProvider; callOpenAiBroker; store: false",
-                "annotation": "apps/node-backend/src/services/aiProviderAdapters.ts; apps/node-backend/src/integrations/openai/brokerClient.ts; apps/node-backend/src/integrations/openai/egress-helper.mjs"
-              },
-              {
-                "from": "ex.openai",
-                "to": "sv.airesearch",
-                "title": "Validate the provider answer",
-                "note": "Schema-check before restoration.",
-                "payload": "resolveProviderAnswer / parseModelAnswer",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "db.postgres",
-                "title": "Checkpoint the protected answer",
-                "note": "Persist provider output before replacing references.",
-                "payload": "provider answer checkpoint",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "sv.aireference",
-                "title": "Restore allowed same-job references",
-                "note": "Fail closed on malformed or cross-scope tokens. A definite synthesis failure does not silently switch providers.",
-                "payload": "restoreAnswerForJob",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts; apps/node-backend/src/services/aiReferenceService.ts"
-              },
-              {
-                "from": "sv.airesearch",
-                "to": "fe.pages",
-                "title": "Show the restored result",
-                "note": "Publish after local validation and restoration.",
-                "payload": "result or explicit failure",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
-              }
-            ],
-            "docs": [
-              {
-                "path": "security/ai-data-access.md",
-                "label": "AI Data Access Policy"
-              },
-              {
-                "path": "api/ai-research.md",
-                "label": "AI Research API"
-              }
-            ]
-          },
-          {
             "id": "portfolio-history",
             "name": "Load complete portfolio history on demand",
             "category": "Portfolio",
@@ -6109,15 +5608,13 @@
           {
             "id": "research",
             "name": "4. Research and AI",
-            "description": "Compare local calculations, Ollama, cloud catalog plans and explicitly disclosed evidence.",
+            "description": "Compare local calculations, saved research, monitors, Ollama chat and recoverable investigations.",
             "flows": [
               "manual-analysis",
               "macro-series-fetch",
               "research-dossier",
               "local-analysis-monitor",
               "ai-chat",
-              "cloud-catalog-analysis",
-              "cloud-evidence-disclosure",
               "ai-research-investigation"
             ]
           },

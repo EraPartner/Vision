@@ -1,14 +1,16 @@
 ---
 title: ADR-167 - Packaged OpenAI API Release Gate
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, privacy, release, electron]
 description: Keep the OpenAI API investigation route disabled in packaged Vision until a separate live synthetic acceptance is approved and completed.
 aliases: [packaged OpenAI API gate, cloud evaluation release scope]
 ---
 
 # ADR-167: Packaged OpenAI API Release Gate
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Context
 
@@ -42,6 +44,6 @@ synthetic route acceptance with separate authorization.
 ## Related
 
 - [[docs/adr/index|Architecture Decision Records]]
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/features/ai-chat|AI Chat]]
 - [[docs/api/ai-research|AI Research API]]

@@ -44,10 +44,6 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   // imported wrapper reads state; direct callers can validate a complete plan.
   "apps/node-backend/src/services/portfolioImportReconciliationService.ts:buildPortfolioImportReconciliationPlan",
   "apps/node-backend/src/integrations/ollama/prompts.ts:toOllamaMessage",
-  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:createInspectionFetch",
-  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:evaluateCloudPrivacyTrace",
-  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.ts:CLOUD_PRIVACY_EVALUATION_CASES",
-  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.ts:CLOUD_PRIVACY_SYNTHETIC_POLICY",
   "apps/node-backend/src/services/aiEvaluation/localCases.ts:LOCAL_AI_EVALUATION_CASES",
   "apps/node-backend/src/services/aiEvaluation/localReliability.ts:runLocalAiCase",
   "apps/node-backend/src/services/aiEvaluation/localReliability.ts:scoreLocalAiRun",
