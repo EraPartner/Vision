@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -478,7 +478,7 @@ Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [
 - When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is
   performed. Native Electron's loopback binding supplies the network boundary and the CSRF guard
   below supplies the browser-origin boundary.
-- A startup warning is logged when the token is absent, instructing operators to set it if the port is published on `0.0.0.0`.
+- A startup line is logged when the token is absent: info level on a loopback bind (the desktop app's normal setup), warning level on an acknowledged non-loopback bind (`ADMIN_ALLOW_TOKENLESS_NONLOOPBACK`). A non-loopback bind without a token or that acknowledgement refuses to start.
 - A tokenless non-loopback bind refuses startup unless `ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true`
   explicitly acknowledges an outer access boundary.
 

@@ -78,6 +78,11 @@ export interface EnsureAppRoleOptions {
   migrationsUrl?: string | undefined;
   /** Connect attempts while the DB cold-starts. */
   maxAttempts?: number;
+  /**
+   * The schema may not exist yet. Grants on missing objects are then logged
+   * at info level; the caller re-runs the bootstrap after migrating.
+   */
+  beforeMigrations?: boolean;
   log?: BootstrapLogger;
 }
 
@@ -210,6 +215,9 @@ async function grantCurrentRelations(
   return failures;
 }
 
+/** undefined_table, undefined_function, invalid_schema_name */
+const UNDEFINED_OBJECT_CODES = new Set(["42P01", "42883", "3F000"]);
+
 function isAllTablesGrant(statement: string): boolean {
   return /\bON\s+ALL\s+TABLES\s+IN\s+SCHEMA\s+public\b/i.test(statement);
 }
@@ -293,6 +301,7 @@ export async function ensureAppRole({
   databaseUrl,
   migrationsUrl,
   maxAttempts = 40,
+  beforeMigrations = false,
   log = logger,
 }: EnsureAppRoleOptions): Promise<BootstrapResult> {
   try {
@@ -428,8 +437,13 @@ export async function ensureAppRole({
           await client.query(stmt);
         } catch (err) {
           grantFailures++;
-          log.warn(
-            `[role-bootstrap] grant failed (${(err as Error).message}): ${stmt.slice(0, 120)}`,
+          const missing =
+            beforeMigrations &&
+            UNDEFINED_OBJECT_CODES.has((err as { code?: string }).code ?? "");
+          (missing ? log.info : log.warn).call(
+            log,
+            `[role-bootstrap] grant ${missing ? "deferred until migrations" : "failed"} ` +
+              `(${(err as Error).message}): ${stmt.slice(0, 120)}`,
           );
         }
       }

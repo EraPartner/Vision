@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -262,7 +262,9 @@ default, timeouts, and `vision_analysis, pg_catalog` search path. The migration 
 
 After migrations succeed, backend startup calls `analysisRoleBootstrap.js` through
 `DATABASE_URL_MIGRATIONS` when available. A restricted owner checks the existing login's attributes
-before resetting relation grants. The grant set contains six approved views: `transactions_v1`,
+before resetting relation grants: it revokes only grants the executor actually holds in `public`
+and `vision_analysis`, so runtime materialized views owned by the application role do not fail the
+pass. The grant set contains six approved views: `transactions_v1`,
 `transactions_v2`, `accounts_v1`, `holding_events_v1`, `cash_flows_v1`, and `cash_flows_v2`.
 Running this pass after migrations includes newly created or replaced views. A privileged bootstrap
 connection can still provision the role directly for standalone backend deployments.

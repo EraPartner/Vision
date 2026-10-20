@@ -306,7 +306,8 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
      exact data directory;
    - create separate cluster-administrator, owner/migration, application, and Analysis executor roles.
      The administrator provisions the executor password and read-only defaults; after migrations,
-     the owner validates the executor and grants only the six approved Analysis views. The owner
+     the owner validates the executor, revokes any direct grants it holds, and grants only the six
+     approved Analysis views. The owner
      remains `NOCREATEROLE`. See [[docs/features/analysis-workspace#Operational boundary|Analysis
      operational boundary]]. The owner role
      owns schema tables and performs migrations and database-wide maintenance; the application role
@@ -1286,8 +1287,8 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 **Symptom:** The backend exits during `runMigrations()`. Electron stops polling, shows the
 startup error page and a "Failed to start Vision." dialog with the error from `backend.log`.
 
-**Cause:** The database still carries Alembic's `alembic_version`, or it has application objects
-but no migration marker. The migrator fails closed and changes nothing.
+**Cause:** The database has application objects but no migration marker, for example a database
+from before the switch to TypeScript migrations. The migrator fails closed and changes nothing.
 
 **Fix:** Read the error in `backend.log`; do not wipe the database to make it boot. See
 [[docs/guides/migrations|Database Migration Guide]].

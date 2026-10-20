@@ -167,7 +167,9 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
 
     const sameRole = await ensureAppRole({
       databaseUrl: TEST_URL,
-      migrationsUrl: urlFor("vision_test", "vision_test") + "?x=1",
+      migrationsUrl:
+        urlFor(decodeURIComponent(new URL(TEST_URL).username), "other") +
+        "?x=1",
       log,
     });
     expect(sameRole).toMatchObject({ status: "skipped", reason: "same-role" });

@@ -134,12 +134,25 @@ export async function ensureAnalysisRole({
       );
     }
     await client.query(`REVOKE ALL ON SCHEMA public FROM ${ANALYSIS_ROLE}`);
-    await client.query(
-      `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM ${ANALYSIS_ROLE}`,
+    // Revoke only where the executor holds a grant. A schema-wide REVOKE also
+    // touches relations the owner cannot administer, such as the materialized
+    // views the app role creates at runtime, and fails on them.
+    const granted = await client.query<{ relation: string }>(
+      `SELECT c.oid::regclass::text AS relation
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         CROSS JOIN LATERAL aclexplode(c.relacl) acl
+        WHERE n.nspname IN ('public', 'vision_analysis')
+          AND c.relkind IN ('r', 'p', 'v', 'm', 'f')
+          AND acl.grantee = $1::regrole
+        GROUP BY c.oid`,
+      [ANALYSIS_ROLE],
     );
-    await client.query(
-      `REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA vision_analysis FROM ${ANALYSIS_ROLE}`,
-    );
+    for (const { relation } of granted.rows) {
+      await client.query(
+        `REVOKE ALL PRIVILEGES ON ${relation} FROM ${ANALYSIS_ROLE}`,
+      );
+    }
     await client.query(
       `GRANT USAGE ON SCHEMA vision_analysis TO ${ANALYSIS_ROLE}`,
     );

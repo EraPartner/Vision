@@ -1,7 +1,7 @@
 /**
  * The production migrator (src/database/migrate.ts) against real, disposable
  * PostgreSQL 18 databases: fresh install, idempotent re-run, fail-closed
- * refusals (unversioned objects, a database still on Alembic), and a later
+ * refusals (unversioned objects, a database from before the baseline), and a later
  * reversible migration with its audit events.
  */
 
@@ -96,20 +96,14 @@ async function regclass(client: pg.Client, name: string) {
     .rows[0].name as string | null;
 }
 
-/** A baseline database that still carries Alembic's version table. */
-async function alembicDatabase(revision: string) {
-  const db = await track(createMigratedDatabase("c_alembic"));
-  await withClient(db.url, async (client) => {
-    await client.query(
+/** A full schema without the Kysely ledger, as before the TypeScript baseline. */
+async function preBaselineDatabase() {
+  const db = await track(createMigratedDatabase("c_prebaseline"));
+  await withClient(db.url, (client) =>
+    client.query(
       "DROP TABLE public.kysely_migration, public.kysely_migration_lock",
-    );
-    await client.query(
-      "CREATE TABLE public.alembic_version (version_num varchar(64) PRIMARY KEY)",
-    );
-    await client.query("INSERT INTO public.alembic_version VALUES ($1)", [
-      revision,
-    ]);
-  });
+    ),
+  );
   return db;
 }
 
@@ -190,17 +184,13 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       });
     }, 180_000);
 
-    it("refuses a database still on Alembic without changing anything", async () => {
+    it("refuses a database from before the baseline without changing anything", async () => {
       const migrator = await loadMigrator();
-      const db = await alembicDatabase("0128_category_path_on_legacy_rename");
+      const db = await preBaselineDatabase();
       await expect(
         withMigrationTarget(db.url, () => migrator.runMigrations()),
-      ).rejects.toThrow("still uses Alembic");
+      ).rejects.toThrow("no migration marker");
       await withClient(db.url, async (client) => {
-        expect(
-          (await client.query("SELECT version_num FROM public.alembic_version"))
-            .rows,
-        ).toEqual([{ version_num: "0128_category_path_on_legacy_rename" }]);
         expect(await appliedNames(client)).toEqual([]);
         expect(await auditEvents(client)).toHaveLength(1);
       });

@@ -3,7 +3,7 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-19
+date: 2026-10-20
 last_modified: 2026-10-19
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
@@ -84,8 +84,8 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
 2. **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
    with Kysely's migrator in one transaction. An empty PostgreSQL 18 database receives the `0001`
-   baseline and must match its catalog fingerprint; a database still carrying `alembic_version`, or
-   one with application objects but no migration marker, is refused and left unchanged. See
+   baseline and must match its catalog fingerprint; a database with application objects but no
+   migration marker is refused and left unchanged. See
    [[docs/guides/migrations|Database Migration Guide]],
    [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
    [[docs/adr/224-remove-alembic-adoption|ADR-224]].

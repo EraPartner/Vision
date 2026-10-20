@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [guide, database, migrations, kysely, postgresql, destructive-ddl, ci, performance]
 description: How to create, run, lint and roll back Vision's PostgreSQL migrations with the Kysely migrator and the squashed 0001 baseline
 aliases: [migration-guide, database-schema, schema-changes]
@@ -62,7 +62,7 @@ An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fi
 migrating, column order and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
 back. A database with application objects but no migration marker is refused.
 
-A database still carrying `alembic_version` is refused and left unchanged
+A database from before the switch falls under that rule and is left unchanged
 ([[docs/adr/224-remove-alembic-adoption|ADR-224]]): the one existing database was adopted on
 2026-10-19. Restore a backup taken after the switch, or reset the Demo with
 `bun run demo:reset-native`.

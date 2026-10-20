@@ -79,8 +79,8 @@ partially switched database cannot become the writer by accident.
 
 The backend applies migrations in-process with Kysely's migrator; no separate migration executable
 is spawned. An empty PostgreSQL 18 cluster installs `db/migrations/0001_baseline.sql` atomically
-and verifies its catalog fingerprint, then applies later numbered files. A cluster still on
-Alembic is refused and left unchanged. If the backend exits during startup,
+and verifies its catalog fingerprint, then applies later numbered files. A cluster with
+application objects but no migration ledger is refused and left unchanged. If the backend exits during startup,
 Electron stops waiting and shows the error from `backend.log`. The package ships the whole `db/`
 folder (`migrations/` and `schema-inventory.sql`). See
 [[docs/guides/migrations|Database Migration Guide]] and
@@ -134,7 +134,7 @@ The desktop backup path uses the native database transport. A `.visionbak` bundl
 database dump, attachments, settings, metadata, and checksums. Restore extracts into staging,
 validates paths and checksums, restores into a fresh database, verifies it, and only then switches
 the active database. Only backups taken after the switch to the Kysely baseline restore; older
-Alembic-era dumps are refused with `BACKUP_PRE_BASELINE`. The schema revision a backup records is
+dumps without that ledger are refused with `BACKUP_PRE_BASELINE`. The schema revision a backup records is
 the highest name in `public.kysely_migration`.
 
 `bun run native:isolated-smoke` exercises that complete encrypted-bundle journey in a temporary

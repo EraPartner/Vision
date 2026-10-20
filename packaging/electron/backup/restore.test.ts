@@ -117,13 +117,7 @@ test("a bundle whose metadata.json is not an object is rejected as corrupt", asy
   await assert.rejects(openBundle(bundlePath), /missing metadata\.json/);
 });
 
-const ALEMBIC_ERA_DUMP = `CREATE TABLE public.alembic_version (
-    version_num character varying(64) NOT NULL
-);
-COPY public.alembic_version (version_num) FROM stdin;
-0128_category_path_on_legacy_rename
-\\.
-`;
+const PRE_BASELINE_DUMP = "CREATE TABLE public.notes (id int);\n";
 
 function kyselyDump(...names: string[]): string {
   return `CREATE TABLE public.kysely_migration (
@@ -131,7 +125,7 @@ function kyselyDump(...names: string[]): string {
     "timestamp" character varying(255) NOT NULL
 );
 COPY public.notes (id, body) FROM stdin;
-1\tCOPY public.alembic_version (version_num) FROM stdin;
+1\tCOPY public.kysely_migration (name, "timestamp") FROM stdin;
 \\.
 COPY public.kysely_migration (name, "timestamp") FROM stdin;
 ${names.map((name) => `${name}\t2026-10-19T00:00:00.000Z`).join("\n")}
@@ -193,19 +187,10 @@ async function writeBundle(
   return bundlePath;
 }
 
-test("restore refuses a plain dump taken before the TypeScript migration baseline", async (t) => {
-  const restored: string[] = [];
-  initRuntime("0001_baseline", restored);
-  const dumpPath = await writeDump(t, ALEMBIC_ERA_DUMP);
-
-  await assert.rejects(runRestore(dumpPath), hasCode("BACKUP_PRE_BASELINE"));
-  assert.deepEqual(restored, []);
-});
-
 test("restore refuses a plain dump without a migration ledger", async (t) => {
   const restored: string[] = [];
   initRuntime("0001_baseline", restored);
-  const dumpPath = await writeDump(t, "CREATE TABLE public.notes (id int);\n");
+  const dumpPath = await writeDump(t, PRE_BASELINE_DUMP);
 
   await assert.rejects(runRestore(dumpPath), hasCode("BACKUP_PRE_BASELINE"));
   assert.deepEqual(restored, []);
@@ -216,7 +201,7 @@ test("restore refuses a bundle whose dump predates the baseline", async (t) => {
   initRuntime("0001_baseline", restored);
   const bundlePath = await writeBundle(
     t,
-    ALEMBIC_ERA_DUMP,
+    PRE_BASELINE_DUMP,
     "0128_category_path_on_legacy_rename",
   );
 
