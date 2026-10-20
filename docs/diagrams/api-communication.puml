@@ -5,13 +5,14 @@ title API Communication - Frontend to Backend
 skinparam linetype ortho
 skinparam nodesep 50
 skinparam ranksep 80
+allowmixing
 
 actor "User" as User
 
 package "Frontend (React)" {
   class Browser {
     +React App
-    +React Router v6
+    +React Router v8 (createBrowserRouter)
     +TanStack Query
   }
 
@@ -37,7 +38,7 @@ package "Frontend (React)" {
     class ApiClient {
       +baseUrl: string
       +timeout: 30s
-      +retry: 2 attempts
+      +retry: 2 (idempotent requests only)
       +request<T>(endpoint, config): Promise<T>
     }
   }
@@ -174,7 +175,7 @@ package "Router to Repository/Service" {
   InvestmentsRouter --> InvestmentRepository
   InvestmentsRouter --> PortfolioTransactionRepository
   ImportRouter --> ImportService
-  SettingsRouter --> SR2 as SettingsRepository
+  SettingsRouter --> SettingsRepository
   WatchlistRouter --> WatchlistRepository
   SplitsRouter --> SplitRepository
   SavedChartsRouter --> SavedChartsRepository

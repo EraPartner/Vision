@@ -9,14 +9,14 @@ skinparam ranksep 60
 package "Frontend" {
   class Pages <<React Component>>
   class PortfolioImportSession <<ADR-177>>
-  class PortfolioSummaries
-  class PortfolioSummaryQuery
-  class PortfolioImportDetection
+  class usePortfolioSummaries
+  class usePortfolioSummaryQuery
+  class "portfolioImportDetection.ts" as PortfolioImportDetection
   class PortfolioHistoryQueries
   class DashboardVisibleQueries
   class ImportReviewEditQueue
   class WidgetSaveQueue
-  class PortfolioImportsApi
+  class "lib/api/portfolioImports.ts" as PortfolioImportsApi
   class "tab sessionStorage" as ImportSessionStorage
   
   class Hooks {
@@ -32,11 +32,8 @@ package "Frontend" {
   }
   
   package "API Client" {
-    class ApiClient {
-      -baseUrl: string
-      -request<T>(config): Promise<T>
-      -retry(maxAttempts): Promise<T>
-      -cancelAll(): void
+    class "apiClient (lib/api.ts) + lib/api/client.ts" as ApiClient {
+      +request<T>: timeout 30s, 2 retries (idempotent only)
     }
     
     class API_BASE_URL
@@ -119,9 +116,9 @@ PortfolioImportSession --> PortfolioImportsApi : sequential SSE; optional asset 
 PortfolioImportSession --> ImportSessionStorage : staged batch metadata only
 PortfolioImportsApi --> ApiClient : strict JSON reconciliation / multipart upload
 PortfolioImportSession --> QueryClient : invalidate confirmed committed scope
-Hooks --> PortfolioSummaries : metadata + CRUD transactions
-PortfolioSummaries --> PortfolioSummaryQuery : active holdings / loading / errors
-PortfolioSummaryQuery --> ApiClient : GET /api/info/portfolio-summary?currency
+Hooks --> usePortfolioSummaries : metadata + CRUD transactions
+usePortfolioSummaries --> usePortfolioSummaryQuery : active holdings / loading / errors
+usePortfolioSummaryQuery --> ApiClient : GET /api/info/portfolio-summary?currency
 Hooks --> ApiClient
 ApiClient --> RESTEndpoints
 

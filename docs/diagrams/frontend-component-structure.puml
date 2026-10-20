@@ -24,19 +24,15 @@ package "UI Components (Radix + Tailwind)" {
   class Switch
   class Table
   class Calendar
-  class Toast
   class Tooltip
   class DropdownMenu
   class Command
   class Sidebar
   class Skeleton
   class Badge
-  class Avatar
   class Separator
   class Collapsible
-  class Breadcrumb
   class Textarea
-  class Form
   class Tabs
   class Progress
   class Slider
@@ -45,22 +41,22 @@ package "UI Components (Radix + Tailwind)" {
   class Accordion
   class Popover
   class ContextMenu
-  class NavigationMenu
-  class Pagination
-  class AspectRatio
   class Alert
-  class HoverCard
-  class InputOTP
-  class Menubar
   class ScrollArea
   class Card
   class Label
   class Sonner
+  class SegmentedControl
+  class Disclosure
+  class Inspector
+  class List
+  class FieldError
+  class ShimmerLayer
 }
 
 package "Layout Components" {
   class AppLayout {
-    +LiquidCanvas: atmosphere layer
+    +liquid-canvas: CSS atmosphere layer
     +ShaderAurora: WebGL (effective enhanced tier only)
     +Topbar: scroll-linked + title collapse
     +Sidebar: AppSidebar
@@ -138,12 +134,6 @@ package "Shared Components" {
     +↑/↓ keyboard row navigation
   }
 
-  class DataTable {
-    +sortable/filterable table
-    +debounced search sync + cleanup
-    +sourceIndex row mapping
-  }
-
   class ColumnFilter {
     +shared column-filter popover
     +multi-value filtering UI
@@ -182,25 +172,19 @@ package "Feature Components - Dashboard" {
     +activeIndex: pointer-driven
     +RollingNumber hero
   }
-  class SuggestionCard {
-    +kicker + count title
-    +up to 3 payment rows (Money)
-    +Review → /planned
-    +dismiss-all X
-    +useUpcomingPlannedPayments
-  }
   class MonthlyTrendsChart
-  class MonthlySpendingChart
   class CategoryPieChart
   class BankBalancesWidget
-  class CashFlowComparisonChart
+  class CashFlowForecastChart
   class MonthToDateHero {
     +useMonthToDate (average-vs-current)
     +usePlannedTotals (planned-transactions/totals)
   }
   class NeedsAttentionList
   class NetWorthCard
-  class UpcomingPaymentsList
+  class UpcomingPaymentsList {
+    +useUpcomingPlannedPayments
+  }
   class AccountsList
   class RecentTransactionsList
 }
@@ -226,7 +210,7 @@ package "Feature Components - Categories" {
 }
 
 package "Feature Components - Portfolio" {
-  class PortfolioOverview
+  class PortfolioPage
   class PortfolioExposureCard <<ADR-150>>
   class PortfolioTaxAdjustmentsDialog
   class PortfolioNewsFeed
@@ -234,9 +218,8 @@ package "Feature Components - Portfolio" {
     ' Shows "Holdings by Account" card (byAccount from useAccountPositions)
   }
   class WatchlistChartDialog
-  class MetalsHoldingsCard
-  class MoveHoldingDialog <<ADR-091>> {
-    ' strategy selector (fifo | proportional) for partial moves
+  class BrokerTransferDialog {
+    ' re-tags lots to a broker account
   }
   class CloseAccountDialog <<ADR-091>> {
     ' Lists account holdings, transfers in-specie, then archives account
@@ -255,11 +238,11 @@ useHoldingActions --> assetPageParts : renderMenu
 useHoldingActions --> InvestmentDetailDialog : controlled open
 useHoldingActions --> AddPortfolioTxnDialog : controlled open
 
-PortfolioOverview --> PortfolioExposureCard : issuer, sector, country views
+PortfolioPage --> PortfolioExposureCard : issuer, sector, country views
 
 package "Feature Components - Statistics" {
   class RecipientInsightsTab
-  class CustomCategoryChart
+  class CustomChart
 }
 
 package "Feature Components - Planning" {
@@ -347,8 +330,8 @@ package "Feature Components - Import" {
     +current ready review + atomic commit
     +bounded income counts + retained partial sources
   }
-  class PortfolioImportDetection
-  class PortfolioImportsApi
+  class "portfolioImportDetection.ts" as PortfolioImportDetection
+  class "lib/api/portfolioImports.ts" as PortfolioImportsApi
 }
 PortfolioImportPage --> PortfolioImportSession
 PortfolioImportSession --> PortfolioImportDetection : read complete supported file
@@ -432,11 +415,10 @@ AddTransactionSheet --> CategoryCombobox
 CategoriesPage --> CategoryNodeDialog
 AddTransactionSheet --> RecipientCombobox
 VirtualDataTable --> ColumnFilter
-DataTable --> ColumnFilter
 VirtualDataTable --> TransactionQuickLook : onRowQuickLook (Space)
 VirtualDataTable --> TransactionInspector : onRowSelect (via TransactionsPage)
 TransactionInspector --> SplitTransactionDialog : footer Split
-SuggestionCard --> useUpcomingPlannedPayments
+UpcomingPaymentsList --> useUpcomingPlannedPayments
 UpcomingPaymentsNotification --> useUpcomingPlannedPayments
 
 note right of ImportPage
