@@ -36,6 +36,28 @@ export interface AppTzParts {
   second: number;
 }
 
+// Constructing a DateTimeFormat costs ~13x a formatToParts call, and snapshot
+// warmup converts dates thousands of times, so keep one formatter per zone.
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function zoneFormatter(zone: string): Intl.DateTimeFormat {
+  let formatter = zoneFormatters.get(zone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: zone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    zoneFormatters.set(zone, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Convert UTC Date to zoned wall-clock components.
  */
@@ -43,16 +65,7 @@ export function toAppTz(utcDate: Date, zone: string = APP_TIMEZONE): AppTzParts 
   if (!(utcDate instanceof Date) || Number.isNaN(utcDate.getTime())) {
     throw new TypeError("toAppTz requires a valid Date");
   }
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(utcDate);
+  const parts = zoneFormatter(zone).formatToParts(utcDate);
 
   const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
   let year = get("year");

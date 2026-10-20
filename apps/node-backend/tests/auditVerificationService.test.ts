@@ -76,13 +76,20 @@ function fixture(
       ),
       // Only `rows` of the pg result is read.
       runQuery: loose<NonNullable<VerifyAuditHistoryOptions["runQuery"]>>(
-        async (sql: string) => {
+        async (sql: string, params: unknown[] = []) => {
+          // Domain rows are read per page by id; key each fixture row by the
+          // id the chain entry links to.
+          const linked = (fixtureRows: unknown[] = []) =>
+            fixtureRows.map((row, index) => ({
+              id_text: (params[0] as string[])[index],
+              ...(row as object),
+            }));
           if (sql.includes("FROM public.kysely_migration"))
             return { rows: revisions.map((name) => ({ name })) };
           if (sql.includes("FROM db_editor_audit WHERE id"))
-            return { rows: rows.dbEditor ?? [] };
+            return { rows: linked(rows.dbEditor) };
           if (sql.includes("FROM split_audit WHERE id"))
-            return { rows: rows.split ?? [] };
+            return { rows: linked(rows.split) };
           if (sql.includes("FROM portfolio_retag_audit WHERE id"))
             return { rows: rows.retag ?? [] };
           return {

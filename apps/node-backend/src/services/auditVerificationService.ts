@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
+import { z } from "zod";
 import type { RawBuilder } from "kysely";
 import { query } from "../database/connection.ts";
 import { compileQuery } from "../database/db.ts";
@@ -106,33 +107,115 @@ function runOn(runQuery: typeof query, statement: RawBuilder<unknown>) {
   return runQuery(compiled.sql, [...compiled.parameters]);
 }
 
-async function verifyDomainRow(
+type DomainStream = "db_editor" | "split" | "portfolio_retag";
+
+const dbEditorLinkRowSchema = dbEditorAuditRowSchema.extend({
+  id_text: z.string(),
+});
+const splitLinkRowSchema = splitAuditRowSchema.extend({ id_text: z.string() });
+
+type DbEditorLinkRow = z.infer<typeof dbEditorLinkRowSchema>;
+type SplitLinkRow = z.infer<typeof splitLinkRowSchema>;
+type RetagLinkRow = z.infer<typeof portfolioRetagAuditRowSchema>;
+
+/** Linked domain rows of one chain page, keyed by their id text. */
+interface DomainRows {
+  db_editor: Map<string, DbEditorLinkRow>;
+  split: Map<string, SplitLinkRow>;
+  portfolio_retag: Map<string, RetagLinkRow>;
+}
+
+/** The domain row a payload links to; undefined for other streams. */
+function domainReference(
   payload: Record<string, unknown>,
-  runQuery: typeof query,
-): Promise<string | null> {
+): { stream: DomainStream; id: string | undefined } | undefined {
+  const { stream } = payload;
   if (
-    typeof payload.stream !== "string" ||
-    !["db_editor", "split", "portfolio_retag"].includes(payload.stream)
+    stream !== "db_editor" &&
+    stream !== "split" &&
+    stream !== "portfolio_retag"
   )
-    return null;
+    return undefined;
   const id =
-    payload.stream === "portfolio_retag"
-      ? payload.receipt_id
-      : payload.auditRowId;
-  if (typeof id !== "string" || !/^[1-9]\d*$/.test(id))
-    return "invalid_reference";
-  if (payload.stream === "db_editor") {
+    stream === "portfolio_retag" ? payload.receipt_id : payload.auditRowId;
+  return {
+    stream,
+    id: typeof id === "string" && /^[1-9]\d*$/.test(id) ? id : undefined,
+  };
+}
+
+/**
+ * Read every domain row one chain page links to with one query per stream;
+ * a lookup per entry made startup verification one round trip per entry.
+ */
+async function readDomainRows(
+  payloads: Record<string, unknown>[],
+  runQuery: typeof query,
+): Promise<DomainRows> {
+  const ids: Record<DomainStream, Set<string>> = {
+    db_editor: new Set(),
+    split: new Set(),
+    portfolio_retag: new Set(),
+  };
+  for (const payload of payloads) {
+    const reference = domainReference(payload);
+    if (reference?.id) ids[reference.stream].add(reference.id);
+  }
+  const domainRows: DomainRows = {
+    db_editor: new Map(),
+    split: new Map(),
+    portfolio_retag: new Map(),
+  };
+  if (ids.db_editor.size > 0) {
     const result = await runOn(
       runQuery,
-      sql`SELECT table_name, op, pk_json::text AS pk_text,
+      sql`SELECT id::text AS id_text, table_name, op, pk_json::text AS pk_text,
               before_json::text AS before_text, after_json::text AS after_text,
               statement,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
-         FROM db_editor_audit WHERE id = ${id}`,
+         FROM db_editor_audit WHERE id = ANY(${[...ids.db_editor]}::bigint[])`,
     );
-    const rows = checkRows(dbEditorAuditRowSchema, result.rows);
-    const row = rows[0];
-    if (!row || rows.length !== 1) return "missing_domain_row";
+    for (const row of checkRows(dbEditorLinkRowSchema, result.rows))
+      domainRows.db_editor.set(row.id_text, row);
+  }
+  if (ids.split.size > 0) {
+    const result = await runOn(
+      runQuery,
+      sql`SELECT id::text AS id_text, split_id::text AS split_id_text, action, actor,
+              payload::text AS payload_text,
+              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
+         FROM split_audit WHERE id = ANY(${[...ids.split]}::bigint[])`,
+    );
+    for (const row of checkRows(splitLinkRowSchema, result.rows))
+      domainRows.split.set(row.id_text, row);
+  }
+  if (ids.portfolio_retag.size > 0) {
+    const result = await runOn(
+      runQuery,
+      sql`SELECT id,
+              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at,
+              idempotency_key, request_fingerprint,
+              from_account_id, to_account_id, transaction_ids,
+              previous_assignments, selected_count, changed_count
+         FROM portfolio_retag_audit WHERE id = ANY(${[...ids.portfolio_retag]}::bigint[])`,
+    );
+    for (const row of checkRows(portfolioRetagAuditRowSchema, result.rows))
+      domainRows.portfolio_retag.set(String(row.id), row);
+  }
+  return domainRows;
+}
+
+function verifyDomainRow(
+  payload: Record<string, unknown>,
+  domainRows: DomainRows,
+): string | null {
+  const reference = domainReference(payload);
+  if (!reference) return null;
+  const { id } = reference;
+  if (id === undefined) return "invalid_reference";
+  if (reference.stream === "db_editor") {
+    const row = domainRows.db_editor.get(id);
+    if (!row) return "missing_domain_row";
     if (
       payload.table !== row.table_name ||
       payload.event !== row.op ||
@@ -150,17 +233,9 @@ async function verifyDomainRow(
     ]);
     return expected === payload.auditDigest ? null : "domain_digest";
   }
-  if (payload.stream === "split") {
-    const result = await runOn(
-      runQuery,
-      sql`SELECT split_id::text AS split_id_text, action, actor,
-              payload::text AS payload_text,
-              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
-         FROM split_audit WHERE id = ${id}`,
-    );
-    const rows = checkRows(splitAuditRowSchema, result.rows);
-    const row = rows[0];
-    if (!row || rows.length !== 1) return "missing_domain_row";
+  if (reference.stream === "split") {
+    const row = domainRows.split.get(id);
+    if (!row) return "missing_domain_row";
     if (
       payload.splitId !== row.split_id_text ||
       payload.event !== row.action ||
@@ -177,38 +252,25 @@ async function verifyDomainRow(
     ]);
     return expected === payload.auditDigest ? null : "domain_digest";
   }
-  if (payload.stream === "portfolio_retag") {
-    const result = await runOn(
-      runQuery,
-      sql`SELECT id,
-              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at,
-              idempotency_key, request_fingerprint,
-              from_account_id, to_account_id, transaction_ids,
-              previous_assignments, selected_count, changed_count
-         FROM portfolio_retag_audit WHERE id = ${id}`,
-    );
-    const rows = checkRows(portfolioRetagAuditRowSchema, result.rows);
-    const row = rows[0];
-    if (!row || rows.length !== 1) return "missing_domain_row";
-    const expected = {
-      stream: "portfolio_retag",
-      event: "receipt_created",
-      receipt_id: String(row.id),
-      occurred_at: row.occurred_at,
-      idempotency_key: row.idempotency_key,
-      request_fingerprint: row.request_fingerprint,
-      from_account_id: row.from_account_id,
-      to_account_id: row.to_account_id,
-      transaction_ids: row.transaction_ids,
-      previous_assignments: row.previous_assignments,
-      selected_count: row.selected_count,
-      changed_count: row.changed_count,
-    };
-    return canonicalAuditPayload(expected) === canonicalAuditPayload(payload)
-      ? null
-      : "domain_digest";
-  }
-  return null;
+  const row = domainRows.portfolio_retag.get(id);
+  if (!row) return "missing_domain_row";
+  const expected = {
+    stream: "portfolio_retag",
+    event: "receipt_created",
+    receipt_id: String(row.id),
+    occurred_at: row.occurred_at,
+    idempotency_key: row.idempotency_key,
+    request_fingerprint: row.request_fingerprint,
+    from_account_id: row.from_account_id,
+    to_account_id: row.to_account_id,
+    transaction_ids: row.transaction_ids,
+    previous_assignments: row.previous_assignments,
+    selected_count: row.selected_count,
+    changed_count: row.changed_count,
+  };
+  return canonicalAuditPayload(expected) === canonicalAuditPayload(payload)
+    ? null
+    : "domain_digest";
 }
 
 /**
@@ -306,8 +368,12 @@ export async function verifyAuditHistory({
     if (result.ok === false) {
       return fail(result.code, sequence + result.position + 1);
     }
+    const domainRows = await readDomainRows(
+      segment.map((row) => row.payload),
+      runQuery,
+    );
     for (const row of segment) {
-      const domainError = await verifyDomainRow(row.payload, runQuery);
+      const domainError = verifyDomainRow(row.payload, domainRows);
       if (domainError) return fail(domainError, row.sequence);
       if (
         retention &&

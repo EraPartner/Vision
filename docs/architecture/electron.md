@@ -449,6 +449,9 @@ See [[docs/api/internal-audit|Private Audit Bridge]] and
    - if that signal does not arrive within `VISION_RENDERER_READY_TIMEOUT_MS` (default 12 seconds),
      reload the document once while bypassing Chromium's cache; and
    - if the retry also fails, replace the indefinite boot splash with the localized recovery page.
+   - Boot marks: `audit_verify` (audit check before navigation), `load_document` (the
+     application document load) and, once per launch, `renderer_ready` with the total since
+     process start.
      The preload bridge records only structural failure metadata such as the failure kind, error
      name, asset basename, and line number. It never records a full URL, error message, credentials,
      application data, or localStorage contents.
@@ -531,7 +534,8 @@ settings). Simplified merged view:
 - **`extraResources`** — Kept outside asar at `Contents/Resources/`. They include `i18n/` and the
   executable `native-runtime/` payload and the compiled `audit-keychain` helper.
 
-- **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend,
+- **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend (built
+  with `bun build --compile --bytecode`, so launch skips parsing the bundled modules),
   production frontend, `db/` migrations (applied in-process by the compiled backend), configuration,
   and checksum manifest used by the default native provider.
 
