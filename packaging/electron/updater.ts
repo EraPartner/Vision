@@ -20,22 +20,10 @@ import { appRoot } from "./paths";
 
 export type UpdateMode = "native" | "source";
 
-export type UpdateDecision =
-  | "checksum_failed"
-  | "checksum_verified"
-  | "install_requested"
-  | "install_failed";
-
-export interface UpdateDecisionEvent {
-  decision: UpdateDecision;
-  mode: "native";
-  version: string;
-}
-
 type TranslationVars = Record<string, string | undefined>;
 
 // Context threaded from main.js via init():
-//   { APP_NAME, IS_DEMO, t, notify, markQuitting(), recordAuditUpdateDecision() }
+//   { APP_NAME, IS_DEMO, t, notify, markQuitting(), stopRuntime(), startRuntime() }
 // markQuitting flips main.js's isQuitting flag so the will-quit handler knows
 // the installer-driven quit is already underway.
 export interface UpdaterContext {
@@ -44,7 +32,6 @@ export interface UpdaterContext {
   t(key: string, vars?: TranslationVars): string;
   notify(body: string): void;
   markQuitting(): void;
-  recordAuditUpdateDecision(event: UpdateDecisionEvent): Promise<unknown>;
   stopRuntime(): Promise<unknown>;
   startRuntime(): Promise<unknown>;
 }
@@ -357,38 +344,12 @@ export function getUpdateMode(): UpdateMode {
   return app.isPackaged ? "native" : "source";
 }
 
-export async function recordUpdateDecision(
-  decision: UpdateDecision,
-  version: string,
-): Promise<void> {
-  if (typeof ctx.recordAuditUpdateDecision !== "function") {
-    throw new Error("Native update audit bridge is unavailable");
-  }
-  await ctx.recordAuditUpdateDecision({ decision, mode: "native", version });
-}
-
-export async function verifyUpdateChecksum(
+export function verifyUpdateChecksum(
   expected: string | null | undefined,
   actual: string | null | undefined,
-  version: string,
-): Promise<void> {
+): void {
   if (!expected || !actual || actual.toLowerCase() !== expected.toLowerCase()) {
-    await recordUpdateDecision("checksum_failed", version);
     throw new Error("Checksum mismatch — update was not installed");
-  }
-  await recordUpdateDecision("checksum_verified", version);
-}
-
-export async function launchAuditedInstaller(
-  version: string,
-  launch: () => Promise<unknown>,
-): Promise<void> {
-  await recordUpdateDecision("install_requested", version);
-  try {
-    await launch();
-  } catch (error) {
-    await recordUpdateDecision("install_failed", version);
-    throw error;
   }
 }
 
@@ -540,7 +501,6 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
 
     const checksumAsset = pickChecksumAsset(release, assetName);
     if (!checksumAsset?.browser_download_url) {
-      await recordUpdateDecision("checksum_failed", latestVersion);
       throw new Error("No checksum asset found for the native update");
     }
     const expected = parseSha256Body(
@@ -548,11 +508,10 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
       assetName,
     );
     if (!expected) {
-      await recordUpdateDecision("checksum_failed", latestVersion);
       throw new Error("Native update checksum is invalid");
     }
     const actual = await computeFileSha256(zipPath);
-    await verifyUpdateChecksum(expected, actual, latestVersion);
+    verifyUpdateChecksum(expected, actual);
 
     const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
     for (const entry of zipEntries.split("\n")) {
@@ -722,14 +681,12 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
     } catch {
       /* offline — proceed with the prepared bundle */
     }
-    await launchAuditedInstaller(latestVersion, async () => {
-      // Read the live pending update, as before, after the recheck awaits.
-      await launchPreparedNativeInstaller({
-        installerPath,
-        installerArgs: currentPendingUpdate().installerArgs,
-        stopRuntime: ctx.stopRuntime,
-        startRuntime: ctx.startRuntime,
-      });
+    // Read the live pending update, as before, after the recheck awaits.
+    await launchPreparedNativeInstaller({
+      installerPath,
+      installerArgs: currentPendingUpdate().installerArgs,
+      stopRuntime: ctx.stopRuntime,
+      startRuntime: ctx.startRuntime,
     });
     markQuitting();
     setImmediate(() => app.quit());

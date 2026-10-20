@@ -8,16 +8,12 @@ import { spawnSync } from "node:child_process";
 import type { SpawnOptions } from "node:child_process";
 
 import {
-  init,
   pickNativeAppZip,
   parseSha256Body,
   verifyUpdateChecksum,
-  recordUpdateDecision,
-  launchAuditedInstaller,
   updaterChildEnv,
   launchPreparedNativeInstaller,
 } from "./updater";
-import type { UpdateDecisionEvent } from "./updater";
 import {
   parseInstallerArgs,
   validateVisionAppPath,
@@ -40,61 +36,18 @@ test("update checksum must contain exactly one hash for the selected ZIP", () =>
   }
 });
 
-test("update checksum decisions are recorded without file paths or URLs", async () => {
-  const events: UpdateDecisionEvent[] = [];
-  init({ recordAuditUpdateDecision: async (event) => events.push(event) });
-  await verifyUpdateChecksum("a".repeat(64), "a".repeat(64), "v1.2.3");
-  await assert.rejects(
-    verifyUpdateChecksum("a".repeat(64), "b".repeat(64), "v1.2.3"),
-    /Checksum mismatch/,
-  );
-  assert.deepEqual(events, [
-    { decision: "checksum_verified", mode: "native", version: "v1.2.3" },
-    { decision: "checksum_failed", mode: "native", version: "v1.2.3" },
-  ]);
-});
-
-test("native update decisions fail closed when audit callback is missing or fails", async () => {
-  init({});
-  await assert.rejects(
-    recordUpdateDecision("install_requested", "v1.2.3"),
-    /audit bridge is unavailable/,
-  );
-  init({
-    recordAuditUpdateDecision: async () => {
-      throw new Error("audit down");
-    },
-  });
-  await assert.rejects(
-    recordUpdateDecision("install_requested", "v1.2.3"),
-    /audit down/,
-  );
-});
-
-test("installer launch follows the recorded decision and failure is recorded", async () => {
-  const calls: string[] = [];
-  init({
-    recordAuditUpdateDecision: async ({ decision }) => calls.push(decision),
-  });
-  await assert.rejects(
-    launchAuditedInstaller("v1.2.3", async () => {
-      calls.push("launch");
-      throw new Error("launch failed");
-    }),
-    /launch failed/,
-  );
-  assert.deepEqual(calls, ["install_requested", "launch", "install_failed"]);
-
-  init({
-    recordAuditUpdateDecision: async () => {
-      throw new Error("audit down");
-    },
-  });
-  await assert.rejects(
-    launchAuditedInstaller("v1.2.3", async () => calls.push("unexpected")),
-    /audit down/,
-  );
-  assert.equal(calls.includes("unexpected"), false);
+test("update checksum must match the downloaded ZIP", () => {
+  verifyUpdateChecksum("a".repeat(64), "A".repeat(64));
+  for (const [expected, actual] of [
+    ["a".repeat(64), "b".repeat(64)],
+    [null, "a".repeat(64)],
+    ["a".repeat(64), undefined],
+  ] as const) {
+    assert.throws(
+      () => verifyUpdateChecksum(expected, actual),
+      /Checksum mismatch/,
+    );
+  }
 });
 
 test("native installer activates a synthetic app and restores the old app on launch failure", async () => {

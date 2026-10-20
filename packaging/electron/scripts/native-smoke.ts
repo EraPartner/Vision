@@ -19,9 +19,6 @@ import { appRoot } from "../paths";
 import { resolveNativePayloadRoot } from "./resolve-native-payload";
 
 type NativeRuntime = ReturnType<typeof createNativeRuntime>;
-type NativeRuntimeOptions = Parameters<typeof createNativeRuntime>[0];
-type AuditWitnessStore = NonNullable<NativeRuntimeOptions["auditWitness"]>;
-type AuditWitnessRecord = Parameters<AuditWitnessStore["create"]>[0];
 type DatabaseStats = Parameters<typeof assertDatabaseStatsEqual>[0];
 
 /** The runtime methods the smoke restore wrapper intercepts. */
@@ -83,34 +80,6 @@ function reservePort(): Promise<number> {
       server.close((error) => (error ? reject(error) : resolve(port)));
     });
   });
-}
-
-function syntheticAuditOptions() {
-  let witness: AuditWitnessRecord | undefined;
-  return {
-    auditBridgeToken: crypto.randomBytes(32).toString("hex"),
-    auditSafeStorage: {
-      isEncryptionAvailable: () => true,
-      encryptString: (value: string) => Buffer.from(`synthetic-smoke:${value}`),
-      decryptString: (value: Buffer) => {
-        const encoded = value.toString();
-        if (!encoded.startsWith("synthetic-smoke:"))
-          throw new Error("Synthetic smoke audit key is invalid");
-        return encoded.slice("synthetic-smoke:".length);
-      },
-    },
-    auditWitness: {
-      read: async () => witness && structuredClone(witness),
-      create: async (value: AuditWitnessRecord) => {
-        if (witness) throw new Error("Synthetic smoke witness exists");
-        witness = structuredClone(value);
-      },
-      replace: async (value: AuditWitnessRecord) => {
-        if (!witness) throw new Error("Synthetic smoke witness is missing");
-        witness = structuredClone(value);
-      },
-    },
-  };
 }
 
 function tableCounts(stats: DatabaseStats): Record<string, number> {
@@ -406,19 +375,13 @@ export async function main(): Promise<void> {
     appPort: () => port,
     postgresPort: Number(process.env.VISION_POSTGRES_PORT || 54329),
     syntheticOffline: true,
-    ...syntheticAuditOptions(),
   });
-  let transferTarget: NativeRuntime | undefined;
-  let transferTargetDir: string | undefined;
+  let moveTarget: NativeRuntime | undefined;
+  let moveTargetDir: string | undefined;
   let failure: unknown;
   try {
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
-    const auditAtStart = await runtime.verifyAuditHistory({
-      establishSession: true,
-    });
-    if (auditAtStart.status !== "verified")
-      throw new Error("Synthetic native audit enrollment failed");
     await verifyFrontendAssets(port);
     const initialServices = await requestJson(
       port,
@@ -601,104 +564,43 @@ export async function main(): Promise<void> {
     )
       throw new Error("Native bundle attachment state was not restored");
 
-    const transferPassword = crypto.randomBytes(24).toString("base64url");
-    const transfer =
-      await runtime.exportProtectedAuditTransfer(transferPassword);
     await runtime.stop({ keepPostgres: true });
-    transferTargetDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "vision-audit-transfer-smoke-"),
+    moveTargetDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "vision-device-move-smoke-"),
     );
-    const transferPort = await reservePort();
-    transferTarget = createNativeRuntime({
-      userDataDir: transferTargetDir,
+    const movePort = await reservePort();
+    moveTarget = createNativeRuntime({
+      userDataDir: moveTargetDir,
       repoRoot,
       runtimeRoot,
       postgresRuntimeRoot: nativePayloadRoot,
       browserRuntimeRoot: nativePayloadRoot,
       requireRuntimeManifest,
-      runtimeId: `vision_transfer_${crypto.randomBytes(4).toString("hex")}`,
-      appPort: () => transferPort,
+      runtimeId: `vision_move_${crypto.randomBytes(4).toString("hex")}`,
+      appPort: () => movePort,
       postgresPort: await reservePort(),
-      ...syntheticAuditOptions(),
     });
-    await transferTarget.start();
-    await transferTarget.waitUntilReady({ detailed: true });
-    const freshAudit = await transferTarget.verifyAuditHistory({
-      establishSession: true,
-    });
-    if (freshAudit.status !== "verified")
-      throw new Error("Synthetic transfer target enrollment failed");
-    await transferTarget.importProtectedAuditTransfer(
-      transfer,
-      transferPassword,
-    );
-    await transferTarget.stop({ keepPostgres: true });
-    const transferredBundle = await openBundle(encPath, { passphrase });
+    await moveTarget.start();
+    await moveTarget.waitUntilReady({ detailed: true });
+    await moveTarget.stop({ keepPostgres: true });
+    const movedBundle = await openBundle(encPath, { passphrase });
     try {
-      await restoreNativeBundle(transferTarget, {
-        dbSqlPath: transferredBundle.dbSqlPath,
-        attachmentsDir: transferredBundle.attachmentsDir,
-        expectedSchemaHead: schemaHeadOf(transferredBundle.metadata),
+      await restoreNativeBundle(moveTarget, {
+        dbSqlPath: movedBundle.dbSqlPath,
+        attachmentsDir: movedBundle.attachmentsDir,
+        expectedSchemaHead: schemaHeadOf(movedBundle.metadata),
       });
     } finally {
-      transferredBundle.cleanup();
+      movedBundle.cleanup();
     }
-    if ((await transferTarget.verifyAuditHistory()).status !== "verified")
-      throw new Error("Transferred audit checkpoint did not verify backup");
     const movedAccount = await requestJson(
-      transferPort,
+      movePort,
       "GET",
       `/api/accounts/${accountId}`,
     );
     if (field(movedAccount, "data", "display_name") !== "Native smoke original")
       throw new Error("Device-move backup data was not restored");
 
-    const tamperedSqlPath = path.join(transferTargetDir, "tampered-db.sql");
-    const originalSql = await fs.promises.readFile(dbSqlPath, "utf8");
-    await fs.promises.writeFile(
-      tamperedSqlPath,
-      `${originalSql}\nALTER TABLE public.audit_chain_entries DISABLE TRIGGER audit_chain_entries_immutable;\nUPDATE public.audit_chain_entries SET payload = '{"stream":"synthetic_tamper"}'::jsonb WHERE sequence = (SELECT min(sequence) FROM public.audit_chain_entries);\nALTER TABLE public.audit_chain_entries ENABLE TRIGGER audit_chain_entries_immutable;\n`,
-      { mode: 0o600 },
-    );
-    const tamperedBundle = await createBundle({
-      destDir: path.join(transferTargetDir, "tampered-backups"),
-      deviceId: "native-smoke-tampered",
-      schemaHead: before.schema,
-      appVersion: "native-smoke",
-      dbSqlPath: tamperedSqlPath,
-      attachmentsDir,
-      frontendState,
-    });
-    const tamperedEncrypted = await encryptBundle(
-      tamperedBundle.bundlePath,
-      passphrase,
-    );
-    await transferTarget.stop({ keepPostgres: true });
-    const openedTampered = await openBundle(tamperedEncrypted.encPath, {
-      passphrase,
-    });
-    try {
-      let rejected = false;
-      try {
-        await restoreNativeBundle(transferTarget, {
-          dbSqlPath: openedTampered.dbSqlPath,
-          attachmentsDir: openedTampered.attachmentsDir,
-          expectedSchemaHead: schemaHeadOf(openedTampered.metadata),
-        });
-      } catch (error) {
-        if (errorCode(error) !== "RESTORED_AUDIT_INTEGRITY_FAILED") throw error;
-        rejected = true;
-      }
-      if (!rejected)
-        throw new Error("Tampered synthetic backup passed audit restore");
-    } finally {
-      openedTampered.cleanup();
-    }
-    await transferTarget.waitUntilReady({ detailed: true });
-    if ((await transferTarget.verifyAuditHistory()).status !== "verified")
-      throw new Error(
-        "Tampered restore did not preserve the original audit state",
-      );
     console.log(
       cleanup
         ? `Native PostgreSQL 18 smoke passed on loopback port ${port}. Synthetic data was removed.`
@@ -707,7 +609,7 @@ export async function main(): Promise<void> {
   } catch (error) {
     failure = error;
   } finally {
-    await transferTarget?.stop().catch(() => {});
+    await moveTarget?.stop().catch(() => {});
     await runtime.stop().catch(() => {});
     if (failure) {
       const logs: [string, string][] = [
@@ -725,12 +627,12 @@ export async function main(): Promise<void> {
       }
     }
     await cleanupSmokeUserData(userDataDir, cleanup, !failure);
-    if (transferTargetDir) {
+    if (moveTargetDir) {
       if (failure && cleanup)
         console.error(
-          `Synthetic transfer diagnostics were retained at ${transferTargetDir}`,
+          `Synthetic device-move diagnostics were retained at ${moveTargetDir}`,
         );
-      await cleanupSmokeUserData(transferTargetDir, cleanup, !failure);
+      await cleanupSmokeUserData(moveTargetDir, cleanup, !failure);
     }
   }
   if (failure) throw failure;

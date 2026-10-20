@@ -9,7 +9,6 @@
 // ships without zod and the sandboxed preload cannot load modules.
 
 import path from "node:path";
-import { validateReadOptions } from "../audit-viewer";
 import type { ElectronInvokeChannel } from "../electron-api";
 
 export const REJECT_INVALID = Symbol("reject-invalid-ipc-arguments");
@@ -125,33 +124,6 @@ export function isValidHslComponents(value: unknown): value is string {
     value.length <= 32 &&
     HSL_COMPONENTS_RE.test(value)
   );
-}
-
-// Same bounds as requireTransferPassword() in audit-anchor.js, which stays the
-// authoritative check; failing here first avoids the history verification and
-// file dialogs that precede it.
-const TRANSFER_PASSWORD_MIN_LENGTH = 16;
-const TRANSFER_PASSWORD_MAX_LENGTH = 1024;
-
-function auditReadArguments(args: IpcArguments) {
-  expectArity(args, 1);
-  return [validateReadOptions(args[0])];
-}
-
-function auditTransferArguments(args: IpcArguments): [string] {
-  expectArity(args, 1);
-  const [password] = args;
-  if (
-    typeof password !== "string" ||
-    password.length < TRANSFER_PASSWORD_MIN_LENGTH ||
-    password.length > TRANSFER_PASSWORD_MAX_LENGTH
-  ) {
-    throw invalidArguments(
-      "Invalid audit transfer password",
-      "transfer_password_invalid",
-    );
-  }
-  return [password];
 }
 
 function pickedRestorePath(
@@ -320,16 +292,6 @@ const errorResult = (error: IpcArgumentError) => ({
   success: false,
   error: error.message,
 });
-const failedAuditRead = (error: IpcArgumentError) => ({
-  success: false,
-  status: "failed",
-  error: error.message,
-});
-const failedAuditTransfer = (error: IpcArgumentError) => ({
-  success: false,
-  status: "failed",
-  reason: error.code || "transfer_failed",
-});
 
 export interface IpcArgumentContractDependencies {
   /** true only for paths blessed by the backup:select-file picker. */
@@ -406,21 +368,6 @@ export function createIpcArgumentContracts({
       validate: noArguments,
       invalidResult: REJECT_INVALID,
     },
-    "audit:enroll": { validate: noArguments, invalidResult: errorResult },
-    "audit:read": {
-      validate: auditReadArguments,
-      invalidResult: failedAuditRead,
-    },
-    "audit:export": { validate: noArguments, invalidResult: errorResult },
-    "audit:transfer-export": {
-      validate: auditTransferArguments,
-      invalidResult: failedAuditTransfer,
-    },
-    "audit:transfer-import": {
-      validate: auditTransferArguments,
-      invalidResult: failedAuditTransfer,
-    },
-    "audit:rotate-key": { validate: noArguments, invalidResult: errorResult },
     "recovery:retry": { validate: noArguments, invalidResult: errorResult },
     "recovery:open-logs": { validate: noArguments, invalidResult: errorResult },
     "app:renderer-failure": {

@@ -74,7 +74,6 @@ import reportsRouter from "./routes/reports.ts";
 import tagsRouter from "./routes/tags.ts";
 import accountsRouter from "./routes/accounts.ts";
 import crossWorkspaceRouter from "./routes/crossWorkspace.ts";
-import internalAuditRouter from "./routes/internalAudit.ts";
 import analysisRouter from "./routes/analysis.ts";
 import analysisMonitorsRouter from "./routes/analysisMonitors.ts";
 import researchDossiersRouter from "./routes/researchDossiers.ts";
@@ -116,9 +115,6 @@ app.use(
 app.use(requestMetrics);
 
 app.use(createCorsMiddleware(() => settings.api.corsOrigins));
-
-// The Electron-only audit bridge has a narrower body limit than the data API.
-app.use("/api/internal/audit", express.json({ limit: "4kb" }));
 
 // JSON body parser with size limit
 app.use(express.json({ limit: "1mb" }));
@@ -252,7 +248,6 @@ app.use("/api", globalRateLimiter);
 // Electron-main requests pass unchanged.
 app.use("/api", csrfGuard);
 
-mountRouter(app, "/api/internal/audit", internalAuditRouter);
 mountRouter(app, "/api/transactions", transactionsRouter);
 mountRouter(app, "/api/categories", categoriesRouter);
 mountRouter(app, "/api/recipients", recipientsRouter);

@@ -138,11 +138,10 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       ownerRole: "own",
       dbName: "db",
     });
-    expect(stmts).toHaveLength(7);
+    expect(stmts).toHaveLength(6);
     const joined = stmts.join(";\n");
     expect(joined).not.toContain(':"');
     expect(joined).toContain('"a""pp"');
-    expect(joined).toContain("audit_chain_prune_prefix(BIGINT, CHAR(64))");
     expect(joined).toContain('GRANT CONNECT ON DATABASE "db" TO "a""pp"');
     expect(joined).toContain(
       'ALTER DEFAULT PRIVILEGES FOR ROLE "own" IN SCHEMA public',
@@ -211,20 +210,6 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       rolcreatedb: false,
       rolreplication: false,
     });
-    const functionGrant = await queryAs(
-      APP_ROLE,
-      APP_PASS,
-      "SELECT has_function_privilege(current_user, 'public.audit_chain_prune_prefix(bigint,character)', 'EXECUTE') AS allowed",
-    );
-    expect(functionGrant[0].allowed).toBe(true);
-    await expect(
-      queryAs(
-        APP_ROLE,
-        APP_PASS,
-        "SELECT audit_chain_prune_prefix(0, repeat('0',64)::char(64))",
-      ),
-    ).rejects.toThrow("invalid audit retention boundary");
-
     // The role can log in with the (quote-hostile) password and use DML on a
     // real migrated table, including sequence access via the serial default.
     const inserted = await queryAs(

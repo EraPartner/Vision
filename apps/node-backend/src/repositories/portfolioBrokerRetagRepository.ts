@@ -1,5 +1,5 @@
 /**
- * Persistence for the audited portfolio broker re-tag operation.
+ * Persistence for the portfolio broker re-tag operation.
  *
  * Every function runs on the ambient transaction connection (the `db` driver
  * routes through query()). The service wraps the complete compare-and-set
@@ -10,8 +10,6 @@ import { sql } from "kysely";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   historicalRateRowSchema,
-  portfolioRetagAuditInsertedRowSchema,
-  portfolioRetagAuditRowSchema,
   retagDestinationAccountRowSchema,
   retagLockedTransactionRowSchema,
   portfolioTransactionKeyRowSchema,
@@ -24,21 +22,12 @@ import type {
 } from "@vision/types/brands";
 import type {
   HistoricalRateDbRow,
-  PortfolioRetagAuditDbRow,
   RetagDestinationAccountRow,
   RetagLockedTransactionRow,
   RetagTransactionEventDbRow,
 } from "../database/rows/portfolio.ts";
 import { getUnitEventsForInvestment } from "./portfolioTxRepo.reads.ts";
 import type { PortfolioUnitEventRow } from "./portfolioTxRepo.reads.ts";
-
-/** BIGINT ids arrive from pg as strings. Derived from the checked row schema. */
-export type PortfolioRetagAuditRow = PortfolioRetagAuditDbRow;
-
-export type PortfolioRetagAuditInsert = Omit<
-  PortfolioRetagAuditRow,
-  "id" | "created_at"
->;
 
 /** NUMERIC columns arrive from pg as strings. Derived from the checked row schema. */
 export type RetagTransactionEventRow = RetagTransactionEventDbRow;
@@ -55,29 +44,6 @@ export type RetagCustodyEventRow = Partial<
 export async function lockPortfolioTransactionWrites(): Promise<void> {
   await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
     db,
-  );
-}
-
-export async function getAuditByIdempotencyKey(
-  idempotencyKey: string,
-): Promise<PortfolioRetagAuditRow | undefined> {
-  return checkedRow(
-    portfolioRetagAuditRowSchema,
-    db
-      .selectFrom("portfolio_retag_audit")
-      .select([
-        "id",
-        "idempotency_key",
-        "request_fingerprint",
-        "from_account_id",
-        "to_account_id",
-        "transaction_ids",
-        "previous_assignments",
-        "selected_count",
-        "changed_count",
-        "created_at",
-      ])
-      .where("idempotency_key", "=", idempotencyKey),
   );
 }
 
@@ -191,36 +157,11 @@ export async function compareAndSetAccount(
   return rows.map((row) => row.id);
 }
 
-export async function insertAudit(
-  receipt: PortfolioRetagAuditInsert,
-): Promise<PortfolioRetagAuditRow & { occurred_at: string }> {
-  const row = await checkedRow(
-    portfolioRetagAuditInsertedRowSchema,
-    sql`INSERT INTO portfolio_retag_audit
-       (idempotency_key, request_fingerprint, from_account_id, to_account_id,
-        transaction_ids, previous_assignments, selected_count, changed_count)
-     VALUES (${receipt.idempotency_key}, ${receipt.request_fingerprint},
-             ${receipt.from_account_id}, ${receipt.to_account_id},
-             ${JSON.stringify(receipt.transaction_ids)}::jsonb,
-             ${JSON.stringify(receipt.previous_assignments)}::jsonb,
-             ${receipt.selected_count}, ${receipt.changed_count})
-     RETURNING id, idempotency_key, request_fingerprint, from_account_id,
-               to_account_id, transaction_ids, previous_assignments,
-               selected_count, changed_count, created_at,
-               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
-  );
-  // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
-  if (!row) throw new Error("Re-tag audit insert returned no row");
-  return row;
-}
-
 export default {
   lockPortfolioTransactionWrites,
-  getAuditByIdempotencyKey,
   lockEligibleDestinationAccount,
   lockTransactions,
   getUnitEventsForInvestments,
   getHistoricalRates,
   compareAndSetAccount,
-  insertAudit,
 };

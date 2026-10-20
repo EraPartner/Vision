@@ -94,9 +94,6 @@ function syntheticRestoreRuntime({
     async waitUntilReady() {
       step("waitUntilReady");
     },
-    async assertRestoredAuditHistory() {
-      step("verifyAudit");
-    },
     async finalizeDatabaseSwitch(token: unknown) {
       assert.equal(token, databaseToken);
       step("finalizeDatabase");
@@ -137,7 +134,6 @@ test("smoke validates every restored table before startup telemetry can write", 
     "getStats:restored",
     "start:restored",
     "waitUntilReady",
-    "verifyAudit",
     "finalizeDatabase",
     "finalizeAttachments",
   ]);

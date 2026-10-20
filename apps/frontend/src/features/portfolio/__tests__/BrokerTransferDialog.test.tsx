@@ -121,7 +121,6 @@ describe("BrokerTransferDialog", () => {
                 async ({ request }) => {
                     body = await request.json();
                     return ok({
-                        receipt_id: 42,
                         idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
                         from_account_id: 7,
                         to_account_id: 8,
@@ -132,7 +131,6 @@ describe("BrokerTransferDialog", () => {
                         ],
                         selected_count: 2,
                         changed_count: 2,
-                        created_at: "2026-09-08T00:00:00Z",
                         replayed: false,
                     });
                 },
@@ -180,7 +178,6 @@ describe("BrokerTransferDialog", () => {
         expect(
             within(dialog).getByText("2 lot transactions moved."),
         ).toBeVisible();
-        expect(within(dialog).getByText("Receipt #42")).toBeVisible();
         expect(closeRequests).toBe(0);
     });
 
@@ -214,17 +211,15 @@ describe("BrokerTransferDialog", () => {
                     attempt += 1;
                     if (attempt === 1) return err(503, "Result unknown");
                     return ok({
-                        receipt_id: 43,
                         idempotency_key: body.idempotency_key,
                         from_account_id: 7,
                         to_account_id: null,
                         transaction_ids: [11],
                         previous_assignments: [
-                            { transaction_id: 11, account_id: 7 },
+                            { transaction_id: 11, account_id: null },
                         ],
                         selected_count: 1,
-                        changed_count: 1,
-                        created_at: "2026-09-08T00:00:00Z",
+                        changed_count: 0,
                         replayed: true,
                     });
                 },
@@ -257,7 +252,9 @@ describe("BrokerTransferDialog", () => {
             "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
             "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
         ]);
-        expect(await within(dialog).findByText("Receipt #43")).toBeVisible();
+        expect(
+            await within(dialog).findByText("1 lot transactions moved."),
+        ).toBeVisible();
     });
 
     it("fails closed while the preview is loading", async () => {

@@ -109,7 +109,6 @@ const CONSTRAINT_RENAMES = [
 const INDEX_RENAMES = [
   ["uniq_pte_planned_executed", "uq_pte_planned_executed", true],
   ["ux_transactions_opening_anchor", "uq_transactions_opening_anchor", true],
-  ["db_editor_audit_table_time_idx", "idx_db_editor_audit_table_time", false],
   [
     "ix_import_staging_rows_matched_pattern_id",
     "idx_import_staging_rows_matched_pattern_id",

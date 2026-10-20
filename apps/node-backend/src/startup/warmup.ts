@@ -368,7 +368,7 @@ export async function runWarmupTasks({
       });
     });
 
-  // Prune only terminal import staging; audit evidence is retained.
+  // Prune only terminal import staging.
   // Never rejects: each table's prune failure is caught and logged.
   void pruneOldImportBatches();
 

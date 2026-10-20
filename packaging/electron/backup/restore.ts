@@ -49,7 +49,6 @@ export interface RestoreContext {
 
 export interface RestoreRequestOptions {
   passphrase?: string | null | undefined;
-  allowUnverifiedAudit?: boolean | undefined;
 }
 
 export interface BundleBackupResult {
@@ -264,7 +263,7 @@ export async function runBundleBackup(
 
 export async function runBundleRestore(
   bundlePath: string,
-  { passphrase, allowUnverifiedAudit = false }: RestoreRequestOptions = {},
+  { passphrase }: RestoreRequestOptions = {},
 ): Promise<BundleRestoreResult> {
   if (!bundlePath) throw new Error("No backup file specified");
   if (!fs.existsSync(bundlePath))
@@ -315,7 +314,6 @@ export async function runBundleRestore(
       dbSqlPath,
       attachmentsDir,
       expectedSchemaHead: schemaHead,
-      allowUnverifiedAudit,
     });
     const cleanupWarning = restore.cleanupWarning;
     return {
@@ -334,7 +332,7 @@ export async function runBundleRestore(
 
 export async function runRestore(
   sqlFilePath: string,
-  { passphrase, allowUnverifiedAudit = false }: RestoreRequestOptions = {},
+  { passphrase }: RestoreRequestOptions = {},
 ): Promise<{ success: true; file: string }> {
   if (!sqlFilePath) throw new Error("No backup file specified");
   if (!fs.existsSync(sqlFilePath))
@@ -362,7 +360,6 @@ export async function runRestore(
     await restoreNativeDatabase(nativeRuntime, restoreSource, {
       format: "plain",
       expectedSchemaHead: dumpHead,
-      allowUnverifiedAudit,
     });
     return { success: true, file: sqlFilePath };
   } finally {

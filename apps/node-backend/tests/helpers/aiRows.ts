@@ -1,5 +1,5 @@
 /**
- * Synthetic AI, analysis and audit rows shaped exactly like node-postgres
+ * Synthetic AI and analysis rows shaped exactly like node-postgres
  * returns them (BIGINT as strings, TIMESTAMPTZ as `Date`, JSONB parsed), for
  * tests that mock `query()` under the checked reads of those repositories and
  * services. Pass `overrides` for the columns a test cares about.

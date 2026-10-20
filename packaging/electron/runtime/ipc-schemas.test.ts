@@ -41,7 +41,6 @@ function reject(
 test("argument-free channels accept no arguments and reject extra ones", () => {
   for (const channel of [
     "update:check-github",
-    "audit:enroll",
     "backup:select-file",
     "recovery:retry",
     "app:renderer-ready",
@@ -53,51 +52,10 @@ test("argument-free channels accept no arguments and reject extra ones", () => {
   }
   assert.equal(contracts["update:check-github"].invalidResult, REJECT_INVALID);
   assert.equal(contracts["backup:select-dir"].invalidResult, null);
-  assert.deepEqual(reject("audit:enroll", [1]), {
+  assert.deepEqual(reject("recovery:retry", [1]), {
     success: false,
     error: "Unexpected IPC arguments",
   });
-});
-
-test("audit:read keeps the audit-viewer range rules", () => {
-  assert.deepEqual(accept("audit:read"), [{ afterSequence: 0, limit: 100 }]);
-  assert.deepEqual(accept("audit:read", { afterSequence: 7, limit: 500 }), [
-    { afterSequence: 7, limit: 500 },
-  ]);
-  assert.deepEqual(reject("audit:read", [null]), {
-    success: false,
-    status: "failed",
-    error: "Invalid audit read options",
-  });
-  reject("audit:read", [{ extra: true }], "Invalid audit read options");
-  reject("audit:read", [{ limit: 0 }], "Invalid audit read range");
-  reject("audit:read", [{ limit: 501 }], "Invalid audit read range");
-  reject("audit:read", [{ afterSequence: -1 }], "Invalid audit read range");
-});
-
-test("audit transfers reject a missing or out-of-range password before any dialog", () => {
-  for (const channel of [
-    "audit:transfer-export",
-    "audit:transfer-import",
-  ] as const) {
-    const password = "p".repeat(16);
-    assert.deepEqual(accept(channel, password), [password]);
-    assert.deepEqual(accept(channel, "p".repeat(1024)), ["p".repeat(1024)]);
-    for (const invalid of [
-      undefined,
-      null,
-      12345678901234567890,
-      { password },
-      "p".repeat(15),
-      "p".repeat(1025),
-    ]) {
-      assert.deepEqual(reject(channel, [invalid]), {
-        success: false,
-        status: "failed",
-        reason: "transfer_password_invalid",
-      });
-    }
-  }
 });
 
 test("backup restore accepts only picker-blessed files with a backup extension", () => {

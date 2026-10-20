@@ -34,18 +34,3 @@ export const databaseSizeRowSchema = z
 export const userTableNameRowSchema = z
   .object({ relname: z.string() })
   .describe("user table name row");
-
-/** `INSERT INTO db_editor_audit ... RETURNING` in services/dbEditor.ts. */
-export const dbEditorAuditRowSchema = z
-  .object({
-    /** BIGSERIAL. */
-    id: pgBigint,
-    /** Nullable JSONB columns cast `::text`. */
-    pk_text: z.string().nullable(),
-    before_text: z.string().nullable(),
-    after_text: z.string().nullable(),
-    statement: z.string(),
-    /** `to_char(created_at ...)`: an ISO-8601 UTC string. */
-    occurred_at: z.string(),
-  })
-  .describe("db editor audit row");

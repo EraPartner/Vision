@@ -14,8 +14,6 @@ import {
   parseDatabaseStats,
   type DatabaseStats,
 } from "./database-stats";
-import { createAuditAnchor, AuditAnchorError } from "../audit-anchor";
-import { createKeychainWitness } from "../audit-keychain";
 
 export const POSTGRES_MAJOR = 18;
 export const POSTGRES_MINOR = 6;
@@ -109,8 +107,6 @@ export interface PortProbeServer {
 export interface NativeRuntimeError extends Error {
   code?: string | number | null | undefined;
   exitCode?: string | number | null | undefined;
-  auditStatus?: unknown;
-  auditReason?: unknown;
   recoveryErrors?: unknown[];
 }
 
@@ -180,44 +176,6 @@ export function safeChildEnv(
     .filter(Boolean)
     .join(":");
   return env;
-}
-
-/** An updater decision recorded through the private audit bridge. */
-export type UpdateDecisionPayload = {
-  readonly decision: string;
-  readonly mode: string;
-  readonly version: string;
-};
-
-/** The audit operations an updater decision needs from a runtime. */
-export interface UpdateDecisionRuntime {
-  readonly mode: string;
-  recordAuditUpdateDecision(payload: UpdateDecisionPayload): Promise<unknown>;
-  auditRequiresAnchoredClosure(): boolean | Promise<boolean>;
-  closeAuditCheckpoint(): Promise<unknown>;
-}
-
-export async function recordUpdateDecisionThroughNativeRuntime(
-  runtime: UpdateDecisionRuntime | null | undefined,
-  payload: UpdateDecisionPayload,
-): Promise<unknown> {
-  if (runtime?.mode === "native") {
-    const recorded = await runtime.recordAuditUpdateDecision(payload);
-    if (!(await runtime.auditRequiresAnchoredClosure())) {
-      return { auditStatus: "unavailable", recorded };
-    }
-    const closure = await runtime.closeAuditCheckpoint();
-    if (optionalFieldsOf(closure)?.status !== "verified") {
-      const error: NativeRuntimeError = new Error(
-        "Native update audit checkpoint is unavailable",
-      );
-      error.code = "AUDIT_UPDATE_CHECKPOINT_UNAVAILABLE";
-      throw error;
-    }
-    return recorded;
-  }
-  if (payload?.mode === "dev") return;
-  throw new Error("Native update audit bridge is unavailable");
 }
 
 export function managedPostgresChildEnv(): ChildEnv {
@@ -737,7 +695,6 @@ export interface NativeBackendEnvOptions {
   runtimeRoot?: string | undefined;
   repoRoot?: string | undefined;
   tools: { chrome?: string | undefined };
-  auditBridgeToken?: string | undefined;
   syntheticOffline?: boolean | undefined;
 }
 
@@ -748,7 +705,6 @@ export function buildNativeBackendEnv({
   runtimeRoot,
   repoRoot,
   tools,
-  auditBridgeToken,
   syntheticOffline,
 }: NativeBackendEnvOptions): ChildEnv {
   const resolvedRuntimeRoot = runtimeRoot || repoRoot;
@@ -768,7 +724,6 @@ export function buildNativeBackendEnv({
     PUPPETEER_EXECUTABLE_PATH: tools.chrome,
     OLLAMA_URL: "http://127.0.0.1:11434",
     ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
-    VISION_AUDIT_BRIDGE_TOKEN: auditBridgeToken,
     VISION_SYNTHETIC_SMOKE_OFFLINE: syntheticOffline ? "1" : undefined,
   });
 }
@@ -1205,63 +1160,6 @@ export async function finalizeDirectorySwitch(
   return { status: "finalized" };
 }
 
-type AuditAnchorOptions = Parameters<typeof createAuditAnchor>[0];
-
-/** Encryption the audit anchor uses for its key (Electron's safeStorage). */
-export type AuditSafeStorage = AuditAnchorOptions["safeStorage"];
-
-/** External witness of the audit checkpoint (the macOS Keychain helper). */
-export type AuditWitness = AuditAnchorOptions["witness"];
-
-/** Sends one request to the backend's private audit bridge. */
-export type AuditRequest = (
-  endpoint: string,
-  payload: UnknownRecord,
-) => Promise<unknown>;
-
-const LEGACY_CUTOVER_FIELDS = [
-  "dbEditorMaxId",
-  "splitMaxId",
-  "retagMaxId",
-] as const;
-
-const VERIFIED_AUDIT_STATUSES: readonly unknown[] = [
-  "verified",
-  "partially_verified",
-];
-
-/**
- * The audit anchor operations the runtime uses. The anchor validates its own
- * inputs and outputs; the runtime reads its results field by field.
- */
-interface NativeAuditAnchor {
-  readTrustedCheckpoint(): Promise<unknown>;
-  initializeFirstCheckpoint(
-    head: unknown,
-    legacyCutover: unknown,
-    options?: { enrollment?: boolean },
-  ): Promise<unknown>;
-  persistCheckpoint(head: unknown): Promise<unknown>;
-  persistRetentionBoundary(candidate: unknown): Promise<unknown>;
-  exportProtectedTransfer(password: unknown): Promise<Buffer>;
-  importProtectedTransfer(
-    contents: Buffer,
-    password: unknown,
-    options?: { expectedCurrent?: { sequence: unknown; hash: unknown } },
-  ): Promise<unknown>;
-  rotateKey(): Promise<unknown>;
-}
-
-/** An audit verification or read outcome; bridge results pass through. */
-export type AuditResult = UnknownRecord;
-
-export interface AuditReadResult {
-  readonly verification: AuditResult;
-  readonly entries: readonly unknown[];
-  readonly hasMore: boolean;
-  readonly [field: string]: unknown;
-}
-
 export interface NativeRuntimeOptions {
   userDataDir: string;
   repoRoot?: string | undefined;
@@ -1281,12 +1179,6 @@ export interface NativeRuntimeOptions {
   spawnProcess?: SpawnProcess | undefined;
   spawnPostgresProcess?: SpawnProcess | undefined;
   isPortFree?: ((port: number) => Promise<boolean>) | undefined;
-  auditBridgeToken?: string | undefined;
-  auditSafeStorage?: AuditSafeStorage | undefined;
-  auditKeychainHelper?: string | undefined;
-  auditWitness?: AuditWitness | undefined;
-  auditPlatform?: NodeJS.Platform | undefined;
-  auditRequest?: AuditRequest | undefined;
 }
 
 export interface NativeRuntimePaths {
@@ -1333,10 +1225,6 @@ export type StartResult =
   | { status: "already-running"; pid: number; port: number }
   | { status: "started"; pid: number; port: number; database: string };
 
-export type AuditRetentionResult =
-  | { status: "unavailable" | "not_due" | "nothing_due" }
-  | { status: "pruned"; removed: unknown };
-
 interface BackendCommand {
   bin: string;
   args: string[];
@@ -1375,29 +1263,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     typeof options.appPort === "function"
       ? options.appPort
       : () => Number(options.appPort || DEFAULT_APP_PORT);
-  const auditBridgeToken = options.auditBridgeToken;
-  if (
-    auditBridgeToken !== undefined &&
-    !/^[0-9a-f]{64}$/.test(auditBridgeToken)
-  ) {
-    throw new TypeError("Invalid native audit bridge token");
-  }
-  const auditAnchor: NativeAuditAnchor | undefined =
-    options.auditSafeStorage &&
-    (options.auditKeychainHelper || options.auditWitness)
-      ? createAuditAnchor({
-          userDataDir,
-          safeStorage: options.auditSafeStorage,
-          witness:
-            options.auditWitness ||
-            createKeychainWitness({
-              executable: options.auditKeychainHelper,
-              runtimeId,
-            }),
-          platform: options.auditPlatform,
-        })
-      : undefined;
-  const sendAuditRequest: AuditRequest = options.auditRequest || auditRequest;
   const nativeRoot = path.join(userDataDir, "native", runtimeId);
   const paths: NativeRuntimePaths = Object.freeze({
     nativeRoot,
@@ -1418,19 +1283,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   // Set when the backend started by start() exits; cleared by the next start().
   let backendExit: { code: number | null | undefined } | undefined;
   let postgresChild: SpawnedChild | undefined;
-  let newClusterCreatedThisLaunch = false;
   let restoreSwitchOwnedThisLaunch = false;
   let startupRestoreRecovery: Promise<void> | undefined;
-  let freshAuditReceiptId: unknown;
-  let auditSessionEstablished = false;
-  let auditLiveClosureEnabled = false;
-  let auditAnchorDetectedThisLaunch = false;
-  let auditEverTrustedThisLaunch = false;
-  let auditCheckpointMetadataSyncedThisLaunch = false;
-  let auditClosurePaused = false;
-  let auditClosurePromise: Promise<unknown> = Promise.resolve();
-  let lastAuditRetentionAttempt = 0;
-  let auditRetentionPromise: Promise<AuditRetentionResult> | undefined;
 
   /** The discovered tools; like reading `tools.x` before discovery, throws. */
   function requireTools(): NativeTools {
@@ -1662,7 +1516,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       await ensureManagedPostgresConfig(staging);
       await fs.promises.chmod(staging, 0o700);
       await fs.promises.rename(staging, paths.postgresData);
-      newClusterCreatedThisLaunch = true;
       return {
         status: "initialized",
         dataDirectory: paths.postgresData,
@@ -2319,16 +2172,11 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         error.code = "BACKEND_STALE_PID";
         throw error;
       }
-      if (!auditBridgeToken) {
-        return {
-          status: "already-running",
-          pid: existingPid,
-          port: getAppPort(),
-        };
-      }
-      // A backend kept alive across app launches has the previous launch's
-      // private token. Restart it before any audit verification request.
-      await stopBackend();
+      return {
+        status: "already-running",
+        pid: existingPid,
+        port: getAppPort(),
+      };
     }
     await fs.promises.unlink(paths.pid).catch(() => {});
 
@@ -2350,7 +2198,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       runtimeRoot,
       repoRoot,
       tools: requireTools(),
-      auditBridgeToken,
       syntheticOffline: options.syntheticOffline === true,
     });
     const logFd = fs.openSync(paths.backendLog, "a", 0o600);
@@ -2396,604 +2243,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       lastStartupError(log.slice(-65_536)) ??
       `The Vision backend stopped during startup (exit code ${backendExit.code ?? "unknown"}).`
     );
-  }
-
-  function auditRequest(
-    endpoint: string,
-    payload: UnknownRecord,
-  ): Promise<unknown> {
-    if (!auditBridgeToken) {
-      const error: NativeRuntimeError = new Error(
-        "Native audit bridge is not configured",
-      );
-      error.code = "AUDIT_BRIDGE_UNAVAILABLE";
-      throw error;
-    }
-    const data = JSON.stringify(payload);
-    const maxResponseBytes = endpoint === "read" ? 4 * 1024 * 1024 : 16_384;
-    return new Promise((resolve, reject) => {
-      const request = http.request(
-        {
-          hostname: LOOPBACK_HOST,
-          port: getAppPort(),
-          path: `/api/internal/audit/${endpoint}`,
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${auditBridgeToken}`,
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(data),
-          },
-          timeout: 10_000,
-        },
-        (response) => {
-          let body = "";
-          let responseBytes = 0;
-          response.on("data", (chunk: Buffer) => {
-            responseBytes += chunk.length;
-            if (responseBytes > maxResponseBytes) {
-              request.destroy(new Error("Audit bridge response is too large"));
-              return;
-            }
-            body += chunk;
-          });
-          response.on("end", () => {
-            try {
-              const parsed: unknown = JSON.parse(body);
-              if (
-                response.statusCode !== 200 ||
-                optionalFieldsOf(parsed)?.ok !== true ||
-                !fieldsOf(parsed).data
-              ) {
-                throw new Error("Audit bridge rejected request");
-              }
-              resolve(fieldsOf(parsed).data);
-            } catch (error) {
-              reject(error);
-            }
-          });
-        },
-      );
-      request.on("timeout", () =>
-        request.destroy(new Error("Audit bridge timed out")),
-      );
-      request.on("error", reject);
-      request.end(data);
-    });
-  }
-
-  async function recordAuditUpdateDecision(
-    payload: UpdateDecisionPayload,
-  ): Promise<unknown> {
-    return sendAuditRequest("update-decision", payload);
-  }
-
-  function checkpointBridgePayload(metadata: unknown): UnknownRecord {
-    const { sequence, headHash, anchorKind, receiptId, receiptHash } =
-      fieldsOf(metadata);
-    return { sequence, headHash, anchorKind, receiptId, receiptHash };
-  }
-
-  function trustedBridgePayload(trusted: UnknownRecord): UnknownRecord {
-    return {
-      sequence: trusted.sequence,
-      hash: trusted.hash,
-      ...(trusted.retention ? { retention: trusted.retention } : {}),
-    };
-  }
-
-  async function readVerifiedAuditEntries({
-    afterSequence = 0,
-    limit = 100,
-  }: {
-    afterSequence?: number;
-    limit?: number;
-  } = {}): Promise<AuditReadResult> {
-    if (
-      !Number.isSafeInteger(afterSequence) ||
-      afterSequence < 0 ||
-      !Number.isSafeInteger(limit) ||
-      limit < 1 ||
-      limit > 500
-    ) {
-      throw new RangeError("Invalid audit read page");
-    }
-    const unavailable = (status: string, reason: string): AuditReadResult => ({
-      verification: { status, reason },
-      entries: [],
-      hasMore: false,
-    });
-    if (!auditBridgeToken || !auditAnchor) {
-      return unavailable("unavailable", "bridge_or_anchor_unavailable");
-    }
-    let trustedCheckpoint: unknown;
-    try {
-      trustedCheckpoint = await auditAnchor.readTrustedCheckpoint();
-    } catch (error) {
-      if (error instanceof AuditAnchorError && error.code === "uninitialized") {
-        return unavailable("unavailable", "no_trusted_anchor");
-      }
-      return unavailable("failed", "anchor_invalid");
-    }
-    const trusted = fieldsOf(trustedCheckpoint);
-    const result = await sendAuditRequest("read", {
-      trustedCheckpoint: trustedBridgePayload(trusted),
-      afterSequence,
-      limit,
-    });
-    const verificationValue = optionalFieldsOf(result)?.verification;
-    if (!verificationValue) {
-      return unavailable("failed", "audit_read_verification_failed");
-    }
-    const verification = fieldsOf(verificationValue);
-    if (
-      !VERIFIED_AUDIT_STATUSES.includes(verification.status) ||
-      verification.anchoredThrough !== trusted.sequence ||
-      verification.retentionThrough !==
-        optionalFieldsOf(trusted.retention)?.through ||
-      LEGACY_CUTOVER_FIELDS.some(
-        (field) =>
-          optionalFieldsOf(verification.legacyCutover)?.[field] !==
-          fieldsOf(trusted.legacyCutover)[field],
-      )
-    ) {
-      return unavailable("failed", "audit_read_verification_failed");
-    }
-    // Relational checks use Number(), which coerces exactly like `<=` does.
-    const resultFields = fieldsOf(result);
-    const { entries, hasMore } = resultFields;
-    if (
-      !isUnknownArray(entries) ||
-      entries.length > limit ||
-      typeof hasMore !== "boolean" ||
-      entries.some((entry) => {
-        const { sequence, anchorStatus } = fieldsOf(entry);
-        return (
-          typeof sequence !== "number" ||
-          !Number.isSafeInteger(sequence) ||
-          sequence <=
-            Math.max(
-              afterSequence,
-              Number(optionalFieldsOf(trusted.retention)?.through ?? 0),
-            ) ||
-          sequence > Number(verification.sequence) ||
-          anchorStatus !==
-            (sequence <= Number(trusted.sequence)
-              ? "anchored"
-              : "pending_anchor")
-        );
-      })
-    ) {
-      return unavailable("failed", "invalid_audit_read_response");
-    }
-    const metadata = fieldsOf(trusted.metadata);
-    return {
-      ...resultFields,
-      entries,
-      hasMore,
-      verification: {
-        ...verification,
-        ...(metadata.enrollmentSequence !== undefined
-          ? { enrollmentSequence: metadata.enrollmentSequence }
-          : {}),
-      },
-    };
-  }
-
-  async function verifyAuditHistory({
-    forRestore = false,
-    establishSession = false,
-  }: {
-    forRestore?: boolean;
-    establishSession?: boolean;
-  } = {}): Promise<AuditResult> {
-    const establishing = establishSession && !auditSessionEstablished;
-    const finish = (result: AuditResult): AuditResult => {
-      if (establishing) auditSessionEstablished = true;
-      return result;
-    };
-    if (!auditBridgeToken || !auditAnchor) {
-      return finish({
-        status: "unavailable",
-        reason: "bridge_or_anchor_unavailable",
-      });
-    }
-    let trusted: unknown;
-    try {
-      trusted = await auditAnchor.readTrustedCheckpoint();
-      auditAnchorDetectedThisLaunch = true;
-    } catch (error) {
-      if (
-        !(error instanceof AuditAnchorError) ||
-        error.code !== "uninitialized"
-      ) {
-        auditAnchorDetectedThisLaunch = true;
-        return finish({ status: "failed", reason: "anchor_invalid" });
-      }
-    }
-    const result = fieldsOf(
-      await sendAuditRequest(
-        "verify",
-        trusted
-          ? {
-              trustedCheckpoint: {
-                ...trustedBridgePayload(fieldsOf(trusted)),
-              },
-            }
-          : {},
-      ),
-    );
-    if (trusted && result.status === "unavailable") {
-      return finish({
-        status: "failed",
-        reason: "anchored_history_unavailable",
-      });
-    }
-    if (result.status === "failed") return finish(result);
-    if (
-      trusted &&
-      LEGACY_CUTOVER_FIELDS.some(
-        (field) =>
-          !Number.isSafeInteger(
-            optionalFieldsOf(result.legacyCutover)?.[field],
-          ) ||
-          fieldsOf(result.legacyCutover)[field] !==
-            fieldsOf(fieldsOf(trusted).legacyCutover)[field],
-      )
-    ) {
-      return finish({ status: "failed", reason: "legacy_cutover_changed" });
-    }
-    if (!trusted) {
-      if (
-        forRestore ||
-        !newClusterCreatedThisLaunch ||
-        result.status !== "unavailable" ||
-        typeof result.sequence !== "number" ||
-        !Number.isSafeInteger(result.sequence) ||
-        result.sequence < 0 ||
-        !/^[0-9a-f]{64}$/.test(String(result.hash)) ||
-        !result.legacyUnverified ||
-        Object.values(result.legacyUnverified).some((count) => count !== "0")
-      ) {
-        return finish({ status: "unavailable", reason: "no_trusted_anchor" });
-      }
-      let metadata: unknown;
-      try {
-        metadata = await auditAnchor.initializeFirstCheckpoint(
-          { sequence: result.sequence, hash: result.hash },
-          result.legacyCutover,
-        );
-      } catch (error) {
-        if (error instanceof AuditAnchorError) {
-          return finish({ status: "unavailable", reason: error.code });
-        }
-        throw error;
-      }
-      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
-      auditCheckpointMetadataSyncedThisLaunch = true;
-      auditAnchorDetectedThisLaunch = true;
-      auditEverTrustedThisLaunch = true;
-      freshAuditReceiptId = fieldsOf(metadata).receiptId;
-      if (establishing) auditLiveClosureEnabled = true;
-      return finish({
-        status: "verified",
-        sequence: result.sequence,
-        hash: result.hash,
-      });
-    }
-    if (!VERIFIED_AUDIT_STATUSES.includes(result.status)) {
-      return finish({
-        status: "failed",
-        reason: "unexpected_verification_status",
-      });
-    }
-    if (
-      establishing &&
-      !forRestore &&
-      !auditCheckpointMetadataSyncedThisLaunch
-    ) {
-      try {
-        await sendAuditRequest(
-          "checkpoint",
-          checkpointBridgePayload(fieldsOf(trusted).metadata),
-        );
-        auditCheckpointMetadataSyncedThisLaunch = true;
-      } catch {
-        return finish({
-          status: "failed",
-          reason: "checkpoint_metadata_unavailable",
-        });
-      }
-    }
-    // A valid prefix does not make the unanchored tail independently trusted.
-    // Never promote it to the external anchor during a later startup or restore.
-    if (establishing && result.status === "verified") {
-      auditLiveClosureEnabled = true;
-      auditEverTrustedThisLaunch = true;
-    }
-    return finish(result);
-  }
-
-  async function enrollExistingAuditHistory(): Promise<AuditResult> {
-    if (!auditBridgeToken || !auditAnchor) {
-      return { status: "unavailable", reason: "bridge_or_anchor_unavailable" };
-    }
-    try {
-      await auditAnchor.readTrustedCheckpoint();
-      return { status: "unavailable", reason: "already_enrolled" };
-    } catch (error) {
-      if (
-        !(error instanceof AuditAnchorError) ||
-        error.code !== "uninitialized"
-      ) {
-        return { status: "failed", reason: "anchor_invalid" };
-      }
-    }
-    // The operator explicitly accepts this internally consistent history as
-    // the starting point. We cannot attest what happened before this moment.
-    const result = optionalFieldsOf(await sendAuditRequest("verify", {}));
-    if (
-      result?.status !== "unavailable" ||
-      typeof result.sequence !== "number" ||
-      !Number.isSafeInteger(result.sequence) ||
-      result.sequence < 0 ||
-      !/^[0-9a-f]{64}$/.test(String(result.hash)) ||
-      !result.legacyCutover
-    ) {
-      return { status: "failed", reason: "history_invalid" };
-    }
-    let metadata: unknown;
-    try {
-      metadata = await auditAnchor.initializeFirstCheckpoint(
-        { sequence: result.sequence, hash: result.hash },
-        result.legacyCutover,
-        { enrollment: true },
-      );
-      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
-      auditCheckpointMetadataSyncedThisLaunch = true;
-    } catch {
-      return { status: "failed", reason: "enrollment_incomplete" };
-    }
-    auditAnchorDetectedThisLaunch = true;
-    const verified = await verifyAuditHistory({ establishSession: true });
-    if (!VERIFIED_AUDIT_STATUSES.includes(verified.status)) {
-      return { status: "failed", reason: "enrollment_verification_failed" };
-    }
-    auditLiveClosureEnabled = true;
-    auditEverTrustedThisLaunch = true;
-    return {
-      status: verified.status,
-      enrollmentSequence: fieldsOf(metadata).enrollmentSequence,
-    };
-  }
-
-  async function exportProtectedAuditTransfer(
-    password: unknown,
-  ): Promise<Buffer> {
-    if (!auditAnchor) throw new AuditAnchorError("uninitialized");
-    const verified = await verifyAuditHistory();
-    if (!VERIFIED_AUDIT_STATUSES.includes(verified.status)) {
-      throw new AuditAnchorError("history_unverified");
-    }
-    if (verified.status === "partially_verified") {
-      const closed = await closeAuditCheckpoint();
-      if (closed.status !== "verified")
-        throw new AuditAnchorError("history_unverified");
-    }
-    return auditAnchor.exportProtectedTransfer(password);
-  }
-
-  async function importProtectedAuditTransfer(
-    contents: Buffer,
-    password: unknown,
-  ): Promise<{ sequence: unknown; hash: unknown }> {
-    if (!auditAnchor || !newClusterCreatedThisLaunch || !freshAuditReceiptId) {
-      throw new AuditAnchorError("transfer_target_not_fresh");
-    }
-    await pauseAuditClosure();
-    try {
-      const current = fieldsOf(await auditAnchor.readTrustedCheckpoint());
-      if (
-        fieldsOf(current.metadata).receiptId !== freshAuditReceiptId ||
-        (await verifyAuditHistory()).status !== "verified"
-      ) {
-        throw new AuditAnchorError("transfer_target_not_fresh");
-      }
-      const metadata = fieldsOf(
-        await auditAnchor.importProtectedTransfer(contents, password, {
-          expectedCurrent: { sequence: current.sequence, hash: current.hash },
-        }),
-      );
-      freshAuditReceiptId = undefined;
-      endAuditSession();
-      auditCheckpointMetadataSyncedThisLaunch = false;
-      return { sequence: metadata.sequence, hash: metadata.headHash };
-    } finally {
-      resumeAuditClosure();
-    }
-  }
-
-  async function rotateAuditKey(): Promise<{ sequence: unknown }> {
-    if (!auditAnchor) throw new AuditAnchorError("uninitialized");
-    const verified = await verifyAuditHistory();
-    if (!VERIFIED_AUDIT_STATUSES.includes(verified.status)) {
-      throw new AuditAnchorError("history_unverified");
-    }
-    if (verified.status === "partially_verified") {
-      const closed = await closeAuditCheckpoint();
-      if (closed.status !== "verified")
-        throw new AuditAnchorError("history_unverified");
-    }
-    const metadata = await auditAnchor.rotateKey();
-    freshAuditReceiptId = undefined;
-    auditCheckpointMetadataSyncedThisLaunch = false;
-    await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
-    auditCheckpointMetadataSyncedThisLaunch = true;
-    return { sequence: fieldsOf(metadata).sequence };
-  }
-
-  async function runAuditRetentionIfDue(): Promise<AuditRetentionResult> {
-    if (!auditAnchor || !auditBridgeToken || !auditLiveClosureEnabled) {
-      return { status: "unavailable" };
-    }
-    if (auditRetentionPromise) return auditRetentionPromise;
-    if (Date.now() - lastAuditRetentionAttempt < 24 * 60 * 60 * 1000) {
-      return { status: "not_due" };
-    }
-    lastAuditRetentionAttempt = Date.now();
-    auditRetentionPromise = (async (): Promise<AuditRetentionResult> => {
-      let trusted = fieldsOf(await auditAnchor.readTrustedCheckpoint());
-      if (trusted.retention) {
-        await sendAuditRequest("retention-prune", {
-          trustedCheckpoint: trustedBridgePayload(trusted),
-        });
-      }
-      const plan = await sendAuditRequest("retention-plan", {
-        trustedCheckpoint: trustedBridgePayload(trusted),
-      });
-      if (!optionalFieldsOf(plan)?.eligible) return { status: "nothing_due" };
-      const metadata = await auditAnchor.persistRetentionBoundary(plan);
-      auditCheckpointMetadataSyncedThisLaunch = false;
-      await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
-      auditCheckpointMetadataSyncedThisLaunch = true;
-      trusted = fieldsOf(await auditAnchor.readTrustedCheckpoint());
-      const pruned = await sendAuditRequest("retention-prune", {
-        trustedCheckpoint: trustedBridgePayload(trusted),
-      });
-      return { status: "pruned", removed: fieldsOf(pruned).removed };
-    })();
-    try {
-      return await auditRetentionPromise;
-    } catch (error) {
-      lastAuditRetentionAttempt =
-        Date.now() - 24 * 60 * 60 * 1000 + 5 * 60 * 1000;
-      throw error;
-    } finally {
-      auditRetentionPromise = undefined;
-    }
-  }
-
-  function auditClosureEnabled(): boolean {
-    return auditLiveClosureEnabled;
-  }
-
-  async function auditRequiresAnchoredClosure(): Promise<boolean> {
-    if (auditAnchorDetectedThisLaunch || auditEverTrustedThisLaunch)
-      return true;
-    if (!auditAnchor) return false;
-    try {
-      await auditAnchor.readTrustedCheckpoint();
-      auditAnchorDetectedThisLaunch = true;
-      return true;
-    } catch (error) {
-      if (error instanceof AuditAnchorError && error.code === "uninitialized") {
-        return false;
-      }
-      auditAnchorDetectedThisLaunch = true;
-      return true;
-    }
-  }
-
-  function auditSessionPending(): boolean {
-    return !auditSessionEstablished;
-  }
-
-  function endAuditSession(): void {
-    auditLiveClosureEnabled = false;
-    // A recovered backend must establish trust again at the exact external
-    // checkpoint. A valid but unanchored tail still cannot start a session.
-    auditSessionEstablished = false;
-  }
-
-  async function pauseAuditClosure(): Promise<void> {
-    auditClosurePaused = true;
-    await auditClosurePromise;
-  }
-
-  function resumeAuditClosure(): void {
-    auditClosurePaused = false;
-  }
-
-  function closeAuditCheckpoint(): Promise<AuditResult> {
-    const closure = auditClosurePromise.then(async (): Promise<AuditResult> => {
-      if (!auditLiveClosureEnabled || auditClosurePaused) {
-        return { status: "unavailable", reason: "live_closure_not_active" };
-      }
-      try {
-        const result = await verifyAuditHistory();
-        if (result.status === "verified") return result;
-        if (result.status !== "partially_verified") {
-          auditLiveClosureEnabled = false;
-          return result;
-        }
-        // Partial verification implies an anchor; mirror `undefined.x` otherwise.
-        if (!auditAnchor) throw new TypeError("Native audit anchor is missing");
-        const metadata = await auditAnchor.persistCheckpoint({
-          sequence: result.sequence,
-          hash: result.hash,
-        });
-        await sendAuditRequest("checkpoint", checkpointBridgePayload(metadata));
-        auditCheckpointMetadataSyncedThisLaunch = true;
-        return { ...result, status: "verified" };
-      } catch (error) {
-        endAuditSession();
-        throw error;
-      }
-    });
-    auditClosurePromise = closure.catch(() => {});
-    return closure;
-  }
-
-  async function assertRestoredAuditHistory({
-    allowUnverifiedAudit = false,
-  }: { allowUnverifiedAudit?: boolean } = {}): Promise<AuditResult> {
-    if (allowUnverifiedAudit) {
-      // Explicit recovery verifies the restored chain independently. An older
-      // backup cannot contain the current trusted checkpoint, so it must not
-      // be enrolled or used to lower the external receipt.
-      const candidate = fieldsOf(await sendAuditRequest("verify", {}));
-      if (
-        candidate.status !== "unavailable" ||
-        typeof candidate.sequence !== "number" ||
-        !Number.isSafeInteger(candidate.sequence) ||
-        candidate.sequence < 0 ||
-        !/^[0-9a-f]{64}$/.test(String(candidate.hash))
-      ) {
-        const error: NativeRuntimeError = new Error(
-          "Restored database audit chain is invalid",
-        );
-        error.code = "RESTORED_AUDIT_RECOVERY_INVALID";
-        throw error;
-      }
-      endAuditSession();
-      return { status: "unavailable", reason: "explicit_recovery" };
-    }
-    let result: AuditResult;
-    try {
-      result = await verifyAuditHistory({ forRestore: true });
-    } catch {
-      const error: NativeRuntimeError = new Error(
-        "Restored database audit verification is unavailable",
-      );
-      error.code = "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE";
-      error.auditStatus = "unavailable";
-      error.auditReason = "bridge_unavailable";
-      throw error;
-    }
-    if (result.status !== "verified") {
-      const error: NativeRuntimeError = new Error(
-        result.status === "failed"
-          ? "Restored database failed the trusted audit integrity check"
-          : "Restored database cannot be verified against the trusted audit checkpoint",
-      );
-      error.code =
-        result.status === "failed"
-          ? "RESTORED_AUDIT_INTEGRITY_FAILED"
-          : "RESTORED_AUDIT_INTEGRITY_UNAVAILABLE";
-      error.auditStatus = result.status;
-      error.auditReason = result.reason;
-      throw error;
-    }
-    return result;
   }
 
   async function stopBackend({
@@ -3772,22 +3021,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     writeState,
     start,
     backendStartupFailure,
-    verifyAuditHistory,
-    enrollExistingAuditHistory,
-    exportProtectedAuditTransfer,
-    importProtectedAuditTransfer,
-    rotateAuditKey,
-    runAuditRetentionIfDue,
-    readVerifiedAuditEntries,
-    recordAuditUpdateDecision,
-    assertRestoredAuditHistory,
-    auditClosureEnabled,
-    auditRequiresAnchoredClosure,
-    auditSessionPending,
-    endAuditSession,
-    closeAuditCheckpoint,
-    pauseAuditClosure,
-    resumeAuditClosure,
     stop,
     stopPostgres,
     restart,

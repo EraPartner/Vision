@@ -251,7 +251,7 @@ describe("Splits Routes", () => {
       expect(splitService.createSplitAtomic).not.toHaveBeenCalled();
     });
 
-    it("forwards a numeric-string amount and actor to the service", async () => {
+    it("forwards a numeric-string amount to the service", async () => {
       splitService.createSplitAtomic.mockResolvedValue(
         partial({
           id: 7,
@@ -262,12 +262,11 @@ describe("Splits Routes", () => {
       );
       await api
         .post(`${BASE}/`)
-        .set("x-actor", "manual-entry")
         .send({ transaction_id: 1, recipient_id: 2, amount: "20" })
         .expect(201);
 
       expect(splitService.createSplitAtomic).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: "20", actor: "manual-entry" }),
+        expect.objectContaining({ amount: "20" }),
       );
     });
 
@@ -363,7 +362,6 @@ describe("Splits Routes", () => {
           { recipient_id: 2, amount: 20, note: "x" },
           { recipient_id: 4, amount: 5, note: "y" },
         ],
-        actor: null,
       });
       expect(res.body).toEqual(okEnvelope({ items: [{ id: 1 }], total: 1 }));
     });
@@ -448,7 +446,6 @@ describe("Splits Routes", () => {
           { recipient_id: 12, amount: 5, note: "n" },
           { recipient_id: 3, amount: 0, note: undefined },
         ],
-        actor: null,
       });
     });
 
@@ -490,14 +487,13 @@ describe("Splits Routes", () => {
       items: [{ id: 1 }, { id: 2 }],
     };
 
-    it("forwards validated ids, recipient, mode and actor to the service", async () => {
+    it("forwards validated ids, recipient and mode to the service", async () => {
       splitService.createBulkSplitsAtomic.mockResolvedValue(
         partial(BULK_RESULT),
       );
 
       const res = await api
         .post(`${BASE}/bulk`)
-        .set("x-actor", "tor")
         .send({
           transaction_ids: [3, "1", 2],
           recipient_id: "7",
@@ -512,7 +508,6 @@ describe("Splits Routes", () => {
         recipient_id: 7,
         mode: "full",
         note: "dinner",
-        actor: "tor",
       });
     });
 
@@ -712,35 +707,8 @@ describe("Splits Routes", () => {
         amount: 12,
         note: "partial",
         paid_at: "2026-03-20",
-        actor: null,
       });
       expect(res.body).toEqual(okEnvelope({ id: 5, split_id: 7, amount: 12 }));
-    });
-
-    it("propagates the caller-supplied actor header to the audit row", async () => {
-      splitService.getSplitById.mockResolvedValue(
-        partial({ id: 7, amount: 100 }),
-      );
-      splitService.getAlreadyPaid.mockResolvedValue(0);
-      splitService.addPayment.mockResolvedValue(
-        partial({
-          id: 5,
-          split_id: 7,
-          amount: 12,
-        }),
-      );
-
-      await api
-        .post(`${BASE}/7/pay`)
-        .set("x-actor", "import-review")
-        .send({ amount: 12 })
-        .expect(201);
-
-      expect(splitService.addPayment).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actor: "import-review",
-        }),
-      );
     });
 
     // Pins for the zod swap (ZOD-08): positive-finite check, raw forwarding.
@@ -851,7 +819,7 @@ describe("Splits Routes", () => {
       );
       const res = await api.post(`${BASE}/9/settle`).expect(200);
 
-      expect(splitService.settleSplit).toHaveBeenCalledWith(9, null);
+      expect(splitService.settleSplit).toHaveBeenCalledWith(9);
       expect(res.body).toEqual(okEnvelope({ id: 9, settled: true }));
     });
 
@@ -874,7 +842,7 @@ describe("Splits Routes", () => {
       );
       const res = await api.post(`${BASE}/owed/12/settle-all`).expect(200);
 
-      expect(splitService.settleAllByRecipient).toHaveBeenCalledWith(12, null);
+      expect(splitService.settleAllByRecipient).toHaveBeenCalledWith(12);
       expect(res.body).toEqual(okEnvelope({ settled_count: 2 }));
     });
 
@@ -894,7 +862,7 @@ describe("Splits Routes", () => {
 
       const res = await api.delete(`${BASE}/1`).expect(404);
       expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
-      expect(splitService.deleteSplit).toHaveBeenCalledWith(1, null);
+      expect(splitService.deleteSplit).toHaveBeenCalledWith(1);
     });
 
     it("throws NotFoundError when split cannot be deleted", async () => {
@@ -908,7 +876,7 @@ describe("Splits Routes", () => {
       splitService.deleteSplit.mockResolvedValue(true);
 
       const res = await api.delete(`${BASE}/1`).expect(204);
-      expect(splitService.deleteSplit).toHaveBeenCalledWith(1, null);
+      expect(splitService.deleteSplit).toHaveBeenCalledWith(1);
       expect(res.body).toEqual({});
     });
 

@@ -43,7 +43,7 @@ const PORTFOLIO_LOT_TYPES: PortfolioTxnType[] = ["buy", "gift", "sell"];
 
 /**
  * Return the complete account-wide lot event selection when it fits the
- * audited bulk re-tag boundary. Loading this on the server avoids the
+ * bulk re-tag boundary. Loading this on the server avoids the
  * investment and per-investment pagination caps in the frontend read model.
  */
 export async function previewAccountPortfolioLots(accountId: AccountId) {

@@ -55,14 +55,6 @@ test("native package resources use the prepared payload without path strings", (
   const { afterPack } = packageConfig(runtimeRoot);
   assert.equal(afterPack, path.join(__dirname, "finalize-native-package.js"));
   assert.ok(fs.existsSync(afterPack), "afterPack hook must be compiled");
-  assert.deepEqual(
-    packageConfig(runtimeRoot, { auditHelper: "/tmp/audit-keychain" })
-      .extraResources,
-    [
-      { from: runtimeRoot, to: "native-runtime" },
-      { from: "/tmp/audit-keychain", to: "audit-keychain" },
-    ],
-  );
 });
 
 test("Demo packages reuse the native payload and add only isolated seed resources", async () => {

@@ -1,12 +1,11 @@
 /**
  * Real-Postgres coverage for the checked reads (ADR-193) of the AI
- * repositories, the audit chain head and checkpoints, saved-analysis
- * versions, monitor notifications and the admin database stats. Each call
+ * repositories, saved-analysis versions, monitor notifications and the admin database stats. Each call
  * goes through its row schema, so a schema that is wrong for what pg really
  * returns fails here with a RowContractError.
  */
 import { bodyAt } from "./helpers/responseBody.ts";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import type { AiInvestigationRequest } from "@vision/types/aiResearch";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -27,13 +26,6 @@ import {
 import aiChatRepository from "../src/repositories/aiChatRepository.ts";
 import * as investigations from "../src/repositories/aiInvestigationRepository.ts";
 import * as documents from "../src/repositories/aiResearchDocumentRepository.ts";
-import {
-  appendAuditEvent,
-  readAuditHead,
-  readAuditSegment,
-  recordAuditCheckpoint,
-} from "../src/repositories/auditChainRepository.ts";
-import { verifyAuditHistory } from "../src/services/auditVerificationService.ts";
 import {
   createSavedAnalysis,
   deleteSavedAnalysis,
@@ -60,7 +52,6 @@ import {
 import adminRouter from "../src/routes/admin.ts";
 
 const HASH = "b".repeat(64);
-const STREAM = "test_row_contracts";
 
 const cleanup: { sql: string; params: unknown[] }[] = [];
 function onCleanup(sql: string, ...params: unknown[]) {
@@ -68,7 +59,7 @@ function onCleanup(sql: string, ...params: unknown[]) {
 }
 
 describe.skipIf(!hasTestDatabase())(
-  "AI, audit and analysis row contracts (real Postgres)",
+  "AI and analysis row contracts (real Postgres)",
   () => {
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
@@ -260,149 +251,6 @@ describe.skipIf(!hasTestDatabase())(
           (row) => row.documentId === created.id,
         ),
       ).toMatchObject({ embedding: { model: "synthetic" } });
-    });
-
-    // Audit history and checkpoints are append-only, so this test leaves its
-    // synthetic entries in the disposable test database.
-    it("reads the audit chain head, a segment and checkpoint receipts", async () => {
-      await appendAuditEvent({ stream: STREAM, event: "first" });
-      await appendAuditEvent({ stream: STREAM, event: "second" });
-      const head = await readAuditHead();
-      expect(head.sequence).toBeGreaterThanOrEqual(2);
-      expect(head.updatedAt).toBeInstanceOf(Date);
-      const [previous] = await readAuditSegment({
-        afterSequence: head.sequence - 2,
-        limit: 1,
-      });
-      expect(previous!.sequence).toBe(head.sequence - 1);
-
-      for (const [sequence, headHash] of [
-        [head.sequence, head.hash],
-        [previous!.sequence, previous!.hash],
-      ] as const) {
-        const receipt = {
-          sequence,
-          headHash,
-          anchorKind: STREAM,
-          receiptId: randomUUID(),
-          receiptHash: HASH,
-        };
-        const recorded = await recordAuditCheckpoint(receipt);
-        expect(recorded.createdAt).toBeInstanceOf(Date);
-        // Replaying the same receipt reads the existing checkpoint row.
-        expect(await recordAuditCheckpoint(receipt)).toEqual(recorded);
-      }
-    });
-
-    // The rows below mirror what dbEditor, splitService and the portfolio
-    // retag service write; the domain audit tables are append-only too.
-    it("verifies chain entries against each linked domain audit row", async () => {
-      const pool = getTestPool()!;
-      const digest = (values: unknown[]) =>
-        createHash("sha256").update(JSON.stringify(values)).digest("hex");
-      const occurredAt = `to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`;
-
-      const editor = (
-        await pool.query(
-          `INSERT INTO db_editor_audit (table_name, op, pk_json, before_json, after_json, statement)
-           VALUES ('categories', 'update', '{"id": 1}', NULL, '{"detail": "x"}', 'UPDATE synthetic')
-           RETURNING id, pk_json::text AS pk_text, before_json::text AS before_text,
-                     after_json::text AS after_text, statement, ${occurredAt}`,
-        )
-      ).rows[0];
-      await appendAuditEvent({
-        stream: "db_editor",
-        event: "update",
-        auditRowId: String(editor.id),
-        table: "categories",
-        occurred_at: editor.occurred_at,
-        auditDigest: digest([
-          "categories",
-          "update",
-          editor.pk_text,
-          editor.before_text,
-          editor.after_text,
-          editor.statement,
-          editor.occurred_at,
-        ]),
-      });
-
-      const split = (
-        await pool.query(
-          `INSERT INTO split_audit (split_id, action, actor, payload)
-           VALUES (NULL, 'delete', NULL, '{"amount": "1.00"}')
-           RETURNING id, payload::text AS payload_text, ${occurredAt}`,
-        )
-      ).rows[0];
-      await appendAuditEvent({
-        stream: "split",
-        event: "delete",
-        auditRowId: String(split.id),
-        splitId: null,
-        actor: null,
-        occurred_at: split.occurred_at,
-        auditDigest: digest([
-          null,
-          "delete",
-          null,
-          split.payload_text,
-          split.occurred_at,
-        ]),
-      });
-
-      const retag = (
-        await pool.query(
-          `INSERT INTO portfolio_retag_audit
-             (idempotency_key, request_fingerprint, from_account_id, to_account_id,
-              transaction_ids, previous_assignments, selected_count, changed_count)
-           VALUES ($1, $2, NULL, 7, '[1]', '[{"transaction_id": 1, "account_id": null}]', 1, 1)
-           RETURNING id, ${occurredAt}, idempotency_key, request_fingerprint,
-                     from_account_id, to_account_id, transaction_ids,
-                     previous_assignments, selected_count, changed_count`,
-          [randomUUID(), HASH],
-        )
-      ).rows[0];
-      await appendAuditEvent({
-        stream: "portfolio_retag",
-        event: "receipt_created",
-        receipt_id: String(retag.id),
-        occurred_at: retag.occurred_at,
-        idempotency_key: retag.idempotency_key,
-        request_fingerprint: retag.request_fingerprint,
-        from_account_id: retag.from_account_id,
-        to_account_id: retag.to_account_id,
-        transaction_ids: retag.transaction_ids,
-        previous_assignments: retag.previous_assignments,
-        selected_count: retag.selected_count,
-        changed_count: retag.changed_count,
-      });
-
-      // Another suite in the same database may have pruned the chain's
-      // prefix; trust that boundary so the walk still reaches these entries.
-      const head = await readAuditHead();
-      const [earliest] = await readAuditSegment({ afterSequence: 0, limit: 1 });
-      const retention =
-        earliest && earliest.sequence > 1
-          ? {
-              through: earliest.sequence - 1,
-              hash: earliest.previousHash,
-              domainMax: { dbEditor: 0, split: 0, retag: 0 },
-              migrationHeads: (
-                await pool.query(
-                  "SELECT name FROM public.kysely_migration ORDER BY name DESC LIMIT 1",
-                )
-              ).rows.map((row: { name: string }) => row.name),
-            }
-          : undefined;
-      expect(
-        await verifyAuditHistory({
-          trustedCheckpoint: {
-            sequence: head.sequence,
-            hash: head.hash,
-            retention,
-          },
-        }),
-      ).toMatchObject({ status: "verified" });
     });
 
     it("reads monitor lists and marks a notification read", async () => {

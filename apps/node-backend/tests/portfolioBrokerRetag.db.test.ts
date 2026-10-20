@@ -1,4 +1,4 @@
-/** Real-PostgreSQL atomicity, idempotency, and lock coverage for WP-C3. */
+/** Real-PostgreSQL atomicity, replay, and lock coverage for WP-C3. */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import {
@@ -23,8 +23,6 @@ const uuid = (suffix: string) =>
 let fixture: Awaited<ReturnType<typeof seed>>;
 
 async function wipe() {
-  // Audit receipts are linked from the immutable chain. Preserve them so a
-  // later verifier can still resolve every signed domain event.
   await pool.query("DELETE FROM portfolio_transactions");
   await pool.query("DELETE FROM investments WHERE name LIKE 'WPC3 %'");
   await pool.query("DELETE FROM accounts WHERE name LIKE 'WPC3 %'");
@@ -112,24 +110,77 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     await closeTestPool();
   });
 
-  it("updates the complete set and durably replays its receipt", async () => {
-    const first = await retagPortfolioTransactions(request());
-    const replay = await retagPortfolioTransactions(request());
+  async function accountIds() {
     const rows = await pool.query(
-      "SELECT account_id FROM portfolio_transactions ORDER BY id",
+      "SELECT account_id, xmin::text AS version FROM portfolio_transactions ORDER BY id",
     );
-    const audits = await pool.query(
-      "SELECT count(*)::int AS count FROM portfolio_retag_audit WHERE idempotency_key = $1",
-      [uuid("1")],
-    );
+    return rows.rows.map((row) => ({
+      account: row.account_id === null ? null : Number(row.account_id),
+      version: row.version as string,
+    }));
+  }
 
-    expect(rows.rows.map((row) => Number(row.account_id))).toEqual([
+  it("applies a repeated request once and reports the repeat as a replay", async () => {
+    const first = await retagPortfolioTransactions(request());
+    const afterFirst = await accountIds();
+    const replay = await retagPortfolioTransactions(request());
+    const afterReplay = await accountIds();
+
+    expect(afterFirst.map((row) => row.account)).toEqual([
       fixture.destination,
       fixture.destination,
     ]);
-    expect(first.replayed).toBe(false);
-    expect(replay).toEqual({ ...first, replayed: true });
-    expect(audits.rows[0].count).toBe(1);
+    // The replay wrote nothing: the row versions are unchanged.
+    expect(afterReplay).toEqual(afterFirst);
+    expect(first).toMatchObject({
+      replayed: false,
+      selected_count: 2,
+      changed_count: 2,
+      previous_assignments: fixture.transactionIds.map((id) => ({
+        transaction_id: id,
+        account_id: fixture.source,
+      })),
+    });
+    expect(replay).toMatchObject({
+      replayed: true,
+      selected_count: 2,
+      changed_count: 0,
+      idempotency_key: uuid("1"),
+      previous_assignments: fixture.transactionIds.map((id) => ({
+        transaction_id: id,
+        account_id: fixture.destination,
+      })),
+    });
+  });
+
+  it("applies concurrent identical requests once", async () => {
+    const results = await Promise.all([
+      retagPortfolioTransactions(request(uuid("6"))),
+      retagPortfolioTransactions(request(uuid("6"))),
+    ]);
+    expect(
+      results.map((result) => [result.replayed, result.changed_count]).sort(),
+    ).toEqual([
+      [false, 2],
+      [true, 0],
+    ]);
+    expect((await accountIds()).map((row) => row.account)).toEqual([
+      fixture.destination,
+      fixture.destination,
+    ]);
+  });
+
+  it("still rejects a stale source once the rows have moved elsewhere", async () => {
+    await retagPortfolioTransactions(request());
+    const error = await retagPortfolioTransactions({
+      ...request(uuid("7")),
+      to_account_id: null,
+    }).catch((err: unknown) => err);
+    expect(error).toMatchObject({ code: "CONFLICT" });
+    expect((await accountIds()).map((row) => row.account)).toEqual([
+      fixture.destination,
+      fixture.destination,
+    ]);
   });
 
   it("rolls back when moving only the buy would oversell the source", async () => {
@@ -163,11 +214,14 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     expect((rejected as PromiseRejectedResult).reason).toMatchObject({
       code: "CONFLICT",
     });
-    const audits = await pool.query(
-      "SELECT count(*)::int AS count FROM portfolio_retag_audit WHERE idempotency_key = ANY($1::uuid[])",
-      [[uuid("3"), uuid("4")]],
-    );
-    expect(audits.rows[0].count).toBe(1);
+    const winner = (
+      outcomes.find((outcome) => outcome.status === "fulfilled") as
+        PromiseFulfilledResult<{ to_account_id: number | null }>
+    ).value;
+    expect((await accountIds()).map((row) => row.account)).toEqual([
+      winner.to_account_id,
+      winner.to_account_id,
+    ]);
   });
 
   it("rechecks destination eligibility after a concurrent account close", async () => {

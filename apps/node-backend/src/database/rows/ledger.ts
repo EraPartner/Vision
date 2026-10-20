@@ -226,14 +226,3 @@ export const splitPaymentLockRowSchema = transactionSplitRowSchema
 export const splitPaidRowSchema = z
   .object({ paid: pgNumeric })
   .describe("split paid row");
-
-/** `writeAudit`'s RETURNING row: `split_audit.id` is BIGSERIAL. */
-export const splitAuditRowSchema = z
-  .object({
-    id: pgBigint,
-    payload_text: z.string().nullable(),
-    /** to_char of the NOT NULL created_at. */
-    occurred_at: z.string(),
-  })
-  .describe("split audit row");
-export type SplitAuditRow = z.output<typeof splitAuditRowSchema>;

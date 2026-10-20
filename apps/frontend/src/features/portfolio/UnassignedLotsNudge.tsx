@@ -9,6 +9,7 @@ import {
     useInvestmentMutations,
 } from "@/hooks/portfolio/useInvestments";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { retagMovedCount } from "@/lib/api/portfolio";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { PortfolioTransaction } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -128,7 +129,7 @@ export function UnassignedLotsNudge({
         idempotencyRef.current = undefined;
         toast.success(
             t("portfolio.assignLotsSuccess", {
-                count: String(receipt.changed_count),
+                count: String(retagMovedCount(receipt)),
             }),
         );
     };

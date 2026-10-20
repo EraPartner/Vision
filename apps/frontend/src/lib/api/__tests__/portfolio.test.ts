@@ -332,7 +332,6 @@ describe("portfolio API client", () => {
                 async ({ request }) => {
                     body = await request.json();
                     return ok({
-                        receipt_id: 9,
                         idempotency_key: "receipt-key",
                         from_account_id: null,
                         to_account_id: 7,
@@ -343,7 +342,6 @@ describe("portfolio API client", () => {
                         ],
                         selected_count: 2,
                         changed_count: 2,
-                        created_at: "2025-01-01T00:00:00.000Z",
                         replayed: false,
                     });
                 },

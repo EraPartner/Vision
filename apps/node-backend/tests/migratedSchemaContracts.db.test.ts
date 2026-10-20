@@ -48,6 +48,24 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
     await closeTestPool();
   });
 
+  it("has no audit history tables or functions after migration 0004", async () => {
+    const relations = await pool!.query(
+      `SELECT c.relname FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public'
+          AND c.relname IN ('audit_chain_head', 'audit_chain_entries',
+            'audit_chain_checkpoints', 'db_editor_audit', 'split_audit',
+            'portfolio_retag_audit')`,
+    );
+    expect(relations.rows).toEqual([]);
+    const functions = await pool!.query(
+      `SELECT p.proname FROM pg_proc p
+         JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public' AND p.proname LIKE 'audit_chain%'`,
+    );
+    expect(functions.rows).toEqual([]);
+  });
+
   it("keeps per-currency statement balances constrained and owned by their account", async () => {
     const constraints = await pool!.query(
       `SELECT conname FROM pg_constraint
@@ -174,7 +192,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
     ]);
   });
 
-  it("maintains updated_at with the shared trigger on every audited mutable table", async () => {
+  it("maintains updated_at with the shared trigger on every listed mutable table", async () => {
     const tables = [
       "exchange_rates",
       "user_settings",
@@ -339,7 +357,7 @@ describe.skipIf(!hasTestDatabase())("migrated schema contracts", () => {
          JOIN pg_namespace vn ON vn.oid = v.relnamespace
          JOIN pg_class t ON t.oid = d.refobjid
         WHERE vn.nspname = 'vision_analysis'
-          AND t.relname IN ('provider_api_keys', 'db_editor_audit')`,
+          AND t.relname = 'provider_api_keys'`,
     );
     expect(forbiddenTables.rows).toEqual([]);
     const forbiddenColumns = await pool!.query(

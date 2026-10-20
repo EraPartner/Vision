@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import { spawnSync } from "node:child_process";
-import type { SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import { Arch, Platform, build } from "electron-builder";
 
 import { appRoot } from "../paths";
@@ -36,11 +33,6 @@ export interface BuildNativePackageOptions {
     nativeRuntimeRoot: string;
   }) => Promise<{ outputRoot: string }>;
   builder?: typeof build;
-  compiler?: (
-    executable: string,
-    args: string[],
-    options: SpawnSyncOptionsWithStringEncoding,
-  ) => { error?: Error | undefined; status: number | null; stderr: string };
 }
 
 const electronRoot = appRoot;
@@ -65,10 +57,8 @@ export function nativeRuntimeRoot(): string {
 export function packageResources(
   runtimeRoot: string,
   demoSeedRoot: string | undefined = undefined,
-  auditHelper: string | undefined = undefined,
 ): PackageResource[] {
   const resources = [{ from: runtimeRoot, to: "native-runtime" }];
-  if (auditHelper) resources.push({ from: auditHelper, to: "audit-keychain" });
   if (demoSeedRoot) {
     resources.push({ from: demoSeedRoot, to: "demo-seed" });
   }
@@ -77,17 +67,11 @@ export function packageResources(
 
 export function packageConfig(
   runtimeRoot: string,
-  {
-    demoSeedRoot = undefined,
-    auditHelper = undefined,
-  }: {
-    demoSeedRoot?: string | undefined;
-    auditHelper?: string | undefined;
-  } = {},
+  { demoSeedRoot = undefined }: { demoSeedRoot?: string | undefined } = {},
 ): NativePackageConfig {
   return {
     ...(demoSeedRoot ? { extends: "./electron-builder-demo.json" } : {}),
-    extraResources: packageResources(runtimeRoot, demoSeedRoot, auditHelper),
+    extraResources: packageResources(runtimeRoot, demoSeedRoot),
     // The hook is compiled next to this module (out/scripts).
     afterPack: path.join(__dirname, "finalize-native-package.js"),
   };
@@ -111,7 +95,6 @@ export async function main(
   const prepare = options.prepare || prepareNativeRuntime;
   const prepareDemo = options.prepareDemo || buildDemoSeed;
   const builder = options.builder || build;
-  const compiler = options.compiler || spawnSync;
   prepare();
   const runtimeRoot = nativeRuntimeRoot();
   fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);
@@ -127,39 +110,12 @@ export async function main(
     args.directoryOnly || args.demo ? ["dir"] : ["dmg", "zip"],
     Arch.arm64,
   );
-  const helperDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "vision-audit-helper-"),
-  );
-  try {
-    const auditHelper = path.join(helperDir, "audit-keychain");
-    const result = compiler(
-      "/usr/bin/xcrun",
-      [
-        "swiftc",
-        path.join(electronRoot, "audit-keychain.swift"),
-        "-o",
-        auditHelper,
-      ],
-      { encoding: "utf8" },
-    );
-    if (result.error || result.status !== 0) {
-      throw new Error(
-        `Audit Keychain helper build failed: ${result.stderr || result.error}`,
-      );
-    }
-    fs.chmodSync(auditHelper, 0o755);
-    return await builder({
-      projectDir: electronRoot,
-      targets,
-      publish: "never",
-      config: packageConfig(runtimeRoot, {
-        demoSeedRoot: demoSeed?.outputRoot,
-        auditHelper,
-      }),
-    });
-  } finally {
-    fs.rmSync(helperDir, { recursive: true, force: true });
-  }
+  return await builder({
+    projectDir: electronRoot,
+    targets,
+    publish: "never",
+    config: packageConfig(runtimeRoot, { demoSeedRoot: demoSeed?.outputRoot }),
+  });
 }
 
 if (require.main === module) {

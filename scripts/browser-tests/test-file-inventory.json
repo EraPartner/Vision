@@ -2,16 +2,16 @@
   "generatedOn": "2026-10-20",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 935,
+  "totalFiles": 927,
   "counts": {
-    "simulated-dom": 260,
-    "unit-script-or-contract-needs-review": 309,
+    "simulated-dom": 259,
+    "unit-script-or-contract-needs-review": 305,
     "property-test": 12,
-    "mocked-unit-or-service": 200,
+    "mocked-unit-or-service": 199,
     "live-http-contract": 2,
     "source-or-file-contract": 17,
-    "database-test": 102,
-    "native-runtime-or-filesystem-test": 33
+    "database-test": 101,
+    "native-runtime-or-filesystem-test": 32
   },
   "identicalSourceGroups": [],
   "files": [
@@ -1761,14 +1761,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/pages/admin/AuditHistoryCard.test.tsx",
-      "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
       "path": "apps/frontend/src/pages/portfolio/RebalancePage.test.tsx",
       "inferredBoundary": "simulated-dom",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2298,34 +2290,6 @@
     {
       "path": "apps/node-backend/tests/attachmentUploadMiddleware.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/auditAdversarial.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/auditChainCore.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/auditChainRepository.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/auditReadService.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/auditVerificationService.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -4053,11 +4017,6 @@
       ]
     },
     {
-      "path": "apps/node-backend/tests/routes/internalAudit.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/routes/investments.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise",
@@ -4808,11 +4767,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "packaging/electron/audit-viewer.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "packaging/electron/backup/encrypted-file.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4847,6 +4801,11 @@
       "reviewFlags": [
         "source-assertion-review"
       ]
+    },
+    {
+      "path": "packaging/electron/legacy-audit-cleanup.test.ts",
+      "inferredBoundary": "native-runtime-or-filesystem-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "packaging/electron/native-ui.contract.test.ts",
@@ -4906,11 +4865,6 @@
     },
     {
       "path": "packaging/electron/runtime/runtime-manifest.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/scripts/audit-anchor.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

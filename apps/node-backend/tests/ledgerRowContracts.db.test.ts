@@ -185,7 +185,7 @@ describe.skipIf(!hasTestDatabase())("ledger row contracts (real DB)", () => {
     expect(planned?.tags.map((tag) => tag.slug)).toEqual(["ledger-contract-a"]);
   });
 
-  it("creates a split batch through the checked totals, insert and audit rows", async () => {
+  it("creates a split batch through the checked totals and insert rows", async () => {
     await seed();
     const splits = await splitService.createSplitsBatchAtomic({
       transaction_id: asTransactionId(txIds[0]!),
