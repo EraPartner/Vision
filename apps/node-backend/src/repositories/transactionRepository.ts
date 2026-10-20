@@ -323,47 +323,59 @@ function pageCte(
 
 /**
  * Carry stamped balances over the same filtered rows used by the list, emitting
- * `ledger_balances(id, running_balance)` for the rows of the `page` CTE.
+ * `ledger_balances(id, running_balance)`. With `forPage`, only the rows of the
+ * `page` CTE (see pageCte) are emitted; otherwise every filtered row is, which
+ * suits a selective filter whose matches are cheaper to balance than to page
+ * twice.
  */
 function runningBalanceCtes(
   where: RawBuilder<unknown>,
   joins: RawBuilder<unknown>,
+  { forPage }: { forPage: boolean },
 ): RawBuilder<unknown> {
   // Same identity as accountBalanceSql's daily series: cumulative amount plus
   // the latest stamp's (balance - cumulative amount). A zero-amount opening
   // row resets the balance, and later unstamped rows advance it normally.
   //
-  // Only the partitions the page touches are scanned; a row's balance depends
-  // on its own (account, currency) partition alone. One window pass yields the
+  // For a page, only the partitions it touches are scanned; a row's balance
+  // depends on its own (account, currency) partition alone. One window pass yields the
   // running sum and, as a running count of stamps, the group each row shares
-  // with the latest stamp at or before it. A stamp opens its group, so the
-  // page rows find their stamp by an equality join instead of a second window
-  // pass and re-sort over the whole ledger. Group 0 has no stamp.
+  // with the latest stamp at or before it (group 0 has none). A stamp opens its
+  // group and is its only stamped row, so MAX over the group is that stamp's
+  // (balance - cumulative). Page rows are picked out only after both windows
+  // ran over the whole partition.
   return sql`
-    ledger AS MATERIALIZED (
+    ledger AS (
       SELECT t.id, t.account_id, COALESCE(t.currency, 'EUR') AS currency, t.balance,
              SUM(t.amount) OVER ledger_order AS cumulative,
-             COUNT(t.balance) OVER ledger_order AS stamp_group
+             COUNT(t.balance) OVER ledger_order AS stamp_group,
+             ${forPage ? sql`t.id IN (SELECT p.id FROM page p)` : sql`true`} AS on_page
       FROM transactions t
       ${joins}
       WHERE ${where}
-        AND (COALESCE(t.account_id, -1), COALESCE(t.currency, 'EUR')) IN (
+      ${
+        forPage
+          ? sql`AND (COALESCE(t.account_id, -1), COALESCE(t.currency, 'EUR')) IN (
           SELECT COALESCE(p.account_id, -1), p.currency FROM page p
-        )
+        )`
+          : sql``
+      }
       WINDOW ledger_order AS (
         PARTITION BY t.account_id, COALESCE(t.currency, 'EUR')
         ORDER BY t.date ASC, ${bankChronologySql("t")} ASC, t.id ASC
       )
     ),
     ledger_balances AS (
-      SELECT l.id, l.cumulative + COALESCE(s.balance - s.cumulative, 0) AS running_balance
-      FROM page p
-      JOIN ledger l ON l.id = p.id
-      LEFT JOIN ledger s
-        ON s.balance IS NOT NULL
-       AND s.stamp_group = l.stamp_group
-       AND s.currency = l.currency
-       AND COALESCE(s.account_id, -1) = COALESCE(l.account_id, -1)
+      SELECT id, running_balance
+      FROM (
+        SELECT id, on_page,
+               cumulative + COALESCE(
+                 MAX(balance - cumulative) OVER (PARTITION BY account_id, currency, stamp_group),
+                 0
+               ) AS running_balance
+        FROM ledger
+      ) carried
+      WHERE on_page
     )`;
 }
 
@@ -468,7 +480,7 @@ function enrichedPage(
   // whose order is total because it ends with t.id.
   return sql`
       WITH ${pageCte(where, TRANSACTION_JOINS, orderBy, limit, offset)},
-      ${runningBalanceCtes(where, TRANSACTION_JOINS)}
+      ${runningBalanceCtes(where, TRANSACTION_JOINS, { forPage: true })}
       ${projection}, lb.running_balance
       FROM page
       JOIN transactions t ON t.id = page.id
@@ -778,42 +790,26 @@ export const transactionRepository = {
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
-    const uncategorisedProjection = sql`
-        SELECT t.*,
-               ${ACCOUNT_LABEL_SQL},
-               r.name AS recipient_name,
-               NULL AS category_name${runningBalanceCol},
-               ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order`;
-    // With balances the page is selected first (see enrichedPage).
-    const uncategorisedRows = includeBalance
-      ? sql`
-        ${uncategorisedProjection}
-        FROM page
-        JOIN transactions t ON t.id = page.id
-        ${uncategorisedJoins}
-        JOIN ledger_balances lb ON lb.id = t.id`
-      : sql`
-        ${uncategorisedProjection}
-        FROM transactions t
-        ${uncategorisedJoins}
-        WHERE ${uncategorisedWhere}
-        ORDER BY ${orderBy}
-        LIMIT ${limit} OFFSET ${offset}`;
-
     const pageQuery = sql`
-      WITH ${
-        includeBalance
-          ? sql`${pageCte(uncategorisedWhere, uncategorisedJoins, orderBy, limit, offset)},
-      ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},`
-          : sql``
-      } total_cte AS (
+      ${includeBalance ? sql`WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins, { forPage: false })},` : sql`WITH`} total_cte AS (
         SELECT count(*)::int AS total
         FROM transactions t
         ${COUNT_JOINS}
         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
         WHERE ${uncategorisedWhere}
       ),
-      uncategorised_rows AS (${uncategorisedRows}
+      uncategorised_rows AS (
+        SELECT t.*,
+               ${ACCOUNT_LABEL_SQL},
+               r.name AS recipient_name,
+               NULL AS category_name${runningBalanceCol},
+               ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
+        FROM transactions t
+        ${uncategorisedJoins}
+        ${includeBalance ? sql`JOIN ledger_balances lb ON lb.id = t.id` : sql``}
+        WHERE ${uncategorisedWhere}
+        ORDER BY ${orderBy}
+        LIMIT ${limit} OFFSET ${offset}
       )
       SELECT u.*,
              tc.total AS total_count
