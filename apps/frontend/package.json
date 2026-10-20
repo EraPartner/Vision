@@ -14,8 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run --exclude src/test/live-contracts/live-contracts.test.ts",
-    "test:coverage": "vitest run --coverage --exclude src/test/live-contracts/live-contracts.test.ts",
-    "test:mutation": "stryker run"
+    "test:coverage": "vitest run --coverage --exclude src/test/live-contracts/live-contracts.test.ts"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.3.0",
@@ -78,9 +77,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@stryker-mutator/core": "^10.0.0",
-    "@stryker-mutator/typescript-checker": "^10.0.0",
-    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/react-query-devtools": "^5.104.2",
     "@testing-library/jest-dom": "^7.0.1",

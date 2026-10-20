@@ -123,7 +123,6 @@ aliases:
 | Fix an import-boundary or circular-import error                         | `bun run lint:deps`                                                                               | [[docs/reference/code-patterns#static-checks\|Static checks]] |
 | Fix an unused-export or dead-file error (`@public` tag)                 | `bun run lint:dead`                                                                               | [[docs/adr/225-static-checks-for-agents\|ADR-225]]            |
 | Run all tests                                                           | [[docs/reference/scripts\|Scripts Reference]]                                                     | `bun run test`                                                |
-| Run mutation tests                                                      | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation`            |
 | Write a unit test                                                       | [[docs/testing/testing\|Testing Documentation]]                                                   | [[docs/reference/code-patterns\|Code Patterns]]               |
 | Write an integration test                                               | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]]                 | [[docs/testing/test-inventory\|Test Inventory]]               |
 | Check test coverage (CI enforces it only on pushes to `main`)           | `bun run test:coverage`                                                                           | [[docs/reference/scripts\|Scripts Reference]]                 |
@@ -163,7 +162,6 @@ bun run lint             # Frontend ESLint + lint:deps (import boundaries) + lin
 bun run lint:backend     # Backend ESLint, including the type-aware rules
 bun run test             # Backend suite without a database; DB cases self-skip
 bun run test:watch       # Backend watch mode with disposable PostgreSQL 18
-bun run --filter 'vision-frontend' test:mutation    # Run mutation tests (Stryker; frontend workspace only)
 
 # Building
 bun run build            # Production build

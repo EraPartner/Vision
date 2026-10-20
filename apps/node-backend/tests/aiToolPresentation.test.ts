@@ -27,7 +27,7 @@ import { aiChatRepository } from "../src/repositories/aiChatRepository.ts";
 import { dispatchTool } from "../src/services/aiChat/tools/index.ts";
 import {
   getConversationWithMessages,
-  presentAiToolMessage,
+  __presentAiToolMessage,
   runChatTurn,
 } from "../src/services/aiChatService.ts";
 import { partial } from "./helpers/partial.ts";
@@ -94,7 +94,7 @@ describe("Outgoing AI tool presentation preserves stored data and prompt contrac
       meta: { renderAs: "pie" },
     };
     const row = { id: "tool", toolResult: result };
-    const presented = presentAiToolMessage(row);
+    const presented = __presentAiToolMessage(row);
     expect(presented.toolResult).toBe(result);
     expect(presented.toolPresentation).toMatchObject({
       columns: ["date", "value", "amount"],
@@ -113,7 +113,7 @@ describe("Outgoing AI tool presentation preserves stored data and prompt contrac
     });
     expect(result.data[0]?.value).toBe(Infinity);
     expect("toolPresentation" in row).toBe(false);
-    expect(presentAiToolMessage({ id: "plain", toolResult: null })).toEqual({
+    expect(__presentAiToolMessage({ id: "plain", toolResult: null })).toEqual({
       id: "plain",
       toolResult: null,
     });
