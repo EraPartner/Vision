@@ -73,6 +73,9 @@ export function balanceProvenanceLateral({
       FROM transactions t2
       WHERE t2.account_id = a.id AND t2.is_active = true
         AND t2.date <= ${asOfDate}
+        -- Implied by the comparison below; this plain bound lets the
+        -- (account_id, date) index skip the rows before the anchor.
+        AND t2.date >= COALESCE((SELECT date FROM anchor), '-infinity'::date)
         AND (
           NOT EXISTS (SELECT 1 FROM anchor)
           OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (SELECT date, chronology, id FROM anchor)
@@ -160,6 +163,8 @@ export function computedBalanceByCurrencyLateral({
       WHERE t2.account_id = ${account} AND t2.is_active = true
         AND t2.date <= ${asOfDate}
         AND COALESCE(t2.currency, 'EUR') = ccy.currency
+        -- Implied by the comparison below; lets the date index skip pre-anchor rows.
+        AND t2.date >= COALESCE(anch.date, '-infinity'::date)
         AND (anch.date IS NULL OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (anch.date, anch.chronology, anch.id))
     ) dlt ON true
   ) ${sql.id(alias)} ON true
@@ -404,6 +409,8 @@ export function computedBalanceSeriesCtes({
       WHERE t.account_id = p.account_id AND t.is_active = true
         AND t.date < (SELECT first_day FROM bs_span)
         ${samePartition}
+        -- Implied by the comparison below; lets the date index skip pre-anchor rows.
+        AND t.date >= COALESCE(anch.date, '-infinity'::date)
         AND (anch.date IS NULL OR (t.date, ${bankChronologySql("t")}, t.id) > (anch.date, anch.chronology, anch.id))
     ) dlt ON true
     ${

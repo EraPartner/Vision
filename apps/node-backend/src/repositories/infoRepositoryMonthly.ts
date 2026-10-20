@@ -267,7 +267,7 @@ export async function getMonthlyFinancialSummary(
   // prepared-statement parameter (the Statistics range hit this as $1).
   const today = sql`${todayYmd}::date`;
   let rangeStart = allTime
-    ? sql`COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${today}))`
+    ? sql`COALESCE((SELECT date_trunc('month', MIN(date)) FROM transactions WHERE is_active = true), date_trunc('month', ${today}))`
     : sql`date_trunc('month', ${today} - interval '5 months')`;
   let rangeEnd = sql`date_trunc('month', ${today})`;
   const transactionFilters: RawBuilder<unknown>[] = [];
@@ -323,6 +323,7 @@ export async function getMonthlyFinancialSummary(
     daily AS (
       SELECT
         date,
+        date - (EXTRACT(DAY FROM date)::int - 1) AS month_start,
         currency,
         COUNT(*) AS cnt,
         COALESCE(SUM(amount) FILTER (WHERE amount >= 0), 0) AS income_amount,
@@ -337,8 +338,9 @@ export async function getMonthlyFinancialSummary(
       (m.month_start + interval '1 month' - interval '1 day')::date AS period_end,
       d.date, d.currency, d.cnt, d.income_amount, d.spending_amount
     FROM months m
-    LEFT JOIN daily d ON d.date >= m.month_start
-      AND d.date < m.month_start + interval '1 month'
+    -- An equality on the month (not a date range) lets the planner hash the
+    -- join; the range form compared every day with every month.
+    LEFT JOIN daily d ON d.month_start = m.month_start
     ORDER BY m.month_start, d.date
   `;
   logger.debug("Monthly summary SQL executing", {
