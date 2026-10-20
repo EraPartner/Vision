@@ -41,7 +41,6 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 | [[docs/diagrams/backup-aead-encryption.puml            | Backup AEAD Encryption]]    | `backup-aead-encryption.puml`            | AES-256-GCM v2 bundle create + restore                                            | Understanding backup format             |
 | [[docs/diagrams/dev-observability-flow.puml            | Dev Observability]]         | `dev-observability-flow.puml`            | API event bus → ring buffer → Inspector                                           | Frontend internals                      |
 | [[docs/diagrams/commitment-aware-cash-flow.puml        | Commitment-aware Cash]]     | `commitment-aware-cash-flow.puml`        | Reserve floor, planned bills, and rebalance cap                                   | Understanding cash planning             |
-| [[docs/diagrams/life-scenario-flow.puml                | Life Scenario]]             | `life-scenario-flow.puml`                | Saved assumptions and paired portfolio forecasts                                  | Understanding scenario comparison       |
 | [[docs/diagrams/electron-audit-verification-flow.puml  | Electron Audit Receipt]]    | `electron-audit-verification-flow.puml`  | Signed local witness, private bridge, live closure, and restore gate              | Understanding native audit recovery     |
 
 ## Frontend Diagrams
@@ -83,7 +82,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A standalone HTML companion to these PlantUML diagrams. Journey view shows ordered handoffs; Architecture map shows the full system. Select a learning path, step through a flow, and expand payload/source details when needed.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 75 components / 45 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, and planned-payment execution. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
+- **Coverage:** 75 components / 44 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, and planned-payment execution. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
 - **Start here:** [[docs/guides/visual-learning|Understand Vision Visually]] has five learning paths and compact conceptual diagrams.
 - **Deep links:** use `flow-visualizer.html#flow-id`, for example [planned payment completion](../flow-visualizer.html#planned-payment-completion).
 - **Extending:** edit the embedded JSON (schema documented inline), then run `node --test scripts/tests/flow-visualizer.test.ts`.

@@ -1298,6 +1298,10 @@ Migration 0106 rewrites the `belgian_tax_profile_snapshot_meta_v1` value in plac
 upgrade atomically. Downgrade reconstructs the alias from the canonical value. See
 [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 
+Migration 0003 (`db/migrations/0003_remove_life_scenarios.sql`) deletes the `life_scenarios` row
+that held saved Life scenario definitions. Its rollback is a no-op; the deleted row is not
+restored. See [[docs/adr/230-remove-life-scenario|ADR-230]].
+
 | Field   | Type  | Constraints | Description   |
 | ------- | ----- | ----------- | ------------- |
 | `key`   | TEXT  | PK          | Setting key   |

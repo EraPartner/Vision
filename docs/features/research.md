@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - url-state
   - feature
@@ -111,8 +111,6 @@ historical and forward-looking percentages and announces both proportions as its
 value. Keyboard adjustments update the same blend used by the forecast request.
 
 ## API Surface
-
-The Forecast page also supports saved three-month income interruption scenarios. The user enters a baseline monthly surplus, planned portfolio contribution, and monthly income loss. Vision limits the first three months of scenario contributions to the nonnegative reduced surplus, then resumes the baseline contribution. An optional nominal savings goal month compares target probabilities at that month using the same simulation seed for both paths. The UI refuses to attribute an approximate median difference to income interruption if reported market inputs change between the two forecast requests. Scenario definitions are stored under `life_scenarios` in [[docs/api/settings|Settings API]]; results remain on demand. The values are assumptions, not a budget guarantee or a real-value inflation adjustment. See [[docs/api/research|Research API]] for the contribution schedule and goal-month contract and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]] for the request path.
 
 Nineteen endpoints at `/api/research`, all under `marketRateLimiter`: six GET data endpoints (search/quote/chart/fundamentals/analyst/news), two analytics endpoints (scorecard, portfolio-forecast), two macro endpoints (macro/search, macro/series — ADR-082), five symbol-mapping endpoints (`GET/POST/DELETE /mappings`, `POST /mappings/resolve`, `POST /mappings/audit`), three provider-key Settings endpoints, and one stateless submitted-data presentation endpoint. Full endpoint reference: [[docs/api/research|Research API]].
 
@@ -342,6 +340,7 @@ surfaces remain consistent with the workspace.
 
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — architecture decision for the macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, ADR-082)
 - [[docs/adr/081-research-analytics-forecasting|ADR-081]] — architecture decision for Pillars B/C/D deepening (portfolio projection engine, scorecard, chart builder)
+- [[docs/adr/230-remove-life-scenario|ADR-230]] — removal of the Life scenario panel and its saved scenarios
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — foundation ADR (aggregation layer, capability map, quota governor, symbol mapping, Pillars A/B/D initial)
 - [[docs/api/research|Research API]] — endpoint reference (all 19 endpoints)
 - [[docs/integrations/price-providers|Price Providers Integration]] — provider registry and health service this layer builds on
@@ -360,15 +359,11 @@ Chart Builder places layout and range controls first, then the chart, followed b
 
 ## Task-focused guidance and hierarchy
 
-Chart Builder explains how to start with a symbol, compare series, and choose a range. Economic-source details are expandable; indicator guidance explains SMA, EMA, and Bollinger bands. The chart reminds users to check assigned axes before comparing values. Life Scenario separates naming, the three monthly amounts, and a visible optional-goal group. Compare is the first, primary action; Save is secondary. Median-result interpretation and all existing assumptions remain visible.
+Chart Builder explains how to start with a symbol, compare series, and choose a range. Economic-source details are expandable; indicator guidance explains SMA, EMA, and Bollinger bands. The chart reminds users to check assigned axes before comparing values.
 
 ## Clarity and recovery feedback
 
 Chart Builder shows whether the current layout state was saved on this device, is being saved, or failed to persist. The status reflects the existing local-storage write result. Forecast uses short month/year ticks; full dates remain in tooltips.
-
-### Saved scenario input and recovery
-
-The saved-scenario picker is a select with a _New…_ entry, and deleting a saved scenario acts at once with an Undo toast. Life Scenario restores saved amounts using the selected number format, so decimal values remain editable and retain their meaning when compared again. If saved definitions cannot load, Retry preserves the current draft. Save stays unavailable until loading succeeds, preventing an incomplete saved list from being overwritten.
 
 ### Comparison history context
 
@@ -402,15 +397,8 @@ existing callers and lazy loading. API clients can submit already-fetched values
 preserves source order, null warmups, currency conventions and provider quota; the endpoint does
 not fetch, persist, or invent provenance.
 
-## Shared Life Scenario calculations
+## Removed Life scenario panel
 
-`packages/shared-utils/src/research/forecastScenario.ts` now supplies the existing web Life Scenario
-preparation, five-field comparability check and median difference. API clients can use the two
-additive Life Scenario kinds of [[docs/api/research#POST /api/research/presentation|the same stateless
-presentation API]], then make the same two existing seeded forecasts. Scenario inputs override
-immediate main contribution/goal/seed fields; other assumptions and the fixed three-month schedule
-retain the source behavior. The service performs no simulation, provider request or settings write.
-Missing values remain unavailable, and a numerically overflowed forecast retains the existing
-client error boundary. Names, local goal-month resolution, fresh unsaved IDs, saved IDs and result
-signature guards remain with the caller. Saved definitions still use the existing `life_scenarios`
-Settings contract, with its 50-record limit. The new kinds add no API operation or migration.
+[[docs/adr/230-remove-life-scenario|ADR-230]] removed the Life scenario panel that compared a
+three-month income interruption against the baseline forecast. The forecast request keeps its
+`monthly_contribution_schedule` and `goal_month` fields.

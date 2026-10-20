@@ -147,49 +147,13 @@ describe("Settings storage and retrieval", () => {
   });
 });
 
-describe("life_scenarios setting", () => {
+describe("removed life_scenarios setting (ADR-230)", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const scenario = {
-    id: "interruption-1",
-    name: "Income interruption",
-    kind: "income_interruption",
-    interruptionMonths: 3,
-    monthlySurplus: 800,
-    monthlyIncomeLoss: 500,
-    monthlyContribution: 600,
-    goalValue: 25000,
-    goalDate: "2028-12-01",
-  };
-
-  it("saves a bounded scenario with a paired dated goal", async () => {
-    query.mockResolvedValue({ rowCount: 1 });
-    const response = await api
-      .put(`${BASE}/life_scenarios`)
-      .send(singleBody({ value: [scenario] }))
-      .expect(200);
-    expect(response.body).toEqual(
-      okEnvelope({
-        key: "life_scenarios",
-        value: [scenario],
-        expected: { exists: true, value: [scenario] },
-      }),
-    );
-  });
-
-  it("rejects an unpaired goal and invalid cash assumptions", async () => {
-    const { goalDate: _goalDate, ...unpaired } = scenario;
+  it("rejects writes to the removed key", async () => {
     await api
       .put(`${BASE}/life_scenarios`)
-      .send(singleBody({ value: [unpaired] }))
-      .expect(400);
-    await api
-      .put(`${BASE}/life_scenarios`)
-      .send(singleBody({ value: [{ ...scenario, monthlySurplus: -1 }] }))
-      .expect(400);
-    await api
-      .put(`${BASE}/life_scenarios`)
-      .send(singleBody({ value: [{ ...scenario, monthlyContribution: 900 }] }))
+      .send(singleBody({ value: [] }))
       .expect(400);
     expect(query).not.toHaveBeenCalled();
   });

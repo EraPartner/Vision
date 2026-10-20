@@ -216,4 +216,26 @@ describe('runPortfolioForecast', () => {
     await expect(runPortfolioForecast({ horizonMonths: 2, monthlyContributionSchedule: [0, Infinity] }, deps()))
       .rejects.toThrow(RangeError);
   });
+
+  it('serializes overflowing contribution money as null, which the forecast contract rejects', async () => {
+    const { PortfolioForecastSchema } = await import('@vision/types/contracts');
+    const snapshots = Array.from({ length: 100 }, (_, i) => ({
+      value: 1000 * Math.exp(i * 0.0005),
+      snapshot_date: `2026-01-${i}`,
+    }));
+    const result = await runAvailable(
+      { horizonMonths: 3, paths: 100, monthlyContribution: 1e308, seed: 'overflow-wire' },
+      deps({
+        getPortfolioSummary: async () => ({ totals: { totalPortfolioValue: 1000 }, summaries: [] }),
+        getSnapshots: async () => snapshots,
+        today: () => '2026-10-13',
+      }),
+    );
+    const wire = JSON.parse(JSON.stringify(result)) as Record<string, unknown>;
+    expect(wire.available).toBe(true);
+    expect(wire.monthlyContribution).toBeNull();
+    expect(wire.netInvested).toBeNull();
+    expect((wire.projected as { p50: unknown }).p50).toBeNull();
+    expect(PortfolioForecastSchema.safeParse(wire).success).toBe(false);
+  });
 });

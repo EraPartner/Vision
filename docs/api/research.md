@@ -2,8 +2,8 @@
 title: Research API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - api
   - research
@@ -115,17 +115,15 @@ complete histories above the global JSON-body limit. Histories are never silentl
 Temporary uploads are cleaned up. Success uses the standard envelope with
 `data: { "kind": "...", "result": ... }`; the echoed kind selects the result schema.
 
-| Kind                  | Submitted JSON                                                                                                                                        | Result                                                                                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `compare`             | `series: [{symbol, points}]`, at most 6                                                                                                               | `rows`, `stats[{symbol,totalReturn,volatility,maxDrawdown,firstTime?,lastTime?}]`, `correlation{symbols,matrix}` |
-| `chart`               | At most 5 `series[{id,field,type,points}]`, at most 20 `indicators[{id,type,period,seriesId}]`, `rebase`, `oscillator`, nullable `oscillatorSeriesId` | `rows` and `oscillatorRows`, keyed by series/indicator IDs                                                       |
-| `watchlist`           | Nullable `targetPrice`, `currentPrice`, `addedPrice`; optional `points` (default empty)                                                               | `list`, `chart` and nullable `preview`                                                                           |
-| `watchlistBatch`      | At most 5000 `entries[{id,targetPrice,currentPrice,addedPrice}]`                                                                                      | `entries[{id,list}]`, preserving submitted order                                                                 |
-| `providerQuote`       | `points`, `investment{name,currency,symbol?,priceProvider?}`, optional nullable `selectedSymbol`                                                      | Synthesized `{symbol,name,price?,change,changePercent,currency,exchange,type}` or null for empty history         |
-| `analyst`             | Nullable `consensus{strongBuy,buy,hold,sell,strongSell}`                                                                                              | `{total,bullFraction,bearFraction,verdictKey,tone,fractions}` or null for missing/zero-count consensus           |
-| `marketAdd`           | Positive numeric `amount?`, `units?`, `price?`; optional `derive` (default true)                                                                      | Existing two-of-three result: optional derived/effective fields, `providedCount`, `isConsistent`                 |
-| `lifeScenarioPrepare` | `scenario`, immediate camel `forecastInput`, optional nullable structural `goalMonth`                                                                 | `baselineInput`, `interruptedInput`, `reducedContribution`, `monthlyDeficit`, optional `goalMonth`               |
-| `lifeScenarioCompare` | Raw `baseline` and `interrupted` forecasts                                                                                                            | `comparable`, `available`, nullable `medianGap` and nullable `errorKey`                                          |
+| Kind             | Submitted JSON                                                                                                                                        | Result                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `compare`        | `series: [{symbol, points}]`, at most 6                                                                                                               | `rows`, `stats[{symbol,totalReturn,volatility,maxDrawdown,firstTime?,lastTime?}]`, `correlation{symbols,matrix}` |
+| `chart`          | At most 5 `series[{id,field,type,points}]`, at most 20 `indicators[{id,type,period,seriesId}]`, `rebase`, `oscillator`, nullable `oscillatorSeriesId` | `rows` and `oscillatorRows`, keyed by series/indicator IDs                                                       |
+| `watchlist`      | Nullable `targetPrice`, `currentPrice`, `addedPrice`; optional `points` (default empty)                                                               | `list`, `chart` and nullable `preview`                                                                           |
+| `watchlistBatch` | At most 5000 `entries[{id,targetPrice,currentPrice,addedPrice}]`                                                                                      | `entries[{id,list}]`, preserving submitted order                                                                 |
+| `providerQuote`  | `points`, `investment{name,currency,symbol?,priceProvider?}`, optional nullable `selectedSymbol`                                                      | Synthesized `{symbol,name,price?,change,changePercent,currency,exchange,type}` or null for empty history         |
+| `analyst`        | Nullable `consensus{strongBuy,buy,hold,sell,strongSell}`                                                                                              | `{total,bullFraction,bearFraction,verdictKey,tone,fractions}` or null for missing/zero-count consensus           |
+| `marketAdd`      | Positive numeric `amount?`, `units?`, `price?`; optional `derive` (default true)                                                                      | Existing two-of-three result: optional derived/effective fields, `providedCount`, `isConsistent`                 |
 
 Every request includes `kind`. A point requires numeric `time`; `close`, `high`, `low` and `volume`
 are optional nullable numbers. Inputs are finite JSON numbers, not localized number strings.
@@ -157,36 +155,14 @@ Analyst verdict keys use the existing 0.60/0.45 bull/bear thresholds and `succes
 keeps 4 amount, 8 unit and 6 price decimal-place rounding and the existing 0.01 consistency tolerance.
 Optional uncomputed fields are absent, matching the existing form helper; overflowed derived/effective values serialize as null.
 
-Life Scenario preparation reuses `packages/shared-utils/src/research/forecastScenario.ts`. The
-scenario contains `id`, literal `interruptionMonths: 3`, nonnegative monthly surplus/income loss/
-planned contribution, and optional positive goal value. Contribution cannot exceed surplus. A
-positive goal pairs with a supplied integer goal month within the immediate input horizon
-(1..600); omitted/null goal month is absent. Goal date/name/ID lifecycle remains caller-owned.
-The bridge preserves the complete ID in `life-scenario:<id>` without a seed truncation.
+The forecast engine's rounded money/bands can serialize as null on numerical overflow, even when
+`available` is true. OpenAPI records that wire possibility; it does not loosen the existing
+`PortfolioForecastSchema` client validity guard. Clients should retain that required-numeric
+guard, so overflow produces an error rather than a fabricated projection. An injected-engine
+fixture in `apps/node-backend/tests/services/portfolioProjection.test.ts` verifies this boundary.
 
-Preparation computes `max(0,min(contribution,surplus-incomeLoss))` and
-`max(0,incomeLoss-surplus)`. It overwrites the immediate main contribution, target, goal month and
-seed before returning two camel inputs. Invalid discarded main monetary values do not reject a
-valid scenario. Other immediate inputs, including an existing baseline schedule, pass through;
-the interrupted input replaces the schedule with exactly three reduced contributions, with
-trailing months retaining the planned contribution. The client makes the same two existing
-forecast calls in parallel using the returned identical seed; the presentation service does not
-simulate, read providers or persist settings.
-
-Comparison checks exactly `startValue`, `historyDays`, `expectedAnnualReturn`, `annualVolatility`
-and `forwardBlend` using JavaScript strict equality: missing/missing agrees, while missing/null
-or a changed numeric value does not. No new currency/method/seed attribution check is added.
-Mismatched inputs return `comparable: false`, `available: false`, `medianGap: null` and
-`errorKey: "research.lifeScenario.inputsChanged"`. Otherwise the error key is null, availability
-requires both forecasts, and the median difference is returned only when both medians exist.
-Unavailability or absent medians never invent a zero gap. An available explicit-null median is
-rejected as a validation error, matching the maintained forecast client's invalid-data behavior.
-
-The forecast engine remains unchanged. Its rounded money/bands can serialize as null on numerical
-overflow, even when `available` is true. OpenAPI records that wire possibility; it does not loosen
-the existing `PortfolioForecastSchema` client validity guard. Clients should retain
-that required-numeric guard, so overflow produces an error rather than a fabricated projection or
-scenario comparison. Synthetic injected-engine and route fixtures verify this boundary.
+The `lifeScenarioPrepare` and `lifeScenarioCompare` kinds were removed by
+[[docs/adr/230-remove-life-scenario|ADR-230]]; they now return `400 VALIDATION_ERROR`.
 
 Invalid JSON/shapes/bounds or multipart failures return `400 VALIDATION_ERROR`; the shared market
 rate limit returns 429; unexpected file/calculation failures return 500. The new operation is additive.
@@ -543,7 +519,7 @@ When fundamentals are unavailable from all providers:
 
 ### POST /api/research/portfolio-forecast
 
-Monte Carlo projection of aggregate portfolio value. Results are not persisted; submit the same seed and inputs to reproduce a run. Saved scenario definitions use [[docs/api/settings|Settings API]] instead.
+Monte Carlo projection of aggregate portfolio value. Results are not persisted; submit the same seed and inputs to reproduce a run.
 
 **Request Body:**
 
