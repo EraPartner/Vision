@@ -3,8 +3,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { readFileSync } from "node:fs";
-import { createLiveContractSkipBannerReporter } from "./src/test/live-contracts/liveContractSkipBanner";
-import { defaultRoutePreloadPlugin } from "./src/build-support/defaultRoutePreload";
+import { createLiveContractSkipBannerReporter } from "./src/test/live-contracts/liveContractSkipBanner.ts";
+import { defaultRoutePreloadPlugin } from "./src/build-support/defaultRoutePreload.ts";
 
 const rootPackage = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
@@ -83,7 +83,7 @@ export default defineConfig(({ mode }) => ({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
     // decimal.js is imported both directly (src/utils/currency.ts) and
     // transitively via @vision/shared-utils, which declares its own copy.
@@ -205,7 +205,7 @@ export default defineConfig(({ mode }) => ({
       VITE_LOG_LEVEL: "warn",
     },
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["e2e/**", "node_modules/**"],
