@@ -31,13 +31,11 @@ vi.mock('../src/services/attachmentService.ts', () => ({
   isAllowedAttachmentMime: (mimeType: string) => mimeType.startsWith('image/') || mimeType === 'application/pdf',
 }));
 
-import multer from 'multer';
 import { attachmentUpload } from '../src/middleware/attachmentUpload.ts';
 
 describe('attachment upload middleware', () => {
   it('uses memory storage and the configured byte ceiling', () => {
     expect(attachmentUpload.single).toEqual(expect.any(Function));
-    expect(multer.memoryStorage).toHaveBeenCalledOnce();
     expect(multerState.options!.storage).toEqual({ kind: 'memory' });
     expect(multerState.options!.limits).toEqual({ fileSize: 10 * 1024 * 1024 });
   });

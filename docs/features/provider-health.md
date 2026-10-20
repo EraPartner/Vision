@@ -2,8 +2,8 @@
 title: Provider Health Tracking
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-06-16
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-06-16
 tags: [feature, admin, provider-health, observability, research-providers, twelve-data, finnhub, fmp, alpha-vantage]
 description: Passive health tracking and active probing for all price, FX, inflation, and research data providers
@@ -61,7 +61,7 @@ Table: `provider_health`
 | `consecutive_failures` | int | Reset to 0 on any success |
 | `updated_at` | timestamptz | Row last-modified timestamp |
 
-Created via migration `0010_add_provider_health.py`.
+Created by the historical Alembic migration `0010_add_provider_health.py`; now part of `db/migrations/0001_baseline.sql` ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
 
 ## Passive Tracking
 

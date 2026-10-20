@@ -40,7 +40,7 @@ Application startup now flows through the Kysely migrator:
 Application Start → checkConnection() → runMigrations()
                                          ↓
                      Kysely Migrator: 0001_baseline.sql (empty DB, fingerprint check)
-                     or adoption of an Alembic 0128 DB, then pending NNNN_*.sql files
+                     (an alembic_version DB is refused), then pending NNNN_*.sql files
                                          ↓
                                     refreshMaterializedViews()
 ```

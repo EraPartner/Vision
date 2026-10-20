@@ -9,7 +9,7 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 - [ ] No real secrets staged: `.env`, `.env.local`, `.env.production` stay gitignored; only
       `.env.example` (placeholders) is tracked. No tokens/PII in code or logs.
 - [ ] gitleaks passes on the staged diff (`gitleaks git --staged -c config/gitleaks.toml .`);
-      the `secrets-scan` CI job and the `.githooks/pre-commit` hook both gate on it.
+      the `Repo Checks` CI job and the `.githooks/pre-commit` hook both gate on it.
 - [ ] No files >1 MB staged (pre-commit blocks them; `ALLOW_BIG_FILES=1` only if truly intended)
       and no leftover merge-conflict markers.
 
@@ -31,8 +31,9 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 
 ## Tests & validation
 
-- [ ] `bun run lint` and `bun run lint:backend` — ESLint clean (frontend + backend).
-- [ ] `bun run typecheck` (frontend strict) and `cd apps/node-backend && bunx tsc -p tsconfig.json`.
+- [ ] `bun run lint` (frontend ESLint, `lint:deps` import boundaries, `lint:dead` knip) and
+      `bun run lint:backend` (backend ESLint) clean.
+- [ ] `bun run typecheck` (frontend strict) and `bun run typecheck:backend`.
 - [ ] `bun run test` (backend vitest) and `bun run test:frontend` — scale depth to risk per AGENTS.md.
 - [ ] `bun run validate-locales` and `bun run check-endpoint-matrix` pass.
 - [ ] High-risk (security / migration / destructive) also: `bun run build`. One-shot: `bun run check`.

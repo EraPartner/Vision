@@ -61,7 +61,7 @@ else
   echo "[pre-commit] =================================================================="
   echo "[pre-commit] WARNING: gitleaks not installed -- staged changes were NOT scanned"
   echo "[pre-commit]          for secrets locally. Install it: brew install gitleaks"
-  echo "[pre-commit]          (CI's secrets-scan job still gates, but local coverage is"
+  echo "[pre-commit]          (CI's Repo Checks job still gates, but local coverage is"
   echo "[pre-commit]          off). Set REQUIRE_GITLEAKS=1 to make this a hard failure."
   echo "[pre-commit] =================================================================="
   if [ "${REQUIRE_GITLEAKS:-}" = "1" ]; then

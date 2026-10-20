@@ -106,14 +106,16 @@ describe("Analysis monitor routes request validation", () => {
   });
 
   it("rejects a non-UUID id before any service call", async () => {
+    // Build each request only when it runs: supertest closes the agent's
+    // shared server once its pending requests settle.
     for (const request of [
-      api.post(`${BASE}/notifications/7/read`),
-      api.get(`${BASE}/7/observations`),
-      api.post(`${BASE}/7/check`),
-      api.patch(`${BASE}/7`).send({ enabled: false }),
-      api.delete(`${BASE}/7`),
+      () => api.post(`${BASE}/notifications/7/read`),
+      () => api.get(`${BASE}/7/observations`),
+      () => api.post(`${BASE}/7/check`),
+      () => api.patch(`${BASE}/7`).send({ enabled: false }),
+      () => api.delete(`${BASE}/7`),
     ]) {
-      expectValidationError(await request.expect(400), /^id: /);
+      expectValidationError(await request().expect(400), /^id: /);
     }
     expect(readMonitorNotification).not.toHaveBeenCalled();
     expect(listMonitorObservations).not.toHaveBeenCalled();

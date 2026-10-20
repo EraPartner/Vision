@@ -107,8 +107,9 @@ Optional field. When omitted, the backend attempts to snapshot the live quote fo
 `added_price` is captured only at creation. `PATCH /api/watchlist/:id` rejects a
 non-null `added_price` instead of silently ignoring it.
 
-> [!info] Migration required
-> `added_price` is added by migration 0058 (authored, not applied). Until the migration runs, the column does not exist and the backtest display is suppressed.
+> [!info] Column history
+> `added_price` was added by historical migration 0058, now part of the `0001` baseline
+> ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]), so the column always exists.
 
 **Field Validation (June 2026):**
 

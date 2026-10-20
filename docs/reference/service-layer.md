@@ -139,7 +139,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ### Error Handling (2026-05-05 Bug Hunt)
 
-- **Network failures:** Caught and logged at error level; fallback to database or hardcoded rates
+- **Network failures:** Caught and logged at error level; fallback to the stored database rates
 - **Malformed responses:** JSON parse errors and missing rate data handled gracefully with fallback
 - **Timeout safety:** API fetch calls wrapped with timeout handling to prevent hung requests
 - **Partial success:** If one provider fails, others are still attempted; service doesn't fail-fast

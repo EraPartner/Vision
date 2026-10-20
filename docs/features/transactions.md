@@ -563,6 +563,9 @@ The delete confirmation (`txPage.delete.desc`) used to say that the action canno
 
 ## Migrations
 
+Historical Alembic revisions, kept as history. Their combined result is `db/migrations/0001_baseline.sql`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]); the `.py` files exist only in Git history.
+
 - `0001_initial_database_schema.py` — Initial schema with `transactions`, `categories`, `recipients` tables
 - `0003_make_recipient_nullable.py` — Made `recipient_id` nullable on transactions
 - `0005_manual_raw_transactions.py` — Added `manual_raw_transactions` table for manual entry deduplication

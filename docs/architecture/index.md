@@ -492,7 +492,7 @@ Documentation:
 
 ### @vision/shared-utils Cross-Workspace Package (ADR-069 and ADR-073)
 
-[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] introduced `packages/shared-utils/` for pure logic shared by both apps, and [[docs/adr/073-shared-portfolio-math-package|ADR-073]] explicitly broadened that boundary to cross-workspace portfolio calculations. Its current modules are `money`, `portfolio`, `assetClasses`, `category`, `csv`, and `slugify`; the removed `downsample` module is no longer part of the package. `roundMoney` remains canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. App-specific I/O and framework code remain in their owning workspaces.
+[[docs/adr/069-shared-utils-monorepo-package|ADR-069]] introduced `packages/shared-utils/` for pure logic shared by both apps, and [[docs/adr/073-shared-portfolio-math-package|ADR-073]] explicitly broadened that boundary to cross-workspace portfolio calculations. Its current modules are `money`, `portfolio`, `portfolioCustody`, `portfolioImportDetection`, `category`, `csv`, `csvPreview`, `csvSeparator` and `slugify`, plus the `belgianTax/` engine (server-run since [[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]], tested by `bun run test:packages`) and the `analysis/`, `research/` and `ai-chat/` directories; the removed `downsample` module is no longer part of the package. `roundMoney` remains canonically `ROUND_HALF_EVEN` (banker's rounding) everywhere. App-specific I/O and framework code remain in their owning workspaces.
 
 ### Other June 2026 Security & Correctness
 

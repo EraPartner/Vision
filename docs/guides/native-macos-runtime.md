@@ -70,11 +70,15 @@ application-data directory and are never logged.
 ## Start development
 
 ```bash
-bun run dev
+bun run electron:dev
 ```
 
-Startup initializes or opens the private cluster, runs the guarded migration command, starts the
-backend on a random loopback port when appropriate, and waits for detailed readiness before showing
+`bun run electron:dev` opens the Electron shell on the `Vision Development` profile.
+`bun run dev` bootstraps the same `vision_dev` cluster without Electron, then runs the watched
+backend (which applies pending migrations on boot) and the Vite frontend (`packaging/electron/scripts/native-development.ts`).
+
+Electron startup initializes or opens the private cluster, starts the backend (which applies
+pending migrations before it listens) on a random loopback port when appropriate, and waits for detailed readiness before showing
 the application. `runtime-state.json` records the active native database identity so a stale or
 partially switched database cannot become the writer by accident.
 

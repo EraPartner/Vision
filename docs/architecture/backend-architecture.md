@@ -83,10 +83,12 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
 2. **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
-   with Kysely's migrator in one transaction. An empty database receives the `0001` baseline; an
-   Alembic database is adopted only at `0128_category_path_on_legacy_rename` with the baseline
-   fingerprint; anything else fails closed. See [[docs/guides/migrations|Database Migration Guide]]
-   and [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]].
+   with Kysely's migrator in one transaction. An empty PostgreSQL 18 database receives the `0001`
+   baseline and must match its catalog fingerprint; a database still carrying `alembic_version`, or
+   one with application objects but no migration marker, is refused and left unchanged. See
+   [[docs/guides/migrations|Database Migration Guide]],
+   [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
+   [[docs/adr/224-remove-alembic-adoption|ADR-224]].
 3. **Materialized-view warmup** — after Express starts listening, create, index, and refresh the two runtime-managed views. Each phase has its own boot trace mark; failures degrade `/health/detailed` and reads fall back to live SQL.
 4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
    - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
@@ -133,7 +135,8 @@ isInternetReachable({
 
 All external APIs fall back to cached or database data:
 
-- **Exchange rates**: In-memory cache (24h TTL) + database → hardcoded rates
+- **Exchange rates**: In-memory cache (24h TTL) + stored database rates; a currency without a
+  stored rate is reported as unconverted, never converted at a constant ([[docs/adr/216-server-owned-domain-calculations|ADR-216]])
 - **Investment prices**: Cached current prices + historical DB → fallback to previous close
 - **Portfolio snapshots**: Computed from existing FX rows (may be stale)
 - **Info endpoints**: Aggregated from database only, no external calls
@@ -382,10 +385,16 @@ skinparam nodesep 40
 skinparam ranksep 60
 
 package "Database" {
-  class "connection.ts" as DB {
-    +query(sql, params)
-    +getClient()
+  class "db.ts (Kysely, ADR-226)" as DB {
+    +db
+    +checkedRows(schema, builder)
+    +checkedRow(schema, builder)
   }
+  class "connection.ts" as Conn {
+    +query(sql, params)
+    +withTransaction(fn)
+  }
+  DB --> Conn : compiled SQL via query()
 }
 
 package "Repositories" {

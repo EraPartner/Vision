@@ -42,7 +42,7 @@ database switch blocks update work.
 The updater:
 
 1. fetches release metadata from the configured GitHub release source;
-2. selects the macOS artifact for the running architecture;
+2. selects the Apple Silicon macOS artifact (`Vision-*-arm64-mac.zip`, the only build; ADR-219);
 3. downloads the artifact and checksum;
 4. verifies the SHA-256 digest before extraction;
 5. creates a backup and stops the native runtime;

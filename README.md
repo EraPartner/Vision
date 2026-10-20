@@ -157,7 +157,7 @@ Vision/
 │           ├── routes/         # REST endpoints
 │           ├── services/       # Business logic, price providers, bank adapters
 │           ├── repositories/   # Data access layer
-│           ├── integrations/   # Ollama AI client
+│           ├── integrations/   # AI provider clients (Ollama, OpenAI, Codex)
 │           └── middleware/     # Auth, logging, error handling
 ├── packages/
 │   ├── shared-utils/           # Pure helpers (money, slugify, downsample) shared by backend + frontend
@@ -188,7 +188,7 @@ bun run dist                 # build + package Electron .app
 bun run demo:reset-native    # request a canonical synthetic Demo reset on next launch
 
 # Linting & types
-bun run lint                 # frontend ESLint
+bun run lint                 # frontend ESLint + import boundaries (lint:deps) + dead code (lint:dead)
 bun run lint:backend         # backend ESLint
 bun run typecheck            # frontend TypeScript typecheck
 
@@ -242,15 +242,15 @@ bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 
 | Adapter            | File         |
 | ------------------ | ------------ |
-| Belfius            | `belfius.js` |
-| Revolut            | `revolut.js` |
-| KBC                | `kbc.js`     |
-| ING                | `ing.js`     |
-| BNP Paribas Fortis | `bnp.js`     |
-| SABB               | `sabb.js`    |
-| Wise               | `wise.js`    |
-| Vision backup      | `vision.js`  |
-| Generic CSV mapper | `generic.js` |
+| Belfius            | `belfius.ts` |
+| Revolut            | `revolut.ts` |
+| KBC                | `kbc.ts`     |
+| ING                | `ing.ts`     |
+| BNP Paribas Fortis | `bnp.ts`     |
+| SABB               | `sabb.ts`    |
+| Wise               | `wise.ts`    |
+| Vision backup      | `vision.ts`  |
+| Generic CSV mapper | `generic.ts` |
 
 ### Price Providers
 
@@ -316,7 +316,7 @@ Workflow: `.github/workflows/release.yml`
 - Never commit real `.env` files or secrets
 - Keep your deployment private and access-controlled
 - Backups are encrypted with AES-256-GCM (per-backup random salt)
-- Dependency and container images should be reviewed and updated regularly
+- Dependencies should be reviewed and updated regularly
 - AI chat uses a local Ollama instance — no financial data leaves your network
 
 ---
