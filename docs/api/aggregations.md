@@ -2,9 +2,9 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
@@ -1237,6 +1237,12 @@ When using default parameters (mc_paths=1000, mc_percentiles=[10,50,90]), respon
 - `meta.source === 'live'` indicates freshly computed result (custom parameters or cache miss/expiry)
 - Daily job (`refreshCashflowForecastMc`) precomputes forecasts after its successful-completion checkpoint becomes 24 hours old
 - Cache lookup is O(1) DB query (~5ms); live computation with 1000 paths ≈ 300-500ms
+- Since 2026-10-20, a live compute first checks an in-process memo of up to eight payloads keyed
+  by a hash of the loaded inputs and MC params. A hit returns the identical payload (still
+  `meta.source === 'live'`) without re-running simulation or backtest, and does not re-record
+  backtest accuracy. It covers non-default params such as the dashboard's `mc_paths=500`,
+  `mc_percentiles=[25,75]`. Any data change misses it. See
+  [[docs/features/cash-flow-forecast|Cash Flow Forecast]].
 
 **Ensemble Method (Phase F + v2, June 2026):**
 
