@@ -389,10 +389,10 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
   // requested historical rate was missing. convertRowsToEur retains this as
   // internal row metadata. Recipient pivot summarizes it into an explicit
   // response-level conversion contract; other repositories may project it away.
-  async function resolveRateWithFallback(
+  function resolveRateWithFallback(
     code: string,
     rowDate: string | null,
-  ): Promise<{ rate: number | undefined; fellBack: boolean }> {
+  ): { rate: number | undefined; fellBack: boolean } {
     if (code === "EUR") return { rate: 1, fellBack: false };
 
     if (!useHistoricalRatesByDate || !rowDate) {
@@ -416,6 +416,17 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
     return { rate: undefined, fellBack: true };
   }
 
+  // Each row's date is resolved once and reused by both passes below.
+  const rowDates: Array<string | null> = [];
+  function rowDateAt(index: number, row: T): string | null {
+    let rowDate = rowDates[index];
+    if (rowDate === undefined) {
+      rowDate = resolveDateFromRow(row);
+      rowDates[index] = rowDate;
+    }
+    return rowDate;
+  }
+
   let historicalIndex: HistoricalRateIndex | null = null;
   if (useHistoricalRatesByDate) {
     const relevantCurrencies = [
@@ -429,8 +440,8 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
       historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
 
       const datesByUnindexedCurrency = new Map<string, string[]>();
-      for (const row of rows) {
-        const rowDate = resolveDateFromRow(row);
+      for (const [index, row] of rows.entries()) {
+        const rowDate = rowDateAt(index, row);
         if (!rowDate) continue;
         const rowCurrency = (row.currency || "EUR").toUpperCase().trim();
         if (rowCurrency === toCur) continue;
@@ -455,18 +466,22 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
   }
 
   const converted: ConvertedRow<T>[] = [];
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     const currency = (row.currency || "EUR").toUpperCase().trim();
-    const amount = toNumber(toDecimal(row.amount));
-    const rowDate = resolveDateFromRow(row);
+    // A number survives the Decimal round trip unchanged, so skip it.
+    const amount =
+      typeof row.amount === "number"
+        ? row.amount
+        : toNumber(toDecimal(row.amount));
+    const rowDate = rowDateAt(index, row);
 
     if (currency === toCur) {
       converted.push({ ...row, amount_eur: amount });
       continue;
     }
 
-    const fromResolved = await resolveRateWithFallback(currency, rowDate);
-    const toResolved = await resolveRateWithFallback(toCur, rowDate);
+    const fromResolved = resolveRateWithFallback(currency, rowDate);
+    const toResolved = resolveRateWithFallback(toCur, rowDate);
     const fellBack = fromResolved.fellBack || toResolved.fellBack;
     const fallbackFields = fellBack
       ? { used_fallback_rate: true, fallback_reason: "historical_rate_missing" }

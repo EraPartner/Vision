@@ -60,8 +60,10 @@ function forecast({
   // Stationary bootstrap: block length ~ Geom(1/L), start index ~ Uniform.
   const restartProb = 1 / MEAN_BLOCK_LENGTH;
   const N = residuals.length;
+  // The bucket depends only on the date, so look it up once per day rather
+  // than once per path.
   const rows = forecastDates.map((date) => ({
-    date,
+    mean: lookupBucket(buckets, date).mean,
     values: new Array<number>(paths),
   }));
 
@@ -74,8 +76,7 @@ function forecast({
       if (resid === undefined) {
         throw new RangeError(`block bootstrap: residual ${idx} out of range`);
       }
-      const bucket = lookupBucket(buckets, row.date);
-      row.values[p] = bucket.mean + resid;
+      row.values[p] = row.mean + resid;
       idx = (idx + 1) % N;
     }
   }

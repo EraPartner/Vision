@@ -771,6 +771,9 @@ function broadCandidate(
   current: HistoryImage,
   proof: NexoProSpotReconciliationEvidence | undefined,
 ): boolean {
+  // Checked first: the planner calls this for every history row, and the
+  // reference evidence below parses the row's raw data on each call.
+  if (Number(row.investment_id) !== Number(current.investment_id)) return false;
   const distance = dayDistance(source.date, current.date);
   const secondaryTradeIdentity = portfolioPerformanceReferenceIdentifiesLegacy(
     row,
@@ -786,10 +789,7 @@ function broadCandidate(
         equalNumber(proof.grossUnits, current.units, 8))) &&
     equalNumber(proof.unitPrice, current.price_per_unit, 6) &&
     equivalentEconomics(source, current, proof);
-  if (
-    Number(row.investment_id) !== Number(current.investment_id) ||
-    (distance > 7 && !boundedProDateProof && !secondaryTradeIdentity)
-  )
+  if (distance > 7 && !boundedProDateProof && !secondaryTradeIdentity)
     return false;
   const transfer = transferWithoutBasis(row);
   if (
@@ -1079,6 +1079,12 @@ export function buildPortfolioImportReconciliationPlan({
     blockers.push(issue);
     actions.push({ ...issue, action: "blocked" });
   };
+  // The first history row per fingerprint identity, as history.find returned.
+  const historyByIdentity = new Map<string, HistoryImage>();
+  for (const current of history) {
+    const identity = `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}`;
+    if (!historyByIdentity.has(identity)) historyByIdentity.set(identity, current);
+  }
   const scope = batches.map((batch) => Number(batch.id)).sort((a, b) => a - b);
   const referenceIssues = new Set<string>();
   for (const batch of batches) {
@@ -1273,11 +1279,7 @@ export function buildPortfolioImportReconciliationPlan({
       else {
         const event = prepared.event;
         const identity = `${event.dedup_fingerprint_version}:${event.dedup_fingerprint}`;
-        const canonical = history.find(
-          (current) =>
-            `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}` ===
-            identity,
-        );
+        const canonical = historyByIdentity.get(identity);
         const same = (current: ColumnImage) =>
           current.type === "asset_adjustment" &&
           (
@@ -1330,11 +1332,7 @@ export function buildPortfolioImportReconciliationPlan({
       else {
         const event = preparedTransfer.event;
         const identity = `${event.dedup_fingerprint_version}:${event.dedup_fingerprint}`;
-        const canonical = history.find(
-          (current) =>
-            `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}` ===
-            identity,
-        );
+        const canonical = historyByIdentity.get(identity);
         const sameTransfer = (current: ColumnImage) =>
           current.type === "asset_transfer" &&
           (
@@ -1402,11 +1400,7 @@ export function buildPortfolioImportReconciliationPlan({
       source: publicValues(source),
     };
     const canonical = identity
-      ? history.find(
-          (current) =>
-            `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}` ===
-            identity,
-        )
+      ? historyByIdentity.get(identity)
       : undefined;
     if (canonical && identity) {
       if (

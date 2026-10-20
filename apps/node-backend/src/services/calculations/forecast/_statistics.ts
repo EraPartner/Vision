@@ -1,7 +1,10 @@
 /**
  * Return an interpolated percentile from an ascending numeric sample.
  */
-export function quantile(sortedAsc: number[], percentile: number): number {
+export function quantile(
+  sortedAsc: ArrayLike<number>,
+  percentile: number,
+): number {
   if (sortedAsc.length === 0) return 0;
   const index = (percentile / 100) * (sortedAsc.length - 1);
   const lower = Math.floor(index);
