@@ -490,7 +490,7 @@ Documentation:
 ### Other June 2026 Security & Correctness
 
 - **Global rate limiter on `/api`** — `globalRateLimiter` mounted before all routers; configurable via `RATE_LIMIT_GLOBAL_MAX` / `RATE_LIMIT_GLOBAL_WINDOW_MS`. See `backend-api-layer.puml`.
-- **Trusted-proxy XFF gating** — `TRUSTED_PROXIES` env var controls when `X-Forwarded-For` is trusted for IP keying.
+- **Trusted-proxy XFF gating** — `TRUSTED_PROXIES` env var controlled when `X-Forwarded-For` was trusted for IP keying. Removed 2026-10-20 by [[docs/adr/233-loopback-only-backend|ADR-233]]; buckets are socket-keyed.
 - **VISION_DEV fail-safe** — dev bypasses (rate-limit skip, wildcard CORS) now require explicit `VISION_DEV=true`.
 - **Zip-bomb guard** — `extractZip` in Electron backup restore enforces `MAX_RESTORE_BYTES` (10 GiB) and `MAX_RESTORE_ENTRIES` (100,000).
 - **5 MB response cap** — `_assertResponseWithinCap` applied to Binance and Kinesis fetches.

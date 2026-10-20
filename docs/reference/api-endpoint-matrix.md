@@ -153,9 +153,10 @@ aliases:
 >
 > **Absent and empty are unchanged** — `?category_ids=`, `?category_id=` still mean "no filter" and answer 200. Non-breaking for shipped callers: the Transactions page and the Imports Export card build these with `ids.join(',')` from `number[]` state and omit empty values; nothing in the frontend sends `account_ids`. `openapi.yaml` already typed the four scalars `integer` (now annotated `format: int32, minimum: 1`, and the two comma lists carry a documented `pattern`), so the implementation moved _onto_ the published contract. See [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
-Every HTTP operation first checks its destination Host authority. Unlisted, malformed, or
-duplicate authorities return 403 before CORS and body parsing. See
-[[docs/security/data-protection]] and [[docs/guides/deployment]] for exact hostname permissions.
+Every HTTP operation first checks its destination Host authority: only `localhost`, `127.0.0.1`
+or `::1` with the backend port pass; anything else returns 403 before body parsing. No operation
+sends CORS headers ([[docs/adr/233-loopback-only-backend|ADR-233]]). See
+[[docs/security/data-protection]] and [[docs/guides/deployment]].
 Generic custom CSV uploads accept `number_format`; ambiguous automatic values and unsupported
 encodings return 400. Saved parser configs retain this option. See [[docs/api/imports]] and
 [[docs/api/portfolio-imports]].
@@ -572,6 +573,10 @@ in ascending order and preserves source order within a date. See
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
 
 ## Admin
+
+Admin operations have no authentication layer and never return `401`; the `ADMIN_AUTH_TOKEN`
+bearer check was removed by [[docs/adr/233-loopback-only-backend|ADR-233]] (non-breaking for the
+desktop app, which never set a token).
 
 | Method | Path                                              | Description                                                                                                                                  | Rate Limit         | Doc                       |
 | ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |

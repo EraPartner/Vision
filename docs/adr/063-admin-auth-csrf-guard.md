@@ -3,13 +3,18 @@ title: Admin Auth Token-or-Open + CSRF Guard
 type: adr
 status: accepted
 date: 2026-05-29
-updated: 2026-05-29
+updated: 2026-10-20
 tags: [adr, security, admin-auth, csrf, sec-fetch-site, cors, bearer-token, loopback, docker, 2026-05-29]
 description: Replace RFC1918 IP-allowlist admin fallback with token-or-open + CSRF guard. When ADMIN_AUTH_TOKEN is set, enforce timing-safe Bearer; when unset, rely on the loopback port binding and a new Sec-Fetch-Site/Origin CSRF guard mounted on /api/admin.
 aliases: [admin csrf guard, csrf guard, admin auth 2026, token-or-open]
 ---
 
 # ADR-063: Admin Auth Token-or-Open + CSRF Guard
+
+> [!note] Superseded in part by [[docs/adr/233-loopback-only-backend|ADR-233]] on 2026-10-20.
+> The `ADMIN_AUTH_TOKEN` bearer check and the tokenless non-loopback startup override are removed;
+> the backend is loopback-only. The CSRF guard stays, with its Origin fallback limited to the
+> backend's own loopback origins.
 
 ## Status
 

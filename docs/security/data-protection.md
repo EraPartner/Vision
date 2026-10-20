@@ -4,10 +4,10 @@ type: security
 status: active
 date: 2026-10-20
 updated: 2026-10-20
-tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
-description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
+tags: [security, csp, same-origin, loopback, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, host-guard, dns-rebinding, zip-bomb, response-cap, content-length]
+description: Content Security Policy, the loopback-only network boundary, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). 2026-10-20: CORS, the admin token and proxy support removed; the backend is loopback-only (ADR-233). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.ts", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/database/analysisRoleBootstrap.ts", "apps/node-backend/src/middleware/adminAuth.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
+related_code: ["apps/node-backend/src/main.ts", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/database/analysisRoleBootstrap.ts", "apps/node-backend/src/middleware/hostGuard.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
 ---
 
 # Security: Data Protection & CSP
@@ -88,51 +88,30 @@ The error recovery page (`packaging/electron/assets/error.html`, 2026-05-07) use
 
 ## Security Headers
 
-| Header                      | Value                             | Purpose                  |
-| --------------------------- | --------------------------------- | ------------------------ |
-| `X-Frame-Options`           | `DENY`                            | Prevent iframe embedding |
-| `X-Content-Type-Options`    | `nosniff`                         | Prevent MIME sniffing    |
-| `X-XSS-Protection`          | `1; mode=block`                   | XSS filter               |
-| `Strict-Transport-Security` | `max-age=31536000`                | HSTS (production only)   |
-| `Referrer-Policy`           | `strict-origin-when-cross-origin` | Limit referrer info      |
+Set on every backend response in `apps/node-backend/src/main.ts`:
+
+| Header                    | Value                                          | Purpose                     |
+| ------------------------- | ---------------------------------------------- | --------------------------- |
+| `X-Frame-Options`         | `DENY`                                         | Prevent iframe embedding    |
+| `X-Content-Type-Options`  | `nosniff`                                      | Prevent MIME sniffing       |
+| `X-XSS-Protection`        | `0`                                            | Deprecated; CSP is relied on |
+| `Referrer-Policy`         | `strict-origin-when-cross-origin`              | Limit referrer info         |
+| `Permissions-Policy`      | `camera=(), microphone=(), geolocation=()`     | Deny device APIs            |
+| `Content-Security-Policy` | `default-src 'self'; … frame-ancestors 'none'` | See the CSP section above   |
+
+There is no `Strict-Transport-Security` header: the backend speaks plain HTTP on loopback only, so
+HSTS would have no effect ([[docs/adr/233-loopback-only-backend|ADR-233]]).
 
 ---
 
-## Cross-Origin Resource Sharing (CORS)
+## Same-origin only (no CORS)
 
-Vision implements CORS with strict origin validation to prevent credential leakage (2026-04-29 remediation per ADR-042):
-
-### Policy
-
-- **Explicit Allowlist**: Only origins in `settings.api.corsOrigins` receive `Access-Control-Allow-Origin` response header
-- **Credentials Only with Allowlist**: `Access-Control-Allow-Credentials: true` is set **only** when origin is on the explicit allowlist — never combined with wildcard `*`
-- **Wildcard Dev-Only**: Wildcard origin (`*`) permitted in development environments only, **without credentials** (browser enforces this requirement)
-- **Production**: Wildcard origin is never used; only explicit origins are allowed
-
-### Code Pattern
-
-```javascript
-const origin = req.headers.origin;
-const allowed = settings.api.corsOrigins;
-const isWildcard = allowed === "*";
-
-const originAllowed = Array.isArray(allowed)
-  ? allowed.includes(origin)
-  : !isWildcard && allowed === origin;
-
-if (originAllowed && origin) {
-  // Credentials only with explicit origin allowlist
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-} else if (isWildcard && isDevelopment()) {
-  // Wildcard dev-only, no credentials
-  res.setHeader("Access-Control-Allow-Origin", "*");
-}
-```
-
-### Rationale
-
-Combining wildcard origin with `Allow-Credentials: true` allows any web page to read authenticated responses (browser rejects this, but it's a code-smell security anti-pattern). The fix ensures credentials are never sent with wildcard origins, even in development.
+The backend sends no CORS headers and does not answer CORS preflights
+([[docs/adr/233-loopback-only-backend|ADR-233]]). Every legitimate client is same-origin: the
+packaged renderer loads the backend's own origin, and in development the Vite proxy forwards `/api`
+from the dev server's origin. A page on any other origin therefore cannot read API responses. The
+CSRF guard below still stops cross-site state-changing requests from executing, because the
+same-origin policy hides responses but does not block requests.
 
 ---
 
@@ -307,7 +286,6 @@ Sensitive configuration via environment variables only:
 
 - Database credentials
 - API keys (Kinesis, etc.)
-- CORS origins
 
 Never stored in source code or committed to git.
 
@@ -322,8 +300,7 @@ provider keys appear in the clear in every database dump and in every
 **Why this is accepted rather than fixed:**
 
 - The same class of secret already lives in plaintext in `.env` — provider keys
-  set by environment variable, `DATABASE_URL` with the database password, and
-  `ADMIN_AUTH_TOKEN`. `pgp_sym_encrypt` would need its key from that same file,
+  set by environment variable and `DATABASE_URL` with the database password. `pgp_sym_encrypt` would need its key from that same file,
   so anyone who can read the ciphertext can almost always read the key too. It
   moves the secret, it does not protect it.
 - The threat it would actually address — an attacker who reads the database or a
@@ -456,53 +433,49 @@ Code: [[apps/node-backend/src/services/prices/priceProviderRegistry.ts]]
 
 ---
 
-### Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)
+### Loopback-only boundary: bind gate, Host guard and CSRF guard (2026-10-20)
 
-The global [[apps/node-backend/src/middleware/hostGuard.ts|Host guard]] now checks the destination
-before CORS preflight, body parsing, health checks, static files, and API routes. It accepts
-`localhost`, valid IPv4/IPv6 loopback addresses (including mapped loopback), the specific bind
-hostname/address, and exact additional `SERVER_ALLOWED_HOSTS` entries. Wildcard binds are never
-wildcard permissions. Missing, duplicate, or malformed Host headers and unlisted destinations
-receive 403. Forwarded headers, Origin, fetch metadata, and admin tokens cannot bypass this check.
-Proxies that rewrite Host must enforce their own public hostname policy before forwarding;
-the backend sees only the rewritten authority.
-This closes the server-side arbitrary-Host path used by DNS rebinding; a browser exploit and live
-HTTP acceptance remain unverified in the restricted local test environment. See
-[[docs/guides/deployment#Network and admin security|deployment]] for reverse proxy setup.
+The API has no per-request authentication. Its boundary is the machine, enforced by three checks
+([[docs/adr/233-loopback-only-backend|ADR-233]], superseding the admin token of
+[[docs/adr/063-admin-auth-csrf-guard|ADR-063]]):
 
-Admin endpoints (`/api/admin/*`) are protected by two co-operating guards. See [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] for the full decision record.
+**Bind gate (`main.ts` `start()`)** — the backend exits before listening when `SERVER_HOST` is not
+loopback (`127.0.0.0/8`, `::1`, `localhost`; `isLoopbackHost()` in `hostGuard.ts`). There is no
+override. The packaged and development runtimes bind `127.0.0.1`.
 
-**`adminAuth.js` — Token-or-Open**
+**[[apps/node-backend/src/middleware/hostGuard.ts|Host guard]]** — mounted directly after the
+request id, before body parsing, health checks, static files and routes. The `Host` header must
+name `localhost`, `127.0.0.1` or `::1` (or the loopback bind address when spelled differently)
+with the backend's own port. IP spellings are canonicalized first (`127.1`, `0x7f000001` and
+`[0:0:0:0:0:0:0:1]` match). Missing, malformed or foreign Host values, including a DNS-rebinding
+hostname, receive 403. `X-Forwarded-Host`, Origin and fetch metadata cannot bypass it.
 
-- When `ADMIN_AUTH_TOKEN` is set: every admin request must carry `Authorization: Bearer <token>`. Comparison uses `crypto.timingSafeEqual()` on equal-length buffers to prevent timing side-channels.
-- When `ADMIN_AUTH_TOKEN` is unset: the middleware calls `next()` immediately. No IP check is
-  performed. Native Electron's loopback binding supplies the network boundary and the CSRF guard
-  below supplies the browser-origin boundary.
-- A startup line is logged when the token is absent: info level on a loopback bind (the desktop app's normal setup), warning level on an acknowledged non-loopback bind (`ADMIN_ALLOW_TOKENLESS_NONLOOPBACK`). A non-loopback bind without a token or that acknowledgement refuses to start.
-- A tokenless non-loopback bind refuses startup unless `ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true`
-  explicitly acknowledges an outer access boundary.
-
-> [!warning] This supersedes the RFC1918 IP-allowlist fallback from ADR-037. The middleware no longer trusts the entire private address space — `10.x`, `172.16.x`, `192.168.x`, IPv6 ULA are no longer implicitly trusted.
-
-**`csrfGuard.js` — `createCsrfGuard` (mounted before `adminAuthMiddleware`)**
-
-Blocks cross-site state-changing browser requests across `/api`. Strategy (zero-config, no tokens/cookies):
+**`csrfGuard.ts` — `createCsrfGuard`** — blocks cross-site state-changing browser requests across
+`/api`. Strategy (zero-config, no tokens/cookies):
 
 - `GET`/`HEAD`/`OPTIONS` are always allowed.
 - `Sec-Fetch-Site` header (sent by Chrome 76+, Firefox 90+, Safari 16.4+) is authoritative:
   - `same-origin` or `none` (typed URL, curl, Electron IPC): allow.
   - `same-site` or `cross-site`: reject with 403.
-- Fallback when `Sec-Fetch-Site` absent: if `Origin` is present it must be in `settings.api.corsOrigins`; if `Origin` is absent the request is treated as a non-browser client and allowed.
-
-CORS alone does not stop cross-site requests from executing — it only hides the response. The CSRF guard prevents the request body from reaching the route handler.
+- Fallback when `Sec-Fetch-Site` is absent: a present `Origin` must be one of the backend's own
+  loopback origins (`http://localhost:PORT`, `http://127.0.0.1:PORT`, `http://[::1]:PORT`), plus
+  the Vite dev server's loopback origins on port 8080 outside production (`loopbackOrigins()`).
+  An absent `Origin` is treated as a non-browser client and allowed.
 
 Mount order in `main.ts`:
 
 ```
-mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);
+app.use(createHostGuard({ bindHost, port }));   // first, after requestId
+app.use("/api", globalRateLimiter);
+app.use("/api", csrfGuard);
+mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminRouter);
 ```
 
-Code links: [[apps/node-backend/src/middleware/adminAuth.ts]], [[apps/node-backend/src/middleware/csrfGuard.ts]]
+> [!warning] Cross-site GET reads
+> The CSRF guard does not block safe methods. A cross-site page cannot read the response (no
+> CORS), but a GET still executes. Guarding safe methods is an open decision.
+
+Code links: [[apps/node-backend/src/middleware/hostGuard.ts]], [[apps/node-backend/src/middleware/csrfGuard.ts]]
 
 ### CSV Download Filename Sanitization (Phase C)
 
@@ -682,6 +655,7 @@ The installed application starts only its private loopback PostgreSQL cluster.
 - [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049: Phase 6.1–7 Bug Hunt Recovery Hardening]] — Database schema fixes, Electron backup/restore safety
 - [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040: Backup Format v2 AEAD Encryption]] — Backup encryption scheme (v1 legacy, v2 current)
 - [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042: CodeQL + Dependabot Remediation]] — CORS fix, rate limiters, input validation improvements
+- [[docs/adr/233-loopback-only-backend|ADR-233: Loopback-only backend]] — bind gate, fixed Host allowlist, no CORS, no admin token
 - [[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]] — Security job documentation and setup
 - [[docs/security/index]] — Security documentation index
 - [[docs/security/input-validation]] — Input validation details

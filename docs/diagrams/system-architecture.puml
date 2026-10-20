@@ -20,12 +20,10 @@ package "Client" {
   }
 }
 
-cloud "Reverse proxy (optional)\nTRUSTED_PROXIES for X-Forwarded-For" as Proxy
-
 package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
     node "Express.js" as Express
-    node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
+    node "Middleware Stack\nrequestId · Host guard · metrics\nCSRF · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin" as Routes
     node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration · reports · attachments" as Services
     node "Shared TypeScript helpers\ncomplete-source detection + bounded CSV preview\nPortfolio Tax estimators + cost buckets\nAnalysis CSV / stored-ZIP workbook interchange\nResearch stats / indicators / exact source previews" as SharedHelpers
@@ -69,8 +67,6 @@ cloud "Build & Distribution" as DevToolsCloud {
 package "Client to Server" {
   User --> ReactApp
   ReactApp --> Express : REST API (loopback)
-  ReactApp ..> Proxy : optional
-  Proxy ..> Express : forward
 }
 
 package "Desktop Runtime" {
@@ -121,7 +117,7 @@ end note
 
 note right of Middleware
   Rate limit: 200 req/min global
-  Admin auth: crypto.timingSafeEqual against ADMIN_AUTH_TOKEN
+  Loopback-only: bind gate + Host guard + CSRF guard, no CORS (ADR-233)
   Envelope: { data, error, meta }  (ADR-026)
 end note
 

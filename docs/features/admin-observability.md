@@ -2,8 +2,8 @@
 title: Admin Observability Dashboard
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-20
+updated: 2026-10-20
 tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
@@ -43,7 +43,7 @@ All `/admin/*` routes are now wrapped with the `RequireAdmin` guard component ([
 - If `adminMode === true`: children are rendered
 - If `adminMode === false`: user is redirected to `/` (dashboard)
 
-**Note:** The backend `adminAuth.js` middleware is the actual security boundary — it rejects `/api/admin/*` requests without valid admin credentials. The frontend guard exists purely for UX: without it, deep-linking to `/admin` renders an empty page with cascading API failures. With it, users are redirected gracefully until they enable Admin Mode in settings.
+**Note:** The backend's loopback-only boundary (bind gate, Host guard and CSRF guard, [[docs/adr/233-loopback-only-backend|ADR-233]]) is the actual security boundary; there are no admin credentials. The frontend guard exists purely for UX: without it, deep-linking to `/admin` renders an empty page with cascading API failures. With it, users are redirected gracefully until they enable Admin Mode in settings.
 
 > [!note] Shadow Divergences (Phase F → Removed Phase 9)
 > The Shadow Divergences page (`/admin/shadow-divergences`) was used to track aggregation endpoint parity during the Phase 2→9 migration. It has been removed as of Phase 9, along with the underlying `agg_shadow_divergences` table (dropped via migration 0009). All validation criteria were met and aggregation parity confirmed.

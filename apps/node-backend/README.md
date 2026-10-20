@@ -26,9 +26,9 @@ To run only the backend, provide a real `DATABASE_URL` and, for schema changes,
 bun run --filter 'financial-transaction-manager-node' dev
 ```
 
-The backend binds to loopback in native mode. A non-loopback deployment without
-`ADMIN_AUTH_TOKEN` fails closed unless the operator explicitly acknowledges an external network
-boundary.
+The backend only binds to loopback: it exits at startup when `SERVER_HOST` is not
+`127.0.0.0/8`, `::1` or `localhost`, and it answers only requests whose `Host` names a loopback
+address with its own port (ADR-233).
 
 ## Configuration
 

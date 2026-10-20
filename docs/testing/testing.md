@@ -1035,7 +1035,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.ts]], [[apps/nod
   - [[apps/node-backend/tests/helpers/repoMocks.test.ts]] keeps the shared `mockTxConnection` contract aligned with production ambient routing, including nested savepoints and post-transaction invalidation.
 
 - Security/config regression additions for this branch:
-  - [[apps/node-backend/tests/config.test.ts]] covers optional `ADMIN_AUTH_TOKEN` config mapping and trimming behavior.
+  - [[apps/node-backend/tests/config.test.ts]] covers config defaults and env overrides, including that a container-exported `HOSTNAME` no longer changes the bind host.
   - [[apps/node-backend/tests/main.test.ts]] covers admin auth middleware behavior (token required only when configured).
 - Route hardening/perf regression additions for this branch:
   - [[apps/node-backend/tests/routes/investments.test.ts]] covers bulk-transactions cache-key correctness for differing `limit` values.

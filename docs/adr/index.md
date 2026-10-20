@@ -286,6 +286,16 @@ in a hidden, sandboxed, script-free window without network access. Puppeteer and
 Chrome Headless Shell are removed. A plain browser opens its print dialog instead. This is a
 breaking API change. It supersedes the PDF-browser part of ADR-155.
 
+### 2026-10-20: Loopback-only backend (accepted)
+
+[[docs/adr/233-loopback-only-backend|ADR-233]] makes the backend refuse any non-loopback bind and
+fixes the Host allowlist to `localhost`, `127.0.0.1` and `::1` with the backend port. It removes
+the Docker/LAN/browser-deployment leftovers: the `ADMIN_AUTH_TOKEN` bearer check and admin token
+UI, CORS and `CORS_ORIGINS`, `SERVER_ALLOWED_HOSTS`, `TRUSTED_PROXIES`, the gzip middleware, HSTS,
+the `HOSTNAME` bind fallback, `VISION_VITE_BIND_HOST` and the role-bootstrap connect retry. The CSRF
+guard's Origin fallback accepts only the backend's own loopback origins. It supersedes the admin
+token of ADR-063 and corrects ADR-077's status to superseded by ADR-176.
+
 ### 2026-10-20: Remove the Life scenario panel (accepted)
 
 [[docs/adr/230-remove-life-scenario|ADR-230]] removes the Life scenario panel from the Portfolio

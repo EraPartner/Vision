@@ -44,7 +44,7 @@ offline, but receives `allowExternal: false`; the later online recovery pass per
 {
   debug: boolean,              // From DEBUG env var (default: true)
   server: {
-    host: string,              // SERVER_HOST or HOSTNAME (default: localhost)
+    host: string,              // SERVER_HOST (default: localhost); must be loopback (ADR-233)
     port: number,              // PORT (default: 3002)
     environment: string,       // ENVIRONMENT or NODE_ENV (default: development)
   },
@@ -58,7 +58,6 @@ offline, but receives `allowExternal: false`; the later online recovery pass per
     title: string,             // App title
     version: string,           // API version
     description: string,       // API description
-    corsOrigins: string[],     // CORS_ORIGINS (comma-separated)
   },
   admin: {
     enableResetDb: boolean,    // ENABLE_RESET_DB (default: false)

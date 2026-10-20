@@ -8,12 +8,11 @@ tags:
   - security
   - rate-limiting
   - ddos
-  - trusted-proxies
-  - xff
+  - socket-keyed
   - dev-mode
 description: Rate limiting implementation to protect against abuse and ensure
   fair resource usage. June 2026 adds global baseline limiter on /api,
-  explicit trusted-proxy XFF handling, and VISION_DEV fail-safe dev bypass.
+  socket-keyed buckets (no X-Forwarded-For trust since 2026-10-20), and VISION_DEV fail-safe dev bypass.
 aliases:
   - rate limit
   - ddos protection
@@ -311,44 +310,21 @@ Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLim
 
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,
-- client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
+- the client key (`req.socket.remoteAddress`, then `unknown`), which ignores `X-Forwarded-For`,
 - presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), `importRateLimiter` (`20 req/min`), `attachmentRateLimiter` (`60 req/min` for file operations), `spaRateLimiter` (`600 req/min` for SPA fallback serving), `reportRateLimiter` (`30 req/min` for report document generation), `marketRateLimiter` (`90 req/min` for Yahoo Finance proxy), `investmentRateLimiter` (`300 req/min` for external price providers), and `aggregationRateLimiter` (`600 req/min` for CPU-bound dashboard/forecast endpoints).
 
 Related code: [[apps/node-backend/src/middleware/rateLimiter.ts]]
 
-## X-Forwarded-For / Trusted Proxies (June 2026)
+## Client key: the socket peer (2026-10-20)
 
-Previously, the rate limiter derived the client IP from `X-Forwarded-For` without validation, allowing a hostile client to spoof any IP and bypass per-IP limits.
-
-The `rateLimiter.js` module now exports an `ipMatchesRule(ip, rule)` helper and gates XFF trust on the `TRUSTED_PROXIES` env var:
-
-```javascript
-// config.js
-trustedProxies: ((process.env.TRUSTED_PROXIES ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean),
-  // rateLimiter.js
-  function resolveClientIp(req) {
-    const socketIp = req.socket?.remoteAddress ?? "unknown";
-    const xff = req.headers["x-forwarded-for"];
-    if (!xff || trustedProxies.length === 0) return socketIp;
-    // Only trust XFF when the request came through a known proxy
-    if (trustedProxies.some((rule) => ipMatchesRule(socketIp, rule))) {
-      return xff.split(",")[0].trim();
-    }
-    return socketIp;
-  });
-```
-
-**Default behavior (no `TRUSTED_PROXIES` set):** Client IP is always the raw socket address. XFF
-headers are ignored. This is correct for direct native access without a reverse proxy.
-
-**Behind a reverse proxy:** Set `TRUSTED_PROXIES` to your proxy's IP or CIDR (e.g. `192.168.1.1` or `10.0.0.0/8`). See [[docs/reference/environment-variables|environment variables]].
+Every bucket is keyed by `keyPrefix` plus `req.socket.remoteAddress`. `X-Forwarded-For` is never
+read. The backend only listens on loopback with no proxy in front of it
+([[docs/adr/233-loopback-only-backend|ADR-233]]), so the June 2026 `TRUSTED_PROXIES` setting and its
+IPv4 CIDR matcher were removed. Limits per bucket are unchanged.
 
 ## Development Bypass (Fail-Safe, June 2026)
 
-Dev-only bypasses — rate-limit skipping and wildcard CORS reflection — are now gated on the **explicit** env var `VISION_DEV=true`.
+The dev-only rate-limit bypass is gated on the **explicit** env var `VISION_DEV=true`.
 
 Previously, these bypasses activated whenever `ENVIRONMENT=development`, which could silently fire in any deployment that happened to set `NODE_ENV=development`. The new check is fail-safe: the default is disabled, and the backend `dev` npm script sets `VISION_DEV=true` automatically.
 
@@ -358,11 +334,6 @@ isDev: process.env.VISION_DEV === 'true',
 
 // rateLimiter.js — skip check
 if (config.isDev) return next();
-
-// main.ts — CORS reflection (dev only)
-if (config.isDev) {
-  res.setHeader('Access-Control-Allow-Origin', req.headers.origin ?? '*');
-}
 ```
 
-> [!warning] Never set `VISION_DEV=true` in production. It disables all rate limiting and opens CORS reflection.
+> [!warning] Never set `VISION_DEV=true` in production. It disables all rate limiting.

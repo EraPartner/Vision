@@ -2,8 +2,8 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -74,8 +74,16 @@ import env from "@/lib/env";
 
 ```typescript
 // In apps/frontend/src/lib/api/client.ts
-export const API_BASE_URL = env.VITE_API_URL || "http://localhost:3002";
+export const API_BASE_URL =
+    env.VITE_API_URL ||
+    (import.meta.env.MODE !== "test" && typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:3002");
 ```
+
+The API is always same-origin: the backend sends no CORS headers
+([[docs/adr/233-loopback-only-backend|ADR-233]]). In development the Vite proxy forwards `/api`;
+only Vitest falls back to `http://localhost:3002` (MSW).
 
 If `VITE_API_URL` is malformed, Zod validation fails at boot with a clear error message, preventing silent misconfiguration. See [[docs/adr/030-frontend-environment-schema|ADR-030]] for validation rules.
 
@@ -120,7 +128,11 @@ apps/frontend/src/types/
 import { env } from "@/lib/env";
 
 // Exported utilities
-export const API_BASE_URL = env.VITE_API_URL || "http://localhost:3002";
+export const API_BASE_URL =
+    env.VITE_API_URL ||
+    (import.meta.env.MODE !== "test" && typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost:3002");
 export const DEFAULT_TIMEOUT_MS = 30_000;
 export const MAX_RETRIES = 2;
 export const RETRYABLE_STATUS_CODES = [408, 429, 502, 503, 504];

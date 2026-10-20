@@ -1305,7 +1305,7 @@ research pages (Home/Compare/ChartBuilder/MarketLookup).
 **Source:** [[apps/frontend/src/lib/api.ts|api.ts]]
 
 ```ts
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3002";
+const API_BASE_URL = env.VITE_API_URL || (MODE !== "test" ? window.location.origin : "http://localhost:3002");
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 502, 503, 504]);
@@ -1385,7 +1385,7 @@ export const apiClient = new ApiClient();
 
 | Pattern      | Rule                                                                                                              |
 | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Base URL     | `VITE_API_URL` env var, fallback to `localhost:3002`                                                              |
+| Base URL     | `VITE_API_URL` env var, else the page origin (same-origin only, ADR-233); `localhost:3002` under Vitest          |
 | Imports      | New narrow consumers import from `@/lib/api/<domain>`; `apiClient` remains a compatibility or multi-domain facade |
 | Query params | `buildQuery()` skips `undefined`/`null` values                                                                    |
 | Retry        | Exponential backoff for idempotent methods only                                                                   |
@@ -1565,15 +1565,15 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ## Express App Setup
 
-**Source:** [[apps/node-backend/src/main.ts|main.ts]], [[apps/node-backend/src/middleware/cors.ts|cors.js]], [[apps/node-backend/src/middleware/compression.ts|compression.js]]
+**Source:** [[apps/node-backend/src/main.ts|main.ts]], [[apps/node-backend/src/middleware/hostGuard.ts|hostGuard.ts]], [[apps/node-backend/src/middleware/csrfGuard.ts|csrfGuard.ts]]
 
 ### Middleware Stack (in order)
 
-1. **Request ID and metrics** — attach the correlation ID, then begin rolling request measurement
-2. **CORS** — `middleware/cors.ts` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
-3. **JSON parsing** — `express.json({ limit: '1mb' })`
-4. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
-5. **Compression** — `middleware/compression.ts` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
+1. **Request ID** — attach the correlation ID
+2. **Host guard** — `middleware/hostGuard.ts` rejects any `Host` other than `localhost`, `127.0.0.1` or `::1` with the backend port (403)
+3. **Request metrics** — begin rolling request measurement
+4. **JSON parsing** — `express.json({ limit: '1mb' })`
+5. **Security headers** — CSP, X-Frame-Options, etc. (no HSTS and no CORS headers; [[docs/adr/233-loopback-only-backend|ADR-233]])
 6. **Request logging and response envelope** — log the request and attach `res.ok(data, meta?)`
 7. **Global guards and rate limiter** — apply cross-site request forgery protection and limiting before routes
 8. **Routes** — registered with per-route limiters where needed

@@ -2,12 +2,12 @@
   "generatedOn": "2026-10-20",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 922,
+  "totalFiles": 918,
   "counts": {
-    "simulated-dom": 259,
-    "unit-script-or-contract-needs-review": 304,
+    "simulated-dom": 258,
+    "unit-script-or-contract-needs-review": 302,
     "property-test": 12,
-    "mocked-unit-or-service": 197,
+    "mocked-unit-or-service": 196,
     "live-http-contract": 2,
     "source-or-file-contract": 16,
     "database-test": 101,
@@ -1155,11 +1155,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/lib/__tests__/adminToken.test.ts",
-      "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/frontend/src/lib/__tests__/aiChatStreamStore.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2063,14 +2058,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/adminAuth.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
       "path": "apps/node-backend/tests/adr088Contract.db.test.ts",
       "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2408,22 +2395,12 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/compressionMiddleware.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/config.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/connection.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/corsMiddleware.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

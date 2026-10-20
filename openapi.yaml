@@ -7,9 +7,11 @@ info:
     Self-hosted financial transaction manager.
     All responses are wrapped in the ADR-026 envelope:
     `{ ok: true, data: T }` on success, `{ ok: false, error: {...} }` on failure.
-    Every request must have one valid Host authority targeting loopback, the configured
-    listener hostname/address, or an exact SERVER_ALLOWED_HOSTS entry. Rejected
-    destinations receive 403 before CORS, body parsing, health and routes.
+    The backend only listens on loopback and has no user or admin authentication
+    (ADR-233). Every request must have one Host authority naming localhost,
+    127.0.0.1 or ::1 with the backend port; other destinations receive 403 before
+    body parsing, health and routes. No CORS headers are sent: clients are
+    same-origin.
 
 servers:
   - url: http://localhost:3000

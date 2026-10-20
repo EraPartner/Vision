@@ -4,7 +4,7 @@ type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
 date: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -752,13 +752,14 @@ InvestmentsRouter --> IR
 
 Recent update note (2026-04-10):
 
-The global destination Host guard runs immediately after request ID assignment, before CORS,
-parsers, health checks, and every route. It grants exact configured destinations and loopback
-authorities; wildcard binds do not weaken it. The admin token and `/api` CSRF guards remain
-separate checks. See [[docs/security/data-protection#Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)|Data Protection]]
-and [[docs/guides/deployment#Network and admin security|Deployment]].
+The global destination Host guard runs immediately after request ID assignment, before parsers,
+health checks, and every route. It accepts only `localhost`, `127.0.0.1` and `::1` with the backend
+port. Startup refuses a non-loopback bind, the backend sends no CORS headers, and the `/api` CSRF
+guard is a separate check ([[docs/adr/233-loopback-only-backend|ADR-233]]). See
+[[docs/security/data-protection#Loopback-only boundary: bind gate, Host guard and CSRF guard (2026-10-20)|Data Protection]]
+and [[docs/guides/deployment#Network boundary|Deployment]].
 
-- Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.ts]], [[apps/node-backend/src/config/config.ts]]).
+- Optional admin bearer-auth middleware was added in main app wiring (`ADMIN_AUTH_TOKEN`). It was removed on 2026-10-20 by [[docs/adr/233-loopback-only-backend|ADR-233]]; admin routes rely on the loopback-only boundary.
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.ts]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/importRoutes.ts]], [[apps/node-backend/src/routes/transactions.ts]]).
 - Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.ts]] against [[apps/node-backend/src/routes/settings.ts]].

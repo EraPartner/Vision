@@ -80,9 +80,8 @@ filter. Prefer the shared table and query-key contracts over a local refresh wor
 
 ### Rate limit exceeded
 
-Wait for the returned window to reset. Do not add broad trusted-proxy rules to hide the symptom.
-When a reverse proxy is intentional, configure `TRUSTED_PROXIES` narrowly and verify the direct
-socket address.
+Wait for the returned window to reset. Buckets are keyed by the socket peer address only;
+`X-Forwarded-For` is ignored and no proxy configuration exists ([[docs/adr/233-loopback-only-backend|ADR-233]]).
 
 ### Import fails on a large file
 

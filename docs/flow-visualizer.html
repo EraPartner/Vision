@@ -1245,7 +1245,7 @@
           {
             "id": "be.middleware",
             "label": "Middleware chain",
-            "sub": "hostGuard · adminAuth · csrfGuard · rateLimit · errorHandler",
+            "sub": "hostGuard · csrfGuard · rateLimit · errorHandler",
             "kind": "backend",
             "x": 220,
             "y": 348
@@ -3436,68 +3436,60 @@
           },
           {
             "id": "signin",
-            "name": "Use an optional admin API token",
+            "name": "Open the admin screens (loopback-only, no token)",
             "category": "Admin",
-            "summary": "Admin Mode exposes screens. An operator-provided session token authorizes API requests when configured.",
+            "summary": "Admin Mode exposes screens. The API has no admin credentials; the loopback-only bind, the Host guard and the CSRF guard are the boundary (ADR-233).",
             "steps": [
               {
                 "from": "browser",
                 "to": "fe.pages",
                 "title": "Open the admin overview",
-                "note": "Enable Admin Mode to expose the screens. The token card stays available when requests fail.",
-                "payload": "AdminTokenCard",
+                "note": "Enable Admin Mode to expose the screens. There is no token card.",
+                "payload": "AdminOverviewPage",
                 "annotation": "apps/frontend/src/pages/admin/AdminOverviewPage.tsx; apps/frontend/src/components/auth/RequireAdmin.tsx"
               },
               {
                 "from": "fe.pages",
-                "to": "browser",
-                "title": "Store the token for this session",
-                "note": "Saving stores the trimmed operator token; it does not validate it.",
-                "payload": "sessionStorage vision.adminToken",
-                "annotation": "apps/frontend/src/lib/adminToken.ts"
-              },
-              {
-                "from": "browser",
                 "to": "fe.apiclient",
-                "title": "Read the session token",
-                "note": "Attach Bearer only when a token is stored.",
-                "payload": "getAdminToken / apiRequest",
-                "annotation": "apps/frontend/src/lib/api/client.ts"
+                "title": "Request admin data same-origin",
+                "note": "No Authorization header; the request goes to the page's own origin.",
+                "payload": "apiRequest(GET /api/admin/database/stats)",
+                "annotation": "apps/frontend/src/lib/api/client.ts; apps/frontend/src/lib/api/admin.ts"
               },
               {
                 "from": "fe.apiclient",
                 "to": "be.middleware",
-                "title": "Send an admin request",
-                "note": "Use a real protected admin endpoint.",
-                "payload": "GET /api/admin/database/stats",
-                "annotation": "apps/frontend/src/lib/api/admin.ts"
+                "title": "Pass the loopback Host and CSRF checks",
+                "note": "Host must be localhost, 127.0.0.1 or ::1 with the backend port; state-changing cross-site requests are rejected.",
+                "payload": "Host: 127.0.0.1:PORT, Sec-Fetch-Site: same-origin",
+                "annotation": "apps/node-backend/src/middleware/hostGuard.ts; apps/node-backend/src/middleware/csrfGuard.ts"
               },
               {
                 "from": "be.middleware",
                 "to": "be.routes",
-                "title": "Check configured authentication",
-                "note": "Timing-safe in-memory comparison; missing/wrong token gives 401 when configured. Without a configured token, access is open.",
-                "payload": "ADMIN_AUTH_TOKEN",
-                "annotation": "apps/node-backend/src/middleware/adminAuth.ts"
+                "title": "Dispatch to the admin router",
+                "note": "The admin mount adds only its rate limiter and the CSRF alias; no authentication middleware.",
+                "payload": "adminRateLimiter → adminRouter",
+                "annotation": "apps/node-backend/src/main.ts"
               },
               {
                 "from": "be.routes",
                 "to": "db.postgres",
                 "title": "Read requested statistics",
-                "note": "The database supplies the requested data, never token matching.",
+                "note": "The database supplies the requested data.",
                 "payload": "database statistics",
                 "annotation": "apps/node-backend/src/routes/admin.ts"
               },
               {
                 "from": "be.routes",
                 "to": "fe.pages",
-                "title": "Show data or access guidance",
-                "note": "No onboarding redirect. Tokenless non-loopback startup needs explicit acknowledgement of external access controls.",
-                "payload": "data or UNAUTHORIZED",
+                "title": "Show data or the error",
+                "note": "Failures render a humanized message. A non-loopback SERVER_HOST makes startup exit, so the API is never reachable from the network.",
+                "payload": "data or error envelope",
                 "annotation": "apps/frontend/src/components/shared/AdminErrorState.tsx; apps/node-backend/src/main.ts"
               }
             ],
-            "takeaway": "There is no global startup sign-in. UI visibility is a preference; server authorization depends on the configured token and deployment controls.",
+            "takeaway": "There is no sign-in. UI visibility is a preference; server access is limited to the local machine by the loopback-only boundary.",
             "docs": [
               {
                 "path": "features/admin-observability.md",
@@ -4316,7 +4308,7 @@
             "id": "db-data-edit",
             "name": "Browse and edit a DB table (admin data editor)",
             "category": "Admin",
-            "summary": "Admin opens a table in the data editor, browses/filters rows, edits cells, previews the SQL dry-run, then commits the batch — all under admin auth with xmin optimistic concurrency and a log line per committed change.",
+            "summary": "Admin opens a table in the data editor, browses/filters rows, edits cells, previews the SQL dry-run, then commits the batch — behind the loopback-only boundary with xmin optimistic concurrency and a log line per committed change.",
             "steps": [
               {
                 "from": "browser",
@@ -4333,8 +4325,8 @@
               {
                 "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "GET /api/admin/database/tables/:table/schema — Bearer + CSRF headers",
-                "annotation": "Admin middleware stack: csrfGuard → adminAuth (timing-safe Bearer when ADMIN_AUTH_TOKEN set) → adminRateLimiter → handler in admin.ts."
+                "payload": "GET /api/admin/database/tables/:table/schema — same-origin, Sec-Fetch-Site",
+                "annotation": "Admin middleware stack: hostGuard → csrfGuard → adminRateLimiter → handler in admin.ts (no authentication middleware, ADR-233)."
               },
               {
                 "from": "be.routes",

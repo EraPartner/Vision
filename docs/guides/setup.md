@@ -63,10 +63,10 @@ It does not open an Electron window; use `bun run electron:dev` for the desktop 
 separate administrator, migration-owner, and application roles, installs required extensions, runs the
 Kysely migrator (`db/migrations/`), and waits for detailed readiness.
 
-The Vite development proxy listens on `127.0.0.1` by default because it exposes the local data
-API. `VISION_VITE_BIND_HOST` is a process environment override for the Vite config, not a
-browser setting. Wildcard values require an explicit outer network boundary. Keep the default
-loopback bind and Vite hostname validation enabled for local development.
+The Vite development server always listens on `127.0.0.1` because its proxy exposes the local data
+API. Open the frontend at `http://127.0.0.1:8080`: the browser calls `/api` same-origin and the
+proxy forwards it to the backend named by `VISION_DEV_API_TARGET`, which `bun run dev` sets. The
+backend sends no CORS headers, so a frontend on another origin cannot use it ([[docs/adr/233-loopback-only-backend|ADR-233]]).
 
 For focused frontend work, point `DATABASE_URL` at a disposable PostgreSQL 18 database and run the
 workspace scripts directly. `bun run test:db` creates, migrates, and removes a private temporary
