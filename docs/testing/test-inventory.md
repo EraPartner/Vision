@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-19
+date: 2026-10-20
 last_modified: 2026-10-19
-updated: 2026-10-19
+updated: 2026-10-20
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -880,6 +880,10 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 
 **Not in CI yet:** opt-in via `bun run test:mutation` from `apps/frontend`. First baseline run before deciding whether to gate.
 
+> [!note] Removed 2026-10-19
+> `test:mutation`, `stryker.config.json` and the Stryker dev dependencies were removed: the
+> command was never in CI and no longer started under Bun (its TypeScript checker plugin did not load).
+
 **Coverage delta this phase:** baseline 1219 → **1233** vitest tests (+14 from F5);; +mutation harness (F6).
 
 ### Edge-Coverage Sweep (2026-05-02 — Phase E16)
@@ -995,17 +999,6 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | `apps/frontend/src/pages/portfolio/__tests__/PortfolioImportPage.presets.test.ts` | Portfolio import presets         | Nexo and Saxo source selection maps to the expected maintained format, columns, specialized hint, and fresh config object                                                                             |
 | `apps/node-backend/tests/sseWriter.test.ts`                                       | SSE backpressure (Phase 3.2)     | `drainIfNeeded()` immediate return + full-buffer pause; `createSseWriter()` client tracking, async write, closed state, frame format                                                                  |
 
-### Earlier Backend Coverage (2026-04-10)
-
-| File                                                  | Area                   | Coverage Added                                        |
-| ----------------------------------------------------- | ---------------------- | ----------------------------------------------------- |
-| `apps/node-backend/tests/config.test.ts`              | Config/security        | `ADMIN_AUTH_TOKEN` mapping + trim behavior            |
-| `apps/node-backend/tests/routes/investments.test.ts`  | Performance/regression | Bulk transactions cache-key includes `limit`          |
-| `apps/node-backend/tests/routes/transactions.test.ts` | Security               | CSV formula neutralization + sanitized route errors   |
-| `apps/node-backend/tests/routes/import.test.ts`       | Security               | Sanitized import errors and stream error expectations |
-| `apps/node-backend/tests/routes/admin.test.ts`        | Security               | Sanitized admin errors and auth behavior assertions   |
-| `apps/node-backend/tests/routes/info.test.ts`         | Security/perf          | `/api/info/refresh-views` route + limiter assertions  |
-
 ## Coverage Gaps
 
 ### High-Priority Missing Tests
@@ -1067,26 +1060,6 @@ bun vitest run --test-name-pattern="testName"
 - Unit tests test pure functions with various input/output combinations
 - Integration tests test API endpoints with real database queries
 
-### Backend route and middleware coverage updates (2026-04-10)
-
-| File                                                  | Area                | Coverage Added                                                                                                                                                                           |
-| ----------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/node-backend/tests/rateLimiter.test.ts`         | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (500/min), `adminMutateLimiter` (30/min), `importRateLimiter` (20/min)                             |
-| `apps/node-backend/tests/routes/admin.test.ts`        | Admin API           | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
-| `apps/node-backend/tests/routes/marketLookup.test.ts` | Market API          | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance                                                                      |
-
-### Backend coverage additions (2026-04-11)
-
-| File                                                           | Area                        | Coverage Added                                                                                                                     |
-| -------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/currencyConversionService.test.ts]]  | Currency conversion service | Unsupported-currency fallback, `warmCache` dual-API failure fallback, ECB 90-day historical backfill                               |
-| [[apps/node-backend/tests/routes/plannedTransactions.test.ts]] | Planned transactions route  | Loan term bounds validation, patch `recipient_name`/`category_name` name-to-id resolution, loan toggle-off schedule/field clearing |
-| [[apps/node-backend/tests/routes/transactions.test.ts]]        | Transactions route          | `normalize_to_eur` conversion path, duplicate detection `409`, unresolved recipient/category validation branches in patch flow     |
-
-Validation runs (passed): `bun vitest run tests/currencyConversionService.test.ts tests/routes/plannedTransactions.test.ts tests/routes/transactions.test.ts`; `npm test -- --coverage`
-
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
-
 ### Test Updates (2026-04-22)
 
 | File                                              | Area       | Changes                                                                                                                                                                                                                      |
@@ -1096,120 +1069,11 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
 
-### Backend coverage additions (2026-04-11, repository/schema)
-
-| File                                                             | Area                           | Coverage Added                                                                                                                           |
-| ---------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/categoryRepository.test.ts]]           | Category repository            | `createOrGet` normalization, insert success (`created: true`), conflict fallback returning existing enriched category (`created: false`) |
-| [[apps/node-backend/tests/plannedTransactionRepository.test.ts]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries                         |
-
-> [!note] Schema initialization test archived
-> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); since [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] the schema comes from `db/migrations/` through the Kysely migrator.
-
-Validation runs (passed): `bun vitest run tests/categoryRepository.test.ts tests/plannedTransactionRepository.test.ts`; `npm test -- --coverage`
-
-Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
-
-### Incremental backend coverage addendum (2026-04-11)
-
-- [[apps/node-backend/tests/currencyConversionService.test.ts]] adds a historical miss-cache regression scenario, verifying repeated historical misses do **not** cause duplicate DB lookups.
-- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]]
-- Validation context (passed): `bun vitest run tests/currencyConversionService.test.ts`; `npm test -- --coverage` (overall `74.18/59.54/78.47/77.68`).
-
-### Backend coverage addendum (2026-04-11, repository deep-branching)
-
-| File                                                             | Area                           | Coverage Added                                                                                                                                                                                                                                                                                                                               |
-| ---------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/categoryRepository.test.ts]]           | Category repository            | `getAll` filtered+enriched branch, `getCount`, `getById` null return, `update` no-op + normalization, `hardDelete`, `assignToRecipients`                                                                                                                                                                                                     |
-| [[apps/node-backend/tests/plannedTransactionRepository.test.ts]] | Planned transaction repository | `getAll` rows-present hydration path (executions + loan schedule), `getById` null/hydrated, `create` loan success + rollback on schedule failure + non-loan no-schedule insert, `update` sanitized fallback + null update + hydration, `hardDelete` true/false, `addExecution` explicit/default date, `replaceLoanSchedule` success/rollback |
-
-Validation runs (passed): `bun vitest run tests/categoryRepository.test.ts tests/plannedTransactionRepository.test.ts`; `npm test -- --coverage`
-
-Coverage snapshot after this cycle: overall `76.84/61.72/80.74/80.29` (statements/branches/functions/lines).
-
-Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
-
-### Backend coverage addendum (2026-04-11, adapters + raw import service)
-
-> [!info] Phase C Update (April 2026)
-> These tests predate the Phase C consolidation of importService, streamingImportService, and rawTransactionImportService into `importPipeline`. Tests have been refactored to mock the unified orchestrator; see Phase C addendum below.
-
-| File                                              | Area                    | Coverage Added                                                                                       |
-| ------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/wiseAdapter.test.ts]]   | Bank adapters           | Wise adapter parsing/normalization paths                                                             |
-| [[apps/node-backend/tests/sabbAdapter.test.ts]]   | Bank adapters           | SABB adapter parsing/normalization paths                                                             |
-| [[apps/node-backend/tests/visionAdapter.test.ts]] | Bank adapters           | Vision adapter parsing/normalization paths                                                           |
-| [[apps/node-backend/tests/routes/import.test.ts]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
-
-Removed tests (2026-05-29):
-
-- `rawTransactionImportService.test.js` — Deleted (file and implementation removed)
-- `streamingImportService.test.js` — Deleted (file and implementation removed)
-- `iban.test.js` — Deleted (orphan; `iban.js` removed)
-- `importService.test.js` — Superseded by route-level tests mocking unified orchestrator
-
-Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]], [[docs/testing/testing|Testing Documentation]]
-
-### Backend coverage addendum (2026-04-11, info routes)
-
-| File                                            | Area                                   | Coverage Added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [[apps/node-backend/tests/routes/info.test.ts]] | Info routes + cache warm orchestration | Route-level dependency mocks (DB, recurring detection, materialized views, FX cache helpers, portfolio snapshots); `GET /recurring-patterns` fallback semantics; `GET /exchange-rates` stale/current refresh branching + warm-failure warning + DB `500`; `POST /exchange-rates/refresh` success/error; `POST /refresh-views` success/failure; `GET /portfolio-performance` mapping/default date range/invalid-currency EUR fallback/error `500`; `warmInfoCaches` prewarm + failure-isolation/logging |
-
-Validation runs (passed):
-
-- `bun vitest run tests/routes/info.test.ts`
-- `npm test -- --coverage`
-
-Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
-
-Related source links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.ts]], [[apps/node-backend/src/services/materializedViewService.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]], [[docs/testing/testing|Testing Documentation]]
-
-### Backend coverage addendum (2026-04-11, portfolio transaction repository)
-
-| File                                                               | Area                             | Coverage Added                                                                                                                                                                                                                                                  |
-| ------------------------------------------------------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/portfolioTransactionRepository.test.ts]] | Portfolio transaction repository | `getAllByInvestmentIds` empty-normalized-id return, id/type sanitization + clamped pagination limits, omitted type/limit branch; `getCount` single-id + type, normalized-id-array path, all-invalid-ids type-only path; `getSummary` grouped summary row return |
-
-Validation runs (passed):
-
-- `bun vitest run tests/portfolioTransactionRepository.test.ts` (25 tests)
-- `npm test -- --coverage` (827 tests)
-
-Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]] `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
-
-Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
-
 ### Backend coverage additions (2026-05-18, snapshot valuation parity)
 
 | File                                                                    | Area                                | Coverage Added                                                                                                                                                                                                                                                                                                |
 | ----------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.ts]] | Portfolio snapshot valuation parity | Regression tests locking savings accrual formula (`principal × rate × days / (100 × 365)`), real-estate appreciation summed from `appreciation` transactions, bond `interest` transaction resetting the accrual clock, and latest-day unit-based snapshot using `investments.current_price` not stale history |
-
-### Backend coverage additions (2026-04-11, managed loop safe/sequential)
-
-| File                                                                    | Area                                   | Coverage Added                                                               |
-| ----------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/routes/marketLookup.test.ts]]                 | Market lookup routes                   | Expanded quote/news route branch and response-shape coverage                 |
-| [[apps/node-backend/tests/priceProviderService.test.ts]]                | Price provider service                 | Expanded provider-resolution and price-history handling branches             |
-| [[apps/node-backend/tests/investmentRepository.test.ts]]                | Investment repository                  | Expanded repository compatibility and query-path coverage                    |
-| [[apps/node-backend/tests/routes/import.test.ts]]                       | Import routes (Phase C)                | Streaming import backpressure, orchestrator integration, error-path coverage |
-| [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.ts]] | Portfolio performance snapshot service | Expanded snapshot generation and edge-case branch coverage                   |
-| [[apps/node-backend/tests/infoRepository.test.ts]]                      | Info repository                        | Expanded aggregation and conversion-path coverage                            |
-| [[apps/node-backend/tests/materializedViewService.test.ts]]             | Materialized view service              | Expanded refresh/coalescing and failure-path coverage                        |
-
-Coverage snapshot after managed loop stop condition:
-
-- Statements: **87.78%**
-- Branches: **75.00%**
-- Functions: **91.71%**
-- Lines: **90.89%**
-- Passing tests: **54 files**, **871 tests**
-
-Loop artifacts:
-
-- [[.claude/baselines/test-coverage-baseline-20260411-101903.md]]
-- [[.claude/plans/test-coverage-sequential-safe-runbook.md]]
 
 ## Frontend Phase D: Coverage Threshold Ratchet & Contract Tests (2026-04-30, expanded 2026-05-02)
 

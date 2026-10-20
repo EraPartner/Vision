@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     architecture,
@@ -15,7 +15,6 @@ tags:
     health-monitoring,
     async-io,
     csp-headers,
-    dev-rebuild,
     phase-0,
     phase-1,
     phase-2,
@@ -32,7 +31,6 @@ tags:
     postgresql-18,
     startup,
     troubleshooting,
-    alembic-migration-fixes,
     deployment-modes,
     shell-installer,
     update-system,
@@ -967,47 +965,6 @@ The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/a
 - Manual "Check for Updates" button, which refreshes the shared status query
 - Displays latest available version if newer; the install button appears in Electron only
 
-#### Retired CI/CD Integration (April–May 2026)
-
-> [!history]
-> The following paragraphs describe the former image-based pipeline. ADR-133 retired it. Current CI
-> runs seven native jobs on disposable PostgreSQL 18 clusters without a filesystem vulnerability
-> scan, and current releases require a passing `CI Complete` on the tagged commit before publishing
-> macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]] and
-> [[docs/adr/221-proportional-ci|ADR-221]].
-
-**release.yml** (May 2026):
-
-- `verify` job checks:
-  - Named volumes in `docker-compose.yml` match `packaging/electron/resources/docker-compose.yml`
-  - Version tag matches the root, frontend, and Electron package manifests
-  - JS dependencies audit passes
-  - Blocks all other jobs until checks pass
-
-- `docker` job pushes image with version tag to GHCR
-- `package-mac` job generates `.sha256` checksum alongside ZIP
-- Both artifacts uploaded to GitHub release
-
-**ci.yml** (May 2026):
-
-- Early stage:
-  - `secrets-scan`, `deps-audit`, `pip-audit`, `lint`, `typecheck`, `build-frontend`, `test-frontend`, `test-backend`
-  - `verify-compose-sync` — compares named volumes between root and embedded compose files
-  - `quality-gate` — aggregates all early checks, gates expensive Docker build
-
-- Docker stage (after quality-gate passes):
-  - `build-image` — builds Docker image once, reused by downstream jobs
-  - `trivy-scan` — scans image for OS/system CVEs
-  - `docker-verify` — container health check (build image, start compose, poll health on port 3002)
-  - `test-live-api-contracts` — validates MSW fixtures against real backend responses
-  - `ci-complete` — final aggregation gate (set as required status check in branch protection)
-
-**Security focus:** Compose sync verification prevents the v1.0.2 data-loss bug where omitted volumes caused attachments to vanish on update.
-
-Detailed workflow definitions in [[docs/features/application-updates|Application Updates Feature]] and [[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]].
-
----
-
 ## Security Considerations
 
 ### Defense-in-Depth Isolation
@@ -1143,57 +1100,6 @@ bun run electron:prod
   `EnableNodeCliInspectArguments` fuse off and ignore it.
 - **Renderer process:** Chrome DevTools (Cmd+Option+I)
 - **Backend process:** Standard Node.js debugging
-
-### Retired Docker Dev Rebuild File Watcher
-
-> [!history]
-> This section records removed development behavior and is not an available command path.
-
-When the explicit Docker provider is used in development, a file watcher monitors source files and
-triggers an automatic Docker rebuild and restart. Native development restarts the Bun backend from
-the checkout and does not build a Docker image.
-
-```javascript
-// Watches frontend, backend, packages/, i18n/source and bun lockfiles
-fs.watch(sourceDir, { recursive: true }, (eventType, filename) => {
-  // Kill in-flight build with SIGTERM to signal cancellation
-  if (activeBuildChild) {
-    activeBuildChild.kill("SIGTERM");
-  }
-  // Queue new rebuild from updated sources
-});
-```
-
-**Watch targets (June 2026):** `apps/frontend`, `apps/node-backend`, `packages/`, `i18n/source`, `package.json`, `bun.lock[b]`. The watch callback ignores `node_modules/`, `dist/`, and dot-directory churn.
-
-Previously only the two `apps/` directories were watched, so edits to `packages/shared-utils` or locale strings in `i18n/source` never triggered an auto-rebuild in dev mode — the container kept serving stale code until the next manual relaunch. This was confusing because `DOCKER_PATHS` (the skip-build cache check) already tracked those paths.
-
-**Behavior:**
-
-- File edit detected → signal SIGTERM to any in-flight build
-- In-flight build catches SIGTERM, marks error as `.cancelled = true`, rejects promise
-- Cancelled build swallows error (expected), does not log failure
-- New build is immediately queued with the latest source state
-
-**Rationale:** Eliminates stale builds when multiple edits occur in quick succession. Prevents cascading Docker builds while preserving the most recent change for execution.
-
-### Retired Dockerfile Dependency-Layer Cache (June 2026 — P2 fix)
-
-**Problem:** Both Dockerfile stages previously copied the full `packages/` directory and `i18n/source/` before running `bun install --frozen-lockfile`. Any change to `packages/shared-utils/src/*` or a locale string invalidated the install layer, triggering a full dependency reinstall in every image build (CI and Electron dev-mode auto-rebuilds).
-
-**Fix:** Only workspace manifests (`packages/*/package.json`) are copied before `bun install`. The full `packages/` tree and `i18n/source/` are copied after the install layer, before the build steps that require them. Stage 2 also adds a post-install `COPY packages/` so symlink targets for the shared-utils workspace are in place at runtime.
-
-**Verify:** `docker build` twice with a one-line change in `packages/shared-utils/src/money.ts` between runs — the second build should show `CACHED` on the install layer.
-
-### Retired Dockerfile Bun Install Retries (August 2026)
-
-Both Dockerfile dependency stages run `scripts/bun-install-with-retry.sh`. The wrapper retries a
-failed frozen install up to three times with a two-second delay. This covers transient registry or
-Bun download failures, including a tarball integrity failure caused by an incomplete download.
-
-Every attempt keeps `--frozen-lockfile` and Bun's integrity verification enabled. The wrapper does
-not rewrite the lockfile, clear the cache, or bypass a mismatch; a persistent failure still stops
-the image build after the third attempt.
 
 ### Quit and Runtime Lifecycle (June–August 2026)
 
@@ -1423,68 +1329,6 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 1. Confirm `packaging/electron/bun.lock` is present and unchanged.
 2. Reinstall with `bun install --frozen-lockfile --cwd packaging/electron`.
 3. Rebuild with `npm run dist` from `packaging/electron/` and inspect the resulting asar before changing dependency declarations.
-
-### Retired error: missing packaged Compose resources
-
-> [!history]
-> ADR-133 removed this packaging path. Current package validation checks only the native payload.
-
-**Cause:** Embedded `resources/docker-compose.yml` not copied to app bundle via `extraResources`.
-
-**Fix:** Ensure `packaging/electron/package.json` includes:
-
-```json
-{
-  "build": {
-    "extraResources": [
-      { "from": "i18n", "to": "i18n" },
-      { "from": "resources", "to": "resources" }
-    ]
-  }
-}
-```
-
-**Verification:** After build, verify `app.asar` and the external native payload manifest. The
-payload must contain the compiled backend, frontend and `db/` migrations; the backend applies the
-migrations in-process.
-
-```bash
-bun packaging/electron/build.ts
-node packaging/electron/out/scripts/prepare-native-runtime.js
-```
-
-### Retired error: registry authorization on first launch
-
-> [!history]
-> ADR-133 removed application-image pulls. The details below are retained only as incident history.
-
-**Cause:** Packaged app attempted to pull Docker image from private GHCR registry without credentials.
-
-**Solution (2026-04-27):** Electron orchestrator (`packaging/electron/main.js`) now pre-pulls the image during `parallel_init()` if missing locally:
-
-```javascript
-// Inside Promise.all() during main process startup:
-// Pulls ghcr.io/erapartner/vision:<tag> only if image missing
-// Non-fatal; falls back to inline pull during compose up
-await preLoadDockerImage();
-```
-
-**Additional safeguard:** Embedded `resources/docker-compose.yml` also uses `pull_policy: missing` to avoid re-pulling on subsequent launches:
-
-```yaml
-services:
-  app:
-    image: ghcr.io/erapartner/vision:latest
-    pull_policy: missing # Use local image if available; skip registry pull
-```
-
-**Manual pre-pull (if needed):**
-
-1. Build locally: `docker compose build` (creates `vision-app:latest`)
-2. Retag: `docker tag vision-app:latest ghcr.io/erapartner/vision:latest`
-3. Rebuild packaged app: `npm run dist`
-
-With automatic pre-pull + `pull_policy: missing`, Docker Compose finds the locally-tagged image without attempting registry auth on first launch or subsequent boots.
 
 ## Conditional preference persistence
 

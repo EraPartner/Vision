@@ -22,7 +22,7 @@
 
 Most finance apps trade your privacy for convenience. Vision gives you both:
 
-- **Privacy-first** — your financial data never leaves your environment
+- **Privacy-first** — your financial data stays in your environment unless you turn on and approve an experimental cloud AI feature
 - **Self-hosted** — run the native Electron desktop app or the source stack with PostgreSQL 18
 - **Complete** — transactions, budgeting, portfolio analytics, Belgian tax, AI chat, and net worth in one place
 - **Developer-friendly** — TypeScript/React + Node.js/Express in a clean Bun monorepo with an OpenAPI spec
@@ -58,7 +58,10 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 
 ### 🤖 AI Chat
 
-- Local AI assistant powered by **Ollama** — no data sent to third-party LLMs
+- Local AI assistant powered by **Ollama** — ordinary chat sends no data to third-party LLMs
+- **Experimental, off by default:** OpenAI research (`OPENAI_API_ENABLED`) and a Codex route
+  (`VISION_EXPERIMENTAL_CODEX`). OpenAI receives only a payload you preview and grant
+  ([AI data access](docs/security/ai-data-access.md))
 - Query your transactions, categories, and financial data in natural language
 - Tool-augmented responses with structured result cards
 
@@ -233,7 +236,7 @@ bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
 | Backend   | Node.js (Bun runtime), Express                                                                |
 | Database  | PostgreSQL 18.6; bundled for Electron and externally supplied for source development          |
 | Desktop   | Electron                                                                                      |
-| AI        | Ollama (local LLM)                                                                            |
+| AI        | Ollama (local LLM); experimental opt-in OpenAI and Codex                                      |
 | Testing   | Vitest (frontend + backend)                                                                   |
 | Packaging | Native Electron DMG/ZIP and GitHub Actions release workflow                                   |
 | API spec  | OpenAPI 3.x (`openapi.yaml`)                                                                  |
@@ -317,7 +320,8 @@ Workflow: `.github/workflows/release.yml`
 - Keep your deployment private and access-controlled
 - Backups are encrypted with AES-256-GCM (per-backup random salt)
 - Dependencies should be reviewed and updated regularly
-- AI chat uses a local Ollama instance — no financial data leaves your network
+- AI chat uses a local Ollama instance — no financial data leaves your network. The experimental
+  OpenAI and Codex features are off by default; OpenAI sends only the payload you preview and grant
 
 ---
 

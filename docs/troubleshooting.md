@@ -2,7 +2,7 @@
 title: Troubleshooting & FAQ
 type: reference
 status: active
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [
     troubleshooting,
@@ -33,13 +33,6 @@ aliases: [troubleshooting, FAQ, common issues, errors, debugging, problems]
    `bun run native:isolated-smoke`.
 
 Do not reset the database merely to make startup succeed.
-
-### Legacy runtime marker blocks startup
-
-The native-only release fails with `LEGACY_RUNTIME_MIGRATION_REQUIRED` when saved state identifies
-the retired product runtime. Migrate with Vision 1.0.2 before upgrading. Do not delete the legacy
-database or attachments; they may be the only recoverable copy. See
-[[docs/adr/133-native-only-runtime-and-delivery|ADR-133]].
 
 ### Database connection refused
 
@@ -125,7 +118,6 @@ Never print the passphrase. A signed and notarized production build provides the
 
 | Error                               | Meaning                                           | Action                                                                                                                                        |
 | ----------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LEGACY_RUNTIME_MIGRATION_REQUIRED` | Saved state belongs to the retired runtime        | Migrate with Vision 1.0.2 before upgrading                                                                                                    |
 | `INVALID_PASSPHRASE`                | Encrypted backup authentication failed            | Re-enter the passphrase; do not modify the bundle                                                                                             |
 | `BUNDLE_SCHEMA_NEWER`               | Backup was created by a newer schema              | Upgrade Vision before restoring                                                                                                               |
 | `BACKUP_PRE_BASELINE`               | Backup predates the TypeScript migration baseline | Not restorable by this version; restore only backups taken after the switch ([[docs/adr/222-typescript-migrations-kysely-baseline\|ADR-222]]) |

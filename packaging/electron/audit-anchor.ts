@@ -341,10 +341,26 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
+/** Check and read through one no-follow handle, so a swapped path cannot be read. */
 async function readRegular(file: string): Promise<string> {
-  const stat = await fs.promises.lstat(file);
-  if (!stat.isFile()) throw new AuditAnchorError("invalid_file_type");
-  return fs.promises.readFile(file, "utf8");
+  let handle: FileHandle;
+  try {
+    handle = await fs.promises.open(
+      file,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW,
+    );
+  } catch (error) {
+    if (isRecord(error) && error.code === "ELOOP")
+      throw new AuditAnchorError("invalid_file_type");
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile())
+      throw new AuditAnchorError("invalid_file_type");
+    return await handle.readFile("utf8");
+  } finally {
+    await handle.close();
+  }
 }
 
 async function atomicPrivateWrite(

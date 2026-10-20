@@ -528,10 +528,10 @@ async function runChatTurnLocked({
         toolArgs: preCallArgs ?? {},
         toolResult: result,
       });
-      toolMessages.push(presentAiToolMessage(toolRow));
+      toolMessages.push(__presentAiToolMessage(toolRow));
       await onEvent?.({
         type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
-        data: { message: presentAiToolMessage(toolRow) },
+        data: { message: __presentAiToolMessage(toolRow) },
       });
 
       baseMessages.push({
@@ -684,10 +684,10 @@ async function runChatTurnLocked({
         toolArgs: args ?? {},
         toolResult: result,
       });
-      toolMessages.push(presentAiToolMessage(toolRow));
+      toolMessages.push(__presentAiToolMessage(toolRow));
       await onEvent?.({
         type: AI_CHAT_STREAM_EVENT.TOOL_RESULT,
-        data: { message: presentAiToolMessage(toolRow) },
+        data: { message: __presentAiToolMessage(toolRow) },
       });
 
       baseMessages.push({
@@ -742,7 +742,7 @@ export async function getConversationWithMessages(id: string): Promise<{
   const conversation = await aiChatRepository.getConversation(id);
   if (!conversation) return null;
   const messages = await aiChatRepository.getMessages(id);
-  return { conversation, messages: messages.map(presentAiToolMessage) };
+  return { conversation, messages: messages.map(__presentAiToolMessage) };
 }
 
 export async function createEmptyConversation({
@@ -782,7 +782,7 @@ export const __constants = Object.freeze({
 });
 
 /** Add presentation only to outgoing messages; stored results and model context stay unchanged. */
-export function presentAiToolMessage<T extends { toolResult?: unknown }>(
+export function __presentAiToolMessage<T extends { toolResult?: unknown }>(
   message: T,
 ): T & { toolPresentation?: ReturnType<typeof toolResultPresentation> } {
   if (message.toolResult == null) return message;
