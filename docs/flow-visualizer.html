@@ -1685,10 +1685,10 @@
           {
             "id": "sv.portfolioprojection",
             "label": "Portfolio projection",
-            "sub": "Research · matched scenario paths",
+            "sub": "Research · Monte Carlo paths",
             "kind": "service",
             "path": "apps/node-backend/src/services/research/projection/portfolioProjection.ts",
-            "desc": "Simulates aggregate portfolio value using snapshot risk and optional provider drift. A monthly contribution schedule and goal month support income-interruption comparisons with one explicit seed.",
+            "desc": "Simulates aggregate portfolio value using snapshot risk and optional provider drift, with an optional per-month contribution schedule and goal month under one explicit seed.",
             "x": 400,
             "y": 1060
           },
@@ -1797,7 +1797,7 @@
             "x": 800,
             "y": 1240,
             "path": "apps/node-backend/src/services/research/presentationService.ts",
-            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add and Life Scenario preparation/comparison transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
+            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
           },
           {
             "id": "sv.marketlookup",
@@ -4719,80 +4719,6 @@
               {
                 "path": "features/portfolio.md",
                 "label": "Feature - Portfolio & Investments"
-              }
-            ]
-          },
-          {
-            "id": "saved-income-interruption",
-            "name": "Save and compare income interruption",
-            "category": "Forecasting",
-            "summary": "A saved three-month income interruption uses paired forecast requests with one seed and an optional goal month.",
-            "steps": [
-              {
-                "from": "browser",
-                "to": "fe.pages",
-                "payload": "LifeScenarioPanel: surplus, income loss, contribution, goal month",
-                "annotation": "apps/frontend/src/pages/research/LifeScenarioPanel.tsx collects nominal assumptions inside PortfolioForecastPage."
-              },
-              {
-                "from": "fe.pages",
-                "to": "fe.apiclient",
-                "payload": "PUT /api/settings/life_scenarios {value, expected}",
-                "annotation": "LifeScenarioPanel.tsx saves named definitions; forecast results stay on demand."
-              },
-              {
-                "from": "fe.apiclient",
-                "to": "be.routes",
-                "payload": "validated income_interruption definition",
-                "annotation": "apps/node-backend/src/routes/settings.ts validates the scenario and persisted baseline; settingsRepository.replace rejects stale whole-value saves with 409."
-              },
-              {
-                "from": "be.routes",
-                "to": "be.repos",
-                "payload": "settingsRepository JSONB upsert",
-                "annotation": "Definitions use the normal Settings store and its backup coverage."
-              },
-              {
-                "from": "be.repos",
-                "to": "db.postgres",
-                "payload": "user_settings: life_scenarios",
-                "annotation": "Only user-authored inputs are stored; simulation results are not persisted."
-              },
-              {
-                "from": "fe.pages",
-                "to": "fe.apiclient",
-                "payload": "two POST /api/research/portfolio-forecast requests with one seed",
-                "annotation": "LifeScenarioPanel.tsx compares a fixed contribution with a three-entry reduced schedule."
-              },
-              {
-                "from": "fe.apiclient",
-                "to": "be.routes",
-                "payload": "monthly_contribution_schedule and optional goal_month",
-                "annotation": "apps/node-backend/src/routes/research.ts bounds the schedule and goal month."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.portfolioprojection",
-                "payload": "runPortfolioForecast twice",
-                "annotation": "apps/node-backend/src/services/research/projection/portfolioProjection.ts applies per-month contributions and optional goal probability."
-              },
-              {
-                "from": "sv.portfolioprojection",
-                "to": "be.repos",
-                "payload": "portfolio summary and NAV snapshot history",
-                "annotation": "The two requests read live portfolio inputs; the UI checks reported input summaries before comparison."
-              },
-              {
-                "from": "sv.portfolioprojection",
-                "to": "fe.pages",
-                "payload": "approximate median gap and goal probabilities",
-                "annotation": "LifeScenarioPanel.tsx hides stale draft results and rejects changed reported market inputs."
-              }
-            ],
-            "docs": [
-              {
-                "path": "features/cash-flow-forecast.md",
-                "label": "Cash Flow Forecast"
               }
             ]
           },

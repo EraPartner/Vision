@@ -2,14 +2,14 @@
   "generatedOn": "2026-10-20",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 938,
+  "totalFiles": 935,
   "counts": {
-    "simulated-dom": 261,
-    "unit-script-or-contract-needs-review": 310,
+    "simulated-dom": 260,
+    "unit-script-or-contract-needs-review": 309,
     "property-test": 12,
     "mocked-unit-or-service": 200,
     "live-http-contract": 2,
-    "source-or-file-contract": 18,
+    "source-or-file-contract": 17,
     "database-test": 102,
     "native-runtime-or-filesystem-test": 33
   },
@@ -1547,14 +1547,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/lib/research/__tests__/forecastScenario.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "expected-output-provenance-review"
-      ]
-    },
-    {
       "path": "apps/frontend/src/lib/research/__tests__/indicators.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -1835,14 +1827,6 @@
       "path": "apps/frontend/src/pages/portfolio/rebalanceUrlState.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/pages/research/LifeScenarioPanel.test.tsx",
-      "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
     },
     {
       "path": "apps/frontend/src/pages/research/PortfolioForecastPage.test.tsx",
@@ -4161,15 +4145,6 @@
       "path": "apps/node-backend/tests/routes/researchDossiers.validation.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/routes/researchForecastScenario.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review",
-        "expected-output-provenance-review"
-      ]
     },
     {
       "path": "apps/node-backend/tests/routes/researchPresentation.test.ts",

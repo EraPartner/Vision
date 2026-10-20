@@ -109,12 +109,11 @@ Located in `docs/diagrams/`:
 | Backup AEAD Encryption | AES-256-GCM v2 bundle create + restore (ADR-040)                      | `backup-aead-encryption.puml`            |
 | Dev Observability      | API event bus → ring buffer → Cmd+Shift+A Inspector                   | `dev-observability-flow.puml`            |
 | Commitment-aware Cash  | Stored-rate bill projection and reserve floor before rebalance        | `commitment-aware-cash-flow.puml`        |
-| Life Scenario          | Saved inputs and paired portfolio forecasts                           | `life-scenario-flow.puml`                |
 | Electron Audit Receipt | Local signed witness, private bridge, live closure, and restore gate  | `electron-audit-verification-flow.puml`  |
 
 ## Interactive Flow Visualizer
 
-Open [the interactive visualizer](../flow-visualizer.html#api-request) for 75 components and 45 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
+Open [the interactive visualizer](../flow-visualizer.html#api-request) for 75 components and 44 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
 
 ![[docs/diagrams/system-architecture.puml]]
 

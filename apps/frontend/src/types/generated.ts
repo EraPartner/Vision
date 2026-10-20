@@ -4137,7 +4137,7 @@ export interface paths {
         put?: never;
         /**
          * Compute Research presentation from submitted data without fetching or persisting
-         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus market-add two-of-three previews and Life Scenario preparation/comparison. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
+         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus and market-add two-of-three previews. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
          */
         post: operations["computeResearchPresentation"];
         delete?: never;
@@ -6451,61 +6451,10 @@ export interface components {
             providedCount: number;
             isConsistent: boolean;
         };
-        ResearchLifeScenario: {
-            id: string;
-            /** @enum {string} */
-            kind?: "income_interruption";
-            /** @enum {integer} */
-            interruptionMonths: 3;
-            monthlySurplus: number;
-            monthlyIncomeLoss: number;
-            monthlyContribution: number;
-            goalValue?: number;
-            name?: string;
-            goalDate?: string;
-        } & {
-            [key: string]: unknown;
-        };
-        /** @description Immediate camelCase forecast input. Only horizon is validated here. monthlyContribution, targetValue, goalMonth and seed are overwritten from the scenario, so malformed discarded main money values do not block a valid scenario. Other fields pass through unchanged; the existing forecast request adapter/route retains its own normalization and validation. */
-        ResearchLifeScenarioForecastInput: {
-            horizonMonths: number;
-        } & {
-            [key: string]: unknown;
-        };
-        ResearchLifeScenarioPreparedInput: {
-            horizonMonths: number;
-            monthlyContribution: number;
-            targetValue?: number;
-            goalMonth?: number;
-            seed: string;
-        } & {
-            [key: string]: unknown;
-        };
-        ResearchLifeScenarioPrepareResult: {
-            baselineInput: components["schemas"]["ResearchLifeScenarioPreparedInput"];
-            interruptedInput: components["schemas"]["ResearchLifeScenarioPreparedInput"] & {
-                monthlyContributionSchedule: number[];
-            };
-            goalMonth?: number;
-            reducedContribution: number;
-            monthlyDeficit: number;
-        };
-        ResearchLifeScenarioCompareResult: {
-            comparable: boolean;
-            available: boolean;
-            medianGap: number | null;
-            /** @enum {string|null} */
-            errorKey: "research.lifeScenario.inputsChanged" | null;
-        };
-        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). lifeScenarioPrepare requires scenario, forecastInput and optional nullable goalMonth; contribution must not exceed surplus, and a dated goal pairs a positive goalValue with goalMonth within horizon. lifeScenarioCompare requires baseline/interrupted raw forecasts and checks exactly five market-input fields with strict missing/null semantics. Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
+        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
         ResearchPresentationSnapshot: {
             /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd" | "lifeScenarioPrepare" | "lifeScenarioCompare";
-            scenario?: components["schemas"]["ResearchLifeScenario"];
-            forecastInput?: components["schemas"]["ResearchLifeScenarioForecastInput"];
-            goalMonth?: number | null;
-            baseline?: components["schemas"]["ResearchPortfolioForecastData"];
-            interrupted?: components["schemas"]["ResearchPortfolioForecastData"];
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
             series?: {
                 symbol?: string;
                 id?: string;
@@ -6553,8 +6502,8 @@ export interface components {
         /** @description result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null. */
         ResearchPresentationData: {
             /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd" | "lifeScenarioPrepare" | "lifeScenarioCompare";
-            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"] | components["schemas"]["ResearchLifeScenarioPrepareResult"] | components["schemas"]["ResearchLifeScenarioCompareResult"]) | null;
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
+            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"]) | null;
         };
         ResearchMeta: {
             provider: string | null;

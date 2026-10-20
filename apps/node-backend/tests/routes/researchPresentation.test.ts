@@ -219,6 +219,19 @@ describe("Stateless Research presentation", () => {
   });
   it.each([
     { kind: "unknown" },
+    // Removed by ADR-230.
+    {
+      kind: "lifeScenarioPrepare",
+      scenario: {
+        id: "s",
+        interruptionMonths: 3,
+        monthlySurplus: 900,
+        monthlyIncomeLoss: 700,
+        monthlyContribution: 500,
+      },
+      forecastInput: { horizonMonths: 12 },
+    },
+    { kind: "lifeScenarioCompare", baseline: {}, interrupted: {} },
     {
       kind: "compare",
       series: Array.from({ length: 7 }, () => ({ symbol: "A", points: [] })),

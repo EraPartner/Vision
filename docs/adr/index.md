@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-20: Remove the Life scenario panel (accepted)
+
+[[docs/adr/230-remove-life-scenario|ADR-230]] removes the Life scenario panel from the Portfolio
+Forecast page, its saved `life_scenarios` setting and the `lifeScenarioPrepare` and
+`lifeScenarioCompare` presentation kinds. Migration 0003 deletes the stored setting row. The
+portfolio forecast endpoint is unchanged. This is a breaking API change.
+
 ### 2026-10-20: Remove cloud AI, the Codex experiment and AgentCloak (accepted)
 
 [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] removes the OpenAI API investigation
