@@ -488,3 +488,15 @@ test("a checkpoint file holding JSON null is an invalid receipt, not a crash", a
     code: "receipt_invalid",
   });
 });
+
+test("a symlinked receipt is rejected instead of followed", async (t) => {
+  const f = await fixture(t);
+  await f.anchor.initializeGenesis(ZERO_CUTOVER);
+  const moved = `${f.receiptPath}.real`;
+  await fs.promises.rename(f.receiptPath, moved);
+  await fs.promises.symlink(moved, f.receiptPath);
+  await assert.rejects(f.anchor.readTrustedCheckpoint(), {
+    name: "AuditAnchorError",
+    code: "invalid_file_type",
+  });
+});
