@@ -209,10 +209,15 @@ export const accountRepository = {
              lb.post_anchor_count,
              bp.balance_parts,
              COALESCE(sb.statement_balances, '[]'::json) AS statement_balances,
-             EXISTS (
-               SELECT 1 FROM transactions t2
+             -- The ORDER BY steers the probe onto the (account_id, date) index:
+             -- a bare EXISTS was planned as a sequential scan per account, which
+             -- reads the whole ledger for every account that has no rows.
+             (
+               SELECT true FROM transactions t2
                WHERE t2.account_id = a.id AND t2.is_active = true
-             ) AS has_transactions
+               ORDER BY t2.date DESC
+               LIMIT 1
+             ) IS NOT NULL AS has_transactions
       FROM accounts a
       -- lb stays the account-level (cross-currency) lateral for the PROVENANCE
       -- fields only: "as of {date} statement + {n} entries since" describes the

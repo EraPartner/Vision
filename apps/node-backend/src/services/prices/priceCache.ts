@@ -339,7 +339,9 @@ export async function loadLatestHistoricalPointByInvestmentIds(
 
 /**
  * Upsert a normalized point series for one investment. Silently no-ops when the
- * table is absent (42P01) or nothing survives normalization.
+ * table is absent (42P01) or nothing survives normalization. Points whose price
+ * and source are unchanged are not rewritten: the startup backfill re-saves
+ * every stored series, and rewriting identical rows only produced dead tuples.
  *
  * @param source provider id; defaults to 'provider'
  */
@@ -372,7 +374,9 @@ export async function saveHistoricalPointsToDatabase(
        close_price = EXCLUDED.close_price,
        source = EXCLUDED.source,
        fetched_at = NOW(),
-       updated_at = NOW()`.execute(db);
+       updated_at = NOW()
+     WHERE (asset_price_history.close_price, asset_price_history.source)
+       IS DISTINCT FROM (EXCLUDED.close_price, EXCLUDED.source)`.execute(db);
   } catch (error) {
     if (hasErrorCode(error, "42P01")) return;
     if (hasErrorCode(error, "23503")) {

@@ -170,5 +170,35 @@ describe.skipIf(!hasTestDatabase())(
         "provider",
       ]);
     });
+
+    it("leaves unchanged price points untouched when a series is saved again", async () => {
+      expect(investmentId).toBeDefined();
+      const day = (d: number) => Date.UTC(2025, 3, d, 12);
+      const stamps = async () => {
+        const { rows } = await getTestPool()!.query(
+          `SELECT to_char(price_date, 'YYYY-MM-DD') AS day, updated_at::text AS updated_at
+             FROM asset_price_history WHERE investment_id = $1 ORDER BY price_date`,
+          [investmentId],
+        );
+        return Object.fromEntries(rows.map((row) => [row.day, row.updated_at]));
+      };
+      const before = await stamps();
+
+      await saveHistoricalPointsToDatabase(
+        investmentId!,
+        [
+          { timestampMs: day(1), price: 100 },
+          { timestampMs: day(2), price: 111 },
+        ],
+        "binance",
+      );
+
+      const after = await stamps();
+      expect(after["2025-04-01"]).toBe(before["2025-04-01"]);
+      expect(after["2025-04-02"]).not.toBe(before["2025-04-02"]);
+      expect(
+        (await loadHistoricalPointsFromDatabase(investmentId!)).map((p) => p.price),
+      ).toEqual([100, 111, 125]);
+    });
   },
 );
