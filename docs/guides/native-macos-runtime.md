@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -18,11 +18,6 @@ related_code:
 
 Vision for macOS bundles PostgreSQL 18.6, the compiled Bun backend with its `db/` migration files,
 and Chrome Headless Shell. Electron owns their lifecycle. A host database service is neither used nor required.
-
-> [!warning] Legacy installation
-> If this installation still has a saved marker from the retired runtime, use Vision 1.0.2 to
-> migrate before upgrading. Current startup fails closed and does not create an empty replacement
-> database over that state. Do not delete the old data while deciding how to recover it.
 
 ## Build inputs
 

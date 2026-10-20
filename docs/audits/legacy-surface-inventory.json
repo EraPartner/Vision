@@ -248,9 +248,8 @@
       "title": "Archived Alembic revisions",
       "domain": "database/migrations",
       "classification": "historical-record-only",
-      "disposition": "The archived Alembic trees (legacy_versions and versions) were deleted with Alembic (ADR-222); Git history keeps them. The migration-history page records the retired numbering.",
+      "disposition": "The archived Alembic trees (legacy_versions and versions) were deleted with Alembic (ADR-222); Git history keeps them.",
       "paths": [
-        "docs/reference/migration-dependencies.md",
         "docs/adr/222-typescript-migrations-kysely-baseline.md"
       ],
       "readers": "Human audit through Git history.",
