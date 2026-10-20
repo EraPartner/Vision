@@ -23,13 +23,13 @@ export function isLoopbackHost(host: string | null | undefined): boolean {
   return /^(::ffff:)?127(\.\d{1,3}){3}$/.test(h);
 }
 
-interface Authority {
+interface HostHeader {
   host: string;
   port: number | undefined;
 }
 
 /** Parse a single HTTP authority without accepting URL credentials or paths. */
-function parseAuthority(value: unknown): Authority | undefined {
+function parseHostHeader(value: unknown): HostHeader | undefined {
   if (typeof value !== "string" || !value || /[\s,@/\\?#]/u.test(value))
     return undefined;
   const match = value.startsWith("[")
@@ -83,7 +83,7 @@ export function createHostGuard({
 }: { bindHost?: string | undefined; port?: number | undefined } = {}) {
   const allowed = new Set(LOOPBACK_HOSTS);
   if (bindHost && isLoopbackHost(bindHost)) {
-    const bind = parseAuthority(
+    const bind = parseHostHeader(
       isIP(bindHost) === 6 ? `[${bindHost}]` : bindHost,
     );
     if (bind) allowed.add(bind.host);
@@ -94,11 +94,11 @@ export function createHostGuard({
     _res: ExpressResponse,
     next: ExpressNextFunction,
   ) {
-    const authority = parseAuthority(req.headers.host);
+    const target = parseHostHeader(req.headers.host);
     if (
-      authority &&
-      allowed.has(authority.host) &&
-      (port === undefined || authority.port === port)
+      target &&
+      allowed.has(target.host) &&
+      (port === undefined || target.port === port)
     )
       return next();
     return next(new ForbiddenError("Invalid request host"));
