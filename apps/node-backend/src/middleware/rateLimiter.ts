@@ -18,69 +18,6 @@ interface RateLimitEntry {
 
 const requestCounts = new Map<string, RateLimitEntry>();
 
-/**
- * Parse a dotted-quad IPv4 string to a uint32, or undefined if not IPv4.
- */
-function ipv4ToInt(ip: string): number | undefined {
-  const parts = ip.split(".");
-  if (parts.length !== 4) return undefined;
-  let n = 0;
-  for (const part of parts) {
-    const octet = Number(part);
-    if (
-      !Number.isInteger(octet) ||
-      octet < 0 ||
-      octet > 255 ||
-      !/^\d+$/.test(part)
-    )
-      return undefined;
-    n = n * 256 + octet;
-  }
-  return n >>> 0;
-}
-
-/**
- * Whether `addr` matches an IP or IPv4 CIDR `rule` (e.g. `172.18.0.1` or
- * `172.18.0.0/16`). Non-CIDR rules are matched exactly (works for IPv6 too).
- */
-function ipMatchesRule(addr: string, rule: string): boolean {
-  if (!addr || !rule) return false;
-  if (addr === rule) return true;
-  const slash = rule.indexOf("/");
-  if (slash === -1) return false;
-  const base = ipv4ToInt(rule.slice(0, slash));
-  const bits = Number(rule.slice(slash + 1));
-  const target = ipv4ToInt(addr);
-  if (
-    base === undefined ||
-    target === undefined ||
-    !Number.isInteger(bits) ||
-    bits < 0 ||
-    bits > 32
-  ) {
-    return false;
-  }
-  if (bits === 0) return true;
-  const mask = (bits === 32 ? 0xffffffff : ~((1 << (32 - bits)) - 1)) >>> 0;
-  return (target & mask) === (base & mask);
-}
-
-/**
- * Whether `X-Forwarded-For` from this peer can be trusted to identify the real
- * client. Only honored when the immediate peer matches an explicitly configured
- * `TRUSTED_PROXIES` IP/CIDR. Empty config trusts nothing, so a LAN client can't
- * spoof XFF to mint a fresh rate-limit bucket per request (fail-safe default).
- */
-function isTrustedProxyAddr(addr: string): boolean {
-  if (!addr) return false;
-  const trusted = settings.security?.trustedProxies ?? [];
-  if (trusted.length === 0) return false;
-  const a = addr.replace(/^::ffff:/i, "");
-  return trusted.some(
-    (rule) => ipMatchesRule(a, rule) || ipMatchesRule(addr, rule),
-  );
-}
-
 // Clean up old entries every 60 seconds.
 // .unref() so the timer does not keep test/CLI processes alive.
 setInterval(() => {
@@ -119,16 +56,9 @@ export function rateLimiter({
       return next();
     }
 
-    const remoteAddr =
-      req.socket?.remoteAddress || req.connection?.remoteAddress || "";
-    // x-forwarded-for is a single comma-joined header in practice (Node/Express
-    // fold repeated headers into one string, except set-cookie); typed
-    // string|string[] only because that's the general header-value shape.
-    const xff = (req.headers?.["x-forwarded-for"] ?? "") as string;
-    const forwarded = isTrustedProxyAddr(remoteAddr)
-      ? (xff.split(",")[0] ?? "").trim()
-      : "";
-    const ip = forwarded || remoteAddr || "unknown";
+    // Keyed by the socket peer. The backend only listens on loopback and no
+    // proxy sits in front of it, so forwarding headers are never consulted.
+    const ip = req.socket?.remoteAddress || "unknown";
     const key = `${keyPrefix}:${ip}`;
     const now = Date.now();
 
@@ -285,5 +215,3 @@ export const aggregationRateLimiter = rateLimiter({
   maxRequests: 600,
   keyPrefix: "aggregations",
 });
-
-export { ipMatchesRule as __ipMatchesRule };

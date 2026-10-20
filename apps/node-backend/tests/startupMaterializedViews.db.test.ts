@@ -202,7 +202,6 @@ describe.skipIf(!hasTestDatabase())(
           ...childEnv,
           PORT: String(new URL(baseUrl).port),
           SERVER_HOST: "127.0.0.1",
-          ADMIN_AUTH_TOKEN: "boot-order-test-token",
         },
       });
       backend.stdout?.on("data", (c) => {

@@ -27,7 +27,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setTimeout as sleep } from "node:timers/promises";
 import pg from "pg";
 import { z } from "zod";
 import { logger } from "../config/logger.ts";
@@ -76,8 +75,6 @@ export interface EnsureAppRoleOptions {
   databaseUrl: string;
   /** Privileged URL (DDL / migration role). */
   migrationsUrl?: string | undefined;
-  /** Connect attempts while the DB cold-starts. */
-  maxAttempts?: number;
   /**
    * The schema may not exist yet. Grants on missing objects are then logged
    * at info level; the caller re-runs the bootstrap after migrating.
@@ -223,69 +220,32 @@ function isAllTablesGrant(statement: string): boolean {
 }
 
 /**
- * Errors that mean "the server isn't accepting connections YET" — worth
- * retrying while postgres finishes a cold start. Anything else (bad password,
- * unknown role/database, TLS mismatch, …) is a configuration problem retries
- * cannot fix.
- */
-function isRetryableConnectError(err: unknown): boolean {
-  const { code, message } = (err ?? {}) as { code?: string; message?: string };
-  const transportCodes = [
-    "ECONNREFUSED",
-    "ECONNRESET",
-    "ENOTFOUND",
-    "EAI_AGAIN",
-    "ETIMEDOUT",
-  ];
-  return (
-    code === "57P03" || // cannot_connect_now: server is starting up
-    (code !== undefined && transportCodes.includes(code)) ||
-    /Connection terminated/i.test(message || "")
-  );
-}
-
-/**
- * Connect a one-shot client as the privileged migration role, waiting out a
- * cold Postgres start with the same backoff envelope as main.ts's pool poll.
+ * Connect a one-shot client as the privileged migration role. PostgreSQL is
+ * already accepting connections here: the native runtime waits for
+ * `pg_isready` before it spawns the backend, so a failure is a configuration
+ * problem and is not retried.
  */
 async function connectPrivileged(
   migrationsUrl: string,
-  maxAttempts: number,
   log: BootstrapLogger,
 ): Promise<PgOneShotClient | null> {
-  const baseDelay = 50;
-  const maxDelay = 1000;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const client = new pg.Client({
-      connectionString: migrationsUrl,
-      connectionTimeoutMillis: 5_000,
-      statement_timeout: 30_000,
-    });
-    try {
-      await client.connect();
-      return client;
-    } catch (err) {
-      // A failed pg.Client keeps its socket handle until end() is called.
-      await client.end().catch(() => {});
-      if (!isRetryableConnectError(err)) {
-        log.warn(
-          `[role-bootstrap] cannot connect as the migration role (${(err as Error).message}) — ` +
-            "skipping least-privilege bootstrap. Check DATABASE_URL_MIGRATIONS.",
-        );
-        return null;
-      }
-      if (attempt === maxAttempts) {
-        log.warn(
-          `[role-bootstrap] database not reachable after ${maxAttempts} attempts (${(err as Error).message}) — ` +
-            "skipping least-privilege bootstrap.",
-        );
-        return null;
-      }
-      const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-      await sleep(delay);
-    }
+  const client = new pg.Client({
+    connectionString: migrationsUrl,
+    connectionTimeoutMillis: 5_000,
+    statement_timeout: 30_000,
+  });
+  try {
+    await client.connect();
+    return client;
+  } catch (err) {
+    // A failed pg.Client keeps its socket handle until end() is called.
+    await client.end().catch(() => {});
+    log.warn(
+      `[role-bootstrap] cannot connect as the migration role (${(err as Error).message}) — ` +
+        "skipping least-privilege bootstrap. Check DATABASE_URL_MIGRATIONS.",
+    );
+    return null;
   }
-  return null;
 }
 
 /**
@@ -300,7 +260,6 @@ async function connectPrivileged(
 export async function ensureAppRole({
   databaseUrl,
   migrationsUrl,
-  maxAttempts = 40,
   beforeMigrations = false,
   log = logger,
 }: EnsureAppRoleOptions): Promise<BootstrapResult> {
@@ -360,7 +319,7 @@ export async function ensureAppRole({
       return { status: "error", reason: "grants-template-unreadable" };
     }
 
-    const client = await connectPrivileged(migrationsUrl, maxAttempts, log);
+    const client = await connectPrivileged(migrationsUrl, log);
     if (!client)
       return { status: "unavailable", reason: "privileged-connect-failed" };
 

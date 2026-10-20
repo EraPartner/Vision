@@ -64,23 +64,9 @@ const optionalStringEnv = z
     return trimmed === "" ? undefined : trimmed;
   });
 
-const csvEnv = (defaultValue: string) =>
-  z
-    .string()
-    .optional()
-    .transform((value) => {
-      const raw = value && value.trim() ? value : defaultValue;
-      return raw
-        .split(",")
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-    });
-
 const envSchema = z
   .object({
     SERVER_HOST: optionalStringEnv,
-    SERVER_ALLOWED_HOSTS: csvEnv(""),
-    HOSTNAME: optionalStringEnv,
     PORT: intEnv(3002),
     ENVIRONMENT: optionalStringEnv,
     NODE_ENV: optionalStringEnv,
@@ -100,16 +86,10 @@ const envSchema = z
     DB_POOL_SIZE: intEnv(5),
     DB_MAX_OVERFLOW: intEnv(10),
 
-    CORS_ORIGINS: csvEnv("http://localhost:5174,http://localhost:8080"),
-
-    // Explicit opt-in for dev-only bypasses (rate-limit skip, wildcard CORS).
+    // Explicit opt-in for the dev-only rate-limit bypass.
     // Unset/default is fail-safe: bypasses stay OFF even when ENVIRONMENT is
     // 'development', so a misconfigured deploy is never silently permissive.
     VISION_DEV: booleanEnv(false),
-
-    // Reverse-proxy IPs/CIDRs whose X-Forwarded-For we trust to identify the real
-    // client (for rate-limit keying). Empty = trust nothing → key on socket addr.
-    TRUSTED_PROXIES: csvEnv(""),
 
     // Baseline app-wide rate-limit ceiling for the data plane (per IP per window).
     // A DoS backstop above normal single-user bursts; stricter per-route limiters
@@ -118,13 +98,6 @@ const envSchema = z
     RATE_LIMIT_GLOBAL_WINDOW_MS: intEnv(60_000),
 
     ENABLE_RESET_DB: booleanEnv(false),
-    ADMIN_AUTH_TOKEN: stringEnv(""),
-    // Explicit acknowledgment that /api/admin/* may run without a token on a
-    // non-loopback bind because an OUTER layer restricts access (the documented
-    // reverse proxy or host firewall binds the public-facing listener to
-    // loopback only). Without this, a tokenless non-loopback bind refuses
-    // to start instead of logging a warning nobody reads.
-    ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: booleanEnv(false),
 
     OLLAMA_URL: optionalStringEnv,
     OLLAMA_DEFAULT_MODEL: stringEnv("llama3.1:8b"),

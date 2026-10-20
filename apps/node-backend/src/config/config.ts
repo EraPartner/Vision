@@ -41,8 +41,7 @@ function defaultAnalysisDatabaseUrl(databaseUrl: string): string | undefined {
 
 const settings = deepFreeze({
   server: {
-    host: env.SERVER_HOST || env.HOSTNAME || "localhost",
-    allowedHosts: env.SERVER_ALLOWED_HOSTS,
+    host: env.SERVER_HOST || "localhost",
     port: env.PORT,
     environment: env.ENVIRONMENT || env.NODE_ENV || "development",
   },
@@ -64,23 +63,15 @@ const settings = deepFreeze({
     title: "Financial Transaction Manager",
     version: "1.0.0",
     description: "Import and manage financial transactions from various banks",
-    // Always string[]: env.CORS_ORIGINS is parsed by csvEnv. The union type
-    // this used to carry existed only to satisfy main.ts's unreachable
-    // `corsOrigins === '*'` wildcard branch, which has since been deleted.
-    corsOrigins: env.CORS_ORIGINS,
   },
 
   admin: {
     enableResetDb: env.ENABLE_RESET_DB,
-    authToken: env.ADMIN_AUTH_TOKEN,
-    allowTokenlessNonLoopback: env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK,
   },
 
   security: {
     // Explicit opt-in for dev-only bypasses (fail-safe when unset — see env.js).
     devBypass: env.VISION_DEV,
-    // Reverse-proxy IPs/CIDRs whose X-Forwarded-For is trusted. Empty = none.
-    trustedProxies: env.TRUSTED_PROXIES,
   },
 
   rateLimit: {

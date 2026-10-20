@@ -1,4 +1,4 @@
-import { BlockList, isIP } from "node:net";
+import { isIP } from "node:net";
 import { ForbiddenError } from "./errorHandler.ts";
 import type {
   ExpressNextFunction,
@@ -6,25 +6,45 @@ import type {
   ExpressResponse,
 } from "../types/express.ts";
 
-const loopback = new BlockList();
-loopback.addSubnet("127.0.0.0", 8, "ipv4");
-loopback.addAddress("::1", "ipv6");
+/** The loopback names the backend answers to (ADR-233). */
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1"];
+
+/**
+ * True when an address only accepts or names local connections: localhost,
+ * ::1 and the whole 127.0.0.0/8 block, including IPv4-mapped IPv6. Startup
+ * refuses to bind anything else (ADR-233).
+ */
+export function isLoopbackHost(host: string | null | undefined): boolean {
+  const h = String(host ?? "")
+    .trim()
+    .toLowerCase();
+  if (!h) return false;
+  if (h === "localhost" || h === "::1" || h === "[::1]") return true;
+  return /^(::ffff:)?127(\.\d{1,3}){3}$/.test(h);
+}
+
+interface Authority {
+  host: string;
+  port: number | undefined;
+}
 
 /** Parse a single HTTP authority without accepting URL credentials or paths. */
-function parseAuthority(value: unknown): string | undefined {
+function parseAuthority(value: unknown): Authority | undefined {
   if (typeof value !== "string" || !value || /[\s,@/\\?#]/u.test(value))
     return undefined;
   const match = value.startsWith("[")
     ? /^\[([^\]]+)\](?::([0-9]+))?$/u.exec(value)
     : /^([^:]+)(?::([0-9]+))?$/u.exec(value);
-  const [, rawHost, port] = match ?? [];
+  const [, rawHost, rawPort] = match ?? [];
   if (rawHost === undefined) return undefined;
-  if (port !== undefined && (Number(port) < 1 || Number(port) > 65535))
-    return undefined;
+  const port = rawPort === undefined ? undefined : Number(rawPort);
+  if (port !== undefined && (port < 1 || port > 65535)) return undefined;
   if (value.startsWith("[") && isIP(rawHost) !== 6) return undefined;
   if (!value.startsWith("[") && !/^[a-z0-9.-]+$/iu.test(rawHost))
     return undefined;
   try {
+    // The URL parser canonicalizes IP spellings (127.1, 0x7f000001,
+    // [0:0:0:0:0:0:0:1]) so the exact-match allowlist sees one form.
     const url = new URL(`http://${value}`);
     const host = url.hostname.replace(/^\[|\]$/gu, "").toLowerCase();
     // DNS labels cannot be empty or start/end with a hyphen. A final root dot
@@ -42,40 +62,31 @@ function parseAuthority(value: unknown): string | undefined {
           ))
     )
       return undefined;
-    return canonical;
+    return { host: canonical, port };
   } catch {
     return undefined;
   }
 }
 
 /**
- * Validate the destination authority independently of CORS, CSRF and proxy IPs.
- * Bind addresses such as 0.0.0.0 and :: never become wildcard permissions.
+ * Reject any request whose Host is not a loopback name, so a DNS-rebinding
+ * page (attacker.example resolving to 127.0.0.1) cannot reach the API even
+ * though its requests are same-origin from the browser's point of view.
+ *
+ * The allowlist is fixed: localhost, 127.0.0.1, ::1, plus the loopback bind
+ * address when it is spelled differently (startup refuses non-loopback binds).
+ * With `port`, the Host must also name that port.
  */
 export function createHostGuard({
   bindHost,
-  allowedHosts = [],
-}: { bindHost?: string; allowedHosts?: string[] } = {}) {
-  const allowed = new Set(["localhost"]);
-  for (const value of allowedHosts) {
-    const authority = isIP(value) === 6 ? `[${value}]` : value;
-    const host = parseAuthority(authority);
-    if (
-      !host ||
-      (isIP(value) !== 6 && value.includes(":")) ||
-      host === "0.0.0.0" ||
-      host === "::"
-    )
-      throw new Error(
-        "SERVER_ALLOWED_HOSTS must contain exact hostnames or IP addresses without ports",
-      );
-    allowed.add(host);
-  }
-  if (bindHost && bindHost !== "0.0.0.0" && bindHost !== "::") {
-    const host = parseAuthority(
+  port,
+}: { bindHost?: string | undefined; port?: number | undefined } = {}) {
+  const allowed = new Set(LOOPBACK_HOSTS);
+  if (bindHost && isLoopbackHost(bindHost)) {
+    const bind = parseAuthority(
       isIP(bindHost) === 6 ? `[${bindHost}]` : bindHost,
     );
-    if (host) allowed.add(host);
+    if (bind) allowed.add(bind.host);
   }
 
   return function hostGuard(
@@ -83,20 +94,11 @@ export function createHostGuard({
     _res: ExpressResponse,
     next: ExpressNextFunction,
   ) {
-    // Node discards duplicate Host headers in req.headers. Inspect the wire
-    // header list too, so a proxy/backend disagreement cannot bypass this guard.
-    if (req.rawHeaders) {
-      let count = 0;
-      for (let i = 0; i < req.rawHeaders.length; i += 2)
-        if (req.rawHeaders[i]?.toLowerCase() === "host") count += 1;
-      if (count !== 1) return next(new ForbiddenError("Invalid request host"));
-    }
-    const host = parseAuthority(req.headers.host);
-    const ip = host ? isIP(host) : 0;
+    const authority = parseAuthority(req.headers.host);
     if (
-      host &&
-      (allowed.has(host) ||
-        (ip !== 0 && loopback.check(host, ip === 4 ? "ipv4" : "ipv6")))
+      authority &&
+      allowed.has(authority.host) &&
+      (port === undefined || authority.port === port)
     )
       return next();
     return next(new ForbiddenError("Invalid request host"));

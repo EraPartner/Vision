@@ -349,7 +349,7 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
       log,
     });
     expect(res).toMatchObject({ status: "unavailable" });
-    // Auth errors must not burn the 40-attempt cold-start budget (~37s).
+    // A configuration error fails on the first and only connect attempt.
     expect(Date.now() - started).toBeLessThan(8_000);
     expect(log.lines.warn.join("\n")).toContain(
       "cannot connect as the migration role",
@@ -361,7 +361,6 @@ describe.skipIf(!hasTestDatabase())("roleBootstrap (real Postgres)", () => {
     const res = await ensureAppRole({
       databaseUrl: urlFor(APP_ROLE, APP_PASS),
       migrationsUrl: "postgresql://x:y@127.0.0.1:59999/vision_test",
-      maxAttempts: 2,
       log,
     });
     expect(res).toMatchObject({ status: "unavailable" });
