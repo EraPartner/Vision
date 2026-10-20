@@ -139,8 +139,9 @@
            - --ease-out-expo  something ARRIVING: page entrance, `.animate-in`,
                               `.animate-stagger`, sheets, chart draw-ins.
                               Now the real out-expo, matching Framer.
-           - --ease-in-out-quart  ambient loops that ease at both ends (aurora
-                              drift). */
+           - --ease-in-out-quart  ambient loops that ease at both ends (the
+                              aurora drift bakes this curve into its
+                              stepped keyframes in index.css). */
         --duration-fast: 150ms;
         --duration-normal: 260ms;
         --duration-slow: 420ms;

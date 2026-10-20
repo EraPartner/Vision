@@ -2,8 +2,8 @@
 title: Appearance Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-20
+updated: 2026-10-20
 tags: [feature, appearance, theming, personalization, frontend, settings, phase-1, visual-effects-tiers, auto-adapt-display, fx-reduced, shader-aurora, webgl, premium-v3, system-accent, vibrancy, electron-native, macos, june-2026, canvas-text, aurora-legibility, liquid-glass-sidebar, accessibility, colorblind, gain-loss, skin-v2]
 description: Per-user theme variant selection with five color palettes, light/dark mode switching, and schedule-based mode transitions. June 2026 (ADR-075): Visual-effects tier model (reduced/standard/enhanced) + autoAdaptDisplay replaces the ADR-071 enhancedEffects boolean; large-display heuristic auto-drops to reduced on 4K-class screens. June 2026 V12 (ADR-072): system accent color overlay (Electron/macOS only, persisted in theme_settings.systemAccent) and vibrancy gated on effective tier. 2026-06-24: colorblind gain/loss palette promoted to a persisted user setting (colorblindGainLoss, default false/classic); --gain/--loss CSS tokens unified app-wide; gain/loss Tailwind color utilities added. 2026-10-05 — the default light theme gives --gain its own WCAG AA gold (36 74% 33%); dark mode and the other variants keep the accent gain.
 aliases: [appearance, theming, theme variants, color palettes, dark mode, light mode, system accent, vibrancy]
@@ -373,6 +373,8 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 - `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
 - `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle. Since 2026-08-09 the WebGL `ShaderAurora` participates too: `AppLayout` passes the same condition as a `staticAtmosphere` prop and the canvas holds a single static frame instead of looping (before this, its ~30 fps redraw kept forcing the full-backdrop recomposite the class exists to avoid).
+
+**Aurora drift cadence** — The CSS aurora blobs advance in 100ms `steps()` (keyframes sample `--ease-in-out-quart` every 4s; both drifts share the 100ms grid), so at rest the window redraws, and every glass surface re-blurs, 10 times a second instead of on every vsync. The sub-pixel per-frame motion it drops was below one 8-bit colour step (2026-10-20).
 
 **`AppLayout`** — mounts `ShaderAurora` only when effective tier is `enhanced`, passing `staticAtmosphere={largeDisplay}` (equivalent to the `fx-static-atmosphere` condition while mounted, since the tier is then `enhanced`).
 
