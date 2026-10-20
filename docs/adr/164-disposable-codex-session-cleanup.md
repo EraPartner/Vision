@@ -1,14 +1,16 @@
 ---
 title: ADR-164 - Disposable Codex Session Cleanup
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, codex, ai, privacy, security]
 description: Remove abandoned synthetic Codex session directories after a backend crash without touching unrelated temporary files.
 aliases: [Codex stale session cleanup]
 ---
 
 # ADR-164: Disposable Codex Session Cleanup
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Context
 
@@ -27,5 +29,5 @@ Crash leftovers are removed on the next experimental session start, not by a bac
 ## Related
 
 - [[docs/adr/index|Architecture Decision Records]]
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]

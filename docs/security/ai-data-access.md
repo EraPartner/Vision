@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     security,
@@ -28,119 +28,34 @@ related_code:
     "apps/node-backend/tests/aiChatService.test.ts",
     "apps/node-backend/tests/aiChatTools.test.ts",
     "apps/node-backend/src/services/aiEvaluation/localReliability.ts",
-    "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts",
-    "apps/node-backend/src/services/aiReferenceService.ts",
-    "apps/node-backend/src/services/agentCloakPreflight.ts",
-    "apps/node-backend/src/repositories/aiReferenceRepository.ts",
-    "apps/node-backend/tests/aiReferenceService.test.ts",
   ]
 ---
 
 # AI Data Access Policy
 
-> [!tip] Compare AI disclosure boundaries
-> [Open the journey](../flow-visualizer.html#cloud-catalog-analysis) or [the companion flow](../flow-visualizer.html#cloud-evidence-disclosure). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
+> [!tip] Follow the AI boundaries
+> [Open the chat journey](../flow-visualizer.html#ai-chat) or [the investigation flow](../flow-visualizer.html#ai-research-investigation). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
 Security policies governing the AI chat feature introduced by [[docs/adr/024-local-llm-chat|ADR-024]]. The feature gives a local LLM (Ollama) indirect access to financial data through a bounded tool registry. This document defines the constraints.
 
 ## Core Guarantees
 
-1. **Ordinary chat is local.** `/api/ai` contacts only configured Ollama. The separate
-   `/api/ai-research` OpenAI route can be enabled in packaged Vision only with explicit private
-   runtime configuration. It remains off by default and still requires the boundary below.
-   Code capability does not establish live synthetic release acceptance; see
-   [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
+1. **Models are Ollama only.** `/api/ai` and `/api/ai-research` investigations contact only the
+   configured Ollama endpoint. Vision has no cloud model route; the OpenAI API route, the Codex
+   experiment and AgentCloak were removed in
+   [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
 3. **Parameterized queries only.** Tools call repository and service methods only. Their SQL runs through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.ts](apps/node-backend/src/database/connection.ts), including Kysely-built queries, whose driver routes through `query()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
 5. **Local mode stays local.** Data flows from repository → tool → local persistence → Ollama →
-   browser. Only a separately previewed and granted typed payload can cross the optional egress path.
-
-## Optional investigation egress
-
-The server reserves request, character, token, cost, monthly, and cumulative disclosure-unit budgets
-transactionally before every attempt. Revocation blocks retries and resume. The short-lived helper
-runs inside a default-deny macOS Seatbelt profile with no application-data access. It has one fixed
-Responses API destination, rejects redirects, receives a scrubbed environment, requests `store:
-false`, and enables neither hosted tools nor background state. Non-macOS cloud egress fails closed.
-Records keep the payload digest and policy metadata, not payload text or credentials. The exact final
-HTTP request bytes, rather than an earlier inner object, are bound to the consent digest.
-This describes disclosure records only. Recoverable investigation jobs retain their local inputs,
-checkpoints, and results. In selected-evidence synthesis, that includes the exact selected evidence
-until the user deletes the investigation through the UI or API.
-
-In both planning profiles, cloud output can prioritize locally generated plan identifiers and may
-propose up to three strict analysis plans using only public catalog identifiers. Vision rejects SQL,
-relation names, private scope identifiers, unknown fields, stale catalog versions, and plans outside
-the selected workspace. It adds account, investment, and date restrictions locally as parameters,
-runs the plan through the dedicated read-only executor, and keeps all rows and formula results local.
-The distinct selected-evidence synthesis profile sends only the exact
-manually selected evidence and accepts a schema-validated final answer; it has no tools or implicit
-local context. Public web queries and provider symbols are entered separately and are never derived
-from the private investigation question. This addresses normal model/tool overreach and adapter
-defects. It does not defend against a compromised operating system or malicious signed runtime.
-Retrieved document and web text is untrusted evidence, never executable instruction. See
-[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]]. The identifier-only analysis
-extension is recorded in [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]].
-
-### Explicit reversible-reference boundary
-
-The two selected-text profiles accept explicit `[[vision-ref:type|value]]` markers in the selected
-summary or selected evidence. Preview changes them to fresh typed tokens. Each token contains 18
-cryptographically secure random bytes encoded as 24 base64url characters and belongs to one random
-preview UUID. Equal type/value pairs reuse a token only inside that preview.
-Optional Desktop mode also turns validated detected spans in those selected fields into `subject`
-tokens in the same scope before the exact consent payload is computed.
-
-The value map is local authenticated ciphertext. AES-256-GCM uses a fresh 12-byte nonce and binds
-the scope UUID, complete token, and declared type as authenticated additional data. The
-base64-encoded 32-byte `AI_REFERENCE_MAPPING_KEY` stays outside PostgreSQL and outside the database
-backup. An unclaimed preview is valid for 15 minutes; claiming is atomic and binds it to one job for
-30 days. Raw markers, unknown tokens, malformed tokens, cross-scope tokens, expired scopes, token
-collisions, key mismatch, and fabricated response tokens fail closed.
-
-The token-bearing provider-form answer is stored locally before restoration. After a restart,
-Vision schema-validates that checkpoint and performs local restoration without repeating model or
-cloud generation. Replacement is allowlisted to display text: summary; fact, calculation, and
-interpretation text; assumptions; missing information; conflict descriptions; and evidence
-excerpts. Structural fields and evidence IDs, labels, locators, kinds, dates, and availability are
-not replaced. Restoration failure is visible as a failed job, never a partially restored success.
-
-This is **pseudonymization, not anonymity**. A token discloses its declared type, and unmarked
-amounts, dates, holdings, prose, and cross-field patterns can still identify the underlying subject.
-Users must inspect the complete preview, not treat markers as a general privacy filter. See
-[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
-
-### Optional AgentCloak gate and protection
-
-`AGENTCLOAK_PREFLIGHT_ENABLED` adds a check before cloud preview completes and before each OpenAI
-send attempt. The default `mcp` mode calls an authenticated operator-managed AgentCloak loopback
-`/mcp` endpoint. It sends present user-authored `question`, `selectedSummary`, and
-`selectedEvidence` after Vision's explicit marker replacement, with `REFERENCE` in place of token
-identifiers. Vision accepts only a well-formed `cloak` result whose text exactly matches the checked
-text. A proposed change blocks disclosure. AgentCloak does not receive Vision's encrypted map or
-mapping key. The MCP credential is sent in a header, not returned in status or preview.
-
-The optional `desktop` mode calls the installed app's experimental loopback `/detect` endpoint. At
-preview, Vision checks selected summary and evidence after explicit marker replacement and validates
-the detected spans. It replaces those literals with scoped random `subject` tokens and stores their
-mapping as AES-256-GCM ciphertext under `AI_REFERENCE_MAPPING_KEY`. The exact cloud payload and
-grant digest are computed after protection. A public question is checked but never automatically
-rewritten. Desktop checks the tokenized text again before preview completes and before each OpenAI
-send; any remaining finding blocks disclosure. Existing token identifiers are masked before the
-Desktop call. Vision restores allowlisted answer text from its own scope after checkpointing the
-provider-form answer; it never calls Desktop `/protect` or `/reveal` or depends on its map.
-
-Malformed responses, timeouts, and connection failures block enabled cloud work in either mode.
-Desktop `/detect` is undocumented for third-party use and has no request authentication; other
-local processes may be able to call the app. A loopback address only constrains Vision's first hop
-and does not prove a service's forwarding or retention behavior. Detection can miss private values,
-and tokenized context can still identify a person. The user must inspect the full preview. See
-[[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169]] and
-[[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170]].
-
+   browser. Only the separately enabled public research modes below reach another service.
 6. **Canonical financial math where shared.** Portfolio metrics and monthly cash-flow tools delegate currency conversion, transfer treatment, cost basis, partial-sale basis, and totals to the same calculation services used by Vision's screens. Tool names are not permission to redefine a metric.
+
+## Public research egress
+
+Public web queries and provider symbols are entered separately and are never derived from the
+private investigation question. Retrieved document and web text is untrusted evidence, never
+executable instruction. See [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]].
 
 ## Threat Model
 
@@ -154,10 +69,6 @@ and tokenized context can still identify a person. The user must inspect the ful
 | Resource exhaustion (LLM requests huge result sets)                                | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM                                                                                                      |
 | Abuse/rate (script hammering `/api/ai/chat`)                                       | 30 req/min rate limit; standard limits on CRUD endpoints                                                                                                                                |
 | Context overflow exposing unintended history                                       | Service trims history to last N turns; summaries generated server-side, never pass raw unbounded history to the LLM                                                                     |
-| Cloud planner emits SQL or requests private rows                                   | Strict identifier-only plan schema, public catalog without relations, local trusted-scope injection, isolated local execution, and local-only result synthesis                          |
-| Reversible token is reused or moved across jobs                                    | Preview scope expires after 15 minutes, is atomically claimed by one job, and validates every token and type against that scope                                                         |
-| Provider invents or corrupts a reversible token                                    | Local restoration replaces only known same-job tokens in allowlisted text fields; unknown or malformed tokens fail the job visibly                                                      |
-| Database backup exposes the reversible-reference key                               | Backup contains authenticated ciphertext rows but never `AI_REFERENCE_MAPPING_KEY`; the key is deployment state and must be protected separately                                        |
 | Aborted stream leaves orphaned state                                               | `req.on('close')` handler marks in-flight assistant message aborted; no dangling transactions                                                                                           |
 | Ollama host pointed at a malicious server                                          | `OLLAMA_URL` validated at startup (localhost or RFC1918 private only by default); warning surfaced if user overrides to a public IP                                                     |
 
@@ -243,27 +154,8 @@ If an AI chat data leak is suspected:
 
 The fixed-oracle local reliability suite measures tool selection, scope, grounding, abstention,
 partial failures, follow-up preservation, latency, resident model memory, and prompt-injection
-resistance. The separate cloud privacy suite inspects exact serialized synthetic traffic and fails
-closed on unapproved destinations, redirects, identifiers, cross-scope state, telemetry, and
-post-cancellation requests. See [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
+resistance. See [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
 for commands, thresholds, evidence, and unresolved release blockers.
-
-The optional OpenAI investigation route has three distinct grants. Public-question planning passes a
-typed private-data classifier. Selected-summary planning sends the exact summary but omits the
-original question and constraints. Selected-evidence synthesis sends the exact manually selected
-evidence and lets OpenAI write the final answer without hosted tools. Planning grants cannot authorize
-synthesis. The UI can select only server-allowlisted API models. The selected identifier is part of
-the digest-bound request, and its own configured prices drive reservation and usage accounting so a
-more expensive model cannot inherit a cheaper model's limits. The exact final request bytes are
-digest-bound to an expiring grant. Network timeouts and
-connection failures remain in a `sent` uncertain state and are not replayed automatically. Definite
-cloud-synthesis failures become explicit partial results and do not trigger local-model fallback.
-Deleting disclosure history removes both usage records and grants.
-Deleting an investigation separately removes its persisted selected evidence, steps, result, and
-claimed reference scope with all encrypted entries. A database restore on the same installation can
-resume an in-flight token-bearing answer only while the 30-day scope and original installation key
-remain available. Restoring elsewhere without that key fails visibly. Completed local `result_json`
-already contains the restored answer and does not need the map for display.
 
 ## Out of Scope (v1)
 
@@ -282,6 +174,4 @@ already contains the restored answer and does not need the map for display.
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]]
 - [[docs/api/ai-research|AI Research API]]
 - [[docs/adr/145-bounded-ai-research-orchestration|ADR-145]]
-- [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]
-- [[docs/adr/169-operator-managed-agentcloak-preflight|ADR-169: Operator-managed AgentCloak Preflight]]
-- [[docs/adr/170-agentcloak-desktop-detection-and-scoped-protection|ADR-170: AgentCloak Desktop Detection with Scoped Vision Protection]]
+- [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229: Remove cloud AI, Codex and AgentCloak]]

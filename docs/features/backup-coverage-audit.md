@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-20
 updated: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -79,18 +79,18 @@ baseline: a dump that has no `kysely_migration` rows fails with `BACKUP_PRE_BASE
 
 #### AI & Conversations
 
+Migration 0002 dropped `ai_disclosure_grants`, `ai_disclosure_records`, `ai_reference_scopes` and
+`ai_reference_entries` ([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). An older
+backup that still contains them restores, and the next backend start drops them again.
+
 | Table                            | Domain      | Backup      | Notes                                                |
 | -------------------------------- | ----------- | ----------- | ---------------------------------------------------- |
 | `ai_conversations`               | AI Chat     | ✅ Included |                                                      |
 | `ai_messages`                    | AI Chat     | ✅ Included |                                                      |
 | `ai_research_documents`          | AI Research | ✅ Included | Local document metadata                              |
 | `ai_research_passages`           | AI Research | ✅ Included | Local extracted text and embeddings                  |
-| `ai_investigation_jobs`          | AI Research | ✅ Included | Inputs, provider-form checkpoints, and local results |
+| `ai_investigation_jobs`          | AI Research | ✅ Included | Inputs, answer checkpoints, and local results        |
 | `ai_investigation_steps`         | AI Research | ✅ Included | Reusable step checkpoints                            |
-| `ai_disclosure_grants`           | AI Research | ✅ Included | Digest-bound consent and budgets; no exact payload   |
-| `ai_disclosure_records`          | AI Research | ✅ Included | Disclosure metadata and usage; no exact payload      |
-| `ai_reference_scopes`            | AI Research | ✅ Included | One-job scope and expiry; ciphertext only            |
-| `ai_reference_entries`           | AI Research | ✅ Included | Typed token, AES-256-GCM ciphertext, nonce, and tag  |
 | `research_dossiers`              | Research    | ✅ Included | Current local dossier content and version pointer    |
 | `research_dossier_versions`      | Research    | ✅ Included | Immutable content snapshots                          |
 | `research_dossier_links`         | Research    | ✅ Included | Live foreign keys and historical target labels       |
@@ -231,7 +231,6 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | Materialised views                                 | ❌ Excluded | Re-built at runtime by `materializedViewService.js`                                                                                                                                                           |
 | Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
-| `AI_REFERENCE_MAPPING_KEY`                         | ❌ Excluded | Installation-held reversible-reference key. It is not PostgreSQL data and is never written into the bundle. Preserve it separately to recover an in-flight token-bearing investigation after restore.         |
 | `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
 | Electron `audit-anchor/` receipt and encrypted key | ❌ Excluded | A same-install restore checks the candidate chain against this receipt and the separate Keychain checkpoint. A new installation has neither witness.                                                          |
 | macOS Keychain audit checkpoint                    | ❌ Excluded | Latest version 3 receipt digest and chain head. Its loss or mismatch fails verification; it is not recreated from a restored database.                                                                        |

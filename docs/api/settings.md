@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -259,18 +259,15 @@ Typical fields persisted in `app_settings`:
   "startOfWeek": "monday",
   "showDecimalPlaces": 2,
   "language": "en",
-  "openAiDefaultModel": "approved-model-id",
   "autoClearPlannedOnMatch": true
 }
 ```
 
 **`autoClearPlannedOnMatch` (June 2026):** When `true` (default), an ingested transaction that unambiguously matches exactly one active unexecuted planned payment is automatically linked and that planned payment is executed (same path as a manual `POST /:id/execute`). Ambiguous matches (0 or ≥2 candidates) surface as confirmable suggestions via `GET /api/planned-transactions/match-suggestions`. Set to `false` to disable all auto-link behavior including suggestions. See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Planned Transactions: Auto-Link on Ingest]].
 
-**`openAiDefaultModel` (September 2026):** Optional user preference for the model pre-selected on
-new OpenAI investigations. The frontend accepts at most 200 characters and uses it only while the
-identifier remains in the server-approved catalog. The investigation request still carries an
-explicit model and the backend performs the authoritative allowlist check. See
-[[docs/adr/148-user-default-openai-model|ADR-148]].
+**`openAiDefaultModel` (retired):** The September 2026 OpenAI default-model preference was removed
+with the OpenAI API route ([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). The
+frontend drops the field from a stored `app_settings` blob on hydration.
 
 Code links: [[apps/frontend/src/stores/hydration/AppSettingsHydration.tsx]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 

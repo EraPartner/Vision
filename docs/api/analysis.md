@@ -2,8 +2,8 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, bounded execution, saved definitions and read-only shared TypeScript CSV/XLSX interchange under /api/analysis.
 path: /api/analysis
@@ -93,8 +93,8 @@ edited. Measure identifiers remain stable; holdings labels now describe raw tota
 Visual `limit` is a page size, not an inner SQL cap. SQL authors remain responsible for units,
 currency conversion and explicit SQL limits.
 
-Formula evaluation accepts optional `inputComplete` (default true). Saved and cloud-plan execution
-set it from the result window; aggregate formulas on incomplete input return `INCOMPLETE_INPUT`
+Formula evaluation accepts optional `inputComplete` (default true). Saved execution
+sets it from the result window; aggregate formulas on incomplete input return `INCOMPLETE_INPUT`
 errors rather than page-only summaries. Errors carry `formulaId`, `code`, `message`, and optional
 zero-based `rowIndex`. A failed cell does not clear other rows. Consumed failed references produce
 `DEPENDENCY_ERROR`. Numeric aggregates reject mixed contributing `currency` values with `MIXED_CURRENCIES`; result units identify literal, parameter or result-column currency. Missing scope returns CURRENCY_PROVENANCE_REQUIRED; missing financial contributors withhold aggregates. Quantity arithmetic checks investment identity. Formula result columns are included in saved result metadata.

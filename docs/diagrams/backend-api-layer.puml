@@ -322,14 +322,6 @@ package "Routes" {
     +/api/admin/* : timing-safe bearer auth (ADR-037)
   }
 
-  class CodexExperimentalRouter {
-    +GET /status : disposable account status
-    +POST /session : start isolated App Server
-    +POST /login : device-code login
-    +POST /synthetic-turn : fixed fictional question
-    +POST /logout : dispose session
-  }
-
   class InternalAuditRouter <<Electron main only>> {
     +POST /verify : full chain and domain-link check
     +POST /read : verified bounded page
@@ -376,13 +368,8 @@ package "Routes" {
     +GET,PATCH,DELETE /conversations/:id : read/rename/delete conversation
   }
 
-  class AiResearchRouter <<ADR-171>> {
-    +GET /agentcloak-desktop : effective status and fresh Desktop probe
-    +PUT /agentcloak-desktop : enable or disable Desktop protection
-    +GET /status : research status
-    +POST /disclosures/preview, /disclosures/grants : cloud disclosure
-    +GET /disclosures/grants, /disclosures/records; DELETE /disclosures/records
-    +POST /disclosures/grants/:id/revoke : revoke grant
+  class AiResearchRouter <<ADR-145, ADR-229>> {
+    +GET /status : local research status
     +GET,POST /investigations; GET,DELETE /investigations/:id
     +POST /investigations/:id/resume, /investigations/:id/cancel
   }
@@ -513,7 +500,6 @@ Main --> SplitsRouter
 Main --> MarketLookupRouter
 Main --> InfoRouter
 Main --> AdminRouter
-Main --> CodexExperimentalRouter : /api/admin/codex-experimental\nadmin auth + loopback
 Main --> InternalAuditRouter : /api/internal/audit
 Main --> AggregationsRouter
 Main --> BelgianTaxRouter : /api/belgian-tax\nglobal + aggregation limiter

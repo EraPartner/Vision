@@ -1,8 +1,8 @@
 ---
 title: ADR-171 - Explicitly configured packaged OpenAI API route
 type: adr
-status: Accepted
-date: 2026-09-25
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, privacy, release, electron, openai, agentcloak]
 description: Permit the packaged OpenAI API investigation route only with explicit private runtime configuration, while tracking live synthetic acceptance separately from code capability.
 aliases: [ADR-171, packaged OpenAI explicit configuration]
@@ -16,6 +16,8 @@ related_code:
 ---
 
 # ADR-171: Explicitly configured packaged OpenAI API route
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 

@@ -8,7 +8,7 @@ last_modified: 2026-10-20
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 312
+api_operation_count: 299
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 312 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 299 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **312 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **299 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -89,6 +89,8 @@ aliases:
 > **2026-10-11 — Belgian tax partner attribution (ADR-201, non-breaking, count 300 → 301):** `GET /api/info/deduction-candidates` was served but missing from `openapi.yaml` and this matrix; it is now declared, and each `byDeductionType` group gains an additive `byOwner` (`me` / `partner` / `joint`) split of its total. `GET /api/aggregations/category-pivot` cells gain an optional `incomeByOwner` (`partner` / `joint`). `POST /api/reports/tax` accepts optional `household` (validated like the household setting) and `precomputedHousehold` and renders per-partner rows for two partners. No field is removed or renamed.
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
+>
+> **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 >
 > **2026-10-20 — import rate-limit scope narrowed (non-breaking, operation count unchanged):** `importRateLimiter` (20 req/min, shared `import` bucket) now covers only uploads, the portfolio probe, and commits under `/api/import` and `/api/portfolio/import`. Batch previews, row and investment overrides, batch list/detail/rollback, saved parsers, and reconciliation preview are limited only by the global API limiter. Clients previously throttled during review no longer receive those `429` responses. See [[docs/security/rate-limiting]].
 
@@ -264,20 +266,15 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST             | `/api/analysis/saved/:id/restore`     | Restore a prior definition as a new version                | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/saved/:id/ai-proposal` | Generate an inspectable local-model edit proposal          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 
-## AI Research (20 operations)
+## AI Research (12 operations)
 
 | Method      | Path                                             | Description                                                        | Rate Limit          | Doc                                   |
 | ----------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------- | ------------------------------------- |
 | GET         | `/api/ai-research/status`                        | Inspect local research and provider readiness                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST   | `/api/ai-research/investigations`                | List or start recoverable jobs; create may claim one preview scope | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, PUT    | `/api/ai-research/agentcloak-desktop`            | Probe Desktop and inspect or change its protection preference      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
+| GET, POST   | `/api/ai-research/investigations`                | List or start recoverable local jobs                               | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/investigations/:id`            | Inspect or delete one investigation                                | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/resume`     | Resume completed checkpoints                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/cancel`     | Cancel queued or active work                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST        | `/api/ai-research/disclosures/preview`           | Preview the exact protected cloud payload and disclosure units     | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, POST   | `/api/ai-research/disclosures/grants`            | List grants or approve bounded digest-bound egress                 | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| POST        | `/api/ai-research/disclosures/grants/:id/revoke` | Revoke a grant before queued egress or retry                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
-| GET, DELETE | `/api/ai-research/disclosures/records`           | Inspect disclosure metadata or delete records and revoke grants    | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST   | `/api/ai-research/documents`                     | List or locally index selected research documents                  | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/documents/:id`                 | Inspect or delete a document and its derived passages              | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/documents/search/passages`     | Retrieve cited local document passages                             | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
@@ -611,11 +608,6 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                                         | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/codex-experimental/status`            | Disposable synthetic Codex session and account status                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/codex-experimental/session`           | Start isolated App Server with synthetic workspace                                                                                           | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/codex-experimental/login`             | Begin ChatGPT device-code login in isolated runtime                                                                                          | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
-| POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
 ## Belgian Tax — Native phase 3 prerequisite
 

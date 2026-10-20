@@ -4,7 +4,7 @@ type: reference
 status: active
 date: 2026-10-20
 updated: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 tags:
   [
     reference,
@@ -1722,27 +1722,18 @@ pt }|---|| cat
 Migration 0111 adds local `ai_research_documents` and cascading `ai_research_passages`; deleting a
 document removes every derived keyword and embedding row. `ai_investigation_jobs` owns durable state
 and result/checkpoint JSON, while `ai_investigation_steps` makes completed tool work reusable.
-`ai_disclosure_grants` stores scoped budgets, the inspected payload digest, and one of the
-`cloud-plan-public`, `selected-summary`, or `cloud-synthesis-selected` modes. The third mode cannot
-reuse a planning grant because its dedicated grant is bound to the selected-evidence payload.
-`ai_disclosure_records` stores policy, digest, field/unit manifests, reservations, and actual usage;
-it never stores API credentials or exact outbound payload text. See
-[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]] and
-[[docs/adr/146-explicit-selected-evidence-cloud-synthesis|ADR-146]].
+`ai_investigation_jobs.route` accepts only `local`. See
+[[docs/adr/145-bounded-ai-research-orchestration|ADR-145]].
 
-Migration 0113 adds `ai_reference_scopes` and `ai_reference_entries`. A scope begins unclaimed with
-a 15-minute use window. Investigation creation atomically assigns it to at most one
-`ai_investigation_jobs` row and sets a 30-day expiry. The job foreign key is unique and uses
-`ON DELETE CASCADE`, so deleting a job deletes its scope; deleting a scope cascades to every entry.
-Each entry has a globally unique typed token plus AES-256-GCM ciphertext, a 12-byte nonce, and a
-16-byte authentication tag. Scope ID, token, and type are authenticated additional data in the
-service layer. PostgreSQL never stores the plaintext mapping or `AI_REFERENCE_MAPPING_KEY`.
+`ai_investigation_jobs.checkpoint_json.providerResult` stores the validated model answer, so a
+restart reuses it without a second model call.
 
-`ai_investigation_jobs.checkpoint_json.providerResult` stores the validated provider-form answer
-before local token restoration. It can contain scoped tokens but not the plaintext mapping. After
-successful restoration, `result_json` stores the local answer with allowlisted display text
-restored. Startup reuses the provider-form checkpoint without a second model call. See
-[[docs/adr/151-scoped-reversible-ai-references|ADR-151]].
+Migration 0002 (`db/migrations/0002_remove_cloud_ai.sql`) deletes investigation jobs on any route
+other than `local` (their steps cascade), narrows the `route` check to `local`, drops
+`ai_investigation_jobs.grant_id`, drops `ai_disclosure_records`, `ai_disclosure_grants`,
+`ai_reference_entries` and `ai_reference_scopes`, and deletes the `agentcloak_desktop_enabled`
+`user_settings` row. Its rollback recreates the empty tables and column; deleted rows are not
+restored. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 
 ## Query Patterns
 

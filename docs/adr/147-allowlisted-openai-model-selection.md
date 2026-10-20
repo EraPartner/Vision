@@ -1,14 +1,16 @@
 ---
 title: ADR-147 - Allowlisted OpenAI Model Selection
 type: adr
-status: Accepted
-date: 2026-09-14
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, openai, models, configuration, privacy, spend]
 description: Let users select an OpenAI API model in the investigation UI while enforcing a server-owned allowlist and per-model spend accounting.
 aliases: [OpenAI model picker, API model allowlist]
 ---
 
 # ADR-147: Allowlisted OpenAI Model Selection
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 
@@ -60,5 +62,5 @@ OpenAI documents the separate billing boundary in
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/api/ai-research|AI Research API]]
 - [[docs/reference/environment-variables|Environment Variables]]
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/adr/index|All ADRs]]

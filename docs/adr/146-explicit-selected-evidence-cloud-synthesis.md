@@ -1,14 +1,16 @@
 ---
 title: ADR-146 - Explicit Selected-Evidence Cloud Synthesis
 type: adr
-status: Accepted
-date: 2026-09-14
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, openai, privacy, disclosure, synthesis, evidence]
 description: Add a distinct opt-in mode where OpenAI writes the final answer from only the exact user-selected evidence approved in a bounded disclosure preview.
 aliases: [cloud synthesis, selected evidence synthesis, OpenAI final answer]
 ---
 
 # ADR-146: Explicit Selected-Evidence Cloud Synthesis
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 
@@ -67,5 +69,5 @@ The new mode has these rules:
 - [[docs/features/ai-chat|AI Chat and Investigations]]
 - [[docs/api/ai-research|AI Research API]]
 - [[docs/security/ai-data-access|AI Data Access Policy]]
-- [[docs/reference/openai-codex-assistance-profiles|OpenAI and Codex Assistance Profiles]]
+- OpenAI and Codex Assistance Profiles (deleted by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/adr/index|All ADRs]]

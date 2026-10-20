@@ -109,9 +109,6 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `native:smoke`                  | Offline disposable native backend, audit enrollment, protected device move, valid backup restore and tampered backup rejection |
 | `calibrate:category-outliers`   | Privacy-preserving threshold backtest against a local Vision API                                                               |
 | `evaluate:local-ai`             | Score a live Ollama model with fixed synthetic tool oracles                                                                    |
-| `evaluate:cloud-privacy`        | Inspect deterministic synthetic cloud-assistance traffic                                                                       |
-| `evaluate:codex-seatbelt-smoke` | Offline macOS file and network boundary probe for synthetic Codex                                                              |
-| `evaluate:codex-subscription`   | Opt-in device login and one fixed fictional Codex turn; requires `VISION_EXPERIMENTAL_CODEX_BINARY`                            |
 
 `scripts/with-test-db.sh` ignores inherited database URLs by default. It creates a private native
 PostgreSQL 18 cluster with a generated password and SCRAM authentication, enables required

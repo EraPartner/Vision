@@ -261,13 +261,6 @@ package "Repositories" {
     +deleteJob(id): Promise<boolean>
   }
 
-  class AiReferenceRepository <<ADR-151>> {
-    +createScope(scope): Promise<Scope>
-    +getScope(id): Promise<Scope | null>
-    +getScopeForJob(jobId): Promise<Scope | null>
-    +deleteExpiredUnclaimed(): Promise<number>
-  }
-
   class ProviderHealthRepository {
     +listAll(): Promise<ProviderHealth[]>
     +findByProvider(provider): Promise<ProviderHealth | null>
@@ -330,12 +323,6 @@ package "Repositories" {
 
   class ImportCommitRepository {
     +commitFingerprintRows(rows)
-  }
-
-  class AiDisclosureRepository {
-    +createGrant / listGrants / revokeGrant
-    +listRecords / deleteHistory
-    +reserveDisclosure / updateDisclosureRecord
   }
 
   class AiResearchDocumentRepository {
@@ -473,7 +460,6 @@ DB <.. AttachmentRepository
 DB <.. ImportBatchRepository
 DB <.. AiChatRepository
 DB <.. AiInvestigationRepository
-DB <.. AiReferenceRepository
 DB <.. ProviderHealthRepository
 DB <.. CashflowForecastMcRepository
 DB <.. CashflowForecastMcRollingRepository
@@ -484,7 +470,6 @@ DB <.. PortfolioExposureRepository
 DB <.. PortfolioImportBatchRepository
 DB <.. PortfolioBrokerRetagRepository
 DB <.. ImportCommitRepository
-DB <.. AiDisclosureRepository
 DB <.. AiResearchDocumentRepository
 DB <.. ProviderApiKeyRepository
 DB <.. ProviderQuotaRepository
@@ -532,7 +517,5 @@ CurrencyConversionService --> TransactionRepository
 PriceProviderService --> InvestmentRepository
 
 AiInvestigationService --> AiInvestigationRepository
-AiInvestigationService --> AiReferenceService
-AiReferenceService --> AiReferenceRepository
 
 @enduml

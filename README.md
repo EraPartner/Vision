@@ -24,9 +24,8 @@ spending, tracks your portfolio and net worth, and computes Belgian personal inc
 macOS app bundles its own PostgreSQL 18 database, so your data lives in a private, loopback-only
 database on your Mac.
 
-- **Private by default.** No account and no cloud service. AI chat runs on a local Ollama model;
-  the cloud AI features are experimental, off by default, and send only what you preview and
-  grant ([AI data access](docs/security/ai-data-access.md)).
+- **Private by default.** No account and no cloud service. AI chat and investigations run on a
+  local Ollama model ([AI data access](docs/security/ai-data-access.md)).
 - **One app.** Transactions, budgets, planned payments, forecasts, investments, research, and tax
   in one place.
 - **Built to last.** A strict TypeScript monorepo with an OpenAPI contract, a PostgreSQL schema
@@ -75,8 +74,6 @@ Vision is a native macOS app for Apple Silicon. There are no Windows, Linux, or 
 
 - Local assistant on **Ollama** that answers questions about your transactions and categories
   with tool-backed result cards
-- **Experimental, off by default:** OpenAI research (`OPENAI_API_ENABLED`) and a Codex route
-  (`VISION_EXPERIMENTAL_CODEX`). OpenAI receives only a payload you preview and grant
 
 ### 🧩 App
 
@@ -154,7 +151,7 @@ flowchart LR
   UI -- "REST (openapi.yaml)" --> API["Express backend on Bun<br/>routes → services → repositories"]
   API -- "Kysely" --> DB[("PostgreSQL 18<br/>bundled, loopback-only")]
   API --> Ext["Price, FX and research providers"]
-  API --> AI["Ollama (local)<br/>OpenAI / Codex (opt-in)"]
+  API --> AI["Ollama (local)"]
 ```
 
 - **The server computes, the browser displays.** Totals, FX conversion, gains, forecasts, and tax
@@ -196,7 +193,7 @@ Vision/
 | Backend  | Express on Bun, Zod, decimal.js                                               |
 | Database | PostgreSQL 18.6 with Kysely                                                   |
 | Desktop  | Electron, Apple Silicon DMG and ZIP                                           |
-| AI       | Ollama (local); experimental opt-in OpenAI and Codex                          |
+| AI       | Ollama (local)                                                                |
 | Testing  | Vitest, with backend tests against a disposable PostgreSQL 18                 |
 | API spec | OpenAPI 3 (`openapi.yaml`)                                                    |
 
@@ -249,7 +246,7 @@ The packaged app generates its own database credentials and writes them to a res
 
 For source development, copy `.env.example` to `.env` only when you need provider API keys or
 overrides. The template documents every optional setting (database roles, logging, Ollama,
-research providers, experimental OpenAI and Codex). See
+AI web research, research providers). See
 [`docs/reference/environment-variables.md`](docs/reference/environment-variables.md).
 
 ### Contributing
@@ -292,7 +289,7 @@ dependency audits on the release tree before packaging.
 - The Electron shell runs with context isolation and the sandbox on, and Node integration off.
 - Backups can be encrypted with AES-256-GCM (per-backup random salt).
 - Ollama runs locally by default. If you point it at a remote endpoint, that endpoint receives
-  your prompts and tool results. The OpenAI and Codex features are off by default.
+  your prompts and tool results.
 
 See [`docs/security/`](docs/security/).
 

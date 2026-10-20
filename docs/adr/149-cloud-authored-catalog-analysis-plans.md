@@ -1,14 +1,16 @@
 ---
 title: ADR-149 - Cloud-authored catalog analysis plans
 type: adr
-status: Accepted
-date: 2026-09-14
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, analysis, privacy, security, openai, catalog]
 description: Allow a cloud planner to propose identifier-only analysis plans while local validation, scope injection, execution, and result synthesis remain inside Vision.
 aliases: [cloud analysis plans, identifier-only cloud planner]
 ---
 
 # ADR-149: Cloud-authored catalog analysis plans
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 

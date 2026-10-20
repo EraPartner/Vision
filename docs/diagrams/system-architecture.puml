@@ -27,17 +27,17 @@ package "Server" {
     node "Express.js" as Express
     node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
-    node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
+    node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration · reports · attachments" as Services
     node "Shared TypeScript helpers\ncomplete-source detection + bounded CSV preview\nPortfolio Tax estimators + cost buckets\nAnalysis CSV / stored-ZIP workbook interchange\nResearch stats / indicators / exact source previews" as SharedHelpers
     node "Research presentation bridge\nsubmitted-data only / 64 MiB multipart\nno provider / DB / FX lookup" as ResearchPresentation
-    node "Repositories\ntransaction · recipient · planning · portfolio\nimports + history receipts · AI jobs + reference maps · attachments · settings · info" as Repos
+    node "Repositories\ntransaction · recipient · planning · portfolio\nimports + history receipts · AI jobs · attachments · settings · info" as Repos
     node "Background Jobs\nrefreshCashflowForecastMc · local analysis monitor scheduler" as Jobs
   }
 }
 
 database "PostgreSQL 18" as DB {
   node "Schema (db/migrations, Kysely migrator)" as SchemaInit
-  node "User-data tables\ntransactions · recipients · planning · portfolio + exposure sources\nimports + reconciliation receipts + custody/adjustment evidence · attachments · AI jobs + encrypted reference maps · monitor history · settings" as Tables
+  node "User-data tables\ntransactions · recipients · planning · portfolio + exposure sources\nimports + reconciliation receipts + custody/adjustment evidence · attachments · AI jobs · monitor history · settings" as Tables
   node "Materialized Views\nmonthly summary · category totals\ncashflow daily · bank balances" as MatViews
   node "Aggregation tables (trigger-maintained)\nrecipient totals · split outstanding" as AggTables
   node "Indexes (incl. covering partial)" as Indexes
@@ -53,9 +53,6 @@ cloud "External Services" as External {
   node "FRED / St. Louis Fed (macro series, ADR-082)" as FRED
   node "DBnomics (ECB/OECD/IMF macro, keyless, ADR-082)" as DBnomics
   node "Local Ollama (LLM, 127.0.0.1:11434)" as Ollama
-  node "AgentCloak\nDesktop /detect or MCP /mcp, optional" as AgentCloak
-  node "OpenAI Responses API\nopt-in planning or selected-evidence synthesis" as OpenAI
-  node "Codex App Server provider\nexperimental synthetic-only" as CodexProvider
 }
 
 cloud "Build & Distribution" as DevToolsCloud {
@@ -85,14 +82,6 @@ package "Desktop Runtime" {
   Electron --> Routes : loopback + per-launch token\nverify and checkpoint metadata
 }
 
-package "Experimental Codex Boundary" {
-  node "Disposable App Server\nmacOS Seatbelt + ephemeral auth" as CodexChild
-  node "CONNECT proxy\nallowed hosts + byte caps" as CodexProxy
-  Routes --> CodexChild : admin opt-in + fixed fictional turn
-  CodexChild --> CodexProxy : loopback only
-  CodexProxy --> CodexProvider : TLS tunnel
-}
-
 package "Server Components" {
   Express --> Middleware
   Middleware --> Routes
@@ -114,8 +103,6 @@ package "Database Access" {
 package "External Services" {
   Services --> External : HTTPS / local HTTP (Ollama)
   External --> Services : JSON
-  Services --> AgentCloak : optional Desktop detection before protection\nfinal preview check + each OpenAI attempt
-  Services --> AgentCloak : Desktop setup availability probe\nbefore saving enabled preference
 }
 
 note right of External
@@ -126,22 +113,13 @@ note right of External
   - Macro (ADR-082): FRED (keyed), Eurostat (keyless),
     DBnomics (keyless) — provider-pinned, in-memory cache,
     never persisted to asset_price_history
-  - Ollama is local-only (privacy non-negotiable)
-  - OpenAI egress is explicit and digest-bound. Planning receives
-    public catalog identifiers only; private analysis results stay local (ADR-149)
-  - Explicit selected-text markers may become one-job typed tokens.
-    AES-256-GCM mappings and answer restoration stay local (ADR-151).
-  - Optional AgentCloak Desktop detects selected-text spans before preview;
-    Vision encrypts their scoped token mapping and restores locally (ADR-170).
-    The MCP mode checks token-safe text without applying its rewrite (ADR-169).
-    Remaining findings, changed text, or check failure block egress.
+  - Ollama is local-only (privacy non-negotiable); chat and
+    investigations have no cloud model route (ADR-229)
 end note
 
 note right of Tables
   Raw-transaction tables: per-bank for replay / audit;
   manual_raw_transactions handles manual-entry dedup.
-  Reversible-reference rows contain ciphertext, nonce, tag, and typed token.
-  Their installation key is outside PostgreSQL and backup (ADR-151).
 end note
 
 note right of Middleware

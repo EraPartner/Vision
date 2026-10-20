@@ -192,12 +192,6 @@ package "External / Data" {
     +one startup catch-up and 60-second ticks
   }
 
-  class CloudAnalysisPlanService <<ADR-149>> {
-    +getPublicCloudAnalysisCatalog(): PublicCatalog
-    +parseCloudAnalysisPlans(text, scope): Plan[]
-    +executeCloudAnalysisPlan(plan, trustedScope): Promise<Result>
-  }
-
   class QuoteBackfillService {
     +backfillHistoricalAssetQuotes(): Promise<void>
     +refreshActiveHoldingQuotes(): Promise<void>
@@ -252,35 +246,14 @@ package "AI & Observability" {
     +listConversations() / getConversationWithMessages(id)
   }
 
-  class AiInvestigationService <<ADR-145, ADR-151, ADR-169>> {
+  class AiInvestigationService <<ADR-145, ADR-229>> {
     +createInvestigation(input): Promise<Job>
     +runInvestigationJob(id): Promise<Job>
     +resumeRecoverableInvestigations(): Promise<number>
   }
 
-  class AiReferenceService <<ADR-151>> {
-    +prepareReferencePreview(request): Promise<PreparedPreview>
-    +validateReferenceRequest(request): Promise<Scope>
-    +claimReferenceScope(scopeId, jobId): Promise<Scope>
-    +restoreAnswerForJob(jobId, answer): Promise<AiAnswer>
-  }
-
   class AiProviderAdapters {
-    +generateWithProvider(request): Promise<ProviderResult>
-  }
-
-  class AgentCloakPreflight <<ADR-169, ADR-170>> {
-    +checkAgentCloakPreflight(disclosedPayload): Promise<Status>
-    +detectAgentCloakDesktopSpans(text): Promise<Spans>
-  }
-
-  class AgentCloakDesktopSetupService <<ADR-171>> {
-    +agentCloakDesktopStatus(): Promise<Status>
-    +configureAgentCloakDesktop(enabled): Promise<Status>
-  }
-
-  class AiReferenceKeySetup <<ADR-171>> {
-    +ensureReferenceMappingKey(): Created | Existing
+    +generateLocal(input): Promise<ProviderGeneration>
   }
 
   class ProviderHealthService {
@@ -294,7 +267,6 @@ package "AI & Observability" {
     +buildRouteManifest(app): Route[]
   }
 
-  class AiDisclosureService
   class "aiResearchDocuments" as AiResearchDocuments
   class "research/*" as ResearchProviders
 }
@@ -492,8 +464,6 @@ note right of ResearchDossierService
   Validates live category, investment, saved-analysis,
   and document references directly before each write.
 end note
-CloudAnalysisPlanService --> AnalysisCatalog : validates identifier-only plans
-CloudAnalysisPlanService --> AnalysisExecutor : executes with locally injected scope
 
 AggregationRefreshService --> MaterializedViewService
 
@@ -550,17 +520,9 @@ AiChatService --> TransactionRepository
 AiChatService --> InfoRepository : canonical cash flow
 AiChatService --> PortfolioSummaryService : canonical portfolio metrics
 
-AiInvestigationService --> AiReferenceService : claim and local restoration
-AiReferenceService --> AgentCloakPreflight : Desktop span detection at preview
-AiInvestigationService --> AiProviderAdapters : consent-bound cloud generation
-AiProviderAdapters --> AgentCloakPreflight : before each OpenAI attempt
-AgentCloakPreflight --> "AgentCloak Desktop or MCP" : loopback detect or cloak check
-AgentCloakDesktopSetupService --> AgentCloakPreflight : fresh bounded probe
-AgentCloakDesktopSetupService --> AiReferenceKeySetup : ensure key on enable
-AgentCloakDesktopSetupService --> SettingsRepository : persist boolean only
-AiReferenceKeySetup --> "Private environment file" : create missing or blank key
-AiInvestigationService --> AiInvestigationRepository : provider-form checkpoint
-AiReferenceService --> AiReferenceRepository : encrypted scoped mappings
+AiInvestigationService --> AiProviderAdapters : local Ollama generation
+AiProviderAdapters --> "Ollama client"
+AiInvestigationService --> AiInvestigationRepository : answer checkpoint
 
 ProviderHealthService --> ProviderHealthRepository
 

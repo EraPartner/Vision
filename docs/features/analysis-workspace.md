@@ -284,7 +284,7 @@ starting. See [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] fo
 - [[docs/reference/analysis-contract|Analysis Contract Reference]]
 - [[docs/reference/analysis-datasets|Analysis Datasets]]
 - [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]]
-- [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]]
+- [[docs/adr/149-cloud-authored-catalog-analysis-plans|ADR-149]] (superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]])
 - [[docs/features/portfolio|Portfolio]]
 
 ## Template selection

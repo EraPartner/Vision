@@ -2,8 +2,8 @@
 title: DashboardSettingsDialog
 type: component
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     components,
@@ -59,10 +59,8 @@ DashboardSettingsDialog (sidebar orchestrator)
 ├── AppearanceSection    — theme variant, color mode + schedule, system accent, visual effects, auto-adapt
 ├── StatisticsSection    — exclusion scope, exclude-hidden, include-transfers, excluded categories/recipients
 ├── BehaviorSection      — startup section, cost-basis method, auto-clear planned, reset recurring dismissals
-├── AiSection            — AI chat, OpenAI, AgentCloak Desktop, analysis preferences, research provider keys
+├── AiSection            — AI chat, analysis preferences, research provider keys
 │   ├── AIChatSettingsSection
-│   ├── OpenAiSettingsSection
-│   ├── AgentCloakDesktopSettingsSection
 │   ├── AnalysisPreferencesSettings
 │   └── ResearchKeysSection
 ├── BackupSection        — directory, backup-on-quit, passphrase, run/restore (Electron only)
@@ -250,7 +248,7 @@ Reads from `useAppSettings`; writes through `updateAppSettings`.
 
 ### Contents
 
-Composes `[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama status + default model), `OpenAiSettingsSection` (default OpenAI model), `AgentCloakDesktopSettingsSection` (connection status, Check again, Enable/Disable), `AnalysisPreferencesSettings` (default answer depth, default benchmark with Clear) and `ResearchKeysSection` (one row per provider: masked status, key input, Save, Clear). Each sub-component reads and writes independently; `AiSection` is a layout wrapper. Keys are entered inline; no sub-dialog opens from this section.
+Composes `[[apps/frontend/src/features/settings/AIChatSettingsSection.tsx|AIChatSettingsSection]]` (Ollama status + default model), `AnalysisPreferencesSettings` (default answer depth, default benchmark with Clear) and `ResearchKeysSection` (one row per provider: masked status, key input, Save, Clear). Each sub-component reads and writes independently; `AiSection` is a layout wrapper. Keys are entered inline; no sub-dialog opens from this section.
 
 ---
 
@@ -350,7 +348,7 @@ interface AIChatSettingsSectionProps {
 | `settings.group.{formatting,localeDisplay,colorMode,visualEffects}` | Group card titles                                    |
 | `settings.dashboard.excludedCount.{one,other}`                      | Count badge on the exclusion groups (`tc()`)         |
 
-ADR-183 removed `settings.done`, `settings.description`, `settings.saveHint`, `settings.section.*.desc`, `settings.app.identity` and `settings.dashboard.excluded`, and reworded the failure toasts to the "Couldn't …" form (`settings.backup.failed`, `settings.restore.failed`, `settings.backup.passphrase.saveFailed`, `settings.research.{save,clear}Failed`, `settings.agentCloak.statusError`); the restore confirmation button reads Restore.
+ADR-183 removed `settings.done`, `settings.description`, `settings.saveHint`, `settings.section.*.desc`, `settings.app.identity` and `settings.dashboard.excluded`, and reworded the failure toasts to the "Couldn't …" form (`settings.backup.failed`, `settings.restore.failed`, `settings.backup.passphrase.saveFailed`, `settings.research.{save,clear}Failed`, and `settings.agentCloak.statusError`, which ADR-229 later removed with the AgentCloak Desktop group); the restore confirmation button reads Restore.
 
 ---
 

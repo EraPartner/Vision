@@ -1,8 +1,8 @@
 ---
 title: ADR-170 - AgentCloak Desktop detection with scoped Vision protection
 type: adr
-status: Accepted
-date: 2026-09-25
+status: superseded
+date: 2026-10-20
 tags: [adr, ai, privacy, security, agentcloak, openai]
 description: Use optional local AgentCloak Desktop detection to protect selected cloud text with Vision's encrypted scoped references before consent, while keeping the MCP gate available.
 aliases: [ADR-170, AgentCloak Desktop protection]
@@ -16,6 +16,8 @@ related_code:
 ---
 
 # ADR-170: AgentCloak Desktop detection with scoped Vision protection
+
+> [!note] Superseded by [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]] on 2026-10-20.
 
 ## Status
 
