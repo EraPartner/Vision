@@ -212,16 +212,23 @@ export async function applyPatterns(
   const patternRows = preloadedPatterns ?? await loadActivePatterns();
   if (patternRows.length === 0) return result;
 
+  // Compile each pattern once per call, on first use. Going through the LRU
+  // per (name, pattern) pair cost a key build per test, and recompiled every
+  // pattern for every name once there were more patterns than cache slots.
+  const compiled: Array<RegExp | undefined> = [];
   for (const raw of distinctRaw) {
     if (!raw) continue;
     const upper = raw.trim().toUpperCase();
-    for (const prow of patternRows) {
-      let re: RegExp;
-      try {
-        re = compilePattern(prow);
-      } catch (err) {
-        logger.warn('[recipientPatternService] bad pattern, skipping', { id: prow.id, err: (err as Error).message });
-        continue;
+    for (const [index, prow] of patternRows.entries()) {
+      let re = compiled[index];
+      if (!re) {
+        try {
+          re = compilePattern(prow);
+        } catch (err) {
+          logger.warn('[recipientPatternService] bad pattern, skipping', { id: prow.id, err: (err as Error).message });
+          continue;
+        }
+        compiled[index] = re;
       }
       if (re.test(upper)) {
         result.set(raw, { recipientId: prow.recipient_id, patternId: prow.id });
