@@ -90,6 +90,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `todo:list`                  | Print the current TODO ledger                      |
 | `todo:check`                 | Verify TODO counts and ledger integrity            |
 | `db:lint`                    | Squawk lint of `db/migrations/*.sql` (destructive DDL) |
+| `search:ast`                 | Structural code search with ast-grep (`bun run search:ast -l ts -p 'sumMoney($$$)' apps`) |
 | `check`                      | Run the repository aggregate static and test gates |
 
 ## Tests
@@ -134,6 +135,11 @@ All database scripts use the Kysely migrator in `apps/node-backend/src/database/
 | `db:lint`         | Squawk lint of migration SQL with `config/squawk.toml`                                               |
 | `db:codegen`      | Regenerate `apps/node-backend/src/database/schema.generated.ts` from `.kysely-codegenrc.json`       |
 | `db:index-stats`  | Inspect index statistics                                                                             |
+
+`apps/node-backend/scripts/postgres-mcp.ts` is not a package script. It is the read-only
+PostgreSQL MCP server that `.mcp.json` registers for Claude Code; it reads only
+`VISION_MCP_DATABASE_URL` and refuses non-loopback hosts
+([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]).
 
 See [[docs/guides/migrations|Database Migration Guide]] for the workflow.
 
