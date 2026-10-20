@@ -54,6 +54,7 @@ bun run db:migrate            # apply pending migrations through the app's migra
 bun run db:status             # list applied and pending migrations
 bun run db:lint               # squawk lint of migration SQL for destructive DDL
 bun run db:codegen            # regenerate the Kysely database types from a migrated database
+bun run search:ast -l ts -p 'sumMoney($$$)' apps   # structural search (ast-grep)
 # from apps/node-backend:
 bun vitest run src/path/to/x.test.js
 bun vitest run --test-name-pattern="name"
@@ -185,6 +186,12 @@ maintenance unless the user asks for one.
   stay aligned with the portable skills under `.agents/skills/`.
 - `.claude/rules/` holds symlinks to the canonical nested guidance in `docs/AGENTS.md` and
   `packaging/AGENTS.md`. They have no `paths:` scope, so Claude loads them in every session.
+- `.claude/settings.json` runs a background edit hook (owning `tsc` project, ESLint,
+  dependency-cruiser) that reports errors after edits, and a cloud-only session-start hook that
+  installs dependencies. `.mcp.json` adds `vision-postgres`, read-only SQL against a local database
+  named by `VISION_MCP_DATABASE_URL`. See ADR-227.
+- Prefer `bun run search:ast` over text search when the question is about code shape, such as
+  every call of a function or every `||` fallback on a field.
 - Host-specific Claude setup belongs in the gitignored `CLAUDE.local.md`.
 - Use Claude Code's built-in sandbox for agent execution. See `docs/guides/devcontainer.md` for the
   shared agent workflow.

@@ -28,6 +28,7 @@ dist/
 !.claude/agents/
 !.claude/rules/
 !.claude/settings.json
+!.claude/hooks/
 .opencode/
 AGENTS.local.md
 CLAUDE.*
