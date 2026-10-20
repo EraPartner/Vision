@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-20: TypeScript navigation MCP server (accepted)
+
+[[docs/adr/228-typescript-navigation-mcp|ADR-228]] replaces the local-only TypeScript
+language-server plugin from ADR-227 with `vision-typescript`, an in-repo MCP server over the
+repository's own `tsserver`. Local and cloud sessions get symbol search, go-to-definition,
+cross-package references, hover types and per-file diagnostics with no global install.
+
 ### 2026-10-20: Claude Code static-analysis aids (accepted)
 
 [[docs/adr/227-claude-code-static-analysis-aids|ADR-227]] commits Claude Code tooling in the

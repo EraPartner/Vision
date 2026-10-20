@@ -34,9 +34,10 @@ aids ([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]):
 - After each edit of a TypeScript or JavaScript file, a background hook runs the owning `tsc`
   project, ESLint and dependency-cruiser and wakes Claude only when they report errors.
 - Cloud sessions run `bun install` at start and warm the `tsc` caches.
-- Local sessions get the TypeScript language server after installing it once:
-  `npm install -g typescript-language-server typescript`. Cloud sessions do not run language
-  servers.
+- The `vision-typescript` MCP server gives local and cloud sessions TypeScript navigation:
+  `find_symbol`, `definition`, `references`, `hover` and `diagnostics`, across the frontend,
+  backend and shared packages. It runs the repository's own `tsserver`, so nothing is installed
+  globally ([[docs/adr/228-typescript-navigation-mcp|ADR-228]]).
 - The `vision-postgres` MCP server answers read-only SQL against a local migrated database. Set
   `VISION_MCP_DATABASE_URL` to a loopback URL, preferably with a read-only role, before starting
   Claude Code. Never point it at the real Vision database.

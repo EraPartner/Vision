@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "bun",
       "args": ["apps/node-backend/scripts/postgres-mcp.ts"]
+    },
+    "vision-typescript": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["apps/node-backend/scripts/typescript-mcp.ts"]
     }
   }
 }
