@@ -39,7 +39,7 @@ tags:
     pdf-report,
     db-maintenance,
     db-data-editor,
-    puppeteer,
+    electron-print,
     reports,
     multi-method-forecast,
     accuracy-persistence,
