@@ -61,7 +61,7 @@ Vision is a native macOS app for Apple Silicon. There are no Windows, Linux, or 
 
 - Stocks, ETFs, crypto, precious metals, real estate, savings, and bonds
 - Price providers: **Yahoo Finance**, **Binance**, **Kinesis**, and **custom JSON endpoints**
-- Currency conversion from stored ECB rates
+- Currency conversion from stored rates (ECB, with open.er-api for currencies ECB does not publish)
 - Daily net-worth snapshots and performance over time
 - Portfolio statement import, market lookup, watchlist, and research dossiers
 
