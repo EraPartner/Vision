@@ -48,12 +48,6 @@ describe("analysis role bootstrap", () => {
     const statements = client.query.mock.calls.map(([sql]) => sql).join("\n");
     expect(statements).toContain("NOINHERIT");
     expect(statements).toContain("default_transaction_read_only = on");
-    expect(statements).toContain(
-      "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public",
-    );
-    expect(statements).toContain(
-      "REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA vision_analysis",
-    );
     expect(statements.match(/GRANT SELECT ON vision_analysis\./g)).toHaveLength(
       6,
     );

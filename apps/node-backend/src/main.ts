@@ -451,12 +451,14 @@ async function start() {
       );
       process.exit(1);
     }
-    logger.warn(
-      "ADMIN_AUTH_TOKEN is not set — admin endpoints have no per-request token check. " +
-        "This is safe only because the port is published on 127.0.0.1 (loopback). The CSRF " +
-        "guard blocks cross-site *state-changing* requests, but NOT cross-site GET reads " +
-        "(safe methods are exempt), so it is not by itself an authorization boundary. If you " +
-        "publish the port on 0.0.0.0 or behind a proxy, SET ADMIN_AUTH_TOKEN to enforce token-based auth.",
+    // Loopback without a token is the desktop app's normal setup, so it is
+    // informational there; a tokenless non-loopback bind stays a warning.
+    const log = isLoopbackHost(HOST) ? logger.info : logger.warn;
+    log.call(
+      logger,
+      "ADMIN_AUTH_TOKEN is not set; admin endpoints rely on the bind address and the CSRF " +
+        "guard, which does not block cross-site GET reads. Set ADMIN_AUTH_TOKEN before " +
+        "exposing the port beyond loopback.",
     );
   }
 
@@ -471,6 +473,7 @@ async function start() {
     const appRoleBootstrap = await ensureAppRole({
       databaseUrl: settings.database.url,
       migrationsUrl: settings.database.migrationsUrl,
+      beforeMigrations: true,
     });
     endRoleBootstrap();
 

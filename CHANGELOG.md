@@ -54,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Analysis executor disabled after the first launch** — startup revoked privileges schema-wide,
+  which failed on the runtime materialized views the app role owns ("permission denied for table
+  mv_category_totals"). It now revokes only the executor's own grants.
 - Cleared multiple full-codebase audit backlogs (May–June 2026), including precision,
   timezone, and dedup robustness fixes.
 - Electron: unjammed menu/dock/CSV actions and hardened menu accelerators; gated initial
