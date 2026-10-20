@@ -314,7 +314,7 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   class PortfolioImportBatchService <<ADR-078>>
   class PortfolioImportCommitService {
     +commitReviewedPortfolioImport(batchId, accountId?)
-    +commitReviewedPortfolioImports({batchIds, adoptPolicy?, batchPolicies?, expectedPlanFingerprint})
+    +commitReviewedPortfolioImports({batchIds, adoptPolicy?, batchPolicies?})
   }
   class PortfolioImportReadinessService {
     +assertPortfolioImportReadiness(batchId, batch, accountId?)
@@ -325,23 +325,13 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +applyPortfolioImportReconciliation(scope)
     +validatePortfolioImportAdoptionRollback(batchId, history)
     +restorePortfolioImportAdoptions(receipts)
-    +bounded paired-income proof + record/restore
+    +full-history plan rebuilt at commit (ADR-236)
   }
-  class PortfolioIbkrCashReconciliation {
-    +proveIbkrCashCorrections(rows, batches, context)
-    +applyIbkrCashCorrection(action)
+  class PortfolioImportLegacyReceipts <<ADR-236>> {
     +validateIbkrCashCorrectionRollback(receipts)
-    +guarded original-fingerprint repeat aliases
-  }
-  class PortfolioKinesisCashScope <<ADR-189>> {
-    +proveKinesisCashSources(rows, batches, fundingPolicy)
-    +classifyKinesisCash(context)
-    +complete source + account-ledger closure + component images
-  }
-  class PortfolioImportCashService <<ADR-189>> {
-    +recordKinesisCash(member)
-    +validateKinesisCashRollback(batchId)
-    +one/two-component source receipt orchestration
+    +restoreIbkrCashCorrection(receipt)
+    +findCorrectedIbkrCashAlias(row)
+    +undo of receipts written before ADR-236
   }
   class PortfolioAssetAdjustmentService <<ADR-177>> {
     +previewPortfolioAssetAdjustment(row, batch)
@@ -476,15 +466,10 @@ PortfolioImportCommitService --> PortfolioImportBatchRepository : batch lock + a
 PortfolioImportReadinessService --> PortfolioImportBatchRepository : complete staging
 PortfolioImportCommitService --> PortfolioImportReconciliationService : current reviewed plan
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : CAS + immutable receipts
-PortfolioImportReconciliationService --> PortfolioIbkrCashReconciliation : native funding correction + cash restore
-PortfolioIbkrCashReconciliation --> PortfolioImportCashRepository : financial images + typed journal
-PortfolioImportReconciliationService --> PortfolioKinesisCashScope : closed cash-only source proof
-PortfolioImportReconciliationService --> PortfolioImportCashService : selected cash writer + guarded rollback
-PortfolioImportCashService --> PortfolioKinesisCashScope : typed proof + component image comparison
-PortfolioImportCashService --> PortfolioImportCashRepository : canonical main/fee persistence
-PortfolioImportCashService --> PortfolioImportReconciliationRepository : source settlement + retained envelopes
+PortfolioImportBatchService --> PortfolioImportLegacyReceipts : guarded legacy IBKR cash restore
+PortfolioImportLegacyReceipts --> PortfolioImportCashRepository : financial images + typed journal
 
-PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit-policy repair of prior copy
+PortfolioImportBatchService --> PortfolioImportDuplicateRepairService : restore legacy repair on rollback
 PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : all-image CAS + inverse receipt
 PortfolioImportReconciliationService --> PortfolioAssetTransferService : full projected history
 PortfolioImportPipelineService --> PortfolioAssetTransferService : transfer route

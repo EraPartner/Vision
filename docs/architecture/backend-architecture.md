@@ -24,7 +24,8 @@ accounting detail before batch creation or SSE headers. Maintained statements st
 one reviewed source/history plan. `portfolioImportCommitService.js` locks the scope and applies
 adoption, canonical rows, and custody events atomically. Immutable receipt repositories retain
 before/after financial images. The separate duplicate-repair service retains both manual/imported
-images plus original staging/batch counters and restores them under strict checks. Custody
+images plus original staging/batch counters; since ADR-236 it only restores repairs applied
+earlier. Custody
 repositories store dated gross units and asset fees.
 `portfolioAssetAdjustmentService.js` adds immutable dated yield reversals/asset fees with original
 lot allocation receipts and restrictive links to yield evidence. `portfolioHistoryWriteService.js`
@@ -36,22 +37,14 @@ summaries and snapshots. Budgeting uploads retain their CSV boundary. See
 [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]], and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for contracts and recovery.
 
-The bounded cash scope uses `portfolioKinesisCashScope.js` for complete original-source/account
-closure and typed one/two-component proof. `portfolioImportCashService.js` owns selected writer and
-rollback orchestration; `portfolioImportCashRepository.js` owns ledger persistence and image locks.
-Repositories do not import source-proof services.
-Successful new cash commit/rollback schedules the existing statistics cache refresh; failed
-operations and no-op repeats do not. Typed source receipts remain in existing staging,
-and warmup pruning preserves their owning batches. No new holdings, counterpart bank leg or generic
-portfolio drain runs. See [[docs/adr/189-proved-brokerage-cash-history|ADR-189]] and
-[[docs/api/portfolio-imports]].
-
-The bounded in-kind income writer uses `portfolioKinesisIncomePairs.js` to reprove each literal
-income against an existing zero-basis acquisition. `portfolioIncomeRecognitionRepository.js`
-retains immutable paired record/restore receipts. Active-pair database guards protect both canonical
-after-images; guarded rollback releases income before dependent acquisition restoration. Shared
-portfolio math and reports expose `totalInKindIncome` separately from ordinary income and gains.
-No acquisition or cash/custody drain runs in this scope. See
+Kinesis fiat and IBKR deposits and withdrawals commit as ordinary brokerage cash through the
+pipeline commit. A zero yield-basis Kinesis distribution commits its literal income through
+`portfolioIncomeRecognitionRepository.ts` (`insertIncludedInUnitsIncome`) with the
+`included_in_units` role beside its zero-basis units; shared portfolio math and reports expose it
+as `totalInKindIncome`, separate from ordinary income and gains. `portfolioImportLegacyReceipts.ts`
+and the duplicate-repair service only restore receipts written before
+[[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]], which removed the bounded cash
+and income scopes and their proof services. See
 [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and [[docs/reference/data-model]].
 
 ![[docs/diagrams/backend-api-layer.puml]]

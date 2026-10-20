@@ -213,9 +213,7 @@ package "Portfolio Import Session State (ADR-177)" {
   class PortfolioImportSession {
     +statements + optional File objects
     +global/per-statement adoption policy
-    +XML policy/result/blockers + explicit original import ID
-    +effective managed clone/supplemental scope
-    +scopeKey + reviewed planFingerprint
+    +scopeKey of the reviewed batch IDs and policies
     +operation state + blockers
   }
   class "tab sessionStorage" as ImportSessionStorage {
@@ -225,7 +223,7 @@ package "Portfolio Import Session State (ADR-177)" {
   class "server staging + history" as ImportSessionServerState
 }
 PortfolioImportSession --> ImportSessionStorage : resume staged scope
-PortfolioImportSession --> ImportSessionServerState : preview then fingerprint-pinned commit
+PortfolioImportSession --> ImportSessionServerState : preview then commit of the same scope
 PortfolioImportSession ..> QueryClient : invalidate only confirmed success
 
 package "Provider Stack" {

@@ -96,6 +96,15 @@ It supersedes whole-lot re-tagging for dated custody history and records guarded
 
 [[docs/adr/189-proved-brokerage-cash-history|ADR-189]] adds complete proved cash-only review,
 source-owned broker transfer classification, literal withdrawal fee expenses and guarded rollback.
+Its cash-only scope, funding confirmation and closed-cash proof are superseded by ADR-236.
+
+## Current reconciliation simplification
+
+[[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]] removes the bounded
+reconciliation scopes, the Kinesis, IBKR, Saxo and Portfolio Performance proof frameworks, plan
+fingerprints and trigger-enforced receipt immutability. Kinesis and IBKR cash import as ordinary
+brokerage cash. The in-kind income role of ADR-188, undo of applied adoptions and every journal
+table stay. Parts of ADR-177, ADR-188 and ADR-189 are superseded.
 
 ## All ADRs
 
@@ -270,6 +279,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > The Vision Native ADRs written on the native branch as ADR-206 to ADR-210 are ADR-209 to
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
+
+### 2026-10-20: Simplify portfolio import reconciliation (accepted)
+
+[[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]] removes the bounded Kinesis
+scopes, the IBKR, Saxo and Portfolio Performance proofs, plan fingerprints and receipt triggers.
+Migration 0005 drops seven triggers and their functions; no table or row is dropped. Kinesis fiat
+cash is ordinary brokerage cash. This is a breaking API change.
 
 ### 2026-10-20: Hash the native runtime payload once per installed version (accepted)
 

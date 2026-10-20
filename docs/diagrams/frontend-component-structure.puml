@@ -317,10 +317,8 @@ package "Feature Components - Import" {
   class PortfolioImportSession <<ADR-177>> {
     +source/account detection per statement
     +global/per-batch policy and counterpart
-    +optional XML + zero policy + selected prior import
-    +effective managed/supplemental scope
+    +Kinesis zero yield-basis policy
     +current ready review + atomic commit
-    +bounded income counts + retained partial sources
   }
   class "portfolioImportDetection.ts" as PortfolioImportDetection
   class "lib/api/portfolioImports.ts" as PortfolioImportsApi

@@ -121,17 +121,15 @@ package "Repositories" {
   }
 
   class PortfolioImportCashRepository <<ADR-189>> {
-    +readKinesisCashContext()
-    +lockKinesisCashLedger()
-    +insertKinesisCash(component)
-    +readCashImagesForUpdate(ids)
+    +readIbkrCashImagesForUpdate(ids)
+    +readActiveIbkrCashReceipts(batchId)
+    +writeIbkrCashRestoration(receipt)
+    +guardOriginalIbkrCashRollback(batchId)
+    +readOwnedKinesisCashFeeIds(batchId)
   }
   class PortfolioIncomeRecognitionRepository <<ADR-188>> {
-    +readKinesisIncomeUnitContext(history)
-    +readIncomeRecognitionContext(history)
-    +recordPairedPortfolioIncome(pair)
+    +insertIncludedInUnitsIncome(row, accountId, batchId)
     +restorePairedPortfolioIncomeForBatch(batchId)
-    +readPairedIncomeRollbackBatchIds(batchId)
   }
   class PortfolioImportDuplicateRepairRepository <<ADR-177>> {
     +readDuplicateRepairContext(history)
@@ -469,13 +467,12 @@ DB <.. InsightCashProjectionRepository
 DB <.. InsightDismissalRepository
 
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : snapshots + receipts
-PortfolioImportReconciliationService --> PortfolioIncomeRecognitionRepository : paired income + guarded restore
-PortfolioImportReconciliationService --> PortfolioImportCashService : bounded cash orchestration
-PortfolioImportCashService --> PortfolioImportCashRepository : signed main/fee images
-PortfolioImportCashService --> PortfolioImportReconciliationRepository : immutable source settlement
+PortfolioImportPipelineService --> PortfolioIncomeRecognitionRepository : in-kind income insert
+PortfolioImportBatchService --> PortfolioIncomeRecognitionRepository : legacy paired-income restore
+PortfolioImportBatchService --> PortfolioImportCashRepository : legacy IBKR cash restore
 
 PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : dual images + guarded copy restore
-PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit reviewed repair
+PortfolioImportBatchService --> PortfolioImportDuplicateRepairService : legacy repair restore
 PortfolioAssetTransferService --> PortfolioAssetTransferRepository : canonical custody events
 PortfolioAssetAdjustmentService --> PortfolioAssetAdjustmentRepository : unit removals + pinned yield evidence
 PortfolioImportReconciliationService --> PortfolioAssetAdjustmentService : projected adjustment validation

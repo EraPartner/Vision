@@ -194,7 +194,7 @@ package "Routes" {
     +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
     +POST /batches/:id/commit : atomic maintained reviewed commit
     +POST /reconciliation/preview : reviewed multi-batch plan
-    +POST /reconciliation/commit : fingerprint-pinned atomic scope
+    +POST /reconciliation/commit : plan rebuilt under locks, atomic scope
   }
 
   class SettingsRouter {

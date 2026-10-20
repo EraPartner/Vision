@@ -94,6 +94,8 @@ aliases:
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 >
+> **2026-10-20 — portfolio reconciliation simplified (ADR-236, BREAKING, operation count unchanged):** `POST /api/portfolio/import/reconciliation/preview` and `/commit` take only `batch_ids`, `adopt_policy` and `batch_policies`; `reconciliation_scope`, `cash_funding_policy` and `expected_plan_fingerprint` are rejected with `400`. Plans drop `planFingerprint`, `selectedRowIds`, `pending`, `complete`, `deferredCounts`, `batchProgress` and the cash, income and date proof fields; commit results drop `repaired`, `recordedIncome` and `recordedCash`, and the `409` details drop `planFingerprint`. Commit rebuilds the plan at commit time and returns `409 stale_existing_transaction` when an existing transaction changed. Portfolio uploads no longer accept the `ibkr_funding_history` format or `.xls` workbooks, and the probe no longer reports `native_receipts` or `presetKey`. Kinesis fiat and IBKR deposits and withdrawals commit as ordinary brokerage cash. See [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
+>
 > **2026-10-20 — reports return print-ready documents (ADR-234, BREAKING, operation count unchanged):** `POST /api/reports/financial`, `/portfolio` and `/tax` keep their request bodies but now answer `200` with the success envelope `{ ok: true, data: { filename, html, footerTemplate } }` instead of `application/pdf` bytes with `Content-Disposition`/`Content-Length`. The backend no longer bundles or launches a browser. The Electron shell prints `html` to PDF through the new `report:print-pdf` invoke channel (`window.electronReports.printToPdf`); a plain browser opens its print dialog on the document. Breaking for any client that expected PDF bytes; the shipped frontend is updated. See [[docs/adr/234-electron-report-pdf-printing|ADR-234]].
 >
 > **2026-10-20 — audit history removed (ADR-231, BREAKING, count 299 → 293):** the six private `POST /api/internal/audit/{verify,read,retention-plan,retention-prune,checkpoint,update-decision}` operations, the `AuditBridgeToken` security scheme and the `Audit*` schemas are gone. `PUT /api/investments/transactions/broker` no longer stores receipts: its receipt drops `receipt_id` and `created_at`, a request whose rows already sit on `to_account_id` returns `replayed: true` with `changed_count: 0` and no write, and reusing an `idempotency_key` with a different body is no longer `409`. Split routes ignore `x-actor`; the database editor no longer returns `403` for audit tables. The `electronAudit` bridge and its six `audit:*` IPC channels are removed. See [[docs/adr/231-remove-audit-history|ADR-231]].
@@ -176,13 +178,13 @@ batch joins the lock scope; a new reversible receipt preserves the original tran
 notes. This adds supported reconciliation behavior without changing operation paths or shapes.
 Matching CSV rows, including net-only dividends, may settle as duplicate evidence against a
 selected detailed Saxo workbook after literal header, identity and financial proofs. Only proved
-companions receive readiness exceptions; their status/error counters update in the atomic commit.
+companions receive readiness exceptions; their status/error counters update in the atomic commit. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 IBKR staging retains literal header and Summary currency context. Verified context can support
 currency and separate-withholding corrections for imported-copy repairs or standalone legacy sales.
 Unique same-date economic claims narrow overlapping copy candidates; proved different copies stay
 duplicates. Missing or ambiguous evidence blocks. Operation paths, response shapes and match windows
-remain unchanged.
+remain unchanged. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 > Generic portfolio uploads accept additive optional `source_id_column` and `source_account_column` mappings for literal provider identity. Omitted mappings preserve the existing configuration shape; see [[docs/api/portfolio-imports|Portfolio imports]].
 
@@ -197,14 +199,14 @@ source rows. Transaction DTOs add the read-only `income_recognition_role` and po
 dividends/income/gains. Archived ordinary calculations remain unchanged. Role setters are rejected; old
 absent role means standard. No operation is added or removed; these fields and optional scope are
 additive. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/api/portfolio-imports]],
-[[docs/api/investments]] and [[docs/api/portfolio-summary]].
+[[docs/api/investments]] and [[docs/api/portfolio-summary]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 Full history can compose paired income with its one selected zero-basis Gift action.
 Output-only `incomeProof.unitRowId` binds the same batch and investment; existing units and income
 repeats also require canonical unit identity. The unit is proved before income is written in the
 same atomic commit. Full `recordedIncome` and `recordedCash` are additive subtotals within
 `imported`; older responses may omit them. Exact owned cash repeats remain compatible, while new
-Kinesis cash still requires its confirmed bounded review. No operation or scope is added.
+Kinesis cash still requires its confirmed bounded review. No operation or scope is added. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 ## Integrity and report contract changes (2026-10-11)
 
@@ -507,8 +509,8 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full-history reconciliation of the selected batches (ADR-236)                                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/commit`                       | Commit the reviewed batches atomically against the history as it stands at commit time                            | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments — Phase 5A
 
@@ -776,7 +778,7 @@ See [[docs/api/info.md|Info & Analytics API]] for deprecation notes on the remov
 ## Related
 
 - [[docs/api/index|API Index]]
-- [[docs/api/portfolio-imports|Portfolio Imports API]] — full-history and bounded Kinesis reconciliation contracts
+- [[docs/api/portfolio-imports|Portfolio Imports API]] — full-history reconciliation contract
 - [[docs/reference/error-codes\|Error Codes Reference]]
 - [[docs/reference/code-patterns\|Code Patterns Reference]]
 - [[docs/security/rate-limiting\|Rate Limiting]]
@@ -789,9 +791,9 @@ The optional Kinesis `record_cash_only` scope requires explicit preservation and
 counts. Brokerage-origin movements and expenses have no invented peer. Other portfolio/income/custody
 rows remain pending; repeated proved cash is a no-op. These optional fields are additive with no
 operation changes. See [[docs/api/portfolio-imports]] and
-[[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+[[docs/adr/189-proved-brokerage-cash-history|ADR-189]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 Native IBKR funding workbooks use the additive `ibkr_funding_history` format on the existing
 portfolio upload paths. Its separate source-preferred correction scope preserves cash IDs,
 authenticates original/native evidence, and creates no new financial rows. Bank uploads remain
-CSV-only. See [[docs/api/portfolio-imports#IBKR native funding correction scope]].
+CSV-only. See [[docs/api/portfolio-imports]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
