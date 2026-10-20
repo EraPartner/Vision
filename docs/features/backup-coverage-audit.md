@@ -51,26 +51,18 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 | `agg_recipient_totals`  | Aggregates | ✅ Included |       |
 | `agg_split_outstanding` | Aggregates | ✅ Included |       |
 
-#### Audit history
+#### Removed audit history
 
-| Table                     | Domain    | Backup      | Notes                                                                               |
-| ------------------------- | --------- | ----------- | ----------------------------------------------------------------------------------- |
-| `audit_chain_head`        | Audit     | ✅ Included | Current internal head and forward-only legacy maximum IDs                           |
-| `audit_chain_entries`     | Audit     | ✅ Included | Versioned linked entries after migration 0117                                       |
-| `audit_chain_checkpoints` | Audit     | ✅ Included | Metadata for separately persisted receipts; the receipt files are not in the bundle |
-| `db_editor_audit`         | Admin     | ✅ Included | Older DB-editor audit rows                                                          |
-| `split_audit`             | Splits    | ✅ Included | Older split audit rows                                                              |
-| `portfolio_retag_audit`   | Portfolio | ✅ Included | Older broker-retag audit rows                                                       |
+Migration `0004_remove_audit_history` dropped `audit_chain_head`, `audit_chain_entries`,
+`audit_chain_checkpoints`, `db_editor_audit`, `split_audit` and `portfolio_retag_audit`, and
+`BACKUP_COVERED_TABLES` no longer names them
+([[docs/adr/231-remove-audit-history|ADR-231]]). An older backup that still contains them
+restores without an audit check or continuity warning; restore activates the dump at its own
+migration head, and the next backend start applies 0004 and drops the tables again. No test
+restores a pre-0004 dump end to end.
 
-The three new tables are registered in `BACKUP_COVERED_TABLES`. A bundle preserves the bytes of all six audit tables for recovery, but it does not include the Electron `audit-anchor/` key and signed receipt. Included audit bytes are not a verified evidence claim. The generic Admin data editor cannot inspect those tables without an authenticated receipt, so its schema, row, and mutation requests return `403`. The same installation first compares a restored chain with the local receipt before finalizing the database switch and rolls back unless verification returns `verified`. This exact-head rule can reject an otherwise valid older backup or one taken between the 30-second live receipt updates. After a successful rollback, the user can deliberately accept a second default-Cancel warning to retry that backup once. Recovery still requires a full internally valid chain, keeps the old external receipt, and leaves audit continuity unverified; a later check may report rollback. A backup moved to a new installation lacks the original witness and cannot silently enroll. An existing native installation may deliberately establish a new forward-looking baseline from the Admin audit view after a full internal check; entries through that baseline are labeled accepted at enrollment, not proven authentic before it. Version 3 additionally checks a macOS Keychain checkpoint outside the application-data tree, so a rollback of PostgreSQL and that tree alone is detected if the Keychain item survives. Missing Keychain items and older version 2 receipts remain unverified. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]], [[docs/adr/157-electron-local-audit-receipt|ADR-157]], [[docs/adr/158-macos-keychain-audit-witness|ADR-158]], [[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]], and [[docs/security/data-protection|Data Protection]].
-
-For a new Mac, Admin can export a small password-protected audit transfer on the old Mac. Import it during the new Mac's first native launch, then restore a database backup whose audit head matches the transferred checkpoint. Import replaces only the fresh cluster's checkpoint and does not trust database rows; the existing restore gate verifies the full chain. Keep the password apart from the transfer file and keep the old Mac available until the restore verifies. See [[docs/adr/161-password-protected-audit-device-transfer|ADR-161]].
-
-If transfer import is interrupted, the next start accepts only the local checkpoint pair that matches the independent Keychain witness. A private journal restores the original fresh pair if the witness did not advance; it keeps the imported pair if the witness did. A mismatched or missing witness fails closed. After a crash that restores the original pair, create a fresh empty target again before retrying import. Keep the old Mac and matching backup until restore succeeds. See [[docs/adr/163-audit-transfer-recovery-journal|ADR-163]].
-
-After one-year retention prunes an authenticated old prefix, a new backup contains the retained suffix and current head, not the deleted chain payloads. The matching external receipt signs the deleted predecessor sequence and hash, linked domain high-water IDs, and migration heads. Restore on the same Mac or via a protected device transfer must retain that receipt; a database bundle alone cannot verify its truncated prefix. Older backups may still contain those entries under the backup retention policy. Migration 0118 refuses downgrade after the first prune. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
-
-Fresh installs start at migration `0001_baseline` with a single `baseline_installed` audit event.
+Fresh installs start at migration `0001_baseline` (which still creates the audit chain with one
+`baseline_installed` entry) and then apply the later migrations, so 0004 drops it again.
 The schema revision of a database, and the `schemaHead` a bundle records, is the highest name in
 `public.kysely_migration`. Restore refuses any backup taken before the switch to the Kysely
 baseline: a dump that has no `kysely_migration` rows fails with `BACKUP_PRE_BASELINE`. See
@@ -109,8 +101,7 @@ backup that still contains them restores, and the next backend start drops them 
 | `portfolio_asset_adjustment_sources` | Included | Restrictive original yield-source links, including evidence in older batches (0123) |
 
 These tables are registered in `BACKUP_COVERED_TABLES`. They retain original-trade restoration and
-custody replay state, including referenced batches/staging provenance. They are domain history and
-are not entries in the witnessed audit chain. The import session's tab-scoped `sessionStorage`
+custody replay state, including referenced batches/staging provenance. They are domain history. The import session's tab-scoped `sessionStorage`
 metadata is not a backup surface; canonical staged batches and source records remain in PostgreSQL.
 See [[docs/reference/data-model]] and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for guarded migration recovery.
@@ -232,8 +223,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
-| Electron `audit-anchor/` receipt and encrypted key | ❌ Excluded | A same-install restore checks the candidate chain against this receipt and the separate Keychain checkpoint. A new installation has neither witness.                                                          |
-| macOS Keychain audit checkpoint                    | ❌ Excluded | Latest version 3 receipt digest and chain head. Its loss or mismatch fails verification; it is not recreated from a restored database.                                                                        |
+| Legacy Electron `audit-anchor/` folder             | ❌ Excluded | Retired by ADR-231. `legacy-audit-cleanup.ts` deletes it once at launch, with the macOS Keychain audit-witness item.                                                                                          |
 
 The encrypted reference tables are backed up to preserve job and checkpoint consistency. On the
 same installation, a restored in-flight job can restore its provider-form checkpoint while the
@@ -265,7 +255,7 @@ Users who **do** store a passphrase will see macOS password prompts on an unsign
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Always Allow**                   | In the Keychain dialog, click "Always Allow" to suppress future challenges for Vision Safe Storage                                                                          |
 | `VISION_BACKUP_PASSPHRASE` env var | Bypasses `safeStorage` entirely; the shell reads the passphrase from the environment variable instead. Useful for automation, CI, or users who want no Keychain involvement |
-| No stored passphrase               | No backup-passphrase Keychain prompt occurs. An enrolled native audit checkpoint can still prompt through its separate Keychain item.                                       |
+| No stored passphrase               | No backup-passphrase Keychain prompt occurs. The one-time legacy audit cleanup may still prompt once to delete its old Keychain item.                                       |
 
 > [!note]
 > `safeStorage` only stores and retrieves the _passphrase text_. The backup encryption key itself is always derived via scrypt from the passphrase; the Keychain never holds the raw key.
@@ -330,9 +320,9 @@ their public interfaces and supply format-specific magic values and messages:
 ## Consistent native capture and restart recovery
 
 The native bundle writer captures SQL, attachments and schema head while the backend writer is
-stopped. PostgreSQL remains available for `pg_dump`. `backup/quiescent-snapshot.ts` drains audit
-closure, stops the writer, invokes capture, and always attempts restart and detailed readiness in
-`finally`, even when capture fails. It then resumes audit closure. Compression and encryption run
+stopped. PostgreSQL remains available for `pg_dump`. `backup/quiescent-snapshot.ts` stops the
+writer, invokes capture, and always attempts restart and detailed readiness in `finally`, even
+when capture fails. Compression and encryption run
 after the backend returns. The main process pauses its watchdog and holds a maintenance guard
 against conflicting restore/update shutdown; quit waits for that guard. This introduces a brief
 write interruption, signalled through `backend:lost` with the localized backup-maintenance reason.
@@ -395,12 +385,9 @@ and [[docs/architecture/electron|Electron architecture]].
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
    links, and compute the count and aggregate SHA-256 fingerprint.
 8. **Atomic Activation** — Stop the active writer, switch the staged database and attachment tree,
-   start the provider, and wait for database-backed `/health/detailed` readiness. Native Electron
-   then compares the restored audit chain with its local signed receipt. A non-`verified` result
-   rolls the candidate back before finalization. If rollback succeeds, the user may explicitly
-   retry once under a second default-Cancel warning; that path requires an internally valid chain
-   and leaves audit continuity unverified. Both switches keep rollback state until readiness and
-   the required audit check succeed.
+   start the provider, and wait for database-backed `/health/detailed` readiness. Both switches
+   keep rollback state until readiness succeeds. There is no audit-receipt check or
+   audit-continuity warning ([[docs/adr/231-remove-audit-history|ADR-231]]).
 9. **Frontend State Restore** — Return `{ frontendState.keys }` to renderer; component writes each key to localStorage via `localStorage.setItem(key, value)`.
 10. **Page Reload** — Trigger full reload so theme and UI preferences take effect.
 
@@ -414,9 +401,6 @@ and [[docs/architecture/electron|Electron architecture]].
   remain active or are rolled back together
 - Database restore or detailed-readiness failure → Explicit provider error; staged database and
   attachment state are rolled back before the writer resumes
-- Missing, mismatched, or incomplete trusted audit receipt for native restore → First attempt
-  rejects the candidate and rolls the database and attachment switches back; recovery is offered
-  only after that rollback succeeds and requires a full internally valid chain on one retry
 - Fallback source resolution: If user does not enter passphrase in modal, restore attempts `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) before throwing `PASSPHRASE_REQUIRED`
 
 **Related Code:**

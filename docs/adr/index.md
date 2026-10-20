@@ -130,31 +130,31 @@ remains a trusted-publisher risk.
 abandoned marked synthetic Codex session roots on the next start while leaving
 active and unrelated temporary files alone.
 
-[[docs/adr/163-audit-transfer-recovery-journal|ADR-163]] (Accepted) recovers an
+[[docs/adr/163-audit-transfer-recovery-journal|ADR-163]] (Accepted; superseded by ADR-231) recovers an
 interrupted protected audit transfer only when the current or journal checkpoint
 matches the independent Keychain witness.
 
-[[docs/adr/162-one-year-audit-retention|ADR-162]] (Accepted) binds a
+[[docs/adr/162-one-year-audit-retention|ADR-162]] (Accepted; superseded by ADR-231) binds a
 one-year-old audit prefix to an external receipt before guarded atomic pruning.
 
-[[docs/adr/161-password-protected-audit-device-transfer|ADR-161]] (Accepted)
+[[docs/adr/161-password-protected-audit-device-transfer|ADR-161]] (Accepted; superseded by ADR-231)
 adds a password-protected transfer of the trusted audit checkpoint to a fresh
 Mac before restoring the matching backup.
 
-[[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]] (Accepted) lets an
+[[docs/adr/160-explicit-audit-enrollment-baseline|ADR-160]] (Accepted; superseded by ADR-231) lets an
 existing native installation deliberately create a forward-looking Keychain
 checkpoint while marking earlier entries as accepted at enrollment.
 
-[[docs/adr/158-macos-keychain-audit-witness|ADR-158]] (Accepted) adds a
+[[docs/adr/158-macos-keychain-audit-witness|ADR-158]] (Accepted; superseded by ADR-231) adds a
 macOS Keychain checkpoint outside the application-data tree. Existing version
 2 receipts do not enroll automatically, and key recovery remains open.
 
-[[docs/adr/157-electron-local-audit-receipt|ADR-157]] (Accepted) adds a
+[[docs/adr/157-electron-local-audit-receipt|ADR-157]] (Accepted; superseded by ADR-231) adds a
 main-process local audit receipt, a private loopback verification bridge, and
 startup and restore checks. Existing-install enrollment and ongoing checkpoint
 promotion remain open.
 
-[[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]] (Accepted) records a
+[[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]] (Accepted; superseded by ADR-231) records a
 forward-only audit-chain cutover and backup coverage. ADR-157 adds the later
 installation-local receipt and lifecycle checks.
 
@@ -277,6 +277,16 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 Forecast page, its saved `life_scenarios` setting and the `lifeScenarioPrepare` and
 `lifeScenarioCompare` presentation kinds. Migration 0003 deletes the stored setting row. The
 portfolio forecast endpoint is unchanged. This is a breaking API change.
+
+### 2026-10-20: Remove audit history (accepted)
+
+[[docs/adr/231-remove-audit-history|ADR-231]] removes the audit-history feature: the PostgreSQL
+hash chain, the Electron signed receipt and macOS Keychain witness, the private audit bridge,
+enrollment, device transfer, key rotation, retention, the Admin audit view and the
+`db_editor_audit`, `split_audit` and `portfolio_retag_audit` tables. Migration 0004 drops the
+tables; a one-time Electron cleanup removes the leftover receipt folder and Keychain item. The
+broker re-tag recognises a repeat from the current assignments. It supersedes ADR-156, 157, 158,
+160, 161, 162 and 163, and the audit parts of ADR-013, ADR-101, ADR-207 and ADR-222.
 
 ### 2026-10-20: Remove cloud AI, the Codex experiment and AgentCloak (accepted)
 

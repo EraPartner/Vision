@@ -122,7 +122,8 @@ bun run native:smoke
 
 `native:smoke` runs its backend with external refreshes disabled. It uses a
 disposable synthetic PostgreSQL cluster and checks package startup, backup,
-restore, audit history, and runtime-role writes without contacting data providers.
+restore (also into a second fresh cluster, as for a device move), and runtime-role writes without
+contacting data providers.
 
 For an installed app, read the persisted `appPort` from settings and probe `GET /health` and
 `GET /health/detailed`. Do not reset the database merely because startup failed; inspect the

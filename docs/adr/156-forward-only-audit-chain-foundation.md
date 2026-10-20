@@ -1,14 +1,16 @@
 ---
 title: ADR-156 - Forward-Only Audit Chain Foundation
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, database, backup, migration-0117]
 description: Start a versioned audit hash chain after the existing audit rows, preserve its database state in backups, and defer any tamper-evidence claim until an independent anchor and lifecycle verification exist.
 aliases: [audit chain foundation, audit cutover]
 ---
 
 # ADR-156: Forward-Only Audit Chain Foundation
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 

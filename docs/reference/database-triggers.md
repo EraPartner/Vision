@@ -2,8 +2,8 @@
 title: Database Triggers Reference
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     reference,
@@ -128,7 +128,7 @@ its function before widening `split_payments.amount` to `NUMERIC(18,4)`.
 
 The authoritative cap is `splitService.addPayment`: it locks the parent split through a repository primitive with
 `SELECT ... FOR UPDATE`, recomputes existing payments, compares at four-decimal storage precision,
-and inserts, auto-settles, and audits in one transaction. Direct SQL does not receive this guard.
+and inserts and auto-settles in one transaction. Direct SQL does not receive this guard.
 See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 This does not affect the aggregate-maintenance trigger
@@ -147,8 +147,7 @@ payment inserts, updates, and deletes.
 | `portfolio_asset_adjustment_sources_immutable` | Adjustment source links, BEFORE UPDATE/DELETE | Rejects updates and direct deletes; permits deletion only by cascade after parent adjustment removal |
 
 The journal retains the financial ID without a financial foreign key. Its source batch/staging
-foreign keys restrict pruning. These guards preserve domain receipts; they do not make them part
-of the independently witnessed audit chain. See [[docs/reference/data-model]],
+foreign keys restrict pruning. These guards preserve domain receipts. See [[docs/reference/data-model]],
 [[docs/features/portfolio-import]], and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for application compare-and-set,
 source retention, and downgrade limits.
@@ -165,6 +164,7 @@ source retention, and downgrade limits.
 | `0062_trigger_lookup_only_on_update`         | Replaces `sync_account_id_from_bank_account()` with lookup-only-on-UPDATE variant; adds `trg_enforce_split_within_amount` (ADR-088 addendum) |
 | `0087_flat_investments_conversion`           | Restores the timestamp trigger on flat `investments`; removes the inheritance-view trigger and function (ADR-109)                            |
 | `0088_money_precision_alignment`             | Removes the pre-squash `trg_split_payment_overpayment_guard`; aggregate-maintenance triggers remain (ADR-112)                                |
+| `0004_remove_audit_history`                  | Drops the audit-chain tables with their append-only triggers and `audit_chain_reject_mutation()` ([[docs/adr/231-remove-audit-history\|ADR-231]]) |
 
 ## Related
 

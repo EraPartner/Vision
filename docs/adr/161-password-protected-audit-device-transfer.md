@@ -1,14 +1,16 @@
 ---
 title: ADR-161 - Password-Protected Audit Device Transfer
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, electron, backup]
 description: Move a trusted audit checkpoint to a fresh Mac in a small password-protected file before restoring its matching backup.
 aliases: [audit device transfer]
 ---
 
 # ADR-161: Password-Protected Audit Device Transfer
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 

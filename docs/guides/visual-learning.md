@@ -27,7 +27,7 @@ cover the most important concepts; **All flows** also includes specialist flows.
 | Everyday money         | [Import](../flow-visualizer.html#csv-import), [review](../flow-visualizer.html#import-commit), [transfers](../flow-visualizer.html#internal-transfer-reconciliation), [splits](../flow-visualizer.html#split-shared-expense), [plans](../flow-visualizer.html#planned-payment-completion) | Posted records, debt and expectations have different meanings                |
 | Portfolio and planning | [Prices](../flow-visualizer.html#refresh-prices), [performance](../flow-visualizer.html#portfolio-valuation), [cash commitments](../flow-visualizer.html#commitment-aware-cash)                                                                                                           | Current prices, historical snapshots and future projections are separate     |
 | Research and AI        | [Manual analysis](../flow-visualizer.html#manual-analysis), [Ollama chat](../flow-visualizer.html#ai-chat), [investigations](../flow-visualizer.html#ai-research-investigation)                                                                                                           | Which calculations are local and which public queries can leave Vision       |
-| Backup and trust       | [Backup](../flow-visualizer.html#backup-create), [restore](../flow-visualizer.html#backup-restore), [audit receipt](../flow-visualizer.html#native-audit-receipt)                                                                                                                         | Backup coverage, rollback and external continuity checks                     |
+| Backup and trust       | [Backup](../flow-visualizer.html#backup-create), [restore](../flow-visualizer.html#backup-restore), [update](../flow-visualizer.html#app-update)                                                                                                                                          | Backup coverage, rollback and update checks                                  |
 
 ## How a page gets data
 
@@ -161,15 +161,13 @@ flowchart TD
     Validate --> Staging[Restore into a fresh staging database]
     Staging --> Switch[Switch database and attachments with rollback copies]
     Switch --> Ready[Restart and check detailed readiness]
-    Ready --> Audit[Compare audit chain with external local receipt]
-    Audit --> Result{Checks pass?}
+    Ready --> Result{Checks pass?}
     Result -->|Yes| Finalize[Finalize database, then clean old attachments]
     Result -->|No| Rollback[Roll back both storage switches]
 ```
 
-Installation keys and audit anchors remain outside the bundle. Automated and quit-time backups
-omit the current frontend-state snapshot. Restore recovery can permit one explicitly approved
-audit retry after safe rollback; it preserves the external receipt. See
+Automated and quit-time backups omit the current frontend-state snapshot. Restore no longer checks
+an audit receipt ([[docs/adr/231-remove-audit-history|ADR-231]]). See
 [[docs/features/backup-coverage-audit|Backup Coverage Audit]] and
 [[docs/guides/native-macos-runtime|Native macOS Runtime]].
 

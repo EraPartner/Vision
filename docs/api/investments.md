@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-19
-last_modified: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+last_modified: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     api,
@@ -456,11 +456,20 @@ move that creates or worsens a broker-partition oversell or breaks dated custody
 A re-tag is an assignment correction; imported dated partial transfers use the separate ADR-177
 custody ledger and retain original acquisition lots/FX.
 
-The UUID is durable idempotency state. Repeating the same semantic request returns the original
-receipt with `replayed: true`; reusing its UUID for another request returns `409`. Receipts retain
-the sorted transaction IDs, prior assignments, selected and changed counts, and both account IDs.
-They deliberately do not foreign-key account rows, so later account deletion cannot erase audit
-meaning. Migration 0100 adds `portfolio_retag_audit`, which is included in backup coverage.
+A repeated request is recognised from the current assignments, not from stored state
+([[docs/adr/231-remove-audit-history|ADR-231]]). When `from_account_id` and `to_account_id`
+differ and every selected row already sits on `to_account_id`, the endpoint writes nothing and
+returns a receipt with `replayed: true` and `changed_count: 0`, whatever the key and even if the
+request was never sent before. The destination eligibility check still runs first. `idempotency_key` must be a UUID; it is echoed in the receipt but never stored,
+so reusing a key with a different body is not a `409`. A selection that is partly on the source
+and partly on the destination is stale and returns `409`.
+
+The receipt contains `idempotency_key`, both account IDs, the sorted `transaction_ids`,
+`previous_assignments`, `selected_count`, `changed_count`, and `replayed`. `previous_assignments`
+records each row's broker before this call, so a replay reports the destination. The receipt has
+no `receipt_id` or `created_at` and is not persisted; removing those two fields was a breaking
+change to the receipt schema. The web dialogs report `selected_count` as the moved count for a
+replay (`retagMovedCount()` in `apps/frontend/src/lib/api/portfolio.ts`).
 
 This route has a separate 30 requests/minute limiter in addition to the investments group limiter.
 The operation first locks the destination account row, matching account close and merge lock order,
@@ -773,6 +782,7 @@ For real estate investments:
 
 - [[docs/api/watchlist|Watchlist API]]
 - [[docs/adr/002-database-schema|Database Schema]]
+- [[docs/adr/231-remove-audit-history|ADR-231: Remove audit history]] (stateless broker re-tag replay)
 
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 

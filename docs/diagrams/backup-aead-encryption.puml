@@ -20,10 +20,10 @@ group Create backup
   UI -> Hook : useBackup.create({ passphrase? })
   Hook -> Main : ipc invoke 'backup:run'
   Main -> Main : acquire maintenance guard; pause watchdog
-  Main -> Main : drain/pause audit closure; stop backend writer
+  Main -> Main : stop backend writer
   Main -> DB   : pg_dump >> bundle/db.sql (PostgreSQL remains running)
   Main -> Files: copy $ATTACHMENTS_DIR/* >> bundle/attachments/
-  Main -> Main : finally restart backend; await detailed readiness; resume closure
+  Main -> Main : finally restart backend; await detailed readiness
   Main -> Main : release maintenance guard; resume watchdog
   Main -> LS   : snapshot (theme, preferences) >> bundle/frontend-state.json
   Main -> Backup: encryptBundle(bundle, passphrase)
@@ -57,11 +57,11 @@ group Restore backup
   Main -> DB    : restore into staged database; retain previous database
   Main -> Main  : persist attachment switch intent before renames
   Main -> Files : activate staged attachment tree; retain previous tree
-  Main -> Main  : require readiness and audit verification before finalization
-  alt verification succeeds
+  Main -> Main  : require detailed readiness before finalization
+  alt readiness succeeds
     Main -> DB : finalize database journal
     Main -> Files : finalize attachment journal
-  else activation or verification fails
+  else activation or readiness fails
     Main -> Files : restore previous attachment tree
     Main -> DB : roll back database switch
   end

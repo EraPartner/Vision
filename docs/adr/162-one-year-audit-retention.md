@@ -1,14 +1,16 @@
 ---
 title: ADR-162 - One-Year Audit Chain Retention
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, retention, postgres]
 description: Delete only complete year-old audit chain prefixes after their boundary is bound to an external Keychain-backed receipt.
 aliases: [audit chain retention]
 ---
 
 # ADR-162: One-Year Audit Chain Retention
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 
@@ -31,7 +33,7 @@ Old chain entries and their exact payloads are intentionally unrecoverable from 
 ## Related
 
 - [[docs/adr/index|Architecture Decision Records]]
-- [[docs/api/internal-audit|Private Audit Bridge]]
+- Private Audit Bridge (deleted by [[docs/adr/231-remove-audit-history|ADR-231]])
 - [[docs/reference/data-model|Data Model Reference]]
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
 - [[docs/security/data-protection|Data Protection]]

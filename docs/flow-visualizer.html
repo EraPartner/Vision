@@ -1602,7 +1602,7 @@
             "sub": "splitService · plannedTransactionService · portfolioTransactionService",
             "kind": "service",
             "path": "apps/node-backend/src/services/",
-            "desc": "Owns split lifecycle validation, owed projections, transactional audit writes, atomic planned parent/tag/loan-schedule updates, and portfolio transaction domain rules. Repositories provide parameterized persistence and transaction-client primitives.",
+            "desc": "Owns split lifecycle validation, owed projections, atomic planned parent/tag/loan-schedule updates, and portfolio transaction domain rules. Repositories provide parameterized persistence and transaction-client primitives.",
             "x": 400,
             "y": 960
           },
@@ -1693,46 +1693,6 @@
             "y": 1060
           },
           {
-            "id": "sv.auditverify",
-            "label": "Audit verifier",
-            "sub": "chain · domain links · migration heads",
-            "kind": "service",
-            "path": "apps/node-backend/src/services/auditVerificationService.ts",
-            "desc": "Scans the complete chain, linked domain rows, migration heads, and legacy cutover against an authenticated checkpoint supplied by Electron.",
-            "x": 580,
-            "y": 1060
-          },
-          {
-            "id": "build.auditanchor",
-            "label": "Local audit receipt",
-            "sub": "Electron safeStorage · HMAC",
-            "kind": "build",
-            "path": "packaging/electron/audit-anchor.ts",
-            "desc": "HMAC receipt and encrypted key outside PostgreSQL and backup bundles. Version 3 is checked against a separate macOS Keychain checkpoint.",
-            "x": 760,
-            "y": 1060
-          },
-          {
-            "id": "ex.keychain",
-            "label": "macOS Keychain",
-            "sub": "latest audit checkpoint",
-            "kind": "external",
-            "path": "packaging/electron/audit-keychain.swift",
-            "desc": "Security framework generic-password item stores the latest signed-receipt digest and chain head outside application data.",
-            "x": 940,
-            "y": 1060
-          },
-          {
-            "id": "sv.auditretention",
-            "label": "Audit retention",
-            "sub": "one-year prefix · guarded prune",
-            "kind": "service",
-            "path": "apps/node-backend/src/services/auditRetentionService.ts",
-            "desc": "Plans a verified year-old chain prefix and asks migration 0118 to prune only after Electron signs the boundary outside PostgreSQL.",
-            "x": 1120,
-            "y": 1060
-          },
-          {
             "id": "ex.brave",
             "label": "Brave Search API",
             "sub": "public queries · hard daily ceiling",
@@ -1747,7 +1707,7 @@
             "x": 940,
             "y": 740,
             "path": "apps/node-backend/src/services/dbEditor.ts",
-            "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; writes to db_editor_audit; debounces matview refresh for base tables (ADR-101)"
+            "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; logs each committed change; debounces matview refresh for base tables (ADR-101)"
           },
           {
             "id": "sv.portfolioreconciliation",
@@ -1894,34 +1854,6 @@
           [
             "be.routes",
             "sv.portfolioprojection"
-          ],
-          [
-            "be.routes",
-            "sv.auditverify"
-          ],
-          [
-            "be.routes",
-            "sv.auditretention"
-          ],
-          [
-            "sv.auditretention",
-            "sv.auditverify"
-          ],
-          [
-            "sv.auditretention",
-            "db.postgres"
-          ],
-          [
-            "sv.auditverify",
-            "db.postgres"
-          ],
-          [
-            "build.electron",
-            "build.auditanchor"
-          ],
-          [
-            "build.auditanchor",
-            "ex.keychain"
           ],
           [
             "build.electron",
@@ -3051,7 +2983,7 @@
                 "to": "build.native",
                 "title": "Export local data",
                 "note": "Use the native backup transport.",
-                "payload": "Acquire maintenance guard, pause watchdog/audit, stop backend while keeping PostgreSQL",
+                "payload": "Acquire maintenance guard, pause watchdog, stop backend while keeping PostgreSQL",
                 "annotation": "packaging/electron/main.ts and backup/quiescent-snapshot.ts hold the writer pause across database dump and attachment capture."
               },
               {
@@ -3074,7 +3006,7 @@
                 "from": "build.native",
                 "to": "build.electron",
                 "title": "Resume writers",
-                "payload": "Restart backend, await readiness and resume watchdog/audit in finally",
+                "payload": "Restart backend, await readiness and resume watchdog in finally",
                 "annotation": "packaging/electron/backup/quiescent-snapshot.ts resumes before bundle compression, including capture failures."
               },
               {
@@ -3102,7 +3034,7 @@
                 "annotation": "packaging/electron/main.ts; packaging/electron/backup/restore.ts"
               }
             ],
-            "takeaway": "Encryption needs a configured passphrase. Without one, the bundle is plaintext with a warning. Mapping keys and audit anchors stay external.",
+            "takeaway": "Encryption needs a configured passphrase. Without one, the bundle is plaintext with a warning.",
             "docs": [
               {
                 "path": "features/backup-coverage-audit.md",
@@ -3118,7 +3050,7 @@
             "id": "backup-restore",
             "name": "Restore a bundle with rollback protection",
             "category": "Backup",
-            "summary": "Validate a bundle, stage a fresh database and attachments, and finalize after readiness and audit checks.",
+            "summary": "Validate a bundle, stage a fresh database and attachments, and finalize after readiness.",
             "steps": [
               {
                 "from": "fe.features",
@@ -3170,14 +3102,6 @@
               },
               {
                 "from": "build.native",
-                "to": "build.auditanchor",
-                "title": "Compare the restored audit chain",
-                "note": "Match the external receipt unless the specific recovery path is explicitly approved.",
-                "payload": "assertRestoredAuditHistory",
-                "annotation": "packaging/electron/backup/native-transport.ts; packaging/electron/audit-anchor.ts"
-              },
-              {
-                "from": "build.native",
                 "to": "db.postgres",
                 "title": "Finalize or roll back",
                 "note": "Finalize the database then clean previous attachments; on failure restore both switches.",
@@ -3193,7 +3117,7 @@
                 "annotation": "packaging/electron/backup/restore.ts; packaging/electron/preload.ts"
               }
             ],
-            "takeaway": "Failures roll back database and attachment switches. An approved audit-recovery retry requires successful rollback; the external receipt stays unchanged.",
+            "takeaway": "Failures roll back database and attachment switches. Older backups that still hold the removed audit tables restore normally; the next backend start drops those tables.",
             "docs": [
               {
                 "path": "features/backup-coverage-audit.md",
@@ -4400,7 +4324,7 @@
                 "from": "be.repos",
                 "to": "db.postgres",
                 "payload": "INSERT adjustments; UPDATE accounts SET is_active=false, closed_at=?, in_net_worth=false",
-                "annotation": "Each non-zero currency reaches zero as of the close date. Existing statement readings, planned rows, future-dated activity, holdings, and history remain linked for audit.",
+                "annotation": "Each non-zero currency reaches zero as of the close date. Existing statement readings, planned rows, future-dated activity, holdings, and history remain linked.",
                 "title": "Persist adjustments and closed state"
               },
               {
@@ -4422,7 +4346,7 @@
             "id": "db-data-edit",
             "name": "Browse and edit a DB table (admin data editor)",
             "category": "Admin",
-            "summary": "Admin opens a table in the data editor, browses/filters rows, edits cells, previews the SQL dry-run, then commits the batch — all under admin auth with xmin optimistic concurrency and a committed-SQL audit trail.",
+            "summary": "Admin opens a table in the data editor, browses/filters rows, edits cells, previews the SQL dry-run, then commits the batch — all under admin auth with xmin optimistic concurrency and a log line per committed change.",
             "steps": [
               {
                 "from": "browser",
@@ -4499,8 +4423,8 @@
               {
                 "from": "sv.dbeditor",
                 "to": "db.postgres",
-                "payload": "BEGIN; SELECT … FOR UPDATE (xmin check); INSERT/UPDATE/DELETE …; INSERT INTO db_editor_audit …; COMMIT",
-                "annotation": "All-or-nothing batch. Audit row written inside the same transaction so a rollback also removes the audit entry. Materialized-view base tables (transactions/recipients/categories) trigger scheduleRefresh() after commit."
+                "payload": "BEGIN; SELECT … FOR UPDATE (xmin check); INSERT/UPDATE/DELETE …; COMMIT",
+                "annotation": "All-or-nothing batch. After commit, each change is logged as db-editor mutation committed (table, op, pk); no audit table (ADR-231). Materialized-view base tables (transactions/recipients/categories) trigger scheduleRefresh() after commit."
               },
               {
                 "from": "sv.dbeditor",
@@ -4723,104 +4647,6 @@
             ]
           },
           {
-            "id": "native-audit-receipt",
-            "name": "Verify native audit history and guard restore",
-            "category": "Security",
-            "summary": "Electron compares the database chain with a signed local receipt and macOS Keychain checkpoint, offers an explicit baseline for existing installations, closes valid tails during a trusted live session, and rejects restore candidates without an exact match.",
-            "steps": [
-              {
-                "from": "build.electron",
-                "to": "build.auditanchor",
-                "payload": "read HMAC-signed receipt and safeStorage-encrypted key",
-                "annotation": "packaging/electron/audit-anchor.ts authenticates the installation-local sequence, hash, and migration cutover outside PostgreSQL."
-              },
-              {
-                "from": "build.auditanchor",
-                "to": "ex.keychain",
-                "payload": "compare version 3 receipt digest and chain head with Keychain checkpoint",
-                "annotation": "packaging/electron/audit-keychain.swift reads the independent checkpoint; packaging/electron/audit-anchor.ts fails closed on a missing or mismatched record."
-              },
-              {
-                "from": "build.electron",
-                "to": "be.routes",
-                "payload": "POST /api/internal/audit/verify with loopback peer and per-launch token",
-                "annotation": "packaging/electron/runtime/native.ts calls apps/node-backend/src/routes/internalAudit.ts; the renderer never receives the token."
-              },
-              {
-                "from": "be.routes",
-                "to": "sv.auditverify",
-                "payload": "authenticated checkpoint or no anchor",
-                "annotation": "apps/node-backend/src/services/auditVerificationService.ts returns verified, partially_verified, unavailable, or failed."
-              },
-              {
-                "from": "sv.auditverify",
-                "to": "db.postgres",
-                "payload": "scan chain, domain links, schema migration heads, and legacy cutover",
-                "annotation": "apps/node-backend/src/services/auditVerificationService.ts compares a supplied trusted checkpoint with the full audit history and the latest public.kysely_migration name."
-              },
-              {
-                "from": "browser",
-                "to": "build.electron",
-                "payload": "explicit Start audit protection action with default-Cancel warning",
-                "annotation": "apps/frontend/src/pages/admin/AuditHistoryCard.tsx calls the native audit:enroll bridge; packaging/electron/main.ts rechecks the missing-anchor state and asks for confirmation."
-              },
-              {
-                "from": "build.electron",
-                "to": "build.auditanchor",
-                "payload": "internally checked existing head and immutable enrollment sequence",
-                "annotation": "packaging/electron/runtime/native.ts verifies the full unanchored chain; audit-anchor.ts signs the enrollment baseline and creates a Keychain witness without claiming earlier authenticity."
-              },
-              {
-                "from": "build.electron",
-                "to": "build.auditanchor",
-                "payload": "trusted live 30-second cycle persists valid new head",
-                "annotation": "packaging/electron/main.ts establishes a session only at the exact trusted head, including after backend restart. Closure failures retry at bounded intervals. Verified recovery clears the outstanding notification; enrollment, unavailable, partial and failed states remain distinct."
-              },
-              {
-                "from": "build.electron",
-                "to": "sv.auditretention",
-                "payload": "daily /retention-plan with externally authenticated checkpoint",
-                "annotation": "packaging/electron/runtime/native.ts asks auditRetentionService.js for a verified complete prefix older than one year."
-              },
-              {
-                "from": "sv.auditretention",
-                "to": "build.auditanchor",
-                "payload": "last old sequence and hash, linked domain IDs, migration heads",
-                "annotation": "packaging/electron/audit-anchor.ts signs the proposed boundary into its receipt and Keychain witness before deletion."
-              },
-              {
-                "from": "build.electron",
-                "to": "sv.auditretention",
-                "payload": "signed /retention-prune request",
-                "annotation": "apps/node-backend/src/services/auditRetentionService.ts verifies the retained history and calls migration 0118's atomic guarded function."
-              },
-              {
-                "from": "sv.auditretention",
-                "to": "db.postgres",
-                "payload": "delete eligible complete prefix under chain-head lock",
-                "annotation": "audit_chain_prune_prefix (historical migration 0118, now in db/migrations/0001_baseline.sql) rechecks age, continuity, checkpoint metadata, boundary hash, and successor."
-              },
-              {
-                "from": "build.electron",
-                "to": "be.routes",
-                "payload": "POST /api/internal/audit/update-decision: bounded checksum or install event",
-                "annotation": "packaging/electron/updater.ts records native decisions through the private bridge. A receipt or previously trusted session requires synchronous checkpoint closure; an existing installation without either may continue with audit unavailable."
-              },
-              {
-                "from": "build.electron",
-                "to": "db.postgres",
-                "payload": "restore candidate must match local receipt before database switch finalizes",
-                "annotation": "packaging/electron/backup/native-transport.ts first rolls back a non-verified candidate. Explicit recovery then retries once only after successful rollback, requires a full internally valid chain, and preserves the external receipt."
-              }
-            ],
-            "docs": [
-              {
-                "path": "features/backup-coverage-audit.md",
-                "label": "Backup Coverage Audit"
-              }
-            ]
-          },
-          {
             "id": "api-request",
             "name": "Follow a page request through Vision",
             "category": "Start here",
@@ -5022,8 +4848,8 @@
             "id": "native-startup",
             "name": "Open Vision and reach the first page",
             "category": "Deployment",
-            "summary": "Start the managed database and backend, check readiness, assess audit continuity, and load the app.",
-            "takeaway": "A running process differs from readiness. Audit failure or unavailability produces a notice and does not block app access.",
+            "summary": "Start the managed database and backend, check readiness, and load the app.",
+            "takeaway": "A running process differs from readiness. Startup does not wait on an audit check.",
             "steps": [
               {
                 "from": "electron",
@@ -5032,6 +4858,14 @@
                 "note": "Select the profile and backend port; show the splash.",
                 "payload": "launch",
                 "annotation": "packaging/electron/main.ts"
+              },
+              {
+                "from": "build.electron",
+                "to": "build.electron",
+                "title": "Remove legacy audit leftovers",
+                "note": "Once, without blocking startup: delete the retired audit-anchor folder and macOS Keychain item.",
+                "payload": "cleanupLegacyAuditArtifacts; userData/.legacy-audit-cleanup-done marker",
+                "annotation": "packaging/electron/legacy-audit-cleanup.ts runs fire-and-forget from launch() in packaging/electron/main.ts; /usr/bin/security delete-generic-password is tried once (ADR-231)."
               },
               {
                 "from": "build.electron",
@@ -5053,9 +4887,9 @@
                 "from": "build.native",
                 "to": "be.routes",
                 "title": "Start the backend",
-                "note": "Spawn with allowlisted environment and private audit bridge.",
+                "note": "Spawn with an allowlisted environment, or reuse a matching healthy backend left by a previous launch.",
                 "payload": "backend process",
-                "annotation": "packaging/electron/runtime/native.ts"
+                "annotation": "packaging/electron/runtime/native.ts start() returns already-running for a healthy recorded backend process."
               },
               {
                 "from": "be.routes",
@@ -5080,14 +4914,6 @@
                 "note": "Poll backend health and database/cache gates.",
                 "payload": "GET /health/detailed; pollAndLoad; pingReady",
                 "annotation": "packaging/electron/main.ts; packaging/electron/runtime/native.ts"
-              },
-              {
-                "from": "build.electron",
-                "to": "build.auditanchor",
-                "title": "Assess audit continuity",
-                "note": "Establish a trusted session where possible; surface failure or unavailability.",
-                "payload": "checkAuditIntegrity({ establishSession: true })",
-                "annotation": "packaging/electron/main.ts; packaging/electron/audit-anchor.ts"
               },
               {
                 "from": "build.electron",
@@ -5223,8 +5049,8 @@
                 "from": "sv.transactiondomains",
                 "to": "db.postgres",
                 "title": "Save shares atomically",
-                "note": "Lock the parent, enforce four-decimal allocation precision and save creation audits.",
-                "payload": "splits and split_audit",
+                "note": "Lock the parent, enforce four-decimal allocation precision and save the shares.",
+                "payload": "transaction_splits",
                 "annotation": "apps/node-backend/src/services/splitService.ts"
               },
               {
@@ -5254,9 +5080,9 @@
               {
                 "from": "sv.transactiondomains",
                 "to": "db.postgres",
-                "title": "Store payment and audit",
-                "note": "Payment, optional settled state and audit record commit together.",
-                "payload": "split_payments and split_audit",
+                "title": "Store payment",
+                "note": "Payment and optional settled state commit together.",
+                "payload": "split_payments and transaction_splits.is_settled",
                 "annotation": "apps/node-backend/src/services/splitService.ts"
               },
               {
@@ -5547,12 +5373,11 @@
           {
             "id": "trust",
             "name": "5. Backup and trust",
-            "description": "Understand admin access, backup coverage, restore rollback and the external receipt.",
+            "description": "Understand admin access, backup coverage, restore rollback and updates.",
             "flows": [
               "signin",
               "backup-create",
               "backup-restore",
-              "native-audit-receipt",
               "app-update"
             ]
           }

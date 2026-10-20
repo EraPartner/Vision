@@ -2,7 +2,7 @@
 title: Codebase audit implementation delivery
 type: testing
 status: active
-date: 2026-10-19
+date: 2026-10-20
 tags: [audit, implementation, verification, recovery, performance]
 description: Implementation ledger for the October 2026 audit and the user-authorized waiver of further optional live acceptance checks.
 ---
@@ -20,6 +20,11 @@ notifications and clearing recovered warnings are implemented, but the original 
 cause is still unconfirmed. No keys, receipts or trust anchors were reset and no existing database
 was enrolled automatically. Belgian tax correctness and household/multiple-activity support remain
 outside this delivery. The filing workflow changes do not establish tax-rule correctness.
+
+> [!note] Audit history removed on 2026-10-20
+> [[docs/adr/231-remove-audit-history|ADR-231]] removed the native audit feature, its notifications
+> and its receipts, so the original warning can no longer occur. The ledger below is kept as a
+> record of the October delivery.
 
 ## Implementation ledger
 

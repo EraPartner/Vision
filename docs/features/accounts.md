@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -188,7 +188,7 @@ All from the detail route's header menu (WP-B4):
 
 The account detail page shows active, unexecuted planned transactions in a separate **Upcoming planned transactions** forecast section above the posted ledger. These rows are filtered by the account's canonical `name`. They never enter the posted ledger, running balance, sparkline, load-more count, reconciliation drift, or `?since=` reconciliation view.
 
-- **Close account** — archives the account (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). For a portfolio account, an exact server preview counts every assigned `buy`, `gift`, and `sell` row. The dialog can keep those rows on the closed account, move the complete set to another active portfolio account, or move it to Unassigned through the audited broker re-tag endpoint. It never splits a selection above the 500-row atomic limit. Under the configured weighted-average, FIFO, or LIFO method, the server compares the production partitioned totals before and after and rejects a move that would change global units, invested basis, or realized profit/loss. Re-tag runs before close; a re-tag failure leaves the account open, while a later close failure is reported as a partial state and retries reuse the same receipt key. The cash choice remains separate: the dialog defaults to requesting that the server zero the canonical account balance with one visible, dated adjustment per non-zero currency partition before closing. The server recalculates those partitions, so a stale or zero cached UI balance cannot suppress the adjustment request. When a residual is shown, the user may opt out and preserve it instead. The close and adjustments are atomic and retry-safe; adjustments do not count as income or spending. Holdings-only wallet and crypto-exchange accounts send `preserve` and never show the cash option. Ledger history is preserved. **Archive/Restore** toggles listing without the close workflow.
+- **Close account** — archives the account (`is_active=false`; closed accounts also leave net worth per WP-A3 semantics). For a portfolio account, an exact server preview counts every assigned `buy`, `gift`, and `sell` row. The dialog can keep those rows on the closed account, move the complete set to another active portfolio account, or move it to Unassigned through the broker re-tag endpoint. It never splits a selection above the 500-row atomic limit. Under the configured weighted-average, FIFO, or LIFO method, the server compares the production partitioned totals before and after and rejects a move that would change global units, invested basis, or realized profit/loss. Re-tag runs before close; a re-tag failure leaves the account open, while a later close failure is reported as a partial state and retries reuse the same idempotency key, and the repeated re-tag returns a no-write replay receipt. The cash choice remains separate: the dialog defaults to requesting that the server zero the canonical account balance with one visible, dated adjustment per non-zero currency partition before closing. The server recalculates those partitions, so a stale or zero cached UI balance cannot suppress the adjustment request. When a residual is shown, the user may opt out and preserve it instead. The close and adjustments are atomic and retry-safe; adjustments do not count as income or spending. Holdings-only wallet and crypto-exchange accounts send `preserve` and never show the cash option. Ledger history is preserved. **Archive/Restore** toggles listing without the close workflow.
 - **Delete** — hard delete; a 409 (still referenced) routes to the close flow instead of dead-ending.
 
 ## Transactions-page account filter

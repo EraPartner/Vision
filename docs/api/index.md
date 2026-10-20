@@ -2,8 +2,8 @@
 title: API Documentation Index
 type: api-index
 status: active
-date: 2026-10-13
-updated: 2026-09-20
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     api,
@@ -69,37 +69,36 @@ SORT path ASC
 
 ## Quick Reference
 
-| Resource                      | Path                                | Methods                  | Documentation                                                   |
-| ----------------------------- | ----------------------------------- | ------------------------ | --------------------------------------------------------------- |
-| Analysis workspace            | `/api/analysis`                     | GET, POST, PUT, DELETE   | [[docs/api/analysis\|Analysis API]]                             |
-| Research dossiers             | `/api/research-dossiers`            | GET, POST, PUT, DELETE   | [[docs/api/research-dossiers\|Research Dossiers API]]           |
-| Analysis monitors             | `/api/analysis/monitors`            | GET, POST, PATCH, DELETE | [[docs/api/analysis-monitors\|Analysis Monitors API]]           |
-| Belgian Tax                   | `/api/belgian-tax`                  | GET, POST                | [[docs/api/belgian-tax\|Belgian Tax API]]                       |
-| Transactions                  | `/api/transactions`                 | GET, POST, PATCH, DELETE | [[docs/api/transactions\|Transactions API]]                     |
-| Categories                    | `/api/categories`                   | GET, POST, PATCH, DELETE | [[docs/api/categories\|Categories API]]                         |
-| Recipients                    | `/api/recipients`                   | GET, POST, PATCH, DELETE | [[docs/api/recipients\|Recipients API]]                         |
-| Planned Transactions          | `/api/planned-transactions`         | GET, POST, PATCH, DELETE | [[docs/api/plannedTransactions\|Planned Transactions API]]      |
-| Investments                   | `/api/investments`                  | GET, POST, PATCH, DELETE | [[docs/api/investments\|Investments API]]                       |
-| Watchlist                     | `/api/watchlist`                    | GET, POST, PATCH, DELETE | [[docs/api/watchlist\|Watchlist API]]                           |
-| Market Lookup                 | `/api/market`                       | GET                      | [[docs/api/marketLookup\|Market Lookup API]]                    |
-| Research (ADR-079)            | `/api/research`                     | GET                      | [[docs/api/research\|Research API]]                             |
-| Imports                       | `/api/import`                       | GET, POST                | [[docs/api/imports\|Imports API]]                               |
-| Portfolio Imports (ADR-078)   | `/api/portfolio/import`             | GET, POST, PATCH, DELETE | [[docs/api/portfolio-imports\|Portfolio Imports API]]           |
-| Attachments (Phase 5A)        | `/api/attachments`                  | GET, POST, DELETE        | [[docs/api/attachments\|Attachments API]]                       |
-| Saved Charts                  | `/api/saved-charts`                 | GET, POST, PATCH, DELETE | [[docs/api/savedCharts\|Saved Charts API]]                      |
-| Settings                      | `/api/settings`                     | GET, PUT, DELETE         | [[docs/api/settings\|Settings API]]                             |
-| Recipient Bank Accounts       | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |
-| Splits                        | `/api/splits`                       | GET, POST, PATCH, DELETE | [[docs/api/splits\|Splits API]]                                 |
-| Admin                         | `/api/admin`                        | GET, POST                | [[docs/api/admin\|Admin API]]                                   |
-| Private Electron Audit Bridge | `/api/internal/audit`               | POST                     | [[docs/api/internal-audit\|Internal Audit Bridge API]]          |
-| Reports (Phase 3)             | `/api/reports`                      | POST, GET (legacy)       | [[docs/api/reports\|Reports API]]                               |
-| Aggregations (Phase 2)        | `/api/aggregations`                 | GET                      | [[docs/api/aggregations\|Aggregations API]]                     |
-| Info & Analytics              | `/api/info`                         | GET                      | [[docs/api/info\|Info & Analytics API]]                         |
-| Portfolio Summary             | `/api/info/portfolio-summary`       | GET                      | [[docs/api/portfolio-summary\|Portfolio Summary API]]           |
-| Cross-Workspace               | `/api/cross-workspace`              | POST                     | [[docs/api/cross-workspace\|Cross-Workspace API]]               |
-| AI Chat                       | `/api/ai`                           | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]]                                    |
-| Tags (ADR-052, May 2026)      | `/api/tags`                         | GET, POST, PATCH, DELETE | [[docs/api/tags\|Tags API]]                                     |
-| Health                        | `/health` · `/health/detailed`      | GET                      | [[docs/api/health\|Health API]]                                 |
+| Resource                    | Path                                | Methods                  | Documentation                                                   |
+| --------------------------- | ----------------------------------- | ------------------------ | --------------------------------------------------------------- |
+| Analysis workspace          | `/api/analysis`                     | GET, POST, PUT, DELETE   | [[docs/api/analysis\|Analysis API]]                             |
+| Research dossiers           | `/api/research-dossiers`            | GET, POST, PUT, DELETE   | [[docs/api/research-dossiers\|Research Dossiers API]]           |
+| Analysis monitors           | `/api/analysis/monitors`            | GET, POST, PATCH, DELETE | [[docs/api/analysis-monitors\|Analysis Monitors API]]           |
+| Belgian Tax                 | `/api/belgian-tax`                  | GET, POST                | [[docs/api/belgian-tax\|Belgian Tax API]]                       |
+| Transactions                | `/api/transactions`                 | GET, POST, PATCH, DELETE | [[docs/api/transactions\|Transactions API]]                     |
+| Categories                  | `/api/categories`                   | GET, POST, PATCH, DELETE | [[docs/api/categories\|Categories API]]                         |
+| Recipients                  | `/api/recipients`                   | GET, POST, PATCH, DELETE | [[docs/api/recipients\|Recipients API]]                         |
+| Planned Transactions        | `/api/planned-transactions`         | GET, POST, PATCH, DELETE | [[docs/api/plannedTransactions\|Planned Transactions API]]      |
+| Investments                 | `/api/investments`                  | GET, POST, PATCH, DELETE | [[docs/api/investments\|Investments API]]                       |
+| Watchlist                   | `/api/watchlist`                    | GET, POST, PATCH, DELETE | [[docs/api/watchlist\|Watchlist API]]                           |
+| Market Lookup               | `/api/market`                       | GET                      | [[docs/api/marketLookup\|Market Lookup API]]                    |
+| Research (ADR-079)          | `/api/research`                     | GET                      | [[docs/api/research\|Research API]]                             |
+| Imports                     | `/api/import`                       | GET, POST                | [[docs/api/imports\|Imports API]]                               |
+| Portfolio Imports (ADR-078) | `/api/portfolio/import`             | GET, POST, PATCH, DELETE | [[docs/api/portfolio-imports\|Portfolio Imports API]]           |
+| Attachments (Phase 5A)      | `/api/attachments`                  | GET, POST, DELETE        | [[docs/api/attachments\|Attachments API]]                       |
+| Saved Charts                | `/api/saved-charts`                 | GET, POST, PATCH, DELETE | [[docs/api/savedCharts\|Saved Charts API]]                      |
+| Settings                    | `/api/settings`                     | GET, PUT, DELETE         | [[docs/api/settings\|Settings API]]                             |
+| Recipient Bank Accounts     | `/api/recipients/:id/bank-accounts` | GET, POST, PATCH, DELETE | [[docs/api/recipientBankAccounts\|Recipient Bank Accounts API]] |
+| Splits                      | `/api/splits`                       | GET, POST, PATCH, DELETE | [[docs/api/splits\|Splits API]]                                 |
+| Admin                       | `/api/admin`                        | GET, POST                | [[docs/api/admin\|Admin API]]                                   |
+| Reports (Phase 3)           | `/api/reports`                      | POST, GET (legacy)       | [[docs/api/reports\|Reports API]]                               |
+| Aggregations (Phase 2)      | `/api/aggregations`                 | GET                      | [[docs/api/aggregations\|Aggregations API]]                     |
+| Info & Analytics            | `/api/info`                         | GET                      | [[docs/api/info\|Info & Analytics API]]                         |
+| Portfolio Summary           | `/api/info/portfolio-summary`       | GET                      | [[docs/api/portfolio-summary\|Portfolio Summary API]]           |
+| Cross-Workspace             | `/api/cross-workspace`              | POST                     | [[docs/api/cross-workspace\|Cross-Workspace API]]               |
+| AI Chat                     | `/api/ai`                           | GET, POST, PATCH, DELETE | [[docs/api/ai\|AI Chat API]]                                    |
+| Tags (ADR-052, May 2026)    | `/api/tags`                         | GET, POST, PATCH, DELETE | [[docs/api/tags\|Tags API]]                                     |
+| Health                      | `/health` · `/health/detailed`      | GET                      | [[docs/api/health\|Health API]]                                 |
 
 ## Core Concepts
 
@@ -132,7 +131,6 @@ SORT path ASC
 
 - Most endpoints are currently workspace-internal and do not require user auth.
 - `/api/admin/*` supports optional Bearer-token protection via `ADMIN_AUTH_TOKEN`; when configured, requests must include `Authorization: Bearer <token>`.
-- `/api/internal/audit/*` requires a loopback socket peer and a separate per-launch Electron Bearer token; see [[docs/api/internal-audit|Private Electron Audit Bridge API]].
 
 ## Response Envelope (ADR-026)
 

@@ -106,7 +106,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
 | `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |
-| `native:smoke`                  | Offline disposable native backend, audit enrollment, protected device move, valid backup restore and tampered backup rejection |
+| `native:smoke`                  | Offline disposable native backend, encrypted backup restore, and restore into a second fresh cluster (device move)             |
 | `calibrate:category-outliers`   | Privacy-preserving threshold backtest against a local Vision API                                                               |
 | `evaluate:local-ai`             | Score a live Ollama model with fixed synthetic tool oracles                                                                    |
 

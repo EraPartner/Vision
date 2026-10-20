@@ -2,8 +2,8 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - api
   - splits
@@ -60,17 +60,11 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 - The route rejects malformed input early. `splitService.addPayment` then locks the split row through a repository primitive, recomputes the total, and repeats the exact four-decimal cap before insert. This locked service transaction is authoritative and serializes concurrent payment requests.
 - There is no canonical DB-level overpayment trigger. Migration 0088 removes the weaker pre-squash trigger from upgraded databases; direct SQL can bypass the cap. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
-### Audit Trail
+### No change history
 
-All split lifecycle events are recorded in `split_audit`. `splitService` calls the repository's parameterized `writeAudit()` primitive inside the same transaction as each mutation:
-
-- **create**: triggered by POST `/api/splits` or POST `/api/splits/batch`
-- **pay**: triggered by POST `/api/splits/:id/pay`
-- **settle**: triggered by POST `/api/splits/:id/settle`
-- **settle_all**: triggered by POST `/api/splits/owed/:id/settle-all` (only written if settled_count > 0)
-- **delete**: triggered by DELETE `/api/splits/:id`, captures pre-delete snapshot
-
-Actor is read from the caller-supplied `x-actor` header and otherwise stored as `null`. The header is audit context, not authenticated identity.
+Split routes keep no change history. [[docs/adr/231-remove-audit-history|ADR-231]] removed the
+`split_audit` table (migration `0004_remove_audit_history`) and the caller-supplied `x-actor`
+header; a client that still sends `x-actor` is not rejected, and the header is ignored.
 
 ## List Pagination (opt-in)
 
@@ -272,7 +266,7 @@ Get all splits for a specific transaction.
 
 Create a new split for a transaction.
 
-The endpoint validates split allocation via `validateSplitAllocation` before write and records a `create` audit trail entry.
+The endpoint validates split allocation via `validateSplitAllocation` before write.
 
 **Request Body:**
 
@@ -331,7 +325,7 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 Implementation notes:
 
 - Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
-- `splitService.createSplitAtomic()` owns allocation validation, insertion, and the action='create' audit in one transaction. The route supplies the actor resolved from headers.
+- `splitService.createSplitAtomic()` owns allocation validation and insertion in one transaction.
 
 ---
 
@@ -339,7 +333,7 @@ Implementation notes:
 
 Create multiple splits for a transaction at once.
 
-The endpoint validates total batch allocation via `validateBatchSplitAllocation` before writes and records a `create` audit trail entry per split (with `batch: true` in payload).
+The endpoint validates total batch allocation via `validateBatchSplitAllocation` before writes.
 
 **Request Body:**
 
@@ -402,7 +396,7 @@ Implementation notes:
 
 - Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.ts]]).
-- `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
+- `splitService.createSplitsBatchAtomic()` validates the complete allocation, and persists all rows through one bulk repository primitive in the same transaction.
 
 ---
 
@@ -452,7 +446,7 @@ Rows the preset cannot apply to are **skipped and counted**, not failed, so one 
 
 Implementation notes:
 
-- `splitService.createBulkSplitsAtomic()` locks each transaction with `lockAndGetTotals`, computes the share, re-checks it with `validateSplitAllocation`, inserts through `insertSplitInTransaction`, and writes one action='create' audit row per split with `bulk: true` and the `mode` in the payload, all inside one `withTransaction`.
+- `splitService.createBulkSplitsAtomic()` locks each transaction with `lockAndGetTotals`, computes the share, re-checks it with `validateSplitAllocation`, and inserts through `insertSplitInTransaction`, all inside one `withTransaction`.
 
 ---
 
@@ -518,8 +512,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 
 Implementation notes:
 
-- `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.ts]]).
-- Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.ts]]).
+- `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, and conditionally auto-settles in one database transaction ([[apps/node-backend/src/services/splitService.ts]]).
 
 ---
 
@@ -555,7 +548,7 @@ Get all payments for a specific split.
 
 Mark a split as fully settled.
 
-This is a manual settlement operation (not triggered by payment reaching the full amount). Records a `settle` audit trail entry with `manual: true`.
+This is a manual settlement operation (not triggered by payment reaching the full amount).
 
 **Parameters:**
 
@@ -590,7 +583,7 @@ and the recipient's name:
 
 Implementation notes:
 
-- Settles the split and writes the action='settle' audit atomically via `splitService.settleSplit(splitId, actor)`; the route returns 404 if missing.
+- Settles the split via `splitService.settleSplit(splitId)`; the route returns 404 if missing.
 - `settleSplit` re-selects the updated row through `recipients` and a per-split `split_payments` aggregate (same CTE re-select idiom as `createSplitAtomic`), so `recipient_name`/`amount_paid` in the response are real values — the bare `RETURNING *` it used before fabricated `recipient_name: null` / `amount_paid: 0`.
 
 ---
@@ -602,7 +595,7 @@ Mark all **unsettled** splits for a specific recipient as settled.
 **Recipient Alias Grouping (Phase Q+):**
 If the provided `id` is an alias (has a `primary_recipient_id`), all unsettled splits from the entire alias group are settled. This ensures that settling a primary or alias recipient settles all owed amounts from the entire merge group.
 
-This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records. Records a `settle_all` audit trail entry only if settled_count > 0.
+This endpoint matches existing settlement behavior: it only sets `is_settled = true` and does **not** create payment records.
 
 **Parameters:**
 
@@ -633,7 +626,7 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 Implementation notes:
 
 - Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
-- `splitService.settleAllByRecipient()` runs the update and, only when `settled_count > 0`, its action='settle_all' audit in one transaction.
+- `splitService.settleAllByRecipient()` runs one update across the recipient group and returns `settled_count`.
 
 ---
 
@@ -641,7 +634,7 @@ Implementation notes:
 
 Hard-delete a split.
 
-Splits are physically deleted (not soft-deleted). The deletion is permanent and irreversible. A `delete` audit trail entry is written with the pre-delete snapshot (split_id, transaction_id, recipient_id, amount), so the split can be reconstructed for auditing purposes but not recovered.
+Splits are physically deleted (not soft-deleted). The deletion is permanent and irreversible, and no record of the deleted split is kept; only a backup taken before the delete still contains it.
 
 **Parameters:**
 
@@ -659,8 +652,7 @@ Splits are physically deleted (not soft-deleted). The deletion is permanent and 
 
 Implementation notes:
 
-- `splitService.deleteSplit()` fetches the pre-delete snapshot, hard-deletes the split through the repository (cascading to `split_payments`), and writes the action='delete' audit in one transaction. It returns false when the row is missing or cannot be deleted.
-- Split audit rows survive deletion via `ON DELETE SET NULL` on split_id FK, enabling forensic reconstruction ([[docs/adr/013-split-hard-delete-with-audit-trail]]).
+- `splitService.deleteSplit()` hard-deletes the split through the repository (cascading to `split_payments`). It returns false when no row was deleted.
 
 ## TypeScript Types
 
@@ -739,7 +731,8 @@ interface SplitCreateInput {
 - [[docs/api/transactions]] - Transactions API
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/splits]] - Feature specification
-- [[docs/adr/013-split-hard-delete-with-audit-trail]] - Audit trail design and hard-delete semantics
+- [[docs/adr/013-split-hard-delete-with-audit-trail]] - Hard-delete semantics (its audit trail is superseded)
+- [[docs/adr/231-remove-audit-history|ADR-231]] - Removal of `split_audit` and `x-actor`
 - [[apps/node-backend/src/lib/calculations/splits.ts]] - Pure validation module
 - [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
 
@@ -749,5 +742,5 @@ These historical Alembic revisions are folded into `db/migrations/0001_baseline.
 ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]); the `.py` files survive only in Git history.
 
 - `0019_transaction_splits_and_agg.py` — Added `transaction_splits`, `split_payments`, and the trigger-maintained outstanding aggregate
-- `0021_split_audit.py` — Added the append-only `split_audit` table
+- `0021_split_audit.py` — Added the append-only `split_audit` table (dropped by `db/migrations/0004_remove_audit_history.sql`)
 - `0088_money_precision_alignment.py` — Widened split and payment amounts to `NUMERIC(18,4)` and retired the pre-squash overpayment trigger on upgraded databases

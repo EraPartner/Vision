@@ -2,9 +2,9 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags:
   [
     feature,
@@ -483,7 +483,7 @@ batches, source rows, policies, relevant current history, and companion-Pro evid
 explicit policy requires that reviewed fingerprint. Any relevant state change makes it stale.
 Each adoption writes immutable before/after snapshots into
 `portfolio_import_reconciliation_journal` in the same transaction as the adoption. Receipts are
-reversible domain evidence, not an independently anchored audit chain.
+reversible domain evidence.
 
 After the locked complete projection passes, the reviewed writer drains source events in date, batch,
 and row order. Custody writes use [[apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.ts]]

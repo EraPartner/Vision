@@ -2,12 +2,16 @@
 title: ADR-013 - Split Hard-Delete with split_audit Trail
 type: adr
 status: accepted
-date: 2026-04-16
+date: 2026-10-20
 tags: [adr, splits, soft-delete, audit, database, phase-4]
 description: Splits and split_payments are hard-deleted via ON DELETE CASCADE; lifecycle is preserved in an append-only split_audit table.
 ---
 
 # ADR-013: Split Hard-Delete with split_audit Trail
+
+> [!note] Superseded in part by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20:
+> migration 0004 drops `split_audit` and split routes no longer read `x-actor`. Hard delete with
+> `ON DELETE CASCADE` stays in force.
 
 ## Status
 

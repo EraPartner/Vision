@@ -1,14 +1,16 @@
 ---
 title: ADR-157 - Electron Local Audit Receipt and Private Bridge
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-20
 tags: [adr, audit, security, electron, backup, restore]
 description: Bind the forward-only database audit chain to a local main-process receipt and verify it at native startup and before restore activation.
 aliases: [Electron audit receipt, audit bridge decision]
 ---
 
 # ADR-157: Electron Local Audit Receipt and Private Bridge
+
+> [!note] Superseded by [[docs/adr/231-remove-audit-history|ADR-231]] on 2026-10-20.
 
 ## Context
 
@@ -33,6 +35,6 @@ The local receipt detects a database rollback, fork, changed legacy cutover, or 
 
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]]
-- [[docs/api/internal-audit|Private Electron Audit Bridge API]]
+- Private Electron Audit Bridge API (deleted by [[docs/adr/231-remove-audit-history|ADR-231]])
 - [[docs/security/data-protection|Data Protection]]
 - [[docs/features/backup-coverage-audit|Backup Coverage Audit]]

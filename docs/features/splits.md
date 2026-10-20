@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     feature,
@@ -21,7 +21,7 @@ tags:
     recipient-groups,
     recipient-alias-collapsing,
   ]
-description: Transaction splitting and debt tracking between recipients, with overpayment guards and audit trail; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage. Phase Q+ adds recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) into single rows for consistency with other reporting surfaces.
+description: Transaction splitting and debt tracking between recipients, with overpayment guards; uses Decimal.js for precise monetary calculations. Includes settlement notifications via toast messages with i18n keys. Phase Q adds recipient-group filtering for complete transaction history in OwesPage. Phase Q+ adds recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) into single rows for consistency with other reporting surfaces.
 aliases:
   [splits-feature, owes-feature, debts, shared expenses, roommate expenses]
 related_code:
@@ -77,15 +77,11 @@ A **payment** records a partial settlement of a split. Multiple payments can be 
 
 The **owed summary** aggregates all unsettled splits to show who owes whom and how much.
 
-### Split Audit Trail
+### No change history
 
-The **split_audit** table (migration 0021) records all lifecycle events: split creation, payment, settlement, and deletion. Each audit row captures:
-
-- `action`: one of `create`, `payment`, `settle`, `settle_all`, or `delete`
-- `actor`: caller-supplied `x-actor` header, or `null` when absent
-- `payload`: context-specific data (e.g., split snapshot on delete, payment amount on payment)
-
-Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON DELETE SET NULL` on the `split_id` FK.
+Splits are **hard-deleted** (not soft-deleted), and no change history is kept.
+[[docs/adr/231-remove-audit-history|ADR-231]] removed the `split_audit` table (migration
+`0004_remove_audit_history`) and the caller-supplied `x-actor` header.
 
 ---
 
@@ -116,21 +112,6 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 
 **Migration:** historical Alembic `0019_transaction_splits_and_agg.py`, now part of `db/migrations/0001_baseline.sql`
 
-### split_audit
-
-| Column     | Type        | Description                                                           |
-| ---------- | ----------- | --------------------------------------------------------------------- |
-| id         | BIGSERIAL   | Primary key                                                           |
-| split_id   | INTEGER     | FK to transaction_splits (ON DELETE SET NULL)                         |
-| action     | VARCHAR(50) | Event type (`create`, `payment`, `settle`, `settle_all`, or `delete`) |
-| actor      | TEXT        | Who performed the action                                              |
-| payload    | JSONB       | Context-specific data (e.g., amount, recipient_id, payment info)      |
-| created_at | TIMESTAMPTZ | Event timestamp                                                       |
-
-**Index:** `idx_split_audit_split_id` on (`split_id`)
-
-**Migration:** historical Alembic `0021_split_audit.py`, now part of `db/migrations/0001_baseline.sql`
-
 ---
 
 ## Validation & Overpayment Guards
@@ -155,11 +136,10 @@ Pure calculation functions in [[apps/node-backend/src/lib/calculations/splits.ts
 
 ### Defense in Depth
 
-Overpayment protection operates at three layers:
+Overpayment protection operates at two layers:
 
 1. **Route level** — `validatePaymentAmount` returns 400 before the repository call.
 2. **Locked service transaction** — `splitService.addPayment` locks the split row through a repository primitive, recomputes the paid total, and rejects an exact four-decimal overpayment before inserting. The lock serializes concurrent payment requests.
-3. **Audit level** — Every accepted write is recorded in `split_audit` in the same transaction.
 
 > [!warning] No canonical overpayment trigger
 > Fresh databases never created the pre-squash `fn_split_payment_overpayment_guard()` trigger.
@@ -187,28 +167,27 @@ Overpayment protection operates at three layers:
 | Method | Path                          | Description                                                                                                           |
 | ------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/api/splits/transaction/:id` | Get splits for a transaction                                                                                          |
-| POST   | `/api/splits`                 | Create a single split; validates allocation against transaction total; writes audit row with action='create'          |
-| POST   | `/api/splits/batch`           | Create multiple splits; batch validation via `validateBatchSplitAllocation`; audit row per split with action='create' |
-| POST   | `/api/splits/bulk`            | Bulk split: one payee, `equal` (50/50) or `full` (0/100) share of many transactions; already-split, zero-amount and missing rows skipped and counted; audit row per split with `bulk: true` |
-| DELETE | `/api/splits/:id`             | Hard-delete split; writes audit row with action='delete' + pre-delete snapshot                                        |
+| POST   | `/api/splits`                 | Create a single split; validates allocation against transaction total                                                 |
+| POST   | `/api/splits/batch`           | Create multiple splits; batch validation via `validateBatchSplitAllocation`                                           |
+| POST   | `/api/splits/bulk`            | Bulk split: one payee, `equal` (50/50) or `full` (0/100) share of many transactions; already-split, zero-amount and missing rows skipped and counted |
+| DELETE | `/api/splits/:id`             | Hard-delete split and its payments                                                                                    |
 
 ### Payment & Settlement
 
 | Method | Path                              | Description                                                                                                 |
 | ------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/splits/:id/pay`             | Record a payment; validates under a row lock; writes audit row with action='payment'                        |
+| POST   | `/api/splits/:id/pay`             | Record a payment; validates under a row lock                                                                |
 | GET    | `/api/splits/:id/payments`        | Get payment history                                                                                         |
-| POST   | `/api/splits/:id/settle`          | Mark split as settled; writes audit row with action='settle'                                                |
-| POST   | `/api/splits/owed/:id/settle-all` | Settle all unsettled splits for recipient; writes single audit row with action='settle_all' + settled_count |
+| POST   | `/api/splits/:id/settle`          | Mark split as settled                                                                                       |
+| POST   | `/api/splits/owed/:id/settle-all` | Settle all unsettled splits for recipient; returns `settled_count`                                          |
 
 Implementation notes:
 
-- All routes resolve actor from the caller-supplied `x-actor` header, falling back to `null`, using `resolveActor(req)` ([[apps/node-backend/src/routes/splits.ts]]). This is audit context, not an authenticated user identity.
 - Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers ([[apps/node-backend/src/routes/splits.ts]]).
 - Owed CSV export uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) for centralized CSV formatting with full escape support ([[apps/node-backend/src/routes/splits.ts]]).
-- `splitService` validates allocation through the pure calculation module, persists single or batch rows through repository primitives, and writes each create audit row in the same transaction.
-- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert, conditional auto-settlement, and audit in one transaction ([[apps/node-backend/src/services/splitService.ts]]).
-- Settlement and hard deletion also delegate to service transactions, so the mutation and its audit record commit or roll back together. DELETE returns 404 when the service reports no row.
+- `splitService` validates allocation through the pure calculation module, and persists single or batch rows through repository primitives in one transaction.
+- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert and conditional auto-settlement in one transaction ([[apps/node-backend/src/services/splitService.ts]]).
+- Settlement and hard deletion delegate to `splitService`, which runs one repository statement each. DELETE returns 404 when the service reports no row.
 
 ---
 
@@ -322,7 +301,8 @@ i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and acc
 ## Related
 
 - [[docs/api/splits]] — API documentation
-- [[docs/adr/013-split-hard-delete-with-audit-trail]] — Audit trail design and hard-delete semantics
+- [[docs/adr/013-split-hard-delete-with-audit-trail]] — Hard-delete semantics (its audit trail is superseded)
+- [[docs/adr/231-remove-audit-history|ADR-231]] — Removal of `split_audit` and `x-actor`
 - [[docs/features/views#owes]] — Owes page in views
 - [[docs/adr/002-database-schema#transaction-splits-tables]] — Schema details
 - [[apps/node-backend/src/lib/calculations/splits.ts]] — Pure calc module for validation
