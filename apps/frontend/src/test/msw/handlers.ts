@@ -1248,9 +1248,6 @@ export const defaultHandlers = [
     ),
     http.get(`${API_BASE}/api/info/inflation-rates`, () => ok([])),
 
-    http.get(`${API_BASE}/api/admin/endpoint-liveness`, () =>
-        ok({ items: [], total: 0 }),
-    ),
     http.get(`${API_BASE}/api/admin/database/stats`, () =>
         ok({ tables: [], db_size: null }),
     ),

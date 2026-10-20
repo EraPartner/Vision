@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-10-19",
+  "reviewedOn": "2026-10-20",
   "policy": "Preserve independently justified behavior. Protected financial, database and recovery tests and coverage thresholds remain unchanged. On 2026-10-18 the owner removed the Playwright browser journeys while the Swift native app was the intended UI. That app was retired on 2026-10-19 and the journeys were not restored, so React web layout has no browser coverage. On 2026-10-19 ADR-215 made structure-only tests (source text, mock call order, SQL strings sent to mocks, private helpers) deletable with a one-line reason; behaviour they alone covered gets a boundary test.",
   "reviewedTests": [
     {
@@ -676,6 +676,66 @@
       "decision": "remove (ADR-215)",
       "boundary": "structure",
       "reason": "Asserts index.css selector text for Electron vibrancy substitution; CSS structure, not behaviour."
+    },
+    {
+      "path": "apps/node-backend/tests/routes/analysisInterchange.test.ts",
+      "decision": "remove with removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "HTTP route contract",
+      "reason": "Tested only the removed POST /api/analysis/interchange/import|export routes; the browser interchange keeps its own tests (features/analysis/analysisInterchange.test.ts, analysisWorkbook.test.ts, shared-utils)."
+    },
+    {
+      "path": "apps/node-backend/tests/routes/researchPresentation.test.ts",
+      "decision": "remove with removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "HTTP route contract",
+      "reason": "Tested only the removed POST /api/research/presentation route; the shared presentation helpers keep lib/research/__tests__/presentation.test.ts."
+    },
+    {
+      "path": "apps/node-backend/tests/services/cashflowForecastAggregation.test.ts",
+      "decision": "remove with removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "mocked unit",
+      "reason": "Tested only the removed non-Monte-Carlo aggregation/cashflowForecast.ts engine behind the removed GET /api/aggregations/cashflow-forecast."
+    },
+    {
+      "path": "apps/node-backend/tests/backup-coverage.test.ts",
+      "decision": "split: table registry removed, localStorage registry kept as localStorage-keys-registry.test.ts",
+      "boundary": "source-or-file contract",
+      "reason": "The BACKUP_COVERED_TABLES registry was read only by this test; the backup is a whole-database pg_dump (packaging/electron/runtime/native.ts) with no table filter. The localStorage-key registration scan is kept unchanged."
+    },
+    {
+      "path": "apps/node-backend/tests/crossWorkspaceAnalytics.test.ts",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "pure domain function",
+      "reason": "Removed the projectNetWorth cases with the never-wired, test-only __projectNetWorth export; rebalancing cases kept."
+    },
+    {
+      "path": "apps/node-backend/tests/routes/aiResearchDocuments.validation.test.ts",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "HTTP route contract",
+      "reason": "Removed passage-search cases with the removed POST /api/ai-research/documents/search/passages route; in-process searchResearchDocuments is unchanged."
+    },
+    {
+      "path": "apps/node-backend/tests/routes/admin.test.ts",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "HTTP route contract",
+      "reason": "Removed the GET /endpoint-liveness case with the removed route; GET /endpoints and /metrics/requests cases kept."
+    },
+    {
+      "path": "apps/node-backend/tests/routes/aggregationsQuerySchemas.test.ts",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "HTTP route contract",
+      "reason": "Removed the cashflow-forecast months fallback with the removed route; other schema cases kept."
+    },
+    {
+      "path": "apps/frontend/src/features/analysis/analysisWorkbook.test.ts",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "pure function",
+      "reason": "Removed the browser-vs-Node XML adapter parity case; the Node adapter (services/analysisWorkbookXml.ts) was removed with the interchange routes."
+    },
+    {
+      "path": "apps/frontend/src/pages/__tests__/admin/AdminPages.integration.test.tsx",
+      "decision": "trim cases for removed code (unused-code cleanup, 2026-10-20)",
+      "boundary": "simulated-dom",
+      "reason": "Removed the case overriding the never-called /api/admin/endpoint-liveness handler; the page's real /api/admin/endpoints error case is kept."
     }
   ],
   "fileInventory": "scripts/browser-tests/test-file-inventory.json",

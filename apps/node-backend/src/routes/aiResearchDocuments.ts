@@ -8,7 +8,6 @@ import {
   getResearchDocument,
   ingestResearchDocument,
   listResearchDocuments,
-  searchResearchDocuments,
 } from "../services/aiResearchDocuments.ts";
 
 const router = Router();
@@ -25,16 +24,6 @@ const documentIdSchema = z
 const uploadFieldsSchema = z.object({
   title: z.string().optional(),
   source_name: z.string().optional(),
-});
-
-// The service clamps `limit` to 1..20 (default 8), like parsePagination's maxLimit.
-const passageSearchSchema = z.object({
-  query: z
-    .string({ error: "query must be a non-empty string" })
-    .trim()
-    .min(1, "query must be a non-empty string"),
-  mode: z.enum(["hybrid", "keyword", "semantic"]).optional(),
-  limit: z.number().int().positive().optional(),
 });
 
 router.get("/", async (_req, res) => {
@@ -64,12 +53,6 @@ router.post("/", upload.single("file"), async (req, res) => {
     if (error instanceof ValidationError) throw error;
     throw new ValidationError("The research document could not be ingested");
   }
-});
-// Input faults are rejected by the schema above; anything the service throws
-// after that is a server fault and reaches the error handler as a 500.
-router.post("/search/passages", async (req, res) => {
-  const search = parseInput(passageSearchSchema, req.body ?? {});
-  res.ok(await searchResearchDocuments(search));
 });
 router.delete("/:id", async (req, res) => {
   if (

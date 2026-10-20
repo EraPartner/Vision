@@ -13,7 +13,6 @@
  */
 
 import { Router } from "express";
-import presentationRouter from "./researchPresentation.ts";
 import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
 import { ValidationError } from "../middleware/errorHandler.ts";
@@ -38,7 +37,6 @@ import {
 } from "../services/research/adapters/macroCatalog.ts";
 
 const router = Router();
-router.use(presentationRouter);
 
 // Keyed by `dataType` (a runtime string from the aggregator's capability map,
 // not a closed union here), and the per-key shapes genuinely differ (items[]
@@ -46,9 +44,7 @@ router.use(presentationRouter);
 /** Stable empty shapes so the frontend gets a consistent payload when unavailable. */
 const EMPTY_BY_TYPE: Record<string, unknown> = {
   search: { items: [] },
-  quote: undefined,
   chart: { points: [] },
-  fundamentals: undefined,
   analyst: undefined,
   news: { articles: [] },
 };
@@ -170,15 +166,6 @@ router.get("/search", async (req, res) => {
   await respond(res, "search", { symbol: q });
 });
 
-// GET /api/research/quote?symbol=AAPL&asset_class=stock
-router.get("/quote", async (req, res) => {
-  const symbol = requireSymbol(req.query.symbol);
-  await respond(res, "quote", {
-    symbol,
-    assetClass: optionalParam(req.query.asset_class) || undefined,
-  });
-});
-
 // GET /api/research/chart?symbol=AAPL&asset_class=stock&range=1mo
 router.get("/chart", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
@@ -187,22 +174,6 @@ router.get("/chart", async (req, res) => {
     assetClass: optionalParam(req.query.asset_class) || undefined,
     range: optionalParam(req.query.range) || "1mo",
   });
-});
-
-// GET /api/research/fundamentals?symbol=AAPL
-// Fundamentals are MERGED across FMP + Yahoo (FMP preferred, Yahoo fills gaps),
-// not raced like the other data types.
-router.get("/fundamentals", async (req, res) => {
-  const symbol = requireSymbol(req.query.symbol);
-  const result = await researchAggregator.fetchFundamentals({
-    symbol,
-    assetClass: optionalParam(req.query.asset_class) || undefined,
-  });
-  const data =
-    result.source === "unavailable" ? EMPTY_BY_TYPE.fundamentals : result.data;
-  // See the provenance metadata convention in respond() above.
-  const meta = { provider: result.provider ?? null, source: result.source };
-  res.ok(data ?? null, meta);
 });
 
 // GET /api/research/analyst?symbol=AAPL

@@ -1740,26 +1740,6 @@
             "desc": "Dated yield reversals consume only source-proven zero-basis yield lots. Asset fees consume original lots and purchase FX. Per-method allocations and restrictive source links retain evidence."
           },
           {
-            "id": "sv.analysisinterchange",
-            "label": "Analysis file interchange",
-            "sub": "shared CSV · stored ZIP / XML",
-            "kind": "service",
-            "x": 420,
-            "y": 1240,
-            "path": "apps/node-backend/src/services/analysisInterchangeService.ts",
-            "desc": "Read-only import/export adapts shared browser serializers/parsers through existing Node CSV and Saxes XML libraries. Scoped transport preserves captured precision, provenance and window metadata."
-          },
-          {
-            "id": "sv.researchpresentation",
-            "label": "Research presentation",
-            "sub": "submitted data · shared TS only",
-            "kind": "service",
-            "x": 800,
-            "y": 1240,
-            "path": "apps/node-backend/src/services/research/presentationService.ts",
-            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
-          },
-          {
             "id": "sv.marketlookup",
             "label": "Market lookup",
             "sub": "Yahoo quotes / chart / news",
@@ -2129,22 +2109,6 @@
           ],
           [
             "fe.stores",
-            "pkg.shared-utils"
-          ],
-          [
-            "be.routes",
-            "sv.analysisinterchange"
-          ],
-          [
-            "sv.analysisinterchange",
-            "pkg.shared-utils"
-          ],
-          [
-            "be.routes",
-            "sv.researchpresentation"
-          ],
-          [
-            "sv.researchpresentation",
             "pkg.shared-utils"
           ],
           [
@@ -3914,7 +3878,7 @@
               {
                 "from": "fe.pages",
                 "to": "fe.apiclient",
-                "payload": "GET /api/aggregations/cashflow-forecast?months=12&mc_paths=500",
+                "payload": "GET /api/aggregations/cashflow-forecast-methods?mc_paths=500",
                 "annotation": "lib/api/aggregations.ts."
               },
               {

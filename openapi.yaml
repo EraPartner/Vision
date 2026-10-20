@@ -2746,115 +2746,6 @@ components:
                 limit: { type: integer, minimum: 1, maximum: 200 }
                 offset: { type: integer, minimum: 0, maximum: 1000000 }
 
-    AnalysisInterchangeValue:
-      nullable: true
-      oneOf:
-        - { type: string }
-        - { type: number, format: double }
-        - { type: boolean }
-      description: Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion.
-    AnalysisInterchangeColumn:
-      type: object
-      required: [id, label, type]
-      properties:
-        id: { type: string }
-        label: { type: string }
-        type:
-          type: string
-          enum: [string, integer, decimal, boolean, date]
-    AnalysisInterchangeAttachment:
-      type: object
-      required: [id, fileName, importedAt, sha256, columns, rows]
-      properties:
-        id: { type: string }
-        fileName: { type: string }
-        importedAt: { type: string, format: date-time }
-        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
-        columns:
-          type: array
-          maxItems: 32
-          items: { $ref: "#/components/schemas/AnalysisInterchangeColumn" }
-        rows:
-          type: array
-          maxItems: 1000
-          items:
-            type: object
-            additionalProperties:
-              { $ref: "#/components/schemas/AnalysisInterchangeValue" }
-    AnalysisInterchangeImport:
-      type: object
-      required: [format, attachment, formulaCells]
-      properties:
-        format: { type: string, enum: [csv, xlsx] }
-        attachment:
-          { $ref: "#/components/schemas/AnalysisInterchangeAttachment" }
-        formulaCells: { type: integer, minimum: 0 }
-      description: Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import.
-    AnalysisInterchangeExportPayload:
-      type: object
-      required: [result, context]
-      description: UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned.
-      properties:
-        result:
-          type: object
-          additionalProperties: true
-          required: [requestId, completedAt, rows, columns, window]
-          properties:
-            requestId: { type: string }
-            startedAt: { type: string }
-            completedAt: { type: string }
-            executor: { type: string }
-            columns:
-              type: array
-              items:
-                type: object
-                required: [id, type]
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  type: { type: string }
-            declaredColumns:
-              type: array
-              items:
-                type: object
-                required: [id, type]
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  type: { type: string }
-                  label: { type: string }
-            rows:
-              type: array
-              items:
-                type: object
-                additionalProperties: {}
-              description: Original Analysis cells, including JSON/array columns, as returned; no currency conversion.
-            window: { type: object, additionalProperties: true }
-            complete: { type: boolean }
-            coverage: {}
-            transformationCoverage: {}
-            preparationLineage: {}
-            transformationErrors: {}
-            formulaErrors: {}
-            formulaSummaries:
-              type: object
-              additionalProperties:
-                { $ref: "#/components/schemas/AnalysisInterchangeValue" }
-        context:
-          type: object
-          additionalProperties: true
-          required: [name, timezone, workspace]
-          properties:
-            name: { type: string }
-            timezone: { type: string }
-            workspace: { type: string }
-            definitionId: { type: string }
-            definitionVersion: { type: integer }
-            datasetIds: { type: array, items: { type: string } }
-            sourceReferences: { type: array, items: { type: string } }
-            assumptions: {}
-            formulas: {}
-
     AnalysisVisualFilter:
       type: object
       required: [fieldId, operator]
@@ -3594,291 +3485,6 @@ components:
     # Research wire contracts. These are named even where most provider fields
     # are optional so generated clients and the hand-written UI adapters cannot
     # silently drift apart.
-    ResearchPresentationRow:
-      type: object
-      required: [time]
-      description: Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null.
-      properties:
-        time: { type: number }
-      additionalProperties: { type: number, nullable: true }
-
-    ResearchPresentationCompareResult:
-      type: object
-      required: [rows, stats, correlation]
-      properties:
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-        stats:
-          type: array
-          items:
-            type: object
-            required: [symbol, totalReturn, volatility, maxDrawdown]
-            properties:
-              symbol: { type: string }
-              totalReturn: { type: number, nullable: true }
-              volatility: { type: number, nullable: true }
-              maxDrawdown: { type: number, nullable: true }
-              firstTime: { type: number }
-              lastTime: { type: number }
-        correlation:
-          type: object
-          required: [symbols, matrix]
-          properties:
-            symbols: { type: array, items: { type: string } }
-            matrix:
-              type: array
-              items:
-                type: array
-                items: { type: number, nullable: true }
-
-    ResearchPresentationChartResult:
-      type: object
-      required: [rows, oscillatorRows]
-      properties:
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-        oscillatorRows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-
-    ResearchPresentationWatchlistList:
-      type: object
-      required:
-        [
-          distancePercent,
-          absoluteDistancePercent,
-          isAtOrBelowTarget,
-          sinceAddedPercent,
-        ]
-      properties:
-        distancePercent: { type: number, nullable: true }
-        absoluteDistancePercent: { type: number, nullable: true }
-        isAtOrBelowTarget: { type: boolean }
-        sinceAddedPercent: { type: number, nullable: true }
-
-    ResearchPresentationWatchlistResult:
-      type: object
-      required: [list, chart, preview]
-      properties:
-        list: { $ref: "#/components/schemas/ResearchPresentationWatchlistList" }
-        chart:
-          type: object
-          required:
-            [
-              distancePercent,
-              absoluteDistancePercent,
-              isAtOrBelowTarget,
-              hasValidTarget,
-              domain,
-            ]
-          properties:
-            distancePercent: { type: number, nullable: true }
-            absoluteDistancePercent: { type: number, nullable: true }
-            isAtOrBelowTarget: { type: boolean }
-            hasValidTarget: { type: boolean }
-            domain:
-              type: array
-              minItems: 2
-              maxItems: 2
-              items: { type: number }
-        preview:
-          type: object
-          nullable: true
-          required: [absolutePercent, direction]
-          properties:
-            absolutePercent: { type: number }
-            direction: { type: string, enum: [below, above] }
-
-    ResearchPresentationWatchlistBatchResult:
-      type: object
-      required: [entries]
-      properties:
-        entries:
-          type: array
-          items:
-            type: object
-            required: [id, list]
-            properties:
-              id: { type: integer, minimum: 1 }
-              list:
-                {
-                  $ref: "#/components/schemas/ResearchPresentationWatchlistList",
-                }
-
-    ResearchPresentationAnalystResult:
-      type: object
-      nullable: true
-      required: [total, bullFraction, bearFraction, verdictKey, tone, fractions]
-      properties:
-        total: { type: number }
-        bullFraction: { type: number }
-        bearFraction: { type: number }
-        verdictKey:
-          {
-            type: string,
-            enum:
-              [
-                market.strongBuy,
-                market.buy,
-                market.hold,
-                market.sell,
-                market.strongSell,
-              ],
-          }
-        tone: { type: string, enum: [success, destructive, warning] }
-        fractions: { $ref: "#/components/schemas/ResearchAnalystConsensus" }
-
-    ResearchPresentationProviderQuoteResult:
-      type: object
-      nullable: true
-      required: [symbol, name, change, changePercent, currency, exchange, type]
-      properties:
-        symbol: { type: string }
-        name: { type: string }
-        price: { type: number, nullable: true }
-        change: { type: number, nullable: true }
-        changePercent: { type: number, nullable: true }
-        currency: { type: string }
-        exchange: { type: string }
-        type: { type: string }
-
-    ResearchPresentationMarketAddResult:
-      type: object
-      required: [providedCount, isConsistent]
-      properties:
-        derivedAmount: { type: number, nullable: true }
-        derivedUnits: { type: number, nullable: true }
-        derivedPrice: { type: number, nullable: true }
-        effectiveAmount: { type: number, nullable: true }
-        effectiveUnits: { type: number, nullable: true }
-        effectivePrice: { type: number, nullable: true }
-        providedCount: { type: integer, minimum: 0, maximum: 3 }
-        isConsistent: { type: boolean }
-
-    ResearchPresentationSnapshot:
-      type: object
-      required: [kind]
-      description: >-
-        Uploaded JSON discriminated by kind. compare requires series[{symbol,points}]
-        (max 6). chart requires series[{id,field,type,points}] (max 5),
-        indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase,
-        oscillator and nullable oscillatorSeriesId. watchlist requires nullable
-        targetPrice/currentPrice/addedPrice and optional points. watchlistBatch
-        requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000).
-        providerQuote requires points and investment{name,currency,symbol?,priceProvider?},
-        with optional selectedSymbol. analyst requires nullable consensus with all five
-        numeric count fields. marketAdd accepts positive amount/units/price and optional
-        derive (default true). Points require time, with optional nullable numeric
-        close/high/low/volume. There is no point-count truncation; transport is bounded.
-      properties:
-        kind:
-          {
-            type: string,
-            enum:
-              [
-                compare,
-                chart,
-                watchlist,
-                watchlistBatch,
-                providerQuote,
-                analyst,
-                marketAdd,
-              ],
-          }
-        series:
-          type: array
-          items:
-            type: object
-            properties:
-              symbol: { type: string, minLength: 1, maxLength: 64 }
-              id: { type: string, minLength: 1, maxLength: 128 }
-              field: { type: string, enum: [price, volume] }
-              type: { type: string, enum: [line, area, candlestick, bar] }
-              points:
-                type: array
-                items: { $ref: "#/components/schemas/ResearchChartPoint" }
-        indicators:
-          type: array
-          maxItems: 20
-          items:
-            type: object
-            required: [id, type, period, seriesId]
-            properties:
-              id: { type: string, minLength: 1, maxLength: 128 }
-              type: { type: string, enum: [sma, ema, bollinger] }
-              period: { type: integer, minimum: 1, maximum: 500 }
-              seriesId: { type: string, minLength: 1, maxLength: 128 }
-        rebase: { type: boolean }
-        oscillator: { type: string, enum: [none, rsi, macd] }
-        oscillatorSeriesId: { type: string, nullable: true }
-        targetPrice: { type: number, nullable: true }
-        currentPrice: { type: number, nullable: true }
-        addedPrice: { type: number, nullable: true }
-        points:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchChartPoint" }
-        entries:
-          type: array
-          maxItems: 5000
-          items:
-            type: object
-            required: [id, targetPrice, currentPrice, addedPrice]
-            properties:
-              id: { type: integer, minimum: 1 }
-              targetPrice: { type: number }
-              currentPrice: { type: number, nullable: true }
-              addedPrice: { type: number, nullable: true }
-        investment:
-          type: object
-          required: [name, currency]
-          properties:
-            symbol: { type: string, nullable: true }
-            name: { type: string }
-            currency: { type: string }
-            priceProvider: { type: string, nullable: true }
-        selectedSymbol: { type: string, nullable: true }
-        consensus:
-          {
-            $ref: "#/components/schemas/ResearchAnalystConsensus",
-            nullable: true,
-          }
-        amount: { type: number, exclusiveMinimum: 0 }
-        units: { type: number, exclusiveMinimum: 0 }
-        price: { type: number, exclusiveMinimum: 0 }
-        derive: { type: boolean, default: true }
-
-    ResearchPresentationData:
-      type: object
-      required: [kind, result]
-      description: result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null.
-      properties:
-        kind:
-          {
-            type: string,
-            enum:
-              [
-                compare,
-                chart,
-                watchlist,
-                watchlistBatch,
-                providerQuote,
-                analyst,
-                marketAdd,
-              ],
-          }
-        result:
-          nullable: true
-          anyOf:
-            - $ref: "#/components/schemas/ResearchPresentationCompareResult"
-            - $ref: "#/components/schemas/ResearchPresentationChartResult"
-            - $ref: "#/components/schemas/ResearchPresentationWatchlistResult"
-            - $ref: "#/components/schemas/ResearchPresentationWatchlistBatchResult"
-            - $ref: "#/components/schemas/ResearchPresentationProviderQuoteResult"
-            - $ref: "#/components/schemas/ResearchPresentationAnalystResult"
-            - $ref: "#/components/schemas/ResearchPresentationMarketAddResult"
-
     ResearchMeta:
       type: object
       required: [provider, source]
@@ -3902,27 +3508,6 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ResearchSearchItem" }
-
-    ResearchQuote:
-      type: object
-      required: [symbol]
-      properties:
-        symbol: { type: string }
-        name: { type: string, nullable: true }
-        price: { type: number, nullable: true }
-        change: { type: number, nullable: true }
-        changePercent: { type: number, nullable: true }
-        currency: { type: string, nullable: true }
-        exchange: { type: string, nullable: true }
-        type: { type: string, nullable: true }
-        open: { type: number, nullable: true }
-        dayHigh: { type: number, nullable: true }
-        dayLow: { type: number, nullable: true }
-        prevClose: { type: number, nullable: true }
-        volume: { type: number, nullable: true }
-        avgVolume: { type: number, nullable: true }
-        high52w: { type: number, nullable: true }
-        low52w: { type: number, nullable: true }
 
     ResearchChartPoint:
       type: object
@@ -4321,28 +3906,12 @@ components:
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchSearchData" }
-    ResearchQuoteEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
-        - type: object
-          properties:
-            data: { $ref: "#/components/schemas/ResearchQuote", nullable: true }
     ResearchChartEnvelope:
       allOf:
         - $ref: "#/components/schemas/ResearchEnvelopeBase"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchChartData" }
-    ResearchFundamentalsEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
-        - type: object
-          properties:
-            data:
-              {
-                $ref: "#/components/schemas/ResearchFundamentals",
-                nullable: true,
-              }
     ResearchAnalystEnvelope:
       allOf:
         - $ref: "#/components/schemas/ResearchEnvelopeBase"
@@ -8259,88 +7828,6 @@ paths:
             description: "VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan",
           }
 
-  /api/analysis/interchange/import:
-    post:
-      operationId: importAnalysisInterchange
-      summary: Parse a CSV or Vision XLSX scenario attachment without persistence
-      tags: [Analysis]
-      description: Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, format]
-              properties:
-                file: { type: string, format: binary }
-                format: { type: string, enum: [csv, xlsx] }
-      responses:
-        "200":
-          description: Inferred value-only attachment and raw ignored-formula count.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        {
-                          $ref: "#/components/schemas/AnalysisInterchangeImport",
-                        }
-        "400":
-          {
-            description: Invalid format,
-            file,
-            upload limit,
-            CSV structure or bounds,
-            ZIP/CRC/XML,
-            provenance or attachment bounds.,
-          }
-        "429": { description: API or existing Analysis rate limit exceeded. }
-        "500": { description: Upload source read failed. }
-
-  /api/analysis/interchange/export:
-    post:
-      operationId: exportAnalysisInterchange
-      summary: Export a supplied captured Analysis snapshot as CSV or value-only XLSX
-      tags: [Analysis]
-      description: Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, format]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
-                format: { type: string, enum: [csv, xlsx] }
-      responses:
-        "200":
-          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx.
-          headers:
-            Content-Disposition: { schema: { type: string } }
-          content:
-            text/csv:
-              schema: { type: string, format: binary }
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema: { type: string, format: binary }
-        "400":
-          {
-            description: Missing or invalid multipart snapshot/format,
-            over 64 MiB input,
-            invalid result/context JSON,
-            or XLSX row limit.,
-          }
-        "429": { description: API or existing Analysis rate limit exceeded. }
-        "500": { description: Upload source read or serialization failed. }
-
   /api/analysis/execute:
     post:
       summary: Execute a bounded visual or custom-SQL analysis
@@ -9257,18 +8744,6 @@ paths:
         "404": { description: Dossier not found }
 
   # ─── Bounded AI research ──────────────────────────────────────────────────
-  /api/ai-research/status:
-    get:
-      summary: Inspect local model, web research, and document capabilities
-      operationId: getAiResearchStatus
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Configured capabilities without credentials.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-
   /api/ai-research/investigations:
     get:
       summary: List recoverable AI investigation jobs
@@ -9456,43 +8931,6 @@ paths:
       responses:
         "204": { description: Document and derived indexes deleted }
         "404": { description: Document not found }
-
-  /api/ai-research/documents/search/passages:
-    post:
-      summary: Retrieve cited keyword, semantic, or hybrid local passages
-      operationId: searchAiResearchPassages
-      tags: [AIResearch]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                  minLength: 1
-                  description: Trimmed before use; a blank query is rejected.
-                mode:
-                  type: string
-                  enum: [hybrid, keyword, semantic]
-                  default: hybrid
-                limit:
-                  type: integer
-                  minimum: 1
-                  default: 8
-                  description: The service caps results at 20.
-      responses:
-        "200":
-          description: Bounded passages with document, version, page, and section locators
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-        "400":
-          {
-            description: "VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer",
-          }
 
   /api/cross-workspace/commitment-aware-cash:
     post:
@@ -13237,28 +12675,6 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/UnconvertedAmounts"
-
-  /api/aggregations/cashflow-forecast:
-    get:
-      summary: Monte-Carlo cashflow forecast
-      operationId: getCashflowForecast
-      tags: [Aggregations]
-      parameters:
-        - in: query
-          name: months
-          schema:
-            type: integer
-        - in: query
-          name: currency
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Forecast data
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
 
   /api/aggregations/cashflow-forecast-methods:
     get:
@@ -17511,84 +16927,7 @@ paths:
                       data:
                         $ref: "#/components/schemas/EndpointList"
 
-  /api/admin/endpoint-liveness:
-    get:
-      summary: Liveness probe for each endpoint
-      operationId: adminEndpointLiveness
-      tags: [Admin]
-      responses:
-        "200":
-          description: Liveness results
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                method: { type: string }
-                                path: { type: string }
-                                live: { type: boolean }
-                          total:
-                            type: integer
-
   # ─── Research (ADR-079) ───────────────────────────────────────────────────────
-  /api/research/presentation:
-    post:
-      summary: Compute Research presentation from submitted data without fetching or persisting
-      operationId: computeResearchPresentation
-      tags: [Research]
-      description: >-
-        Stateless shared TypeScript transformations for Compare, Chart Builder,
-        watchlist list/chart/add previews, provider-history quotes, analyst consensus
-        and market-add two-of-three previews. No provider, database, settings or FX
-        lookup. Original source ordering, warmups, thresholds and currency semantics
-        are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart
-        limit bypasses the global JSON-body size limit without silently truncating history.
-        Numeric JSON is validated as finite numbers; non-finite calculation outputs
-        serialize as null as in the web client. Uses the existing Research market rate limiter.
-      requestBody:
-        required: true
-        description: Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected.
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              additionalProperties: false
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
-      responses:
-        "200":
-          description: Computed kind-specific presentation, standard envelope; no read or write side effects.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        {
-                          $ref: "#/components/schemas/ResearchPresentationData",
-                        }
-        "400":
-          description: VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot.
-        "429": { description: Existing Research market rate limit. }
-        "500": { description: File I/O or unexpected calculation failure. }
-
   /api/research/search:
     get:
       summary: Search tickers / securities across research providers
@@ -17608,32 +16947,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResearchSearchEnvelope"
-
-  /api/research/quote:
-    get:
-      summary: Current quote for a symbol
-      operationId: researchQuote
-      tags: [Research]
-      parameters:
-        - in: query
-          name: symbol
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: asset_class
-          schema:
-            type: string
-          description: "Asset class hint for provider routing (e.g. stock, crypto, metals)"
-      responses:
-        "200":
-          description: Quote data with provenance meta (provider, source)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResearchQuoteEnvelope"
-        "400":
-          description: symbol parameter required
 
   /api/research/chart:
     get:
@@ -17668,31 +16981,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResearchChartEnvelope"
-        "400":
-          description: symbol parameter required
-
-  /api/research/fundamentals:
-    get:
-      summary: Fundamentals snapshot for a symbol
-      operationId: researchFundamentals
-      tags: [Research]
-      parameters:
-        - in: query
-          name: symbol
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: asset_class
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Fundamentals data with provenance meta (provider, source)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResearchFundamentalsEnvelope"
         "400":
           description: symbol parameter required
 

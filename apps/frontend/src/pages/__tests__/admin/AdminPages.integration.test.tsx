@@ -339,15 +339,4 @@ describe("Admin pages (integration)", () => {
         expect(container.firstChild).toBeTruthy();
         errSpy.mockRestore();
     });
-
-    it("EndpointLivenessPage does not crash on 4xx liveness", async () => {
-        const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-        server.use(
-            http.get(`${API_BASE}/api/admin/endpoint-liveness`, () => err(404, "Not found")),
-        );
-        const { container } = renderWithApp(<EndpointLivenessPage />);
-        await new Promise((r) => setTimeout(r, 200));
-        expect(container.firstChild).toBeTruthy();
-        errSpy.mockRestore();
-    });
 });

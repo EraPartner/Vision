@@ -779,30 +779,6 @@ Return a static manifest of all registered Express routes.
 
 ---
 
-### GET /api/admin/endpoint-liveness
-
-Return the static route manifest annotated with a `live: true` flag for each entry, confirming that all registered endpoints are reachable.
-
-**Response:** `200 OK` — canonical collection body `{ items, total }`.
-
-```json
-{
-  "items": [
-    { "method": "GET", "path": "/api/transactions", "live": true },
-    { "method": "POST", "path": "/api/transactions", "live": true },
-    { "method": "PATCH", "path": "/api/transactions/:id", "live": true }
-  ],
-  "total": 3
-}
-```
-
-**Notes:**
-
-- Identical source data as `GET /api/admin/endpoints` (same `getRouteManifest()` call), with each entry extended by `live: true`
-- Intended for health/monitoring tooling that needs a single endpoint confirming the route manifest is served and all entries are live
-
----
-
 ## Environment Variables
 
 | Variable           | Description                                                       |

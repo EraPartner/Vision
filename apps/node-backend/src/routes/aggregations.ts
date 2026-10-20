@@ -24,7 +24,6 @@ import { computeRecipientInsights } from "../services/calculations/aggregation/r
 import { computeCashflowComparison } from "../services/calculations/aggregation/cashflow.ts";
 import { computeAverageVsCurrent } from "../services/calculations/aggregation/averageVsCurrent.ts";
 import { computeBankBalances } from "../services/calculations/aggregation/bankBalances.ts";
-import { computeCashflowForecast } from "../services/calculations/aggregation/cashflowForecast.ts";
 import {
   computeCashflowForecast as computeCashflowForecastMethods,
   computeCashflowForecastRolling,
@@ -209,10 +208,6 @@ const currencyOnlyQuery = z
   .object(currencyFields)
   .transform((query) => ({ targetCurrency: targetCurrency(query) }));
 
-const cashflowForecastQuery = z.object({
-  months: clampedIntQuery({ max: 24, fallback: 3 }),
-});
-
 const monteCarloFields = {
   mc_paths: clampedIntQuery({ max: 5000, fallback: 1000 }),
   history_months: clampedIntQuery({ max: 120, fallback: 36 }),
@@ -378,12 +373,6 @@ router.get("/bank-balances", async (req, res) => {
   const options = parseInput(currencyOnlyQuery, req.query);
   const { data, meta } = await computeBankBalances(options);
   res.ok({ data, meta });
-});
-
-router.get("/cashflow-forecast", async (req, res) => {
-  const { months } = parseInput(cashflowForecastQuery, req.query);
-  const { data, meta } = await computeCashflowForecast({ months });
-  res.ok({ data, meta: { ...meta, months } });
 });
 
 router.get("/cashflow-forecast-methods", async (req, res) => {

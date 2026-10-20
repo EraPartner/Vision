@@ -494,14 +494,9 @@ router.get("/metrics/requests", (_req, res) => {
 
 // ── Endpoint Manifest ─────────────────────────────────────────────────────────
 
-// Both manifest endpoints use the canonical `{items, total}` collection shape.
+// The manifest endpoint uses the canonical `{items, total}` collection shape.
 router.get("/endpoints", (_req, res) => {
   const items = getRouteManifest();
-  res.ok({ items, total: items.length });
-});
-
-router.get("/endpoint-liveness", (_req, res) => {
-  const items = getRouteManifest().map((entry) => ({ ...entry, live: true }));
   res.ok({ items, total: items.length });
 });
 

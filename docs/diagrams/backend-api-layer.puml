@@ -230,7 +230,6 @@ package "Routes" {
     +POST /pivot : pivot query
     +POST /extensions/evaluate, /formulas/evaluate : evaluate expressions
     +POST /ai-proposals/preview, /ai-proposals/apply : AI plan proposals
-    +POST /interchange/import, /interchange/export : workbook interchange
     +POST /cancel/:requestId : cancel query
     +POST /drill : contributing records
     +GET,POST /saved : list/create analyses
@@ -318,7 +317,6 @@ package "Routes" {
     +POST /providers/:provider/probe : synthetic probe
     +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)
     +GET /endpoints : live route manifest (Phase F)
-    +GET /endpoint-liveness : route manifest with liveness
     +/api/admin/* : timing-safe bearer auth (ADR-037)
   }
 
@@ -329,7 +327,6 @@ package "Routes" {
     +GET /cashflow-comparison : cash flow comparison
     +GET /average-vs-current : avg vs current spending
     +GET /bank-balances : account balances
-    +GET /cashflow-forecast : N-month forecast (Phase 6)
     +GET /cashflow-forecast-methods, /cashflow-forecast-rolling, /cashflow-forecast-accuracy
     +GET /sankey : income flow diagram (Phase 7)
     +GET /category-pivot, /recipient-by-year, /recipient-pivot, /tag-pivot
@@ -358,7 +355,6 @@ package "Routes" {
   }
 
   class AiResearchRouter <<ADR-145, ADR-229>> {
-    +GET /status : local research status
     +GET,POST /investigations; GET,DELETE /investigations/:id
     +POST /investigations/:id/resume, /investigations/:id/cancel
   }
@@ -366,7 +362,6 @@ package "Routes" {
   class AiResearchDocumentsRouter {
     +GET,POST / : list/upload documents
     +GET,DELETE /:id : read/delete document
-    +POST /search/passages : passage search
   }
 
   class AccountsRouter {
@@ -384,9 +379,9 @@ package "Routes" {
   }
 
   class ResearchRouter {
-    +GET /search, /quote, /chart, /fundamentals, /analyst, /news
+    +GET /search, /chart, /analyst, /news
     +GET /macro/search, /macro/series, /scorecard
-    +POST /portfolio-forecast, /presentation
+    +POST /portfolio-forecast
     +GET,POST /mappings; POST /mappings/resolve, /mappings/audit; DELETE /mappings/:id
     +GET /provider-keys; PUT,DELETE /provider-keys/:provider
   }

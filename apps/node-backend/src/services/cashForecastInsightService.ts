@@ -5,8 +5,7 @@
  * month-end net-cashflow finding — this service performs no forecasting of its own:
  * - Calls `computeCashflowForecast` from calculations/forecast/index.js (the
  *   Monte-Carlo orchestrator the nightly job uses; it caches internally, so no
- *   caching is added here). NOT the same-named function in
- *   aggregation/cashflowForecast.js, which is a different non-MC computation.
+ *   caching is added here).
  * - Picks a primary method: first Monte-Carlo method with bands and no error,
  *   falling back to the ensemble, then to any error-free method.
  * - Reads P50 month-end net cash flow from the method's zero-based `cumulative`

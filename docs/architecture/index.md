@@ -112,7 +112,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-Open [the interactive visualizer](../flow-visualizer.html#api-request) for 71 components and 43 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
+Open [the interactive visualizer](../flow-visualizer.html#api-request) for 69 components and 43 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
 
 ![[docs/diagrams/system-architecture.puml]]
 

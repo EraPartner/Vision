@@ -7,9 +7,8 @@ updated: 2026-10-20
 last_modified: 2026-10-20
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
-description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
+description: Project income and expenses forward using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
 related_code:
-  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts
   - apps/node-backend/src/services/calculations/forecast/index.ts
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.ts
   - apps/node-backend/src/services/calculations/forecast/accuracyStore.ts
@@ -28,27 +27,18 @@ related_code:
 
 # Cash Flow Forecast
 
-Vision offers two complementary cash flow forecasting approaches with a full-featured dashboard visualization:
+Vision forecasts cash flow statistically, with a full-featured dashboard visualization:
 
-1. **Phase 6 (Planned Projection)** — Forward-projects active, unexecuted planned transactions over a rolling window
-2. **Phase 10 (Multi-Method Statistical)** — Uses 7 independent statistical methods to forecast rest-of-month cash flow based on historical patterns and Monte Carlo simulation
-3. **Phase C (Frontend Visualization)** — Dashboard widget with 8-method ensemble chart (7 base + inverse-MSE), controls, confidence bands, and diagnostics panel
+1. **Phase 10 (Multi-Method Statistical)** — Uses 7 independent statistical methods to forecast rest-of-month cash flow based on historical patterns and Monte Carlo simulation
+2. **Phase C (Frontend Visualization)** — Dashboard widget with 8-method ensemble chart (7 base + inverse-MSE), controls, confidence bands, and diagnostics panel
 
-## Overview (Phase 6 + Phase 10 + Phase C)
+> [!note] Planned projection removed (2026-10-20)
+> The separate Phase 6 planned projection, `GET /api/aggregations/cashflow-forecast` and its engine
+> `services/calculations/aggregation/cashflowForecast.ts`, had no client and was removed. Planned
+> transactions still enter the forecasts through the `include_planned` overlay of the methods and
+> rolling endpoints.
 
-Vision offers two complementary forecasting approaches with rich dashboard visualization:
-
-### Phase 6: Planned Projection
-
-Takes all active planned transactions and expands them into future occurrences based on their recurrence pattern (if recurring) or their planned date (if one-time). Groups these by month to show projected monthly net cash flow.
-
-**Key characteristics:**
-
-- **Forward-looking** — Shows N months ahead (default 3, max 24)
-- **Non-convertible** — All amounts stay in their original currency (future FX rates unknown)
-- **Real-time** — Computed on-demand; does not require pre-calculation
-- **Recurring-aware** — Expands recurring transactions into individual monthly occurrences
-- **Endpoint:** `GET /api/aggregations/cashflow-forecast`
+## Overview (Phase 10 + Phase C)
 
 ### Phase 10 + F: Multi-Method Statistical Forecasting with Ensemble
 
@@ -60,7 +50,7 @@ Forecasts the rest of the current month using 8 statistical methods: 5 point for
 - **Multiple methods** — 5 point forecasts (simple/weighted average, EWMA, Holt-Winters, Prophet Lite) + 2 Monte Carlo methods with confidence bands + 1 Ensemble (v2) combining point methods with empirical-Bayes shrinkage and uniform-blend floor
 - **Real-time** — Computed on-demand; methods are stateless and deterministic
 - **Diagnostic** — Walk-forward backtest shows MAE/RMSE/MAPE per method; Phase D persists monthly accuracy metrics
-- **Current month only** — Forecasts remaining days in current month (future months covered by Phase 6 planned projection)
+- **Current month only** — Forecasts remaining days in current month
 - **Endpoints:** `GET /api/aggregations/cashflow-forecast-methods`, `GET /api/aggregations/cashflow-forecast-accuracy` (Phase D)
 
 ### Phase C: Frontend Dashboard Visualization
@@ -150,139 +140,11 @@ All cash flow forecast calculations now route through Decimal.js to eliminate IE
 **Implementation:**
 
 - `cashflowForecast.js`: All date bucketing via APP_TIMEZONE helpers; cumulative net flows accumulated via Decimal `addAll()`
-- `calculations/aggregation/cashflowForecast.js`: Running net-flow stream maintained as Decimal throughout; `divide()` used for per-day allocation when splitting multi-day transactions
 - Frontend `forecastMerge.ts`: Reuses `buildBandMaps()` and `buildSeries()` helpers to avoid redundant accumulation passes
 
 **Benefit:** Forecasts with many categories or long histories no longer accumulate ±0.01 rounding errors. Cumulative net cash flow matches database NUMERIC precision exactly.
 
 ## Endpoints
-
-### Phase 6: Planned Projection
-
-**Path:** `GET /api/aggregations/cashflow-forecast`
-
-**Query Parameters:**
-
-| Parameter | Type    | Default | Max | Description                  |
-| --------- | ------- | ------- | --- | ---------------------------- |
-| `months`  | integer | 3       | 24  | Number of months to forecast |
-
-**Example:**
-
-```http
-GET /api/aggregations/cashflow-forecast?months=6
-```
-
-## Response Shape
-
-```json
-{
-  "data": {
-    "forecast": [
-      {
-        "month": "2026-05",
-        "income": 3500.0,
-        "expenses": -2150.75,
-        "net": 1349.25,
-        "items": [
-          {
-            "id": 42,
-            "planned_date": "2026-05-01",
-            "currency": "EUR",
-            "amount": 3500.0,
-            "memo": "Salary",
-            "recipient_name": "Employer Inc.",
-            "category_name": "INCOME:SALARY",
-            "is_recurring": false,
-            "recurrence_pattern": null
-          },
-          {
-            "id": 15,
-            "planned_date": "2026-05-15",
-            "currency": "EUR",
-            "amount": -1200.0,
-            "memo": "Rent",
-            "recipient_name": "Landlord",
-            "category_name": "HOUSING:RENT",
-            "is_recurring": true,
-            "recurrence_pattern": "monthly"
-          }
-        ]
-      },
-      {
-        "month": "2026-06",
-        "income": 3500.0,
-        "expenses": -2150.75,
-        "net": 1349.25,
-        "items": [/* ... */]
-      }
-    ]
-  },
-  "meta": {
-    "source": "live",
-    "computedAt": "2026-04-24T12:34:56.789Z"
-  }
-}
-```
-
-**Field Descriptions:**
-
-| Field             | Type   | Meaning                                                     |
-| ----------------- | ------ | ----------------------------------------------------------- |
-| `month`           | string | `YYYY-MM` format                                            |
-| `income`          | number | Sum of positive (incoming) amounts                          |
-| `expenses`        | number | Sum of negative (outgoing) amounts (returns negative value) |
-| `net`             | number | `income + expenses`                                         |
-| `items`           | array  | Forecast occurrences in this month                          |
-| `meta.source`     | string | Always `"live"` (computed, not from materialized view)      |
-| `meta.computedAt` | string | ISO 8601 timestamp of computation                           |
-
-## Item Details
-
-Each item in the forecast represents a single planned occurrence:
-
-```json
-{
-  "id": 42, // Planned transaction ID
-  "planned_date": "2026-05-15", // Date of this occurrence
-  "currency": "EUR", // Original currency
-  "amount": -1200.0, // Amount (positive for income, negative for expense)
-  "memo": "Rent", // User-provided memo
-  "recipient_name": "Landlord", // Payee/payer name (null if no recipient)
-  "category_name": "HOUSING:RENT", // Category (GENERAL:DETAIL format, null if uncategorized)
-  "is_recurring": true, // Is this from a recurring pattern?
-  "recurrence_pattern": "monthly" // Recurrence interval (null if one-time)
-}
-```
-
-## Recurring Transaction Expansion
-
-For recurring transactions, the forecast uses the same date-advancement logic as the execute-and-advance endpoint:
-
-**Supported patterns:**
-
-- `daily` — Every day
-- `weekly` — Same day of week
-- `monthly` — Same day of month (or last day if day > 28)
-- `yearly` — Same month and day
-
-**Example: Monthly rent on the 15th**
-
-If planned_date is 2026-05-15 and pattern is `monthly`:
-
-- 2026-05 → occurrence on 15th
-- 2026-06 → occurrence on 15th
-- 2026-07 → occurrence on 15th
-- ... (continues until window end)
-
-**Edge case: Day-of-month overflow**
-
-If planned_date is 2026-01-31 and pattern is `monthly`:
-
-- 2026-01 → 31st
-- 2026-02 → 28th (or 29th in leap year; Feb has no 31st)
-- 2026-03 → 31st
-- ... (algorithm picks the last valid day)
 
 ### Phase 10: Multi-Method Statistical Forecast
 
@@ -440,51 +302,6 @@ If `simple_avg` has MAPE=8.2% and `ewma` has MAPE=6.5%, then EWMA is historicall
 
 ## Use Cases
 
-### Phase 6: Planned Projection Use Cases
-
-### 1. Budget Planning
-
-"How much will I spend next quarter?"
-
-```
-GET /api/aggregations/cashflow-forecast?months=3
-→ Review expenses column for each month
-→ Sum total or identify peak expense months
-```
-
-### 2. Runway Analysis
-
-"How long can I survive on savings given my recurring expenses?"
-
-```
-GET /api/aggregations/cashflow-forecast?months=12
-→ Find first month where net < 0
-→ Compare cumulative net against savings balance
-```
-
-### 3. Negative Net-Flow Periods
-
-"Which months have more planned outflows than inflows?"
-
-```
-GET /api/aggregations/cashflow-forecast?months=6
-→ Check for negative net months
-→ Identify which planned transactions are causing the negative net flow
-```
-
-This forecast starts at zero. It does not include an account-balance or savings anchor, so a
-negative result does not mean the user will run out of money.
-
-### 4. Income Stability Check
-
-"Do I have consistent income forecasted?"
-
-```
-GET /api/aggregations/cashflow-forecast?months=12
-→ Review income column consistency
-→ Flag months with missing or reduced income
-```
-
 ### Phase 10: Multi-Method Statistical Forecast Use Cases
 
 #### 1. Rest-of-Month Net Cash Flow
@@ -553,17 +370,9 @@ Plan for this when reviewing the forecast. Use [[docs/features/exchange-rates|Ex
 
 ## Limitations
 
-### Phase 6 (Planned Projection)
-
-1. **No FX conversion** — Amounts stay in source currency
-2. **No tax estimates** — Forecast amounts are gross, before taxes
-3. **No interest accrual** — Savings/loans don't earn/accrue interest in forecast
-4. **Corporate actions ignored** — Stock splits, dividends not factored into planned transaction forecasts (use portfolio snapshots for that)
-5. **Manual executions not predicted** — If you execute a planned transaction early, forecast still shows it at planned date
-
 ### Phase 10 (Multi-Method Statistical Forecast)
 
-1. **Current month only** — Forecasts remaining days of current month (not future months; use Phase 6 for that)
+1. **Current month only** — Forecasts remaining days of current month (not future months)
 2. **Requires historical data** — Methods need ≥60 days of history to be accurate; Prophet Lite returns zeros below threshold
 3. **No anomaly detection** — Outlier days treated same as normal; Phase B will add robust estimation
 4. **Fixed EWMA α** — Default α=0.15 is tuned for general spending; Phase D ensemble weighting will personalize
@@ -578,8 +387,7 @@ Plan for this when reviewing the forecast. Use [[docs/features/exchange-rates|Ex
 2. **Review monthly** — Update forecast periodically as new bills/income become known
 3. **Use with budgets** — Compare forecast against budgeted amounts for variance analysis
 4. **Handle unusual months** — Mark one-time bonuses or vacation expenses explicitly (they clutter averages)
-5. **Combine approaches** — Use Phase 6 for known upcoming events; Phase 10 for remaining uncertainty
-6. **Trust metrics** — When choosing a method, prefer highest MAPE or lowest RMSE over gut feel
+5. **Trust metrics** — When choosing a method, prefer highest MAPE or lowest RMSE over gut feel
 
 ## Forecast regression benchmarks and percentage errors
 
@@ -625,16 +433,6 @@ than a fixed nightly time. It records success only after cache persistence compl
 **Phase G (Complete):** Per-category breakdown with hierarchical reconciliation. Adds `include_breakdown` query param to forecast-methods endpoint; returns structured `category_breakdown` array showing per-category actual, forecast, and cumulative series with automatic scaling to aggregate.
 
 ## Architecture Notes
-
-### Phase 6: Planned Projection
-
-**Implementation:** [[apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts]]
-
-Pure calculation module with no I/O; called by aggregations route. Returns structured forecast data suitable for dashboard widgets, charts, and detailed analysis views.
-
-**Repository method:** `plannedTransactionRepository.getForForecast(months)` — Fetches only active, unexecuted planned transactions within the window.
-
-**Computational complexity:** O(N × M) where N = number of planned transactions, M = number of months. For typical forecasts (N < 100, M ≤ 24), negligible.
 
 ### Phase 10: Multi-Method Statistical Forecast
 

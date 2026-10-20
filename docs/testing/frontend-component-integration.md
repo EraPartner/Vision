@@ -2,8 +2,8 @@
 title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last-updated: 2026-09-24
 last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
@@ -247,7 +247,6 @@ Covered boot-time endpoints return minimal valid shapes so any page can render:
 | `GET /api/categories`, `GET /api/recipients`, `GET /api/transactions` | `ok({ items: [], total: 0, limit, offset, links: [] })` |
 | `GET /api/planned`                                                    | `ok([])`                                                |
 | `GET /api/portfolio/summary`                                          | `ok({})`                                                |
-| `GET /api/admin/endpoint-liveness`                                    | `ok([])`                                                |
 
 Add new defaults sparingly — most flows belong in per-test overrides via `server.use(...)`.
 

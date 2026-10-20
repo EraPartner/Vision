@@ -294,12 +294,6 @@ describe("MSW handler contracts", () => {
             "portfolio/summary",
         ],
         [
-            "GET /api/admin/endpoint-liveness conforms to collection schema",
-            collectionSchema(),
-            "/api/admin/endpoint-liveness",
-            "admin/endpoint-liveness",
-        ],
-        [
             "GET /api/planned conforms to array schema",
             z.array(z.unknown()),
             "/api/planned",
@@ -689,12 +683,6 @@ describe("Missing GET endpoint contracts (E4)", () => {
             "/api/info/inflation-rates",
             "GET /api/info/inflation-rates",
             z.array(z.unknown()),
-        ],
-        [
-            "GET /api/admin/endpoint-liveness returns { items, total }",
-            "/api/admin/endpoint-liveness",
-            "GET /api/admin/endpoint-liveness",
-            collectionSchema(),
         ],
         [
             "GET /api/admin/database/stats returns expected shape",

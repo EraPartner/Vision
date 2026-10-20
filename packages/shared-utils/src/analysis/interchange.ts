@@ -3,7 +3,6 @@ import type {
   AnalysisInterchangeResult as AnalysisResult,
   AnalysisInterchangeValue as AnalysisValue,
 } from "./types.ts";
-import type { ImportedAnalysisWorkbook } from "./workbook.ts";
 
 export type ScenarioColumnType =
   "string" | "integer" | "decimal" | "boolean" | "date";
@@ -22,47 +21,6 @@ export interface AnalysisScenarioModel {
     resultColumn: string;
     inputColumn: string;
   }>;
-}
-
-/** The existing workbook attachment preview inference; units are intentionally unavailable.
- * A large numeric text cell remains a string even when its logical column type is decimal. */
-export function workbookScenarioAttachment(
-  imported: ImportedAnalysisWorkbook,
-  metadata: {
-    id: string;
-    fileName: string;
-    importedAt: string;
-    sha256: string;
-  },
-): ScenarioAttachment {
-  return {
-    ...metadata,
-    rows: imported.rows,
-    columns: imported.columns.map((id) => {
-      const values = imported.rows
-        .map((row) => row[id])
-        .filter((value) => value != null);
-      const type: ScenarioColumnType =
-        values.length && values.every((value) => typeof value === "boolean")
-          ? "boolean"
-          : values.length &&
-              values.every(
-                (value) =>
-                  typeof value === "number" && Number.isSafeInteger(value),
-              )
-            ? "integer"
-            : values.length &&
-                values.every((value) => /^-?\d+(\.\d+)?$/.test(String(value)))
-              ? "decimal"
-              : values.length &&
-                  values.every((value) =>
-                    /^\d{4}-\d{2}-\d{2}$/.test(String(value)),
-                  )
-                ? "date"
-                : "string";
-      return { id, label: id, type };
-    }),
-  };
 }
 
 export const SCENARIO_CSV_MAX_BYTES = 1_000_000;

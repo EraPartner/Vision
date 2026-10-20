@@ -79,46 +79,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/analysis/interchange/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Parse a CSV or Vision XLSX scenario attachment without persistence
-         * @description Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
-         */
-        post: operations["importAnalysisInterchange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analysis/interchange/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Export a supplied captured Analysis snapshot as CSV or value-only XLSX
-         * @description Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
-         */
-        post: operations["exportAnalysisInterchange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/analysis/execute": {
         parameters: {
             query?: never;
@@ -603,23 +563,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-research/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Inspect local model, web research, and document capabilities */
-        get: operations["getAiResearchStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai-research/investigations": {
         parameters: {
             query?: never;
@@ -729,23 +672,6 @@ export interface paths {
         post?: never;
         /** Delete a document and all derived passages and embeddings */
         delete: operations["deleteAiResearchDocument"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/documents/search/passages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Retrieve cited keyword, semantic, or hybrid local passages */
-        post: operations["searchAiResearchPassages"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2191,23 +2117,6 @@ export interface paths {
          * @description Account rows include the canonical numeric account_id for stable joins to account entities; bank_account remains the label and history-map key. Holdings-only crypto_exchange and wallet accounts are excluded from accounts, totals, and history; ordinary brokerage cash remains eligible. Additive (ADR-216) - a currency partition without a stored rate is left out of the account balance, the totals and the history; the account lists it in unconverted_currencies, and data.unconverted_count counts such partitions.
          */
         get: operations["getBankBalances"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/aggregations/cashflow-forecast": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Monte-Carlo cashflow forecast */
-        get: operations["getCashflowForecast"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3992,43 +3901,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/endpoint-liveness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness probe for each endpoint */
-        get: operations["adminEndpointLiveness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/presentation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Compute Research presentation from submitted data without fetching or persisting
-         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus and market-add two-of-three previews. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
-         */
-        post: operations["computeResearchPresentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/research/search": {
         parameters: {
             query?: never;
@@ -4046,23 +3918,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research/quote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Current quote for a symbol */
-        get: operations["researchQuote"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/research/chart": {
         parameters: {
             query?: never;
@@ -4072,23 +3927,6 @@ export interface paths {
         };
         /** Historical chart points for a symbol */
         get: operations["researchChart"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/fundamentals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fundamentals snapshot for a symbol */
-        get: operations["researchFundamentals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5651,85 +5489,6 @@ export interface components {
                 offset: number;
             };
         };
-        /** @description Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion. */
-        AnalysisInterchangeValue: (string | number | boolean) | null;
-        AnalysisInterchangeColumn: {
-            id: string;
-            label: string;
-            /** @enum {string} */
-            type: "string" | "integer" | "decimal" | "boolean" | "date";
-        };
-        AnalysisInterchangeAttachment: {
-            id: string;
-            fileName: string;
-            /** Format: date-time */
-            importedAt: string;
-            sha256: string;
-            columns: components["schemas"]["AnalysisInterchangeColumn"][];
-            rows: {
-                [key: string]: components["schemas"]["AnalysisInterchangeValue"];
-            }[];
-        };
-        /** @description Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import. */
-        AnalysisInterchangeImport: {
-            /** @enum {string} */
-            format: "csv" | "xlsx";
-            attachment: components["schemas"]["AnalysisInterchangeAttachment"];
-            formulaCells: number;
-        };
-        /** @description UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned. */
-        AnalysisInterchangeExportPayload: {
-            result: {
-                requestId: string;
-                startedAt?: string;
-                completedAt: string;
-                executor?: string;
-                columns: ({
-                    id: string;
-                    type: string;
-                } & {
-                    [key: string]: unknown;
-                })[];
-                declaredColumns?: ({
-                    id: string;
-                    type: string;
-                    label?: string;
-                } & {
-                    [key: string]: unknown;
-                })[];
-                /** @description Original Analysis cells, including JSON/array columns, as returned; no currency conversion. */
-                rows: {
-                    [key: string]: unknown;
-                }[];
-                window: {
-                    [key: string]: unknown;
-                };
-                complete?: boolean;
-                coverage?: unknown;
-                transformationCoverage?: unknown;
-                preparationLineage?: unknown;
-                transformationErrors?: unknown;
-                formulaErrors?: unknown;
-                formulaSummaries?: {
-                    [key: string]: components["schemas"]["AnalysisInterchangeValue"];
-                };
-            } & {
-                [key: string]: unknown;
-            };
-            context: {
-                name: string;
-                timezone: string;
-                workspace: string;
-                definitionId?: string;
-                definitionVersion?: number;
-                datasetIds?: string[];
-                sourceReferences?: string[];
-                assumptions?: unknown;
-                formulas?: unknown;
-            } & {
-                [key: string]: unknown;
-            };
-        };
         AnalysisVisualFilter: {
             fieldId: string;
             operator: string;
@@ -6190,142 +5949,6 @@ export interface components {
             provider: string;
             points: components["schemas"]["InvestmentPriceHistoryPoint"][];
         };
-        /** @description Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null. */
-        ResearchPresentationRow: {
-            time: number;
-        } & {
-            [key: string]: number | null;
-        };
-        ResearchPresentationCompareResult: {
-            rows: components["schemas"]["ResearchPresentationRow"][];
-            stats: {
-                symbol: string;
-                totalReturn: number | null;
-                volatility: number | null;
-                maxDrawdown: number | null;
-                firstTime?: number;
-                lastTime?: number;
-            }[];
-            correlation: {
-                symbols: string[];
-                matrix: (number | null)[][];
-            };
-        };
-        ResearchPresentationChartResult: {
-            rows: components["schemas"]["ResearchPresentationRow"][];
-            oscillatorRows: components["schemas"]["ResearchPresentationRow"][];
-        };
-        ResearchPresentationWatchlistList: {
-            distancePercent: number | null;
-            absoluteDistancePercent: number | null;
-            isAtOrBelowTarget: boolean;
-            sinceAddedPercent: number | null;
-        };
-        ResearchPresentationWatchlistResult: {
-            list: components["schemas"]["ResearchPresentationWatchlistList"];
-            chart: {
-                distancePercent: number | null;
-                absoluteDistancePercent: number | null;
-                isAtOrBelowTarget: boolean;
-                hasValidTarget: boolean;
-                domain: number[];
-            };
-            preview: {
-                absolutePercent: number;
-                /** @enum {string} */
-                direction: "below" | "above";
-            } | null;
-        };
-        ResearchPresentationWatchlistBatchResult: {
-            entries: {
-                id: number;
-                list: components["schemas"]["ResearchPresentationWatchlistList"];
-            }[];
-        };
-        ResearchPresentationAnalystResult: {
-            total: number;
-            bullFraction: number;
-            bearFraction: number;
-            /** @enum {string} */
-            verdictKey: "market.strongBuy" | "market.buy" | "market.hold" | "market.sell" | "market.strongSell";
-            /** @enum {string} */
-            tone: "success" | "destructive" | "warning";
-            fractions: components["schemas"]["ResearchAnalystConsensus"];
-        } | null;
-        ResearchPresentationProviderQuoteResult: {
-            symbol: string;
-            name: string;
-            price?: number | null;
-            change: number | null;
-            changePercent: number | null;
-            currency: string;
-            exchange: string;
-            type: string;
-        } | null;
-        ResearchPresentationMarketAddResult: {
-            derivedAmount?: number | null;
-            derivedUnits?: number | null;
-            derivedPrice?: number | null;
-            effectiveAmount?: number | null;
-            effectiveUnits?: number | null;
-            effectivePrice?: number | null;
-            providedCount: number;
-            isConsistent: boolean;
-        };
-        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
-        ResearchPresentationSnapshot: {
-            /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
-            series?: {
-                symbol?: string;
-                id?: string;
-                /** @enum {string} */
-                field?: "price" | "volume";
-                /** @enum {string} */
-                type?: "line" | "area" | "candlestick" | "bar";
-                points?: components["schemas"]["ResearchChartPoint"][];
-            }[];
-            indicators?: {
-                id: string;
-                /** @enum {string} */
-                type: "sma" | "ema" | "bollinger";
-                period: number;
-                seriesId: string;
-            }[];
-            rebase?: boolean;
-            /** @enum {string} */
-            oscillator?: "none" | "rsi" | "macd";
-            oscillatorSeriesId?: string | null;
-            targetPrice?: number | null;
-            currentPrice?: number | null;
-            addedPrice?: number | null;
-            points?: components["schemas"]["ResearchChartPoint"][];
-            entries?: {
-                id: number;
-                targetPrice: number;
-                currentPrice: number | null;
-                addedPrice: number | null;
-            }[];
-            investment?: {
-                symbol?: string | null;
-                name: string;
-                currency: string;
-                priceProvider?: string | null;
-            };
-            selectedSymbol?: string | null;
-            consensus?: components["schemas"]["ResearchAnalystConsensus"];
-            amount?: number;
-            units?: number;
-            price?: number;
-            /** @default true */
-            derive: boolean;
-        };
-        /** @description result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null. */
-        ResearchPresentationData: {
-            /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
-            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"]) | null;
-        };
         ResearchMeta: {
             provider: string | null;
             /** @enum {string} */
@@ -6340,24 +5963,6 @@ export interface components {
         };
         ResearchSearchData: {
             items: components["schemas"]["ResearchSearchItem"][];
-        };
-        ResearchQuote: {
-            symbol: string;
-            name?: string | null;
-            price?: number | null;
-            change?: number | null;
-            changePercent?: number | null;
-            currency?: string | null;
-            exchange?: string | null;
-            type?: string | null;
-            open?: number | null;
-            dayHigh?: number | null;
-            dayLow?: number | null;
-            prevClose?: number | null;
-            volume?: number | null;
-            avgVolume?: number | null;
-            high52w?: number | null;
-            low52w?: number | null;
         };
         ResearchChartPoint: {
             time: number;
@@ -6621,14 +6226,8 @@ export interface components {
         ResearchSearchEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchSearchData"];
         };
-        ResearchQuoteEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
-            data?: components["schemas"]["ResearchQuote"];
-        };
         ResearchChartEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchChartData"];
-        };
-        ResearchFundamentalsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
-            data?: components["schemas"]["ResearchFundamentals"];
         };
         ResearchAnalystEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchAnalystData"];
@@ -8473,113 +8072,6 @@ export interface operations {
             };
         };
     };
-    importAnalysisInterchange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    /** @enum {string} */
-                    format: "csv" | "xlsx";
-                };
-            };
-        };
-        responses: {
-            /** @description Inferred value-only attachment and raw ignored-formula count. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data: components["schemas"]["AnalysisInterchangeImport"];
-                    };
-                };
-            };
-            /** @description Invalid format */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API or existing Analysis rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Upload source read failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    exportAnalysisInterchange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
-                     */
-                    file: string;
-                    /** @enum {string} */
-                    format: "csv" | "xlsx";
-                };
-            };
-        };
-        responses: {
-            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. */
-            200: {
-                headers: {
-                    "Content-Disposition"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/csv": string;
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
-                };
-            };
-            /** @description Missing or invalid multipart snapshot/format */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API or existing Analysis rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Upload source read or serialization failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     executeAnalysis: {
         parameters: {
             query?: never;
@@ -9915,26 +9407,6 @@ export interface operations {
             };
         };
     };
-    getAiResearchStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Configured capabilities without credentials. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
     listAiInvestigations: {
         parameters: {
             query?: never;
@@ -10223,50 +9695,6 @@ export interface operations {
             };
             /** @description Document not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    searchAiResearchPassages: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Trimmed before use; a blank query is rejected. */
-                    query: string;
-                    /**
-                     * @default hybrid
-                     * @enum {string}
-                     */
-                    mode?: "hybrid" | "keyword" | "semantic";
-                    /**
-                     * @description The service caps results at 20.
-                     * @default 8
-                     */
-                    limit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Bounded passages with document, version, page, and section locators */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13974,29 +13402,6 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["UnconvertedAmounts"];
                     };
-                };
-            };
-        };
-    };
-    getCashflowForecast: {
-        parameters: {
-            query?: {
-                months?: number;
-                currency?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Forecast data */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
                 };
             };
         };
@@ -17927,89 +17332,6 @@ export interface operations {
             };
         };
     };
-    adminEndpointLiveness: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Liveness results */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: {
-                                method?: string;
-                                path?: string;
-                                live?: boolean;
-                            }[];
-                            total: number;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    computeResearchPresentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected. */
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
-                     */
-                    file: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Computed kind-specific presentation, standard envelope; no read or write side effects. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["ResearchPresentationData"];
-                    };
-                };
-            };
-            /** @description VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Existing Research market rate limit. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description File I/O or unexpected calculation failure. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     researchSearch: {
         parameters: {
             query: {
@@ -18030,37 +17352,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResearchSearchEnvelope"];
                 };
-            };
-        };
-    };
-    researchQuote: {
-        parameters: {
-            query: {
-                symbol: string;
-                /** @description Asset class hint for provider routing (e.g. stock, crypto, metals) */
-                asset_class?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Quote data with provenance meta (provider, source) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResearchQuoteEnvelope"];
-                };
-            };
-            /** @description symbol parameter required */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -18087,36 +17378,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResearchChartEnvelope"];
-                };
-            };
-            /** @description symbol parameter required */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    researchFundamentals: {
-        parameters: {
-            query: {
-                symbol: string;
-                asset_class?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Fundamentals data with provenance meta (provider, source) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResearchFundamentalsEnvelope"];
                 };
             };
             /** @description symbol parameter required */

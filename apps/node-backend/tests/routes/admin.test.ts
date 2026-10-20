@@ -452,21 +452,6 @@ describe("Admin Routes", () => {
       expect(res.body).toEqual(okEnvelope({ items: manifest, total: 1 }));
     });
 
-    it("GET /endpoint-liveness returns { items, total } with live flags", async () => {
-      getRouteManifest.mockReturnValue([
-        { method: "GET", path: "/api/health" },
-      ]);
-
-      const res = await api.get(`${BASE}/endpoint-liveness`).expect(200);
-
-      expect(res.body).toEqual(
-        okEnvelope({
-          items: [{ method: "GET", path: "/api/health", live: true }],
-          total: 1,
-        }),
-      );
-    });
-
     it("GET /endpoints reports total 0 for an empty manifest", async () => {
       getRouteManifest.mockReturnValue([]);
 

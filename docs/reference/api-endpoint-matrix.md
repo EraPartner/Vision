@@ -8,7 +8,7 @@ last_modified: 2026-10-20
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 293
+api_operation_count: 284
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 293 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 284 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **293 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **284 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -89,6 +89,8 @@ aliases:
 > **2026-10-11 — Belgian tax partner attribution (ADR-201, non-breaking, count 300 → 301):** `GET /api/info/deduction-candidates` was served but missing from `openapi.yaml` and this matrix; it is now declared, and each `byDeductionType` group gains an additive `byOwner` (`me` / `partner` / `joint`) split of its total. `GET /api/aggregations/category-pivot` cells gain an optional `incomeByOwner` (`partner` / `joint`). `POST /api/reports/tax` accepts optional `household` (validated like the household setting) and `precomputedHousehold` and renders per-partner rows for two partners. No field is removed or renamed.
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
+>
+> **2026-10-20 — unused operations removed (BREAKING for direct HTTP callers only, count 293 → 284):** no frontend, Electron, script or AI-chat caller used these nine operations, so they are gone: `POST /api/analysis/interchange/import` and `POST /api/analysis/interchange/export` (the browser parses and writes CSV/XLSX itself with `@vision/shared-utils/analysis`), `POST /api/research/presentation` (the browser computes presentations with `@vision/shared-utils/research/presentation`), `GET /api/research/quote` and `GET /api/research/fundamentals` (the UI uses `/api/research/chart`, `/api/research/scorecard` and `/api/market/quote`; the AI chat research tool still calls the aggregator directly), `GET /api/ai-research/status`, `POST /api/ai-research/documents/search/passages` (the AI chat and investigation tools still search passages in-process), `GET /api/admin/endpoint-liveness` (the Admin Endpoints page reads `GET /api/admin/endpoints` and `GET /api/admin/metrics/requests`, which remain), and `GET /api/aggregations/cashflow-forecast` (the non-Monte-Carlo planned-transaction projection; the `cashflow-forecast-methods`, `-rolling` and `-accuracy` operations are unchanged).
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 >
@@ -247,7 +249,7 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST   | `/api/cross-workspace/rebalance`             | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells; supports Awesome's five 20% sleeves (ADR-098) | —          | [[docs/features/portfolio\|Portfolio]] |
 | POST   | `/api/cross-workspace/commitment-aware-cash` | Estimate a 90-day candidate cash cap from spendable balances, pending planned and recurring items, and an editable reserve floor                           | —          | [[docs/features/portfolio\|Portfolio]] |
 
-## Analysis Workspace (21 operations — ADR-144)
+## Analysis Workspace (19 operations — ADR-144)
 
 | Method           | Path                                  | Description                                                | Rate Limit  | Doc                             |
 | ---------------- | ------------------------------------- | ---------------------------------------------------------- | ----------- | ------------------------------- |
@@ -255,8 +257,6 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST             | `/api/analysis/extensions/evaluate`   | Preparation, calendar comparisons, scenarios and Goal Seek | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog         | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL               | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/interchange/import`   | Read-only CSV/Vision XLSX scenario parsing with original typed values and ignored-formula count | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/interchange/export`   | Raw CSV/XLSX from captured snapshot; 64 MiB file, XLSX 100,000 rows, no query rerun | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution               | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records                | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -270,18 +270,16 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST             | `/api/analysis/saved/:id/restore`     | Restore a prior definition as a new version                | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/saved/:id/ai-proposal` | Generate an inspectable local-model edit proposal          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 
-## AI Research (12 operations)
+## AI Research (10 operations)
 
 | Method      | Path                                             | Description                                                        | Rate Limit          | Doc                                   |
 | ----------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------- | ------------------------------------- |
-| GET         | `/api/ai-research/status`                        | Inspect local research and provider readiness                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST   | `/api/ai-research/investigations`                | List or start recoverable local jobs                               | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/investigations/:id`            | Inspect or delete one investigation                                | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/resume`     | Resume completed checkpoints                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/cancel`     | Cancel queued or active work                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST   | `/api/ai-research/documents`                     | List or locally index selected research documents                  | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/documents/:id`                 | Inspect or delete a document and its derived passages              | attachment/standard | [[docs/api/ai-research\|AI Research]] |
-| POST        | `/api/ai-research/documents/search/passages`     | Retrieve cited local document passages                             | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 
 ## Research Dossiers (9 operations — ADR-153)
 
@@ -444,11 +442,8 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 
 | Method | Path                                    | Description                                                                                                                                                                                                                                                                                                                                 | Rate Limit | Doc                             |
 | ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
-| POST | `/api/research/presentation` | Stateless submitted-data Compare/chart/watchlist/provider-quote/analyst/market-add; single multipart JSON file ≤64 MiB; no provider/database/FX access | — | [[docs/api/research\|Research]] |
 | GET    | `/api/research/search`                  | Search tickers / securities by name or symbol; returns `{ items: [] }` when query is blank                                                                                                                                                                                                                                                  | —          | [[docs/api/research\|Research]] |
-| GET    | `/api/research/quote`                   | Current quote for `symbol` (+ optional `asset_class` hint for provider routing)                                                                                                                                                                                                                                                             | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/chart`                   | Historical chart points; `range` default `1mo` (1d/5d/1mo/3mo/6mo/1y/2y/5y/max); optional `provider` param pins preferred provider (ADR-081)                                                                                                                                                                                                | —          | [[docs/api/research\|Research]] |
-| GET    | `/api/research/fundamentals`            | Extended fundamentals snapshot merged from FMP + Yahoo in parallel (FMP preferred per field, Yahoo fills gaps; `meta.provider` may be `"fmp+yahoo"`); fields: P/E, EPS, market cap + ADR-081: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, debtToEquity, currentRatio, revenueGrowth, freeCashFlow, fcfYield, …; 12 h cache | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/analyst`                 | Analyst consensus + price targets + recent rating actions; 24 h cache                                                                                                                                                                                                                                                                       | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/news`                    | News articles for a symbol; 2 h cache                                                                                                                                                                                                                                                                                                       | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/macro/search`            | Search macroeconomic series (CPI, rates, unemployment, …); fan-out union across FRED (open) + Eurostat/DBnomics (curated catalog); items carry `{ provider, seriesId, title, region, units, source }` (ADR-082); 1 h cache                                                                                                                  | —          | [[docs/api/research\|Research]] |
@@ -596,7 +591,6 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                                         | —                  | [[docs/api/admin\|Admin]] |
 
 ## Belgian Tax — Native phase 3 prerequisite
 
@@ -638,7 +632,6 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/cashflow-comparison`        | Current vs. historical daily flow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/average-vs-current`         | Average vs. current period metrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/bank-balances`              | Cash-bearing account balances and history; excludes holdings-only wallet/exchange cash; rows expose canonical `account_id` for entity joins                                                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/api/aggregations\|Aggregations]] |
-| GET    | `/api/aggregations/cashflow-forecast`          | N-month forward cash flow from planned transactions (Phase 6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/sankey`                     | Balanced income/funding-gap→spending→category flow graph for d3-sankey, with stable category IDs and localized reserved labels (Phase 7)                                                                                                                                                                                                                                                                                                                                                                                       | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-methods`  | Multi-method cash flow forecast for current month (8 methods; actual-to-date plus always-applied `scheduled_actual`; optional planned overlay; optional category breakdown)                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-rolling`  | Rolling-window forecast: past `days_back` days actuals + next `days_forward` days statistical projection on a date axis (defaults 90/90, max 365 each, sum ≤ 730). Reuses 8-method engine with date-keyed payload, window-relative cumulative anchor; rolling-specific MC defaults (500 paths, P25/P75 percentiles) lower cost for broad horizons; accepts `include_backtest` param for lazy-loaded walk-forward backtest diagnostics (only enabled when user opens diagnostics sheet); uses MC rolling cache with 6-hour TTL. | —          | [[docs/api/aggregations\|Aggregations]] |

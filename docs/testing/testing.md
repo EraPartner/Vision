@@ -1205,7 +1205,7 @@ Four key testing gotchas discovered during Phase A completion:
 - Market news: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
 - Import batches: `{ batches[], total }`
 - Portfolio summary: `{ currency, computed_at, totals{10 numeric fields}, summaries[] }`
-- Singletons: settings, info, health, planned, aggregations, endpoint-liveness
+- Singletons: settings, info, health, planned, aggregations
 - Error envelope: `{ ok: false, error: { message, code? } }` per ADR-026
 
 **MSW Fixture Stubs** (`apps/frontend/src/test/msw/handlers.ts`) — Expanded 2026-05-02:
