@@ -89,8 +89,6 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/importPipeline/adapters/vision.ts:parse",
   "apps/node-backend/src/services/importPipeline/adapters/wise.ts:parse",
   "apps/node-backend/src/services/portfolioImportPipeline/index.ts:prepareImport",
-  // Literal proof is a runtime domain helper also used inside its exporting module.
-  "apps/node-backend/src/services/portfolioIbkrPrimaryProof.ts:getIbkrPrimaryReconciliationEvidence",
   "apps/node-backend/src/services/plannedTransactionService.ts:create",
   "apps/node-backend/src/services/plannedTransactionService.ts:update",
   "apps/node-backend/src/services/priceProviderService.ts:getHistoricalPriceAt",

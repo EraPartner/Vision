@@ -152,16 +152,13 @@ describe("portfolio history adoption plan", () => {
       fees: "2",
       date: "2026-01-03",
     });
-    expect(result.plan.planFingerprint).toBe(
+    expect(
       plan(rows, existing, undefined, overrides.toReversed()).plan
-        .planFingerprint,
-    );
+        .batchPolicies,
+    ).toEqual(result.plan.batchPolicies);
     expect(
       plan(rows, existing, "prefer_source", [overrides[1]!]).plan.ready,
     ).toBe(true);
-    expect(plan(rows, existing).plan.planFingerprint).not.toBe(
-      result.plan.planFingerprint,
-    );
     expect(() =>
       plan(rows, existing, undefined, [
         { batchId: 3, adoptPolicy: "preserve_existing" },
@@ -480,18 +477,5 @@ describe("portfolio history adoption plan", () => {
     expect(result.plan.ready).toBe(true);
     expect(result.plan.summary.duplicate).toBe(1);
     expect(result.adoptions).toHaveLength(0);
-  });
-
-  it("binds account selection, source records, existing notes and policy into its plan fingerprint", () => {
-    const initial = plan([source()], [legacy()]).plan.planFingerprint;
-    expect(
-      plan([source({ account_id: 9 })], [legacy()]).plan.planFingerprint,
-    ).not.toBe(initial);
-    expect(
-      plan([source()], [legacy({ note: "Changed" })]).plan.planFingerprint,
-    ).not.toBe(initial);
-    expect(
-      plan([source()], [legacy()], "preserve_existing").plan.planFingerprint,
-    ).not.toBe(initial);
   });
 });

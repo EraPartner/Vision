@@ -61,9 +61,7 @@ import portfolioTransactionService from "../src/services/portfolio/portfolioTran
 import * as assetAdjustments from "../src/repositories/portfolioAssetAdjustmentRepository.ts";
 import * as assetTransfers from "../src/repositories/portfolioAssetTransferRepository.ts";
 import {
-  readIncomeRecognitionContext,
-  readPairedIncomeRollbackBatchIds,
-  recordPairedPortfolioIncome,
+  insertIncludedInUnitsIncome,
   restorePairedPortfolioIncomeForBatch,
 } from "../src/repositories/portfolioIncomeRecognitionRepository.ts";
 import {
@@ -478,82 +476,59 @@ describe.skipIf(!hasTestDatabase())(
         ),
       ).toHaveLength(2);
 
-      // Paired in-kind income: a proved zero-cost unit lot plus its matched
-      // income staging row, in a batch carrying the primary-source proof.
-      const sourceFileHash = hex("source file");
-      await pool.query(
-        "UPDATE portfolio_import_batches SET custom_config=$2 WHERE id=$1",
-        [
-          importBatch,
-          JSON.stringify({
-            format: "kinesis_transaction_history",
-            yield_basis_policy: "zero",
-            kinesis_source_context: { source_file_hash: sourceFileHash },
-          }),
-        ],
-      );
+      // In-kind income beside its zero-cost unit lot, plus a `record` receipt
+      // as paired income recording wrote it before ADR-236.
       const { rows: unitRows } = await pool.query<{ id: number }>(
         `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,account_id,source_record_hash,import_batch_id)
          VALUES($1,'gift','2025-03-03',0,0.1,0,0,0,'EUR',$2,$3,$4) RETURNING id`,
         [inv, source, hex("income"), importBatch],
       );
       const unitId = unitRows[0]!.id;
-      const { rows: unitImages } = await pool.query<{
-        snapshot: Record<string, unknown>;
-      }>(
-        "SELECT portfolio_income_transaction_snapshot(t) AS snapshot FROM portfolio_transactions t WHERE id=$1",
-        [unitId],
-      );
       const incomeRow = await stagingRow(importBatch, 4, {
         status: "matched",
         type: "dividend",
         route: "portfolio",
       });
       const unitSource = await stagingRow(importBatch, 5);
-      // The journal is immutable; only this suite's rows are removed.
-      onCleanup(
-        "ALTER TABLE portfolio_import_income_recognition_journal ENABLE TRIGGER portfolio_income_journal_immutable",
-      );
       onCleanup(
         "DELETE FROM portfolio_import_income_recognition_journal WHERE batch_id=$1",
         importBatch,
       );
       onCleanup(
-        "ALTER TABLE portfolio_import_income_recognition_journal DISABLE TRIGGER portfolio_income_journal_immutable",
-      );
-      onCleanup(
         "DELETE FROM portfolio_transactions WHERE import_batch_id=$1",
         importBatch,
       );
-      // The pair-receipt trigger is checked at commit, as in production.
-      const income = await withTransaction(() =>
-        recordPairedPortfolioIncome({
-          row: {
-            id: incomeRow,
-            batch_id: importBatch,
-            investment_id: asInvestmentId(inv),
-            tx_date: "2025-03-03",
-            amount: "1.50",
-            currency: asCurrencyCode("EUR"),
-            note: null,
-            account_id: asAccountId(source),
-            source_record_hash: hex("income"),
-            dedup_fingerprint: hex("income fingerprint"),
-            dedup_fingerprint_version: 1,
-          },
-          unit: { ...unitImages[0]!.snapshot, id: unitId },
-          unitSource: { id: unitSource },
-          proof: { sourceFileHash },
-        }),
-      );
-      expect(income.investment_id).toBe(inv);
-      const context = await readIncomeRecognitionContext([
-        { id: unitId, type: "gift" },
-      ]);
-      expect(context.receipts).toHaveLength(1);
-      expect(await readPairedIncomeRollbackBatchIds(importBatch)).toEqual([
+      const incomeId = await insertIncludedInUnitsIncome(
+        {
+          investment_id: inv,
+          tx_date: "2025-03-03",
+          amount: "1.50",
+          currency: "EUR",
+          note: null,
+          source_record_hash: hex("income"),
+          dedup_fingerprint: hex("income fingerprint"),
+          dedup_fingerprint_version: 1,
+        },
+        source,
         Number(importBatch),
-      ]);
+      );
+      expect(
+        (
+          await pool.query(
+            "SELECT investment_id,income_recognition_role,fx_rate_to_eur FROM portfolio_transactions WHERE id=$1",
+            [incomeId],
+          )
+        ).rows[0],
+      ).toEqual({
+        investment_id: inv,
+        income_recognition_role: "included_in_units",
+        fx_rate_to_eur: null,
+      });
+      await pool.query(
+        `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data)
+         SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),'{"sourceFileHash":"synthetic"}' FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$4 AND u.id=$5`,
+        [importBatch, incomeRow, unitSource, incomeId, unitId],
+      );
       expect(
         await restorePairedPortfolioIncomeForBatch(importBatch),
       ).toHaveLength(1);

@@ -22,9 +22,16 @@ import {
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
-import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
-import { cashFeeFingerprint } from "../src/services/portfolioKinesisCashScope.ts";
 import type { CashTransactionSnapshot } from "../src/repositories/portfolioImportCashRepository.ts";
+
+/** A cash transaction's full image, as Kinesis cash receipts recorded it. */
+const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
+  'amount',t.amount::text,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance::text,
+  'account_id',t.account_id,'recipient_id',t.recipient_id,'recipient_bank_account_id',t.recipient_bank_account_id,
+  'category_id',t.category_id,'is_active',t.is_active,'import_batch_id',t.import_batch_id,
+  'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,
+  'dedup_fingerprint_version',t.dedup_fingerprint_version,'is_transfer',t.is_transfer,
+  'transfer_source',t.transfer_source,'transfer_peer_id',t.transfer_peer_id)`;
 
 // Historical conversion still reads the real exchange_rates table. Only a
 // missing-rate fallback is controlled, so this suite never requests live FX.
@@ -237,7 +244,8 @@ async function recordedFundingFee(accountId: number) {
     amount: -2,
     transferSource: "brokerage",
     sourceHash: main.source_record_hash,
-    fingerprint: cashFeeFingerprint(main),
+    // A separate fee component kept its own fingerprint.
+    fingerprint: hash(`kinesis_funding_fee:${main.dedup_fingerprint}`),
   });
   const values = {
     date: main.date,
@@ -282,23 +290,11 @@ async function historicalRate(date: string, value: number) {
 
 async function cleanup() {
   if (!pool) return;
-  // Match existing Kinesis test teardown: the migrated receipt trigger rejects
-  // deleting recorded source evidence, including disposable fixtures.
-  if (owned.batches.length) {
+  if (owned.batches.length)
     await pool.query(
-      "ALTER TABLE portfolio_import_staging_rows DISABLE TRIGGER trg_portfolio_cash_receipt_immutable",
+      "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
+      [owned.batches],
     );
-    try {
-      await pool.query(
-        "DELETE FROM portfolio_import_batches WHERE id=ANY($1::bigint[])",
-        [owned.batches],
-      );
-    } finally {
-      await pool.query(
-        "ALTER TABLE portfolio_import_staging_rows ENABLE TRIGGER trg_portfolio_cash_receipt_immutable",
-      );
-    }
-  }
   await pool.query("DELETE FROM transactions WHERE id=ANY($1::int[])", [
     owned.transactions,
   ]);

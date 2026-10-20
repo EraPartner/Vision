@@ -6,10 +6,7 @@ import { mockLogger } from "./helpers/mockLogger.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import {
-  parseKinesisTransactionHistory,
-  parseKinesisSourceRecordForBasisPolicy,
-} from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
+import { parseKinesisTransactionHistory } from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 const fixture = path.join(
@@ -157,23 +154,5 @@ describe("Kinesis Transaction History portfolio adapter", () => {
         amount: 0,
         assetAdjustment: { kind: "yield_acquisition", basisPolicy: "zero" },
       });
-    const raw = rows.find((r) => r.sourceId === "TX-ADJUST-OUT")!.rawData;
-    expect(
-      parseKinesisSourceRecordForBasisPolicy(raw, {
-        yield_basis_policy: "zero",
-      }),
-    ).toBeUndefined();
-    expect(
-      parseKinesisSourceRecordForBasisPolicy(raw, {
-        yield_basis_policy: "zero",
-        sourceColumns: rows.sourceColumns,
-      })![0]!.typeRaw,
-    ).toBe("AssetAdjustment");
-    expect(
-      parseKinesisSourceRecordForBasisPolicy(`${raw}\n${raw}`, {
-        yield_basis_policy: "zero",
-        sourceColumns: rows.sourceColumns,
-      }),
-    ).toBeUndefined();
   });
 });

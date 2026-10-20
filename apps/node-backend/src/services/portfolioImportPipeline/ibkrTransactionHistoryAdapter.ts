@@ -8,7 +8,6 @@
  * commissions are separate base-currency cash expenses.
  */
 
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { logger } from "../../config/logger.ts";
 import {
@@ -249,7 +248,7 @@ export async function parseIbkrTransactionHistory(
   if (!base.currency) {
     throw new Error("IBKR CSV is missing a valid Summary base currency");
   }
-  const { currency: baseCurrency, row: baseCurrencyRecord } = base;
+  const { currency: baseCurrency } = base;
 
   const rows: ParsedPortfolioRows = [];
   let skipped = 0;
@@ -268,17 +267,6 @@ export async function parseIbkrTransactionHistory(
   }
   rows.skipped = skipped;
   rows.sourceColumns = columns;
-  rows.ibkrSourceContext = {
-    version: 1,
-    source_file_hash: createHash("sha256").update(sourceBytes).digest("hex"),
-    source_columns: columns,
-    base_currency: baseCurrency,
-    header_record: header.rawData,
-    summary_base_currency_record: baseCurrencyRecord.rawData,
-    record_hashes: rows.map((row) =>
-      createHash("sha256").update(row.rawData, "utf8").digest("hex"),
-    ),
-  };
   logger.info(
     `IBKR Transaction History parsed: ${rows.length} rows, ${skipped} skipped`,
   );

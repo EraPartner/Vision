@@ -19,7 +19,6 @@ import {
 import {
   parseAmountField,
   parseCsvFile,
-  parseCsvText,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.ts";
@@ -295,7 +294,13 @@ function parseNonTrade(
   if (DISTRIBUTION_TYPES.has(type)) return parseDistribution(record, config);
 
   if (type === "Holder's_Distribution_Adjustment") {
-    if (!isFiat && delta != null && delta > 0 && amount != null && amount !== 0) {
+    if (
+      !isFiat &&
+      delta != null &&
+      delta > 0 &&
+      amount != null &&
+      amount !== 0
+    ) {
       return [
         baseRow(record, {
           typeRaw: "Gift",
@@ -431,110 +436,6 @@ function parseNonTrade(
   return [unsupportedRow(record, "Unsupported Kinesis transaction type")];
 }
 
-/**
- * Reparse retained literal yield rows only with their actual source header.
- *
- * @returns undefined when the header or record is not a literal yield event;
- *   null when the yield event itself does not map to portfolio rows.
- */
-export function parseKinesisSourceRecordForBasisPolicy(
-  rawData: string,
-  config: {
-    sourceColumns?: string[] | undefined;
-    yield_basis_policy?: "zero" | undefined;
-  },
-): ParsedPortfolioRow[] | null | undefined {
-  const columns = config.sourceColumns;
-  if (
-    !Array.isArray(columns) ||
-    columns.length !== REQUIRED_COLUMNS.length ||
-    new Set(columns).size !== columns.length ||
-    !REQUIRED_COLUMNS.every((column) => columns.includes(column))
-  )
-    return undefined;
-  try {
-    const records: KinesisRecord[] = parseCsvText(rawData, {
-      columns,
-      skip_empty_lines: true,
-      relax_column_count: false,
-    });
-    const [record] = records;
-    if (
-      records.length !== 1 ||
-      !record ||
-      ![...DISTRIBUTION_TYPES, "Holder's_Distribution_Adjustment"].includes(
-        cleanCell(record.Transaction_Type),
-      )
-    )
-      return undefined;
-    return parseNonTrade(record, config);
-  } catch {
-    return undefined;
-  }
-}
-
-/** Reparse a complete retained statement event set with its actual header. */
-export function reparseKinesisSourceEvents(
-  rawRecords: string[],
-  config: { sourceColumns: string[]; yield_basis_policy?: "zero" | undefined },
-): ParsedPortfolioRow[] | undefined {
-  const columns = config.sourceColumns;
-  if (
-    !Array.isArray(columns) ||
-    columns.length !== REQUIRED_COLUMNS.length ||
-    new Set(columns).size !== columns.length ||
-    !REQUIRED_COLUMNS.every((column) => columns.includes(column))
-  )
-    return undefined;
-  try {
-    const records = [...new Set(rawRecords)].map((raw): KinesisRecord => {
-      const parsed: KinesisRecord[] = parseCsvText(raw, {
-        columns,
-        skip_empty_lines: true,
-        relax_column_count: false,
-      });
-      const [record] = parsed;
-      if (parsed.length !== 1 || !record)
-        throw new Error("Expected one literal Kinesis record");
-      return record;
-    });
-    const result: ParsedPortfolioRow[] = [];
-    const orders = new Set<string>();
-    for (const record of records) {
-      if (cleanCell(record.Transaction_Type) !== "Trade") {
-        const parsed = parseNonTrade(record, config);
-        if (!parsed) return undefined;
-        result.push(...parsed);
-        continue;
-      }
-      const order = cleanCell(record.Order_ID);
-      if (!order) return undefined;
-      if (orders.has(order)) continue;
-      orders.add(order);
-      const group = records.filter(
-        (item) =>
-          cleanCell(item.Transaction_Type) === "Trade" &&
-          cleanCell(item.Order_ID) === order,
-      );
-      if (
-        group.length !== 2 ||
-        group.some(
-          (item) =>
-            cleanCell(item.HIN) !== cleanCell(record.HIN) ||
-            cleanCell(item.DateTime) !== cleanCell(record.DateTime),
-        )
-      )
-        return undefined;
-      const parsed = parseTrade(group);
-      if (!parsed) return undefined;
-      result.push(...parsed);
-    }
-    return result;
-  } catch {
-    return undefined;
-  }
-}
-
 export async function parseKinesisTransactionHistory(
   filePath: string,
   config: { encoding?: string; yield_basis_policy?: "zero" } = {},
@@ -584,11 +485,11 @@ export async function parseKinesisTransactionHistory(
       const group = tradesByOrder.get(orderId) ?? [record];
       parsed = parseTrade(group);
       parsed ??= group.map((tradeRecord) =>
-          unsupportedRow(
-            tradeRecord,
-            "Kinesis trade legs could not be paired safely",
-          ),
-        );
+        unsupportedRow(
+          tradeRecord,
+          "Kinesis trade legs could not be paired safely",
+        ),
+      );
     } else {
       parsed = parseNonTrade(record, config);
       if (!parsed) skipped++;

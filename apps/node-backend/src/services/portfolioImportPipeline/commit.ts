@@ -27,10 +27,7 @@ import {
   intIdRowSchema,
   matchedPortfolioStagingRowSchema,
 } from "../../database/rows/portfolioImport.ts";
-import type {
-  CommitBatchRow,
-  MatchedPortfolioStagingRow,
-} from "../../database/rows/portfolioImport.ts";
+import type { MatchedPortfolioStagingRow } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import portfolioTransactionService from "../portfolio/portfolioTransactionService.ts";
 import recipientRepository from "../../repositories/recipientRepository.ts";
@@ -62,44 +59,12 @@ type CanonicalTradeValues = {
   price_per_unit: number | undefined;
 };
 
-/** One proved Kinesis cash action (see classifyKinesisCash). */
-type KinesisCashAction = ReturnType<
-  typeof classifyKinesisCash
->["selected"][number];
-
-/**
- * The proved cash plan re-checked under the ledger lock before the first cash
- * row is marked.
- */
-type KinesisCashReproof = {
-  source: ReconciliationSourceRow[];
-  batch: CommitBatchRow;
-  rates: { currency: string; date: string | null; rate: number | undefined }[];
-  actions: KinesisCashAction[];
-};
-
+import { findCorrectedIbkrCashAlias } from "../portfolioImportLegacyReceipts.ts";
+import { insertIncludedInUnitsIncome } from "../../repositories/portfolioIncomeRecognitionRepository.ts";
 import {
-  readReconciliationSources,
-  type ReconciliationSourceRow,
-} from "../../repositories/portfolioImportReconciliationRepository.ts";
-import {
-  readKinesisCashContext,
-  lockKinesisCashLedger,
-} from "../../repositories/portfolioImportCashRepository.ts";
-import {
-  classifyKinesisCash,
-  proveKinesisCashSources,
-  cashImageEqual,
-} from "../portfolioKinesisCashScope.ts";
-import {
-  getStoredRateToEurOnOrBefore,
-  getUnindexedRatesToEurForDates,
-} from "../currency/rateFetcher.ts";
-import {
-  originalCashFingerprintAlreadyCorrected,
-  readIbkrCashCorrectionContext,
-} from "../portfolioIbkrCashReconciliation.ts";
-import { getIbkrFundingPrimaryEvidence } from "./ibkrFundingHistoryAdapter.ts";
+  isZeroYieldKinesisBatch,
+  kinesisInKindIncomeRowIds,
+} from "./kinesisInKindIncome.ts";
 import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
@@ -229,126 +194,26 @@ export async function commitBatch({
       row.status === "matched" &&
       (selectedRowIds === undefined || selectedRowIds.has(Number(row.id))),
   );
-  const ibkrCashFormat = batchConfigFields(batchRows[0]?.custom_config)?.format;
-  const ibkrCashSources = new Map();
+  const batchFormat = batchConfigFields(batchRows[0]?.custom_config)?.format;
+  // A zero yield-basis Kinesis distribution records its literal income with
+  // the in-kind role; its `:units` gift carries the value (ADR-188, ADR-236).
+  const zeroYieldKinesis = isZeroYieldKinesisBatch(batchRows[0]?.custom_config);
+  const inKindIncomeRowIds = zeroYieldKinesis
+    ? kinesisInKindIncomeRowIds(relevantRows)
+    : new Set<number>();
   if (
-    (ibkrCashFormat === "ibkr_transaction_history" ||
-      ibkrCashFormat === "ibkr_funding_history") &&
-    matched.some((row) => row.route === "cash")
-  ) {
-    const sources = await readReconciliationSources([Number(batchId)]);
-    for (const source of sources)
-      ibkrCashSources.set(Number(source.id), source);
-  }
-
-  if (
-    batchConfigFields(batchRows[0]?.custom_config)?.format ===
-      "kinesis_transaction_history" &&
-    batchConfigFields(batchRows[0]?.custom_config)?.yield_basis_policy ===
-      "zero" &&
-    matched.some((row) => row.type === "dividend")
+    zeroYieldKinesis &&
+    matched.some(
+      (row) =>
+        row.type === "dividend" &&
+        row.source_transaction_id?.endsWith(":income") &&
+        !inKindIncomeRowIds.has(Number(row.id)),
+    )
   )
     throw new ConflictError(
-      "Paired Kinesis income requires its proved acquisition scope",
-      {
-        details: { reason: "paired_income_review_required" },
-      },
+      "A Kinesis yield income row is missing its received units",
+      { details: { reason: "paired_income_units_missing" } },
     );
-  const kinesisCash = new Map<number, KinesisCashAction>();
-  let cashReproof: KinesisCashReproof | undefined;
-  let cashReproved = false;
-  if (
-    batchConfigFields(batchRows[0]?.custom_config)?.format ===
-      "kinesis_transaction_history" &&
-    matched.some((row) => row.route === "cash")
-  ) {
-    const source = await readReconciliationSources([Number(batchId)]);
-    // The format check above read this batch's config, so it exists.
-    const batch = batchRows[0]!;
-    const cashContext = await readKinesisCashContext();
-    if (
-      matched.some(
-        (row) =>
-          row.route === "cash" &&
-          !cashContext.ledger.some(
-            (current) =>
-              current.dedup_fingerprint === row.dedup_fingerprint &&
-              current.dedup_fingerprint_version ===
-                row.dedup_fingerprint_version,
-          ),
-      )
-    )
-      throw new ConflictError(
-        "New Kinesis cash requires confirmed cash-only reconciliation",
-        { details: { reason: "cash_reconciliation_required" } },
-      );
-    const proof = proveKinesisCashSources(
-      source,
-      [batch],
-      "own_account_transfer",
-    );
-    const pairs = new Map<string, { currency: string; date: string | null }>();
-    for (const member of proof.groups.flatMap((group) => group.members))
-      if (member.values.currency !== "EUR")
-        pairs.set(`${member.values.currency}:${member.values.date}`, {
-          currency: member.values.currency,
-          date: member.values.date,
-        });
-    const missing = new Map<string, string[]>(),
-      rates: KinesisCashReproof["rates"] = [];
-    for (const pair of pairs.values()) {
-      // A dateless member can have no stored or fetched rate (both lookups
-      // ignore a missing date), so it has nothing to fetch either.
-      if (pair.date == null) continue;
-      const rate = await getStoredRateToEurOnOrBefore(pair.currency, pair.date);
-      if (rate != null && Number.isFinite(rate) && rate > 0) continue;
-      let dates = missing.get(pair.currency);
-      if (!dates) {
-        dates = [];
-        missing.set(pair.currency, dates);
-      }
-      dates.push(pair.date);
-    }
-    await getUnindexedRatesToEurForDates(missing);
-    for (const pair of pairs.values())
-      rates.push({
-        ...pair,
-        rate:
-          pair.date == null
-            ? undefined
-            : await getStoredRateToEurOnOrBefore(pair.currency, pair.date),
-      });
-    const cashPlan = classifyKinesisCash({
-      rows: source,
-      batches: [batch],
-      context: cashContext,
-      fundingPolicy: "own_account_transfer",
-      historicalFxContext: rates,
-    });
-    if (
-      cashPlan.blockers.length > 0 ||
-      cashPlan.records.length > 0 ||
-      cashPlan.selected.length !==
-        proof.groups.flatMap((group) => group.members).length
-    )
-      throw new ConflictError(
-        "Kinesis cash requires complete source and usable dated rates",
-        { details: { reason: "cash_reconciliation_required" } },
-      );
-    if (
-      selectedRowIds &&
-      cashPlan.records.some(
-        (record) => !selectedRowIds.has(Number(record.row.id)),
-      )
-    )
-      throw new ConflictError(
-        "A closed cash chain cannot be partially drained",
-        { details: { reason: "cash_reconciliation_required" } },
-      );
-    cashReproof = { source, batch, rates, actions: cashPlan.selected };
-    for (const action of cashPlan.selected)
-      kinesisCash.set(action.rowId, action);
-  }
   await db
     .updateTable("portfolio_import_batches")
     .set({ status: "committing" })
@@ -506,8 +371,7 @@ export async function commitBatch({
       chunkDuplicates = 0;
       chunkErrors = 0;
 
-      cashReproved = false;
-      let ibkrCashAliasContext;
+      let ibkrCashAliasLocked = false;
       for (const [j, row] of chunk.entries()) {
         if (row.route === "account_internal") {
           // Wallet-to-Pro movement is retained as a source annotation within
@@ -558,37 +422,6 @@ export async function commitBatch({
         // ── Brokerage cash row (ADR-095): an external deposit/withdrawal, or a
         // D6 instrument-less dividend/interest/fee/tax row → one signed plain
         // cash transaction on the sleeve (NOT a trade, no leg). ──
-        if (
-          isBrokerage &&
-          row.route === "cash" &&
-          kinesisCash.has(Number(row.id))
-        ) {
-          await lockKinesisCashLedger();
-          if (!cashReproved) {
-            // kinesisCash is only populated together with cashReproof.
-            const reproof = cashReproof;
-            if (!reproof)
-              throw new TypeError("Kinesis cash plan is missing its reproof");
-            const checked = classifyKinesisCash({
-              rows: reproof.source,
-              batches: [reproof.batch],
-              context: await readKinesisCashContext(),
-              fundingPolicy: "own_account_transfer",
-              historicalFxContext: reproof.rates,
-            });
-            if (
-              checked.blockers.length > 0 ||
-              !cashImageEqual(checked.selected, reproof.actions)
-            )
-              throw new ConflictError("Cash ledger changed during commit", {
-                details: { reason: "cash_receipt_changed" },
-              });
-            cashReproved = true;
-          }
-          await markRow(row.id, "duplicate");
-          chunkDuplicates++;
-          continue;
-        }
         if (isBrokerage && row.route === "cash") {
           if (batchAccountId === undefined) {
             chunkErrors++;
@@ -599,44 +432,25 @@ export async function commitBatch({
             );
             continue;
           }
-          const ibkrSource = {
-            ...ibkrCashSources.get(Number(row.id)),
-            ...row,
-            account_id: batchAccountId,
-            custom_config: batchRows[0]?.custom_config,
-          };
-          const originalIbkrFunding =
-            ibkrCashFormat === "ibkr_transaction_history" &&
+          if (
+            batchFormat === "ibkr_transaction_history" &&
             ["deposit", "withdrawal"].includes(
               String(row.type_raw).toLowerCase(),
-            );
-          if (originalIbkrFunding) {
-            if (!ibkrCashAliasContext) {
+            )
+          ) {
+            if (!ibkrCashAliasLocked) {
               await sql`LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
                 db,
               );
-              ibkrCashAliasContext = await readIbkrCashCorrectionContext();
+              ibkrCashAliasLocked = true;
             }
-            const correctedAlias = originalCashFingerprintAlreadyCorrected(
-              ibkrSource,
-              ibkrCashAliasContext,
-            );
-            if (correctedAlias != null) {
+            // A pre-ADR-236 funding correction already holds this deposit.
+            if ((await findCorrectedIbkrCashAlias(row)) != null) {
               chunkDuplicates++;
               await markRow(row.id, "duplicate");
               continue;
             }
           }
-          if (
-            ibkrCashFormat === "ibkr_funding_history" &&
-            !getIbkrFundingPrimaryEvidence(ibkrSource)
-          )
-            throw new ConflictError(
-              "IBKR cash requires intact native funding workbook evidence",
-              {
-                details: { reason: "ibkr_native_funding_required" },
-              },
-            );
           const identity = cashIdentityKey(row);
           const occurrence = cashSeenByIdentity.get(identity) ?? 0;
           cashSeenByIdentity.set(identity, occurrence + 1);
@@ -668,13 +482,6 @@ export async function commitBatch({
             await markRow(row.id, "duplicate");
             continue;
           }
-          if (originalIbkrFunding)
-            throw new ConflictError(
-              "IBKR Transaction History funding amounts require a native funding export",
-              {
-                details: { reason: "ibkr_native_funding_required" },
-              },
-            );
           const sp = savepointFor(row.id);
           if (!sp) {
             chunkErrors++;
@@ -796,15 +603,41 @@ export async function commitBatch({
           continue;
         }
         await client.query(`SAVEPOINT ${sp}`);
+        if (inKindIncomeRowIds.has(Number(row.id))) {
+          try {
+            const incomeId = await insertIncludedInUnitsIncome(
+              { ...row, investment_id: row.investment_id },
+              batchAccountId,
+              Number(batchId),
+            );
+            if (incomeId === undefined) {
+              await client.query(`RELEASE SAVEPOINT ${sp}`);
+              chunkDuplicates++;
+              await markRow(row.id, "duplicate");
+              continue;
+            }
+            await markCommitted(row.id, incomeId);
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            chunkImported++;
+            tradeInsertedByIdentity.set(identity, insertedThisRun + 1);
+          } catch (err) {
+            await client.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+            await client.query(`RELEASE SAVEPOINT ${sp}`);
+            chunkErrors++;
+            await markRow(
+              row.id,
+              "error",
+              truncatedErrorMessage(err) || "insert failed",
+            );
+          }
+          continue;
+        }
         try {
           const currency = row.currency || row.investment_currency || EUR;
           let fxRate =
             row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
           const primaryZeroYield =
-            batchConfigFields(batchRows[0]?.custom_config)?.format ===
-              "kinesis_transaction_history" &&
-            batchConfigFields(batchRows[0]?.custom_config)
-              ?.yield_basis_policy === "zero" &&
+            zeroYieldKinesis &&
             row.type === "gift" &&
             row.source_transaction_id?.endsWith(":units") &&
             [

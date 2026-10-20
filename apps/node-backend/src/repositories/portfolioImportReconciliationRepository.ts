@@ -6,7 +6,6 @@ import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { DB, Json } from "../database/schema.generated.ts";
 import {
   batchAccountIdRowSchema,
-  batchConfigFields,
   bigintIdRowSchema,
   reconciliationAdjustmentRowSchema,
   reconciliationBatchScopeRowSchema,
@@ -69,7 +68,6 @@ const snapshot = sql.raw<PortfolioTransactionSnapshot>(
   PORTFOLIO_TRANSACTION_SNAPSHOT_SQL,
 );
 const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
-const json = (value: unknown) => sql<Json>`${JSON.stringify(value)}::json`;
 const anyBigint = (ids: readonly Id[]) => sql<string>`ANY(${ids}::bigint[])`;
 const anyInteger = <T>(ids: readonly number[]) =>
   sql<T>`ANY(${ids}::integer[])`;
@@ -214,222 +212,6 @@ export async function readReconciliationBatchScope(
   );
 }
 
-/** Minimal history shape the Kinesis and Saxo context readers inspect. */
-export type ReconciliationHistoryLike = {
-  id: Id;
-  type: string;
-  import_batch_id?: Id | null;
-  dedup_fingerprint?: string | null;
-};
-
-export type ReconciliationContext = {
-  sources: ReconciliationSourceRow[];
-  batches: ReconciliationBatchScopeRow[];
-};
-
-export type ReconciliationReceiptContext = ReconciliationContext & {
-  receipts: ReconciliationJournalRow[];
-};
-
-/** Custody owners retain the exact supplementary native wallet source binding. */
-export async function readKinesisNetworkContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationContext> {
-  const ids = [
-    ...new Set(
-      history
-        .filter((row) => row.type === "asset_transfer")
-        .map((row) => Number(row.import_batch_id))
-        .filter(Boolean),
-    ),
-  ];
-  if (ids.length === 0) return { sources: [], batches: [] };
-  const owners = await readReconciliationSources(ids);
-  const witnessIds = owners
-    .map((row) =>
-      Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
-    )
-    .filter(Boolean);
-  const batchIds = [...new Set([...ids, ...witnessIds])].sort((a, b) => a - b);
-  const [sources, batches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  return { sources, batches };
-}
-
-/** Native gift group owners include generic source batches, not broker-only context. */
-export async function readKinesisNativeGiftContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const ids = history
-    .filter((row) => row.type === "gift" && Boolean(row.dedup_fingerprint))
-    .map((row) => Number(row.id));
-  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_staging_rows as s", "s.id", "a.staging_row_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(ids))
-      .where("a.action", "=", "adopt")
-      .where(sql<boolean>`s.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt'`)
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set([
-      ...receipts.map((row) => Number(row.batch_id)),
-      ...history
-        .filter((row) => row.type === "gift" && row.import_batch_id != null)
-        .map((row) => Number(row.import_batch_id)),
-    ]),
-  ].sort((a, b) => a - b);
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  const [allSources, allBatches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  const retainedIds = new Set(
-    allSources
-      .filter((row) => row.asset_transfer_details?.nativeGiftGroupReceipt)
-      .map((row) => Number(row.batch_id)),
-  );
-  return {
-    receipts,
-    sources: allSources.filter((row) => retainedIds.has(Number(row.batch_id))),
-    batches: allBatches.filter((row) => retainedIds.has(Number(row.id))),
-  };
-}
-
-export async function retainKinesisNetworkBinding({
-  before,
-  after,
-}: {
-  before: ReconciliationSourceRow;
-  after: Pick<ReconciliationSourceRow, "units" | "asset_transfer_details">;
-}): Promise<boolean> {
-  const changed = await db
-    .updateTable("portfolio_import_staging_rows")
-    .set({
-      route: "asset_transfer",
-      type: null,
-      type_raw: "AssetTransfer",
-      units: after.units,
-      asset_transfer_details: json(after.asset_transfer_details),
-    })
-    .where("id", "=", String(before.id))
-    .where("status", "=", "matched")
-    .where("route", "=", before.route)
-    .where("units", "=", before.units)
-    .where("raw_data", "=", before.raw_data)
-    .where("source_record_hash", "=", before.source_record_hash)
-    .where("dedup_fingerprint", "=", before.dedup_fingerprint)
-    .returning("id")
-    .execute();
-  return changed.length === 1;
-}
-
-export async function assertNoActiveKinesisNetworkConsumers(
-  batchId: Id,
-): Promise<void> {
-  const consumers = await db
-    .selectFrom("portfolio_asset_transfers as t")
-    .innerJoin("portfolio_import_staging_rows as s", "s.id", "t.staging_row_id")
-    .select("t.id")
-    .where(
-      sql<boolean>`s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=${batchId}::text`,
-    )
-    .limit(1)
-    .execute();
-  if (consumers.length > 0)
-    throw new Error(
-      "Native wallet evidence is still used by an active broker transfer. Undo that transfer first.",
-    );
-}
-
-/** Active Kinesis adoption images and their retained complete primary sources. */
-export async function readKinesisAdoptionContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const ids = history
-    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
-    .map((row) => Number(row.id));
-  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(ids))
-      .where("a.action", "=", "adopt")
-      .where(sql<boolean>`b.custom_config->>'format'='kinesis_transaction_history'`)
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
-  ];
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  let batches = await readReconciliationBatchScope(batchIds);
-  const referenced = [
-    ...new Set([
-      ...batchIds,
-      ...batches.flatMap(
-        (batch) =>
-          batchConfigFields(batch.custom_config)
-            ?.portfolio_performance_reference?.effectiveBatchIds ?? [],
-      ),
-    ]),
-  ]
-    .map(Number)
-    .sort((a, b) => a - b);
-  if (referenced.length !== batchIds.length)
-    batches = await readReconciliationBatchScope(referenced);
-  const sources = await readReconciliationSources(referenced);
-  return { receipts, sources, batches };
-}
-
-/** Retained source and immutable receipts that can identify a prior Saxo adoption. */
-export async function readSaxoAdoptionContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const transactionIds = history
-    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
-    .map((row) => Number(row.id));
-  if (transactionIds.length === 0)
-    return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(transactionIds))
-      .where("a.action", "=", "adopt")
-      .where(
-        sql<boolean>`(b.adapter_name = 'saxo_transaction_history'
-          OR b.custom_config->>'format' = 'saxo_transaction_history')`,
-      )
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
-  ];
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  const [sources, batches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  return { receipts, sources, batches };
-}
-
 export async function readReconciledProImportAccounts(
   accountIds: readonly number[],
 ): Promise<number[]> {
@@ -535,21 +317,6 @@ export async function markAdoptedSourceDuplicate(
     .execute();
 }
 
-export async function markSaxoCompanionSourceDuplicate(
-  row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
-): Promise<boolean> {
-  const result = await sql`WITH previous AS (
-       SELECT id,status FROM portfolio_import_staging_rows
-        WHERE id=${row.id} AND batch_id=${row.batch_id} AND status=${row.status} AND status IN ('matched','error')
-     ), changed AS (
-       UPDATE portfolio_import_staging_rows source SET status='duplicate',error_message=NULL
-        FROM previous WHERE source.id=previous.id RETURNING previous.status
-     ) UPDATE portfolio_import_batches SET rows_duplicate=rows_duplicate+(SELECT count(*) FROM changed),
-       rows_error=rows_error-(SELECT count(*) FROM changed WHERE status='error')
-       WHERE id=${row.batch_id} AND EXISTS(SELECT 1 FROM changed) RETURNING id`.execute(db);
-  return result.rows.length === 1;
-}
-
 export async function getActiveAdoptionReceipts(
   batchId: Id,
 ): Promise<ReconciliationJournalRow[]> {
@@ -563,19 +330,4 @@ export async function getActiveAdoptionReceipts(
       .where(activeJournalEntry)
       .orderBy("a.id"),
   );
-}
-
-export async function retainKinesisNativeGiftReceipt(
-  row: ReconciliationSourceRow,
-  receipt: unknown,
-): Promise<boolean> {
-  const previousDetails =
-    row.asset_transfer_details == null
-      ? null
-      : JSON.stringify(row.asset_transfer_details);
-  const result = await sql`UPDATE portfolio_import_staging_rows SET asset_transfer_details=jsonb_build_object('nativeGiftGroupReceipt',${jsonb(receipt)})
-    WHERE id=${row.id} AND route='portfolio' AND type='gift' AND status IN ('committed','duplicate') AND raw_data=${row.raw_data} AND source_record_hash=${row.source_record_hash} AND dedup_fingerprint=${row.dedup_fingerprint} AND asset_transfer_details::jsonb IS NOT DISTINCT FROM ${previousDetails}::jsonb RETURNING id`.execute(
-    db,
-  );
-  return result.rows.length === 1;
 }

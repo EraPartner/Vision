@@ -57,33 +57,15 @@ export async function assertPortfolioImportReadiness({
   batch,
   accountId = batch.account_id,
   reconciliationPlanned = false,
-  provedCompanionRowIds = [],
-  selectedRowIds = undefined,
 }: {
   batchId: number;
   batch: ReadinessBatch;
   accountId?: number | null;
   reconciliationPlanned?: boolean;
-  provedCompanionRowIds?: number[];
-  selectedRowIds?: number[] | undefined;
 }): Promise<void> {
   if (!isMaintainedPortfolioImport(batch)) return;
 
-  const problems =
-    selectedRowIds !== undefined && reconciliationPlanned
-      ? await getImportReadinessProblems(
-          batchId,
-          accountId,
-          provedCompanionRowIds,
-          selectedRowIds,
-        )
-      : provedCompanionRowIds.length > 0 && reconciliationPlanned
-        ? await getImportReadinessProblems(
-            batchId,
-            accountId,
-            provedCompanionRowIds,
-          )
-        : await getImportReadinessProblems(batchId, accountId);
+  const problems = await getImportReadinessProblems(batchId, accountId);
   if (problems.length > 0) {
     throw new ConflictError(
       `Import needs repair: ${problems.length} source rows are incomplete or unresolved. No new transactions were imported.`,
