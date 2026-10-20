@@ -829,8 +829,12 @@ export function taxOverviewStub(
  * that settings read fails: the route reads the same table, so it fails too.
  */
 async function taxOverviewFromSettings(request: Request) {
-    const response = await fetch(`${API_BASE}/api/settings?withBaselines=true`);
-    if (!response.ok) return undefined;
+    // A request still in flight when the test file tears down MSW reaches the
+    // real network and is refused; treat it like a failed settings read.
+    const response = await fetch(
+        `${API_BASE}/api/settings?withBaselines=true`,
+    ).catch(() => undefined);
+    if (!response?.ok) return undefined;
     const body = (await response.json()) as { data?: Record<string, unknown> };
     const data = body.data ?? {};
     const { settings, expected } =
