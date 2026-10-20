@@ -140,6 +140,9 @@ All database scripts use the Kysely migrator in `apps/node-backend/src/database/
 PostgreSQL MCP server that `.mcp.json` registers for Claude Code; it reads only
 `VISION_MCP_DATABASE_URL` and refuses non-loopback hosts
 ([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]).
+`apps/node-backend/scripts/typescript-mcp.ts` is the TypeScript navigation MCP server that
+`.mcp.json` registers next to it; it wraps the repository's own `tsserver`
+([[docs/adr/228-typescript-navigation-mcp|ADR-228]]).
 
 See [[docs/guides/migrations|Database Migration Guide]] for the workflow.
 

@@ -189,7 +189,8 @@ maintenance unless the user asks for one.
 - `.claude/settings.json` runs a background edit hook (owning `tsc` project, ESLint,
   dependency-cruiser) that reports errors after edits, and a cloud-only session-start hook that
   installs dependencies. `.mcp.json` adds `vision-postgres`, read-only SQL against a local database
-  named by `VISION_MCP_DATABASE_URL`. See ADR-227.
+  named by `VISION_MCP_DATABASE_URL`, and `vision-typescript`, which finds symbols, definitions,
+  references, types and per-file diagnostics across all workspaces. See ADR-227 and ADR-228.
 - Prefer `bun run search:ast` over text search when the question is about code shape, such as
   every call of a function or every `||` fallback on a field.
 - Host-specific Claude setup belongs in the gitignored `CLAUDE.local.md`.
