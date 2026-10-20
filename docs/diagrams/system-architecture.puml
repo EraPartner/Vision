@@ -13,14 +13,14 @@ package "Client" {
     node "React 19 + TypeScript" as ReactApp
     node "Vite (Build Tool)" as Vite
     node "Tailwind CSS v4 + Radix UI" as UI
-    node "React Router v6" as Router
+    node "React Router 8" as Router
     node "TanStack Query" as ReactQuery
     node "Zustand (client state)" as Zustand
     node "API Inspector (dev-only)\nCmd+Shift+A" as DevTools
   }
 }
 
-cloud "Load Balancer / Reverse Proxy\n(production hosts only)" as Proxy
+cloud "Reverse proxy (optional)\nTRUSTED_PROXIES for X-Forwarded-For" as Proxy
 
 package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
@@ -70,9 +70,10 @@ cloud "Build & Distribution" as DevToolsCloud {
 }
 
 package "Client to Server" {
-  User --> ReactApp : HTTPS
-  ReactApp --> Proxy : REST API
-  Proxy --> Express : Forward
+  User --> ReactApp
+  ReactApp --> Express : REST API (loopback)
+  ReactApp ..> Proxy : optional
+  Proxy ..> Express : forward
 }
 
 package "Desktop Runtime" {

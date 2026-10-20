@@ -2,326 +2,299 @@
 
 <p align="center">
   <strong>Self-hosted personal finance for people who care about privacy, clarity, and control.</strong><br/>
-  Track transactions, plan cash flow, manage investments, and chat with your data — all on your own infrastructure.
+  Track transactions, plan cash flow, manage investments, and prepare your Belgian taxes, all on your own Mac.
 </p>
 
 <p align="center">
   <a href="https://github.com/EraPartner/Vision/actions/workflows/ci.yml"><img src="https://github.com/EraPartner/Vision/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" /></a>
+  <img src="https://img.shields.io/badge/Platform-macOS%20(Apple%20Silicon)-black" alt="Platform: macOS (Apple Silicon)" />
   <img src="https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-61DAFB" alt="Frontend: React + TypeScript" />
-  <img src="https://img.shields.io/badge/Backend-Node.js%20(Express)-339933" alt="Backend: Node.js + Express" />
-  <img src="https://img.shields.io/badge/Runtime-Bun-black" alt="Runtime: Bun" />
-  <img src="https://img.shields.io/badge/Database-PostgreSQL-4169E1" alt="Database: PostgreSQL" />
-  <img src="https://img.shields.io/badge/Desktop-Electron-47848F" alt="Desktop: Electron" />
+  <img src="https://img.shields.io/badge/Backend-Express%20on%20Bun-339933" alt="Backend: Express on Bun" />
+  <img src="https://img.shields.io/badge/Database-PostgreSQL%2018-4169E1" alt="Database: PostgreSQL 18" />
   <img src="https://img.shields.io/badge/i18n-EN%20%7C%20NL-success" alt="Languages: EN | NL" />
 </p>
 
 ---
 
-## Why Vision?
+## What is Vision?
 
-Most finance apps trade your privacy for convenience. Vision gives you both:
+Vision is a desktop finance manager. It imports your bank exports, categorizes and analyses your
+spending, tracks your portfolio and net worth, and computes Belgian personal income tax. The
+macOS app bundles its own PostgreSQL 18 database, so your data lives in a private, loopback-only
+database on your Mac.
 
-- **Privacy-first** — your financial data stays in your environment unless you turn on and approve an experimental cloud AI feature
-- **Self-hosted** — run the native Electron desktop app or the source stack with PostgreSQL 18
-- **Complete** — transactions, budgeting, portfolio analytics, Belgian tax, AI chat, and net worth in one place
-- **Developer-friendly** — TypeScript/React + Node.js/Express in a clean Bun monorepo with an OpenAPI spec
+- **Private by default.** No account and no cloud service. AI chat runs on a local Ollama model;
+  the cloud AI features are experimental, off by default, and send only what you preview and
+  grant ([AI data access](docs/security/ai-data-access.md)).
+- **One app.** Transactions, budgets, planned payments, forecasts, investments, research, and tax
+  in one place.
+- **Built to last.** A strict TypeScript monorepo with an OpenAPI contract, a PostgreSQL schema
+  under versioned migrations, and tests against a real database.
+
+Vision is a native macOS app for Apple Silicon. There are no Windows, Linux, or browser builds
+([ADR-219](docs/adr/219-minimal-electron-shell-hardening.md)).
 
 ---
 
 ## Features
 
-### 💳 Transactions & Imports
+### 💳 Transactions and imports
 
-- Import CSV exports from **Belfius, Revolut, KBC, SABB, Wise, ING, BNP Paribas**, your own Vision backup, or a **generic CSV mapper**
-- Fast filtering, search, and pagination via a materialized aggregations layer
-- Deduplication, categorization rules, and recurring pattern detection
-- Transaction splits and manual entry
-- Attachments per transaction
-- Export to CSV or Vision backup format
+- CSV import from **Belfius, Revolut, KBC, SABB, Wise, ING, BNP Paribas Fortis**, a Vision
+  backup, or a **generic CSV mapper**
+- Deduplication, categorization rules, transfer detection between your own accounts, splits,
+  tags, attachments, and bulk actions across many rows at once
+- Accounts with running balances and reconciliation
+- Export to CSV or the Vision backup format
 
-### 📅 Budgeting & Planned Payments
+### 📅 Budgeting and planning
 
 - Categories and recipients with rules, merging, and exclusions
-- Planned/recurring payments with forecasting and execution history
-- Dashboard widgets for account-level visibility and cash position tracking
-- Saved chart configurations
+- Planned and recurring transactions with execution history
+- Cash-flow forecast from planned transactions or statistical methods, with confidence bands
+- Statistics: year-over-year comparisons, pivot tables with drill-through, a Sankey flow chart,
+  rolling averages, and saved custom charts
+- Analysis workspace over approved datasets, with saved analyses and scheduled monitors
 
-### 📈 Portfolio & Net Worth
+### 📈 Portfolio and net worth
 
-- Track **stocks, crypto, real estate, savings, bonds**
+- Stocks, ETFs, crypto, precious metals, real estate, savings, and bonds
 - Price providers: **Yahoo Finance**, **Binance**, **Kinesis**, and **custom JSON endpoints**
-- Currency conversion via ECB with fallback rate sources
-- Net worth and performance over time with portfolio snapshots
-- Market lookup and watchlist for decision support
-- PDF report export (portfolio + tax summary)
+- Currency conversion from stored rates (ECB, with open.er-api for currencies ECB does not publish)
+- Daily net-worth snapshots and performance over time
+- Portfolio statement import, market lookup, watchlist, and research dossiers
 
-### 🤖 AI Chat
+### 🇧🇪 Belgian tax
 
-- Local AI assistant powered by **Ollama** — ordinary chat sends no data to third-party LLMs
+- Personal income tax calculator with regional rules, deductions, and cadastral income
+- Portfolio tax tracking (including the Reynders rule)
+- The server computes all tax figures ([ADR-217](docs/adr/217-belgian-tax-figures-on-the-server.md))
+
+### 🤖 AI chat
+
+- Local assistant on **Ollama** that answers questions about your transactions and categories
+  with tool-backed result cards
 - **Experimental, off by default:** OpenAI research (`OPENAI_API_ENABLED`) and a Codex route
   (`VISION_EXPERIMENTAL_CODEX`). OpenAI receives only a payload you preview and grant
-  ([AI data access](docs/security/ai-data-access.md))
-- Query your transactions, categories, and financial data in natural language
-- Tool-augmented responses with structured result cards
 
-### 🧩 Product Experience
+### 🧩 App
 
-- Modern UI built on Radix UI / shadcn patterns + Tailwind CSS
-- English and Dutch (`nl`) localization
-- Offline-resilient — online status detection gates market queries, disables refresh controls gracefully
-- Secure backup/restore with AES-256-GCM encryption (per-backup salt)
-- Desktop app via Electron with bundled PostgreSQL 18 and a native Bun backend
+- English and Dutch
+- PDF reports for finances, portfolio, and tax
+- Backup and restore, with optional AES-256-GCM encryption (per-backup random salt)
+- In-app updates for the packaged app, with a backup and rollback path
+
+Feature details live in [`docs/features/`](docs/features/index.md).
 
 ---
 
-## Quick Start
+## Quick start
 
-### Option A — macOS Desktop (recommended for end users)
+### Install the macOS app
 
-Install the release DMG. The application contains PostgreSQL 18, the schema
-migrations, the Bun backend, the production frontend, and the browser used for PDF
-reports. A running Homebrew PostgreSQL service is not required.
+Install the release DMG. It contains PostgreSQL 18, the migrations, the backend, the frontend,
+and the browser used for PDF reports. You do not need a separate PostgreSQL service.
 
-To build the same application from source, first provide Bun, Node.js, and a
-PostgreSQL 18.6 distribution from Postgres.app or Homebrew. No Python toolchain is
-needed. The PostgreSQL service does not need to be started. Then run:
+Vision creates its database under its macOS application-data directory on first launch. See
+[`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for data migration
+and rollback.
+
+### Build the app from source
+
+You need Bun, Node.js, and a PostgreSQL 18.6 distribution from Postgres.app or Homebrew
+(`postgresql@18`). The PostgreSQL service does not need to run.
 
 ```bash
 git clone https://github.com/EraPartner/Vision.git
 cd Vision
 ./install.sh
-```
-
-After installation, open **Vision** from `/Applications/Vision.app`:
-
-```bash
 open /Applications/Vision.app
 ```
 
-Vision creates a private, loopback-only database under its macOS application-data
-directory on first launch. See
-[`docs/guides/native-macos-runtime.md`](docs/guides/native-macos-runtime.md) for
-data migration and rollback.
+### Try the demo
 
-For a fully isolated application with deterministic synthetic data, build and install
-**Vision Demo**:
+**Vision Demo** is a separate app with deterministic synthetic data. It uses its own database
+below `~/Library/Application Support/Vision Demo/native/vision_demo` and cannot reach the real
+Vision database.
 
 ```bash
 ./install-demo.sh
 open "/Applications/Vision Demo.app"
+bun run demo:reset-native   # restore the canonical dataset, then reopen the Demo app
 ```
 
-Vision Demo uses its own bundled native PostgreSQL runtime below
-`~/Library/Application Support/Vision Demo/native/vision_demo`. It cannot access the real Vision
-database. Restore its canonical dataset with
-`bun run demo:reset-native`, then quit and reopen the Demo app.
+Both installers build the frontend in a private temporary directory and do not touch the
+repository's `dist` directory.
 
-Both macOS installers build the production frontend in a private temporary directory and remove
-that staging directory on exit. They do not depend on, reuse, or clear the repository's shared
-`dist` directory.
-
-### Option B — Development mode
+### Development mode
 
 ```bash
-git clone https://github.com/EraPartner/Vision.git
-cd Vision
 bun install
-bun run native:prepare     # one-time native PostgreSQL/PDF payload
-bun run dev                # start private PostgreSQL, backend, and frontend
+bun run native:prepare   # one-time: private PostgreSQL and PDF payload
+bun run dev              # private PostgreSQL + watched backend + Vite
 ```
 
-`native:prepare` needs PostgreSQL 18.6 build files, but it never starts the external
-PostgreSQL service.
+| Service     | URL                                                    |
+| ----------- | ------------------------------------------------------ |
+| Frontend    | `http://localhost:8080` (picks the next port if taken) |
+| Backend API | `http://localhost:3002`                                |
 
-| Service     | URL                                                         |
-| ----------- | ----------------------------------------------------------- |
-| Frontend    | `http://localhost:8080` (auto-picks next free port if busy) |
-| Backend API | `http://localhost:3002`                                     |
+More setup detail: [`docs/getting-started.md`](docs/getting-started.md).
 
 ---
 
-## For Developers
+## Architecture
 
-### Monorepo Layout
+```mermaid
+flowchart LR
+  subgraph Electron["Electron shell (macOS)"]
+    UI["React 19 frontend<br/>TanStack Query"]
+  end
+  UI -- "REST (openapi.yaml)" --> API["Express backend on Bun<br/>routes → services → repositories"]
+  API -- "Kysely" --> DB[("PostgreSQL 18<br/>bundled, loopback-only")]
+  API --> Ext["Price, FX and research providers"]
+  API --> AI["Ollama (local)<br/>OpenAI / Codex (opt-in)"]
+```
+
+- **The server computes, the browser displays.** Totals, FX conversion, gains, forecasts, and tax
+  are computed by the backend ([ADR-216](docs/adr/216-server-owned-domain-calculations.md)).
+- **Database access** goes through Kysely with types generated from the migrated schema
+  ([ADR-226](docs/adr/226-kysely-query-builder.md)).
+- **Migrations** are numbered `.sql` files in `db/migrations/`, applied by a Kysely migrator on
+  boot, starting from one baseline ([ADR-222](docs/adr/222-typescript-migrations-kysely-baseline.md)).
+- **Ids, currency codes and money are branded types**
+  ([ADR-220](docs/adr/220-branded-ids-currency-codes-and-money.md)).
+
+Read more in [`docs/architecture/`](docs/architecture/index.md) and the
+[ADRs](docs/adr/).
+
+### Monorepo layout
 
 ```text
 Vision/
 ├── apps/
-│   ├── frontend/               # React 19 + TypeScript + Vite
-│   │   └── src/
-│   │       ├── features/       # Feature modules (transactions, categories, imports, ai-chat…)
-│   │       ├── components/     # Shared UI components
-│   │       ├── hooks/          # Custom React hooks
-│   │       ├── stores/         # Client state (Zustand)
-│   │       └── locales/        # Generated i18n files (en, nl)
-│   └── node-backend/           # Express API (Bun runtime)
-│       └── src/
-│           ├── routes/         # REST endpoints
-│           ├── services/       # Business logic, price providers, bank adapters
-│           ├── repositories/   # Data access layer
-│           ├── integrations/   # AI provider clients (Ollama, OpenAI, Codex)
-│           └── middleware/     # Auth, logging, error handling
+│   ├── frontend/          # React 19 + TypeScript + Vite (features/, components/, hooks/, stores/)
+│   └── node-backend/      # Express API on Bun (routes/, services/, repositories/, integrations/)
 ├── packages/
-│   ├── shared-utils/           # Pure helpers (money, slugify, downsample) shared by backend + frontend
-│   └── types/                  # Shared TypeScript types (generated from openapi.yaml)
-├── packaging/
-│   └── electron/               # Desktop wrapper
-├── db/migrations/              # PostgreSQL migrations (Kysely migrator, 0001 baseline)
-├── i18n/source/                # i18n source files → compiled to apps/frontend/src/locales/
-├── scripts/                    # Locale generation, validation, sync tooling
-├── docs/                       # Obsidian knowledge base (ADRs, API docs, feature specs)
-├── openapi.yaml                # REST API contract (source of truth for types)
-└── config/                     # Shared tool configuration (squawk, gitleaks, PostgreSQL)
+│   ├── shared-utils/      # Pure helpers shared by backend and frontend (money, CSV, Belgian tax engine)
+│   └── types/             # Shared TypeScript types and branded ids
+├── packaging/electron/    # Desktop shell and native PostgreSQL runtime
+├── db/migrations/         # PostgreSQL migrations (Kysely migrator)
+├── i18n/source/           # Locale sources, compiled to apps/frontend/src/locales/
+├── scripts/               # Repository tooling (locales, checks, test database)
+├── config/                # Shared tool configuration
+├── docs/                  # Obsidian knowledge base (ADRs, features, guides, reference)
+└── openapi.yaml           # REST API contract
 ```
 
-### All Scripts
+### Tech stack
+
+| Layer    | Technology                                                                    |
+| -------- | ----------------------------------------------------------------------------- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query |
+| Backend  | Express on Bun, Zod, decimal.js                                               |
+| Database | PostgreSQL 18.6 with Kysely                                                   |
+| Desktop  | Electron, Apple Silicon DMG and ZIP                                           |
+| AI       | Ollama (local); experimental opt-in OpenAI and Codex                          |
+| Testing  | Vitest, with backend tests against a disposable PostgreSQL 18                 |
+| API spec | OpenAPI 3 (`openapi.yaml`)                                                    |
+
+---
+
+## Development
+
+### Common scripts
 
 ```bash
-# Development
-bun run native:prepare       # one-time private PostgreSQL/PDF payload
+# Run
 bun run dev                  # private PostgreSQL + watched backend + Vite
-bun run backend              # backend only; requires an explicit database config
+bun run electron:dev         # desktop shell with isolated development data
 
-# Building
-bun run build                # production frontend build (generates locales first)
-bun run build:dev            # dev-mode frontend build
-bun run preview              # preview production build
-bun run dist                 # build + package Electron .app
-bun run demo:reset-native    # request a canonical synthetic Demo reset on next launch
-
-# Linting & types
-bun run lint                 # frontend ESLint + import boundaries (lint:deps) + dead code (lint:dead)
+# Check
+bun run lint                 # frontend ESLint + import boundaries (depcruise) + dead code (knip)
 bun run lint:backend         # backend ESLint
-bun run typecheck            # frontend TypeScript typecheck
+bun run typecheck            # frontend; typecheck:backend, typecheck:packages, typecheck:electron for the rest
+bun run check                # every lint, typecheck and test gate in sequence
 
-# Testing
+# Test
 bun run test                 # backend Vitest suite
 bun run test:db              # backend suite with a private temporary PostgreSQL 18
-bun run test:frontend        # full frontend suite with disposable PostgreSQL 18 and live API contracts
-bun run test:all             # backend + full frontend suites (concurrent)
-bun run test:coverage        # frontend unit/integration coverage report; CI enforces it on pushes to main
-bun run test:watch           # backend watch mode with disposable PostgreSQL 18
+bun run test:frontend        # frontend suite with a disposable PostgreSQL 18 and live API contracts
+bun run test:all             # backend + frontend suites
 
-# Database (Kysely migrator / PostgreSQL)
-bun run db:migrate           # apply all pending migrations
-bun run db:migrate:down      # revert the latest migration (needs its .down.sql); never on live data
+# Database
+bun run db:migrate           # apply pending migrations
 bun run db:status            # list applied and pending migrations
 bun run db:new -- <name>     # create db/migrations/NNNN_<name>.sql
 bun run db:lint              # squawk lint of migration SQL
 bun run db:codegen           # regenerate the Kysely database types
-bun run db:index-stats       # report index usage stats
-bun run quotes:densify       # backfill/densify asset price history
 
-# Electron
-bun run electron:dev         # native desktop with isolated development data
-bun run electron:prod        # native desktop production shell
+# API and locales
+bun run generate:types       # regenerate apps/frontend/src/types/generated.ts from openapi.yaml
+bun run check-endpoint-matrix # check docs/reference/api-endpoint-matrix.md against openapi.yaml
+bun run validate-locales     # check en/nl key parity
 
-# i18n
-bun run generate-locales     # compile i18n source → locale files
-bun run sanitize-locales     # sanitize locale files without recompiling
-bun run validate-locales     # check locale completeness
-bun run sync-nl              # sync Dutch locale from English source
-
-# Types & API
-bun run generate:types       # regenerate TypeScript types from openapi.yaml
-bun run check-endpoint-matrix # verify docs endpoint matrix matches openapi.yaml
+# Package
+bun run dist                 # build and package the Electron app
 ```
 
-### Tech Stack
+The full list, with what each script needs, is in
+[`docs/reference/scripts.md`](docs/reference/scripts.md).
 
-| Layer     | Technology                                                                                    |
-| --------- | --------------------------------------------------------------------------------------------- |
-| Frontend  | React 19, TypeScript, Vite, Tailwind CSS, Radix UI, shadcn/ui, TanStack Query, TanStack Table |
-| Backend   | Node.js (Bun runtime), Express                                                                |
-| Database  | PostgreSQL 18.6; bundled for Electron and externally supplied for source development          |
-| Desktop   | Electron                                                                                      |
-| AI        | Ollama (local LLM); experimental opt-in OpenAI and Codex                                      |
-| Testing   | Vitest (frontend + backend)                                                                   |
-| Packaging | Native Electron DMG/ZIP and GitHub Actions release workflow                                   |
-| API spec  | OpenAPI 3.x (`openapi.yaml`)                                                                  |
+### Configuration
 
-### Bank Import Adapters
+The packaged app generates its own database credentials and writes them to a restricted
+`runtime.env` in its application-data directory. Do not set a database URL for it.
 
-| Adapter            | File         |
-| ------------------ | ------------ |
-| Belfius            | `belfius.ts` |
-| Revolut            | `revolut.ts` |
-| KBC                | `kbc.ts`     |
-| ING                | `ing.ts`     |
-| BNP Paribas Fortis | `bnp.ts`     |
-| SABB               | `sabb.ts`    |
-| Wise               | `wise.ts`    |
-| Vision backup      | `vision.ts`  |
-| Generic CSV mapper | `generic.ts` |
+For source development, copy `.env.example` to `.env` only when you need provider API keys or
+overrides. The template documents every optional setting (database roles, logging, Ollama,
+research providers, experimental OpenAI and Codex). See
+[`docs/reference/environment-variables.md`](docs/reference/environment-variables.md).
 
-### Price Providers
+### Contributing
 
-| Provider             | Asset class                           |
-| -------------------- | ------------------------------------- |
-| Yahoo Finance        | Stocks, ETFs, indices                 |
-| Binance              | Crypto                                |
-| Kinesis              | Precious metals (gold, silver)        |
-| Custom JSON endpoint | Any asset via configurable URL + path |
+1. Create a branch from `main`.
+2. Write tests at stable boundaries: API contracts, real PostgreSQL state, and pure domain
+   functions ([ADR-215](docs/adr/215-behaviour-boundary-tests.md)).
+3. Run `bun run lint`, `bun run lint:backend`, `bun run typecheck`, and the relevant tests.
+4. Use Conventional Commits. `main` requires signed commits, linear history, and a passing
+   `CI Complete` check.
+5. When you change an endpoint, update `openapi.yaml`, regenerate types, and update the endpoint
+   matrix. When you change behaviour, update `docs/`.
 
----
+See [`docs/guides/contributing.md`](docs/guides/contributing.md) and
+[`docs/guides/cicd-pipelines.md`](docs/guides/cicd-pipelines.md).
 
-## Configuration
+### Coding agents
 
-Native Vision generates database credentials in its restricted application-data directory. Do not
-create a database URL for the packaged app. Copy `.env.example` to `.env` only for source
-development provider keys and overrides.
-
-| Variable         | Required    | Description                                           |
-| ---------------- | ----------- | ----------------------------------------------------- |
-| `DATABASE_URL`   | Source only | PostgreSQL connection string                          |
-| `LOG_LEVEL`      | No          | `debug` / `info` / `warn` / `error` (default: `warn`) |
-| `ENABLE_LOGGING` | No          | Toggle logging output (`true` / `false`)              |
-
-> The native Electron runtime writes `runtime.env` with restrictive permissions and separate
-> administrator, migration-owner, and application credentials.
-
----
-
-## API
-
-The full REST API is documented in [`openapi.yaml`](openapi.yaml). TypeScript types are generated from it:
-
-```bash
-bun run generate:types   # → apps/frontend/src/types/generated.ts
-```
-
-Endpoint categories: transactions, categories, recipients, imports, investments, portfolio, planned payments, splits, attachments, saved charts, aggregations, reports, market lookup, watchlist, settings, admin, AI chat.
-
----
-
-## Contributing
-
-1. Fork and create a feature branch from `main`
-2. Write tests first (the project follows TDD) — run `bun run test:all` before opening a PR
-3. Run `bun run lint` and `bun run lint:backend` to catch style issues
-4. Open a pull request with a clear summary and rationale
-
-When adding new adapters, endpoints, or env vars, update `openapi.yaml`, regenerate types, and update the relevant docs in `docs/`.
+[`AGENTS.md`](AGENTS.md) is the shared guide for coding agents. Claude Code also gets edit-time
+checks, a read-only PostgreSQL MCP server, a TypeScript navigation MCP server, and structural
+search with `bun run search:ast`
+([ADR-227](docs/adr/227-claude-code-static-analysis-aids.md),
+[ADR-228](docs/adr/228-typescript-navigation-mcp.md)).
 
 ---
 
 ## Releases
 
-Tag-driven releases (`vX.Y.Z`) trigger GitHub Actions to build the Apple Silicon macOS app and DMG and publish a GitHub Release. The release does not re-run the test suites: it requires the tagged commit, which must be on `main`, to have a passing `CI Complete` check, then re-runs the full-tree secrets scan and the dependency audits before packaging. See [docs/guides/cicd-pipelines.md](docs/guides/cicd-pipelines.md).
-
-Workflow: `.github/workflows/release.yml`
+Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), which builds the Apple
+Silicon app and DMG and publishes a GitHub Release. It does not re-run the test suites: the tagged
+commit must be on `main` with a passing `CI Complete` check. It re-runs the secrets scan and
+dependency audits on the release tree before packaging.
 
 ---
 
-## Security & Privacy
+## Security and privacy
 
-- Never commit real `.env` files or secrets
-- Keep your deployment private and access-controlled
-- Backups are encrypted with AES-256-GCM (per-backup random salt)
-- Dependencies should be reviewed and updated regularly
-- AI chat uses a local Ollama instance — no financial data leaves your network. The experimental
-  OpenAI and Codex features are off by default; OpenAI sends only the payload you preview and grant
+- Your data stays in a loopback-only PostgreSQL database on your Mac.
+- Never commit real `.env` files or secrets.
+- The Electron shell runs with context isolation and the sandbox on, and Node integration off.
+- Backups can be encrypted with AES-256-GCM (per-backup random salt).
+- Ollama runs locally by default. If you point it at a remote endpoint, that endpoint receives
+  your prompts and tool results. The OpenAI and Codex features are off by default.
+
+See [`docs/security/`](docs/security/).
 
 ---
 
