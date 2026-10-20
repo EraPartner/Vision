@@ -2,8 +2,8 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last_modified: 2026-10-19
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
@@ -73,8 +73,7 @@ After one-year retention prunes an authenticated old prefix, a new backup contai
 Fresh installs start at migration `0001_baseline` with a single `baseline_installed` audit event.
 The schema revision of a database, and the `schemaHead` a bundle records, is the highest name in
 `public.kysely_migration`. Restore refuses any backup taken before the switch to the Kysely
-baseline: a dump that has no `kysely_migration` rows or that carries Alembic's `alembic_version`
-table fails with `BACKUP_PRE_BASELINE`. See
+baseline: a dump that has no `kysely_migration` rows fails with `BACKUP_PRE_BASELINE`. See
 [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
 [[docs/guides/migrations|Database Migration Guide]].
 
@@ -383,7 +382,7 @@ and [[docs/architecture/electron|Electron architecture]].
    - **v1 (retired):** Refuse with "This backup uses the retired v1 encryption format, which Vision no longer restores." before any decryption
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
-4. **Schema Validation** — Read the dump's own `kysely_migration` rows. A dump without them, or with an `alembic_version` table, is refused with `BACKUP_PRE_BASELINE`. The highest migration name must equal `metadata.schemaHead` when present (otherwise the bundle is reported corrupt), and is compared with the current `getSchemaHead()` (or the highest shipped `db/migrations/` file). If the bundle schema is newer, throw `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
+4. **Schema Validation** — Read the dump's own `kysely_migration` rows. A dump without them is refused with `BACKUP_PRE_BASELINE`. The highest migration name must equal `metadata.schemaHead` when present (otherwise the bundle is reported corrupt), and is compared with the current `getSchemaHead()` (or the highest shipped `db/migrations/` file). If the bundle schema is newer, throw `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
 5. **Native Database Stage** — The runtime restores into a fresh staged database created from
    `template0`, uses version-matched PostgreSQL 18 tools, stops on the
    first error, and restores in one transaction. A no-owner restore leaves schema tables with the
@@ -392,7 +391,7 @@ and [[docs/architecture/electron|Electron architecture]].
    bootstrap grants restored ordinary tables and views individually and skips those app-owned
    materialized views.
 6. **Database Validation** — Confirm the staged database's highest `kysely_migration` name equals
-   the expected schema head, that it has no `alembic_version`, and that it has public tables before
+   the expected schema head and that it has public tables before
    the live database name can change.
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
    links, and compute the count and aggregate SHA-256 fingerprint.

@@ -2,8 +2,8 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     guide,
@@ -141,7 +141,7 @@ using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
 The backend job enables the audit and transaction performance probes and sets
 `VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
 `apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
-migrated schema. Migrator behaviour, including the refusal of a database still on Alembic
+migrated schema. Migrator behaviour, including the refusal of a database from before the baseline
 ([[docs/adr/224-remove-alembic-adoption|ADR-224]]), is covered by the ordinary suite
 (`tests/migrate.db.test.ts`). The same job then builds the production frontend once and starts the
 native production stack twice, in sequence: first migrate, `/health` and, when the latest

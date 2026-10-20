@@ -128,7 +128,7 @@ All database scripts use the Kysely migrator in `apps/node-backend/src/database/
 
 | Script            | Purpose                                                                                              |
 | ----------------- | ---------------------------------------------------------------------------------------------------- |
-| `db:migrate`      | Apply every pending migration in `db/migrations/`; refuses a database still on Alembic                  |
+| `db:migrate`      | Apply every pending migration in `db/migrations/`; refuses objects without a migration ledger           |
 | `db:migrate:down` | Revert the latest migration; refuses when it has no `.down.sql`                                      |
 | `db:status`       | List migrations and when each was applied                                                            |
 | `db:new`          | Create `db/migrations/NNNN_<name>.sql` (`bun run db:new -- <name>`)                                  |

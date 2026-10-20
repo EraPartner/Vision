@@ -5523,7 +5523,7 @@
                 "title": "Run migrations",
                 "note": "Apply pending db/migrations files before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/database/migrate.ts runs Kysely's Migrator in one transaction: an empty database gets 0001_baseline.sql and a fingerprint check, a database that still carries alembic_version, or holds application objects without a migration marker, is refused (ADR-224)."
+                "annotation": "apps/node-backend/src/database/migrate.ts runs Kysely's Migrator in one transaction: an empty database gets 0001_baseline.sql and a fingerprint check, a database that holds application objects without a migration marker is refused (ADR-224)."
               },
               {
                 "from": "db.migrations",

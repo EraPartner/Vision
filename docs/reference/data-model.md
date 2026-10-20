@@ -2,8 +2,8 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last_modified: 2026-10-19
 tags:
   [
@@ -91,7 +91,7 @@ related_code:
 
 The schema is `db/migrations/0001_baseline.sql` plus later numbered migrations, applied by the
 Kysely migrator. An empty PostgreSQL 18 database loads the baseline in one transaction and must
-match its catalog fingerprint; a database still on Alembic is refused. The baseline is the contracted shape: it has no `bank_account` columns on
+match its catalog fingerprint; a database with application objects but no migration ledger is refused. The baseline is the contracted shape: it has no `bank_account` columns on
 `transactions`/`planned_transactions`, no per-bank `*_raw_transactions` tables, and no
 `legacy_inh_*` copies. Migration numbers below (`0046`, `0062`, …) are historical Alembic revisions
 whose result the baseline contains; the files exist only in Git history. Generated row types live in

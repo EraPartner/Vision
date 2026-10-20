@@ -899,7 +899,7 @@ test("database activation applies materialized-view ownership inside the staging
         return { stdout: "1\n", stderr: "" };
       }
       if (command.includes("to_regclass('public.kysely_migration')")) {
-        return { stdout: "t|f\n", stderr: "" };
+        return { stdout: "t\n", stderr: "" };
       }
       if (command.includes("FROM public.kysely_migration")) {
         return { stdout: "0064_example\n", stderr: "" };
@@ -1326,12 +1326,12 @@ test("native first start persists and unreferences an argument-array backend chi
     assert.equal(await runtime.backendStartupFailure(), undefined);
     await fs.promises.appendFile(
       runtime.paths.backendLog,
-      `2026-10-19T18:45:42.511Z [ERROR] Failed to start application {"error":"Database is at Alembic revision 0125_x"}\n`,
+      `2026-10-19T18:45:42.511Z [ERROR] Failed to start application {"error":"Database has application objects but no migration marker"}\n`,
     );
     (child as unknown as EventEmitter).emit("exit");
     assert.equal(
       await runtime.backendStartupFailure(),
-      "Database is at Alembic revision 0125_x",
+      "Database has application objects but no migration marker",
     );
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });

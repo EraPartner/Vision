@@ -139,17 +139,15 @@ async function appendMigrationAudit(
 
 /**
  * Install the baseline into an empty database inside the migrator's
- * transaction and lock. A database still on Alembic is refused.
+ * transaction and lock. A database with objects but no ledger is refused.
  */
 async function baselineUp(db: Db, baselineSql: string) {
   const [state] = await rows<{
     major: number;
-    alembic: boolean;
     has_objects: boolean;
   }>(
     db,
     `SELECT current_setting('server_version_num')::int / 10000 AS major,
-            to_regclass('public.alembic_version') IS NOT NULL AS alembic,
             EXISTS (
               SELECT 1 FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -166,16 +164,11 @@ async function baselineUp(db: Db, baselineSql: string) {
     throw new Error("The Vision baseline requires PostgreSQL 18");
   }
 
-  if (state.alembic) {
-    throw new Error(
-      "Database still uses Alembic migrations. Restore a backup taken after the " +
-        "switch to TypeScript migrations, or reset the Demo with bun run demo:reset-native.",
-    );
-  }
-
   if (state.has_objects) {
     throw new Error(
-      "Database has application objects but no migration marker; refusing the baseline",
+      "Database has application objects but no migration marker; refusing the baseline. " +
+        "Restore a backup taken after the switch to TypeScript migrations, or reset the " +
+        "Demo with bun run demo:reset-native.",
     );
   }
   await sql.raw(baselineSql).execute(db);

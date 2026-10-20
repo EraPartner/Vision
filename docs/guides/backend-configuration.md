@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
@@ -164,7 +164,7 @@ lifecycle remains external to the backend.
 1. Polls `checkConnection()` with exponential backoff (40 attempts, 50ms → 1000ms)
 2. Runs `runMigrations()` once a DB connection is available. Kysely's migrator applies pending
    `db/migrations/` files in-process in one transaction, installing the `0001` baseline first on
-   an empty database. A database still carrying `alembic_version` is refused
+   an empty database. A database with application objects but no migration ledger is refused
    ([[docs/adr/224-remove-alembic-adoption|ADR-224]]).
 3. Starts the HTTP server once migrations and role grants succeed
 4. Creates, indexes and refreshes materialized views (runtime artifacts) in the post-listen

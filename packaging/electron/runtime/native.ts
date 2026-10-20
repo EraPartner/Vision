@@ -318,8 +318,8 @@ export function parsePostgresVersionNumber(
 
 /**
  * A backup is restorable only when it carries the Kysely migration ledger
- * (`public.kysely_migration`). Alembic-era backups predate the squashed
- * TypeScript baseline and are refused by this code.
+ * (`public.kysely_migration`). Older backups predate the squashed TypeScript
+ * baseline and are refused by this code.
  */
 export const PRE_BASELINE_BACKUP_CODE = "BACKUP_PRE_BASELINE";
 export const PRE_BASELINE_BACKUP_MESSAGE =
@@ -335,9 +335,9 @@ export function preBaselineBackupError(): NativeRuntimeError {
 
 // The schema version is the highest applied Kysely migration name. Names are
 // zero-padded `NNNN_name`, so text ordering is migration order. The first
-// row reports whether each ledger exists so a missing table is not an error.
+// query reports whether the ledger exists so a missing table is not an error.
 const SCHEMA_LEDGER_SQL =
-  "SELECT to_regclass('public.kysely_migration') IS NOT NULL, to_regclass('public.alembic_version') IS NOT NULL;";
+  "SELECT to_regclass('public.kysely_migration') IS NOT NULL;";
 const SCHEMA_HEAD_SQL = "SELECT max(name) FROM public.kysely_migration;";
 
 export function assertPostgres18Version(label: string, output: string): number {
@@ -3120,7 +3120,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     config: NativeDatabaseConfig,
     env: ChildEnv,
     timeout: number,
-  ): Promise<{ head: string | undefined; hasAlembicVersion: boolean }> {
+  ): Promise<{ head: string | undefined }> {
     const query = (command: string) =>
       runFile(
         path.join(requireTools().binDir, "psql"),
@@ -3143,12 +3143,11 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         ],
         { timeout, env },
       ).then((result) => result.stdout.trim());
-    const [hasKysely, hasAlembic] = (await query(SCHEMA_LEDGER_SQL)).split("|");
     const head =
-      hasKysely === "t"
+      (await query(SCHEMA_LEDGER_SQL)) === "t"
         ? (await query(SCHEMA_HEAD_SQL)) || undefined
         : undefined;
-    return { head, hasAlembicVersion: hasAlembic === "t" };
+    return { head };
   }
 
   async function adminDatabasePsql(
@@ -3352,8 +3351,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         if (!Number.isInteger(tableCount) || tableCount <= 0)
           throw new Error("Restored database has no public schema tables");
         const ledger = await readSchemaLedger(target, config, env, 30_000);
-        if (!ledger.head || ledger.hasAlembicVersion)
-          throw preBaselineBackupError();
+        if (!ledger.head) throw preBaselineBackupError();
         if (expectedSchemaHead && ledger.head !== expectedSchemaHead.trim()) {
           throw new Error(
             "Restored database schema revision does not match backup metadata",

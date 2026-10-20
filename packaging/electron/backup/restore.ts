@@ -130,8 +130,6 @@ function getLocalMigrationChainHead(): string {
 interface DumpSchemaLedger {
   /** Highest public.kysely_migration name, or "" when the ledger is absent. */
   head: string;
-  /** The dump creates or fills Alembic's version table. */
-  hasAlembicVersion: boolean;
 }
 
 const KYSELY_COPY =
@@ -139,8 +137,6 @@ const KYSELY_COPY =
 const KYSELY_INSERT =
   /^INSERT INTO\s+(?:"?public"?\.)?"?kysely_migration"?\s*(?:\([^)]*\)\s*)?VALUES\s*\('([^']+)'/i;
 const ANY_COPY = /^COPY\s+\S.*\s+FROM\s+stdin;$/i;
-const ALEMBIC_TABLE =
-  /^(?:CREATE TABLE|COPY|INSERT INTO)\s+(?:"?[\w$]+"?\.)?"?alembic_version"?[\s(]/i;
 
 // Reads the migration ledger rows from a plain pg_dump. A plain dump writes
 // one COPY block per table, so the scan reads the whole file.
@@ -151,7 +147,7 @@ function readDumpSchemaLedger(sqlPath: string): Promise<DumpSchemaLedger> {
       input: stream,
       crlfDelay: Infinity,
     });
-    const ledger: DumpSchemaLedger = { head: "", hasAlembicVersion: false };
+    const ledger: DumpSchemaLedger = { head: "" };
     const record = (name: string | undefined) => {
       if (name && name > ledger.head) ledger.head = name;
     };
@@ -163,7 +159,6 @@ function readDumpSchemaLedger(sqlPath: string): Promise<DumpSchemaLedger> {
         else if (copyBlock === "kysely") record(line.split("\t", 1)[0]);
         return;
       }
-      if (ALEMBIC_TABLE.test(line)) ledger.hasAlembicVersion = true;
       if (KYSELY_COPY.test(line)) copyBlock = "kysely";
       else if (ANY_COPY.test(line)) copyBlock = "other";
       else record(KYSELY_INSERT.exec(line)?.[1]);
@@ -175,11 +170,11 @@ function readDumpSchemaLedger(sqlPath: string): Promise<DumpSchemaLedger> {
 }
 
 /**
- * Refuses a backup taken before the TypeScript migration baseline: it has
- * Alembic's version table and no Kysely migration ledger.
+ * Refuses a backup taken before the TypeScript migration baseline: it has no
+ * Kysely migration ledger.
  */
 function assertPostBaselineBackup(ledger: DumpSchemaLedger): string {
-  if (!ledger.head || ledger.hasAlembicVersion) throw preBaselineBackupError();
+  if (!ledger.head) throw preBaselineBackupError();
   return ledger.head;
 }
 

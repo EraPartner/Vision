@@ -9,7 +9,7 @@ WITH bookkeeping AS (
   SELECT c.oid
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public'
-     AND c.relname IN ('alembic_version', 'kysely_migration',
+     AND c.relname IN ('kysely_migration',
                        'kysely_migration_lock', 'mv_monthly_summary',
                        'mv_category_totals')
   UNION ALL
@@ -17,7 +17,7 @@ WITH bookkeeping AS (
     FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public'
-     AND c.relname IN ('alembic_version', 'kysely_migration',
+     AND c.relname IN ('kysely_migration',
                        'kysely_migration_lock', 'mv_monthly_summary',
                        'mv_category_totals')
 ),
