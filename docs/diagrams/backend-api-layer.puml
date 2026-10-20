@@ -77,6 +77,14 @@ package "Routes" {
   class TransactionsRouter {
     +GET / : list transactions
     +GET /export/csv : export transactions
+    +GET /export/json : export transactions as JSON
+    +GET /transfer-suggestions : candidate transfer pairs
+    +POST /transfers : mark transfer pair
+    +DELETE /transfers/:id : unmark transfer pair
+    +POST /bulk-tag : add/remove tags on up to 500 transactions
+    +POST /bulk-delete : up to 500 ids OR 5000 filter matches
+    +POST /bulk-update : category / recipient / active update
+    +POST /bulk-export : CSV / NDJSON streamed export
     +GET /:id : get transaction
     +POST / : create transaction
     +PATCH /:id : update transaction
@@ -95,7 +103,6 @@ package "Routes" {
     +POST / : create category
     +PATCH /:id : update category
     +DELETE /:id : delete category
-    +POST /assign : assign category to recipients
     +POST /:id/assign : assign recipients to category
   }
 
@@ -108,6 +115,10 @@ package "Routes" {
     +POST /:id/merge : merge recipients
     +POST /:id/unmerge : unmerge recipient
     +GET /:id/aliases : get aliases
+    +GET /clusters : recipient clusters
+    +GET,POST /:id/patterns : list/create match patterns
+    +POST /:id/patterns/preview : preview pattern matches
+    +PATCH,DELETE /:id/patterns/:patternId : edit/delete pattern
   }
 
   class RecipientBankAccountsRouter <<nested under /api/recipients>> {
@@ -120,6 +131,9 @@ package "Routes" {
 
   class PlannedTransactionsRouter {
     +GET / : list planned transactions
+    +GET /due-soon : upcoming planned transactions
+    +GET /totals : planned totals
+    +GET /match-suggestions : candidate transaction matches
     +GET /:id : get planned transaction
     +POST / : create planned transaction
     +PATCH /:id : update planned transaction
@@ -131,6 +145,8 @@ package "Routes" {
     +GET / : list investments
     +GET /providers : list price providers
     +POST /refresh-prices : bulk refresh prices
+    +GET /transactions : list all portfolio transactions
+    +PUT /transactions/broker : retag broker
     +GET /exposure : aggregate explicit look-through exposure
     +PUT /exposure/sources : upsert classifications and fund documents
     +GET /:id/price-history : provider-backed historical prices
@@ -155,6 +171,10 @@ package "Routes" {
     +GET /batches/:id : get transaction import batch
     +DELETE /batches/:id : rollback transaction import batch
     +GET /batches/:id/preview : preview rows grouped by recipient
+    +POST /batches/:id/rows/:rowId/override : override recipient
+    +POST /batches/:id/rows/:rowId/category-override : override category
+    +POST /batches/:id/commit : commit reviewed batch
+    +GET,POST /parsers; PATCH,DELETE /parsers/:id : custom parser configs
   }
 
   class ImportBatchRoutes {
@@ -164,6 +184,7 @@ package "Routes" {
   class PortfolioImportRouter <<ADR-078>> {
     +POST /csv/custom : one-shot CSV / Saxo XLSX import (201|202)
     +POST /csv/stream : CSV / Saxo XLSX preflight before SSE
+    +POST /probe : detect portfolio file format
     +GET /parsers : list portfolio parser configs
     +POST /parsers : create portfolio parser config
     +PATCH /parsers/:id : update portfolio parser config
@@ -197,7 +218,6 @@ package "Routes" {
 
   class SavedChartsRouter {
     +GET / : list charts
-    +GET /:id : get chart
     +POST / : create chart
     +PATCH /:id : update chart
     +DELETE /:id : delete chart
@@ -207,10 +227,15 @@ package "Routes" {
     +GET /catalog : approved fields, measures, joins
     +POST /compile : visual plan to SQL
     +POST /execute : bounded read-only query
+    +POST /pivot : pivot query
+    +POST /extensions/evaluate, /formulas/evaluate : evaluate expressions
+    +POST /ai-proposals/preview, /ai-proposals/apply : AI plan proposals
+    +POST /interchange/import, /interchange/export : workbook interchange
     +POST /cancel/:requestId : cancel query
     +POST /drill : contributing records
     +GET,POST /saved : list/create analyses
     +GET,PUT,DELETE /saved/:id : read/version/delete
+    +GET /saved/:id/versions, POST /saved/:id/restore : history
     +POST /saved/:id/run : refresh and record state
   }
 
@@ -239,6 +264,7 @@ package "Routes" {
     +GET /transaction/:id : get splits for transaction
     +POST / : create split
     +POST /batch : create batch splits
+    +POST /bulk : bulk split creation
     +POST /:id/pay : record payment
     +POST /:id/settle : settle split
     +GET /:id/payments : get payments for split
@@ -283,8 +309,8 @@ package "Routes" {
     +POST /update/apply : apply update
     +POST /update/apply-and-restart : apply and restart
     +POST /investments/kinesis/sanitize-history : sanitize Kinesis spikes
-    +GET /db/stats : database table statistics (Phase 7)
-    +POST /db/vacuum : run VACUUM ANALYZE (Phase 7)
+    +GET /database/stats : database table statistics
+    +POST /database/vacuum : run VACUUM ANALYZE
     +GET /database/tables/:table/schema : column schema + PK discovery (ADR-101)
     +GET /database/tables/:table/rows : paginated/filtered/sorted read; READ ONLY txn (ADR-101)
     +POST /database/tables/:table/mutate : batch insert/update/delete; dryRun; xmin OCC (ADR-101)
@@ -292,8 +318,7 @@ package "Routes" {
     +POST /providers/:provider/probe : synthetic probe
     +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)
     +GET /endpoints : live route manifest (Phase F)
-    +POST /backup : create backup (REST mirror of Electron IPC)
-    +POST /restore : restore backup
+    +GET /endpoint-liveness : route manifest with liveness
     +/api/admin/* : timing-safe bearer auth (ADR-037)
   }
 
@@ -324,13 +349,16 @@ package "Routes" {
     +GET /average-vs-current : avg vs current spending
     +GET /bank-balances : account balances
     +GET /cashflow-forecast : N-month forecast (Phase 6)
+    +GET /cashflow-forecast-methods, /cashflow-forecast-rolling, /cashflow-forecast-accuracy
     +GET /sankey : income flow diagram (Phase 7)
+    +GET /category-pivot, /recipient-by-year, /recipient-pivot, /tag-pivot
   }
 
   class BelgianTaxRouter {
     +GET /overview : live/historical frozen figures + CAS baselines
     +GET /dashboard : server-computed charts + recorded taxes/shares
     +POST /compute : stateless household preview
+    +GET /portfolio-dashboard : portfolio tax dashboard
   }
 
   class ReportsRouter <<Phase 3-8>> {
@@ -341,14 +369,50 @@ package "Routes" {
 
   class AiRouter <<ADR-024>> {
     +POST /chat : Ollama tool-loop chat (rate-limited via AI_CHAT_RATE_LIMIT)
-    +GET /conversations : list saved conversations
-    +DELETE /conversations/:id : delete conversation
-    +GET /health : Ollama reachability probe
+    +POST /chat/stream : SSE chat
+    +GET /status : Ollama reachability + config
+    +GET /models : list models
+    +GET,POST /conversations : list/create conversations
+    +GET,PATCH,DELETE /conversations/:id : read/rename/delete conversation
   }
 
   class AiResearchRouter <<ADR-171>> {
     +GET /agentcloak-desktop : effective status and fresh Desktop probe
     +PUT /agentcloak-desktop : enable or disable Desktop protection
+    +GET /status : research status
+    +POST /disclosures/preview, /disclosures/grants : cloud disclosure
+    +GET /disclosures/grants, /disclosures/records; DELETE /disclosures/records
+    +POST /disclosures/grants/:id/revoke : revoke grant
+    +GET,POST /investigations; GET,DELETE /investigations/:id
+    +POST /investigations/:id/resume, /investigations/:id/cancel
+  }
+
+  class AiResearchDocumentsRouter {
+    +GET,POST / : list/upload documents
+    +GET,DELETE /:id : read/delete document
+    +POST /search/passages : passage search
+  }
+
+  class AccountsRouter {
+    +GET / , /totals, /:id : list/totals/get accounts
+    +POST / : create account
+    +PATCH,DELETE /:id : update/delete account
+    +GET /:id/portfolio-lot-retag-preview, /:id/merge-preview
+    +POST /:id/close, /:id/merge, /:id/opening-balance, /:id/reconcile
+    +PUT,DELETE /:id/statement-balances/:currency
+  }
+
+  class CrossWorkspaceRouter {
+    +POST /commitment-aware-cash : commitment-aware cash view
+    +POST /rebalance : rebalance plan
+  }
+
+  class ResearchRouter {
+    +GET /search, /quote, /chart, /fundamentals, /analyst, /news
+    +GET /macro/search, /macro/series, /scorecard
+    +POST /portfolio-forecast, /presentation
+    +GET,POST /mappings; POST /mappings/resolve, /mappings/audit; DELETE /mappings/:id
+    +GET /provider-keys; PUT,DELETE /provider-keys/:provider
   }
 
   class AttachmentsRouter <<Phase 5A>> {
@@ -363,13 +427,6 @@ package "Routes" {
     +POST / : find-or-create by slug
     +PATCH /:id : update tag (color, is_active)
     +DELETE /:id : soft-delete
-  }
-
-  class BulkActionsRoutes <<mounted route>> {
-    +POST /bulk-tag : add/remove tags on up to 500 transactions
-    +POST /bulk-delete : up to 500 ids OR 5000 filter matches
-    +POST /bulk-update : category / recipient / active update
-    +POST /bulk-export : CSV / NDJSON streamed export
   }
 }
 
@@ -394,6 +451,12 @@ package "Repositories" {
   class "SettingsRepository" as SR2
   class "RecipientBankAccountRepository" as RBAR
   class "InfoRepository" as IFR
+  class "AccountRepository" as AR
+  class "TagRepository" as TGR
+  class "AttachmentRepository" as ATR
+  class "ImportBatchRepository" as IBR
+  class "ImportCommitRepository" as ICR
+  class "PortfolioImportBatchRepository" as PIBR
 }
 
 package "Database" {
@@ -407,9 +470,9 @@ package "Services" {
   class TaxOverviewService
   class TaxDashboardService
   class SharedBelgianTaxEngine
-  class ImportService
-  class RawTransactionImportService
-  class StreamingImportService
+  class "ImportPipeline <<services/importPipeline>>" as ImportPipeline
+  class "StreamImport <<lib/importProgress.ts>>" as StreamImport
+  class ImportBatchService
   class DataImportService
   class PortfolioImportPipelineService <<ADR-078>>
   class PortfolioImportBatchService <<ADR-078>>
@@ -427,7 +490,6 @@ package "Services" {
   class RecurrenceService
   class DeduplicationService
   class TextNormalization
-  class IBANService
   class BankAdapters
 }
 
@@ -460,7 +522,11 @@ Main --> AiRouter
 Main --> AiResearchRouter : /api/ai-research
 Main --> AttachmentsRouter
 Main --> TagsRouter
-TransactionsRouter ..> BulkActionsRoutes : mounts bulk endpoints
+Main --> AccountsRouter : /api/accounts
+Main --> CrossWorkspaceRouter : /api/cross-workspace
+Main --> ResearchRouter : /api/research\nmarket limiter
+Main --> AiResearchDocumentsRouter : /api/ai-research/documents\nattachment limiter
+AccountsRouter --> AR
 ValidationMiddleware --> PureValidation : delegates
 RequestInput --> PureValidation : shared fields wrap validateId and parsers
 TransactionsRouter ..> RequestInput : parseInput (nearly every router)
@@ -478,9 +544,8 @@ InvestmentsRouter --> IR
 InvestmentsRouter --> PTR2
 InvestmentsRouter --> PortfolioExposureService
 PortfolioExposureService --> PER
-ImportRouter --> ImportService
-ImportRouter --> RawTransactionImportService
-ImportRouter --> StreamingImportService
+ImportRouter --> ImportPipeline
+ImportRouter --> StreamImport : SSE progress
 ImportRouter --> DataImportService
 ImportRouter ..> ImportBatchRoutes : registers shared batch routes
 ImportRouter --> ImportBatchService
@@ -515,14 +580,12 @@ InternalAuditRouter --> AuditBridgeService : checkpoint metadata
 AuditBridgeService --> Connection : audit chain repository transaction
 
 ' Service dependencies
-ImportService --> BankAdapters
-ImportService --> DeduplicationService
-ImportService --> RR
-ImportService --> TR
-
-RawTransactionImportService --> TR
-RawTransactionImportService --> RR
-RawTransactionImportService --> DeduplicationService
+ImportPipeline --> BankAdapters
+ImportPipeline --> DeduplicationService
+ImportPipeline --> TR
+ImportPipeline --> IBR : staging
+ImportPipeline --> ICR : commit
+ImportBatchService --> IBR
 
 CurrencyConversionService --> TR
 

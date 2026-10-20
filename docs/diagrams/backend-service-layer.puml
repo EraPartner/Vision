@@ -13,7 +13,7 @@ package "Belgian Tax" {
   class TaxDashboardService {
     +getTaxDashboard(options): chart and widget data
   }
-  class SharedBelgianTaxEngine {
+  class "shared-utils/belgianTax" as SharedBelgianTaxEngine {
     +computeHouseholdTax(household)
     +recordedIncomeAttribution / portfolioTax
   }
@@ -45,16 +45,6 @@ package "Import Pipeline" {
   class DataImportService {
     +importRecipientsCSV(path, opts): Promise<ImportResult>
     +importCategoriesCSV(path, opts): Promise<ImportResult>
-  }
-
-  class StreamingImportService {
-    +streamImport(stream, handler): Promise<void>
-    note bottom: Deprecated (Phase C) —\nfolded into ImportPipeline.
-  }
-
-  class RawTransactionImportService {
-    +importCSVWithRawStorage(filePath, bankName, config): Promise<ImportResult>
-    note bottom: Deprecated (Phase C) —\nfolded into ImportPipeline.
   }
 }
 
@@ -103,42 +93,47 @@ package "Business Logic Services" {
   }
 
   class DeduplicationService {
-    +isDuplicateByFields(date, amount, recipient, memo): Promise<boolean>
-    +findDuplicates(criteria): Promise<Transaction[]>
+    +lockManualTransactionIdentity(input): Promise<Identity>
+    +isManualDuplicate(input): Promise<boolean>
+    +recordManualTransactionDedupClaim(hash, transactionId): Promise<void>
   }
 
   class RecipientMergeService {
     +mergeRecipients(primaryId, duplicateIds): Promise<MergeResult>
-    +unmergeRecipient(id): Promise<boolean>
   }
 
   class RecipientClusterService {
-    +findClusters(opts): ClusterList
+    +findRecipientClusters(opts): ClusterList
   }
 
   class RecipientPatternService {
-    +inferRecipientFromRow(row): RecipientHint
+    +loadActivePatterns(): Promise<Pattern[]>
+    +applyPatterns(rows): Promise<Match[]>
+    +createPattern / updatePattern / deletePattern
   }
 
-  class FilterBuilder {
+  class "lib/filterBuilder" as FilterBuilder {
     +buildTransactionWhere(filters): { sql, params }
   }
 
   class BulkSelection {
-    +resolveSelection({ ids?, filter? }): IdSet
+    +resolveBulkSelection({ ids?, filter? }): IdSet
   }
 }
 
 package "External / Data" {
   class "currency/CurrencyConversionService" as CurrencyConversionService {
-    +convert(amount, from, to): Promise<number>
-    +getExchangeRate(from, to): Promise<number>
+    +convertToCurrency(amount, from, to): Promise<Converted>
+    +convertRowsToEur(rows): Promise<Rows>
+    +loadCurrentRates(): Promise<RateTable>
     +warmCache(): Promise<void>
+    +backfillPortfolioHistoricalRates(): Promise<void>
+    note bottom: Stored exchange_rates only;\na historical miss uses the latest stored rate.
   }
 
   class PriceProviderService {
     +fetchLivePricesDetailed(investments): Promise<PriceMap>
-    +updateInvestmentPrices(): Promise<UpdateResult>
+    +fetchHistoricalPrices(investment, range): Promise<Series>
   }
 
   class BelgianInflationService {
@@ -204,8 +199,10 @@ package "External / Data" {
   }
 
   class QuoteBackfillService {
-    +backfillPortfolioHistoricalRates(): Promise<void>
-    +backfillQuotes(symbols, range): Promise<void>
+    +backfillHistoricalAssetQuotes(): Promise<void>
+    +refreshActiveHoldingQuotes(): Promise<void>
+    +backfillHoldingGaps(): Promise<void>
+    +refreshQuotesForInvestment(id): Promise<void>
   }
 
   class BankAdapters {
@@ -221,20 +218,21 @@ package "Storage & Performance" {
   }
 
   class AggregationRefreshService {
+    +refreshAggregations(): Promise<void>
     +scheduleAggregationRefresh(): void
-    +refreshPhase1Views(): Promise<void>
+    +scheduleMaterializedViewRefresh(): void
     +cancelPendingAggregationRefresh(): void
   }
 
   class AttachmentService {
     +storeAttachment(txId, file): Metadata
-    +streamAttachment(id): Stream
-    +removeAttachment(id): void
+    +resolveAbsolutePath(id): Promise<string>
+    +removeAttachmentFile(path): Promise<void>
   }
 
   class TransactionExport {
-    +streamCsv(res, filters): void
-    +streamNdjson(res, filters): void
+    +streamCsvExport(res, filters): void
+    +streamNdjsonExport(res, filters): void
   }
 }
 
@@ -250,8 +248,8 @@ package "AI & Observability" {
   }
 
   class AiChatService {
-    +respond(messages, tools): Stream
-    +dispatchTool(name, args): ToolResult
+    +runChatTurn(conversationId, message, {streaming}): Promise<Turn>
+    +listConversations() / getConversationWithMessages(id)
   }
 
   class AiInvestigationService <<ADR-145, ADR-151, ADR-169>> {
@@ -288,25 +286,24 @@ package "AI & Observability" {
   class ProviderHealthService {
     +recordSuccess(provider, latency): void
     +recordError(provider, err): void
-    +probe(provider): ProbeResult
-    +getSummary(): Summary
+    +probeProvider(provider): ProbeResult
+    +listProviderHealth(): Summary
   }
 
   class RouteManifest {
-    +buildManifest(app): Route[]
+    +buildRouteManifest(app): Route[]
   }
+
+  class AiDisclosureService
+  class "aiResearchDocuments" as AiResearchDocuments
+  class "research/*" as ResearchProviders
 }
 
 package "Supporting" {
-  class TextNormalization {
+  class "lib/textNormalization" as TextNormalization {
     +normalizeForMatching(text): string
     +cleanRecipientName(name): string
     +cleanKbcRecipientName(name): string
-  }
-
-  class IBANService {
-    +normalizeIban(iban): string
-    +isValidIban(iban): boolean
   }
 }
 
@@ -342,7 +339,6 @@ package "Thin Route Seams (ADR-067, June 2026)" {
   class WatchlistService
   class AttachmentRecordService
   class ImportBatchService
-  class ImportBatchRoutes
   class CustomParserConfigService
   class "portfolio/portfolioTransactionService" as PortfolioTransactionService {
     +create(input)
@@ -421,16 +417,16 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +upsertPortfolioExposureBundle(input): Promise<Sources>
     +getPortfolioExposure(currency): Promise<Exposure>
   }
-  class MoveHoldingService <<ADR-091>> {
-    +move(investmentId, fromAccountId, toAccountId, units?, strategy?): Promise<MoveResult>
-    ' strategy: 'fifo' (default) | 'proportional'
-  }
-  class BrokerageFanoutService <<ADR-095>> {
-    +planBrokerageFanout(rows, accountId): FanoutPlan
-    +commitBrokerageFanout(plan, db): Promise<CommitResult>
-    ' Core built; parser/staging/review UI not yet wired
-  }
+  class "importPipeline/brokerageRouting" as BrokerageRouting
   class AccountMergeService <<ADR-088>>
+  class AccountService
+  class TagService
+  class ReconcileService
+  class TransferReconciliationService
+  class PlannedMatchService
+  class PlannedExecutionService
+  class OpeningBalanceService
+  class InsightsDigestService
 }
 
 ' Relationships
@@ -440,7 +436,7 @@ ImportPipeline --> RecipientPatternService
 ImportPipeline --> RecipientRepository
 ImportPipeline --> TransactionRepository
 ImportPipeline --> ImportBatchRepository
-ImportPipeline --> MaterializedViewService
+ImportPipeline --> AggregationRefreshService
 
 DataImportService --> TextNormalization
 
@@ -452,11 +448,9 @@ RecipientMergeService --> TransactionRepository
 RecipientMergeService --> AggregationRefreshService
 
 RecipientClusterService --> RecipientRepository
-RecipientPatternService --> RecipientRepository
-RecipientPatternService --> IBANService
-RecipientPatternService --> TextNormalization
+RecipientPatternService --> "recipient_match_patterns"
 
-CurrencyConversionService --> TransactionRepository
+CurrencyConversionService --> "exchange_rates (rateFetcher)" : stored rates only
 CommitmentAwareCashService --> PlannedTransactionRepository : pending dated bills
 CommitmentAwareCashService --> CrossWorkspaceDataService : spendable computed balances
 CommitmentAwareCashService --> CurrencyConversionService : stored recent FX

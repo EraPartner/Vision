@@ -7,8 +7,9 @@ skinparam nodesep 30
 skinparam ranksep 50
 
 package "Routing (React Router)" {
-  class BrowserRouter
-  class Routes
+  class createBrowserRouter
+  class RouterProvider
+  class "appRouteManifest (lib/routePreload.ts)" as Routes
 }
 
 package "Budgeting Pages" {
@@ -63,6 +64,14 @@ package "Budgeting Pages" {
     +Owed Amounts
   }
 
+  class AccountsPage {
+    +Account List
+  }
+
+  class AccountDetailPage {
+    +Account Ledger
+  }
+
   class ImportReviewPage {
     +Per-row recipient overrides
     +Commit / cancel batch
@@ -110,6 +119,10 @@ package "Portfolio Pages" {
     +Assets vs Liabilities
     +Time Series
     +By Account Table (cash + holdings + total per in_net_worth account)
+  }
+
+  class RebalancePage {
+    +Rebalance Plans
   }
 
   class PortfolioTaxPage {
@@ -292,12 +305,15 @@ package "Shared Components" {
 }
 
 ' Route Hierarchy
-BrowserRouter --> Routes
+createBrowserRouter --> RouterProvider
+RouterProvider --> Routes
 Routes --> AppLayout
 
 AppLayout --> DashboardPage : "/"
 AppLayout --> TransactionsPage : "/transactions"
 AppLayout --> CategoriesPage : "/categories"
+AppLayout --> AccountsPage : "/accounts"
+AccountsPage --> AccountDetailPage : "/accounts/:id"
 AppLayout --> RecipientsPage : "/recipients"
 AppLayout --> PlannedPaymentsPage : "/planned"
 AppLayout --> StatisticsPage : "/statistics"
@@ -315,6 +331,7 @@ PortfolioPage --> RealEstatePage : "/portfolio/real-estate"
 PortfolioPage --> SavingsPage : "/portfolio/savings"
 PortfolioPage --> NetWorthPage : "/portfolio/net-worth"
 PortfolioPage --> PortfolioTaxPage : "/portfolio/tax"
+PortfolioPage --> RebalancePage : "/portfolio/rebalance"
 PortfolioPage --> PortfolioImportPage : "/portfolio/import"
 PortfolioImportPage --> PortfolioImportSession : owns multi-statement workflow
 PortfolioImportPage --> PortfolioImportReviewPage : "/portfolio/import/:batchId/review"
@@ -341,6 +358,11 @@ AppLayout --> NotFound : "*"
 note right of AdminOverviewPage
   Admin section: shown in the sidebar
   only when admin mode is on (ADR-180)
+  Admin routes wrapped in RequireAdmin (manifest admin: true)
+end note
+
+note right of PortfolioPage
+  Legacy redirect: /portfolio/performance -> /portfolio (keeps ?search)
 end note
 
 note bottom of ResearchHomePage
@@ -349,10 +371,10 @@ note bottom of ResearchHomePage
   /portfolio/watchlist, /portfolio/exchange-rates,
   and /research/symbol/:symbol aliases now render
   Not Found (ADR-136).
-  7 active routes: /research, /research/market,
+  8 active routes: /research, /research/market,
   /research/watchlist, /research/compare,
   /research/charts, /research/forecast,
-  /research/markets.
+  /research/markets, /research/dossiers.
   Use /research/market?symbol= for symbol links.
 end note
 

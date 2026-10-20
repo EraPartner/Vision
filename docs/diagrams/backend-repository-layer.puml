@@ -82,12 +82,14 @@ package "Repositories" {
   }
 
   class RecipientBankAccountRepository {
-    +getAll(opts): Promise<RecipientBankAccount[]>
     +getById(id): Promise<RecipientBankAccount | null>
-    +getByRecipient(recipientId): Promise<RecipientBankAccount[]>
-    +create(data): Promise<RecipientBankAccount>
+    +getByRecipientId(recipientId): Promise<RecipientBankAccount[]>
+    +getByAccountNumber(accountNumber): Promise<RecipientBankAccount | null>
+    +getPrimaryAccount(recipientId): Promise<RecipientBankAccount | null>
+    +createOrGet(data): Promise<RecipientBankAccount>
     +update(id, fields): Promise<RecipientBankAccount>
-    +hardDelete(id): Promise<boolean>
+    +setPrimary(id): Promise<RecipientBankAccount>
+    +softDelete(id): Promise<boolean>
   }
 
   class InvestmentRepository {
@@ -162,7 +164,7 @@ package "Repositories" {
     +getById(id): Promise<Watchlist | null>
     +create(data): Promise<Watchlist>
     +update(id, fields): Promise<Watchlist>
-    +hardDelete(id): Promise<boolean>
+    +delete(id): Promise<boolean>
   }
 
   class SplitRepository {
@@ -189,8 +191,8 @@ package "Repositories" {
 
   class SettingsRepository {
     +get(key): Promise<any>
-    +set(key, value): Promise<void>
     +setMany(settings): Promise<void>
+    +replaceMany(settings): Promise<void>
     +getAll(): Promise<object>
     +delete(key): Promise<boolean>
   }
@@ -200,14 +202,7 @@ package "Repositories" {
     +getById(id): Promise<SavedChart | null>
     +create(data): Promise<SavedChart>
     +update(id, fields): Promise<SavedChart>
-    +hardDelete(id): Promise<boolean>
-  }
-
-  class RawTransactionRepository {
-    +getAll(opts): Promise<RawTransaction[]>
-    +getByHash(hash): Promise<RawTransaction | null>
-    +insert(data): Promise<RawTransaction>
-    +hardDelete(id): Promise<boolean>
+    +delete(id): Promise<boolean>
   }
 
   class InfoRepository {
@@ -220,7 +215,7 @@ package "Repositories" {
     +getNetWorth(): Promise<NetWorth>
     +getRecipientInsights(): Promise<RecipientInsight[]>
     +getExchangeRates(): Promise<ExchangeRate[]>
-    note bottom: Composite (Phase 3.1) — split into\n7 sub-modules: Statistics, Monthly,\nBanks, NetWorth, Planned, Recipients,\nHelpers (+ getNetWorthFromSnapshots).
+    note bottom: Composite (Phase 3.1) — split into\n11 sub-modules: Statistics, Monthly,\nAverageVsCurrent, Banks, NetWorth, Planned,\nRecipients, Forecast, Sankey, Tags, Helpers\n(+ getNetWorthFromSnapshots).
   }
 
   class TagRepository {
@@ -228,31 +223,35 @@ package "Repositories" {
     +findOrCreateBySlug(name, color): Promise<Tag>
     +update(id, fields): Promise<Tag>
     +softDelete(id): Promise<boolean>
-    +attachToTransactions(tagIds, txIds): Promise<void>
-    +detachFromTransactions(tagIds, txIds): Promise<void>
+    +getManyBySlugs(slugs): Promise<Tag[]>
+    +countTransactionReferences(id): Promise<number>
   }
 
   class AttachmentRepository {
-    +insert(metadata): Promise<Attachment>
-    +getById(id): Promise<Attachment | null>
+    +create(metadata): Promise<Attachment>
+    +findById(id): Promise<Attachment | null>
     +listByTransaction(txId): Promise<Attachment[]>
-    +delete(id): Promise<boolean>
+    +deleteById(id): Promise<boolean>
   }
 
   class ImportBatchRepository {
-    +createBatch(meta): Promise<Batch>
-    +insertStaged(batchId, rows): Promise<number>
-    +markPhase(batchId, phase, payload): Promise<void>
-    +getRowsForReview(batchId): Promise<Row[]>
-    +listRecent(limit): Promise<Batch[]>
-    +deleteBatch(batchId): Promise<boolean>
+    +listBatches(opts): Promise<Batch[]>
+    +getBatch(batchId): Promise<Batch | null>
+    +getPreviewRows(batchId): Promise<Row[]>
+    +overrideRecipient(batchId, rowId, recipientId)
+    +overrideCategory(batchId, rowId, categoryId)
+    +markStagingRowDuplicate / Committed / Error(rowId)
+    +rollbackBatch(batchId): Promise<boolean>
   }
 
   class AiChatRepository {
-    +loadConversation(id): Promise<Message[]>
-    +persistTurn(id, prompt, transcript, answer): Promise<void>
     +listConversations(limit): Promise<Conversation[]>
-    +delete(id): Promise<boolean>
+    +getConversation(id): Promise<Conversation | null>
+    +createConversation(input): Promise<Conversation>
+    +renameConversation(id, title)
+    +deleteConversation(id): Promise<boolean>
+    +getMessages(id): Promise<Message[]>
+    +appendMessage(id, message): Promise<void>
   }
 
   class AiInvestigationRepository {
@@ -266,29 +265,104 @@ package "Repositories" {
     +createScope(scope): Promise<Scope>
     +getScope(id): Promise<Scope | null>
     +getScopeForJob(jobId): Promise<Scope | null>
-    +claimScope(id, jobId, expiresAt): Promise<Id | null>
     +deleteExpiredUnclaimed(): Promise<number>
   }
 
   class ProviderHealthRepository {
-    +record({ provider, ok, latencyMs, statusCode }): Promise<void>
-    +getSummary(): Promise<Summary[]>
-    +getRecent({ provider, window }): Promise<Row[]>
+    +listAll(): Promise<ProviderHealth[]>
+    +findByProvider(provider): Promise<ProviderHealth | null>
+    +recordSuccess(provider)
+    +recordError(provider, kind, errorMessage)
   }
 
   class CashflowForecastMcRepository {
-    +upsertSnapshot(params, paths): Promise<Snapshot>
-    +getCached(params, ttl): Promise<Snapshot | null>
+    +get(params): Promise<Snapshot | null>
+    +isFresh(snapshot): boolean
+    +upsert(params, paths): Promise<Snapshot>
+    +getActiveUserIds(): Promise<string[]>
+    +clearAll(): Promise<void>
   }
 
   class CashflowForecastMcRollingRepository {
-    +upsertRollingSnapshot(params, paths): Promise<Snapshot>
-    +getRollingCached(params): Promise<Snapshot | null>
+    +get(params): Promise<Snapshot | null>
+    +isFresh(snapshot): boolean
+    +upsert(params, paths): Promise<Snapshot>
+    +clearAll(): Promise<void>
   }
 
   class CashflowForecastAccuracyRepository {
-    +recordAccuracy(snapshotId, metrics): Promise<void>
-    +getRolling({ window }): Promise<Metrics[]>
+    +upsert({ userId, methodId, asOfMonth, mae, rmse, mape, sampleDays })
+    +getHistory(opts): Promise<AccuracyRow[]>
+    +getLatestByMethod(opts): Promise<AccuracyRow[]>
+    +getAllHistory(opts): Promise<AccuracyRow[]>
+  }
+
+  class AccountRepository {
+    +getAll(opts): Promise<Account[]>
+    +getById(id): Promise<Account | null>
+    +getByName(name): Promise<Account | null>
+    +create(data): Promise<Account>
+    +update(id, fields): Promise<Account>
+    +remove(id): Promise<boolean>
+    +upsertStatementBalance(id, currency, balance)
+    +resolveOrCreateByName(name): Promise<Account>
+  }
+
+  class PortfolioExposureRepository {
+    +listExposureSources()
+    +listExposureTargets()
+    +upsertExposureBundle(bundle)
+  }
+
+  class PortfolioImportBatchRepository {
+    +listBatches(opts) / getBatch(batchId)
+    +getPreviewRows(batchId)
+    +overrideInvestment(s)(batchId, rows)
+    +getCommittedRows(batchId)
+    +markBatchAborted(batchId)
+  }
+
+  class PortfolioBrokerRetagRepository {
+    +lockTransactions(ids)
+    +compareAndSetAccount(id, before, after)
+    +insertAudit(entry)
+  }
+
+  class ImportCommitRepository {
+    +commitFingerprintRows(rows)
+  }
+
+  class AiDisclosureRepository {
+    +createGrant / listGrants / revokeGrant
+    +listRecords / deleteHistory
+    +reserveDisclosure / updateDisclosureRecord
+  }
+
+  class AiResearchDocumentRepository {
+    +listDocuments / getDocument
+    +createDocument / deleteDocument
+    +keywordSearch / semanticCandidates
+  }
+
+  class ProviderApiKeyRepository {
+    +listAll / upsert / remove
+  }
+
+  class ProviderQuotaRepository {
+    +getDayCount / addDayCount / tryReserveDay
+  }
+
+  class InstrumentProviderMapRepository {
+    +listByInstrument / upsert / deleteById / markVerified
+  }
+
+  class InsightCashProjectionRepository {
+    +getProjection / saveProjection
+  }
+
+  class InsightDismissalRepository {
+    +listDismissals / upsertSubscription / upsertOutlier
+    +getCountState / saveCountIfVersion
   }
 
   class CustomParserConfigRepository {
@@ -302,23 +376,14 @@ package "Repositories" {
 }
 
 package "Services" {
-  class ImportService {
-    +importCSV(filePath, bankName, config): Promise<ImportResult>
+  class "ImportPipeline <<services/importPipeline>>" as ImportPipeline {
+    +runImportPipeline(opts): Promise<ImportResult>
+    +commitImport(opts): Promise<ImportResult>
   }
 
   class DataImportService {
     +importRecipientsCSV(path, opts): Promise<ImportResult>
     +importCategoriesCSV(path, opts): Promise<ImportResult>
-  }
-
-  class StreamingImportService {
-    +streamImport(stream, handler): Promise<void>
-    +processBatch(items): Promise<void>
-  }
-
-  class RawTransactionImportService {
-    +importCSVWithRawStorage(filePath, bankName, config): Promise<ImportResult>
-    +deduplicate(data): Promise<DedupeResult>
   }
 
   class RecurringDetectionService {
@@ -376,11 +441,6 @@ package "Services" {
     +cleanKbcRecipientName(name): string
   }
 
-  class IBANService {
-    +normalizeIban(iban): string
-    +isValidIban(iban): boolean
-  }
-
   class BankAdapters {
     +createAdapter(bankName, config): BankParser
     +getSupportedBanks(): string[]
@@ -407,7 +467,6 @@ DB <.. SplitRepository
 DB <.. AuditChainRepository
 DB <.. SettingsRepository
 DB <.. SavedChartsRepository
-DB <.. RawTransactionRepository
 DB <.. InfoRepository
 DB <.. TagRepository
 DB <.. AttachmentRepository
@@ -420,6 +479,18 @@ DB <.. CashflowForecastMcRepository
 DB <.. CashflowForecastMcRollingRepository
 DB <.. CashflowForecastAccuracyRepository
 DB <.. CustomParserConfigRepository
+DB <.. AccountRepository
+DB <.. PortfolioExposureRepository
+DB <.. PortfolioImportBatchRepository
+DB <.. PortfolioBrokerRetagRepository
+DB <.. ImportCommitRepository
+DB <.. AiDisclosureRepository
+DB <.. AiResearchDocumentRepository
+DB <.. ProviderApiKeyRepository
+DB <.. ProviderQuotaRepository
+DB <.. InstrumentProviderMapRepository
+DB <.. InsightCashProjectionRepository
+DB <.. InsightDismissalRepository
 
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : snapshots + receipts
 PortfolioImportReconciliationService --> PortfolioIncomeRecognitionRepository : paired income + guarded restore
@@ -436,19 +507,14 @@ PortfolioImportCommitService --> PortfolioImportReconciliationService : locked p
 PortfolioImportReconciliationService --> PortfolioAssetTransferService : projected custody validation
 
 ' Import service dependencies
-ImportService --> BankAdapters
-ImportService --> DeduplicationService
-ImportService --> RecipientRepository
-ImportService --> TransactionRepository
+ImportPipeline --> BankAdapters
+ImportPipeline --> DeduplicationService
+ImportPipeline --> TransactionRepository
+ImportPipeline --> ImportBatchRepository : staging
+ImportPipeline --> ImportCommitRepository : commit
+ImportPipeline --> AccountRepository
 
 DataImportService --> TextNormalization
-
-StreamingImportService --> ImportService
-
-RawTransactionImportService --> TransactionRepository
-RawTransactionImportService --> RawTransactionRepository
-RawTransactionImportService --> DeduplicationService
-RawTransactionImportService --> RecipientRepository
 
 ' Business logic dependencies
 RecurringDetectionService --> TransactionRepository

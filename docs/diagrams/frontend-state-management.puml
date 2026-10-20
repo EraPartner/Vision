@@ -45,14 +45,6 @@ package "Frontend State Providers and Hooks" {
     +isLoading: boolean
   }
 
-  class WorkspaceHook {
-    +workspace: "budgeting" | "portfolio"
-    +setWorkspace(ws): void
-    --
-    Note: Route-derived for /portfolio/*,
-    sessionStorage-persisted for /admin/*,
-    defaults to budgeting for all others
-  }
 }
 
 package "React Query (Server State)" {
@@ -62,16 +54,8 @@ package "React Query (Server State)" {
     +gcTime: 5min
   }
 
-  class QueryKeys {
-    +TRANSACTIONS: ["transactions"]
-    +CATEGORIES: ["categories"]
-    +RECIPIENTS: ["recipients"]
-    +PLANNED_PAYMENTS: ["planned-payments"]
-    +INVESTMENTS: ["investments"]
-    +PORTFOLIO: ["portfolio"]
-    +STATISTICS: ["statistics"]
-    +SETTINGS: ["settings"]
-    +WATCHLIST: ["watchlist"]
+  class "lib/queryKeys.ts" as QueryKeys {
+    +per-domain factories: all / list(params) / detail(id)
   }
 }
 
@@ -123,17 +107,9 @@ package "Custom Hooks (Business Logic)" {
     +loading / error / refetch
   }
 
-  class useAccountPositions <<ADR-091, ADR-100>> {
-    ' hooks/portfolio/useAccountPositions.ts
-    +byAccount: AccountPositionRow[]
-    ' AccountPositionRow: { account_id, currentValue, totalInvested, gainLoss }
-    +isLoading: boolean
-  }
-
-  class useAccountNetWorth <<ADR-093, ADR-100>> {
-    ' hooks/portfolio/useAccountNetWorth.ts
-    +rows: AccountNetWorthRow[]
-    ' AccountNetWorthRow: { account, cash, holdings, total }
+  class useNetWorthByAccount <<ADR-093, ADR-100>> {
+    ' features/portfolio/usePortfolioQueries.ts
+    +rows per in_net_worth account
     +isLoading: boolean
   }
 
@@ -216,7 +192,7 @@ package "Custom Hooks (Business Logic)" {
 
 package "Utility Hooks" {
   class useDebounce
-  class useToast
+  class "toast (sonner)" as Toast
   class useWidgetVisibility
   class useIsMobile
   class useConfirmDialog
@@ -288,9 +264,6 @@ useFilteredDashboardStats ..> QueryClient : uses
 useStatistics ..> SettingsHydration : uses
 useFilteredDashboardStats ..> SettingsHydration : uses
 
-' WorkspaceHook consumes router
-WorkspaceHook ..> BrowserRouter : uses
-
 ' Aug 2026: URL-state utility hooks
 useTabParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BrowserRouter : uses (useSearchParams)
@@ -300,7 +273,9 @@ package "Zustand settings" {
   class useSettingsStore {
     +appSettings / dashboardSettings / theme state
     +migrated editable values
+    +belgianTax slice (stores/belgianTaxStore.ts)
   }
 }
+BelgianTaxProfileContext ..> useSettingsStore : hydrates/persists slice
 
 @enduml
