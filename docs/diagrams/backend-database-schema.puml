@@ -875,7 +875,7 @@ end note
 note bottom of portfolio_import_batches
   Portfolio CSV/Saxo XLSX statement batches (ADR-078, ADR-177).
   Mirrors import_batches but portfolio-shaped.
-  Included in BACKUP_COVERED_TABLES.
+  Included in the whole-database pg_dump backup.
 end note
 
 ' Materialized views (read-only projections — listed for reference)

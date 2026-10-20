@@ -1,51 +1,11 @@
 /**
  * Cross-workspace analytics (ADR-098) — pure, descriptive. Compose Budgeting +
- * Portfolio + Research: net-worth projection cone and cash-aware rebalancing.
+ * Portfolio + Research: cash-aware rebalancing.
  * (The unified-tax surface was removed in ADR-102.) No IO; callers supply the
  * workspace inputs.
  */
 
 import { toDecimal, toNumber, roundToCents } from '../lib/money.ts';
-import { nanToZero } from '../lib/math.ts';
-
-/**
- * Net-worth / FI projection cone. Median path = exact monthly compounding
- * (balance·(1+r/12) + contribution); P10/P90 widen parametrically with
- * volatility·√(t years), z≈1.2816 for the 10th/90th percentiles.
- */
- function projectNetWorth({
-  current,
-  monthlyContribution,
-  annualReturn,
-  annualVolatility = 0,
-  months,
-}: {
-  current: number;
-  monthlyContribution: number;
-  annualReturn: number;
-  annualVolatility?: number;
-  months: number;
-}): Array<{ month: number; median: number; p10: number; p90: number }> {
-  const Z = 1.2816;
-  const r = nanToZero(Number(annualReturn));
-  const vol = nanToZero(Number(annualVolatility));
-  const contrib = nanToZero(Number(monthlyContribution));
-  const monthly = r / 12;
-  const out = [];
-  let bal = nanToZero(Number(current));
-  for (let m = 1; m <= months; m++) {
-    bal = bal * (1 + monthly) + contrib;
-    const tYears = m / 12;
-    const spread = bal * Z * vol * Math.sqrt(tYears);
-    out.push({
-      month: m,
-      median: toNumber(roundToCents(toDecimal(bal))),
-      p10: toNumber(roundToCents(toDecimal(bal - spread))),
-      p90: toNumber(roundToCents(toDecimal(bal + spread))),
-    });
-  }
-  return out;
-}
 
 /**
  * Resolve the cash a rebalance may actually deploy. Negative available cash is
@@ -130,4 +90,3 @@ export function rebalanceDeployment({
   return out;
 }
 
-export { projectNetWorth as __projectNetWorth };

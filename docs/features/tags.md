@@ -2,8 +2,8 @@
 title: Transaction Tags
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-20
+updated: 2026-10-20
 tags: [feature, transactions, tags, categorization, saved-charts, analytics, i18n, combobox-tags, bug-fix]
 description: Freeform tagging for transactions and planned transactions as a second orthogonal classification dimension; tags can also drive spending series in Custom Charts. 2026-06-26: 3 combobox.tags.* i18n keys added for TagFilterCombobox; TransactionInfoDialog tag-editing state bug fixed (last-tag removal chip stayed on screen after PATCH succeeded).
 aliases: [tags, transaction-tags, labels]
@@ -156,7 +156,6 @@ The Transaction Tags feature test suite is **complete and passing** (2026-05-08)
 | `apps/node-backend/tests/routes/tags.ts` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.ts` | Planned transaction tag read/write and execute-forward inheritance |
 | `apps/node-backend/tests/routes/transactions.test.ts` | Transaction tag filtering and NDJSON export with tag fields |
-| `apps/node-backend/src/backup/coverage.ts` | Backup table enumeration includes tag tables (`tags`, `transaction_tags`, `planned_transaction_tags`) |
 
 **Frontend Test Coverage:**
 

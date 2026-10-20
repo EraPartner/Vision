@@ -1077,7 +1077,7 @@ Migration 0040 introduced the two portfolio import tables:
 - Standard status lifecycle (`pending → staging → … → complete | failed | aborted | awaiting_review`)
 - `default_asset_class` and `default_type` columns store batch-level config defaults
 - `account_id` FK → `accounts` (nullable) — destination brokerage account; committed lots inherit this value (**migration 0057**)
-- Included in `BACKUP_COVERED_TABLES`
+- Included in the whole-database `pg_dump` backup
 
 **`portfolio_import_staging_rows`** — mirrors `import_staging_rows` with portfolio-shaped columns:
 
@@ -1088,7 +1088,7 @@ Migration 0040 introduced the two portfolio import tables:
 - `route`: cash, portfolio, asset transfer, asset adjustment, or account-internal annotation
 - `asset_transfer_details` JSON retains direction, gross/fee units, and basis status (migration 0121)
 - `asset_adjustment_details` JSON retains adjustment kind, account, basis policy, and eligible yield hashes (0123)
-- Included in `BACKUP_COVERED_TABLES`
+- Included in the whole-database `pg_dump` backup
 
 Migrations 0120–0123 add immutable adoption/duplicate-repair receipts, the dated custody ledger,
 and the adjustment ledger with restrictive source links. All new tables are backup-covered and

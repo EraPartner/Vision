@@ -315,7 +315,7 @@ Never stored in source code or committed to git.
 
 `provider_api_keys.api_key` (migration 0043) is a plain `TEXT` column, even
 though the `pgcrypto` extension has been available since the baseline migration
-(`0001`). The table is in `BACKUP_COVERED_TABLES`, so Settings-managed research
+(`0001`). The table is in the whole-database backup dump, so Settings-managed research
 provider keys appear in the clear in every database dump and in every
 **unencrypted** backup bundle.
 

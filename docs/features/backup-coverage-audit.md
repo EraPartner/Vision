@@ -8,7 +8,7 @@ last_modified: 2026-10-20
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
-related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.ts", "apps/node-backend/src/backup/coverage.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
+related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.ts", "packaging/electron/runtime/native.ts", "apps/node-backend/tests/localStorage-keys-registry.test.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
 ---
 
 # Backup Coverage Audit
@@ -30,7 +30,8 @@ related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.t
 - Every Postgres table included in `pg_dump` SQL artifact inside bundle
 - Attachment files (receipts, PDFs) bundled alongside the SQL dump
 - Browser localStorage state (theme, dismissed notifications) captured and restored
-- CI test enforces coverage whenever a new migration or localStorage key is added
+- Table coverage is automatic: the dump is the whole database, so new migrations need no registration
+- CI test enforces registration whenever a new localStorage key is added
 
 ---
 
@@ -40,9 +41,11 @@ related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.t
 
 All user-data tables are included in the `pg_dump` SQL artifact inside every `.visionbak` bundle.
 
-**Source of truth:** `apps/node-backend/src/backup/coverage.ts` → `BACKUP_COVERED_TABLES`
-
-**Enforced by:** `apps/node-backend/tests/backup-coverage.test.ts`
+**Source of truth:** the whole-database `pg_dump` in `packaging/electron/runtime/native.ts`. It
+passes no `--table` or `--exclude-table` filter (only `--exclude-extension` for the bundled
+extensions), so every table in the migrated schema is captured without a registry. The former
+`BACKUP_COVERED_TABLES` list in `apps/node-backend/src/backup/coverage.ts` was read only by its own
+test and was removed on 2026-10-20. The tables below document the current schema.
 
 #### Aggregates
 
@@ -100,7 +103,7 @@ backup that still contains them restores, and the next backend start drops them 
 | `portfolio_asset_adjustments` | Included | Dated unit reversals/asset fees and per-method original-lot basis allocations (0123) |
 | `portfolio_asset_adjustment_sources` | Included | Restrictive original yield-source links, including evidence in older batches (0123) |
 
-These tables are registered in `BACKUP_COVERED_TABLES`. They retain original-trade restoration and
+These tables are included in the whole-database dump. They retain original-trade restoration and
 custody replay state, including referenced batches/staging provenance. They are domain history. The import session's tab-scoped `sessionStorage`
 metadata is not a backup surface; canonical staged batches and source records remain in PostgreSQL.
 See [[docs/reference/data-model]] and
@@ -413,12 +416,12 @@ and [[docs/architecture/electron|Electron architecture]].
 
 ## Coverage Enforcement
 
-`apps/node-backend/tests/backup-coverage.test.ts` runs in CI and:
+Tables need no enforcement: the dump is whole-database, so a table added by a migration is in the
+next backup automatically.
 
-1. **Table coverage** — replays `db/migrations/0001_baseline.sql` and every later up migration (not `.down.sql`), computes the net table set (created minus dropped, following renames), and asserts exact match against `BACKUP_COVERED_TABLES`. Fails if a new migration adds a table not in the registry.
-2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
-
-Adding a table or localStorage key without updating the registries causes a CI failure.
+`apps/node-backend/tests/localStorage-keys-registry.test.ts` runs in CI and fails when frontend
+source reads or writes a raw localStorage key that is not registered in `LOCAL_STORAGE_KEYS` or
+`LOCAL_STORAGE_EXCLUDED_KEYS` (`apps/frontend/src/lib/localStorage-keys.ts`).
 
 ### Native macOS end-to-end journey
 

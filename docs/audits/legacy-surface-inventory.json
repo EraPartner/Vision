@@ -53,8 +53,7 @@
       "disposition": "Historical migration 0108 preserved all provider rows and links in the ADR-141 neutral model. The guarded maintenance contract removed the provider-specific and manual raw relations from the maintained installation; the 0001 baseline (ADR-222) contains no raw relations and the contract scripts were deleted with the Alembic tree.",
       "paths": [
         "db/migrations/0001_baseline.sql",
-        "apps/node-backend/src/services/deduplication.ts",
-        "apps/node-backend/src/backup/coverage.ts"
+        "apps/node-backend/src/services/deduplication.ts"
       ],
       "readers": "Current runtime reads provider-neutral source records, links, and manual duplicate claims; no current reader requires the retired relations.",
       "writers": "Current imports and manual creation write only the provider-neutral replacement relations.",
@@ -113,7 +112,6 @@
       "disposition": "Removed by historical guarded migration 0105; the 0001 baseline (ADR-222) has no exchange_rate_cache. The current runtime uses exchange_rates.",
       "paths": [
         "db/migrations/0001_baseline.sql",
-        "apps/node-backend/src/backup/coverage.ts",
         "apps/node-backend/src/services/currency/currencyConversionService.ts"
       ],
       "readers": "No current application readers.",

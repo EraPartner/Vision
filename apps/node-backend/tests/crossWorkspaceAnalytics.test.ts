@@ -1,28 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  __projectNetWorth as projectNetWorth, rebalanceDeployment, resolveDeployableCash,
+  rebalanceDeployment, resolveDeployableCash,
 } from '../src/services/crossWorkspaceAnalytics.ts';
 import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.ts';
 import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.ts';
-
-describe('projectNetWorth (ADR-098)', () => {
-  it('compounds the median path and widens bands with time', () => {
-    const cone = projectNetWorth({ current: 10000, monthlyContribution: 100, annualReturn: 0.12, annualVolatility: 0.15, months: 12 });
-    expect(cone).toHaveLength(12);
-    // month 1: 10000*1.01 + 100 = 10200
-    expect(cone[0]!.median).toBe(10200);
-    // median strictly increasing here; bands straddle the median
-    expect(cone[11]!.median).toBeGreaterThan(cone[0]!.median);
-    expect(cone[11]!.p90).toBeGreaterThan(cone[11]!.median);
-    expect(cone[11]!.p10).toBeLessThan(cone[11]!.median);
-  });
-  it('zero volatility → flat cone (p10=median=p90)', () => {
-    const cone = projectNetWorth({ current: 1000, monthlyContribution: 0, annualReturn: 0, annualVolatility: 0, months: 3 });
-    expect(cone[2]!.p10).toBe(cone[2]!.median);
-    expect(cone[2]!.p90).toBe(cone[2]!.median);
-    expect(cone[2]!.median).toBe(1000);
-  });
-});
 
 describe('rebalanceDeployment (ADR-098)', () => {
   it('counts funded Savings investments toward Awesome without treating spendable cash as a holding', () => {

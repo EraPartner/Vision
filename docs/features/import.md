@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
-last_modified: 2026-10-11
+date: 2026-10-20
+updated: 2026-10-20
+last_modified: 2026-10-20
 tags:
   [
     feature,
@@ -648,7 +648,7 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 
 **Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers. On every read it re-checks the stored config against the save-path schema of its `kind` (`storedParserConfigSchema` in `lib/parserConfigSchema.ts`, shared with the POST/PATCH request schemas). A stored config the save path would reject is a data-contract violation: it throws in tests and development and is logged elsewhere (issue paths only), and the row is still returned unchanged. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
-**Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.ts` and travels with `.visionbak` exports.
+**Backup**: `custom_parser_configs` is included in the whole-database `pg_dump` backup and travels with `.visionbak` exports.
 
 ### CRUD Endpoints
 
