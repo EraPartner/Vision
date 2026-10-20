@@ -63,9 +63,11 @@ beforeEach(() => {
         ms?: number,
     ) => {
         // Forward short timeouts (under 100ms) used by other libs (Radix, etc.)
-        // but swallow the deliberate 3s reload timer.
+        // but swallow the deliberate 3s reload timer. The swallowed timer still
+        // returns a real handle: msw's mocked connections call unref() on the
+        // keep-alive timers they schedule here.
         if (typeof ms === "number" && ms >= 1000) {
-            return 0 as unknown as ReturnType<typeof setTimeout>;
+            return originalSetTimeout(() => {}, ms);
         }
         return originalSetTimeout(cb, ms);
     }) as typeof window.setTimeout);

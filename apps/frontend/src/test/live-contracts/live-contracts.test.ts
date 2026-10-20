@@ -104,7 +104,7 @@ describe("live contract schema projections", () => {
 
 describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
     beforeAll(() => server.close());
-    afterAll(() => server.listen({ onUnhandledRequest: "error" }));
+    afterAll(() => server.listen({ onUnhandledFrame: "error" }));
 
     it("GET /api/info/health returns status ok", async () => {
         const res = await fetch(`${LIVE_BASE}/health`);

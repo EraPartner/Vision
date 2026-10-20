@@ -17,6 +17,12 @@ updates:
     groups:
       bun:
         patterns: ["*"]
+    ignore:
+      # TypeScript 7 ships no JavaScript compiler API, and typescript-eslint
+      # (peer typescript <6.1), knip, dependency-cruiser and openapi-typescript
+      # need one. Drop this once typescript-eslint supports 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/packaging/electron"

@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-19
+date: 2026-10-20
 tags:
   [
     reference,
@@ -100,7 +100,7 @@ and `test:electron` scripts run `bun packaging/electron/build.ts` first and then
 | `test:frontend`                 | Build and run the full frontend Vitest suite against a disposable PostgreSQL 18 backend, including live API contracts          |
 | `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
 | `test:electron`                 | Build the Electron shell, then run its compiled `node:test` suites (`node --test 'packaging/electron/out/**/*.test.js'`)       |
-| `test:scripts`                  | Repository script tests (`bun test scripts/tests`)                                                                             |
+| `test:scripts`                  | Repository script tests (`bun test scripts/tests`; the jsdom flow-visualizer test runs under `node --test`)                    |
 | `test:packages`                 | Shared package Vitest suite, including the Belgian tax engine tests (`packages/shared-utils/tests`)                            |
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |

@@ -40,6 +40,13 @@ describe("virtual recipient exclusions", () => {
                 ? 200
                 : 40;
         });
+        vi.spyOn(Element.prototype, "clientHeight", "get").mockImplementation(
+            function (this: Element) {
+                return this.hasAttribute("data-radix-scroll-area-viewport")
+                    ? 200
+                    : 40;
+            },
+        );
         const recipients = Array.from({ length: 1000 }, (_, i) => ({
             id: asRecipientId(i + 1),
             name: `Recipient ${i + 1}`,

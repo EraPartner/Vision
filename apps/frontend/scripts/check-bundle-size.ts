@@ -125,7 +125,9 @@ const BUDGETS_KB = {
   // chunks only): 1360.09 -> 1370.39 measured.
   // Raised from 1372 for the explicit number and currency checks of the type-aware lint rules
   // and the holding-tone module split (ADR-225; boot preload 459.52): 1371.28 -> 1372.93 measured.
-  total: 1374,
+  // Raised from 1374 for framer-motion 14 (async motion feature chunk 26.6 -> 31.8 KB) and
+  // @tanstack/react-virtual 3.14.21, all outside the boot preload (458.66): 1380.77 measured.
+  total: 1382,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

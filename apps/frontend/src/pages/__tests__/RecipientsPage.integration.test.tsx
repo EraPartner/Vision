@@ -32,6 +32,34 @@ async function openRowMenu(user: User, name: string) {
     return screen.findByRole("menu");
 }
 
+/**
+ * Give every element a 1200x700 box so the virtual table renders its rows in
+ * jsdom, which lays nothing out. The virtualizer reads the viewport from
+ * clientWidth/clientHeight and rows from offsetWidth/offsetHeight.
+ */
+function stubTableLayout(): () => void {
+    const stubs = [
+        [HTMLElement.prototype, "offsetHeight", 700],
+        [HTMLElement.prototype, "offsetWidth", 1200],
+        [Element.prototype, "clientHeight", 700],
+        [Element.prototype, "clientWidth", 1200],
+    ] as const;
+    const originals = stubs.map(([proto, key, value]) => {
+        const original = Object.getOwnPropertyDescriptor(proto, key);
+        Object.defineProperty(proto, key, {
+            configurable: true,
+            get: () => value,
+        });
+        return original;
+    });
+    return () => {
+        stubs.forEach(([proto, key], i) => {
+            const original = originals[i];
+            if (original) Object.defineProperty(proto, key, original);
+        });
+    };
+}
+
 describe("RecipientsPage (integration)", () => {
     it("recovers the recipient list through Retry", async () => {
         const user = userEvent.setup();
@@ -223,22 +251,7 @@ describe("RecipientsPage (integration)", () => {
     });
 
     it("links recipient rows and edits through a single actions menu", async () => {
-        const heightDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetHeight",
-        );
-        const widthDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetWidth",
-        );
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 700,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 1200,
-        });
+        const restoreLayout = stubTableLayout();
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -271,7 +284,10 @@ describe("RecipientsPage (integration)", () => {
             "href",
             "/transactions?recipient_id=2&filter_label=A%20very%20long%20recipient%20name",
         );
-        expect(recipientLink).toHaveAttribute("title", "A very long recipient name");
+        expect(recipientLink).toHaveAttribute(
+            "title",
+            "A very long recipient name",
+        );
         const target = await screen.findByTitle(
             "A very long primary recipient name",
         );
@@ -300,7 +316,9 @@ describe("RecipientsPage (integration)", () => {
             expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
         );
         const editMenu = await openRowMenu(user, name);
-        await user.click(within(editMenu).getByRole("menuitem", { name: /^edit$/i }));
+        await user.click(
+            within(editMenu).getByRole("menuitem", { name: /^edit$/i }),
+        );
         const recipientInput = screen.getByRole("textbox", {
             name: `Payee: ${name}`,
         });
@@ -324,18 +342,7 @@ describe("RecipientsPage (integration)", () => {
             screen.getByRole("button", { name: `Actions for ${name}` }),
         ).toHaveFocus();
 
-        if (heightDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetHeight",
-                heightDescriptor,
-            );
-        if (widthDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetWidth",
-                widthDescriptor,
-            );
+        restoreLayout();
     });
 
     it("closes Add Recipient dialog via Escape key", async () => {
@@ -358,22 +365,7 @@ describe("RecipientsPage (integration)", () => {
 
         // TanStack Virtual reads offsetHeight/offsetWidth (via getRect) to size the scroll container.
         // jsdom returns 0 for both. Mock to 700/1200 so the virtualizer computes visible rows.
-        const heightDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetHeight",
-        );
-        const widthDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetWidth",
-        );
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 700,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 1200,
-        });
+        const restoreLayout = stubTableLayout();
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -412,39 +404,13 @@ describe("RecipientsPage (integration)", () => {
             await screen.findByRole("heading", { name: /match rules/i }),
         ).toBeInTheDocument();
 
-        if (heightDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetHeight",
-                heightDescriptor,
-            );
-        if (widthDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetWidth",
-                widthDescriptor,
-            );
+        restoreLayout();
     });
 
     it("Recipient Patterns dialog shows empty-patterns message when no patterns exist", async () => {
         const user = userEvent.setup();
 
-        const heightDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetHeight",
-        );
-        const widthDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetWidth",
-        );
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 700,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 1200,
-        });
+        const restoreLayout = stubTableLayout();
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -482,18 +448,7 @@ describe("RecipientsPage (integration)", () => {
         // recipientPatterns.empty = "No patterns yet. Add one to auto-match future imports."
         expect(await screen.findByText(/no rules yet/i)).toBeInTheDocument();
 
-        if (heightDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetHeight",
-                heightDescriptor,
-            );
-        if (widthDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetWidth",
-                widthDescriptor,
-            );
+        restoreLayout();
     });
 
     it("toggling Show inactive from the View menu switches to showing all", async () => {
@@ -634,22 +589,7 @@ describe("RecipientsPage (integration)", () => {
     it("names the recipient, explains delete restrictions, and deletes the confirmed recipient", async () => {
         const user = userEvent.setup();
         let deletedId: string | undefined;
-        const heightDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetHeight",
-        );
-        const widthDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetWidth",
-        );
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 700,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 1200,
-        });
+        const restoreLayout = stubTableLayout();
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -692,39 +632,13 @@ describe("RecipientsPage (integration)", () => {
         );
         await waitFor(() => expect(deletedId).toBe("9"));
 
-        if (heightDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetHeight",
-                heightDescriptor,
-            );
-        if (widthDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetWidth",
-                widthDescriptor,
-            );
+        restoreLayout();
     });
 
     it("Recipient Patterns dialog closes via Escape key", async () => {
         const user = userEvent.setup();
 
-        const heightDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetHeight",
-        );
-        const widthDescriptor = Object.getOwnPropertyDescriptor(
-            HTMLElement.prototype,
-            "offsetWidth",
-        );
-        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
-            configurable: true,
-            get: () => 700,
-        });
-        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
-            configurable: true,
-            get: () => 1200,
-        });
+        const restoreLayout = stubTableLayout();
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
@@ -763,18 +677,7 @@ describe("RecipientsPage (integration)", () => {
 
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-        if (heightDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetHeight",
-                heightDescriptor,
-            );
-        if (widthDescriptor)
-            Object.defineProperty(
-                HTMLElement.prototype,
-                "offsetWidth",
-                widthDescriptor,
-            );
+        restoreLayout();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
