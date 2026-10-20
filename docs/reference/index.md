@@ -2,8 +2,8 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     reference,
@@ -48,8 +48,6 @@ SORT title ASC
 | [[docs/reference/typescript-types\|TypeScript Types]]                      | All frontend type definitions                                                                               |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]]           | File navigation map organized by feature, layer, and task                                                   |
 | [[docs/reference/frontend-api-client\|Frontend API Client Architecture]]   | Transport, types, and facade layers of the HTTP client (Phase 1 refactor)                                   |
-| [[docs/reference/api-client-methods\|API Client Methods Reference]]        | Archived monolithic client reference; use the frontend API client architecture                              |
-| [[docs/reference/schema-initialization\|Schema Initialization (Archived)]] | Legacy schema initialization reference — replaced by `db/migrations/` (Kysely, ADR-222)                     |
 
 ## Algorithms & Computer Science
 

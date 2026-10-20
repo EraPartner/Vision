@@ -2,8 +2,8 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 last-updated: 2026-10-06
 modified: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -236,7 +236,7 @@ bun vitest run src/path/to/test.test.js
 ### Coverage update addendum (2026-04-11)
 
 - Additional backend coverage was added for repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
-- Tests: [[apps/node-backend/tests/categoryRepository.test.ts]], [[apps/node-backend/tests/plannedTransactionRepository.test.ts]]
+- Tests: [[apps/node-backend/tests/plannedTransactionRepository.test.ts]]
 - Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 > [!note] Schema initialization test archived
