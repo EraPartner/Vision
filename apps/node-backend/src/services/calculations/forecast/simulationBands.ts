@@ -10,6 +10,19 @@ export interface SimulationSummary {
  * Summarize path-correlated daily samples without discarding their cumulative
  * distribution. `samples[h][p]` is day h of simulation path p.
  */
+/**
+ * Ascending copy of `values`. A typed-array sort is numeric without a
+ * comparator callback and several times faster, but it places NaN (and holes,
+ * read as NaN) differently, so such samples keep the comparator sort.
+ */
+function sortedAscending(values: readonly number[]): ArrayLike<number> {
+  const typed = Float64Array.from(values);
+  for (const value of typed) {
+    if (Number.isNaN(value)) return values.slice().sort((a, b) => a - b);
+  }
+  return typed.sort();
+}
+
 export function summarizeSimulationPaths(
   samples: number[][],
   forecastDates: string[],
@@ -30,12 +43,12 @@ export function summarizeSimulationPaths(
     // One sample row per forecast day; a missing row was a TypeError before.
     if (!daySamples)
       throw new TypeError(`Missing simulation samples for forecast day ${h}`);
-    const dailySorted = daySamples.slice().sort((a, b) => a - b);
+    const dailySorted = sortedAscending(daySamples);
     for (let p = 0; p < pathCount; p++) {
       // A shorter row adds NaN, exactly as reading past its end did.
       cumulativeByPath[p] = (cumulativeByPath[p] ?? 0) + (daySamples[p] ?? NaN);
     }
-    const cumulativeSorted = cumulativeByPath.slice().sort((a, b) => a - b);
+    const cumulativeSorted = sortedAscending(cumulativeByPath);
     for (const band of bands) {
       band.daily.push({ date, value: quantile(dailySorted, band.q) });
       band.cumulative.push({ date, value: quantile(cumulativeSorted, band.q) });
