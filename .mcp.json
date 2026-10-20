@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "vision-postgres": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["apps/node-backend/scripts/postgres-mcp.ts"]
+    }
+  }
+}
