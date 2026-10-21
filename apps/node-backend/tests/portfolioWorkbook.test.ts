@@ -177,6 +177,30 @@ describe("Saxo detailed workbook economics", () => {
     expect(trade.pricePerUnit).toBeCloseTo(18.0072, 8);
     expect(trade.rawData).toContain("Koop 10 @ 20.00 USD");
   });
+  it("reads a thousands-separated action quantity as the typed execution says", async () => {
+    const sheets = syntheticSaxoWorkbook();
+    const action = "Koop 1,500 @ 20.00 USD";
+    sheets[0]!.records[0]!.Acties = action;
+    sheets[0]!.records[0]!.Boekingsbedrag = -27001.63;
+    Object.assign(sheets[1]!.records[0]!, {
+      Acties: action,
+      "Traded Quantity": 1500,
+      "Verhandelde waarde": 30000,
+    });
+    for (const booking of sheets[2]!.records.slice(0, 3))
+      booking.Acties = action;
+    sheets[2]!.records[0]!.Boekingsbedrag = -27000;
+    await writeSyntheticWorkbook(file, sheets);
+
+    const trade = (await parseSaxoTransactionHistory(file))[0]!;
+
+    expect(trade).toMatchObject({
+      typeRaw: "Buy",
+      units: 1500,
+      pricePerUnit: 18,
+      amount: 27000,
+    });
+  });
   it.each([
     [
       "missing booking",

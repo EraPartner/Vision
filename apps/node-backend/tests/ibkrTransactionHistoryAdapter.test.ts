@@ -248,3 +248,41 @@ describe("IBKR Transaction History portfolio adapter", () => {
     expect(rows.skipped).toBe(2);
   });
 });
+
+describe("IBKR Transaction History number conventions", () => {
+  const buy =
+    "Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,2.0,10.0,USD,-17.0,-0.85,-17.85,0.85,-0.17,-,1";
+
+  it("reads a comma-grouped quantity as thousands, as IBKR writes it", async () => {
+    const rows = await parseModifiedFixture((csv) =>
+      csv.replace(
+        buy,
+        'Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,"1,500",10.0,USD,"-12,750.0",-0.85,"-12,750.85",0.85,-0.17,-,1',
+      ),
+    );
+
+    expect(rows[0]).toMatchObject({
+      typeRaw: "Buy",
+      units: 1500,
+      pricePerUnit: 10,
+      currency: "USD",
+    });
+  });
+
+  it("holds back a trade whose quantity and price do not explain its Gross Amount", async () => {
+    const rows = await parseModifiedFixture((csv) =>
+      csv.replace(
+        buy,
+        "Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,1.5,10.0,USD,\"-12,750.0\",-0.85,\"-12,750.85\",0.85,-0.17,-,1",
+      ),
+    );
+
+    expect(rows[0]).toMatchObject({
+      typeRaw: "Unsupported IBKR event: Buy",
+      units: null,
+      amount: 12750,
+      currency: "EUR",
+    });
+    expect(rows[0]!.note).toMatch(/does not agree with its Gross Amount/);
+  });
+});

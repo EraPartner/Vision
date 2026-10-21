@@ -10,10 +10,11 @@
 
 import { readFile } from "node:fs/promises";
 import { logger } from "../../config/logger.ts";
+import { Decimal, toDecimal } from "../../lib/money.ts";
 import {
   decodeCsvBuffer,
-  parseAmountField,
   parseCsvText,
+  parseCustomAmount,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.ts";
@@ -46,18 +47,64 @@ function cleanCell(value: unknown): string {
   return text === "-" ? "" : text;
 }
 
-function magnitude(value: unknown): number | null {
+/**
+ * An IBKR statement number. IBKR writes a decimal point and comma thousands
+ * (`1,500` is fifteen hundred); a cell that is only valid with a decimal
+ * comma (`4,25`, `1.234,56`) has a single reading and keeps it.
+ */
+export function ibkrNumber(value: unknown): number | null {
   const text = cleanCell(value);
   if (!text) return null;
-  const parsed = parseAmountField(text);
-  return Number.isNaN(parsed) ? null : Math.abs(parsed);
+  const dot = parseCustomAmount(text, "decimal_dot");
+  if (Number.isFinite(dot)) return dot;
+  const comma = parseCustomAmount(text, "decimal_comma");
+  return Number.isFinite(comma) ? comma : null;
+}
+
+function magnitude(value: unknown): number | null {
+  const parsed = ibkrNumber(value);
+  return parsed == null ? null : Math.abs(parsed);
 }
 
 function signedNumber(value: unknown): number | null {
-  const text = cleanCell(value);
-  if (!text) return null;
-  const parsed = parseAmountField(text);
-  return Number.isNaN(parsed) ? null : parsed;
+  return ibkrNumber(value);
+}
+
+/**
+ * A trade's quantity × price × multiplier × exchange rate must explain its
+ * base-currency Gross Amount within 1 % (at least 0.01). A misread quantity
+ * fails by orders of magnitude. Without a gross amount or a rate between two
+ * currencies, nothing can be compared.
+ */
+function grossAgrees(
+  record: Record<string, string>,
+  baseCurrency: string,
+  priceCurrency: string,
+): boolean {
+  const units = magnitude(record.Quantity);
+  const price = magnitude(record.Price);
+  const gross = magnitude(record["Gross Amount"]);
+  const rate =
+    priceCurrency === baseCurrency ? 1 : magnitude(record["Exchange Rate"]);
+  if (
+    units == null ||
+    price == null ||
+    gross == null ||
+    gross === 0 ||
+    rate == null ||
+    rate === 0
+  )
+    return true;
+  const exportedMultiplier = magnitude(record.Multiplier);
+  const multiplier =
+    exportedMultiplier == null || exportedMultiplier === 0
+      ? 1
+      : exportedMultiplier;
+  const value = toDecimal(units).times(price).times(multiplier).times(rate);
+  return value
+    .minus(gross)
+    .abs()
+    .lte(Decimal.max("0.01", value.times("0.01")));
 }
 
 function recordFrom(
@@ -151,6 +198,24 @@ function parseTransaction(
   const isTrade = typeRaw === "Buy" || typeRaw === "Sell";
   const priceCurrency = cleanCell(record["Price Currency"]).toUpperCase();
   const exportedFxRate = magnitude(record["Exchange Rate"]);
+  if (isTrade && !grossAgrees(record, baseCurrency, priceCurrency))
+    return {
+      date: parseDateWithFormat(cleanCell(record.Date), "%Y-%m-%d"),
+      typeRaw: `Unsupported IBKR event: ${originalType}`,
+      symbolRaw: symbol,
+      nameRaw: "",
+      units: null,
+      pricePerUnit: null,
+      amount: magnitude(record["Gross Amount"]),
+      fees: null,
+      taxes: null,
+      currency: baseCurrency,
+      fxRateToEur: null,
+      note: `IBKR ${originalType} of ${cleanCell(record.Quantity)} @ ${cleanCell(record.Price)} does not agree with its Gross Amount; check the quantity and price before importing`,
+      rawData,
+      sourceAccountIdentity: cleanCell(record.Account) || null,
+      sourceId: null,
+    };
   const fxRateToEur = isTrade && baseCurrency === "EUR" ? exportedFxRate : null;
 
   const commission = magnitude(record.Commission) ?? 0;

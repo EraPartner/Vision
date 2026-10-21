@@ -5,7 +5,7 @@ import {
   divide,
   toDecimal,
   toNumber,
-  type Decimal,
+  Decimal,
   type DecimalInput,
 } from "../../lib/money.ts";
 import {
@@ -17,8 +17,8 @@ import {
 } from "../../lib/portfolioUpload.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import {
-  parseAmountField,
   parseCsvFile,
+  parseCustomAmount,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.ts";
@@ -132,16 +132,100 @@ function normalizeHeader(value: unknown): string {
   return cleanCell(value).replaceAll("\u00a0", " ");
 }
 
-function number(value: unknown): number | null {
+/**
+ * The decimal separator of one export. A CSV states it only through cells
+ * whose reading does not depend on it, such as `-181.63` or `1.234,56`;
+ * workbook numbers are typed and always use a dot.
+ */
+type SaxoNumberFormat = "decimal_dot" | "decimal_comma";
+
+/** A number whose value depends on a decimal separator the file never states. */
+class AmbiguousSaxoNumber extends ValidationError {
+  constructor(text: string) {
+    super(
+      `Saxo number ${text} reads differently with a decimal point or comma, and the file does not show which it uses`,
+    );
+  }
+}
+
+const NUMBER_COLUMNS = [
+  "Boekingsbedrag",
+  "Omrekeningskoers",
+  "Totale kosten",
+  "Conversion cost",
+];
+const TRADE_ACTION =
+  /^(Koop|Verkoop|Buy|Sell)\s+([+-]?[\d.,]+)\s+@\s+([+-]?[\d.,]+)(?:\s+([A-Z]{3}))?$/i;
+
+/** The separator one numeric text proves, if its two readings differ in validity. */
+function separatorEvidence(text: string): SaxoNumberFormat | undefined {
+  const dot = parseCustomAmount(text, "decimal_dot");
+  const comma = parseCustomAmount(text, "decimal_comma");
+  if (Number.isFinite(dot) === Number.isFinite(comma)) return undefined;
+  return Number.isFinite(dot) ? "decimal_dot" : "decimal_comma";
+}
+
+/** The CSV's own decimal separator, when its unambiguous numeric cells agree on one. */
+function csvNumberFormat(
+  records: readonly SaxoRecord[],
+): SaxoNumberFormat | undefined {
+  const found = new Set<SaxoNumberFormat>();
+  for (const record of records) {
+    const action = TRADE_ACTION.exec(cleanCell(record.Acties));
+    const texts = [
+      ...NUMBER_COLUMNS.map((column) => cleanCell(record[column])),
+      ...(action ? [action[2]!, action[3]!] : []),
+    ];
+    for (const text of texts) {
+      const evidence = text ? separatorEvidence(text) : undefined;
+      if (evidence) found.add(evidence);
+    }
+  }
+  // A file that proves both separators states no single convention: each cell
+  // then reads on its own, and one that reads two ways is surfaced.
+  return found.size === 1 ? [...found][0] : undefined;
+}
+
+/**
+ * A Saxo number in the export's own convention. Without one, a value that
+ * reads differently with either separator (`1,500`, `1.500`) is ambiguous.
+ */
+function number(
+  value: unknown,
+  format?: SaxoNumberFormat,
+): number | null {
   const text = cleanCell(value);
   if (!text) return null;
-  const parsed = parseAmountField(text);
+  if (isWorkbookNumber(value)) {
+    const parsed = parseCustomAmount(text, "decimal_dot");
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  let parsed: number;
+  try {
+    parsed = parseCustomAmount(text, format ?? "auto");
+  } catch (error) {
+    if (error instanceof ValidationError) throw new AmbiguousSaxoNumber(text);
+    throw error;
+  }
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function magnitude(value: unknown): number | null {
-  const parsed = number(value);
+function magnitude(
+  value: unknown,
+  format?: SaxoNumberFormat,
+): number | null {
+  const parsed = number(value, format);
   return parsed == null ? null : Math.abs(parsed);
+}
+
+/** `magnitude` for a row that is already being rejected: ambiguity reads as absent. */
+function magnitudeOrNull(value: unknown, format?: SaxoNumberFormat) {
+  try {
+    return magnitude(value, format);
+  } catch (error) {
+    if (error instanceof AmbiguousSaxoNumber) return null;
+    throw error;
+  }
 }
 
 function currency(value: unknown): string | null {
@@ -212,24 +296,52 @@ function unsupportedRow(
 ): ParsedPortfolioRow {
   return baseRow(record, {
     typeRaw: `Unsupported Saxo event: ${cleanCell(record.Acties) || cleanCell(record.Transactietype) || "unknown"}`,
-    amount: magnitude(record.Boekingsbedrag),
+    amount: magnitudeOrNull(record.Boekingsbedrag),
     note: reason,
   });
 }
 
-function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
+/**
+ * A CSV trade's units × price × exchange rate must explain its booked
+ * account-currency amount within its costs and 1 % (at least one unit of
+ * currency). A misread quantity, such as `1,500` taken as 1.5, fails by orders
+ * of magnitude. Without a booked amount, or a rate between two currencies,
+ * nothing can be compared.
+ */
+function bookedValueAgrees(
+  record: SaxoRecord,
+  units: number,
+  price: number,
+  instrumentCurrency: string,
+  format: SaxoNumberFormat | undefined,
+): boolean {
+  const booked = magnitude(record.Boekingsbedrag, format);
+  const accountCurrency = currency(record.Valuta);
+  const rate =
+    accountCurrency === instrumentCurrency
+      ? 1
+      : magnitude(record.Omrekeningskoers, format);
+  if (booked == null || booked === 0 || rate == null || rate === 0) return true;
+  const costs = toDecimal(magnitude(record["Totale kosten"], format) ?? 0);
+  const value = toDecimal(units).times(price).times(rate);
+  const tolerance = costs.plus(Decimal.max(1, value.times("0.01")));
+  return value.minus(booked).abs().lte(tolerance);
+}
+
+function parseTrade(
+  record: SaxoRecord,
+  format?: SaxoNumberFormat,
+): ParsedPortfolioRow {
   const action = cleanCell(record.Acties);
-  const match = action.match(
-    /^(Koop|Verkoop|Buy|Sell)\s+([+-]?[\d.,]+)\s+@\s+([+-]?[\d.,]+)(?:\s+([A-Z]{3}))?$/i,
-  );
+  const match = TRADE_ACTION.exec(action);
   if (!match)
     return unsupportedRow(
       record,
       "Saxo trade action could not be parsed safely",
     );
 
-  const units = magnitude(match[2]);
-  const price = magnitude(match[3]);
+  const units = magnitude(match[2], format);
+  const price = magnitude(match[3], format);
   const instrumentCurrency = currency(match[4] || record.Instrumentvaluta);
   if (
     units == null ||
@@ -245,8 +357,16 @@ function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
   }
 
   const accountCurrency = currency(record.Valuta);
-  const exchangeRate = magnitude(record.Omrekeningskoers);
-  const accountFees = magnitude(record["Totale kosten"]);
+  const exchangeRate = magnitude(record.Omrekeningskoers, format);
+  const accountFees = magnitude(record["Totale kosten"], format);
+  if (
+    !RECORD_METADATA.has(record) &&
+    !bookedValueAgrees(record, units, price, instrumentCurrency, format)
+  )
+    return unsupportedRow(
+      record,
+      `Saxo trade ${action} does not agree with its booked amount; check the quantity and price before importing`,
+    );
   const fees =
     accountFees != null &&
     accountFees !== 0 &&
@@ -272,10 +392,26 @@ function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
   });
 }
 
-function parseRecord(record: SaxoRecord): ParsedPortfolioRow {
+function parseRecord(
+  record: SaxoRecord,
+  format?: SaxoNumberFormat,
+): ParsedPortfolioRow {
+  try {
+    return parseKnownRecord(record, format);
+  } catch (error) {
+    if (!(error instanceof AmbiguousSaxoNumber)) throw error;
+    return unsupportedRow(record, error.message);
+  }
+}
+
+function parseKnownRecord(
+  record: SaxoRecord,
+  format?: SaxoNumberFormat,
+): ParsedPortfolioRow {
   const kind = cleanCell(record.Transactietype).toLowerCase();
   const action = cleanCell(record.Acties).toLowerCase();
-  if (kind === "transactie" || kind === "trade") return parseTrade(record);
+  if (kind === "transactie" || kind === "trade")
+    return parseTrade(record, format);
 
   if (kind === "storting/opname" || kind === "cash transfer") {
     if (action === "storting" || action === "deposit") {
@@ -283,7 +419,7 @@ function parseRecord(record: SaxoRecord): ParsedPortfolioRow {
         typeRaw: "Deposit",
         symbolRaw: "",
         nameRaw: "",
-        amount: magnitude(record.Boekingsbedrag),
+        amount: magnitude(record.Boekingsbedrag, format),
         note: cleanCell(record.Opmerking) || "Saxo cash deposit",
       });
     }
@@ -292,7 +428,7 @@ function parseRecord(record: SaxoRecord): ParsedPortfolioRow {
         typeRaw: "Withdrawal",
         symbolRaw: "",
         nameRaw: "",
-        amount: magnitude(record.Boekingsbedrag),
+        amount: magnitude(record.Boekingsbedrag, format),
         note: cleanCell(record.Opmerking) || "Saxo cash withdrawal",
       });
     }
@@ -304,8 +440,8 @@ function parseRecord(record: SaxoRecord): ParsedPortfolioRow {
   ) {
     return baseRow(record, {
       typeRaw: "Unsupported Saxo event: Cashdividend",
-      amount: magnitude(record.Boekingsbedrag),
-      fees: magnitude(record["Totale kosten"]),
+      amount: magnitude(record.Boekingsbedrag, format),
+      fees: magnitude(record["Totale kosten"], format),
       note: "Saxo CSV dividend contains only a net booking amount. Import the detailed XLSX workbook to retain gross dividends and withholding taxes.",
     });
   }
@@ -440,12 +576,35 @@ function amountKind(record: SaxoRecord): AmountKind {
   return "unknown";
 }
 
+/**
+ * The separator of a workbook trade's text action: the one under which its
+ * quantity and price equal the typed execution cells. Neither leaves the
+ * action ambiguous, and the execution check below rejects the workbook.
+ */
+function workbookActionFormat(
+  record: SaxoRecord,
+  trades: readonly SaxoRecord[],
+): SaxoNumberFormat | undefined {
+  const match = TRADE_ACTION.exec(cleanCell(record.Acties));
+  const [trade] = trades;
+  if (!match || trades.length !== 1 || !trade) return undefined;
+  const units = magnitude(trade["Traded Quantity"]);
+  const price = magnitude(trade.Prijs);
+  return (["decimal_dot", "decimal_comma"] as const).find((format) => {
+    const read = (text: string) => {
+      const value = parseCustomAmount(text, format);
+      return Number.isFinite(value) ? Math.abs(value) : undefined;
+    };
+    return read(match[2]!) === units && read(match[3]!) === price;
+  });
+}
+
 function parseWorkbookRecord(
   record: SaxoRecord,
   bookings: SaxoRecord[],
   trades: SaxoRecord[],
 ): ParsedPortfolioRow {
-  const parsed = parseRecord(record);
+  const parsed = parseRecord(record, workbookActionFormat(record, trades));
   const kind = cleanCell(record.Transactietype).toLowerCase();
   const action = cleanCell(record.Acties).toLowerCase();
   const accountCurrency = currency(record.Valuta);
@@ -728,8 +887,9 @@ export async function parseSaxoTransactionHistory(
 
   const rows: ParsedPortfolioRows = [];
   let skipped = 0;
+  const format = csvNumberFormat(records);
   for (const record of records) {
-    const parsed = parseRecord(record);
+    const parsed = parseRecord(record, format);
     if (!parsed?.date || Number.isNaN(parsed.date.getTime())) {
       skipped++;
       continue;

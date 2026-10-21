@@ -25,7 +25,7 @@ import { Decimal, toDecimal } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 import { classifyBrokerageRow } from "./importPipeline/brokerageRouting.ts";
-import { parseAmountField } from "./importPipeline/adapters/_shared.ts";
+import { ibkrNumber } from "./portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts";
 import { ibkrFundingFactsFromRawData } from "./portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import type { IbkrFundingFacts } from "./portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import type {
@@ -302,8 +302,8 @@ function ibkrCsvFunding(
         .trim()
         .replace(/^-$/, "");
     const kind = field("Transaction Type");
-    const gross = parseAmountField(field("Gross Amount"));
-    const rate = parseAmountField(field("Exchange Rate"));
+    const gross = ibkrNumber(field("Gross Amount")) ?? NaN;
+    const rate = ibkrNumber(field("Exchange Rate")) ?? NaN;
     if (
       (kind !== "Deposit" && kind !== "Withdrawal") ||
       !Number.isFinite(gross) ||

@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 
@@ -92,5 +95,66 @@ describe("Saxo transaction history portfolio adapter", () => {
     const rows = await parseSaxoTransactionHistory(fixture);
 
     expect(rows[0]!.sourceId).toBe("101");
+  });
+});
+
+describe("Saxo CSV number conventions", () => {
+  let directory: string;
+  beforeEach(async () => {
+    directory = await fs.mkdtemp(path.join(os.tmpdir(), "vision-saxo-numbers-"));
+  });
+  afterEach(async () => {
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+
+  const header = readFileSync(fixture, "utf8").split("\n", 1)[0]!;
+  const trade = (action: string, booked: string, rate: string, costs: string) =>
+    `synthetic,2026/01/02,2026/01/04,ACC-1,TX-1,POS-1,,101,BK-1,Transactie,${action},${booked},EUR,${rate},0,${costs},,, ,,,Example Inc,EXM:xnas,XX0000000001,USD,Stock,Synthetic exchange,false,`;
+  const deposit = (booked: string) =>
+    `synthetic,2026/01/05,2026/01/05,ACC-1,,,,104,BK-4,Storting/opname,Storting,${booked},EUR,1,0,0,,, ,,,,,,EUR,Cash,,false,`;
+  const write = async (...lines: string[]) => {
+    const file = path.join(directory, "saxo.csv");
+    await fs.writeFile(file, [header, ...lines].join("\n") + "\n");
+    return parseSaxoTransactionHistory(file);
+  };
+
+  it("reads a thousands-separated quantity in the decimal convention the file shows", async () => {
+    const rows = await write(
+      trade('"Koop 1,500 @ 20.00 USD"', "-27002.08", "0.9", "-2.08"),
+    );
+
+    expect(rows[0]).toMatchObject({
+      typeRaw: "Buy",
+      units: 1500,
+      pricePerUnit: 20,
+    });
+  });
+
+  it("reads the same quantity in a decimal-comma file", async () => {
+    const rows = await write(
+      trade('"Koop 1.500 @ 20,00 USD"', '"-27002,08"', '"0,9"', '"-2,08"'),
+    );
+
+    expect(rows[0]).toMatchObject({ units: 1500, pricePerUnit: 20 });
+  });
+
+  it("surfaces a number the file never shows how to read", async () => {
+    const rows = await write(deposit('"1,500"'));
+
+    expect(rows[0]!.typeRaw).toBe("Unsupported Saxo event: Storting");
+    expect(rows[0]!.note).toMatch(/reads differently/);
+    expect(rows[0]!.amount).toBeNull();
+  });
+
+  it("holds back a trade whose quantity and price do not explain its booked amount", async () => {
+    const rows = await write(
+      trade('"Koop 1,500 @ 20.00 USD"', "-28.08", "0.9", "-1.08"),
+    );
+
+    expect(rows[0]!.typeRaw).toBe(
+      "Unsupported Saxo event: Koop 1,500 @ 20.00 USD",
+    );
+    expect(rows[0]!.note).toMatch(/does not agree with its booked amount/);
+    expect(rows[0]!.units).toBeNull();
   });
 });
