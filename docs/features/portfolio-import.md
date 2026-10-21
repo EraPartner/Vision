@@ -389,7 +389,10 @@ on one side (the workbook always has one, since it joins its sheets on it) block
 `cross_format_identity_missing` when route, type, instrument, units, cash and date agree; a
 deposit or withdrawal, which has no portfolio type, pairs by direction. Only the CSV's literal
 `Bk Record Id` is that identity: a CSV row that keeps only a `Transactie-ID` or `Booking Id` uses
-it for its own repeat imports, not to pair with the workbook. The
+it for its own repeat imports, not to pair with the workbook. A committed CSV batch that kept no
+source columns (an older import) cannot show which column its id came from: its id counts as the
+booking record only when it equals the workbook row's record id and that record id is none of the
+workbook row's own `Transactie-ID` or `Booking Id` values; otherwise the pair blocks as above. The
 owner resolves either with the statement policy: "Use detailed source facts" (`prefer_source`)
 records them as one event, by the same outcome as the strict pair in the table above, and
 "Preserve existing facts" (`preserve_existing`) keeps both, without offering the other export's

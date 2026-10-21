@@ -219,6 +219,58 @@ function saxoBookingRecord(row: StagedRow | CrossFormatLedgerSourceRow) {
   }
 }
 
+/**
+ * The source id of a Saxo CSV row from a batch that kept no source columns,
+ * keyed like {@link saxoKey}. Such a row cannot show which column its id came
+ * from: the adapter takes `Bk Record Id`, else `Transactie-ID`, else
+ * `Booking Id`. It is the booking record only once a workbook row proves it
+ * (see {@link saxoWorkbookRecordIsOwnId}).
+ */
+function saxoLegacyCsvKey(row: StagedRow | CrossFormatLedgerSourceRow) {
+  if (
+    formatOf(row) !== SAXO ||
+    isSaxoWorkbookRow(row) ||
+    row.account_id == null ||
+    Array.isArray(batchConfigFields(row.custom_config)?.source_columns)
+  )
+    return undefined;
+  const account = text(row.source_account_identity);
+  const record = text(row.source_transaction_id);
+  return account && record && !/^0+$/.test(record)
+    ? `${row.account_id}\u0000${account}\u0000${record}`
+    : undefined;
+}
+
+/**
+ * Whether a workbook row's booking record id is none of its own
+ * `Transactie-ID` or `Booking Id` values. Then a CSV row of the same event
+ * whose id equals that record id can only have taken it from `Bk Record Id`.
+ */
+function saxoWorkbookRecordIsOwnId(row: StagedRow): boolean {
+  if (!isSaxoWorkbookRow(row)) return false;
+  const record = text(row.source_transaction_id);
+  try {
+    const provenance = JSON.parse(String(row.raw_data)) as {
+      records?: Array<{ headers?: unknown; cells?: unknown }>;
+    };
+    if (!Array.isArray(provenance.records) || provenance.records.length === 0)
+      return false;
+    const others = new Set<string>();
+    for (const item of provenance.records) {
+      if (!Array.isArray(item.headers) || !Array.isArray(item.cells))
+        return false;
+      item.headers.forEach((header, index) => {
+        const name = String(header).replace(/\s/g, " ").trim();
+        if (name === "Transactie-ID" || name === "Booking Id")
+          others.add(text((item.cells as unknown[])[index]));
+      });
+    }
+    return !!record && !others.has(record);
+  } catch {
+    return false;
+  }
+}
+
 /** The booking record of one Saxo account, whichever export staged it. */
 function saxoKey(row: StagedRow | CrossFormatLedgerSourceRow) {
   if (formatOf(row) !== SAXO || row.account_id == null) return undefined;
@@ -459,9 +511,16 @@ export function planCrossFormatSources({
       workbooks.set(key, row);
   }
   const saxoLedger = new Map<string, CrossFormatLedgerSourceRow[]>();
+  const saxoLegacyLedger = new Map<string, CrossFormatLedgerSourceRow[]>();
   for (const source of context.ledgerSources) {
     const key = saxoKey(source);
     if (key) saxoLedger.set(key, [...(saxoLedger.get(key) ?? []), source]);
+    const legacyKey = saxoLegacyCsvKey(source);
+    if (legacyKey)
+      saxoLegacyLedger.set(legacyKey, [
+        ...(saxoLegacyLedger.get(legacyKey) ?? []),
+        source,
+      ]);
   }
   for (const row of open) {
     const key = saxoKey(row);
@@ -480,7 +539,14 @@ export function planCrossFormatSources({
       );
       continue;
     }
-    const recorded = saxoLedger.get(key) ?? [];
+    const proven = saxoLedger.get(key) ?? [];
+    // A CSV recorded before batches kept their source columns counts only
+    // when this workbook row proves its id is the booking record. Otherwise
+    // it stays a keyless twin below.
+    const recorded =
+      proven.length === 0 && saxoWorkbookRecordIsOwnId(row)
+        ? (saxoLegacyLedger.get(key) ?? [])
+        : proven;
     // The same export repeated keeps its ordinary fingerprint duplicate path.
     if (
       recorded.length === 0 ||

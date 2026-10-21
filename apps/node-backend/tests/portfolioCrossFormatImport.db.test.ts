@@ -480,6 +480,67 @@ describeDb("one broker history through more than one export", () => {
       expect(await cashTotals(sleeve)).toEqual({ EUR: "450.0000" });
     });
 
+    describe("a CSV batch recorded before batches kept their source columns", () => {
+      const forgetColumns = (batchId: number) =>
+        pool.query(
+          "UPDATE portfolio_import_batches SET custom_config = custom_config - 'source_columns' WHERE id=$1",
+          [batchId],
+        );
+
+      it("recognises the workbook's events by the CSV's booking record ids", async () => {
+        const sleeve = await account("Saxo");
+        const exm = await investment("EXM");
+        const csv = await stage(await saxoCsv("saxo-no-dividend", [101, 103, 104]), "saxo_transaction_history", sleeve);
+        await commit(csv);
+        await forgetColumns(csv);
+        const workbook = await stage(await saxoXlsx("saxo-all", ALL), "saxo_transaction_history", sleeve);
+        expect(await blockerReasons(workbook)).toEqual({ ready: true, reasons: [] });
+        expect(await commit(workbook)).toMatchObject({ imported: 1, duplicates: 3, errors: 0 });
+        expect(await portfolio(exm)).toEqual([expect.objectContaining(CSV_BUY), DIVIDEND]);
+        expect(await cash(sleeve)).toEqual(SAXO_CASH);
+      });
+
+      it("keeps asking about cash rows whose CSV id is their Booking Id", async () => {
+        const sleeve = await account("Saxo");
+        const blank = saxoSheets([103, 104]).map((sheet) => ({
+          ...sheet,
+          records: sheet.records.map((record) => ({ ...record, "Bk Record Id": "", "Transactie-ID": "" })),
+        }));
+        const csv = await stage(await saxoCsv("cash-blank", [], blank), "saxo_transaction_history", sleeve);
+        await commit(csv);
+        await forgetColumns(csv);
+        const workbook = await stage(await saxoXlsx("cash", [103, 104]), "saxo_transaction_history", sleeve);
+        expect(await blockerReasons(workbook)).toEqual({
+          ready: false,
+          reasons: ["cross_format_identity_missing"],
+        });
+        expect(await cash(sleeve)).toEqual(SAXO_CASH);
+      });
+
+      it("keeps asking when the workbook's record id is also its Transactie-ID", async () => {
+        const sleeve = await account("Saxo");
+        await investment("EXM");
+        const sameIds = (blankRecord: boolean) =>
+          saxoSheets([101]).map((sheet) => ({
+            ...sheet,
+            records: sheet.records.map((record) => ({
+              ...record,
+              "Transactie-ID": "101",
+              ...(blankRecord ? { "Bk Record Id": "" } : {}),
+            })),
+          }));
+        // The CSV's id is its Transactie-ID; nothing shows it is the record.
+        const csv = await stage(await saxoCsv("trade", [], sameIds(true)), "saxo_transaction_history", sleeve);
+        await commit(csv);
+        await forgetColumns(csv);
+        const workbook = await stage(await saxoXlsx("trade", [], sameIds(false)), "saxo_transaction_history", sleeve);
+        expect(await blockerReasons(workbook)).toEqual({
+          ready: false,
+          reasons: ["cross_format_identity_missing"],
+        });
+      });
+    });
+
     it("records each event once when the XLSX comes first and the CSV second", async () => {
       const sleeve = await account("Saxo");
       const exm = await investment("EXM");

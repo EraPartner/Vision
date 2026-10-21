@@ -65,7 +65,10 @@ is surfaced for the owner instead of being settled by a score.
 ## Decision
 
 - **Saxo cross-format identity.** Only the CSV's literal `Bk Record Id` pairs a Saxo CSV row with
-  the workbook; `Transactie-ID` and `Booking Id` stay the row's own repeat-import identity. Cash
+  the workbook; `Transactie-ID` and `Booking Id` stay the row's own repeat-import identity. A
+  committed CSV batch without retained `source_columns` cannot show which column its source id came
+  from; that id pairs only with a workbook row whose record id equals it and whose own
+  `Transactie-ID` and `Booking Id` differ from it, since the adapter takes the record id first. Cash
   rows without that id meet the existing `cross_format_identity_missing` block by direction
   (deposit or withdrawal), date, account and amount, and the existing statement policy resolves it.
 - **Candidates.** A nearby history candidate is unassigned or on the row's own account. An

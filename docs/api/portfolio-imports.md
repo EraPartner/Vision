@@ -817,7 +817,9 @@ within seven days. A manual entry on another date needs a policy (`policy_requir
 same movement), `funding_date_mismatch` (an IBKR CSV deposit or withdrawal matches a funding
 workbook movement in type, account and value, but its date is up to ten days outside the
 request–completion window) and `cross_format_identity_missing` (an otherwise identical Saxo CSV
-and XLSX row, one without a booking record id). These last two clear only on the selected
+and XLSX row, one without a booking record id; a committed CSV batch without retained
+`source_columns` counts its source id as the booking record only when the workbook row's record id
+is none of its own `Transactie-ID` or `Booking Id` values). These last two clear only on the selected
 statements' `batchPolicies` or `adoptPolicy`: `prefer_source` records the pair as one event, and
 the paired `duplicate` or `duplicate_source` carries `policy: prefer_source`; `preserve_existing`
 keeps both. Conflicting policies across the pair keep it blocked. A later import of a row the
