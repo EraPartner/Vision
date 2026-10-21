@@ -3952,33 +3952,36 @@ components:
                 $ref: "#/components/schemas/ResearchScorecardData",
                 nullable: true,
               }
+    # The portfolio forecast, mapping and provider-key routes compute locally or
+    # manage stored settings; no provider answers them, so their `meta` is the
+    # plain transport meta (`requestId`) without `provider`/`source`.
     ResearchPortfolioForecastEnvelope:
       allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - $ref: "#/components/schemas/Envelope"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
     ResearchMappingsEnvelope:
       allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - $ref: "#/components/schemas/Envelope"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchMappingsData" }
     ResearchMappingResolveEnvelope:
       allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - $ref: "#/components/schemas/Envelope"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchMappingResolveData" }
     ResearchMappingAuditEnvelope:
       allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - $ref: "#/components/schemas/Envelope"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchMappingAuditData" }
     ResearchProviderKeysEnvelope:
       allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
+        - $ref: "#/components/schemas/Envelope"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchProviderKeysData" }
@@ -4037,11 +4040,13 @@ components:
           type: string
         description:
           type: string
+          nullable: true
         is_active:
           type: boolean
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -4188,10 +4193,13 @@ components:
           type: string
         primary_bank_account:
           type: string
+          nullable: true
         default_category_id:
           type: integer
+          nullable: true
         default_category_name:
           type: string
+          nullable: true
         primary_recipient_id:
           type: integer
           nullable: true
@@ -4202,11 +4210,13 @@ components:
           type: integer
         notes:
           type: string
+          nullable: true
         is_active:
           type: boolean
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -4935,8 +4945,10 @@ components:
           type: integer
         recipient_name:
           type: string
+          nullable: true
         memo:
           type: string
+          nullable: true
         amount:
           type: number
           format: double
@@ -4955,17 +4967,21 @@ components:
         balance:
           type: number
           format: double
+          nullable: true
         running_balance:
           type: number
           format: double
           description: Per-account, per-currency running balance over the filtered set before pagination. The latest preceding stored statement balance resets the cumulative amount; later unstamped rows advance it. Present only when include_balance=true. Rows with no currency are treated as EUR.
         category_id:
           type: integer
+          nullable: true
         category_name:
           type: string
+          nullable: true
           description: "Format: GENERAL:DETAIL"
         comment:
           type: string
+          nullable: true
         is_active:
           type: boolean
           description: False when the transaction is excluded from totals and statistics.
@@ -5260,26 +5276,35 @@ components:
           description: Stable linked account identity
         recipient_id:
           type: integer
+          nullable: true
         recipient_name:
           type: string
+          nullable: true
         memo:
           type: string
+          nullable: true
         amount:
           type: number
         currency:
           type: string
+          nullable: true
         category_id:
           type: integer
+          nullable: true
         category_name:
           type: string
+          nullable: true
         comment:
           type: string
+          nullable: true
         url:
           type: string
+          nullable: true
         is_recurring:
           type: boolean
         recurrence_pattern:
           type: string
+          nullable: true
         recurrence_end_date:
           type: string
           format: date
@@ -5292,7 +5317,8 @@ components:
         is_loan:
           type: boolean
         loan_type:
-          $ref: "#/components/schemas/PlannedLoanType"
+          allOf:
+            - $ref: "#/components/schemas/PlannedLoanType"
           nullable: true
         loan_principal:
           type: number
@@ -5326,8 +5352,10 @@ components:
         last_executed_date:
           type: string
           format: date
+          nullable: true
         executed_transaction_id:
           type: integer
+          nullable: true
         execution_count:
           type: integer
         executions:
@@ -6002,12 +6030,16 @@ components:
           type: number
         units:
           type: number
+          nullable: true
         price_per_unit:
           type: number
+          nullable: true
         fees:
           type: number
+          nullable: true
         taxes:
           type: number
+          nullable: true
         dividend_amount_convention:
           type: string
           enum: [gross, net, unknown]
@@ -6030,6 +6062,7 @@ components:
           type: string
         fx_rate_to_eur:
           type: number
+          nullable: true
         account_id:
           type: integer
           nullable: true
@@ -6043,13 +6076,17 @@ components:
             was created manually or predates batch attribution.
         note:
           type: string
+          nullable: true
         is_recurring:
           type: boolean
         recurrence_interval:
-          $ref: "#/components/schemas/RecurrenceInterval"
+          allOf:
+            - $ref: "#/components/schemas/RecurrenceInterval"
+          nullable: true
         recurrence_end_date:
           type: string
           format: date
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -6176,6 +6213,56 @@ components:
         unconverted_currencies:
           type: array
           items: { type: string }
+
+    AggregationMeta:
+      type: object
+      description: >-
+        Provenance of an aggregation payload (ADR-011): when it was computed and
+        whether it came from a materialized view (`mv`), a live query (`live`)
+        or a forecast cache (`cache`).
+      required: [computedAt, source]
+      properties:
+        computedAt: { type: string, format: date-time }
+        source: { type: string }
+
+    # The aggregation routes answer `{ data, meta }` (calc modules'
+    # buildEnvelope) inside the transport envelope's `data`.
+    AggregationUnconverted:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/UnconvertedAmounts" }
+        meta: { $ref: "#/components/schemas/AggregationMeta" }
+
+    AggregationCategoryPivot:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: "#/components/schemas/CategoryPivotData" }
+        meta: { $ref: "#/components/schemas/AggregationMeta" }
+
+    AggregationForecast:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [methods]
+          properties:
+            methods: { type: array, items: { type: object } }
+        meta: { $ref: "#/components/schemas/AggregationMeta" }
+
+    AggregationPeriodPivot:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [conversion]
+          properties:
+            conversion:
+              $ref: "#/components/schemas/PeriodPivotConversion"
+        meta: { $ref: "#/components/schemas/AggregationMeta" }
 
     PeriodPivotConversion:
       type: object
@@ -7540,6 +7627,34 @@ components:
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 paths:
+  # ─── API root ───────────────────────────────────────────────────────────────
+
+  /api:
+    get:
+      summary: API identity
+      description: >-
+        Static service identity (main.ts). Served as plain JSON, not wrapped in
+        the `{ ok, data }` envelope. Also answers `/api/`.
+      operationId: getApiRoot
+      tags: [Health]
+      responses:
+        "200":
+          description: Service identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, title, description, runtime, links]
+                properties:
+                  version: { type: string }
+                  title: { type: string }
+                  description: { type: string }
+                  runtime: { type: string }
+                  links:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Link"
+
   # ─── Tags ───────────────────────────────────────────────────────────────────
 
   /api/tags:
@@ -9870,6 +9985,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CategoryNodeEnvelope" }
+        "404": { description: "NOT_FOUND: no category with this id" }
     patch:
       summary: Rename, move, describe, or activate a category node
       operationId: updateCategoryNode
@@ -9947,6 +10063,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Category"
+        "404": { description: "NOT_FOUND: no category with this id" }
     patch:
       summary: Update category
       operationId: updateCategory
@@ -10124,6 +10241,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Recipient"
+        "404": { description: "NOT_FOUND: no recipient with this id" }
     patch:
       summary: Update recipient
       operationId: updateRecipient
@@ -10245,6 +10363,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Setting"
+        "404": { description: "NOT_FOUND: no setting with this key" }
     put:
       summary: Save setting
       operationId: saveSetting
@@ -11443,9 +11562,16 @@ paths:
       summary: List bank accounts for recipient
       operationId: getRecipientBankAccounts
       tags: [Recipients]
+      parameters:
+        - in: query
+          name: active
+          description: Only active bank accounts (default true); `false` includes inactive ones.
+          schema:
+            type: boolean
+            default: true
       responses:
         "200":
-          description: Bank account list
+          description: Bank account list (canonical `{ items, total }`, unpaginated)
           content:
             application/json:
               schema:
@@ -11454,9 +11580,16 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/RecipientBankAccount"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RecipientBankAccount"
+                          total:
+                            type: integer
+                            minimum: 0
     post:
       summary: Add bank account to recipient
       operationId: createRecipientBankAccount
@@ -11828,6 +11961,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PlannedTransaction"
+        "404": { description: "NOT_FOUND: no planned transaction with this id" }
     patch:
       summary: Update planned transaction
       operationId: updatePlannedTransaction
@@ -12463,7 +12597,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/category-breakdown:
     get:
@@ -12492,7 +12626,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/recipient-insights:
     get:
@@ -12527,7 +12661,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/cashflow-comparison:
     get:
@@ -12550,7 +12684,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/average-vs-current:
     get:
@@ -12573,7 +12707,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/bank-balances:
     get:
@@ -12592,7 +12726,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/cashflow-forecast-methods:
     get:
@@ -12606,7 +12740,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AggregationForecast"
 
   /api/aggregations/cashflow-forecast-rolling:
     get:
@@ -12629,7 +12768,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AggregationForecast"
 
   /api/aggregations/cashflow-forecast-accuracy:
     get:
@@ -12638,11 +12782,31 @@ paths:
       tags: [Aggregations]
       responses:
         "200":
-          description: Accuracy metrics
+          description: >-
+            Accuracy metrics as `{ data, meta }`; built by the route, so `meta`
+            is `{ source: "db", userId }` without `computedAt`.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [data, meta]
+                        properties:
+                          data:
+                            type: object
+                            required: [methods, limit_months]
+                            properties:
+                              methods: { type: array, items: { type: object } }
+                              limit_months: { type: integer }
+                          meta:
+                            type: object
+                            required: [source]
+                            properties:
+                              source: { type: string }
 
   /api/aggregations/sankey:
     get:
@@ -12686,7 +12850,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/category-pivot:
     get:
@@ -12737,7 +12901,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/CategoryPivotData"
+                        $ref: "#/components/schemas/AggregationCategoryPivot"
 
   /api/aggregations/recipient-by-year:
     get:
@@ -12788,7 +12952,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/UnconvertedAmounts"
+                        $ref: "#/components/schemas/AggregationUnconverted"
 
   /api/aggregations/recipient-pivot:
     get:
@@ -12846,11 +13010,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [conversion]
-                        properties:
-                          conversion:
-                            $ref: "#/components/schemas/PeriodPivotConversion"
+                        $ref: "#/components/schemas/AggregationPeriodPivot"
 
   /api/aggregations/tag-pivot:
     get:
@@ -12910,11 +13070,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [conversion]
-                        properties:
-                          conversion:
-                            $ref: "#/components/schemas/PeriodPivotConversion"
+                        $ref: "#/components/schemas/AggregationPeriodPivot"
 
   # ─── Investments extra ───────────────────────────────────────────────────────
   /api/investments/exposure:
@@ -13236,6 +13392,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Investment"
+        "404": { description: "NOT_FOUND: no investment with this id" }
     patch:
       summary: Update investment
       operationId: updateInvestment
@@ -13322,6 +13479,7 @@ paths:
                         {
                           $ref: "#/components/schemas/InvestmentPriceHistoryData",
                         }
+        "404": { description: "NOT_FOUND: no investment with this id" }
 
   /api/investments/{id}/transactions:
     parameters:
@@ -13476,6 +13634,7 @@ paths:
             type: string
       responses:
         "400": { description: "VALIDATION_ERROR: `q` sent more than once" }
+        "502": { description: "BAD_GATEWAY: the market data provider failed" }
         "200":
           description: Symbol search results
           content:
@@ -13550,6 +13709,7 @@ paths:
           {
             description: "VALIDATION_ERROR: missing `symbol`, an `interval` outside the list, or a parameter sent more than once",
           }
+        "502": { description: "BAD_GATEWAY: the market data provider failed" }
         "200":
           description: OHLC chart data (canonical `{items, total}` series with `symbol`/`currency` alongside)
           content:
@@ -13598,6 +13758,7 @@ paths:
             maximum: 50
       responses:
         "400": { description: "VALIDATION_ERROR: `count` sent more than once" }
+        "502": { description: "BAD_GATEWAY: the market data provider failed" }
         "200":
           description: News items (canonical `{items, total}` body)
           content:
@@ -13716,6 +13877,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/WatchlistItem"
+        "404": { description: "NOT_FOUND: no watchlist item with this id" }
     patch:
       summary: Update watchlist item
       operationId: updateWatchlistItem
@@ -13876,11 +14038,19 @@ paths:
       tags: [Splits]
       responses:
         "200":
-          description: CSV file
+          description: >-
+            CSV file. Columns: Date (`YYYY-MM-DD`), Bank Account, Recipient,
+            Memo, Amount (the remaining owed amount), Currency, Balance,
+            Category, Comment.
           content:
             text/csv:
               schema:
                 type: string
+        "404":
+          description: "NOT_FOUND: the recipient has no unsettled owed transactions"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/splits/transaction/{id}:
     parameters:
@@ -14275,6 +14445,11 @@ paths:
               schema:
                 type: string
                 format: binary
+        "404":
+          description: "NOT_FOUND: no attachment with this id, or its stored file is missing"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/attachments/{id}:
     parameters:
@@ -14664,6 +14839,11 @@ paths:
                               $ref: "#/components/schemas/OllamaModel"
                           total:
                             type: integer
+        "502":
+          description: "BAD_GATEWAY: the local Ollama server is not reachable or failed; `error.details.ollamaCode` names the cause"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
 
   /api/ai/conversations:
     get:
@@ -14766,6 +14946,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/AiConversationDetail"
+        "404": { description: "NOT_FOUND: no conversation with this id" }
     patch:
       summary: Update conversation title
       operationId: updateAiConversation
@@ -15320,6 +15501,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/ImportBatch"
+        "404": { description: "NOT_FOUND: no import batch with this id" }
     delete:
       summary: Rollback import batch (deletes committed transactions, marks batch aborted)
       operationId: deleteImportBatch
@@ -15379,6 +15561,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "404": { description: "NOT_FOUND: no import batch with this id" }
 
   /api/import/batches/{id}/rows/{rowId}/override:
     parameters:
@@ -15887,6 +16070,7 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/PortfolioImportBatch"
+        "404": { description: "NOT_FOUND: no import batch with this id" }
     delete:
       summary: Rollback portfolio import batch (deletes committed portfolio_transactions, marks batch aborted)
       operationId: deletePortfolioImportBatch
@@ -15926,6 +16110,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortfolioImportPreviewEnvelope"
+        "404": { description: "NOT_FOUND: no import batch with this id" }
 
   /api/portfolio/import/batches/{id}/rows/{rowId}/investment-override:
     parameters:

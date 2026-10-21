@@ -2,8 +2,8 @@
 title: Health API
 type: api
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     api,
@@ -150,6 +150,22 @@ The Electron shell (`packaging/electron/main.ts`) uses `GET /health/detailed` vi
 - Electron can show a detailed error page if a specific cache failed
 - Observability: check which caches are taking longest to warm; the backend boot trace also
   records `portfolio_snapshots`, `info_caches` and `cashflow_forecast_job` durations
+
+## GET /api
+
+Static service identity, declared in `openapi.yaml` (operation `getApiRoot`). `main.ts` registers
+it before the `/api` rate limiter and cross-site guard, so, like the health endpoints, neither
+applies. The body is plain JSON, not the `{ ok, data }` envelope; `/api/` answers the same.
+
+```json
+{
+  "version": "1.0.0",
+  "title": "Financial Transaction Manager",
+  "description": "Import and manage financial transactions from various banks",
+  "runtime": "Node.js/Express",
+  "links": []
+}
+```
 
 ## Error Responses
 

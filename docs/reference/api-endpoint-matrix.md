@@ -8,7 +8,7 @@ last_modified: 2026-10-21
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 284
+api_operation_count: 285
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 284 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 285 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **284 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **285 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -89,6 +89,8 @@ aliases:
 > **2026-10-11 — Belgian tax partner attribution (ADR-201, non-breaking, count 300 → 301):** `GET /api/info/deduction-candidates` was served but missing from `openapi.yaml` and this matrix; it is now declared, and each `byDeductionType` group gains an additive `byOwner` (`me` / `partner` / `joint`) split of its total. `GET /api/aggregations/category-pivot` cells gain an optional `incomeByOwner` (`partner` / `joint`). `POST /api/reports/tax` accepts optional `household` (validated like the household setting) and `precomputedHousehold` and renders per-partner rows for two partners. No field is removed or renamed.
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
+>
+> **2026-10-21 — API dates and spec drift (count 284 → 285):** `GET /api` (the static service identity, plain JSON without the envelope) was served but missing from `openapi.yaml`; it is now declared. Response fixes, breaking only for clients that parsed the old wrong values: `GET /api/splits/owed/:id` sends `transaction_date` as `YYYY-MM-DD` (it was the previous day's UTC timestamp east of UTC); the owed CSV export writes `YYYY-MM-DD` in its Date column (it wrote `Date.toString()`); `PUT /api/accounts/:id/statement-balances/:currency` returns `balance` and `POST /api/accounts/:id/reconcile` returns `transaction.amount` as JSON numbers (they were decimal strings); the DB editor's `/rows` and `/mutate` send `DATE` cells as `YYYY-MM-DD`. `GET /api/admin/metrics/requests` records failed requests under their full mounted path. Spec-only corrections (the responses did not change): nullable fields on `Transaction`, `Category`, `Recipient`, `PlannedTransaction` and `PortfolioTransaction`; the aggregation `{ data, meta: { computedAt, source } }` wrapper; `{ items, total }` for `GET /api/recipients/:id/bank-accounts`; no `meta.provider` on the portfolio-forecast, mapping and provider-key research operations; and the `502` and `404` statuses the routes already returned.
 >
 > **2026-10-20 — unused operations removed (BREAKING for direct HTTP callers only, count 293 → 284):** no frontend, Electron, script or AI-chat caller used these nine operations, so they are gone: `POST /api/analysis/interchange/import` and `POST /api/analysis/interchange/export` (the browser parses and writes CSV/XLSX itself with `@vision/shared-utils/analysis`), `POST /api/research/presentation` (the browser computes presentations with `@vision/shared-utils/research/presentation`), `GET /api/research/quote` and `GET /api/research/fundamentals` (the UI uses `/api/research/chart`, `/api/research/scorecard` and `/api/market/quote`; the AI chat research tool still calls the aggregator directly), `GET /api/ai-research/status`, `POST /api/ai-research/documents/search/passages` (the AI chat and investigation tools still search passages in-process), `GET /api/admin/endpoint-liveness` (the Admin Endpoints page reads `GET /api/admin/endpoints` and `GET /api/admin/metrics/requests`, which remain), and `GET /api/aggregations/cashflow-forecast` (the non-Monte-Carlo planned-transaction projection; the `cashflow-forecast-methods`, `-rolling` and `-accuracy` operations are unchanged).
 >
@@ -577,6 +579,7 @@ in ascending order and preserves source order within a date. See
 | ------ | ------------------ | ---------------------------------------- | ---------- | --------------------------- |
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
+| GET    | `/api`             | Static service identity (no envelope)    | —          | [[docs/api/health\|Health]] |
 
 ## Admin
 
