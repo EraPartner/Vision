@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-10-21
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -102,7 +102,8 @@ runtime bootstrap state, not application data.
 
 The previous Demo database remains available until detailed readiness and stable row-count checks
 pass. The post-start comparison excludes only the documented runtime-owned
-`transfers_backfilled` and `fx_full_history_repair_done` maintenance markers.
+`transfers_backfilled` and `fx_full_history_repair_done` maintenance markers and the
+`daily_job_*` last-run markers that warmup writes after the backend reports ready.
 
 Reset only the isolated Demo data with:
 

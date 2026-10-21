@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import test from "node:test";
 
 import {
@@ -111,6 +112,74 @@ test("post-start comparison permits only runtime-managed user settings", () => {
     hasCode("DATABASE_COUNT_MISMATCH"),
   );
 });
+
+// Runs DATABASE_STATS_SQL against a real PostgreSQL when TEST_DATABASE_URL
+// names a disposable, migrated database. Everything happens inside one
+// transaction that is rolled back.
+test(
+  "stable user-settings count ignores daily job markers written after ready",
+  { skip: !process.env.TEST_DATABASE_URL && "TEST_DATABASE_URL not set" },
+  () => {
+    const run = (settings: string[]) => {
+      const values = settings.map((key) => `('${key}')`).join(", ");
+      const stdout = execFileSync(
+        "psql",
+        [
+          process.env.TEST_DATABASE_URL ?? "",
+          "--tuples-only",
+          "--no-align",
+          "--field-separator",
+          "\t",
+          "--quiet",
+          "--no-psqlrc",
+          "--set",
+          "ON_ERROR_STOP=1",
+          "--command",
+          [
+            "BEGIN",
+            "DELETE FROM public.user_settings",
+            `INSERT INTO public.user_settings(key) VALUES ${values}`,
+            DATABASE_STATS_SQL,
+            "ROLLBACK",
+          ].join(";\n"),
+        ],
+        { encoding: "utf8" },
+      );
+      return parseDatabaseStats(stdout);
+    };
+    const seed = run(["language", "dailyXjobXlookalike"]);
+    const afterWarmup = run([
+      "language",
+      "dailyXjobXlookalike",
+      "daily_job_cashflow_forecast",
+      "daily_job_fx_refresh",
+      "transfers_backfilled",
+    ]);
+    assert.equal(seed.stableImportantRowCounts.user_settings, 2);
+    assert.equal(afterWarmup.stableImportantRowCounts.user_settings, 2);
+    assert.equal(afterWarmup.user_settings, 5);
+    assert.doesNotThrow(() =>
+      assertStableDatabaseStatsEqual(
+        { ...seed, tableCounts: afterWarmup.tableCounts },
+        afterWarmup,
+      ),
+    );
+    const userSettingAdded = run([
+      "language",
+      "dailyXjobXlookalike",
+      "daily_job_cashflow_forecast",
+      "theme",
+    ]);
+    assert.throws(
+      () =>
+        assertStableDatabaseStatsEqual(
+          { ...seed, tableCounts: userSettingAdded.tableCounts },
+          userSettingAdded,
+        ),
+      hasCode("DATABASE_COUNT_MISMATCH"),
+    );
+  },
+);
 
 test("post-start comparison still rejects schema and table-set drift", () => {
   const expected = parseDatabaseStats(statsOutput());

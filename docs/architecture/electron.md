@@ -345,7 +345,8 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    and all table counts, then starts the backend. It finalizes the atomic database switch only
    after detailed readiness and stable user-data counts. The post-start `user_settings`
    comparison excludes only the runtime-owned `transfers_backfilled` and
-   `fx_full_history_repair_done` maintenance markers; ordinary settings remain protected. Failure
+   `fx_full_history_repair_done` maintenance markers and the `daily_job_*` last-run markers that
+   warmup writes after readiness; ordinary settings remain protected. Failure
    restores the previous Demo database before startup exits.
 
 ### Backend Startup
