@@ -2,8 +2,8 @@
 title: Belgian Tax Rule Coverage Matrix
 type: reference
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-21
+updated: 2026-10-21
 tags: [reference, belgian-tax, tax-rules, sources, verification]
 description: One row per Belgian personal income tax rule the engine applies, including the household (two-partner) rules of ADR-200, with the legal basis, the primary source opened for each income year (2024-2026), the code location, the regression test and the verification status.
 aliases: [belgian tax rule matrix, tax rule coverage, tax sources]
@@ -77,6 +77,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | RET26 | FPS Finance, *Voorbereiding van de aangifte in de personenbelasting, aanslagjaar 2026, deel 1*, vak V (Fisconetplus `3fa39f11-7b2d-4d86-9dcb-b77f1904de7f`) | Box V, A.1 splits the pensions: "a) Wettelijke pensioenen verkregen vanaf de wettelijke pensioenleeftijd" (ordinary 1228/2228, December 2025 public-sector pensions 1314/2314, arrears 1230/2230), "b) Overlevingspensioenen en overgangsuitkeringen" (1229/2229, 1315/2315, arrears 1231/2231), "c) Andere pensioenen ... die gezamenlijk belastbaar zijn" (1211/2211, 1316/2316, arrears 1212/2212) |
 | C51 | FPS circular 2018/C/51 on the integrated woonbonus (Fisconetplus `2699b578-d833-4339-b3f2-790a3bb7e601`) | Worked example: 608 per spouse (1,520 × 40%) when both spouses paid |
 | P1  | PwC Worldwide Tax Summaries, Belgium — Individual (taxes on personal income, deductions, other taxes, sample calculation; reviewed 10 Sep 2026) | Secondary cross-check only                                         |
+| WDRT | Wetboek diverse rechten en taksen (law of 2 March 1927), Boek II Titel I, arts 120-124, Justel consolidated text "gepubliceerd tot en met 01-06-2026" (http://www.ejustice.just.fgov.be/eli/wet/1927/03/02/1927030201/justel, PDF `img_l/pdf/1927/03/02/1927030201_N.pdf`, opened 2026-10-21) | Art. 122, 1°: for the art. 120, 1° operations "is een taks van 1,20, 3,50 per duizend of 1,32 pct. volgens het geval, afzonderlijk verschuldigd o[p] de verkoop of afstand en op de aankoop of verwer[v]ing"; art. 120, 1°: "elke verkoop, elke aankoop"; art. 123: the base is, for purchases, "de sommen door de koper te betalen, het loon van de makelaar niet inbegrepen" and, for sales, "de door de verkoper of afstanddoener te ontvangen som, zonder aftrek van het loon van de makelaar"; art. 124: per operation taxed separately under art. 122 at most 1,300 euro, 1,600 euro for art. 121 §1 al. 1, 2° and 4,000 euro for capitalisation shares |
 
 > [!warning] PwC figures that disagree with the primary sources
 > PwC lists IY 2025 dividends 859, savings interest 1,050 and life insurance 2,530. N26 prints
@@ -208,7 +209,8 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Dividend exemption, 30% WHT reclaim    | art. 21, 14°; art. 269 | 833  | 833 ("après gel") | 833 | N25, N26, N27, F5, F7 | `dividendExemption`, backend `services/reports/belgianTaxTables.ts` | "dividend WHT reclaim" | verified (IY 2025/2026 corrected from 859) | `dividend-exemption`: — |
 | Savings-deposit interest exemption, 15% above | art. 21, 5°; art. 171, 3°quinquies | 1,020 | 1,020 ("après gel") | 1,020 | N25, N26, N27, F5, F7 | `savingsInterestExemption`, `savingsInterestExcessRate` | "savings interest tax" | verified (IY 2025/2026 corrected from 1,050) | `savings-interest`: — |
 | Capital gains tax 10%, exemption 10,000 per taxpayer (20,000 for two spouses) from 2026 | L5 arts 10 (art. 96/2, 2°, base 4,855), 14 (art. 171, 2°, e)), 35 | 0 | 0 | 10%; 10,000 per taxpayer | L5, C74, N27 | `capitalGainsTax*` | CGT tests | verified; the per-taxpayer carry-forward of art. 96/2, 3° (base 480 per year, set at €1,000 for AY 2028; at most base 2,426 used per period) is not modelled; there is no 20,000 carry-forward | `capital-gains`: — |
-| TOB, TACR, Reynders                    | Code of miscellaneous duties and taxes; art. 19bis | as code | as code | as code | — | `portfolioTax.ts` | `portfolioTax.test.ts` | unverified in this pass | `tob-tacr-reynders`: — |
+| TOB due separately on the purchase and on the sale, same rate and cap per leg: 0.12% (cap 1,300) bonds and distributing funds, 0.35% (cap 1,600) shares, 1.32% (cap 4,000) capitalisation shares; base = amount paid by the buyer or received by the seller, broker fee excluded | WDRT arts 120, 1°, 121, 122, 1°, 123, 124 | rule | rule | rule | WDRT | `portfolioTax.ts` `computeTobAutoEstimate`, `computeTobRecorded`, `recordedSellTob`; `costBreakdown.ts` | `portfolioTax.test.ts` "estimates the TOB on the sale as on the purchase"; `portfolioTaxYearGains.db.test.ts` | verified 2026-10-21 (previously only buy legs counted, and a sell's recorded taxes were labelled capital-gains tax). From 2026 a sell's recorded taxes can also hold withheld CGT: only the part up to the leg's statutory TOB counts as TOB; the split is the engine's, not a legal rule | `tob-tacr-reynders`: — |
+| TACR, Reynders                         | Code of miscellaneous duties and taxes; art. 19bis | as code | as code | as code | — | `portfolioTax.ts` | `portfolioTax.test.ts` | unverified in this pass | `tob-tacr-reynders`: — |
 
 ## Household taxation
 

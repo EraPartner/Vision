@@ -37,6 +37,7 @@ import { firstOfMonthYmd, todayAppDateString } from "../../lib/timezone.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import { getTaxOverview } from "./overviewService.ts";
 import { buildDashboardSuggestions } from "./dashboardSuggestions.ts";
+import { restateAtTransactionDateRates } from "./transactionDateFx.ts";
 
 type Overview = Awaited<ReturnType<typeof getTaxOverview>>;
 type Monthly = { year: number; month: number; total_income: number };
@@ -410,8 +411,10 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
     }),
     loadLatestRatesToEur(),
   ]);
-  // Recorded-tax widgets use the latest stored FX, not portfolio flow-date FX.
-  // A currency without a stored rate converts to undefined and is flagged.
+  // Recorded portfolio taxes convert at the rate of their transaction's date
+  // (ADR-085, ADR-240); a row without a dated rate falls back to the latest
+  // stored rate below. A currency without any stored rate converts to
+  // undefined and is flagged.
   const convert = (amount: number, fromCurrency?: string) => {
     const from = (fromCurrency ?? "EUR").toUpperCase();
     const to = currency.toUpperCase();
@@ -422,14 +425,18 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
   const investment: PortfolioTaxInvestment = {
     id: 0,
     assetClass: "recorded",
-    transactions: transactions.map((t) => ({
-      type: t.type,
-      date: toYmd(t.date),
-      amount: Number(t.amount),
-      taxes: Number(t.taxes),
-      fees: Number(t.fees),
-      currency: t.currency ?? "EUR",
-    })),
+    transactions: await restateAtTransactionDateRates(
+      transactions.map((t) => ({
+        type: t.type,
+        date: toYmd(t.date),
+        amount: Number(t.amount),
+        taxes: Number(t.taxes),
+        fees: Number(t.fees),
+        currency: t.currency ?? "EUR",
+        fx_rate_to_eur: t.fx_rate_to_eur,
+      })),
+      currency,
+    ),
   };
   return buildTaxDashboard(
     overview,

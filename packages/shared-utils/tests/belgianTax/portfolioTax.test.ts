@@ -12,6 +12,7 @@ import {
     computeReyndersEstimate,
     computeCgtEstimate,
     computeDividendWht,
+    recordedSellTob,
     type PortfolioTaxInvestment,
     type ConvertFn,
 } from "../../src/belgianTax/portfolioTax.ts";
@@ -161,11 +162,10 @@ describe("recorded taxes/fees for a year", () => {
 
 describe("TOB", () => {
     it("sums recorded buy-leg taxes for the year", () => {
-        // inv1 buy 35 + inv3 buy 9.6 (+ inv4 buy is prior year)
-        expect(computeTobRecorded(investments, 2025, convert)).toBeCloseTo(
-            44.6,
-            8,
-        );
+        // inv1 buy 35 + inv3 buy 9.6 (+ inv4 buy is prior year; inv1's sell records 0)
+        expect(
+            computeTobRecorded(investments, 2025, table2025, convert),
+        ).toBeCloseTo(44.6, 8);
     });
 
     it("estimates per-leg TOB by asset class with the per-leg cap", () => {
@@ -173,6 +173,47 @@ describe("TOB", () => {
         expect(
             computeTobAutoEstimate(investments, 2025, table2025, convert),
         ).toBeCloseTo(110.6, 8);
+    });
+
+    // WDRT art. 122, 1°: the tax is due separately on the sale and on the purchase,
+    // at the art. 121 rate, capped per leg by art. 124; art. 123, 2° taxes the sale on
+    // the amount the seller receives.
+    const traded = (sellAmount: number, sellTaxes: number, date = "2025-09-01") => [
+        {
+            id: 20,
+            assetClass: "stock",
+            currency: "EUR",
+            transactions: [
+                { type: "buy", date: "2025-03-01", amount: 10_000, taxes: 35 },
+                { type: "sell", date, amount: sellAmount, taxes: sellTaxes },
+            ],
+        },
+    ];
+
+    it("estimates the TOB on the sale as on the purchase", () => {
+        // buy 10,000 × 0.35% = 35 ; sell 12,000 × 0.35% = 42
+        expect(
+            computeTobAutoEstimate(traded(12_000, 42), 2025, table2025, convert),
+        ).toBeCloseTo(77, 8);
+        // sell 1,000,000 × 0.35% = 3,500, capped at 1,600 per leg
+        expect(
+            computeTobAutoEstimate(traded(1_000_000, 0), 2025, table2025, convert),
+        ).toBeCloseTo(35 + 1_600, 8);
+    });
+
+    it("counts the taxes recorded on a sale as TOB before capital-gains tax applies", () => {
+        expect(
+            computeTobRecorded(traded(12_000, 42), 2025, table2025, convert),
+        ).toBeCloseTo(77, 8);
+    });
+
+    it("counts only the statutory TOB of a sale once its taxes may hold capital-gains tax", () => {
+        // 2026: the sell's 1,042 recorded taxes hold its 42 TOB and 1,000 withheld CGT.
+        const sold = traded(12_000, 1_042, "2026-09-01");
+        expect(computeTobRecorded(sold, 2026, table2026, convert)).toBeCloseTo(42, 8);
+        expect(
+            recordedSellTob(sold[0]!, sold[0]!.transactions[1]!, table2026, convert, true),
+        ).toBeCloseTo(42, 8);
     });
 });
 

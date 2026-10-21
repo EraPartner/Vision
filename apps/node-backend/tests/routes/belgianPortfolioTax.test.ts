@@ -23,6 +23,8 @@ vi.mock("../../src/services/portfolio/portfolioSummaryService.ts", () => ({
 vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   FALLBACK_RATES: { EUR: 1, USD: 0.9 },
   listLatestStoredRates: vi.fn(),
+  // No stored historical rates: only rates stamped on a transaction are dated.
+  getHistoricalRateIndex: vi.fn(async () => new Map()),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { investmentRepository } from "../../src/repositories/investmentRepository.ts";
@@ -144,81 +146,108 @@ beforeEach(() => {
   vi.mocked(
     portfolioTransactionRepository.getAllByInvestmentIds,
   ).mockResolvedValue(txnRows as unknown as Transactions);
-  vi.mocked(getPortfolioSummary).mockResolvedValue({
-    summaries: [
-      {
-        ...rows[0],
-        assetClass: "stock",
-        currency: "EUR",
-        currentValue: 2000000,
-        realizedGain: 15000,
-        unrealizedGain: 40,
-      },
-      {
-        ...rows[1],
-        assetClass: "bond",
-        currency: "EUR",
-        currentValue: 888,
-        realizedGain: 777,
-        unrealizedGain: 777,
-      },
-      {
-        id: 999,
-        assetClass: "stock",
-        currency: "EUR",
-        currentValue: 99999999,
-        realizedGain: 99999999,
-      },
-    ],
-    archivedPresentation: [
-      {
-        ...rows[1],
-        assetClass: "bond",
-        currency: "EUR",
-        currentValue: 1000,
-        realizedGain: 1000,
-        unrealizedGain: 60,
-      },
-    ],
-  } as unknown as Holdings);
+  // Realized gains accumulate per year: 15,000 (stock) and 777 (bond) in 2025,
+  // the same again in 2026, nothing before. A replay through a date returns
+  // the gains up to that date; the lifetime summary (no date) all of them.
+  const realizedThrough = (throughDate?: string) =>
+    !throughDate || throughDate >= "2026-12-31"
+      ? 2
+      : throughDate >= "2025-12-31"
+        ? 1
+        : 0;
+  vi.mocked(getPortfolioSummary).mockImplementation(async (_target, opts) => {
+    const years = realizedThrough(opts?.throughDate);
+    return {
+      summaries: [
+        {
+          ...rows[0],
+          assetClass: "stock",
+          currency: "EUR",
+          currentValue: 2000000,
+          realizedGain: 15000 * years,
+          unrealizedGain: 40,
+        },
+        {
+          ...rows[1],
+          assetClass: "bond",
+          currency: "EUR",
+          currentValue: 888,
+          realizedGain: 777 * years,
+          unrealizedGain: 777,
+        },
+        {
+          id: 999,
+          assetClass: "stock",
+          currency: "EUR",
+          currentValue: 99999999,
+          realizedGain: 99999999,
+        },
+      ],
+      archivedPresentation: [
+        {
+          ...rows[1],
+          assetClass: "bond",
+          currency: "EUR",
+          currentValue: 1000,
+          realizedGain: 1000,
+          unrealizedGain: 60,
+        },
+      ],
+    } as unknown as Holdings;
+  });
   vi.mocked(listLatestStoredRates).mockResolvedValue({
     rows: [{ currency_code: "USD", rate_to_eur: 0.8 }],
   } as unknown as Rates);
 });
 
 describe("Portfolio Tax authoritative dashboard", () => {
-  it("retains frozen PIT, all-time gains, ordinary current FX, canonical archived gains, and selected-year adjustments", async () => {
+  it("retains frozen PIT, tax-year gains, transaction-date FX, canonical archived gains, and selected-year adjustments", async () => {
     const res = await api.get(path).query({ year: 2025, currency: "eur" });
     expect(res.status).toBe(200);
     expect(bodyAt(res, "data", "year")).toBe(2025);
     expect(bodyAt(res, "data", "currency")).toBe("EUR");
+    // The USD buy converts at its stamped transaction-date rate 0.4 (ADR-085),
+    // not today's 0.8: taxes 10 → 4, fees 2 → 0.8, amount 1,000 → 400.
+    // Recorded taxes 4 + 5 (sell) + 30 (dividend) = 39; fees 0.8 + 6 = 6.8.
     expect(bodyAt(res, "data", "totals")).toMatchObject({
-      totalRecordedTaxes: 43,
-      totalRecordedFees: 7.6,
+      totalRecordedTaxes: 39,
+      totalRecordedFees: 6.8,
       totalManualTaxes: 7,
       totalManualFees: 4,
       totalManualCosts: 11,
-      totalTaxes: 50,
-      totalFees: 11.6,
+      totalTaxes: 46,
+      totalFees: 10.8,
       totalPIT: 1234,
-      portfolioTaxesPlusPIT: 1284,
+      portfolioTaxesPlusPIT: 1280,
+      // 2025's realized gains only (the lifetime summary holds 2026's too).
       // Archived holding comes from the dated-FX canonical summary (777), not
       // the current-rate archivedPresentation (1000 / 60) the service ignores.
       totalRealizedGain: 15777,
       totalUnrealizedGain: 817,
     });
     expect(bodyAt(res, "data", "yearlyCostTrend")).toEqual([
-      { period: "2025-01", taxes: 8, fees: 1.6 },
+      { period: "2025-01", taxes: 4, fees: 0.8 },
       { period: "2025-02", taxes: 5, fees: 6 },
       { period: "2025-03", taxes: 30, fees: 0 },
     ]);
     expect(bodyAt(res, "data", "estimates")).toMatchObject({
-      tobRecorded: 8,
-      tobAutoEstimate: 2.8,
+      // TOB on both legs (WDRT art. 122): buy taxes 4 + the bond sell's 5.
+      tobRecorded: 9,
+      // stock buy 400 × 0.35% = 1.4 + bond sell 100 × 0.12% = 0.12.
+      tobAutoEstimate: 1.52,
       tacrEstimate: 3001.332,
       reyndersEstimate: 58.275,
       cgtEstimate: 0,
     });
+    // The bond sell's 5 is its TOB: no capital-gains tax exists in 2025.
+    expect(bodyAt(res, "data", "taxBreakdown")).toEqual(
+      expect.arrayContaining([{ nameKey: "tax.transactionTax", value: 9 }]),
+    );
+    expect(bodyAt(res, "data", "taxBreakdown")).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nameKey: "tax.capitalGainsTax" }),
+      ]),
+    );
     expect(bodyAt(res, "data", "dividend")).toMatchObject({
       grossDividendBase: 100,
       dividendWhtReclaim: 30,
@@ -281,7 +310,8 @@ describe("Portfolio Tax authoritative dashboard", () => {
     vi.mocked(
       portfolioTransactionRepository.getAllByInvestmentIds,
     ).mockResolvedValue([
-      { ...txnRows[0], currency: "XYZ" },
+      // Without a stamped rate: a stamped rate would convert it at that date.
+      { ...txnRows[0], currency: "XYZ", fx_rate_to_eur: null },
     ] as unknown as Transactions);
     const res = await api.get(path).query({ year: 2025 });
     // Never the original amount 1:1 (ADR-216): left out, currency and figures flagged.

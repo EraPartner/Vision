@@ -283,7 +283,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
-[[docs/adr/242-backup-before-boot-migrations|ADR-242]] (2026-10-21, accepted): the desktop app takes a `.visionbak` backup before the backend applies pending migrations to an existing database, stops the launch if it fails, and removes audit-history leftovers only after migration 0004 is recorded.
+### 2026-10-21: Backup before boot migrations (accepted)
+
+[[docs/adr/242-backup-before-boot-migrations|ADR-242]] has the desktop app take a `.visionbak` backup before the backend applies pending migrations to an existing database, stop the launch if it fails, and remove audit-history leftovers only after migration 0004 is recorded.
+
+### 2026-10-21: Portfolio tax per tax year (accepted)
+
+[[docs/adr/240-portfolio-tax-per-tax-year|ADR-240]] makes the Belgian portfolio-tax dashboard use the viewed tax year's realized gains and transaction-date FX, and counts the TOB on the sale as well as the purchase; supersedes the dashboard statements of ADR-216.
+
 ### 2026-10-21: Edit-check hook for shell edits (accepted)
 
 [[docs/adr/238-edit-check-hook-for-shell-edits|ADR-238]] runs the ADR-227 edit-check hook after

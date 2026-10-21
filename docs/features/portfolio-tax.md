@@ -2,8 +2,8 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-21
+updated: 2026-10-21
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
@@ -29,9 +29,9 @@ The Portfolio Tax page (`/portfolio/tax`) tracks taxes and fees associated with 
 The feature aggregates taxes from multiple sources:
 
 1. **Recorded Taxes**: Extracted from portfolio transaction `taxes` and `fees` fields
-   - Capital gains tax (sell transactions with taxes)
+   - Capital gains tax (the part of a sell's taxes above the leg's statutory TOB, from 2026)
    - Dividend withholding (dividend transactions with taxes)
-   - Transaction tax/TOB (buy transactions with taxes)
+   - Transaction tax/TOB (buy taxes and the TOB part of sell taxes)
    - Explicit tax/fee transactions
 
 2. **Manual Adjustments**: User-entered overrides stored in settings
@@ -144,7 +144,9 @@ The page integrates with the `BelgianTaxProfileContext` to:
 3. **Estimate dividend withholding tax**:
    - Belgian dividend exemption: €859
    - Estimated WHT: 30% on amount above exemption
-4. **Track TOB (Transaction Tax on Securities)**: Recorded from buy transaction taxes
+4. **Track TOB (Transaction Tax on Securities)**: Recorded from buy and sell transaction taxes;
+   the TOB is due on the sale and on the purchase (WDRT art. 122,
+   [[docs/adr/240-portfolio-tax-per-tax-year|ADR-240]])
 
 ### Belgian Rules Widget
 
@@ -198,9 +200,10 @@ The cap is a function of the rate, not the instrument. A €1M share buy at 0.35
 
 ### Tax Types
 
-- **Capital Gains Tax**: From sell transactions with taxes
+- **Capital Gains Tax**: From 2026, the part of a sell's taxes above the leg's statutory TOB
+  (an estimate; before 2026 a sell's taxes are TOB)
 - **Dividend Withholding**: From dividend transactions with taxes
-- **Transaction Tax (TOB)**: From buy transactions with taxes
+- **Transaction Tax (TOB)**: From buy transaction taxes and the TOB part of sell taxes
 - **Other Taxes**: From explicit tax-type transactions
 - **Manual Tax Adjustments**: User-entered overrides
 
@@ -215,11 +218,18 @@ The cap is a function of the rate, not the instrument. A €1M share buy at 0.35
 
 All amounts are converted to the target currency (`appSettings.defaultCurrency`) on the server
 (ADR-216): `getPortfolioTaxDashboard` (`apps/node-backend/src/services/tax/portfolioDashboardService.ts`)
-converts with `convertCodeAtLatestRates` at the latest stored rates and returns figures already in
-the requested currency, so the page's `convertToTarget` is the identity.
+returns figures already in the requested currency, so the page's `convertToTarget` is the
+identity.
 
-**Missing rates (2026-10-19):** the server converts at the latest stored rates. An amount without
-one is left out (the converter reports it), never added 1:1 or at a fallback constant. The
+**Transaction-date rates (2026-10-21, ADR-240):** recorded taxes, fees, dividends and TOB legs
+convert at their transaction date's rate (`restateAtTransactionDateRates` in
+`apps/node-backend/src/services/tax/transactionDateFx.ts`: the stamped `fx_rate_to_eur`, else the
+stored rate on or before the date), as the tax report does (ADR-085). Realized gains are the viewed
+tax year's, from the portfolio summary replayed through 31 December of that year and of the year
+before, so sells in other years do not enter the year's CGT estimate.
+
+**Missing rates (2026-10-19):** a transaction without a dated rate converts with
+`convertCodeAtLatestRates` at the latest stored rate. An amount without any stored rate is left out (the converter reports it), never added 1:1 or at a fallback constant. The
 dashboard lists the currency in `unconvertedCurrencies` and the fields that miss it in
 `incompleteFigures`, and the page shows an "Incomplete" warning.
 
