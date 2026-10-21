@@ -476,19 +476,20 @@ export function planCrossFormatSources({
     context.ledgerSources.map(identityOf).filter((identity) => identity),
   );
   /**
-   * The owner's choice for a near match, which no source fact settles:
-   * `prefer_source` records the two rows as one event, `preserve_existing`
-   * keeps both. A row an earlier review already settled keeps that pairing.
-   * Differing statement policies, or none, leave the pair blocked.
+   * Whether the statement policy records a likely pair once: a row an earlier
+   * review already settled keeps that pairing, otherwise every selected
+   * statement that chose a policy chose `prefer_source`. `preserve_existing`
+   * never keeps such a pair apart: the policy may have been chosen for
+   * unrelated rows, and keeping both could count one event twice.
    */
-  const choiceOf = (...pair: StagedRow[]): "pair" | "keep" | undefined => {
+  const pairedByPolicy = (...pair: StagedRow[]): boolean => {
     if (
       pair.some((row) => {
         const identity = identityOf(row);
         return identity !== undefined && context.settledIdentities.has(identity);
       })
     )
-      return "pair";
+      return true;
     const chosen = new Set(
       pair
         .map(policyOf)
@@ -496,16 +497,16 @@ export function planCrossFormatSources({
           (policy) => policy === "prefer_source" || policy === "preserve_existing",
         ),
     );
-    if (chosen.size !== 1) return undefined;
-    return chosen.has("prefer_source") ? "pair" : "keep";
+    return chosen.size === 1 && chosen.has("prefer_source");
   };
   /**
-   * The owner's choice for a Saxo pair that only lacks a booking record id.
-   * Keeping both could count one event twice, so the statement-wide
-   * `preserve_existing` never decides it: only a per-row answer does
-   * (`same_transaction` pairs, `keep_both` keeps both), or `prefer_source`,
-   * which records the pair once. A per-row answer outranks the statement
-   * policy; answers that disagree across the pair leave it blocked.
+   * The owner's choice for a likely pair that no source fact settles: a Saxo
+   * pair that only lacks a booking record id, or an IBKR funding movement
+   * dated just outside its workbook twin's window. Only a per-row answer
+   * decides it (`same_transaction` pairs, `keep_both` keeps both), or
+   * `prefer_source`, which records the pair once. A per-row answer outranks
+   * the statement policy; answers that disagree across the pair leave it
+   * blocked.
    */
   const identityChoiceOf = (
     ...pair: StagedRow[]
@@ -514,7 +515,7 @@ export function planCrossFormatSources({
       pair.map(rowChoiceOf).filter((answer) => answer !== undefined),
     );
     if (answers.size === 0)
-      return choiceOf(...pair) === "pair"
+      return pairedByPolicy(...pair)
         ? { kind: "pair", policy: "prefer_source" }
         : undefined;
     if (answers.size !== 1) return undefined;
@@ -828,7 +829,9 @@ export function planCrossFormatSources({
 
   // Near matches: the same value, but the CSV date lies just outside the
   // workbook's request and completion dates. They are never imported twice
-  // or merged silently; the owner's statement policy decides (choiceOf).
+  // or merged silently; the owner decides as for a Saxo pair without a
+  // booking record id (identityChoiceOf). With several look-alikes only
+  // keeping the row apart is a clear answer.
   const pairedFunding = new Set(inPlan.pairs.map(([, right]) => right));
   const claimedFunding = new Set(toLedger.pairs.map(([, right]) => right));
   const claimedCsv = new Set(corrections.pairs.map(([, right]) => right));
@@ -838,6 +841,16 @@ export function planCrossFormatSources({
       reason: "funding_date_mismatch",
       candidateTransactionIds: ids,
     });
+  const nearAmbiguous = (rows: Iterable<{ row: StagedRow }>, ids: number[] = []) => {
+    for (const { row } of rows)
+      if (rowChoiceOf(row) === "keep_both") keep(row, ids);
+      else
+        decide(row, {
+          kind: "blocked",
+          reason: "funding_date_ambiguous",
+          candidateTransactionIds: ids,
+        });
+  };
   const nearCsv = () =>
     csv.filter((item) => undecided(item.row));
   const nearInPlan = pairUnique(
@@ -850,14 +863,14 @@ export function planCrossFormatSources({
       ibkrNearMovement(left.facts, right.facts),
   );
   for (const [left, right] of nearInPlan.pairs) {
-    const choice = choiceOf(left.row, right.row);
-    if (choice === "pair")
+    const choice = identityChoiceOf(left.row, right.row);
+    if (choice?.kind === "pair")
       decide(left.row, {
         kind: "duplicate_source",
         duplicateOfRowId: Number(right.row.id),
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") {
+    else if (choice?.kind === "keep") {
       keep(left.row);
       keep(right.row);
     } else {
@@ -865,8 +878,7 @@ export function planCrossFormatSources({
       nearMismatch(right.row);
     }
   }
-  blockAll(nearInPlan.ambiguous);
-  blockAll(nearInPlan.ambiguousRight);
+  nearAmbiguous([...nearInPlan.ambiguous, ...nearInPlan.ambiguousRight]);
   const nearToLedger = pairUnique(
     nearCsv(),
     ledgerFunding.filter((item) => !claimedFunding.has(item)),
@@ -875,17 +887,18 @@ export function planCrossFormatSources({
       ibkrNearMovement(left.facts, right.facts),
   );
   for (const [left, right] of nearToLedger.pairs) {
-    const choice = choiceOf(left.row);
-    if (choice === "pair")
+    const choice = identityChoiceOf(left.row);
+    if (choice?.kind === "pair")
       decide(left.row, {
         kind: "duplicate",
         existingTransactionId: right.source.transaction_id,
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") keep(left.row, [right.source.transaction_id]);
+    else if (choice?.kind === "keep")
+      keep(left.row, [right.source.transaction_id]);
     else nearMismatch(left.row, [right.source.transaction_id]);
   }
-  blockAll(
+  nearAmbiguous(
     nearToLedger.ambiguous,
     [...nearToLedger.ambiguousRight].map((item) => item.source.transaction_id),
   );
@@ -897,8 +910,9 @@ export function planCrossFormatSources({
       ibkrNearMovement(right.facts, left.facts),
   );
   for (const [left, right] of nearCorrections.pairs) {
-    const choice = choiceOf(left.row);
-    if (choice === "keep") keep(left.row, [right.source.transaction_id]);
+    // Pairing corrects the earlier CSV deposit, whichever answer chose it.
+    const choice = identityChoiceOf(left.row);
+    if (choice?.kind === "keep") keep(left.row, [right.source.transaction_id]);
     else if (choice === undefined)
       nearMismatch(left.row, [right.source.transaction_id]);
     else if (!unedited(right))
@@ -930,7 +944,7 @@ export function planCrossFormatSources({
         },
       });
   }
-  blockAll(
+  nearAmbiguous(
     nearCorrections.ambiguous,
     [...nearCorrections.ambiguousRight].map((item) => item.source.transaction_id),
   );

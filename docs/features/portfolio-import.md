@@ -394,14 +394,15 @@ source columns (an older import) cannot show which column its id came from: its 
 booking record only when it equals the workbook row's record id and that record id is none of the
 workbook row's own `Transactie-ID` or `Booking Id` values; otherwise the pair blocks as above. The
 statement policy "Use detailed source facts" (`prefer_source`) resolves either by recording them as
-one event, by the same outcome as the strict pair in the table above. A `funding_date_mismatch`
-also resolves with "Preserve existing facts" (`preserve_existing`), which keeps both. A
-`cross_format_identity_missing` row does not: keeping both could count one event twice, so a
+one event, by the same outcome as the strict pair in the table above. "Preserve existing facts"
+(`preserve_existing`) resolves neither: keeping both could count one event twice, so a
 statement-wide choice made for other rows never decides it. The owner answers that row in the
-review instead: **Same transaction** records the pair once, and **Keep both** records both
-without offering the other export's transaction as a likely copy again (several look-alikes block as
-`cross_format_identity_ambiguous`, where only **Keep both** is offered). A repeat import of a paired row settles as a duplicate without asking
-again.
+review instead: **Same transaction** records the pair once, by the same outcome as
+`prefer_source` (for a funding workbook after the CSV, the CSV deposit is corrected to the
+workbook's amount and currency), and **Keep both** records both without offering the other
+export's transaction as a likely copy again (several look-alikes block as
+`cross_format_identity_ambiguous` or `funding_date_ambiguous`, where only **Keep both** is
+offered). A repeat import of a paired row settles as a duplicate without asking again.
 
 Cash adoptions and corrections are written to the cash reconciliation journal and restored by
 rolling back their batch. A CSV batch cannot be rolled back while a funding correction depends on

@@ -16,7 +16,7 @@ tags:
     bug-sweep,
     adr-236,
   ]
-description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same specialized export format, so regular same-size purchases import; remaining look-alikes and Saxo pairs without a booking record id get per-row owner choices (row_choices: keep_both or same_transaction), and preserve_existing no longer keeps both twins of such a pair; previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
+description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same specialized export format, so regular same-size purchases import; remaining look-alikes and Saxo pairs without a booking record id get per-row owner choices (row_choices: keep_both or same_transaction), and preserve_existing no longer keeps both twins of such a pair (amended the same day to cover IBKR funding near matches, funding_date_mismatch and funding_date_ambiguous); previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
 aliases: [adr-239, row choices, keep both, import number conventions]
 related_code:
   [
@@ -113,6 +113,27 @@ double counts or drops a real purchase without telling the owner.
 - Bank preview flags cover fingerprinted ledger rows only; pre-fingerprint rows that commit matches
   by fields are not flagged.
 - Other adapters (Kinesis, Nexo, bank adapters) still use the heuristic amount parser.
+
+## Amendment: IBKR funding near matches (2026-10-21)
+
+An IBKR CSV deposit or withdrawal that matches a funding workbook movement, but is dated up to ten
+days outside its request and completion window, blocked as `funding_date_mismatch` and still
+cleared on the statement-wide `preserve_existing`, which kept both rows. That could count one
+movement twice, and the statement policy may have been chosen for unrelated rows. Such a pair now
+follows the identity-missing rule above, in one review and against an already imported ledger
+row: it clears on `prefer_source` (one movement) or on the row's own `row_choices` answer, where
+`same_transaction` records the pair once and `keep_both` keeps both; `preserve_existing` alone
+leaves it blocked. A per-row answer outranks the statement policy, and answers that disagree across
+a pair keep it blocked. Pairing settles as `prefer_source` does: the CSV row becomes a duplicate of
+the workbook row or of its ledger transaction, and a workbook row whose twin is an earlier CSV
+deposit corrects that deposit to the workbook's amount and currency. A later import of a paired
+row settles without asking again.
+
+Several near look-alikes that cannot be paired one to one block as the new
+`funding_date_ambiguous`, which only `keep_both` clears, so the review offers only **Keep both**
+for it. `ambiguous_funding_history` keeps its meaning for movements inside the window, which no
+answer clears. **Breaking for direct HTTP callers:** `funding_date_mismatch` no longer clears on
+`preserve_existing`. The app offers **Keep both** and **Same transaction** on it.
 
 ## Related
 

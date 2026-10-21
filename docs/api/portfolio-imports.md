@@ -787,9 +787,11 @@ session. This is a read-only database transaction; it creates no canonical rows 
 scope IDs. `adopt_policy` is optional and permits `preserve_existing` or `prefer_source`; absent
 policy permits automatic exact adoption only. Optional `batch_policies` contains at most 100
 unique selected batch IDs with the same policy enum and overrides the global choice. Optional
-`row_choices` answers rows that resemble an existing transaction, and Saxo rows blocked by
-`cross_format_identity_missing`: `keep_both` records the row as a new transaction, and
-`same_transaction` settles it as a duplicate of its single existing candidate or Saxo twin. Each staged row of the selected batches may occur once. Objects are
+`row_choices` answers rows that resemble an existing transaction, Saxo rows blocked by
+`cross_format_identity_missing` or `cross_format_identity_ambiguous`, and IBKR funding rows blocked
+by `funding_date_mismatch` or `funding_date_ambiguous`: `keep_both` records the row as a new
+transaction, and `same_transaction` settles it as a duplicate of its single existing candidate,
+Saxo twin or IBKR funding twin. Each staged row of the selected batches may occur once. Objects are
 strict; unknown fields reject. The JSON scope uses the same safe-integer ceiling as existing
 BIGSERIAL batch path IDs.
 
@@ -821,14 +823,17 @@ and XLSX row, one without a booking record id; a committed CSV batch without ret
 `source_columns` counts its source id as the booking record only when the workbook row's record id
 is none of its own `Transactie-ID` or `Booking Id` values). Both clear on the selected statements'
 `batchPolicies` or `adoptPolicy` `prefer_source`, which records the pair as one event; the paired
-`duplicate` or `duplicate_source` carries `policy: prefer_source`. `funding_date_mismatch` also
-clears on `preserve_existing`, which keeps both. `cross_format_identity_missing` never clears on
-`preserve_existing`, since keeping both could count one event twice: the owner answers that row
-with `row_choices` instead, `same_transaction` recording the pair once (without a `policy`) and
-`keep_both` keeping both. With several look-alikes the rows block as
-`cross_format_identity_ambiguous` instead, which only `keep_both` clears. A per-row answer
-outranks the statement policy; answers or policies that disagree across the pair keep it blocked.
-A later import of a row the owner paired settles the same way without asking again.
+`duplicate` or `duplicate_source` carries `policy: prefer_source`. Neither clears on
+`preserve_existing`, since keeping both could count one movement twice and the statement policy
+may have been chosen for unrelated rows: the owner answers that row with `row_choices` instead,
+`same_transaction` recording the pair once (without a `policy`) and `keep_both` keeping both. For
+an IBKR funding workbook row whose near twin is a CSV deposit an earlier import recorded, pairing
+corrects that deposit to the workbook's amount and currency (a cash `adopt`), whichever of
+`prefer_source` or `same_transaction` chose it. With several look-alikes the rows block as
+`cross_format_identity_ambiguous` or `funding_date_ambiguous` instead, which only `keep_both`
+clears. A per-row answer outranks the statement policy; answers or policies that disagree across
+the pair keep it blocked. A later import of a row the owner paired settles the same way without
+asking again.
 An `adjustment` action carries `adjustment` detail with `date`, `units`, `kind`, `basisPolicy`, and
 `accountId`; `summary.adjustment` counts newly planned adjustment events. Their staging financial
 `type` is null, and their ledger owns source linkage. Staging ordinals include adapter-derived rows
