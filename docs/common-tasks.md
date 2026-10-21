@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     moc,
@@ -136,6 +136,7 @@ aliases:
 | Fix a migration failure              | [[docs/guides/migrations\|Migration Guide]]                                                          | [[docs/troubleshooting\|Troubleshooting]]                       |
 | Fix a rate limit error               | [[docs/reference/error-codes\|Error Codes]]                                                          | [[docs/security/rate-limiting\|Rate Limiting]]                  |
 | Fix a chart rendering issue          | [[docs/performance/chart-downsampling\|Chart Downsampling]]                                          | [[docs/troubleshooting\|Troubleshooting]]                       |
+| Measure Mac performance (before/after) | [[docs/performance/mac-baseline\|Mac Performance Baseline]]                                       | `bun scripts/mac-baseline.ts --help`                            |
 | Fix a React Query cache issue        | [[docs/reference/react-query-keys\|React Query Keys]]                                                | [[docs/performance/caching-strategies\|Caching Strategies]]     |
 | Fix a failing test                   | [[docs/testing/testing\|Testing Documentation]]                                                      | [[docs/testing/test-inventory\|Test Inventory]]                 |
 | Remediate dependency vulnerabilities | [[docs/security/dependency-security-remediation-2026-04\|Dependency Security Remediation (2026-04)]] | [[docs/reference/scripts\|Scripts Reference]]                   |
