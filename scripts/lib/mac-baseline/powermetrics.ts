@@ -35,14 +35,14 @@ function decodeEntities(text: string): string {
 }
 
 function tokenize(xml: string): Token[] {
-  const body = xml.replace(
-    /<\?[\s\S]*?\?>|<!DOCTYPE[\s\S]*?>|<!--[\s\S]*?-->/g,
-    "",
-  );
   const tokens: Token[] = [];
-  const re = /<(\/?)([A-Za-z_][\w-]*)[^>]*?(\/?)>|([^<]+)/g;
-  for (const match of body.matchAll(re)) {
-    const [, slash, name, selfClose, text] = match;
+  // The first alternative consumes the XML prolog, DOCTYPE and comments,
+  // which carry no plist values and are skipped in place.
+  const re =
+    /(<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<![^>]*>)|<(\/?)([A-Za-z_][\w-]*)[^>]*?(\/?)>|([^<]+)/g;
+  for (const match of xml.matchAll(re)) {
+    const [, skipped, slash, name, selfClose, text] = match;
+    if (skipped !== undefined) continue;
     if (text !== undefined) {
       tokens.push({ kind: "text", value: decodeEntities(text) });
     } else if (slash) {
