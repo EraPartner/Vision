@@ -283,6 +283,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-21: Edit-check hook for shell edits (accepted)
+
+[[docs/adr/238-edit-check-hook-for-shell-edits|ADR-238]] runs the ADR-227 edit-check hook after
+`Bash` calls too. A start mark per call lets it check only the TypeScript and JavaScript files the
+command wrote; calls that change more than 25 such files are skipped. AGENTS.md asks agents to
+edit code with `Edit` or `Write`. No CI job or CI time is added.
+
 ### 2026-10-21: Cross-site guard for every method (accepted)
 
 [[docs/adr/237-cross-site-guard-for-every-method|ADR-237]] makes the `/api` cross-site guard reject

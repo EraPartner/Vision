@@ -186,6 +186,9 @@ maintenance unless the user asks for one.
   stay aligned with the portable skills under `.agents/skills/`.
 - `.claude/rules/` holds symlinks to the canonical nested guidance in `docs/AGENTS.md` and
   `packaging/AGENTS.md`. They have no `paths:` scope, so Claude loads them in every session.
+- Make code changes with `Edit` or `Write`, not `sed`, heredocs or scripts. The edit hook below
+  checks shell edits too, but only by file mtime and only when one command changes at most 25
+  files (ADR-238).
 - `.claude/settings.json` runs a background edit hook (owning `tsc` project, ESLint,
   dependency-cruiser) that reports errors after edits, and a cloud-only session-start hook that
   installs dependencies. `.mcp.json` adds `vision-postgres`, read-only SQL against a local database
