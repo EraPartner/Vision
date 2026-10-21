@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
+last_modified: 2026-10-21
 tags:
   [
     knowledge-base,
@@ -273,7 +273,7 @@ Vision 1.0.2 for migration. See [[docs/guides/native-macos-runtime|Native macOS 
 
 **Full macOS shell integration** — the app now behaves like a native Mac application:
 
-- **Window chrome**: `titleBarStyle: 'hiddenInset'`, traffic lights at `{x:20,y:20}`, topbar with `-webkit-app-region: drag`, `electron-fullscreen` class on enter/leave fullscreen.
+- **Window chrome**: `titleBarStyle: 'hiddenInset'`, traffic lights at `{x:20,y:20}`, topbar with `-webkit-app-region: drag` (portaled overlays, dialogs, sheets and popovers are `no-drag` so their controls stay clickable over it), `electron-fullscreen` class on enter/leave fullscreen.
 - **Native menu bar**: App (Settings… ⌘,), File (New Transaction ⌘N, Import CSV… ⇧⌘I), Edit/View (Toggle Sidebar ⌃⌘S) / Window / Help roles, Go ⌘1–⌘9 mirroring in-app shortcuts — all labels from the shared i18n JSON.
 - **Dock menu + badge**: dock menu has New Transaction and Dashboard; badge driven by `UpcomingPaymentsNotification` (visible upcoming payment count).
 - **CSV import handoff**: window-wide drag-and-drop (renderer reads `File` directly, closes Chromium navigate-to-file hole); Finder "Open With" / dock drop (main reads file, sends `{name, content}` — path never crosses sandbox boundary). Both paths feed `lib/importHandoff.ts` (one-slot 30s-TTL, same pattern as `lib/undo.ts`).
