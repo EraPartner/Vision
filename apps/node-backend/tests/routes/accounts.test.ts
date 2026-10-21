@@ -91,7 +91,7 @@ describe("per-currency statement balance routes (ADR-089 D2)", () => {
     accountService.setStatementBalance.mockResolvedValue({
       account_id: asAccountId(7),
       currency: asCurrencyCode("USD"),
-      balance: "120.0000",
+      balance: 120,
       balance_date: "2026-09-04",
     });
     await api
