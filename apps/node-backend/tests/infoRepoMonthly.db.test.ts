@@ -424,6 +424,33 @@ describe.skipIf(!hasTestDatabase())(
         expect(byMonth(r)[await monthKey(1)]!.total_spending).toBe(-50);
         expect(byMonth(r)[await monthKey(2)]!.total_spending).toBe(-25);
       });
+
+      it("reports a net that equals the rounded income plus the rounded spending", async () => {
+        await seedBase();
+        await getTestPool()!.query(
+          `INSERT INTO exchange_rates (currency_code, rate_date, rate_to_eur, is_latest)
+         VALUES ('USD', (${anchored(monthDay(1, 5))})::date, 0.9, false)`,
+        );
+        // 11.34 USD × 0.9 = 10.206 → 10.21; −5.56 USD × 0.9 = −5.004 → −5.00.
+        // Net 10.21 − 5.00 = 5.21; rounding the unrounded net 5.202 gave 5.20.
+        await insertTxn({
+          dateExpr: monthDay(1, 5),
+          amount: "11.34",
+          currency: "USD",
+        });
+        await insertTxn({
+          dateExpr: monthDay(1, 5),
+          amount: "-5.56",
+          currency: "USD",
+        });
+
+        const r = await getMonthlyFinancialSummary([], "EUR", [], false);
+        expect(byMonth(r)[await monthKey(1)]).toMatchObject({
+          total_income: 10.21,
+          total_spending: -5,
+          net_amount: 5.21,
+        });
+      });
     });
 
     // ───────────────────────────────────────────────────────────────────────────
