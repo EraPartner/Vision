@@ -15,6 +15,9 @@ aliases: [admin csrf guard, csrf guard, admin auth 2026, token-or-open]
 > The `ADMIN_AUTH_TOKEN` bearer check and the tokenless non-loopback startup override are removed;
 > the backend is loopback-only. The CSRF guard stays, with its Origin fallback limited to the
 > backend's own loopback origins.
+>
+> Amended by [[docs/adr/237-cross-site-guard-for-every-method|ADR-237]] on 2026-10-21: the guard
+> also rejects cross-site `GET`, `HEAD` and `OPTIONS`.
 
 ## Status
 

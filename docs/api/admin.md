@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   - api
   - admin
@@ -791,7 +791,7 @@ Return a static manifest of all registered Express routes.
 - Update checks are read-only operations
 - Admin routes have no authentication layer ([[docs/adr/233-loopback-only-backend|ADR-233]], superseding the `ADMIN_AUTH_TOKEN` bearer check of [[docs/adr/063-admin-auth-csrf-guard|ADR-063]]). Protection is the loopback-only bind, the Host guard and the CSRF guard:
   - **Bind and Host:** the backend refuses to start on a non-loopback address, and every request must name `localhost`, `127.0.0.1` or `::1` with the backend port in `Host` (403 otherwise).
-  - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with a fallback to the backend's own loopback origins for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
+  - **CSRF guard (all `/api` requests, every method; [[docs/adr/237-cross-site-guard-for-every-method|ADR-237]]):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with a fallback to the backend's own loopback origins for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
   - No admin route returns `401`; that status no longer exists on `/api/admin/*`.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 

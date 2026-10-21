@@ -1,15 +1,16 @@
 /**
- * CSRF guard for state-changing requests.
+ * Cross-site request guard for the whole /api plane.
  *
  * The backend only listens on loopback, so the realistic cross-origin threat
  * is a malicious web page the user visits issuing fetch()/form POSTs to
  * http://localhost:PORT/... . The browser's same-origin policy hides the
  * *response* but does NOT stop the *request* from executing, so a destructive
- * POST (e.g. /api/admin/database/reset) could still fire. This guard rejects
- * cross-site state-changing requests.
+ * POST (e.g. /api/admin/database/reset) could still fire, and a cross-site GET
+ * still runs expensive aggregations, outbound provider calls and timing-visible
+ * lookups. The renderer is always same-origin, so this guard rejects cross-site
+ * requests of every method (ADR-237).
  *
  * Strategy (zero-config, no tokens/cookies needed):
- *   - Safe methods (GET/HEAD/OPTIONS) are never blocked.
  *   - `Sec-Fetch-Site` (sent by all current browsers) is authoritative: allow
  *     `same-origin` and `none` (user-initiated, e.g. typed URL); reject
  *     `same-site` and `cross-site`.
@@ -26,8 +27,6 @@ import type {
   ExpressRequest,
   ExpressResponse,
 } from "../types/express.ts";
-
-const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /** Vite's development server port (apps/frontend/vite.config.ts). */
 const VITE_DEV_SERVER_PORT = 8080;
@@ -52,6 +51,8 @@ export function loopbackOrigins(
 /**
  * @param getAllowedOrigins  returns the exact origins a state-changing request
  *        without `Sec-Fetch-Site` may carry (see {@link loopbackOrigins}).
+ *        Mount it on /api only: /health probes and top-level SPA navigations
+ *        stay outside it.
  */
 export function createCsrfGuard(getAllowedOrigins: () => readonly string[]) {
   return function csrfGuard(
@@ -59,8 +60,6 @@ export function createCsrfGuard(getAllowedOrigins: () => readonly string[]) {
     res: ExpressResponse,
     next: ExpressNextFunction,
   ) {
-    if (SAFE_METHODS.has(String(req.method).toUpperCase())) return next();
-
     const secFetchSite = req.headers["sec-fetch-site"];
     if (typeof secFetchSite === "string" && secFetchSite.length > 0) {
       if (secFetchSite === "same-origin" || secFetchSite === "none")

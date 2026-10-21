@@ -15,11 +15,25 @@ function run(req: DeepPartial<ExpressRequest>) {
 }
 
 describe('csrfGuard', () => {
-  it('never blocks safe methods, even cross-site', () => {
-    for (const method of ['GET', 'HEAD', 'OPTIONS']) {
-      const next = run({ method, headers: { 'sec-fetch-site': 'cross-site', origin: 'https://evil.com' } });
+  it('blocks cross-site and same-site requests of every method, GET included', () => {
+    for (const method of ['GET', 'HEAD', 'OPTIONS', 'POST']) {
+      for (const site of ['cross-site', 'same-site']) {
+        const next = run({ method, headers: { 'sec-fetch-site': site, origin: 'https://evil.com' } });
+        expect(next.mock.calls[0]![0], `${method} ${site}`).toBeInstanceOf(ForbiddenError);
+      }
+    }
+  });
+
+  it('allows same-origin and user-initiated (none) GETs', () => {
+    for (const site of ['same-origin', 'none']) {
+      const next = run({ method: 'GET', headers: { 'sec-fetch-site': site } });
       expect(next).toHaveBeenCalledWith();
     }
+  });
+
+  it('blocks a GET with a foreign Origin and no Sec-Fetch-Site, allows one without Origin', () => {
+    expect(run({ method: 'GET', headers: { origin: 'https://evil.com' } }).mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+    expect(run({ method: 'GET', headers: {} })).toHaveBeenCalledWith();
   });
 
   it('allows same-origin and user-initiated (none) state-changing requests via Sec-Fetch-Site', () => {

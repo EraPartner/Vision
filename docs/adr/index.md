@@ -283,6 +283,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-21: Cross-site guard for every method (accepted)
+
+[[docs/adr/237-cross-site-guard-for-every-method|ADR-237]] makes the `/api` cross-site guard reject
+cross-site and same-site requests of every method, `GET` included, so a malicious page can no
+longer trigger aggregations, provider calls or timing probes. `/health` and SPA navigations stay
+outside the guard. Amends ADR-063 and ADR-233.
+
 ### 2026-10-20: Simplify portfolio import reconciliation (accepted)
 
 [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]] removes the bounded Kinesis
