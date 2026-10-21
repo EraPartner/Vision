@@ -49,7 +49,7 @@ cloud "HTTP/JSON" as Network {
 
 package "Backend (Node.js/Express)" {
   class ExpressApp {
-    +Middleware: CORS, Compression, Rate Limiter, Security Headers
+    +Middleware: Host guard, CSRF guard, Rate Limiter, Security Headers
   }
 
   package "Routes" {

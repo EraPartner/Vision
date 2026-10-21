@@ -1,6 +1,6 @@
 /** Maintained statement detection shared by web and native backend probe. */
 export type PortfolioImportSource =
-  "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
+  "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
 
 export interface DetectedPortfolioImport {
   source: PortfolioImportSource;
@@ -42,7 +42,7 @@ const IBKR_FUNDING_HEADERS = {
 };
 
 const HEADER_SIGNATURES: Record<
-  Exclude<PortfolioImportSource, "ibkr" | "native_receipts">,
+  Exclude<PortfolioImportSource, "ibkr">,
   string[]
 > = {
   kinesis: [
@@ -90,19 +90,6 @@ const HEADER_SIGNATURES: Record<
   ],
 };
 
-const NATIVE_RECEIPT_COLUMNS = [
-  "Date",
-  "Type",
-  "Symbol",
-  "Units",
-  "Amount",
-  "Currency",
-  "Source_ID",
-  "Source_Account",
-  "Receipt_JSON",
-  "Note",
-];
-
 function cell(value: unknown): string {
   return String(value ?? "")
     .replaceAll("\u00a0", " ")
@@ -115,37 +102,6 @@ export function detectPortfolioImportRecords(
   const matches: DetectedPortfolioImport[] = [];
   for (const [index, row] of records.entries()) {
     const header = row.map(cell);
-    if (
-      index === 0 &&
-      header.length === NATIVE_RECEIPT_COLUMNS.length &&
-      row.every((value, field) => value === header[field]) &&
-      new Set(header).size === header.length &&
-      NATIVE_RECEIPT_COLUMNS.every((field) => header.includes(field)) &&
-      records.length > 1 &&
-      records
-        .slice(1)
-        .every(
-          (record) =>
-            record.length === header.length &&
-            ["gift", "asset_fee", "asset_transfer_witness"].includes(
-              cell(record[header.indexOf("Type")]),
-            ) &&
-            ["Source_ID", "Source_Account", "Receipt_JSON"].every((field) =>
-              cell(record[header.indexOf(field)]),
-            ),
-        )
-    ) {
-      matches.push({
-        source: "native_receipts",
-        sourceAccountIdentities: [
-          ...new Set(
-            records
-              .slice(1)
-              .map((record) => cell(record[header.indexOf("Source_Account")])),
-          ),
-        ],
-      });
-    }
     if (
       header[0] === "Transaction History" &&
       header[1] === "Header" &&
@@ -270,26 +226,22 @@ export function detectIbkrFundingWorkbook(
         [
           "Request Date",
           "Reference Number",
-          "Method",
           "Account ID",
-          "Account Title",
           "Amount",
           "Status",
         ].some((key) => !field(key) || field(key) !== original(key))
       )
         return undefined;
       const requested = field("Request Date");
-      const completed = field(
-        sheetName === "Deposit" ? "Date Received" : "Date Processed",
-      );
+      const completed =
+        field(sheetName === "Deposit" ? "Date Received" : "Date Processed") ||
+        requested;
       if (
         ![requested, completed].every(validIsoDate) ||
         completed < requested ||
-        field("Method") !== "Wire" ||
-        field("Status") !== (sheetName === "Deposit" ? "Available" : "Sent") ||
-        !/^[A-Z][A-Z0-9-]{2,49}$/.test(field("Account ID")) ||
+        !/^[A-Z][A-Z0-9*-]{2,49}$/.test(field("Account ID")) ||
         !/^[A-Za-z0-9-]{1,100}$/.test(field("Reference Number")) ||
-        !/^[A-Z]{3} (?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\.\d{2}$/.test(
+        !/^[A-Z]{3} (?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,8})?$/.test(
           field("Amount"),
         ) ||
         !FUNDING_CURRENCIES.has(field("Amount").slice(0, 3)) ||

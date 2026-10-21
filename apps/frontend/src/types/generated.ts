@@ -79,46 +79,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/analysis/interchange/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Parse a CSV or Vision XLSX scenario attachment without persistence
-         * @description Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
-         */
-        post: operations["importAnalysisInterchange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/analysis/interchange/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Export a supplied captured Analysis snapshot as CSV or value-only XLSX
-         * @description Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
-         */
-        post: operations["exportAnalysisInterchange"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/analysis/execute": {
         parameters: {
             query?: never;
@@ -603,23 +563,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai-research/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Inspect local model, web research, and document capabilities */
-        get: operations["getAiResearchStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai-research/investigations": {
         parameters: {
             query?: never;
@@ -729,23 +672,6 @@ export interface paths {
         post?: never;
         /** Delete a document and all derived passages and embeddings */
         delete: operations["deleteAiResearchDocument"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai-research/documents/search/passages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Retrieve cited keyword, semantic, or hybrid local passages */
-        post: operations["searchAiResearchPassages"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2199,23 +2125,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/aggregations/cashflow-forecast": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Monte-Carlo cashflow forecast */
-        get: operations["getCashflowForecast"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/aggregations/cashflow-forecast-methods": {
         parameters: {
             query?: never;
@@ -3048,7 +2957,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate financial report PDF */
+        /**
+         * Generate a print-ready financial report document
+         * @description Returns the financial report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generateFinancialReport"];
         delete?: never;
         options?: never;
@@ -3065,7 +2977,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate portfolio report PDF */
+        /**
+         * Generate a print-ready portfolio report document
+         * @description Returns the portfolio report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generatePortfolioReport"];
         delete?: never;
         options?: never;
@@ -3082,7 +2997,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate tax report PDF */
+        /**
+         * Generate a print-ready tax report document
+         * @description Returns the tax report as a self-contained, script-free HTML document with its page-footer template and PDF filename. The backend renders no PDF; the Electron shell prints the document with its own Chromium and a plain browser opens its print dialog (ADR-234).
+         */
         post: operations["generateTaxReport"];
         delete?: never;
         options?: never;
@@ -3648,7 +3566,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation across a complete portfolio statement scope
-         * @description Read-only plan across up to 100 staged batches. Detects source duplicates, unique existing transactions, corrections, duplicate repairs, dated transfers, asset fees, zero-basis yield reversals and blockers. Omitted policy allows only exact adoption. Explicit policies require a subsequent commit bound to this plan's fingerprint. No history is changed. Explicit prefer_source may correct an unchanged prior Saxo workbook adoption only when the same verified literal source and active receipt after-image prove identity; the fingerprint binds that original batch and receipt context. Literal Saxo CSV events may be duplicate_source companions of uniquely matching selected detailed workbook events, including net-only dividend errors. Missing, ambiguous or conflicting source context remains blocked. Authenticated IBKR header and statement-currency context may prove currency or separate-withholding corrections for imported-copy repairs and standalone legacy sales. Unique same-date economic claims can narrow copy candidates; other proved copies remain duplicates. Matching windows remain unchanged. Optional reconciliation_scope=adopt_existing_only derives proven existing buy/gift adoptions and receipt-proven duplicate/settled actions from complete freshly captured unfiltered Kinesis sources under explicit preserve_existing. The full source is classified before selection. Narrow review never plans inserts, repairs, cash, custody or adjustments; paired yield income remains deferred. Source/receipt ambiguity still blocks. Pending progress describes excluded unsettled events. Full history may record proved zero-basis paired income after the distinct selected Gift insert/adoption or exact existing unit is proved. incomeProof.unitRowId binds that Gift action; unitTransactionId is present for canonical existing units and repeated income. Source roles retain included-in-units income without adding acquisitions or gains again. Complete already-retained original-document evidence may prove closed yield-group membership through independent positive-basis deposit boundaries, complete interval closure, same-file settled yield anchors and globally unique eight-decimal unit pairing. Members select together or block together, without changing original recorded dates or other canonical fields. Broker payment dates remain source evidence. Grouped actions retain one distinct source row and existing record per adopt; the response shape is unchanged. Optional correct_existing_only uses explicit prefer_source to select only proved financial corrections of unique existing Kinesis buy/gift records plus strict receipt-proven retries. Literal primary purchase fees replace recorded fees. Meaningful gift basis/currency require validated original Portfolio Performance recorded-native evidence and an existing meaningful positive gift basis. Currency changes without literal original FX require usable stored historical-date rate evidence, bound in the fingerprint; corrections use the normal historical cache, and rates at most seven days before the transaction date qualify. Unavailable gifts defer without blocking independent literal-fee corrections. Today's rate never authorizes correction and canonical source FX stays unstamped. Ordinary financial corrections retain dates, types, units, notes and IDs; unknown original FX is not invented. A proved closed yield group may instead produce date-only adopt actions with typed dateProof and corrections exactly [date]. Its changed members use the literal broker payment date together; quantities, type, financial values, notes and IDs stay unchanged. memberCount includes unchanged anchors rather than only correction actions. The server binds complete group closure, original reference and all before/after dates in the fingerprint. This does not permit ordinary nearby-date corrections. The same selected-only progress and deferred lifecycle applies. record_in_kind_income_only requires explicit preserve_existing and zero yield interpretation on complete original unfiltered Kinesis primary source. It selects literal paired income only when a unique proved existing zero-basis acquisition and retained source/receipt after-image agree. Actions use record_income with typed incomeProof; source type is dividend, income_recognition_role is included_in_units, units/price are null, and fees/taxes are zero. Positive literal income is rounded at canonical precision without an invented minimum; the retained raw value may round to zero. No new gift, cash movement, custody, adjustment or financial/date correction is selected. Literal amount is retained separately and not added to gains again. Stored historical proof remains readable; no reference upload is available. Preview and locked commit warm normal historical rates automatically. Conversion requires a usable stored income-date rate within seven days, bound in the fingerprint; unresolved dates defer and current rates do not authorize recording. Canonical source FX stays null. record_cash_only requires complete original unfiltered Kinesis source, explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer. The server proves complete cash balance chains and selects cash/duplicate/settled with typed cashProof. New cashValues carry signed amount, date, currency, account, brokerage origin and null peer; trade quotes and confirmed funding are internal, while card payments remain expenses. imported equals recordedCash; adopted, repaired and recordedIncome are zero. No portfolio, income, custody or adjustment drain runs, no opposite bank row is invented, and other source events stay pending. XML is not applied in this scope; retained reference context remains intact. Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required; confirmed cash-only review is required. Unchanged source-owned settled repeats remain compatible with full review. A separately quoted same-currency funding withdrawal fee produces a second cashFeeValues expense component; the main transfer is net of that fee. cashProof.componentCount is one or two, and two-component repeats identify a distinct existingCashFeeTransactionId. Card spending includes its fee once. Source actions and ledger component counts are distinct. The zero-opening complete source requires no unrelated active ledger rows or routed-account statement balance readings, including zero readings; statement and ledger state are fingerprint-bound and rechecked under locks. Historical date-rate readiness is prepared automatically and fingerprint-bound; unresolved readiness defers the whole group rather than using a current rate.
+         * @description Read-only plan across up to 100 staged batches. Detects source duplicates, unique existing transactions to adopt, corrections, dated transfers, asset fees, zero-basis yield reversals and blockers. Omitted policy allows only exact adoption; a difference between source and existing facts needs an explicit global or per-batch policy. A repeated source identity is a duplicate. Kinesis fiat cash and IBKR deposits and withdrawals are ordinary cash actions. A zero yield-basis Kinesis distribution is an insert of its literal income with income_recognition_role=included_in_units beside its zero-basis units. No history is changed. ADR-236 removed the bounded reconciliation scopes, cash funding confirmation and plan fingerprints.
          */
         post: operations["previewPortfolioImportReconciliation"];
         delete?: never;
@@ -3668,7 +3586,7 @@ export interface paths {
         put?: never;
         /**
          * Atomically commit a reviewed portfolio statement scope
-         * @description Locks and rechecks the complete source scope and projected history against the reviewed fingerprint. Adopts existing records with permanent before and after receipts, inserts missing events in global chronological order, and records dated custody transfers and asset adjustments. Proven imported copies of manual transactions are repaired with permanent dual-row receipts. Any blocker or row failure rolls back the whole operation. Adopted records retain their identity and notes. A proved prior Saxo adoption correction locks the original batch and writes a new reversible receipt without changing original counters or cash records. Proved Saxo CSV companions settle as duplicates before financial inserts; their errors and counters update atomically without inventing gross income. With reconciliation_scope=adopt_existing_only, the same reviewed scope and fingerprint apply only proven Kinesis adoptions and newly settled receipted duplicates. Imported and repaired are zero. The writer returns before any general event drain. Deferred source rows remain unsettled; while pending is nonzero all selected batches remain awaiting_review without completion timestamps, even if individual source progress is complete. Existing guarded immutable adoption/restore receipts support rollback after after-image checks. With correct_existing_only and explicit prefer_source, only proved existing financial corrections, proved whole-group yield payment-date corrections and strict receipted retries are applied. Ordinary financial corrections retain dates; grouped date-only corrections require typed dateProof and unchanged financials. Types, units, notes and IDs stay unchanged. Imported and repaired remain zero; pending source events retain the same review lifecycle and guarded immutable adoption receipt rollback. Full history composes literal paired income with its selected zero-basis Gift insert/adoption or already-proved existing unit in one atomic commit. Output-only incomeProof.unitRowId binds the Gift row; unitTransactionId identifies an existing canonical unit. The actual unit after-image is proved before income is written. recordedIncome and recordedCash are additive subsets of imported at batch and aggregate level; repeated income/cash writes neither again. record_in_kind_income_only records only the reviewed literal paired income as canonical included_in_units dividends. imported equals recordedIncome; adopted/repaired are zero. It creates no acquisitions or cash/custody events and returns before the general event drain. Immutable paired-income receipts bind source and unchanged unit acquisition for repeat and guarded rollback. Other source events retain the same pending review lifecycle. record_cash_only requires complete original unfiltered Kinesis source, explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer. The server proves complete cash balance chains and selects cash/duplicate/settled with typed cashProof. New cashValues carry signed amount, date, currency, account, brokerage origin and null peer; trade quotes and confirmed funding are internal, while card payments remain expenses. imported equals recordedCash; adopted, repaired and recordedIncome are zero. No portfolio, income, custody or adjustment drain runs, no opposite bank row is invented, and other source events stay pending. XML is not applied in this scope; retained reference context remains intact. Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required; confirmed cash-only review is required. Unchanged source-owned settled repeats remain compatible with full review. A separately quoted same-currency funding withdrawal fee produces a second cashFeeValues expense component; the main transfer is net of that fee. cashProof.componentCount is one or two, and two-component repeats identify a distinct existingCashFeeTransactionId. Card spending includes its fee once. Source actions and ledger component counts are distinct. The zero-opening complete source requires no unrelated active ledger rows or routed-account statement balance readings, including zero readings; statement and ledger state are fingerprint-bound and rechecked under locks. Historical date-rate readiness is prepared automatically and fingerprint-bound; unresolved readiness defers the whole group rather than using a current rate.
+         * @description Locks the selected batches and their accounts, rebuilds the plan from the current history and commits it in one transaction. Adopts existing records with permanent before and after receipts, inserts missing events in global chronological order, and records dated custody transfers and asset adjustments. Any blocker or row failure rolls back the whole operation. Adopted records retain their identity and notes. The commit adopts the history as it stands at commit time; an existing transaction that changed or disappeared since it was planned is rejected with a conflict.
          */
         post: operations["commitReviewedPortfolioImports"];
         delete?: never;
@@ -3983,43 +3901,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/admin/endpoint-liveness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Liveness probe for each endpoint */
-        get: operations["adminEndpointLiveness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/presentation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Compute Research presentation from submitted data without fetching or persisting
-         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus and market-add two-of-three previews. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
-         */
-        post: operations["computeResearchPresentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/research/search": {
         parameters: {
             query?: never;
@@ -4037,23 +3918,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/research/quote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Current quote for a symbol */
-        get: operations["researchQuote"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/research/chart": {
         parameters: {
             query?: never;
@@ -4063,23 +3927,6 @@ export interface paths {
         };
         /** Historical chart points for a symbol */
         get: operations["researchChart"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/research/fundamentals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Fundamentals snapshot for a symbol */
-        get: operations["researchFundamentals"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4395,6 +4242,15 @@ export interface components {
                 taxableIncome: number;
                 totalPIT: number;
             }[];
+        };
+        /** @description A print-ready report (ADR-234): a self-contained HTML document with inline styles and no scripts, the Chromium print footer template that fills the reserved 28px bottom margin with page numbers, and the PDF filename. */
+        ReportDocument: {
+            /** @description PDF filename in the form vision-<type>-YYYY-MM-DD.pdf (app timezone date). */
+            filename: string;
+            /** @description Complete A4 report document starting with <!DOCTYPE html>. */
+            html: string;
+            /** @description Chromium printToPDF footerTemplate using pageNumber and totalPages spans. */
+            footerTemplate: string;
         };
         /** @description Shared validated request for all three existing report routes. An empty object is valid. Unknown fields are stripped, including the obsolete top-level start_date/end_date/year; select a window through period instead. Tax context fields are accepted by all routes but forwarded to rendering only for the tax report. Null is not an omitted field. */
         ReportRequest: {
@@ -5633,85 +5489,6 @@ export interface components {
                 offset: number;
             };
         };
-        /** @description Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion. */
-        AnalysisInterchangeValue: (string | number | boolean) | null;
-        AnalysisInterchangeColumn: {
-            id: string;
-            label: string;
-            /** @enum {string} */
-            type: "string" | "integer" | "decimal" | "boolean" | "date";
-        };
-        AnalysisInterchangeAttachment: {
-            id: string;
-            fileName: string;
-            /** Format: date-time */
-            importedAt: string;
-            sha256: string;
-            columns: components["schemas"]["AnalysisInterchangeColumn"][];
-            rows: {
-                [key: string]: components["schemas"]["AnalysisInterchangeValue"];
-            }[];
-        };
-        /** @description Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import. */
-        AnalysisInterchangeImport: {
-            /** @enum {string} */
-            format: "csv" | "xlsx";
-            attachment: components["schemas"]["AnalysisInterchangeAttachment"];
-            formulaCells: number;
-        };
-        /** @description UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned. */
-        AnalysisInterchangeExportPayload: {
-            result: {
-                requestId: string;
-                startedAt?: string;
-                completedAt: string;
-                executor?: string;
-                columns: ({
-                    id: string;
-                    type: string;
-                } & {
-                    [key: string]: unknown;
-                })[];
-                declaredColumns?: ({
-                    id: string;
-                    type: string;
-                    label?: string;
-                } & {
-                    [key: string]: unknown;
-                })[];
-                /** @description Original Analysis cells, including JSON/array columns, as returned; no currency conversion. */
-                rows: {
-                    [key: string]: unknown;
-                }[];
-                window: {
-                    [key: string]: unknown;
-                };
-                complete?: boolean;
-                coverage?: unknown;
-                transformationCoverage?: unknown;
-                preparationLineage?: unknown;
-                transformationErrors?: unknown;
-                formulaErrors?: unknown;
-                formulaSummaries?: {
-                    [key: string]: components["schemas"]["AnalysisInterchangeValue"];
-                };
-            } & {
-                [key: string]: unknown;
-            };
-            context: {
-                name: string;
-                timezone: string;
-                workspace: string;
-                definitionId?: string;
-                definitionVersion?: number;
-                datasetIds?: string[];
-                sourceReferences?: string[];
-                assumptions?: unknown;
-                formulas?: unknown;
-            } & {
-                [key: string]: unknown;
-            };
-        };
         AnalysisVisualFilter: {
             fieldId: string;
             operator: string;
@@ -6172,142 +5949,6 @@ export interface components {
             provider: string;
             points: components["schemas"]["InvestmentPriceHistoryPoint"][];
         };
-        /** @description Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null. */
-        ResearchPresentationRow: {
-            time: number;
-        } & {
-            [key: string]: number | null;
-        };
-        ResearchPresentationCompareResult: {
-            rows: components["schemas"]["ResearchPresentationRow"][];
-            stats: {
-                symbol: string;
-                totalReturn: number | null;
-                volatility: number | null;
-                maxDrawdown: number | null;
-                firstTime?: number;
-                lastTime?: number;
-            }[];
-            correlation: {
-                symbols: string[];
-                matrix: (number | null)[][];
-            };
-        };
-        ResearchPresentationChartResult: {
-            rows: components["schemas"]["ResearchPresentationRow"][];
-            oscillatorRows: components["schemas"]["ResearchPresentationRow"][];
-        };
-        ResearchPresentationWatchlistList: {
-            distancePercent: number | null;
-            absoluteDistancePercent: number | null;
-            isAtOrBelowTarget: boolean;
-            sinceAddedPercent: number | null;
-        };
-        ResearchPresentationWatchlistResult: {
-            list: components["schemas"]["ResearchPresentationWatchlistList"];
-            chart: {
-                distancePercent: number | null;
-                absoluteDistancePercent: number | null;
-                isAtOrBelowTarget: boolean;
-                hasValidTarget: boolean;
-                domain: number[];
-            };
-            preview: {
-                absolutePercent: number;
-                /** @enum {string} */
-                direction: "below" | "above";
-            } | null;
-        };
-        ResearchPresentationWatchlistBatchResult: {
-            entries: {
-                id: number;
-                list: components["schemas"]["ResearchPresentationWatchlistList"];
-            }[];
-        };
-        ResearchPresentationAnalystResult: {
-            total: number;
-            bullFraction: number;
-            bearFraction: number;
-            /** @enum {string} */
-            verdictKey: "market.strongBuy" | "market.buy" | "market.hold" | "market.sell" | "market.strongSell";
-            /** @enum {string} */
-            tone: "success" | "destructive" | "warning";
-            fractions: components["schemas"]["ResearchAnalystConsensus"];
-        } | null;
-        ResearchPresentationProviderQuoteResult: {
-            symbol: string;
-            name: string;
-            price?: number | null;
-            change: number | null;
-            changePercent: number | null;
-            currency: string;
-            exchange: string;
-            type: string;
-        } | null;
-        ResearchPresentationMarketAddResult: {
-            derivedAmount?: number | null;
-            derivedUnits?: number | null;
-            derivedPrice?: number | null;
-            effectiveAmount?: number | null;
-            effectiveUnits?: number | null;
-            effectivePrice?: number | null;
-            providedCount: number;
-            isConsistent: boolean;
-        };
-        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
-        ResearchPresentationSnapshot: {
-            /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
-            series?: {
-                symbol?: string;
-                id?: string;
-                /** @enum {string} */
-                field?: "price" | "volume";
-                /** @enum {string} */
-                type?: "line" | "area" | "candlestick" | "bar";
-                points?: components["schemas"]["ResearchChartPoint"][];
-            }[];
-            indicators?: {
-                id: string;
-                /** @enum {string} */
-                type: "sma" | "ema" | "bollinger";
-                period: number;
-                seriesId: string;
-            }[];
-            rebase?: boolean;
-            /** @enum {string} */
-            oscillator?: "none" | "rsi" | "macd";
-            oscillatorSeriesId?: string | null;
-            targetPrice?: number | null;
-            currentPrice?: number | null;
-            addedPrice?: number | null;
-            points?: components["schemas"]["ResearchChartPoint"][];
-            entries?: {
-                id: number;
-                targetPrice: number;
-                currentPrice: number | null;
-                addedPrice: number | null;
-            }[];
-            investment?: {
-                symbol?: string | null;
-                name: string;
-                currency: string;
-                priceProvider?: string | null;
-            };
-            selectedSymbol?: string | null;
-            consensus?: components["schemas"]["ResearchAnalystConsensus"];
-            amount?: number;
-            units?: number;
-            price?: number;
-            /** @default true */
-            derive: boolean;
-        };
-        /** @description result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null. */
-        ResearchPresentationData: {
-            /** @enum {string} */
-            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
-            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"]) | null;
-        };
         ResearchMeta: {
             provider: string | null;
             /** @enum {string} */
@@ -6322,24 +5963,6 @@ export interface components {
         };
         ResearchSearchData: {
             items: components["schemas"]["ResearchSearchItem"][];
-        };
-        ResearchQuote: {
-            symbol: string;
-            name?: string | null;
-            price?: number | null;
-            change?: number | null;
-            changePercent?: number | null;
-            currency?: string | null;
-            exchange?: string | null;
-            type?: string | null;
-            open?: number | null;
-            dayHigh?: number | null;
-            dayLow?: number | null;
-            prevClose?: number | null;
-            volume?: number | null;
-            avgVolume?: number | null;
-            high52w?: number | null;
-            low52w?: number | null;
         };
         ResearchChartPoint: {
             time: number;
@@ -6603,14 +6226,8 @@ export interface components {
         ResearchSearchEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchSearchData"];
         };
-        ResearchQuoteEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
-            data?: components["schemas"]["ResearchQuote"];
-        };
         ResearchChartEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchChartData"];
-        };
-        ResearchFundamentalsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
-            data?: components["schemas"]["ResearchFundamentals"];
         };
         ResearchAnalystEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchAnalystData"];
@@ -7908,92 +7525,37 @@ export interface components {
             defaultModel: string;
             enabled: boolean;
         };
-        /** @description Present only on a correct_existing_only prefer_source date-only adoption of a proved closed Kinesis yield group. Existing and source dates equal recordedDate and paymentDate respectively. Quantities, type and all financial values are unchanged. memberCount includes unchanged yield anchors, which need not be selected correction actions; complete group closure and atomic selection are proved by the server and bound in the reviewed fingerprint. */
-        PortfolioImportReconciliationDateProof: {
-            /** @enum {string} */
-            kind: "closed_kinesis_yield_group";
-            groupKey: string;
-            /** Format: date */
-            recordedDate: string;
-            /** Format: date */
-            paymentDate: string;
-            memberCount: number;
-        };
-        /** @description Present on proved record_income, duplicate or settled paired-income actions in full history or record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full scope requires unitRowId binding the distinct selected Gift action in the same batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do repeated income actions. Repeats also identify the distinct existing income through existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis income/units identity and immutable receipt images, binds proof into the fingerprint, and writes income only after its unit is proved. Each income and unit identity is unique; the proof cannot record income again or add another acquisition. */
-        PortfolioImportReconciliationIncomeProof: {
-            /** @enum {string} */
-            kind: "paired_kinesis_income";
+        /** @description Shared preview and commit body. Unknown fields, including the removed reconciliation_scope, cash_funding_policy and expected_plan_fingerprint, are rejected with 400. */
+        PortfolioImportReconciliationRequest: {
+            batch_ids: number[];
             /**
-             * Format: int64
-             * @description Required only in full history; output-only staged Gift row ID selected in this review.
+             * @description Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
+             * @enum {string}
              */
-            unitRowId?: number;
-            /** Format: int64 */
-            unitTransactionId?: number;
-        } | unknown | unknown;
-        /** @description Signed cash ledger values for a proved source event. Required for a new cash action, optional on proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A separately quoted own-account withdrawal fee is retained as a second negative expense component; the transfer component is net of that fee. Card spending already includes its quoted fee and creates no extra fee row. */
-        PortfolioImportReconciliationCashValues: {
-            /** Format: date */
-            date: string;
-            amount: string;
-            currency: string;
-            /** Format: int64 */
-            accountId: number;
-            isTransfer: boolean;
-            /** @enum {string} */
-            transferSource: "brokerage";
-            /** @enum {integer|null} */
-            transferPeerId: null;
-        };
-        /** @description Present only in record_cash_only on every cash, duplicate or settled action. The complete original source and all cash balance chains are proved before selection; every group member selects together. memberCount includes new and repeated cash actions, and equals selected group action count. Event identities are unique, and fileHash is common within a source batch/group. Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to the reviewed fingerprint and confirmed own-account funding policy; it does not authorize portfolio or custody actions. */
-        PortfolioImportReconciliationCashProof: {
-            /** @enum {string} */
-            kind: "closed_kinesis_cash";
-            groupKey: string;
-            eventKey: string;
-            /** @enum {string} */
-            eventKind: "trade_quote" | "own_account_funding" | "card_expense";
-            fileHash: string;
-            memberCount: number;
-            /**
-             * @description One ledger component
-             * @enum {integer}
-             */
-            componentCount: 1 | 2;
+            adopt_policy?: "preserve_existing" | "prefer_source";
+            /** @description Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. */
+            batch_policies?: {
+                /** Format: int64 */
+                batch_id: number;
+                /** @enum {string} */
+                adopt_policy: "preserve_existing" | "prefer_source";
+            }[];
         };
         PortfolioImportReconciliationCounts: {
+            /** @description Newly recorded transactions, including in-kind income recorded with the included_in_units role. */
             imported: number;
+            /** @description Settled source rows, including adopted rows. */
             duplicates: number;
             adopted: number;
-            repaired: number;
             errors: number;
-            /** @description Additive aggregate and batch subtotal of newly recorded cash ledger components. In full history it is a subset of imported alongside recordedIncome and ordinary records. In record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be smaller. Repeated settlement records no new cash. */
-            recordedCash?: number;
-            /** @description Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In full history it is a subset of imported; the paired Gift is recorded or adopted once in the same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is zero. Missing subtotals remain valid for older full responses. */
-            recordedIncome?: number;
         };
-        PortfolioImportReconciliationCommitResult: components["schemas"]["PortfolioImportReconciliationCounts"] & components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
-            /** @description Present for every bounded scope; server-derived staging IDs, never caller-selectable. Already settled actions need not add to duplicates. */
-            selectedRowIds?: number[];
-            batches: (components["schemas"]["PortfolioImportReconciliationCounts"] & components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
+        PortfolioImportReconciliationCommitResult: components["schemas"]["PortfolioImportReconciliationCounts"] & {
+            batches: (components["schemas"]["PortfolioImportReconciliationCounts"] & {
                 /** Format: int64 */
                 batch_id: number;
             })[];
         };
-        /** @description All four fields are emitted for adopt_existing_only, correct_existing_only, record_in_kind_income_only and record_cash_only plans, commit results, and commit batch entries. Preview batchProgress entries use pending, complete and deferredCounts with their batchId, without reconciliationScope. Full-scope responses retain their existing shape and omit these fields. Complete describes source settlement, not the batch lifecycle: every selected batch stays awaiting_review while the overall session has pending events. */
-        PortfolioImportReconciliationScopeProgress: {
-            /** @enum {string} */
-            reconciliationScope?: "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-            /** @description Excluded unsettled source rows after selected actions; per-batch counts sum to the session total. */
-            pending?: number;
-            /** @description True exactly when pending is zero. */
-            complete?: boolean;
-            /** @description Pending rows grouped by staged event kind, including dividend, gift, sell, cash, asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum to pending. */
-            deferredCounts?: {
-                [key: string]: number;
-            };
-        };
-        PortfolioImportReconciliationPlan: components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
+        PortfolioImportReconciliationPlan: {
             batchIds: number[];
             /** @enum {string|null} */
             adoptPolicy: "preserve_existing" | "prefer_source" | null;
@@ -8003,50 +7565,42 @@ export interface components {
                 /** @enum {string} */
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
-            planFingerprint: string;
             ready: boolean;
-            /** @description Full-scope reviewed actions; attachment/correction selects adopt/duplicate/settled, record_in_kind_income_only selects record_income/duplicate/settled, and record_cash_only selects cash/duplicate/settled only. */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. */
             actions: ({
-                /**
-                 * Format: int64
-                 * @description Resolved investment identity; required on full paired income and its selected Gift action, including bodyless repeats.
-                 */
+                /** Format: int64 */
+                batchId: number;
+                /** Format: int64 */
+                rowId: number;
+                rowOrdinal: number;
+                action: string;
+                /** Format: int64 */
                 investmentId?: number | null;
                 /**
                  * Format: int64
-                 * @description Existing canonical identity for adoption or owned duplicate/settled actions. Full paired income requires distinct existing income and unit identities on repeats.
+                 * @description Existing canonical transaction for an adoption or an owned duplicate.
                  */
                 existingTransactionId?: number;
-                /** @description True for proven native IBKR funding corrections. existingTransactionId identifies the cash ledger; investmentId is null. Only amount and currency can change, retaining the original date, notes and financial provenance. */
-                isCash?: boolean;
-                dateProof?: components["schemas"]["PortfolioImportReconciliationDateProof"];
-                incomeProof?: components["schemas"]["PortfolioImportReconciliationIncomeProof"];
-                cashProof?: components["schemas"]["PortfolioImportReconciliationCashProof"];
-                cashValues?: components["schemas"]["PortfolioImportReconciliationCashValues"];
-                /** @description Required on new componentCount=2 own-account withdrawals. Negative same-date/currency/account fee expense with isTransfer=false, brokerage origin and null peer. Main cashValues is the net withdrawal and isTransfer=true; no separate fee is invented for card payments. Optional alongside main values on repeats. */
-                cashFeeValues?: components["schemas"]["PortfolioImportReconciliationCashValues"];
+                /** @description Settled against another export of the same broker history or a manual cash entry. */
+                crossFormat?: boolean;
+                /** @description The existing transaction is brokerage cash, not a portfolio transaction. */
+                cash?: boolean;
                 /**
                  * Format: int64
-                 * @description Required on duplicate/settled componentCount=2 repeats; a distinct existing fee transaction whose complete after-image is guarded. Forbidden for single-component actions.
+                 * @description For duplicate_source, the selected staged row that records the same event.
                  */
-                existingCashFeeTransactionId?: number;
+                duplicateOfRowId?: number;
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];
-            /** @description Counts of actions in this plan; narrow scope excludes deferred events. */
+            /** @description Counts of actions in this plan by action kind. */
             summary: {
                 [key: string]: number;
             };
-            /** @description Present for every bounded scope; exactly the distinct row IDs in selected actions, derived by the server. */
-            selectedRowIds?: number[];
-            /** @description Present only in narrow preview; commit reports progress within batches instead. */
-            batchProgress?: (components["schemas"]["PortfolioImportReconciliationScopeProgress"] & {
-                /** Format: int64 */
-                batchId: number;
-            })[];
         };
         PortfolioImportBatch: {
             id: string;
@@ -8068,7 +7622,7 @@ export interface components {
         PortfolioImportUpload: {
             /**
              * Format: binary
-             * @description CSV history, detailed Saxo XLSX, or original IBKR funding XLS/XLSX, maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. IBKR funding requires portfolio_format=ibkr_funding_history and original Deposit and Withdrawal sheet headers. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS is accepted only for native IBKR funding history.
+             * @description CSV history, detailed Saxo XLSX, or the IBKR funding workbook (XLS or XLSX), maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. IBKR funding requires portfolio_format=ibkr_funding_history and the original Deposit and Withdrawal sheet headers. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS is accepted only for the IBKR funding workbook.
              */
             file: string;
             /** @description Display label for the import source */
@@ -8085,7 +7639,7 @@ export interface components {
              */
             yield_basis_policy?: "zero";
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. IBKR Transaction History funding values are statement-base amounts; the native funding workbook proves original amounts and currencies. A separate funding correction scope with prefer_source updates exact existing cash matches and creates no new financial records. Unproved new Transaction History funding records cannot be committed. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable, unless the reviewed scope or history holds the XLSX record of the same booking. IBKR Transaction History deposits and withdrawals are recorded as ordinary sleeve cash in the statement base currency. ibkr_funding_history records each completed deposit and withdrawal of the IBKR funding workbook in its own currency; open, rejected and cancelled requests are skipped, and included_symbols is rejected. Reconciliation pairs either IBKR export with the other, so each movement is recorded once. Kinesis fiat deposits, withdrawals, card payments and trade cash legs are recorded as ordinary signed sleeve cash whose amount is the literal balance movement, fees included. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
              * @enum {string}
              */
             portfolio_format?: "ibkr_transaction_history" | "ibkr_funding_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
@@ -8448,113 +8002,6 @@ export interface operations {
             };
             /** @description VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    importAnalysisInterchange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                    /** @enum {string} */
-                    format: "csv" | "xlsx";
-                };
-            };
-        };
-        responses: {
-            /** @description Inferred value-only attachment and raw ignored-formula count. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data: components["schemas"]["AnalysisInterchangeImport"];
-                    };
-                };
-            };
-            /** @description Invalid format */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API or existing Analysis rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Upload source read failed. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    exportAnalysisInterchange: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
-                     */
-                    file: string;
-                    /** @enum {string} */
-                    format: "csv" | "xlsx";
-                };
-            };
-        };
-        responses: {
-            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. */
-            200: {
-                headers: {
-                    "Content-Disposition"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/csv": string;
-                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
-                };
-            };
-            /** @description Missing or invalid multipart snapshot/format */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API or existing Analysis rate limit exceeded. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Upload source read or serialization failed. */
-            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9897,26 +9344,6 @@ export interface operations {
             };
         };
     };
-    getAiResearchStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Configured capabilities without credentials. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
     listAiInvestigations: {
         parameters: {
             query?: never;
@@ -10205,50 +9632,6 @@ export interface operations {
             };
             /** @description Document not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    searchAiResearchPassages: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Trimmed before use; a blank query is rejected. */
-                    query: string;
-                    /**
-                     * @default hybrid
-                     * @enum {string}
-                     */
-                    mode?: "hybrid" | "keyword" | "semantic";
-                    /**
-                     * @description The service caps results at 20.
-                     * @default 8
-                     */
-                    limit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description Bounded passages with document, version, page, and section locators */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-            /** @description VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer */
-            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13960,29 +13343,6 @@ export interface operations {
             };
         };
     };
-    getCashflowForecast: {
-        parameters: {
-            query?: {
-                months?: number;
-                currency?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Forecast data */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"];
-                };
-            };
-        };
-    };
     getCashflowForecastMethods: {
         parameters: {
             query?: never;
@@ -15731,17 +15091,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw financial PDF bytes; no JSON envelope. */
+            /** @description Print-ready financial report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-financial-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
@@ -15791,17 +15149,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw portfolio PDF bytes; no JSON envelope. */
+            /** @description Print-ready portfolio report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
@@ -15851,17 +15207,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Raw tax PDF bytes; no JSON envelope. */
+            /** @description Print-ready tax report document in the success envelope. */
             200: {
                 headers: {
-                    /** @description Attachment filename in the form vision-tax-YYYY-MM-DD.pdf. */
-                    "Content-Disposition"?: string;
-                    /** @description PDF byte count. */
-                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/pdf": string;
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["ReportDocument"];
+                    };
                 };
             };
             /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
@@ -16800,9 +16154,12 @@ export interface operations {
                         data?: {
                             detected: {
                                 /** @enum {string} */
-                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
+                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
                                 sourceAccountIdentities: string[];
-                                /** @enum {string} */
+                                /**
+                                 * @description Present when the IBKR file is the funding workbook rather than the Transaction History CSV.
+                                 * @enum {string}
+                                 */
                                 presetKey?: "ibkr_funding_history";
                             } | null;
                             /** @enum {string|null} */
@@ -17270,36 +16627,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    batch_ids: number[];
-                    /**
-                     * @description Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
-                     * @enum {string}
-                     */
-                    adopt_policy?: "preserve_existing" | "prefer_source";
-                    /**
-                     * @description Optional additive scope. adopt_existing_only requires Kinesis sources, explicit global preserve_existing, no conflicting overrides, no included_symbols/skipped source rows, and verified complete source capture. Row IDs cannot be supplied by callers. correct_existing_only instead requires explicit global prefer_source and either complete Kinesis financial/date proof or a separate native IBKR funding scope proving exact existing base-currency cash corrections. record_in_kind_income_only requires explicit global preserve_existing, zero yield basis and a proved existing zero-basis income/units pair; retained source proof remains readable and other events remain pending. record_cash_only requires complete unfiltered Kinesis source, explicit preserve_existing and cash_funding_policy=own_account_transfer; only the complete proved cash chain is selected, with no XML application.
-                     * @default full
-                     * @enum {string}
-                     */
-                    reconciliation_scope?: "full" | "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-                    /**
-                     * @description Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                     * @enum {string}
-                     */
-                    cash_funding_policy?: "own_account_transfer";
-                    /** @description Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides. */
-                    batch_policies?: {
-                        /** Format: int64 */
-                        batch_id: number;
-                        /** @enum {string} */
-                        adopt_policy: "preserve_existing" | "prefer_source";
-                    }[];
-                };
+                "application/json": components["schemas"]["PortfolioImportReconciliationRequest"];
             };
         };
         responses: {
-            /** @description Review plan; blocked plans still return 200. Narrow scope adds reconciliationScope, selectedRowIds, pending, complete, deferredCounts and batchProgress; actions/summary contain only the selected records. Full response may additionally include proved paired income actions. */
+            /** @description Review plan; blocked plans still return 200. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17310,7 +16642,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Malformed scope or policy, missing batch, or non-reviewable scope */
+            /** @description Malformed or unknown field, missing batch, or non-reviewable scope */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17328,35 +16660,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    batch_ids: number[];
-                    /** @enum {string} */
-                    adopt_policy?: "preserve_existing" | "prefer_source";
-                    /**
-                     * @description Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis sources and the matching explicit policy (preserve_existing for attachment/income, prefer_source for corrections). Income requires zero yield basis and already proved units; excluded events remain pending.
-                     * @default full
-                     * @enum {string}
-                     */
-                    reconciliation_scope?: "full" | "adopt_existing_only" | "correct_existing_only" | "record_in_kind_income_only" | "record_cash_only";
-                    /**
-                     * @description Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                     * @enum {string}
-                     */
-                    cash_funding_policy?: "own_account_transfer";
-                    /** @description Exact selected per-batch overrides used by the reviewed preview. */
-                    batch_policies?: {
-                        /** Format: int64 */
-                        batch_id: number;
-                        /** @enum {string} */
-                        adopt_policy: "preserve_existing" | "prefer_source";
-                    }[];
-                    /** @description Exact fingerprint returned by preview for this source/reconciliation scope, global policy and per-batch overrides; narrow fingerprints also bind selected records, full source proof, receipt context and deferred counts. */
-                    expected_plan_fingerprint: string;
-                };
+                "application/json": components["schemas"]["PortfolioImportReconciliationRequest"];
             };
         };
         responses: {
-            /** @description Aggregate and per-batch counts. Narrow scope adds reconciliationScope, pending, complete and deferredCounts at both levels plus top-level selectedRowIds; imported/repaired are zero and partial sessions stay awaiting_review. Full response adds optional recordedIncome/recordedCash subtotals within imported; older responses remain compatible. errors is zero on success and repaired is always emitted. */
+            /** @description Aggregate and per-batch counts; errors is zero on success. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17367,7 +16675,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Malformed request or non-reviewable scope */
+            /** @description Malformed request, unknown field or non-reviewable scope */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17381,7 +16689,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Stale preview, ambiguous existing history, unresolved source facts, invalid projected history or atomic row failure; no changes retained */
+            /** @description Blocked plan (reconciliation_required), changed existing history, unpaired in-kind income, invalid projected history or atomic row failure; no changes retained */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17453,7 +16761,6 @@ export interface operations {
                                 blockers?: {
                                     [key: string]: unknown;
                                 }[];
-                                planFingerprint?: string;
                             };
                         };
                     };
@@ -17915,89 +17222,6 @@ export interface operations {
             };
         };
     };
-    adminEndpointLiveness: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Liveness results */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: {
-                                method?: string;
-                                path?: string;
-                                live?: boolean;
-                            }[];
-                            total: number;
-                        };
-                    };
-                };
-            };
-        };
-    };
-    computeResearchPresentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected. */
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /**
-                     * Format: binary
-                     * @description UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
-                     */
-                    file: string;
-                };
-            };
-        };
-        responses: {
-            /** @description Computed kind-specific presentation, standard envelope; no read or write side effects. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["ResearchPresentationData"];
-                    };
-                };
-            };
-            /** @description VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Existing Research market rate limit. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description File I/O or unexpected calculation failure. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     researchSearch: {
         parameters: {
             query: {
@@ -18018,37 +17242,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResearchSearchEnvelope"];
                 };
-            };
-        };
-    };
-    researchQuote: {
-        parameters: {
-            query: {
-                symbol: string;
-                /** @description Asset class hint for provider routing (e.g. stock, crypto, metals) */
-                asset_class?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Quote data with provenance meta (provider, source) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResearchQuoteEnvelope"];
-                };
-            };
-            /** @description symbol parameter required */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -18075,36 +17268,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResearchChartEnvelope"];
-                };
-            };
-            /** @description symbol parameter required */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    researchFundamentals: {
-        parameters: {
-            query: {
-                symbol: string;
-                asset_class?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Fundamentals data with provenance meta (provider, source) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ResearchFundamentalsEnvelope"];
                 };
             };
             /** @description symbol parameter required */

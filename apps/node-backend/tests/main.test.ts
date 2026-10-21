@@ -67,10 +67,6 @@ describe("Main Application", () => {
     it("should have database settings", () => {
       expect(settings.database.url).toBeDefined();
     });
-
-    it("should have CORS origins configured", () => {
-      expect(settings.api.corsOrigins).toBeDefined();
-    });
   });
 
   // ── Database Connection ────────────────────────────────────

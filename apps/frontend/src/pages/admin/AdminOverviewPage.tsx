@@ -1,27 +1,12 @@
-import { useState } from "react";
-import { Activity, Database, KeyRound } from "lucide-react";
+import { Activity, Database } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { Link } from "react-router";
-import { toast } from "sonner";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import {
-    setAdminToken,
-    clearAdminToken,
-    hasAdminToken,
-} from "@/lib/adminToken";
 import { cn } from "@/lib/utils";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { useAdminOverviewQueries } from "@/features/admin/useAdminQueries";
@@ -73,79 +58,6 @@ function OverviewCard({
                 </CardContent>
             </Card>
         </Link>
-    );
-}
-
-// Lets a self-hoster who set ADMIN_AUTH_TOKEN on the server authenticate the
-// admin UI. Renders regardless of whether the admin data queries succeed, so a
-// 401'd admin page can still be unlocked. Token is held in sessionStorage only.
-function AdminTokenCard() {
-    const { t } = useLanguage();
-    const [value, setValue] = useState("");
-    const [active, setActive] = useState<boolean>(hasAdminToken());
-
-    const save = () => {
-        setAdminToken(value);
-        setActive(hasAdminToken());
-        setValue("");
-        toast.success(t("admin.token.saved"));
-    };
-
-    const clear = () => {
-        clearAdminToken();
-        setActive(false);
-        toast.success(t("admin.token.cleared"));
-    };
-
-    return (
-        <Card>
-            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary/12 text-primary">
-                    <KeyRound className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 space-y-1">
-                    <CardTitle variant="sm">{t("admin.token.title")}</CardTitle>
-                    <CardDescription>
-                        {t("admin.token.description")}
-                    </CardDescription>
-                </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-                <form
-                    className="flex flex-wrap items-center gap-2"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        if (value.trim()) save();
-                    }}
-                >
-                    <Input
-                        type="password"
-                        autoComplete="off"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder={t("admin.token.placeholder")}
-                        aria-label={t("admin.token.title")}
-                        className="max-w-xs flex-1"
-                    />
-                    <Button type="submit" disabled={!value.trim()}>
-                        {t("admin.token.save")}
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={clear}
-                        disabled={!active}
-                    >
-                        {t("admin.token.clear")}
-                    </Button>
-                </form>
-                {active && (
-                    <p role="status" className="type-footnote text-success">
-                        {t("admin.token.active")}
-                    </p>
-                )}
-            </CardContent>
-        </Card>
     );
 }
 
@@ -246,7 +158,6 @@ export default function AdminOverviewPage() {
                 )}
             </div>
 
-            <AdminTokenCard />
         </PageShell>
     );
 }

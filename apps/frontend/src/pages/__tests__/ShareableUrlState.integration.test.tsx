@@ -37,9 +37,6 @@ describe("shareable page URL state", () => {
                     { provider: "test", source: "live" },
                 );
             }),
-            http.get(`${API_BASE}/api/research/fundamentals`, () =>
-                ok(null, { provider: null, source: "unavailable" }),
-            ),
         );
         renderWithApp(<ResearchComparePage />, {
             initialEntries: ["/research/compare?symbol=AAPL&symbol=MSFT"],
@@ -67,9 +64,6 @@ describe("shareable page URL state", () => {
                     { provider: "test", source: "live" },
                 );
             }),
-            http.get(`${API_BASE}/api/research/fundamentals`, () =>
-                ok(null, { provider: null, source: "unavailable" }),
-            ),
         );
 
         renderWithApp(<ResearchComparePage />, {
@@ -103,9 +97,6 @@ describe("shareable page URL state", () => {
                     { provider: "test", source: "live" },
                 );
             }),
-            http.get(`${API_BASE}/api/research/fundamentals`, () =>
-                ok(null, { provider: null, source: "unavailable" }),
-            ),
         );
 
         renderWithApp(<ResearchComparePage />, {

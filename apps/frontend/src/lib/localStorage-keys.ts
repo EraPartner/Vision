@@ -9,7 +9,7 @@
  *   - packaging/electron/backup/bundle.ts  (snapshot on export)
  *
  * ADDING A KEY? Add it here first, then update BackupSection's snapshot logic.
- * The backup-coverage test will fail in CI until both are done.
+ * The localStorage-keys-registry test will fail in CI until both are done.
  */
 
 export const LOCAL_STORAGE_KEYS = Object.freeze({
@@ -72,15 +72,12 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
 /**
  * Keys that are intentionally excluded from backup snapshots.
  * Transient state that should not carry over to a restored instance.
- * Read as source text by apps/node-backend/tests/backup-coverage.test.ts.
+ * Read as source text by apps/node-backend/tests/localStorage-keys-registry.test.ts.
  *
  * @public
  */
 export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
     [
-        // Admin Bearer token (see lib/adminToken.ts). Session-scoped auth held in
-        // sessionStorage only — must never be persisted to a backup snapshot.
-        "vision.adminToken",
         // Transient ⌘K palette recents — navigation convenience, not user data.
         "vision.palette.recents",
         // Transient window-state restoration — meaningless on another machine.

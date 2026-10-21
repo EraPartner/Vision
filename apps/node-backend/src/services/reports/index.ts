@@ -3,11 +3,12 @@ import { withReportSlot } from "./reportConcurrency.ts";
  * Report generation dispatcher.
  *
  * Entry point for all PDF report types. Each report type (financial, portfolio,
- * tax) builds an HTML document from theme tokens + data, then Puppeteer renders
- * it to a PDF buffer returned to the HTTP route.
+ * tax) builds a print-ready HTML document from theme tokens + data. The backend
+ * does not render PDFs: the desktop shell prints the document with Electron's
+ * own Chromium (`webContents.printToPDF`, ADR-234), and a plain browser prints
+ * it through its print dialog.
  */
 
-import { renderHtmlToPdf } from "./puppeteerRenderer.ts";
 import { toAppDateString, toAppTz, APP_TIMEZONE } from "../../lib/timezone.ts";
 import { buildThemeCss } from "./themeCss.ts";
 import { escapeHtml, SECTION_CSS } from "./sectionHelpers.ts";
@@ -72,6 +73,13 @@ export type ThemeTokens = {
   mode?: "light" | "dark" | undefined;
 };
 
+/** A print-ready report: the document, its footer template and a PDF filename. */
+export type ReportDocument = {
+  filename: string;
+  html: string;
+  footerTemplate: string;
+};
+
 export type GenerateReportOpts = {
   type: "financial" | "portfolio" | "tax";
   signal?: AbortSignal;
@@ -132,7 +140,7 @@ function formatPeriod(period: Period): string {
 function buildBaseCss(): string {
   return `
     /* @page background paints the entire page canvas including the bottom
-       margin area reserved for the Puppeteer footer. Without it, Chromium
+       margin area reserved for the printed footer. Without it, Chromium
        leaves a white strip below the footer iframe (the iframe's allotted
        height is shorter than the @page bottom margin) and the html/body
        backgrounds do not propagate into @page margin boxes. */
@@ -146,8 +154,8 @@ function buildBaseCss(): string {
     }
 
     :root {
-      /* Height reserved for the Puppeteer footer in the bottom margin area.
-         Must match the bottom margin passed to renderHtmlToPdf. */
+      /* Height reserved for the printed footer in the bottom margin area.
+         Must match the desktop printer's bottom page margin (28px). */
       --footer-h: 28px;
     }
 
@@ -303,12 +311,12 @@ function buildBaseCss(): string {
 }
 
 /**
- * Build a Puppeteer footerTemplate HTML string.
+ * Build the Chromium print footerTemplate HTML string.
  *
- * Puppeteer footer templates render in an isolated document — CSS custom
+ * Chromium footer templates render in an isolated document — CSS custom
  * properties from the report HTML are unavailable. Theme colors are
  * interpolated directly as hsl() literals. The template uses the special
- * `.pageNumber` / `.totalPages` spans that Puppeteer populates automatically.
+ * `.pageNumber` / `.totalPages` spans that Chromium populates automatically.
  */
 function buildFooterTemplate(theme: ThemeTokens): string {
   const primary = theme.primary ? `hsl(${theme.primary})` : "#5b7fa6";
@@ -316,7 +324,7 @@ function buildFooterTemplate(theme: ThemeTokens): string {
   const border = theme.border ? `hsl(${theme.border})` : "#d1d5db";
   const surface = theme.surface ? `hsl(${theme.surface})` : "#ffffff";
 
-  // Puppeteer's footer iframe wraps the template in a default <html><body>
+  // Chromium's footer document wraps the template in a default <html><body>
   // with an 8 px body margin — zero it so the footer div fills the iframe
   // edge to edge. CRITICAL: do NOT set `background` on `html` here. Chromium
   // leaks top-level `html` rules from header/footer templates into the main
@@ -687,7 +695,7 @@ function buildTaxBody({
   });
 }
 
-/** Assemble a complete HTML document for PDF rendering. */
+/** Assemble a complete HTML document for PDF printing. */
 function buildDocument({
   themeCss,
   baseCss,
@@ -715,7 +723,7 @@ ${body}
 </html>`;
 }
 
-/** Generate a PDF report for the HTTP route to send. */
+/** Generate a print-ready report document for the HTTP route to send. */
 async function generateReportInner({
   signal,
   type,
@@ -729,7 +737,7 @@ async function generateReportInner({
   precomputedPIT,
   household,
   precomputedHousehold,
-}: GenerateReportOpts): Promise<{ pdf: Buffer; filename: string }> {
+}: GenerateReportOpts): Promise<ReportDocument> {
   const generatedAt = new Date().toISOString();
   const mode = theme.mode ?? "light";
 
@@ -789,24 +797,17 @@ async function generateReportInner({
   });
 
   const footerTemplate = buildFooterTemplate(theme);
-  const pdf = await renderHtmlToPdf(html, {
-    ...(signal ? { signal } : {}),
-    footerTemplate,
-    margin: { top: "0", right: "0", bottom: "28px", left: "0" },
-  });
-
-  signal?.throwIfAborted();
 
   // App-timezone date for the filename — the UTC slice named a report
   // generated shortly after local midnight with yesterday's date.
   const date = toAppDateString(new Date(generatedAt));
   const filename = `vision-${type}-${date}.pdf`;
 
-  return { pdf, filename };
+  return { filename, html, footerTemplate };
 }
 
 export function generateReport(
   options: GenerateReportOpts,
-): Promise<{ pdf: Buffer; filename: string }> {
+): Promise<ReportDocument> {
   return withReportSlot(() => generateReportInner(options), options.signal);
 }

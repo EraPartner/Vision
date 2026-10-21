@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import type { AnalysisResult } from "@/lib/api/analysis";
-import { parseAnalysisWorkbookXml } from "../../../../node-backend/src/services/analysisWorkbookXml";
-import { importAnalysisWorkbook as importSharedWorkbook } from "@vision/shared-utils/analysis/workbook";
 import {
     analysisResultWorkbook,
     importAnalysisWorkbook,
@@ -36,32 +34,6 @@ const fixture = {
     },
 } as unknown as AnalysisResult;
 describe("typed XLSX interchange", () => {
-    it("has identical browser and Node XML adapter results for existing golden snapshots", () => {
-        for (const result of [
-            fixture,
-            {
-                ...fixture,
-                declaredColumns: [
-                    {
-                        id: "precise",
-                        label: "Long amount",
-                        type: "decimal",
-                        nullable: true,
-                    },
-                ],
-                rows: [{ precise: "1234567890123456.78" }],
-            },
-        ]) {
-            const bytes = analysisResultWorkbook(result, {
-                name: "Adapters",
-                timezone: "UTC",
-                workspace: "budgeting",
-            });
-            expect(
-                importSharedWorkbook(bytes, parseAnalysisWorkbookXml),
-            ).toEqual(importAnalysisWorkbook(bytes));
-        }
-    });
     it("exports summary outcomes without colliding with the styles relationship", () => {
         const bytes = analysisResultWorkbook(
             {

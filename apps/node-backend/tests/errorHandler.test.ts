@@ -25,7 +25,6 @@ const {
   ValidationError,
   NotFoundError,
   ConflictError,
-  UnauthorizedError,
   ForbiddenError,
   UpstreamError,
   __UpstreamTimeoutError: UpstreamTimeoutError,
@@ -57,8 +56,7 @@ describe('typed error classes', () => {
     expect(e instanceof AppError).toBe(true);
   });
 
-  it('UnauthorizedError / ForbiddenError map to 401 / 403', () => {
-    expect(new UnauthorizedError().status).toBe(401);
+  it('ForbiddenError maps to 403', () => {
     expect(new ForbiddenError().status).toBe(403);
   });
 

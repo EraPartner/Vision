@@ -450,7 +450,7 @@ renormalized by the exposure service.
 
 **Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-list `allowed`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
 
-**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.ts`) so it is included in `.visionbak` exports.
+**Backup:** Included in the whole-database `pg_dump` backup, so it travels with `.visionbak` exports.
 
 **Related:** [[docs/features/portfolio|Portfolio Feature — Portfolio Overview Ticker Widget]], [[docs/api/investments|Investments API — PATCH /api/investments/:id]]
 
@@ -768,7 +768,7 @@ from current assignments. See [[docs/adr/231-remove-audit-history|ADR-231]].
 | `api_key`    | TEXT        | NOT NULL                | Stored key, plaintext (single-user self-hosted threat model, same as `.env`); masked in API responses and never returned in full to the frontend |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger                                                                 |
 
-**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.ts`) — user-configured data worth preserving.
+**Backup:** Included in the whole-database `pg_dump` backup — user-configured data worth preserving.
 
 **Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration `0043_add_provider_api_keys`
 
@@ -1296,7 +1296,7 @@ these rows back into the existing sorted ID arrays at the API boundary.
 
 The former per-bank `*_raw_transactions` tables (`belfius_`, `revolut_`, `kbc_`, `sabb_`, `wise_`,
 `vision_`, `custom_`, `manual_raw_transactions`) and `transaction_raw_references` are not part of
-the `0001` baseline and are not in `BACKUP_COVERED_TABLES`. Exact source records and their links
+the `0001` baseline, so no backup contains them. Exact source records and their links
 live in `transaction_source_records` and `transaction_source_links`; see
 [[docs/reference/provider-neutral-transaction-provenance|Provider-neutral transaction provenance]].
 
@@ -1328,7 +1328,7 @@ live in `transaction_source_records` and `transaction_source_links`; see
 
 **Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
-**Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.ts`)
+**Backup:** Included in `.visionbak` exports (the whole-database `pg_dump` backup)
 
 **Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]], [[docs/features/portfolio-import#saved-portfolio-parser-configs|Portfolio Import — Saved Parser Configs]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 
@@ -1357,7 +1357,7 @@ live in `transaction_source_records` and `transaction_source_links`; see
 | `started_at`          | TIMESTAMPTZ | NOT NULL, DEFAULT NOW()                    | When the batch was created                                                                                                                                                              |
 | `completed_at`        | TIMESTAMPTZ | NULLABLE                                   | When the batch reached a terminal state                                                                                                                                                 |
 
-**Backup:** Included in `BACKUP_COVERED_TABLES`.
+**Backup:** Included in the whole-database `pg_dump` backup.
 
 **Migrations:** `0040_add_portfolio_import_staging` (base); `0057_portfolio_import_batches_account_id` (adds `account_id`)
 
@@ -1403,7 +1403,7 @@ and secondary XML proof in an internal envelope; supplemental rows retain litera
 are restored through journal images, never deleted via a new batch's canonical pointer.
 
 Indexes cover `(batch_id,status)`, source fingerprint within a batch, and non-null resolved/override
-investment IDs. Included in `BACKUP_COVERED_TABLES`. Receipt and custody foreign keys restrict
+investment IDs. Included in the whole-database `pg_dump` backup. Receipt and custody foreign keys restrict
 ordinary batch/staging pruning even though the staging-to-batch FK itself cascades.
 
 **Related:** [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]],
@@ -1461,7 +1461,7 @@ One adoption is allowed per staging row. Insertion validates that the staging ro
 batch. A restore must reference the matching adoption and swap its exact before/after images.
 Triggers reject receipt updates/deletes. Restoration compares the current financial row with the
 after-image before changing anything. Batch/action lookup and the partial unique adoption-source
-index support replay and rollback. Included in `BACKUP_COVERED_TABLES`.
+index support replay and rollback. Included in the whole-database `pg_dump` backup.
 
 Upgrade creates an empty journal and changes no existing financial rows. Downgrade refuses active
 adoptions; restore them through the application first. Once all are restored, downgrade drops the
@@ -1495,7 +1495,7 @@ transfer-date rates do not create a new purchase basis. Stored fee allocations e
 by removed fee units for each supported method; unresolved original FX is not invented. Updates
 are forbidden. Application rollback can delete events only after validating the projected remaining
 history. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Included in
-`BACKUP_COVERED_TABLES`.
+the whole-database `pg_dump` backup.
 
 Upgrade adds an empty ledger, nullable staging JSON, and two route values without rewriting
 holdings. Downgrade refuses any populated ledger. Roll back dependent imports in safe order first;
@@ -1541,7 +1541,7 @@ block repair. Commit clears the old staging pointer, marks it duplicate, removes
 adopts the manual row, and moves one old imported count to duplicate. Later changes to either row,
 staging, or counters make restoration conflict with `duplicate_repair_changed`.
 
-Included in `BACKUP_COVERED_TABLES`. Retention excludes both the new reviewed batch and its old
+Included in the whole-database `pg_dump` backup. Retention excludes both the new reviewed batch and its old
 original batch. Upgrade adds an empty receipt table without changing financial data. Downgrade
 refuses active repairs; application rollback must append restore receipts first. Removing the
 restored journal then loses receipts while leaving restored history intact.
@@ -1576,7 +1576,7 @@ average. A zero-yield reversal can consume only source-proven zero-basis gifted 
 Updates are forbidden. Validated import rollback can remove an event after full remaining-history
 checks. Replay index: `(investment_id,date,id)`; batch index: `import_batch_id`. Cost allocations
 retain original purchase FX rather than rates at removal time; unknown EUR basis remains null.
-Included in `BACKUP_COVERED_TABLES`.
+Included in the whole-database `pg_dump` backup.
 
 ### PortfolioAssetAdjustmentSource (migration 0123)
 
@@ -1590,7 +1590,7 @@ from a different batch. The source link prevents pruning evidence needed for rep
 | `source_record_hash` | CHAR(64) | Non-null lowercase hexadecimal source hash |
 
 Updates and direct deletes are forbidden. A parent adjustment rollback can cascade removal once
-the parent event is gone. Included in `BACKUP_COVERED_TABLES`. Retention protects both adjustment
+the parent event is gone. Included in the whole-database `pg_dump` backup. Retention protects both adjustment
 batches and batches containing linked source rows.
 
 Upgrade adds these empty tables, nullable staging `asset_adjustment_details`, and the new route

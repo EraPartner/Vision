@@ -2,13 +2,17 @@
 title: ADR-155 - Evidence-Led Electron Surface
 type: adr
 status: Accepted
-date: 2026-09-19
+date: 2026-10-20
 tags: [adr, electron, security, packaging, native-runtime, demo]
 description: Keep Vision's required native desktop journeys while narrowing renderer trust and excluding unneeded packaged assets, with measured Demo evidence.
 aliases: [minimal electron capability surface, electron package audit]
 ---
 
 # ADR-155: Evidence-Led Electron Surface
+
+> [!note] Superseded in part by [[docs/adr/234-electron-report-pdf-printing|ADR-234]] on
+> 2026-10-20: the bundled "PDF browser" (Chrome Headless Shell) is removed and Electron's own
+> Chromium prints report PDFs. The rest of this decision stays in force.
 
 ## Context
 

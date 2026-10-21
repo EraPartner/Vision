@@ -242,11 +242,6 @@ export const portfolioTransactionSnapshotSchema = z.object({
   dedup_fingerprint_version: z.number().nullable(),
 });
 
-/** `SELECT portfolio_income_transaction_snapshot(pt) AS snapshot`. */
-export const portfolioTransactionSnapshotRowSchema = z
-  .object({ snapshot: portfolioTransactionSnapshotSchema })
-  .describe("portfolio transaction snapshot row");
-
 // ---------------------------------------------------------------------------
 // Income recognition journal
 // ---------------------------------------------------------------------------
@@ -271,11 +266,6 @@ export const incomeRecognitionJournalRowSchema = z
     created_at: pgTimestamptz,
   })
   .describe("income recognition journal row");
-
-/** `readPairedIncomeRollbackBatchIds`. */
-export const batchIdRowSchema = z
-  .object({ batch_id: pgBigint })
-  .describe("batch id row");
 
 // ---------------------------------------------------------------------------
 // Broker re-tag

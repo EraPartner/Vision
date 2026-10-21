@@ -1,17 +1,17 @@
 {
-  "generatedOn": "2026-10-20",
+  "generatedOn": "2026-10-21",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 927,
+  "totalFiles": 889,
   "counts": {
-    "simulated-dom": 259,
-    "unit-script-or-contract-needs-review": 305,
+    "simulated-dom": 258,
+    "unit-script-or-contract-needs-review": 284,
     "property-test": 12,
-    "mocked-unit-or-service": 199,
+    "mocked-unit-or-service": 195,
     "live-http-contract": 2,
-    "source-or-file-contract": 17,
-    "database-test": 101,
-    "native-runtime-or-filesystem-test": 32
+    "source-or-file-contract": 13,
+    "database-test": 94,
+    "native-runtime-or-filesystem-test": 31
   },
   "identicalSourceGroups": [],
   "files": [
@@ -423,10 +423,7 @@
     {
       "path": "apps/frontend/src/features/analysis/analysisWorkbook.test.ts",
       "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "expected-output-provenance-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/frontend/src/features/categories/__tests__/AddCategoryDialog.test.tsx",
@@ -1158,11 +1155,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/lib/__tests__/adminToken.test.ts",
-      "inferredBoundary": "simulated-dom",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/frontend/src/lib/__tests__/aiChatStreamStore.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -1389,37 +1381,12 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/lib/api/__tests__/portfolioCashCorrectionResponse.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/lib/api/__tests__/portfolioCashScope.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/lib/api/__tests__/portfolioFullIncome.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/frontend/src/lib/api/__tests__/portfolioImports.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/frontend/src/lib/api/__tests__/portfolioInKindIncomeScope.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/frontend/src/lib/api/__tests__/portfolioMarketResearchContracts.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/frontend/src/lib/api/__tests__/portfolioReconciliationScope.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -2066,14 +2033,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/adminAuth.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
       "path": "apps/node-backend/tests/adr088Contract.db.test.ts",
       "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2293,14 +2252,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/backup-coverage.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
-    },
-    {
       "path": "apps/node-backend/tests/backup-release-compat.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2419,22 +2370,12 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/compressionMiddleware.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/config.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/connection.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/corsMiddleware.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -2995,6 +2936,14 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/localStorage-keys-registry.test.ts",
+      "inferredBoundary": "source-or-file-contract",
+      "decision": "retain unless detailed reviewed ledger says otherwise",
+      "reviewFlags": [
+        "source-assertion-review"
+      ]
+    },
+    {
       "path": "apps/node-backend/tests/logger.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise",
@@ -3211,6 +3160,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/portfolioCrossFormatImport.db.test.ts",
+      "inferredBoundary": "database-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/portfolioCustodyPrecision.test.ts",
       "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -3218,11 +3172,6 @@
     {
       "path": "apps/node-backend/tests/portfolioCustodyRollbackIds.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioDuplicateRepairJournal.db.test.ts",
-      "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -3248,49 +3197,6 @@
     {
       "path": "apps/node-backend/tests/portfolioGenericAdapter.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrCashReconciliation.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrCashReconciliation.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrFundingCommit.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrFundingLifecycle.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrFundingPlan.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrPrimaryProof.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrReconciliation.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioIbkrRepairCandidates.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -3375,16 +3281,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/portfolioImportReference.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioImportReference.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/portfolioImportRollback.db.test.ts",
       "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -3435,74 +3331,8 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/portfolioKinesisAdoptionScope.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisCashScope.db.test.ts",
+      "path": "apps/node-backend/tests/portfolioKinesisImport.db.test.ts",
       "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisCashScope.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisCorrectionScope.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisFullImport.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisFullImport.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisIncomePairs.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisIncomePairs.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisNativeGifts.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisNativeGifts.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisNetworkProof.db.test.ts",
-      "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisNetworkProof.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioKinesisYieldGroups.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
@@ -3527,11 +3357,6 @@
       "reviewFlags": [
         "call-order-review"
       ]
-    },
-    {
-      "path": "apps/node-backend/tests/portfolioRoundedDepositReference.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/portfolioRowContracts.db.test.ts",
@@ -3773,21 +3598,10 @@
     {
       "path": "apps/node-backend/tests/reportDateLabels.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/reportGeneration.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
-    },
-    {
-      "path": "apps/node-backend/tests/reportRendererCancellation.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -3951,11 +3765,6 @@
       ]
     },
     {
-      "path": "apps/node-backend/tests/routes/analysisInterchange.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/routes/analysisMonitors.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4106,15 +3915,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/routes/researchPresentation.test.ts",
-      "inferredBoundary": "source-or-file-contract",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "source-assertion-review",
-        "expected-output-provenance-review"
-      ]
-    },
-    {
       "path": "apps/node-backend/tests/routes/savedCharts.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4223,11 +4023,6 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
-      "path": "apps/node-backend/tests/saxoSourceCorrection.test.ts",
-      "inferredBoundary": "unit-script-or-contract-needs-review",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
       "path": "apps/node-backend/tests/saxoTransactionHistoryAdapter.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4269,11 +4064,6 @@
     },
     {
       "path": "apps/node-backend/tests/services/cashflowForecastAccuracyStoreDbPath.test.ts",
-      "inferredBoundary": "mocked-unit-or-service",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "apps/node-backend/tests/services/cashflowForecastAggregation.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
@@ -4602,10 +4392,7 @@
     {
       "path": "apps/node-backend/tests/unconvertedPortfolioFigures.db.test.ts",
       "inferredBoundary": "database-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise",
-      "reviewFlags": [
-        "call-order-review"
-      ]
+      "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
       "path": "apps/node-backend/tests/unconvertedStatistics.db.test.ts",
@@ -4826,6 +4613,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "packaging/electron/report-pdf.test.ts",
+      "inferredBoundary": "native-runtime-or-filesystem-test",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "packaging/electron/runtime/database-stats.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -4900,16 +4692,6 @@
     },
     {
       "path": "packaging/electron/scripts/native-smoke.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/scripts/prepare-chromium-runtime.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/scripts/prepare-development-runtime.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

@@ -225,7 +225,6 @@ describe.skipIf(!hasTestDatabase())(
       });
       const result = await commitReviewedPortfolioImports({
         batchIds: [batch.id],
-        expectedPlanFingerprint: preview.planFingerprint,
       });
       expect(result).toMatchObject({ imported: 3, adopted: 0, errors: 0 });
       expect(await countEvents(position)).toBe(3);
@@ -305,7 +304,6 @@ describe.skipIf(!hasTestDatabase())(
       expect(before).toMatchObject({ ready: true });
       await commitReviewedPortfolioImports({
         batchIds: [batch.id],
-        expectedPlanFingerprint: before.planFingerprint,
       });
       const persisted = await getUnitEventsForInvestment(position.investment);
       validatePortfolioAssetTransferHistory(persisted);
@@ -324,7 +322,6 @@ describe.skipIf(!hasTestDatabase())(
       await expect(
         commitReviewedPortfolioImports({
           batchIds: [batch.id],
-          expectedPlanFingerprint: after.planFingerprint,
         }),
       ).rejects.toThrow(/not in a reviewable state \(status: complete\)/);
       expect(await getUnitEventsForInvestment(position.investment)).toEqual(

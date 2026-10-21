@@ -16,7 +16,7 @@ package "Native macOS (default)" as NativeMac {
     component "Production frontend (dist)" as NativeFrontend
     component "PostgreSQL 18.6 binaries" as NativePostgresBinaries
     component "db/migrations (Kysely, in-process)" as NativeMigrations
-    component "Chrome Headless Shell" as NativeChrome
+
   }
   database "Vision-managed PostgreSQL 18.6\n127.0.0.1:54329" as NativePostgres
   folder "Application Support/Vision/native/vision" as NativeData {
@@ -63,7 +63,7 @@ NativeBackend --> NativeFrontend : static files
 NativeBackend --> NativePostgres : owner migration / app role
 NativePostgres --> NativePostgresData : durable cluster
 NativeBackend --> NativeAttachments : absolute durable path
-NativeBackend --> NativeChrome : PDF rendering
+ElectronUI --> NativeBackend : report document (HTML)
 NativeBackend --> NativeOllama : local AI
 NativeBackend --> External : HTTPS
 

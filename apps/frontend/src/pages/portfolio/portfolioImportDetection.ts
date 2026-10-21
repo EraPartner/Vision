@@ -21,16 +21,6 @@ export function resolveDetectedPortfolioAccount(
     accounts: readonly Account[],
 ): AccountId | undefined {
     const eligible = activeBrokerAccounts(accounts);
-    if (detected.source === "native_receipts") {
-        // Native receipt addresses can belong to several wallets in one logical
-        // account. They are evidence, not broker account aliases.
-        const wallets = eligible.filter((account) =>
-            [account.name, account.display_name].some(
-                (value) => value?.trim().toLowerCase() === "coolwallet",
-            ),
-        );
-        return wallets.length === 1 ? wallets[0]?.id : undefined;
-    }
     const source = detected.source;
     const sourceIds = new Set(
         detected.sourceAccountIdentities.map((value) => value.toLowerCase()),
@@ -43,10 +33,7 @@ export function resolveDetectedPortfolioAccount(
         ),
     );
     if (exact.length > 0) return exact.length === 1 ? exact[0]?.id : undefined;
-    const aliases: Record<
-        Exclude<PortfolioImportSource, "native_receipts">,
-        string[]
-    > = {
+    const aliases: Record<PortfolioImportSource, string[]> = {
         ibkr: ["ibkr", "interactive brokers"],
         kinesis: ["kinesis", "kinesis money"],
         nexo: ["nexo"],
@@ -86,6 +73,7 @@ export async function detectPortfolioImportFile(
                 (value, index) => value === signature[index],
             );
         if (!xls && !xlsx) return undefined;
+        // IBKR's funding workbook is .xls or .xlsx; only SheetJS reads BIFF.
         const XLSX = await import("xlsx");
         const workbook = XLSX.read(bytes, {
             type: "array",

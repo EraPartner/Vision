@@ -5,7 +5,7 @@ status: active
 date: 2026-10-20
 updated: 2026-10-20
 tags: [api, analysis, sql, query-builder, saved-analysis]
-description: Catalog, bounded execution, saved definitions and read-only shared TypeScript CSV/XLSX interchange under /api/analysis.
+description: Catalog, bounded execution and saved definitions under /api/analysis; CSV/XLSX interchange runs in the browser.
 path: /api/analysis
 methods: [GET, POST, PUT, DELETE]
 aliases: [analysis endpoints, saved analysis API]
@@ -13,7 +13,7 @@ aliases: [analysis endpoints, saved analysis API]
 
 # Analysis API
 
-JSON operations use the standard response envelope; interchange export returns raw CSV/XLSX bytes. The mounted group also uses the aggregation rate
+JSON operations use the standard response envelope. The mounted group also uses the aggregation rate
 limiter. This is an additive API introduced with [[docs/adr/144-isolated-manual-analysis-workspace|ADR-144]].
 
 | Method   | Path                                  | Purpose                                                       |
@@ -22,8 +22,6 @@ limiter. This is an additive API introduced with [[docs/adr/144-isolated-manual-
 | `POST`   | `/api/analysis/compile`               | Compile and normalize a visual plan without executing it      |
 | `POST`   | `/api/analysis/pivot`                 | Complete-source hierarchy, subtotals and percentages          |
 | `POST`   | `/api/analysis/extensions/evaluate`   | Preparation, time comparisons and isolated scenario evaluation |
-| `POST`   | `/api/analysis/interchange/import`    | Parse a value-only CSV or Vision XLSX scenario attachment      |
-| `POST`   | `/api/analysis/interchange/export`    | Export the submitted captured result/context as CSV or XLSX    |
 | `POST`   | `/api/analysis/execute`               | Run a visual plan or custom SQL with row/byte/time limits     |
 | `POST`   | `/api/analysis/cancel/:requestId`     | Cancel a running query through a same-role PostgreSQL session |
 | `POST`   | `/api/analysis/drill`                 | Resolve one grouped row to a bounded source-record page       |
@@ -140,60 +138,16 @@ references, and refresh mode. Restore and AI apply also append versions; neither
 `parameters.scenarioModel` may hold up to five typed CSV attachments. Each attachment is limited to
 1 MB, 1,000 rows, and 32 columns and records normalized values plus a SHA-256 digest. Joins name one
 result column and one scenario column explicitly. Saved refresh applies deterministic left joins
-before formulas and rejects duplicate scenario keys. Browser CSV export remains a local value export;
-the additive interchange API exposes the same shared implementation to API clients without running
-a new query or changing the current result window.
+before formulas and rejects duplicate scenario keys.
 
-## Read-only CSV and workbook interchange
+## CSV and workbook interchange
 
-`POST /api/analysis/interchange/import` (`importAnalysisInterchange`) accepts multipart `file`
-(original bytes/filename) and `format` (`csv` or `xlsx`). Its envelope contains
-`{format,attachment,formulaCells}`. The attachment has `id`, `fileName`, `importedAt`, `sha256`,
-inferred `columns: [{id,label,type}]` and scalar `rows`; types are string/integer/decimal/boolean/date.
-No Analysis execution, scenario save, settings or database mutation occurs. Clients should retain
-decimal/unsafe-integer strings rather than parsing them as floating-point numbers.
-
-CSV keeps the browser contract: **1,000,000 bytes**, **1,000 rows**, **1–32 columns**, strict record
-width and unique normalized IDs. Empty values become null; safe integer text becomes a number;
-decimal text and unsafe integers stay strings. The digest hashes UTF-8 of browser-equivalent decoded
-text, including BOM/replacement-character behavior. `scenario_<sha256-prefix>` IDs retain replacement
-behavior. XLSX keeps the tighter **10,000,000-byte** parser cap within the picker's 10 MiB limit.
-Only Vision stored/uncompressed ZIP Results and optional Provenance sheets are supported, with CRC
-validation and the same XML/Excel 1900 calendar conversion. Formula cells become null and increment
-raw `formulaCells`; cached formula results are ignored. Provenance IDs are restored, types inferred
-again and units remain unavailable. Long numeric text stays a string even when its logical type is
-decimal. The shared parser keeps its 10,000-row/128-column bound; the API then enforces the existing
-attachment **1,000-row/32-column** cap. Workbook IDs are fresh `workbook_<uuid>` values, with original-
-byte SHA-256, retaining append behavior. The caller owns the **five-attachment cap** and joins.
-
-`POST /api/analysis/interchange/export` (`exportAnalysisInterchange`) accepts multipart `format`
-and `file` containing UTF-8 JSON `{result,context}` (`AnalysisInterchangeExportPayload`). The file has
-a scoped **64 MiB (67,108,864-byte)** limit, so large captured snapshots bypass the global 1 MB JSON
-boundary. XLSX retains its **100,000-row cap**; CSV adds no row cap. Oversize requests fail explicitly;
-no rows are truncated. The client must retain captured inputs and existing unchanged-query/
-transformation, known-input and completeness gates. The server validates the supplied snapshot and
-never reruns a query, repairs unavailable values, infers new input state or changes currency.
-
-The response is raw `text/csv; charset=utf-8` or
-`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`, with `Content-Disposition`
-attachment filename `analysis.csv`/`analysis.xlsx`; the save destination may use the captured name.
-Captured export cells may include JSON objects and arrays as well as scalars, matching the Analysis
-wire contract; imported scenario attachments remain scalar. CSV retains union declared/runtime
-columns, reproducibility metadata, decimal strings and formula-
-prefix escaping. XLSX keeps five stored-ZIP sheets: Results, Assumptions, Provenance, Formula
-definitions and Summary results. Values exceeding 15 significant digits remain text; definitions
-never execute. Coverage, preparation lineage, transformation/formula errors and window metadata
-remain independent and intact. Validation retains supplied JSON object order, preserving byte-identical
-stored-ZIP output compared with the browser for the same captured JSON.
-
-Missing/repeated fields, upload bounds, invalid JSON/scalars, CSV structure, ZIP/CRC/XML/provenance
-errors and workbook/attachment bounds return `400 VALIDATION_ERROR`. File read failures return `500`;
-existing global and Analysis aggregation limits apply (`429`). Uploads use the existing temporary-
-directory cleanup convention. The API is additive. Browser synchronous workbook and asynchronous
-File/crypto entry points remain compatibility adapters for `packages/shared-utils/src/analysis/`;
-Node uses existing `saxes` and `csv-parse`, with no new workbook engine or dependency. See
-[[docs/features/analysis-workspace|Analysis Workspace]] and
-[[docs/reference/api-endpoint-matrix|the endpoint matrix]].
+CSV/XLSX scenario import and result export run entirely in the browser through
+`packages/shared-utils/src/analysis/interchange.ts` and `workbook.ts`; there is no server
+interchange operation. The former `POST /api/analysis/interchange/import` and
+`POST /api/analysis/interchange/export` operations had no client and were removed on 2026-10-20
+(see [[docs/reference/api-endpoint-matrix|the endpoint matrix]]). See
+[[docs/features/analysis-workspace|Analysis Workspace]].
 
 ## Related
 

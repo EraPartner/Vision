@@ -1,7 +1,19 @@
-/** One-to-one, reviewable adoption of existing portfolio history. */
-import { createHash } from "node:crypto";
+/**
+ * Reviewed import of broker history into a portfolio that may already hold
+ * manually entered transactions (ADR-177, simplified by ADR-236).
+ *
+ * Every staged row gets one action. A row whose fingerprint is already in the
+ * ledger is a duplicate. A row with exactly one nearby, unassigned manual
+ * candidate adopts that transaction: the existing ID, type and notes stay, the
+ * row gains the source identity and account, and the batch journals a
+ * before/after receipt so rollback can restore it. An inexact candidate needs
+ * the reviewer's choice: keep the existing values (`preserve_existing`) or use
+ * the imported ones (`prefer_source`). A row that another export of the same
+ * broker, or a manual cash entry, already records is settled by the
+ * cross-format rules (portfolioImportCrossFormat.ts). Everything else is
+ * inserted by the ordinary commit pipeline.
+ */
 import { partitionOversellDeficits } from "@vision/shared-utils/portfolio";
-import { asPortfolioTransactionId } from "@vision/types/brands";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import { withTransaction } from "../database/connection.ts";
 import { toDecimal } from "../lib/money.ts";
@@ -11,28 +23,9 @@ import {
 } from "./portfolio/portfolioTransactionRules.ts";
 import type { NullablePartitionedTxn } from "./portfolio/portfolioTransactionRules.ts";
 import {
-  getStoredRateToEurOnOrBefore,
-  getUnindexedRatesToEurForDates,
-} from "./currency/rateFetcher.ts";
-import {
   getNexoProSpotReconciliationEvidence,
   nexoProSourceMoneyMatches,
 } from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
-import {
-  getSaxoCsvCompanionEvidence,
-  getSaxoWorkbookReconciliationEvidence,
-} from "./portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
-import {
-  portfolioPrimaryRawData,
-  verifiedPortfolioPerformanceBasisReference,
-  portfolioPerformanceBasisIdentifiesLegacy,
-  portfolioPerformanceReferenceIdentifiesLegacy,
-  portfolioPerformanceRoundedDepositIdentifiesLegacy,
-  plausibleRoundedKinesisDepositLegacy,
-  verifiedPortfolioPerformanceCustodyAnnotation,
-  portfolioReferenceStagingBinding,
-  zeroYieldIdentifiesLegacy,
-} from "./portfolioPerformanceReferenceEvidence.ts";
 import {
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
@@ -44,92 +37,51 @@ import {
   getActiveAdoptionReceipts,
   insertReconciliationReceipt,
   markAdoptedSourceDuplicate,
-  markSaxoCompanionSourceDuplicate,
+  markCrossFormatSourceDuplicate,
+  readCashLedgerFingerprints,
+  readCrossFormatLedgerSources,
+  readCrossFormatSettledIdentities,
+  readManualCashCandidates,
   readReconciliationBatchScope,
   readReconciliationHistory,
   readReconciliationSources,
   readReconciledProImportAccounts,
-  readSaxoAdoptionContext,
-  readKinesisAdoptionContext,
-  readKinesisNetworkContext,
-  readKinesisNativeGiftContext,
-  retainKinesisNetworkBinding,
-  retainKinesisNativeGiftReceipt,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
-  readDuplicateRepairContext,
-  getActiveDuplicateRepairReceipts,
-} from "../repositories/portfolioImportDuplicateRepairRepository.ts";
+  readActiveIbkrCashReceipts,
+  readIbkrCashImagesForUpdate,
+  writeCashAdoption,
+} from "../repositories/portfolioImportCashRepository.ts";
+import type { IbkrCashProof } from "../repositories/portfolioImportCashRepository.ts";
+import { planCrossFormatSources } from "./portfolioImportCrossFormat.ts";
+import type {
+  CrossFormatContext,
+  CrossFormatDecision,
+} from "./portfolioImportCrossFormat.ts";
 import {
-  applyDuplicatePortfolioRepair,
+  getActiveDuplicateRepairReceipts,
   financialRepairImage,
   validateDuplicatePortfolioRepairRollback,
 } from "./portfolioImportDuplicateRepairService.ts";
-import { narrowImportedIbkrRepairCandidates } from "./portfolioIbkrRepairCandidates.ts";
-import { ibkrPrimaryEvidenceIdentifiesLegacy } from "./portfolioIbkrPrimaryProof.ts";
 import {
-  proveKinesisAdoptionSources,
-  proveKinesisCorrectionSources,
-} from "./portfolioKinesisAdoptionScope.ts";
-import { proveRetainedKinesisYieldGroups } from "./portfolioKinesisYieldGroups.ts";
-import {
-  proveKinesisIncomePairs,
-  normalizeIncomeSnapshot,
-} from "./portfolioKinesisIncomePairs.ts";
-import {
-  readKinesisIncomeUnitContext,
-  readIncomeRecognitionContext,
-  recordPairedPortfolioIncome,
-} from "../repositories/portfolioIncomeRecognitionRepository.ts";
-
-import {
-  classifyKinesisCash,
-  proveKinesisCashSources,
-} from "./portfolioKinesisCashScope.ts";
-import { readKinesisCashContext } from "../repositories/portfolioImportCashRepository.ts";
-import type {
-  IbkrCashCorrectionAction,
-  IbkrCashCorrectionContext,
-  IbkrCashFinancialImage,
-} from "../repositories/portfolioImportCashRepository.ts";
-import { recordKinesisCash } from "./portfolioImportCashService.ts";
-import {
-  readIbkrCashCorrectionContext,
-  proveIbkrCashCorrections,
-  applyIbkrCashCorrection,
-  settleIbkrCashCorrectionRepeat,
-  isIbkrCashCorrectionReceipt,
-  validateIbkrCashCorrectionRollback,
+  isIbkrCashReceipt,
   restoreIbkrCashCorrection,
-} from "./portfolioIbkrCashReconciliation.ts";
-import { proveKinesisFullYieldCandidates } from "./portfolioKinesisFullImport.ts";
+  validateIbkrCashCorrectionRollback,
+} from "./portfolioImportLegacyReceipts.ts";
 import {
-  proveKinesisNetworkBindings,
-  verifiedKinesisNetworkRow,
-  proveKinesisNativeGiftGroups,
-} from "./portfolioKinesisNetworkProof.ts";
-
+  isZeroYieldKinesisBatch,
+  kinesisInKindIncomeRowIds,
+} from "./portfolioImportPipeline/kinesisInKindIncome.ts";
 import type {
   ReconciliationSourceRow,
   ReconciliationBatchScopeRow,
   ReconciliationJournalRow,
-  ReconciliationContext,
-  ReconciliationReceiptContext,
   ReconciliationHistoryEvent,
   PortfolioTransactionSnapshot,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import type { PortfolioAssetAdjustmentRow } from "../repositories/portfolioAssetAdjustmentRepository.ts";
-import type { ParsedPortfolioRow } from "./portfolioImportPipeline/portfolioGenericAdapter.ts";
 import type { NexoProSpotReconciliationEvidence } from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
-import type { KinesisSourceProof } from "./portfolioKinesisAdoptionScope.ts";
-import type { KinesisCashContext as CashContext } from "./portfolioKinesisCashScope.ts";
-import type {
-  IncomeRecognitionContext as IncomeContext,
-  KinesisIncomePairDuplicate,
-  KinesisIncomePairRecord,
-} from "./portfolioKinesisIncomePairs.ts";
-import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 import { firstNonZero } from "../lib/math.ts";
 
 /**
@@ -161,7 +113,7 @@ export interface NormalizedSource {
   fx_rate_to_eur: string | null;
   dividend_amount_convention: string;
 }
-/** The staged fields normalizedSource reads; parsed literals may override them. */
+/** The staged fields normalizedSource reads. */
 export type NormalizedSourceInput = Pick<
   ReconciliationSourceRow,
   "type" | "tx_date" | "asset_class" | "investment_currency" | "custom_config"
@@ -174,22 +126,11 @@ export type NormalizedSourceInput = Pick<
   fx_rate_to_eur: DecimalInput;
   currency: string | null;
 };
-/** A column value compared by sameValue. */
-type ComparableValue = DecimalInput;
-/** A currency and source date whose stored EUR rate a plan reads. */
-export type HistoricalFxPair = { currency: string; date: string };
-/** A stored EUR rate for one currency on one source date (null when absent). */
-export type HistoricalFxRate = HistoricalFxPair & { rate: string | null };
-/** A proved income pair: a new record or an existing repeat. */
-type PairedIncome = KinesisIncomePairRecord | KinesisIncomePairDuplicate;
-/** pg columns; a NULL currency or date finds no stored rate. */
-const fxPair = (row: Pick<ReconciliationSourceRow, "currency" | "tx_date">) =>
-  ({ currency: row.currency, date: row.tx_date }) as HistoricalFxPair;
-/** A plan blocker. Retained yield-group evidence issues may name no row. */
+/** A plan blocker. */
 export interface PlanIssue {
-  batchId?: number;
-  rowId?: number;
-  rowOrdinal?: number;
+  batchId: number;
+  rowId: number;
+  rowOrdinal: number;
   reason: string;
   candidateTransactionIds: number[];
 }
@@ -202,30 +143,17 @@ export interface PlanAction {
   reason?: string;
   candidateTransactionIds?: number[];
   investmentId?: number | null;
-  /** IBKR native funding corrections act on cash, not a holding. */
-  isCash?: boolean;
   source?: Record<string, unknown>;
   existing?: Record<string, unknown>;
   existingTransactionId?: number;
-  existingCashFeeTransactionId?: number;
   duplicateOfRowId?: number;
   corrections?: string[];
   economicsProven?: boolean;
   policy?: string | null;
-  importedTransactionId?: number;
-  originalBatchId?: number;
-  importedExisting?: Record<string, unknown>;
-  incomeProof?: object;
-  cashProof?: unknown;
-  cashValues?: unknown;
-  cashFeeValues?: unknown;
-  dateProof?: {
-    kind: string;
-    groupKey: string;
-    recordedDate: string;
-    paymentDate: string | null;
-    memberCount: number;
-  };
+  /** settled by another export of the same broker or a manual cash entry */
+  crossFormat?: boolean;
+  /** the existing transaction is brokerage cash, not a portfolio row */
+  cash?: boolean;
   transfer?: {
     date: string;
     units: string;
@@ -250,16 +178,14 @@ type ColumnImage = {
   units?: DecimalInput;
   fee_units?: DecimalInput;
 };
-/** A staged row with its proven source values and legacy candidates. */
+/** A staged row with its source values and nearby manual candidates. */
 interface PreparedRow {
   row: ReconciliationSourceRow;
   source: NormalizedSource;
   proof: NexoProSpotReconciliationEvidence | undefined;
   candidates: HistoryImage[];
   baseAction: PlanBaseAction;
-  imported?: HistoryImage;
-  fullYield?: HistoryImage[] | undefined;
-  nativeGift?: boolean;
+  inKindIncome: boolean;
 }
 /** The pre-read evidence and selection the plan builder is pure over. */
 export interface ReconciliationPlanInput {
@@ -269,90 +195,47 @@ export interface ReconciliationPlanInput {
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[] | undefined;
   priorProAccounts?: number[] | undefined;
-  referenceOriginalRows?: ReconciliationSourceRow[] | undefined;
-  saxoAdoptionContext?: ReconciliationReceiptContext | undefined;
-  kinesisAdoptionContext?: ReconciliationReceiptContext | undefined;
-  historicalFxContext?: HistoricalFxRate[] | undefined;
-  incomeRecognitionContext?: IncomeContext | undefined;
-  cashContext?: CashContext | undefined;
-  ibkrCashContext?: IbkrCashCorrectionContext | undefined;
-  cashFundingPolicy?: string | undefined;
-  networkContext?: ReconciliationContext | undefined;
-  nativeGiftContext?: ReconciliationReceiptContext | undefined;
-  reconciliationScope?: string | undefined;
-  repairContext?:
-    | Awaited<ReturnType<typeof readDuplicateRepairContext>>
-    | undefined;
+  /** ledger evidence for rows another export or a manual entry records */
+  crossFormat?: CrossFormatContext | undefined;
+}
+/** A planned cash adoption: a funding correction or a manual cash twin. */
+export interface PlanCashAdoption {
+  row: ReconciliationSourceRow;
+  decision: Extract<CrossFormatDecision, { kind: "adopt_cash" }>;
 }
 export interface PlanAdoption {
   row: ReconciliationSourceRow;
   before: PortfolioTransactionSnapshot;
   after: PortfolioTransactionSnapshot;
   policy: ReconciliationJournalRow["policy"];
-  imported?: HistoryImage | undefined;
-  priorSaxoReceipt?: ReconciliationJournalRow | undefined;
 }
 export type BatchPolicy = { batchId: number; adoptPolicy: string };
 export interface ReconciliationPlan {
   batchIds: number[];
   adoptPolicy: string | null;
   batchPolicies: BatchPolicy[];
-  planFingerprint: string;
   ready: boolean;
   actions: PlanAction[];
   blockers: PlanIssue[];
   summary: Record<string, number>;
-  reconciliationScope?: string;
-  selectedRowIds?: number[];
-  pending?: number;
-  complete?: boolean;
-  deferredCounts?: Record<string, number>;
-  batchProgress?: Array<{
-    batchId: number;
-    pending: number;
-    complete: boolean;
-    deferredCounts: Record<string, number>;
-  }>;
 }
-export type NativeGiftGroup = {
-  proof: unknown;
-  members: ReconciliationSourceRow[];
-};
 export interface ReconciliationPlanResult {
   plan: ReconciliationPlan;
   adoptions: PlanAdoption[];
-  companions: Array<{
-    row: ReconciliationSourceRow;
-    primary: ReconciliationSourceRow;
-  }>;
-  sourceOverrides: Map<number, ReconciliationSourceRow>;
-  networkBindings: Array<Parameters<typeof retainKinesisNetworkBinding>[0]>;
-  nativeGiftGroups: NativeGiftGroup[];
-  incomeRecords?: ReturnType<typeof proveKinesisIncomePairs>["records"];
-  cashRecords?: ReturnType<typeof classifyKinesisCash>["records"];
-  cashCorrections?: IbkrCashCorrectionAction[];
-  cashCorrectionRepeats?: IbkrCashCorrectionAction[];
+  /** rows another export already records; commit settles them as duplicates */
+  crossFormatDuplicates: ReconciliationSourceRow[];
+  cashAdoptions: PlanCashAdoption[];
 }
 /** The batch selection and policies every locked plan read takes. */
 export interface ReconciliationScopeOptions {
   batchIds: number[];
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[] | undefined;
-  reconciliationScope?: string | undefined;
-  cashFundingPolicy?: string | undefined;
 }
-const isRepair = (
-  item: PlanAdoption,
-): item is PlanAdoption & { imported: HistoryImage } => Boolean(item.imported);
 /** A history event or proposed event replayed by the projected-history check. */
 type ProjectedHistoryEvent = NullablePartitionedTxn & {
   investment_id?: number | string | null;
 };
-/** The binding a bounded plan records for one selected row. */
-export type RowProofBinding = Pick<
-  KinesisSourceProof,
-  "eventKey" | "sourceFileHash"
->;
 
 /** A validated source adoption policy. */
 export type AdoptPolicy = "preserve_existing" | "prefer_source";
@@ -373,6 +256,9 @@ const VALUE_FIELDS = [
   "fx_rate_to_eur",
   "dividend_amount_convention",
 ] as const;
+/** Staging columns that hold one CSV cell's NUMERIC value. */
+export type StagedNumberColumn =
+  "units" | "price_per_unit" | "amount" | "fees" | "taxes" | "fx_rate_to_eur";
 const PLACES: Record<StagedNumberColumn, number> = {
   amount: 4,
   units: 8,
@@ -381,6 +267,23 @@ const PLACES: Record<StagedNumberColumn, number> = {
   taxes: 4,
   fx_rate_to_eur: 10,
 };
+const SUMMARY_KINDS = [
+  "insert",
+  "adopt",
+  "duplicate",
+  "duplicate_source",
+  "cash",
+  "transfer",
+  "adjustment",
+  "internal_annotation",
+  "settled",
+  "blocked",
+  "policy_required",
+] as const;
+/** Ordinary nearby legacy matching window, in calendar days. */
+const NEARBY_DAYS = 7;
+/** Literal Nexo Pro execution proof may widen the window to this many days. */
+const NEXO_PRO_DAYS = 31;
 
 function equalNumber(
   left: DecimalInput,
@@ -393,20 +296,16 @@ function equalNumber(
     .eq(toDecimal(right).toDecimalPlaces(places));
 }
 
-function sameValue(
-  field: string,
-  left: ComparableValue,
-  right: ComparableValue,
-): boolean {
+function isPlacesField(field: string): field is StagedNumberColumn {
+  return field in PLACES;
+}
+
+function sameValue(field: string, left: DecimalInput, right: DecimalInput): boolean {
   if (field === "dividend_amount_convention")
     return (left ?? "unknown") === (right ?? "unknown");
   return isPlacesField(field)
     ? equalNumber(left, right, PLACES[field])
     : left === right;
-}
-
-function isPlacesField(field: string): field is StagedNumberColumn {
-  return field in PLACES;
 }
 
 function dayDistance(
@@ -476,13 +375,32 @@ function normalizedSource(row: NormalizedSourceInput): NormalizedSource {
   };
 }
 
-function sourceProof(
+/** The literal CSV record, also when an earlier writer wrapped it in JSON. */
+function literalRawData(rawData: string | null): string | null {
+  if (typeof rawData !== "string" || !rawData.startsWith("{")) return rawData;
+  try {
+    const envelope: unknown = JSON.parse(rawData);
+    if (
+      typeof envelope === "object" &&
+      envelope !== null &&
+      "primaryRawData" in envelope &&
+      typeof envelope.primaryRawData === "string"
+    )
+      return envelope.primaryRawData;
+  } catch {
+    /* An ordinary record that starts with a brace. */
+  }
+  return rawData;
+}
+
+/** The Nexo Pro execution facts that stay literal in the staged row. */
+function nexoProProof(
   row: ReconciliationSourceRow,
   source: NormalizedSource,
 ): NexoProSpotReconciliationEvidence | undefined {
   if (formatOf(row) !== "nexo_pro_spot_history") return undefined;
   const proof = getNexoProSpotReconciliationEvidence(
-    portfolioPrimaryRawData(row.raw_data),
+    literalRawData(row.raw_data),
   );
   if (
     !proof ||
@@ -502,253 +420,20 @@ function sourceProof(
   return proof;
 }
 
-function saxoSourceProof(
-  row: ReconciliationSourceRow,
-  source: NormalizedSource,
-) {
-  if (formatOf(row) !== "saxo_transaction_history") return undefined;
-  const raw = portfolioPrimaryRawData(row.raw_data);
-  if (
-    typeof raw !== "string" ||
-    createHash("sha256").update(raw).digest("hex") !== row.source_record_hash
-  )
-    return undefined;
-  const proof = getSaxoWorkbookReconciliationEvidence(raw);
-  if (
-    !proof ||
-    proof.typeRaw.toLowerCase() !== source.type ||
-    proof.sourceId !== row.source_transaction_id ||
-    proof.sourceAccountIdentity !== row.source_account_identity ||
-    proof.symbolRaw !== row.symbol_raw ||
-    proof.nameRaw !== row.name_raw ||
-    proof.date?.toISOString().slice(0, 10) !== source.date ||
-    proof.currency !== source.currency ||
-    source.fx_rate_to_eur != null
-  )
-    return undefined;
-  const values = {
-    units: proof.units,
-    price_per_unit: proof.pricePerUnit,
-    amount: proof.amount,
-    fees: proof.fees,
-    taxes: proof.taxes,
-  };
-  // Staging NUMERIC columns use PostgreSQL half-away-from-zero rounding.
-  for (const field of [
-    "units",
-    "price_per_unit",
-    "amount",
-    "fees",
-    "taxes",
-  ] as const) {
-    const value = values[field];
-    if (
-      value == null || source[field] == null
-        ? value != null || source[field] != null
-        : !toDecimal(value)
-            .toDecimalPlaces(PLACES[field], 4)
-            .eq(toDecimal(source[field]))
-    )
-      return undefined;
-  }
-  return proof;
-}
-
-function sourceCellNumberMatches(
-  value: DecimalInput,
-  staged: DecimalInput,
-  places: number,
-): boolean {
-  if (value == null || staged == null) return value == null && staged == null;
-  return toDecimal(value).toDecimalPlaces(places, 4).eq(toDecimal(staged));
-}
-
-function verifiedSaxoWorkbookRow(row: ReconciliationSourceRow) {
-  const raw = portfolioPrimaryRawData(row.raw_data);
-  const proof = getSaxoWorkbookReconciliationEvidence(raw);
-  if (!proof || fingerprintRaw(raw) !== row.source_record_hash)
-    return undefined;
-  if (row.route === "portfolio") {
-    try {
-      return saxoSourceProof(row, normalizedSource(row));
-    } catch {
-      return undefined;
-    }
-  }
-  if (
-    row.route !== "cash" ||
-    !["Deposit", "Withdrawal"].includes(proof.typeRaw) ||
-    row.type_raw !== proof.typeRaw ||
-    row.tx_date !== proof.date?.toISOString().slice(0, 10) ||
-    row.currency !== proof.currency ||
-    row.source_transaction_id !== proof.sourceId ||
-    row.source_account_identity !== proof.sourceAccountIdentity ||
-    (row.symbol_raw || "") !== proof.symbolRaw ||
-    (row.name_raw || "") !== proof.nameRaw ||
-    row.fx_rate_to_eur != null ||
-    !sourceCellNumberMatches(proof.amount, row.amount, 4) ||
-    !sourceCellNumberMatches(proof.units, row.units, 8) ||
-    !sourceCellNumberMatches(proof.pricePerUnit, row.price_per_unit, 6) ||
-    !sourceCellNumberMatches(proof.fees ?? 0, row.fees ?? 0, 4) ||
-    !sourceCellNumberMatches(proof.taxes ?? 0, row.taxes ?? 0, 4)
-  )
-    return undefined;
-  return proof;
-}
-
-function fingerprintRaw(raw: unknown): string | undefined {
-  return typeof raw === "string"
-    ? createHash("sha256").update(raw).digest("hex")
-    : undefined;
-}
-
-/** Staging columns that hold one CSV cell's NUMERIC value. */
-export type StagedNumberColumn =
-  "units" | "price_per_unit" | "amount" | "fees" | "taxes" | "fx_rate_to_eur";
-function saxoCsvStagingMatches(
-  row: ReconciliationSourceRow,
-  proof: { csv: ParsedPortfolioRow },
-): boolean {
-  const csv = proof.csv;
-  const unsupportedDividend =
-    csv.typeRaw === "Unsupported Saxo event: Cashdividend";
-  if (
-    row.type_raw !== csv.typeRaw ||
-    row.tx_date !== csv.date?.toISOString().slice(0, 10) ||
-    row.source_transaction_id !== csv.sourceId ||
-    row.source_account_identity !== csv.sourceAccountIdentity ||
-    (row.symbol_raw || "") !== csv.symbolRaw ||
-    (row.name_raw || "") !== csv.nameRaw ||
-    row.currency !== csv.currency ||
-    row.committed_txn_id != null ||
-    (unsupportedDividend
-      ? row.status !== "error" ||
-        row.type != null ||
-        row.route != null ||
-        row.error_message !==
-          'unknown transaction type "Unsupported Saxo event: Cashdividend"'
-      : row.status !== "matched" ||
-        (["Deposit", "Withdrawal"].includes(csv.typeRaw)
-          ? row.route !== "cash" || row.type != null
-          : row.route !== "portfolio" ||
-            row.type !== csv.typeRaw.toLowerCase()))
-  )
-    return false;
-  const literals: Record<StagedNumberColumn, number | null> = {
-    units: csv.units,
-    price_per_unit: csv.pricePerUnit,
-    amount: csv.amount,
-    fees: csv.fees,
-    taxes: csv.taxes,
-    fx_rate_to_eur: csv.fxRateToEur,
-  };
-  return (
-    Object.entries(literals) as Array<[StagedNumberColumn, number | null]>
-  ).every(([field, value]) =>
-    sourceCellNumberMatches(value, row[field], PLACES[field]),
-  );
-}
-
-function sameSnapshot(
-  left: Record<string, unknown> | undefined,
-  right: Record<string, unknown> | undefined,
-): boolean {
-  if (!left || !right) return false;
-  const leftImage = normalizeIncomeSnapshot(left);
-  const rightImage = normalizeIncomeSnapshot(right);
-  const keys = Object.keys(leftImage).sort();
-  return (
-    JSON.stringify(keys) === JSON.stringify(Object.keys(rightImage).sort()) &&
-    keys.every((key) => leftImage[key] === rightImage[key])
-  );
-}
-
-function sourcePreferredImage<T extends HistoryImage>(
-  current: T,
-  source: NormalizedSource,
-  row: ReconciliationSourceRow,
-): T {
-  const after = {
-    ...current,
-    account_id: row.account_id,
-    source_record_hash: row.source_record_hash,
-    dedup_fingerprint: row.dedup_fingerprint,
-    dedup_fingerprint_version: row.dedup_fingerprint_version,
-  };
-  // The staged source supplies each value column by name.
-  const columns: Record<string, unknown> = after;
-  for (const field of VALUE_FIELDS) {
-    if (
-      field === "fx_rate_to_eur" &&
-      source[field] == null &&
-      source.currency === current.currency
-    )
-      continue;
-    columns[field] = source[field];
-  }
-  return after;
-}
-
-function priorSaxoAdoption(
-  row: ReconciliationSourceRow,
+/** A base-currency fee charged in units explains a gross/net unit difference. */
+function proFeeExplainsUnits(
+  proof: NexoProSpotReconciliationEvidence | undefined,
   current: HistoryImage,
-  context: ReconciliationReceiptContext,
-):
-  | { error: string; receipt?: undefined }
-  | { receipt: ReconciliationJournalRow; error?: undefined } {
-  const receipts = context.receipts.filter(
-    (receipt) => Number(receipt.transaction_id) === Number(current.id),
+): boolean {
+  return Boolean(
+    proof &&
+    proof.feeCurrency === proof.symbol &&
+    toDecimal(proof.feeUnits).gt(0) &&
+    equalNumber(proof.grossUnits, current.units, 8),
   );
-  const [receipt] = receipts;
-  if (receipts.length !== 1 || !receipt)
-    return { error: "source_correction_provenance_missing" };
-  if (!sameSnapshot(current, receipt.after_data))
-    return { error: "source_correction_existing_changed" };
-  const prior = context.sources.filter(
-    (source) =>
-      Number(source.id) === Number(receipt.staging_row_id) &&
-      Number(source.batch_id) === Number(receipt.batch_id),
-  );
-  const batch = context.batches.find(
-    (item) => Number(item.id) === Number(receipt.batch_id),
-  );
-  const [original] = prior;
-  if (
-    prior.length !== 1 ||
-    !original ||
-    !batch ||
-    !["complete", "complete_with_errors"].includes(batch.status) ||
-    Number(receipt.batch_id) === Number(row.batch_id)
-  )
-    return { error: "source_correction_provenance_missing" };
-  let originalProof;
-  try {
-    originalProof = saxoSourceProof(original, normalizedSource(original));
-  } catch {
-    return { error: "source_correction_source_changed" };
-  }
-  if (
-    original.status !== "duplicate" ||
-    original.route !== "portfolio" ||
-    original.type !== row.type ||
-    current.type !== row.type ||
-    current.import_batch_id != null ||
-    original.account_id !== row.account_id ||
-    Number(original.investment_id) !== Number(row.investment_id) ||
-    original.dedup_fingerprint !== row.dedup_fingerprint ||
-    original.dedup_fingerprint_version !== row.dedup_fingerprint_version ||
-    original.source_record_hash !== row.source_record_hash ||
-    current.source_record_hash !== row.source_record_hash ||
-    portfolioPrimaryRawData(original.raw_data) !==
-      portfolioPrimaryRawData(row.raw_data) ||
-    !originalProof
-  )
-    return { error: "source_correction_source_changed" };
-  return { receipt };
 }
 
 function transferWithoutBasis(row: ReconciliationSourceRow): boolean {
-  if (verifiedPortfolioPerformanceBasisReference(row)) return false;
   return (
     row.asset_transfer_details?.direction === "in" ||
     (row.type === "gift" &&
@@ -765,32 +450,24 @@ function plausibleUnits(left: DecimalInput, right: DecimalInput): boolean {
   return toDecimal(left).minus(right).abs().lte(tolerance);
 }
 
-function broadCandidate(
+/** A manual transaction that may record the same event as the staged row. */
+function nearbyCandidate(
   row: ReconciliationSourceRow,
   source: NormalizedSource,
   current: HistoryImage,
   proof: NexoProSpotReconciliationEvidence | undefined,
 ): boolean {
-  // Checked first: the planner calls this for every history row, and the
-  // reference evidence below parses the row's raw data on each call.
   if (Number(row.investment_id) !== Number(current.investment_id)) return false;
   const distance = dayDistance(source.date, current.date);
-  const secondaryTradeIdentity = portfolioPerformanceReferenceIdentifiesLegacy(
-    row,
-    current,
-  );
   const boundedProDateProof =
     proof &&
-    distance <= 31 &&
+    distance <= NEXO_PRO_DAYS &&
     source.type === current.type &&
     (equalNumber(source.units, current.units, 8) ||
-      (proof.feeCurrency === proof.symbol &&
-        toDecimal(proof.feeUnits).gt(0) &&
-        equalNumber(proof.grossUnits, current.units, 8))) &&
+      proFeeExplainsUnits(proof, current)) &&
     equalNumber(proof.unitPrice, current.price_per_unit, 6) &&
     equivalentEconomics(source, current, proof);
-  if (distance > 7 && !boundedProDateProof && !secondaryTradeIdentity)
-    return false;
+  if (distance > NEARBY_DAYS && !boundedProDateProof) return false;
   const transfer = transferWithoutBasis(row);
   if (
     source.type !== current.type &&
@@ -800,21 +477,16 @@ function broadCandidate(
   if (!UNIT_TYPES.has(source.type)) return true;
   return (
     plausibleUnits(source.units, current.units) ||
-    portfolioPerformanceRoundedDepositIdentifiesLegacy(row, current) ||
     (source.price_per_unit != null &&
       current.price_per_unit != null &&
       toDecimal(source.price_per_unit).gt(0) &&
       equalNumber(source.price_per_unit, current.price_per_unit, 6) &&
       equivalentEconomics(source, current, proof)) ||
-    Boolean(
-      proof &&
-      proof.feeCurrency === proof.symbol &&
-      toDecimal(proof.feeUnits).gt(0) &&
-      equalNumber(proof.grossUnits, current.units, 8),
-    )
+    proFeeExplainsUnits(proof, current)
   );
 }
 
+/** The imported and recorded amounts describe the same money. */
 function equivalentEconomics(
   source: NormalizedSource,
   current: HistoryImage,
@@ -837,9 +509,7 @@ function equivalentEconomics(
       equalNumber(amount, current.amount, 4),
     );
   const sourceRate =
-    source.currency === "EUR"
-      ? "1"
-      : source.fx_rate_to_eur ?? undefined;
+    source.currency === "EUR" ? "1" : (source.fx_rate_to_eur ?? undefined);
   const currentEur =
     current.currency === "EUR"
       ? current.amount
@@ -869,10 +539,6 @@ function publicValues(
   );
 }
 
-function fingerprint(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
 function canonicalBatchPolicies(
   batchPolicies: BatchPolicy[],
   batches: readonly ReconciliationBatchScopeRow[],
@@ -900,6 +566,22 @@ function canonicalBatchPolicies(
   return canonical.sort((left, right) => left.batchId - right.batchId);
 }
 
+/** Dividend rows that a zero-basis Kinesis yield gift already represents. */
+function inKindIncomeRows(
+  rows: readonly ReconciliationSourceRow[],
+  batches: readonly ReconciliationBatchScopeRow[],
+): Set<number> {
+  const ids = new Set<number>();
+  for (const batch of batches.filter((item) =>
+    isZeroYieldKinesisBatch(item.custom_config),
+  ))
+    for (const id of kinesisInKindIncomeRowIds(
+      rows.filter((row) => Number(row.batch_id) === Number(batch.id)),
+    ))
+      ids.add(id);
+  return ids;
+}
+
 /** Pure plan builder used by preview and locked commit. No proximity match writes data. */
 export function buildPortfolioImportReconciliationPlan({
   rows,
@@ -908,147 +590,36 @@ export function buildPortfolioImportReconciliationPlan({
   adoptPolicy,
   batchPolicies = [],
   priorProAccounts = [],
-  referenceOriginalRows = [],
-  saxoAdoptionContext = {
-    receipts: [],
-    sources: [],
-    batches: [],
-  },
-  kinesisAdoptionContext = {
-    receipts: [],
-    sources: [],
-    batches: [],
-  },
-  historicalFxContext = [],
-  incomeRecognitionContext = {
-    receipts: [],
-    sources: [],
-    batches: [],
-  },
-  cashContext = {
-    ledger: [],
-    sources: [],
-    batches: [],
-  },
-  ibkrCashContext = { ledger: [], sources: [], batches: [], receipts: [] },
-  cashFundingPolicy = undefined,
-  networkContext = {
-    sources: [],
-    batches: [],
-  },
-  nativeGiftContext = kinesisAdoptionContext,
-  reconciliationScope = "full",
-  repairContext = {
-    transactions: [],
-    batches: [],
-    staging: [],
-    knownTransactionIds: [],
-  },
+  crossFormat = undefined,
 }: ReconciliationPlanInput): ReconciliationPlanResult {
-  if (
-    ![
-      "full",
-      "adopt_existing_only",
-      "correct_existing_only",
-      "record_in_kind_income_only",
-      "record_cash_only",
-    ].includes(reconciliationScope)
-  )
-    throw new ValidationError("Unsupported reconciliation_scope");
   if (adoptPolicy !== undefined && !isPolicy(adoptPolicy))
     throw new ValidationError(
       "adopt_policy must be preserve_existing or prefer_source",
     );
   const canonicalPolicies = canonicalBatchPolicies(batchPolicies, batches);
-  if (batches.some((batch) => formatOf(batch) === "ibkr_funding_history")) {
-    if (
-      batches.some((batch) => formatOf(batch) !== "ibkr_funding_history") ||
-      !["full", "correct_existing_only"].includes(reconciliationScope)
-    )
-      throw new ValidationError(
-        "IBKR native funding corrections require a separate funding source scope",
-      );
-    return ibkrFundingCorrectionPlan(
-      rows,
-      batches,
-      ibkrCashContext,
-      adoptPolicy,
-      canonicalPolicies,
-      reconciliationScope,
-    );
-  }
-  const scopedPolicy =
-    reconciliationScope === "correct_existing_only"
-      ? "prefer_source"
-      : "preserve_existing";
-  if (
-    reconciliationScope !== "full" &&
-    (adoptPolicy !== scopedPolicy ||
-      canonicalPolicies.some((policy) => policy.adoptPolicy !== scopedPolicy) ||
-      batches.some(
-        (batch) => formatOf(batch) !== "kinesis_transaction_history",
-      ))
-  )
-    throw new ValidationError(
-      `${reconciliationScope} requires Kinesis sources and ${scopedPolicy}`,
-    );
-  if (
-    reconciliationScope === "record_in_kind_income_only" &&
-    batches.some((batch) => batchConfigFields(batch.custom_config)?.yield_basis_policy !== "zero")
-  )
-    throw new ValidationError(
-      "record_in_kind_income_only requires explicit zero yield basis policy",
-    );
-  if (
-    reconciliationScope === "record_cash_only" &&
-    cashFundingPolicy !== "own_account_transfer"
-  )
-    throw new ValidationError(
-      "record_cash_only requires confirmed own-account funding policy",
-    );
   const overrides = new Map(
     canonicalPolicies.map((override) => [
       override.batchId,
       override.adoptPolicy,
     ]),
   );
+  const policyOf = (row: Pick<ReconciliationSourceRow, "batch_id">) =>
+    overrides.get(Number(row.batch_id)) ?? adoptPolicy;
   const actions: PlanAction[] = [];
   const blockers: PlanIssue[] = [];
   const adoptions: PlanAdoption[] = [];
-  const companions: ReconciliationPlanResult["companions"] = [];
+  const crossFormatDuplicates: ReconciliationSourceRow[] = [];
+  const cashAdoptions: PlanCashAdoption[] = [];
   const prepared: PreparedRow[] = [];
-  const network: ReturnType<typeof proveKinesisNetworkBindings> =
-    reconciliationScope === "full"
-      ? proveKinesisNetworkBindings(rows, batches, history, networkContext)
-      : { overrides: new Map(), bindings: [], blockers: [] };
-  const nativeGifts: ReturnType<typeof proveKinesisNativeGiftGroups> =
-    reconciliationScope === "full"
-      ? proveKinesisNativeGiftGroups(rows, batches, history, nativeGiftContext)
-      : { candidates: new Map(), groups: [], blockers: [] };
-  blockers.push(...network.blockers, ...nativeGifts.blockers);
-  for (const group of nativeGifts.groups) {
-    if (
-      group.members.some(
-        (row) =>
-          (overrides.get(Number(row.batch_id)) ?? adoptPolicy) !==
-          "prefer_source",
-      )
-    )
-      for (const row of group.members)
-        blockers.push({
-          reason: "source_policy_required",
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          candidateTransactionIds: [],
-        });
-  }
-  const fullYieldCandidates: Pick<
-    ReturnType<typeof proveKinesisFullYieldCandidates>,
-    "candidates"
-  > = reconciliationScope === "full"
-    ? proveKinesisFullYieldCandidates(rows, batches, history)
-    : { candidates: new Map() };
+  const crossFormatDecisions = crossFormat
+    ? planCrossFormatSources({ rows, context: crossFormat, policyOf })
+    : new Map<number, CrossFormatDecision>();
+  const inKindIncome = inKindIncomeRows(rows, batches);
+  const zeroYieldBatches = new Set(
+    batches
+      .filter((batch) => isZeroYieldKinesisBatch(batch.custom_config))
+      .map((batch) => Number(batch.id)),
+  );
   const seenSources = new Map<
     string,
     { row: ReconciliationSourceRow; source: ColumnImage }
@@ -1062,15 +633,20 @@ export function buildPortfolioImportReconciliationPlan({
       ["matched", "committed", "duplicate"].includes(row.status)
     )
       proAccounts.add(Number(row.account_id));
+  const rowAction = (
+    row: Pick<ReconciliationSourceRow, "batch_id" | "id" | "row_index">,
+  ) => ({
+    batchId: Number(row.batch_id),
+    rowId: Number(row.id),
+    rowOrdinal: row.row_index + 1,
+  });
   const addBlocker = (
     row: Pick<ReconciliationSourceRow, "batch_id" | "id" | "row_index">,
     reason: string,
     candidates: readonly { id: number | string }[] = [],
   ) => {
     const issue = {
-      batchId: Number(row.batch_id),
-      rowId: Number(row.id),
-      rowOrdinal: row.row_index + 1,
+      ...rowAction(row),
       reason,
       candidateTransactionIds: candidates.map((candidate) =>
         Number(candidate.id),
@@ -1079,145 +655,123 @@ export function buildPortfolioImportReconciliationPlan({
     blockers.push(issue);
     actions.push({ ...issue, action: "blocked" });
   };
-  // The first history row per fingerprint identity, as history.find returned.
+  // The first history row per fingerprint identity.
   const historyByIdentity = new Map<string, HistoryImage>();
   for (const current of history) {
     const identity = `${current.dedup_fingerprint_version}:${current.dedup_fingerprint}`;
     if (!historyByIdentity.has(identity)) historyByIdentity.set(identity, current);
   }
-  const scope = batches.map((batch) => Number(batch.id)).sort((a, b) => a - b);
-  const referenceIssues = new Set<string>();
-  for (const batch of batches) {
-    const config = batchConfigFields(batch.custom_config) ?? {};
-    const reference = config.portfolio_performance_reference;
-    const anchor = rows.find(
-      (row) => Number(row.batch_id) === Number(batch.id),
-    );
-    const addReference = (issue: {
-      reason: string;
-      batchId?: number;
-      rowOrdinal?: number;
-    }) => {
-      const key = JSON.stringify(issue);
-      if (referenceIssues.has(key)) return;
-      referenceIssues.add(key);
-      const sourceRow =
-        rows.find(
-          (row) =>
-            Number(row.batch_id) === Number(issue.batchId) &&
-            row.row_index + 1 === issue.rowOrdinal,
-        ) ?? anchor;
-      const publicIssue = {
-        ...issue,
-        batchId: Number(sourceRow?.batch_id ?? batch.id),
-        ...(sourceRow
-          ? { rowId: Number(sourceRow.id), rowOrdinal: sourceRow.row_index + 1 }
-          : {}),
-        candidateTransactionIds: [],
-      };
-      blockers.push(publicIssue);
-      // Only a batch without staged rows leaves its reference blocker rowless.
-      actions.push({ ...publicIssue, action: "blocked" } as PlanAction);
-    };
-    if (
-      reference &&
-      JSON.stringify(scope) !== JSON.stringify(reference.effectiveBatchIds)
-    )
-      addReference({ reason: "reference_scope_changed" });
-    if (reference) {
-      const expected = reference.routing?.find(
-        (item: { batchId: unknown }) => item.batchId === Number(batch.id),
-      );
-      if (
-        !expected ||
-        Number(expected.accountId) !== Number(batch.account_id) ||
-        (expected.originAccountId ?? null) !==
-          (config.transfer_origin_account_id ?? null) ||
-        (expected.destinationAccountId ?? null) !==
-          (config.transfer_destination_account_id ?? null)
-      )
-        addReference({ reason: "reference_scope_changed" });
+  /** A custody event: a ledger duplicate, an in-session duplicate, or new. */
+  const custodyAction = <E extends ColumnImage>(
+    row: ReconciliationSourceRow,
+    event: E & {
+      dedup_fingerprint: string | null;
+      dedup_fingerprint_version: number | null;
+    },
+    same: (current: ColumnImage) => boolean,
+    kind: "transfer" | "adjustment",
+    detail: Pick<PlanAction, "transfer" | "adjustment">,
+  ) => {
+    const identity = `${event.dedup_fingerprint_version}:${event.dedup_fingerprint}`;
+    const canonical = historyByIdentity.get(identity);
+    if (canonical && !same(canonical)) {
+      addBlocker(row, "source_identity_conflict", [canonical]);
+      return;
     }
-    if (
-      reference &&
-      (portfolioReferenceStagingBinding(rows) !== reference.stagingBinding ||
-        portfolioReferenceStagingBinding(referenceOriginalRows) !==
-          reference.originalStagingBinding)
-    )
-      addReference({ reason: "reference_scope_changed" });
-    for (const issue of config.reference_blockers ?? []) addReference(issue);
-  }
-  const selectedWorkbook = rows.filter((selected) => {
-    if (formatOf(selected) !== "saxo_transaction_history") return false;
-    try {
-      return (
-        JSON.parse(String(portfolioPrimaryRawData(selected.raw_data)))
-          ?.format === "saxo_xlsx_v1"
-      );
-    } catch {
-      return false;
+    const earlier = seenSources.get(identity);
+    if (earlier && !same(earlier.source)) {
+      addBlocker(row, "source_identity_conflict");
+      return;
     }
-  });
-  for (const originalRow of rows) {
-    const row = network.overrides.get(Number(originalRow.id)) ?? originalRow;
+    actions.push({
+      ...rowAction(row),
+      investmentId: Number(row.investment_id),
+      ...detail,
+      action: canonical ? "duplicate" : earlier ? "duplicate_source" : kind,
+      ...(canonical ? { existingTransactionId: Number(canonical.id) } : {}),
+      ...(earlier ? { duplicateOfRowId: Number(earlier.row.id) } : {}),
+    });
+    if (!canonical && !earlier) seenSources.set(identity, { row, source: event });
+  };
+  for (const row of rows) {
     if (["committed", "duplicate"].includes(row.status)) {
-      actions.push({
-        batchId: Number(row.batch_id),
-        rowId: Number(row.id),
-        rowOrdinal: row.row_index + 1,
-        action: "settled",
-      });
+      actions.push({ ...rowAction(row), action: "settled" });
       continue;
     }
-    if (formatOf(row) === "saxo_transaction_history") {
-      const raw = portfolioPrimaryRawData(row.raw_data);
-      let workbook = false;
-      try {
-        workbook = JSON.parse(String(raw))?.format === "saxo_xlsx_v1";
-      } catch {
-        /* Literal CSV. */
-      }
-      if (!workbook) {
-        if (selectedWorkbook.length > 0) {
-          const candidates = selectedWorkbook.filter(
-            (selected) =>
-              selected.source_transaction_id === row.source_transaction_id &&
-              selected.source_account_identity === row.source_account_identity,
-          );
-          const [primary] = candidates;
-          if (candidates.length !== 1 || !primary) {
-            addBlocker(row, "saxo_companion_source_ambiguous");
-            continue;
-          }
-          const proof = getSaxoCsvCompanionEvidence(
-            raw,
-            batchConfigFields(row.custom_config)?.source_columns,
-            String(portfolioPrimaryRawData(primary.raw_data)),
-          );
-          if (
-            !proof ||
-            fingerprintRaw(raw) !== row.source_record_hash ||
-            !saxoCsvStagingMatches(row, proof) ||
-            !verifiedSaxoWorkbookRow(primary) ||
-            primary.account_id == null ||
-            primary.account_id !== row.account_id ||
-            (row.investment_id != null &&
-              Number(row.investment_id) !== Number(primary.investment_id))
-          ) {
-            addBlocker(row, "saxo_companion_source_unverified");
-            continue;
-          }
-          actions.push({
-            batchId: Number(row.batch_id),
-            rowId: Number(row.id),
-            rowOrdinal: row.row_index + 1,
-            action: "duplicate_source",
-            duplicateOfRowId: Number(primary.id),
+    const crossDecision = crossFormatDecisions.get(Number(row.id));
+    // A row kept apart from its near match takes the ordinary path below.
+    const decision =
+      crossDecision?.kind === "kept_apart" ? undefined : crossDecision;
+    if (decision) {
+      const base = {
+        ...rowAction(row),
+        investmentId:
+          row.investment_id == null ? null : Number(row.investment_id),
+        crossFormat: true,
+      };
+      if (decision.kind === "blocked")
+        addBlocker(
+          row,
+          decision.reason,
+          decision.candidateTransactionIds.map((id) => ({ id })),
+        );
+      else if (decision.kind === "duplicate_source") {
+        actions.push({
+          ...base,
+          action: "duplicate_source",
+          duplicateOfRowId: decision.duplicateOfRowId,
+          // A near match the owner paired by choosing prefer_source.
+          ...(decision.policy ? { policy: decision.policy } : {}),
+        });
+        crossFormatDuplicates.push(row);
+      } else if (decision.kind === "duplicate") {
+        actions.push({
+          ...base,
+          action: "duplicate",
+          existingTransactionId: decision.existingTransactionId,
+          ...(decision.policy ? { policy: decision.policy } : {}),
+        });
+        crossFormatDuplicates.push(row);
+      } else {
+        const source = {
+          date: row.tx_date,
+          amount:
+            decision.kind === "adopt_cash"
+              ? decision.after.amount
+              : decision.existing.amount,
+          currency:
+            decision.kind === "adopt_cash"
+              ? decision.after.currency
+              : decision.existing.currency,
+        };
+        const corrections = (["date", "amount", "currency"] as const).filter(
+          (field) =>
+            field === "amount"
+              ? !equalNumber(source.amount, decision.existing.amount, 4)
+              : source[field] !== decision.existing[field],
+        );
+        const cash = {
+          ...base,
+          investmentId: null,
+          cash: true,
+          existingTransactionId: decision.transactionId,
+          existing: decision.existing,
+          source,
+          corrections,
+        };
+        if (decision.kind === "policy_required") {
+          actions.push({ ...cash, action: "policy_required" });
+          blockers.push({
+            ...rowAction(row),
+            reason: "source_policy_required",
+            candidateTransactionIds: [decision.transactionId],
           });
-          companions.push({ row, primary });
-          continue;
+        } else {
+          actions.push({ ...cash, action: "adopt", policy: decision.policy });
+          cashAdoptions.push({ row, decision });
         }
       }
+      continue;
     }
     if (
       row.status !== "matched" ||
@@ -1232,153 +786,94 @@ export function buildPortfolioImportReconciliationPlan({
       continue;
     }
     if (row.route === "account_internal") {
-      const networkWitness = verifiedKinesisNetworkRow(row);
-      if (networkWitness?.kind === "asset_transfer_witness") {
-        actions.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          action: "internal_annotation",
-        });
-        continue;
-      }
-      const custody = verifiedPortfolioPerformanceCustodyAnnotation(row);
+      // A Nexo wallet-to-Pro movement is an annotation inside one account; the
+      // companion Pro trade history supplies its economic events.
       if (
-        (!custody && formatOf(row) !== "nexo_transaction_history") ||
+        formatOf(row) !== "nexo_transaction_history" ||
         row.asset_transfer_details?.direction !== "internal"
       )
         addBlocker(row, "invalid_internal_annotation");
-      else if (!custody && !proAccounts.has(Number(row.account_id)))
+      else if (!proAccounts.has(Number(row.account_id)))
         addBlocker(row, "missing_companion_pro_history");
-      else
-        actions.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          action: "internal_annotation",
-        });
+      else actions.push({ ...rowAction(row), action: "internal_annotation" });
       continue;
     }
     if (row.route === "cash") {
       if (row.account_id == null || row.amount == null)
         addBlocker(row, "incomplete_source");
-      else
-        actions.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          action: "cash",
-        });
+      else actions.push({ ...rowAction(row), action: "cash" });
       continue;
     }
     if (row.route === "asset_adjustment") {
-      const prepared = previewPortfolioAssetAdjustment(row, undefined, {
+      const preview = previewPortfolioAssetAdjustment(row, undefined, {
         sourceRows: rows,
       });
-      if (prepared.error) addBlocker(row, prepared.error);
+      if (preview.error) addBlocker(row, preview.error);
       else {
-        const event = prepared.event;
-        const identity = `${event.dedup_fingerprint_version}:${event.dedup_fingerprint}`;
-        const canonical = historyByIdentity.get(identity);
-        const same = (current: ColumnImage) =>
-          current.type === "asset_adjustment" &&
-          (
-            [
-              "investment_id",
-              "account_id",
-              "date",
-              "adjustment_kind",
-              "basis_policy",
-            ] as const
-          ).every((field) => String(current[field]) === String(event[field])) &&
-          equalNumber(current.units, event.units, 8);
-        if (canonical && !same(canonical)) {
-          addBlocker(row, "source_identity_conflict", [canonical]);
-          continue;
-        }
-        const earlier = seenSources.get(identity);
-        if (earlier && !same(earlier.source)) {
-          addBlocker(row, "source_identity_conflict");
-          continue;
-        }
-        actions.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          investmentId: Number(row.investment_id),
-          action: canonical
-            ? "duplicate"
-            : earlier
-              ? "duplicate_source"
-              : "adjustment",
-          adjustment: {
-            date: event.date,
-            units: event.units,
-            kind: event.adjustment_kind,
-            basisPolicy: event.basis_policy,
-            accountId: event.account_id,
+        const event = preview.event;
+        custodyAction(
+          row,
+          event,
+          (current) =>
+            current.type === "asset_adjustment" &&
+            (
+              [
+                "investment_id",
+                "account_id",
+                "date",
+                "adjustment_kind",
+                "basis_policy",
+              ] as const
+            ).every((field) => String(current[field]) === String(event[field])) &&
+            equalNumber(current.units, event.units, 8),
+          "adjustment",
+          {
+            adjustment: {
+              date: event.date,
+              units: event.units,
+              kind: event.adjustment_kind,
+              basisPolicy: event.basis_policy,
+              accountId: event.account_id,
+            },
           },
-          ...(canonical ? { existingTransactionId: Number(canonical.id) } : {}),
-          ...(earlier ? { duplicateOfRowId: Number(earlier.row.id) } : {}),
-        });
-        if (!canonical && !earlier)
-          seenSources.set(identity, { row, source: event });
+        );
       }
       continue;
     }
     if (row.route === "asset_transfer") {
-      const preparedTransfer = previewPortfolioAssetTransfer(row);
-      if (preparedTransfer.error) addBlocker(row, preparedTransfer.error);
+      const preview = previewPortfolioAssetTransfer(row);
+      if (preview.error) addBlocker(row, preview.error);
       else {
-        const event = preparedTransfer.event;
-        const identity = `${event.dedup_fingerprint_version}:${event.dedup_fingerprint}`;
-        const canonical = historyByIdentity.get(identity);
-        const sameTransfer = (current: ColumnImage) =>
-          current.type === "asset_transfer" &&
-          (
-            [
-              "investment_id",
-              "source_account_id",
-              "destination_account_id",
-              "date",
-            ] as const
-          ).every((field) => String(current[field]) === String(event[field])) &&
-          equalNumber(current.units, event.units, 8) &&
-          equalNumber(current.fee_units, event.fee_units, 8);
-        if (canonical && !sameTransfer(canonical)) {
-          addBlocker(row, "source_identity_conflict", [canonical]);
-          continue;
-        }
-        const earlier = seenSources.get(identity);
-        if (earlier && !sameTransfer(earlier.source)) {
-          addBlocker(row, "source_identity_conflict");
-          continue;
-        }
-        actions.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          investmentId: Number(row.investment_id),
-          transfer: {
-            date: event.date,
-            units: event.units,
-            feeUnits: event.fee_units,
-            receivedUnits: toDecimal(event.units)
-              .minus(event.fee_units)
-              .toFixed(),
-            sourceAccountId: event.source_account_id,
-            destinationAccountId: event.destination_account_id,
+        const event = preview.event;
+        custodyAction(
+          row,
+          event,
+          (current) =>
+            current.type === "asset_transfer" &&
+            (
+              [
+                "investment_id",
+                "source_account_id",
+                "destination_account_id",
+                "date",
+              ] as const
+            ).every((field) => String(current[field]) === String(event[field])) &&
+            equalNumber(current.units, event.units, 8) &&
+            equalNumber(current.fee_units, event.fee_units, 8),
+          "transfer",
+          {
+            transfer: {
+              date: event.date,
+              units: event.units,
+              feeUnits: event.fee_units,
+              receivedUnits: toDecimal(event.units)
+                .minus(event.fee_units)
+                .toFixed(),
+              sourceAccountId: event.source_account_id,
+              destinationAccountId: event.destination_account_id,
+            },
           },
-          action: canonical
-            ? "duplicate"
-            : earlier
-              ? "duplicate_source"
-              : "transfer",
-          ...(canonical ? { existingTransactionId: Number(canonical.id) } : {}),
-          ...(earlier ? { duplicateOfRowId: Number(earlier.row.id) } : {}),
-        });
-        if (!canonical && !earlier)
-          seenSources.set(identity, { row, source: event });
+        );
       }
       continue;
     }
@@ -1392,209 +887,44 @@ export function buildPortfolioImportReconciliationPlan({
     const identity =
       row.dedup_fingerprint &&
       `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`;
+    const income = inKindIncome.has(Number(row.id));
+    if (
+      !income &&
+      zeroYieldBatches.has(Number(row.batch_id)) &&
+      row.type === "dividend" &&
+      row.source_transaction_id?.endsWith(":income")
+    ) {
+      addBlocker(row, "paired_income_units_missing");
+      continue;
+    }
     const baseAction = {
-      batchId: Number(row.batch_id),
-      rowId: Number(row.id),
-      rowOrdinal: row.row_index + 1,
+      ...rowAction(row),
       investmentId: Number(row.investment_id),
-      source: publicValues(source),
+      source: {
+        ...publicValues(source),
+        ...(income ? { income_recognition_role: "included_in_units" } : {}),
+      },
     };
-    const canonical = identity
-      ? historyByIdentity.get(identity)
-      : undefined;
-    if (canonical && identity) {
+    const canonical = identity ? historyByIdentity.get(identity) : undefined;
+    if (canonical) {
       if (
         Number(canonical.investment_id) !== Number(row.investment_id) ||
         canonical.account_id !== row.account_id
       )
         addBlocker(row, "source_identity_conflict", [canonical]);
-      else {
-        const effectivePolicy =
-          overrides.get(Number(row.batch_id)) ?? adoptPolicy;
-        const preferred = sourcePreferredImage(canonical, source, row);
-        const corrections = VALUE_FIELDS.filter(
-          (field) =>
-            !sameValue(
-              field,
-              preferred[field] ?? null,
-              canonical[field] ?? null,
-            ),
-        );
-        if (
-          effectivePolicy === "prefer_source" &&
-          formatOf(row) === "saxo_transaction_history" &&
-          corrections.length > 0 &&
-          canonical.import_batch_id == null
-        ) {
-          if (!saxoSourceProof(row, source)) {
-            addBlocker(row, "source_correction_unverified_evidence", [
-              canonical,
-            ]);
-            continue;
-          }
-          const prior = priorSaxoAdoption(row, canonical, saxoAdoptionContext);
-          if (prior.error) {
-            addBlocker(row, prior.error, [canonical]);
-            continue;
-          }
-          const earlier = identity ? seenSources.get(identity) : undefined;
-          if (earlier) {
-            if (
-              JSON.stringify(earlier.source) !== JSON.stringify(source) ||
-              (overrides.get(Number(earlier.row.batch_id)) ?? adoptPolicy) !==
-                effectivePolicy
-            )
-              addBlocker(row, "source_policy_conflict");
-            else
-              actions.push({
-                ...baseAction,
-                action: "duplicate_source",
-                duplicateOfRowId: Number(earlier.row.id),
-              });
-            continue;
-          }
-          seenSources.set(identity, { row, source });
-          actions.push({
-            ...baseAction,
-            action: "adopt",
-            existingTransactionId: Number(canonical.id),
-            existing: publicValues(canonical),
-            corrections,
-            economicsProven: true,
-            policy: effectivePolicy,
-          });
-          // The canonical image carries this staged transaction's identity.
-          adoptions.push({
-            row,
-            before: canonical as PortfolioTransactionSnapshot,
-            after: preferred as PortfolioTransactionSnapshot,
-            policy: effectivePolicy,
-            priorSaxoReceipt: prior.receipt,
-          });
-          continue;
-        }
-        const proof = sourceProof(row, source);
-        const candidates = repairContext.knownTransactionIds.includes(
-          Number(canonical.id),
-        )
-          ? []
-          : history.filter(
-              (current) =>
-                Number(current.id) !== Number(canonical.id) &&
-                current.import_batch_id == null &&
-                current.dedup_fingerprint == null &&
-                broadCandidate(row, source, current, proof),
-            );
-        if (candidates.length > 0) {
-          const originalBatch = repairContext.batches.find(
-            (batch) => Number(batch.id) === Number(canonical.import_batch_id),
-          );
-          const originalStaging = repairContext.staging.filter(
-            (staged) =>
-              Number(staged.batch_id) === Number(canonical.import_batch_id) &&
-              staged.route !== "cash" &&
-              Number(staged.committed_txn_id) === Number(canonical.id),
-          );
-          const [originalStaged] = originalStaging;
-          if (
-            !canonical.import_batch_id ||
-            !originalBatch ||
-            !["complete", "complete_with_errors"].includes(
-              originalBatch.status,
-            ) ||
-            originalBatch.rows_imported < 1 ||
-            originalStaging.length !== 1 ||
-            !originalStaged ||
-            originalStaged.status !== "committed" ||
-            originalStaged.dedup_fingerprint !== canonical.dedup_fingerprint
-          ) {
-            addBlocker(row, "duplicate_repair_provenance_missing", [
-              canonical,
-              ...candidates,
-            ]);
-            continue;
-          }
-          const changedImportedFacts = (["type", ...VALUE_FIELDS] as const)
-            .filter((field) => field !== "dividend_amount_convention")
-            .some(
-              (field) =>
-                !sameValue(
-                  field,
-                  source[field] ?? null,
-                  canonical[field] ?? null,
-                ),
-            );
-          if (changedImportedFacts) {
-            addBlocker(row, "duplicate_repair_imported_changed", [
-              canonical,
-              ...candidates,
-            ]);
-            continue;
-          }
-          if (
-            (canonical.note || "").trim() !==
-              (originalStaged.note || "").trim() ||
-            canonical.is_recurring ||
-            canonical.recurrence_interval != null ||
-            canonical.recurrence_end_date != null
-          ) {
-            addBlocker(row, "duplicate_repair_imported_annotations_changed", [
-              canonical,
-              ...candidates,
-            ]);
-            continue;
-          }
-          const earlier = identity ? seenSources.get(identity) : undefined;
-          if (earlier) {
-            if (
-              JSON.stringify(earlier.source) !== JSON.stringify(source) ||
-              earlier.row.account_id !== row.account_id ||
-              (overrides.get(Number(earlier.row.batch_id)) ?? adoptPolicy) !==
-                (overrides.get(Number(row.batch_id)) ?? adoptPolicy)
-            )
-              addBlocker(row, "source_policy_conflict");
-            else
-              actions.push({
-                ...baseAction,
-                action: "duplicate_source",
-                duplicateOfRowId: Number(earlier.row.id),
-              });
-            continue;
-          }
-          seenSources.set(identity, { row, source });
-          prepared.push({
-            row,
-            source,
-            proof,
-            candidates,
-            baseAction: {
-              ...baseAction,
-              importedTransactionId: Number(canonical.id),
-              originalBatchId: Number(canonical.import_batch_id),
-              importedExisting: publicValues(canonical),
-            },
-            imported: canonical,
-          });
-          continue;
-        }
+      else
         actions.push({
           ...baseAction,
           action: "duplicate",
           existingTransactionId: Number(canonical.id),
         });
-      }
       continue;
     }
     const earlier = identity ? seenSources.get(identity) : undefined;
     if (earlier) {
-      if (
-        (overrides.get(Number(earlier.row.batch_id)) ?? adoptPolicy) !==
-        (overrides.get(Number(row.batch_id)) ?? adoptPolicy)
-      ) {
+      if (policyOf(earlier.row) !== policyOf(row))
         addBlocker(row, "source_policy_conflict");
-        continue;
-      }
-      if (
+      else if (
         earlier.row.account_id !== row.account_id ||
         earlier.row.investment_id !== row.investment_id ||
         JSON.stringify(earlier.source) !== JSON.stringify(source)
@@ -1609,90 +939,45 @@ export function buildPortfolioImportReconciliationPlan({
       continue;
     }
     if (identity) seenSources.set(identity, { row, source });
-    const proof = sourceProof(row, source);
-    let candidates = history.filter((current) =>
-      broadCandidate(row, source, current, proof),
-    );
-    const fullYield = fullYieldCandidates.candidates.get(Number(row.id));
-    if (fullYield) candidates = fullYield;
-    const nativeGift = nativeGifts.candidates.has(Number(row.id));
-    if (nativeGift) candidates = nativeGifts.candidates.get(Number(row.id))!;
+    const proof = nexoProProof(row, source);
     prepared.push({
       row,
       source,
       proof,
-      candidates,
+      candidates: history.filter((current) => {
+        const keptApart = crossFormatDecisions.get(Number(row.id));
+        return (
+          !(
+            keptApart?.kind === "kept_apart" &&
+            keptApart.transactionIds.includes(Number(current.id))
+          ) && nearbyCandidate(row, source, current, proof)
+        );
+      }),
       baseAction,
-      fullYield,
-      nativeGift,
+      inKindIncome: income,
     });
   }
-  const narrowed = narrowImportedIbkrRepairCandidates(prepared);
-  for (const { baseAction, imported } of narrowed.settledDuplicates)
-    actions.push({
-      ...baseAction,
-      action: "duplicate",
-      // Only an eligible imported copy can be settled (see eligible()).
-      existingTransactionId: Number(imported!.id),
-    });
+  // A candidate claimed by two staged rows is ambiguous for both.
   const uses = new Map<number, number>();
-  for (const item of narrowed.prepared)
+  for (const item of prepared)
     for (const candidate of item.candidates)
       uses.set(Number(candidate.id), (uses.get(Number(candidate.id)) ?? 0) + 1);
-  for (const {
-    row,
-    source: originalSource,
-    proof,
-    candidates,
-    baseAction,
-    imported,
-    fullYield,
-    nativeGift,
-  } of narrowed.prepared) {
-    const effectivePolicy = overrides.get(Number(row.batch_id)) ?? adoptPolicy;
-    const [onlyCandidate] = candidates;
-    const source =
-      (fullYield || nativeGift) && candidates.length === 1 && onlyCandidate
-        ? {
-            ...originalSource,
-            ...publicValues(onlyCandidate),
-            units: originalSource.units,
-          }
-        : originalSource;
-    if (fullYield || nativeGift) baseAction.source = publicValues(source);
+  for (const { row, source, proof, candidates, baseAction, inKindIncome: income } of prepared) {
+    const effectivePolicy = policyOf(row);
     if (candidates.length === 0) {
-      if (imported) {
-        actions.push({
-          ...baseAction,
-          action: "duplicate",
-          existingTransactionId: Number(imported.id),
-        });
-        continue;
-      }
-      const roundedDepositCandidates = history.filter((current) =>
-        plausibleRoundedKinesisDepositLegacy(row, current),
-      );
       const datedProCandidates = proof
         ? history.filter(
             (current) =>
               Number(current.investment_id) === Number(row.investment_id) &&
               current.type === source.type &&
-              dayDistance(current.date, source.date) > 7 &&
-              dayDistance(current.date, source.date) <= 31 &&
+              dayDistance(current.date, source.date) > NEARBY_DAYS &&
+              dayDistance(current.date, source.date) <= NEXO_PRO_DAYS &&
               (equalNumber(proof.netUnits, current.units, 8) ||
                 (proof.feeCurrency === proof.symbol &&
                   equalNumber(proof.grossUnits, current.units, 8))),
           )
         : [];
-      if (roundedDepositCandidates.length > 0)
-        addBlocker(
-          row,
-          roundedDepositCandidates.length > 1
-            ? "ambiguous_history"
-            : "unproven_units",
-          roundedDepositCandidates,
-        );
-      else if (datedProCandidates.length > 0)
+      if (datedProCandidates.length > 0)
         addBlocker(
           row,
           datedProCandidates.length > 1
@@ -1705,6 +990,12 @@ export function buildPortfolioImportReconciliationPlan({
       else actions.push({ ...baseAction, action: "insert" });
       continue;
     }
+    // In-kind income is recorded only as a new row with its accounting role.
+    // An existing manual dividend for the same yield needs a manual decision.
+    if (income) {
+      addBlocker(row, "paired_income_existing_conflict", candidates);
+      continue;
+    }
     const [current] = candidates;
     if (
       candidates.length !== 1 ||
@@ -1715,7 +1006,7 @@ export function buildPortfolioImportReconciliationPlan({
       continue;
     }
     if (
-      (current.account_id != null && !nativeGift) ||
+      current.account_id != null ||
       current.import_batch_id != null ||
       current.dedup_fingerprint != null
     ) {
@@ -1739,17 +1030,8 @@ export function buildPortfolioImportReconciliationPlan({
       addBlocker(row, "missing_original_basis", candidates);
       continue;
     }
-    const secondaryIdentity =
-      portfolioPerformanceBasisIdentifiesLegacy(row, current) ||
-      portfolioPerformanceReferenceIdentifiesLegacy(row, current) ||
-      portfolioPerformanceRoundedDepositIdentifiesLegacy(row, current) ||
-      zeroYieldIdentifiesLegacy(row, current) ||
-      Boolean(fullYield ?? nativeGift) ||
-      ((imported != null || source.type === "sell") &&
-        ibkrPrimaryEvidenceIdentifiesLegacy(row, source, current, rows));
-    const comparable =
-      equivalentEconomics(source, current, proof) || secondaryIdentity;
-    if ((!exact || imported) && effectivePolicy === undefined) {
+    const comparable = equivalentEconomics(source, current, proof);
+    if (!exact && effectivePolicy === undefined) {
       actions.push({
         ...baseAction,
         action: "policy_required",
@@ -1759,12 +1041,8 @@ export function buildPortfolioImportReconciliationPlan({
         economicsProven: comparable,
       });
       blockers.push({
-        batchId: Number(row.batch_id),
-        rowId: Number(row.id),
-        rowOrdinal: row.row_index + 1,
-        reason: imported
-          ? "duplicate_repair_policy_required"
-          : "source_policy_required",
+        ...rowAction(row),
+        reason: "source_policy_required",
         candidateTransactionIds: [Number(current.id)],
       });
       continue;
@@ -1786,14 +1064,7 @@ export function buildPortfolioImportReconciliationPlan({
       effectivePolicy === "prefer_source" &&
       UNIT_TYPES.has(source.type) &&
       !equalNumber(source.units, current.units, 8) &&
-      !fullYield &&
-      !portfolioPerformanceRoundedDepositIdentifiesLegacy(row, current) &&
-      !(
-        proof &&
-        proof.feeCurrency === proof.symbol &&
-        toDecimal(proof.feeUnits).gt(0) &&
-        equalNumber(proof.grossUnits, current.units, 8)
-      )
+      !proFeeExplainsUnits(proof, current)
     ) {
       addBlocker(row, "unproven_units", candidates);
       continue;
@@ -1819,13 +1090,10 @@ export function buildPortfolioImportReconciliationPlan({
           continue;
         columns[field] = source[field];
       }
-    // Inexact or imported rows without a policy were deferred above. The cast
-    // only helps the legacy non-strict program, which cannot narrow a
-    // validated string through the undefined-or-isPolicy guard.
     const policy = effectivePolicy ?? "exact";
     actions.push({
       ...baseAction,
-      action: imported ? "repair_duplicate" : "adopt",
+      action: "adopt",
       existingTransactionId: Number(current.id),
       existing: publicValues(current),
       corrections,
@@ -1839,1380 +1107,26 @@ export function buildPortfolioImportReconciliationPlan({
       before: current as PortfolioTransactionSnapshot,
       after: after as PortfolioTransactionSnapshot,
       policy,
-      imported,
     });
   }
-  const planFingerprint = fingerprint({
-    policy: adoptPolicy ?? null,
-    batchPolicies: canonicalPolicies,
-    priorProAccounts,
-    batches: batches.map((batch) => ({
-      id: batch.id,
-      account_id: batch.account_id,
-      status: batch.status,
-      custom_config: batch.custom_config,
-    })),
-    source: rows.map((row) => ({
-      ...row,
-      created_at: undefined,
-      updated_at: undefined,
-    })),
-    history,
-    repairContext,
-    saxoAdoptionContext,
-    kinesisAdoptionContext,
-    historicalFxContext,
-    incomeRecognitionContext,
-    cashContext,
-    cashFundingPolicy,
-    networkContext,
-    nativeGiftContext,
-    networkBindings: network.bindings,
-    nativeGiftGroups: nativeGifts.groups,
-    reconciliationScope,
-    referenceOriginalRows,
-  });
-  const result = {
+  return {
     plan: {
       batchIds: batches.map((batch) => Number(batch.id)),
       adoptPolicy: adoptPolicy ?? null,
       batchPolicies: canonicalPolicies,
-      planFingerprint,
       ready: blockers.length === 0,
       actions,
       blockers,
       summary: Object.fromEntries(
-        [
-          "insert",
-          "record_income",
-          "adopt",
-          "repair_duplicate",
-          "duplicate",
-          "duplicate_source",
-          "cash",
-          "transfer",
-          "adjustment",
-          "internal_annotation",
-          "settled",
-          "blocked",
-          "policy_required",
-        ].map((action) => [
+        SUMMARY_KINDS.map((action) => [
           action,
           actions.filter((item) => item.action === action).length,
         ]),
       ),
     },
     adoptions,
-    companions,
-    sourceOverrides: network.overrides,
-    networkBindings: network.bindings,
-    nativeGiftGroups: nativeGifts.groups,
-  };
-  return reconciliationScope === "record_cash_only"
-    ? boundedKinesisCashPlan(
-        result,
-        rows,
-        batches,
-        cashContext,
-        // record_cash_only was rejected above unless this is own_account_transfer.
-        cashFundingPolicy,
-        historicalFxContext,
-      )
-    : reconciliationScope === "record_in_kind_income_only"
-      ? boundedKinesisIncomePlan(
-          result,
-          rows,
-          history,
-          batches,
-          kinesisAdoptionContext,
-          incomeRecognitionContext,
-          historicalFxContext,
-        )
-      : reconciliationScope === "correct_existing_only"
-        ? boundedKinesisCorrectionPlan(
-            result,
-            rows,
-            history,
-            batches,
-            kinesisAdoptionContext,
-            historicalFxContext,
-          )
-        : reconciliationScope === "adopt_existing_only"
-          ? boundedKinesisAdoptionPlan(
-              result,
-              rows,
-              history,
-              batches,
-              kinesisAdoptionContext,
-            )
-          : completeKinesisCashRepeatPlan(
-              completeKinesisIncomePlan(
-                result,
-                rows,
-                history,
-                batches,
-                kinesisAdoptionContext,
-                incomeRecognitionContext,
-                historicalFxContext,
-              ),
-              rows,
-              batches,
-              cashContext,
-              historicalFxContext,
-            );
-}
-
-function ibkrFundingCorrectionPlan(
-  rows: ReconciliationSourceRow[],
-  batches: ReconciliationBatchScopeRow[],
-  context: IbkrCashCorrectionContext,
-  adoptPolicy: string | undefined,
-  batchPolicies: BatchPolicy[],
-  scope: string,
-): ReconciliationPlanResult {
-  const proved = proveIbkrCashCorrections(rows, batches, context);
-  const overrides = new Map(
-    batchPolicies.map((item) => [item.batchId, item.adoptPolicy]),
-  );
-  const blockers: PlanIssue[] = [...proved.blockers];
-  const values = (
-    snapshot: IbkrCashFinancialImage,
-    row: ReconciliationSourceRow,
-  ) => ({
-    date: snapshot.date,
-    type: row.type_raw,
-    amount: snapshot.amount,
-    currency: snapshot.currency,
-    memo: snapshot.memo,
-  });
-  const actions: PlanAction[] = [...proved.actions, ...proved.duplicates].map(
-    (item): PlanAction => {
-    const policy = overrides.get(Number(item.row.batch_id)) ?? adoptPolicy;
-    const requiresPolicy =
-      item.action === "adopt" && policy !== "prefer_source";
-    if (requiresPolicy)
-      blockers.push({
-        reason: "source_policy_required",
-        batchId: Number(item.row.batch_id),
-        rowId: Number(item.row.id),
-        rowOrdinal: Number(item.row.row_index) + 1,
-        candidateTransactionIds: [item.transactionId],
-      });
-    return {
-      batchId: Number(item.row.batch_id),
-      rowId: Number(item.row.id),
-      rowOrdinal: Number(item.row.row_index) + 1,
-      investmentId: null,
-      isCash: true,
-      action: requiresPolicy
-        ? "policy_required"
-        : "settled" in item && item.settled
-          ? "settled"
-          : item.action,
-      existingTransactionId: item.transactionId,
-      candidateTransactionIds: [item.transactionId],
-      policy: "prefer_source",
-      economicsProven: true,
-      existing: values(item.before.snapshot, item.row),
-      source: values(item.after.snapshot, item.row),
-      corrections: item.corrections.map((correction) => correction.field),
-    };
-    },
-  );
-  for (const issue of proved.blockers)
-    actions.push({
-      batchId: issue.batchId,
-      rowId: issue.rowId,
-      rowOrdinal: issue.rowOrdinal,
-      investmentId: null,
-      isCash: true,
-      action: "blocked",
-      candidateTransactionIds: issue.candidateTransactionIds,
-    });
-  const summary = Object.fromEntries(
-    [
-      "insert",
-      "record_income",
-      "adopt",
-      "repair_duplicate",
-      "duplicate",
-      "duplicate_source",
-      "cash",
-      "transfer",
-      "adjustment",
-      "internal_annotation",
-      "settled",
-      "blocked",
-      "policy_required",
-    ].map((kind) => [
-      kind,
-      actions.filter((item) => item.action === kind).length,
-    ]),
-  );
-  return {
-    adoptions: [],
-    companions: [],
-    cashCorrections: proved.actions,
-    cashCorrectionRepeats: proved.duplicates,
-    sourceOverrides: new Map(),
-    networkBindings: [],
-    nativeGiftGroups: [],
-    plan: {
-      batchIds: batches.map((batch) => Number(batch.id)),
-      adoptPolicy: adoptPolicy ?? null,
-      batchPolicies,
-      reconciliationScope: scope,
-      actions,
-      blockers,
-      summary,
-      ready: blockers.length === 0,
-      planFingerprint: fingerprint({
-        context: proved.contextFingerprint,
-        adoptPolicy,
-        batchPolicies,
-        scope,
-        actions,
-        blockers,
-      }),
-      selectedRowIds: rows.map((row) => Number(row.id)),
-      pending: 0,
-      complete: true,
-      deferredCounts: {},
-      batchProgress: batches.map((batch) => ({
-        batchId: Number(batch.id),
-        pending: 0,
-        complete: true,
-        deferredCounts: {},
-      })),
-    },
-  };
-}
-
-function completeKinesisCashRepeatPlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  batches: ReconciliationBatchScopeRow[],
-  context: CashContext,
-  rates: HistoricalFxRate[],
-): ReconciliationPlanResult {
-  const sourceBatches = batches.filter(
-    (batch) => formatOf(batch) === "kinesis_transaction_history",
-  );
-  if (sourceBatches.length === 0 || context.sources.length === 0) return full;
-  const ids = new Set(sourceBatches.map((batch) => Number(batch.id)));
-  const sourceRows = rows.filter((row) => ids.has(Number(row.batch_id)));
-  const proved = classifyKinesisCash({
-    rows: sourceRows,
-    batches: sourceBatches,
-    context,
-    fundingPolicy: "own_account_transfer",
-    historicalFxContext: rates,
-  });
-  // Retained owned envelopes supply funding intent only for exact existing repeats.
-  const repeated = proved.selected.filter((action) =>
-    ["duplicate", "settled"].includes(action.action),
-  );
-  const replacements = new Map(
-    repeated.map((action) => [action.rowId, action]),
-  );
-  const actions: PlanAction[] = full.plan.actions.map(
-    (action) => replacements.get(action.rowId) ?? action,
-  );
-  const blockers = [...full.plan.blockers, ...proved.blockers];
-  return {
-    ...full,
-    plan: {
-      ...full.plan,
-      actions,
-      blockers,
-      ready: blockers.length === 0,
-      summary: Object.fromEntries(
-        Object.keys(full.plan.summary).map((kind) => [
-          kind,
-          actions.filter((action) => action.action === kind).length,
-        ]),
-      ),
-      planFingerprint: fingerprint({
-        prior: full.plan.planFingerprint,
-        cashContext: context,
-        repeated,
-        blockers,
-      }),
-    },
-  };
-}
-
-/** Ordinary full imports still need the same pair proof as income-only review. */
-function completeKinesisIncomePlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  history: HistoryImage[],
-  batches: ReconciliationBatchScopeRow[],
-  context: ReconciliationReceiptContext,
-  incomeContext: IncomeContext,
-  rates: HistoricalFxRate[],
-): ReconciliationPlanResult {
-  const sourceBatches = batches.filter(
-    (batch) =>
-      formatOf(batch) === "kinesis_transaction_history" &&
-      batchConfigFields(batch.custom_config)?.yield_basis_policy === "zero",
-  );
-  if (sourceBatches.length === 0) return full;
-  const ids = new Set(sourceBatches.map((batch) => Number(batch.id)));
-  const sourceRows = rows.filter((row) => ids.has(Number(row.batch_id)));
-  const plannedUnits = full.plan.actions
-    .filter(
-      (action) =>
-        ["insert", "adopt"].includes(action.action) &&
-        action.source?.type === "gift",
-    )
-    .map((action) => {
-      const row = sourceRows.find((row) => Number(row.id) === action.rowId);
-      if (!row) return undefined;
-      const adoption = full.adoptions.find(
-        (item) => Number(item.row.id) === action.rowId,
-      );
-      return {
-        action: action.action,
-        row,
-        // A planned insert's projected image: source values and identity only.
-        after:
-          adoption?.after ??
-          ({
-            ...normalizedSource(row),
-            id: -Number(row.id),
-            investment_id: Number(row.investment_id),
-            account_id: row.account_id,
-            source_record_hash: row.source_record_hash,
-            note: row.note,
-            dedup_fingerprint: row.dedup_fingerprint,
-            dedup_fingerprint_version: row.dedup_fingerprint_version,
-          } as PortfolioTransactionSnapshot),
-      };
-    })
-    .filter((unit) => unit !== undefined);
-  const proved = proveKinesisIncomePairs({
-    rows: sourceRows,
-    batches: sourceBatches,
-    history,
-    context,
-    incomeContext,
-    plannedUnits,
-  });
-  const records: KinesisIncomePairRecord[] = [];
-  const actions = [...full.plan.actions];
-  const blockers = [...full.plan.blockers, ...proved.blockers];
-  const provedRecords: readonly PairedIncome[] = proved.records;
-  const provedDuplicates: readonly PairedIncome[] = proved.duplicates;
-  const isRepeat = (
-    record: PairedIncome,
-  ): record is KinesisIncomePairDuplicate => provedDuplicates.includes(record);
-  const available = (row: ReconciliationSourceRow) =>
-    row.currency === "EUR" ||
-    rates.some(
-      (rate) =>
-        rate.currency === row.currency &&
-        rate.date === row.tx_date &&
-        Number(rate.rate) > 0,
-    );
-  const paired = new Map<number, PairedIncome>();
-  for (const record of [...proved.records, ...proved.duplicates])
-    paired.set(Number(record.row.id), record);
-  for (const row of sourceRows.filter(
-    (row) =>
-      row.type === "dividend" && row.source_transaction_id?.endsWith(":income"),
-  )) {
-    const index = actions.findIndex(
-      (action) => action.rowId === Number(row.id),
-    );
-    let action = actions[index];
-    const record = paired.get(Number(row.id));
-    // Two literal distributions can have the same informational value. A
-    // proved income owned by another acquisition is not this new pair.
-    if (
-      record &&
-      provedRecords.includes(record) &&
-      action?.action === "blocked" &&
-      action.candidateTransactionIds && action.candidateTransactionIds.length > 0 &&
-      action.candidateTransactionIds.every((id) =>
-        proved.duplicates.some(
-          (other) =>
-            Number(other.current.id) === Number(id) &&
-            Number(other.unit.id) !== Number(record.unit.id),
-        ),
-      )
-    ) {
-      const issues = blockers.filter(
-        (issue) => Number(issue.rowId) === Number(row.id),
-      );
-      if (
-        issues.length > 0 &&
-        issues.every(
-          (issue) => issue.reason === "existing_assigned_or_imported_history",
-        )
-      ) {
-        for (let position = blockers.length - 1; position >= 0; position--)
-          if (Number(blockers[position]!.rowId) === Number(row.id))
-            blockers.splice(position, 1);
-        action = { ...action, action: "insert", candidateTransactionIds: [] };
-      }
-    }
-    // The income and unit rows share one literal source record.
-    const unitRow = sourceRows.find(
-      (unit) =>
-        unit.source_transaction_id ===
-          String(row.source_transaction_id).replace(/:income$/, ":units") &&
-        unit.source_record_hash === row.source_record_hash,
-    )!;
-    const conflicting =
-      record &&
-      full.plan.blockers.some((issue) =>
-        issue.candidateTransactionIds?.includes(Number(record.unit.id)),
-      );
-    if (
-      !record ||
-      !action ||
-      conflicting ||
-      (action.candidateTransactionIds && action.candidateTransactionIds.length > 0) ||
-      !available(row)
-    ) {
-      blockers.push({
-        batchId: Number(row.batch_id),
-        rowId: Number(row.id),
-        rowOrdinal: row.row_index + 1,
-        reason:
-          record && !available(row)
-            ? "historical_income_rate_unavailable"
-            : "paired_income_review_required",
-        candidateTransactionIds:
-          record && Number(record.unit.id) > 0 ? [Number(record.unit.id)] : [],
-      });
-      continue;
-    }
-    const repeat = isRepeat(record);
-    if (
-      (!repeat && action.action !== "insert") ||
-      (repeat && !["duplicate", "settled"].includes(action.action))
-    ) {
-      blockers.push({
-        reason: "paired_income_existing_conflict",
-        batchId: Number(row.batch_id),
-        rowId: Number(row.id),
-        rowOrdinal: row.row_index + 1,
-        candidateTransactionIds: [],
-      });
-      continue;
-    }
-    const unitIndex = actions.findIndex(
-      (action) => action.rowId === Number(unitRow.id),
-    );
-    const unitAction = actions[unitIndex];
-    if (unitAction && Number(record.unit.id) > 0)
-      actions[unitIndex] = {
-        ...unitAction,
-        existingTransactionId: Number(record.unit.id),
-        investmentId: Number(unitRow.investment_id),
-      };
-    actions[index] = {
-      ...action,
-      investmentId: Number(row.investment_id),
-      action: repeat ? action.action : "record_income",
-      ...(repeat
-        ? { existingTransactionId: Number(record.current.id) }
-        : {
-            source: {
-              ...publicValues(normalizedSource(row)),
-              income_recognition_role: "included_in_units",
-            },
-          }),
-      incomeProof: {
-        kind: "paired_kinesis_income",
-        unitRowId: Number(unitRow.id),
-        ...(Number(record.unit.id) > 0
-          ? { unitTransactionId: Number(record.unit.id) }
-          : {}),
-      },
-    };
-    if (!repeat) records.push(record);
-  }
-  return {
-    ...full,
-    incomeRecords: records,
-    plan: {
-      ...full.plan,
-      actions,
-      blockers,
-      ready: blockers.length === 0,
-      summary: Object.fromEntries(
-        Object.keys(full.plan.summary).map((kind) => [
-          kind,
-          actions.filter((action) => action.action === kind).length,
-        ]),
-      ),
-      planFingerprint: fingerprint({
-        prior: full.plan.planFingerprint,
-        proofs: [...paired.values()].map((record) => ({
-          rowId: record.row.id,
-          unit: record.unit,
-          proof: record.proof,
-        })),
-        actions,
-        blockers,
-      }),
-    },
-  };
-}
-
-function boundedKinesisCashPlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  batches: ReconciliationBatchScopeRow[],
-  context: CashContext,
-  fundingPolicy: string | undefined,
-  historicalFxContext: HistoricalFxRate[],
-): ReconciliationPlanResult {
-  const proved = classifyKinesisCash({
-    rows,
-    batches,
-    context,
-    fundingPolicy,
-    historicalFxContext,
-  });
-  const blockers = [
-    ...proved.blockers,
-    ...full.plan.blockers.filter((issue) =>
-      [
-        "source_identity_conflict",
-        "source_policy_conflict",
-        "reference_scope_changed",
-        "reference_account_mapping_conflict",
-      ].includes(issue.reason),
-    ),
-  ];
-  return {
-    ...boundedKinesisPlanResult(
-      full,
-      rows,
-      batches,
-      context,
-      proved.proofs,
-      proved.selected,
-      [],
-      blockers,
-      "record_cash_only",
-    ),
-    cashRecords: proved.records,
-  };
-}
-
-function boundedKinesisIncomePlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  history: HistoryImage[],
-  batches: ReconciliationBatchScopeRow[],
-  context: ReconciliationReceiptContext,
-  incomeContext: IncomeContext,
-  historicalFxContext: HistoricalFxRate[],
-): ReconciliationPlanResult {
-  const availableRate = (row: ReconciliationSourceRow) =>
-    row.currency === "EUR" ||
-    historicalFxContext.some(
-      (pair) =>
-        pair.currency === row.currency &&
-        pair.date === row.tx_date &&
-        pair.rate != null &&
-        Number.isFinite(Number(pair.rate)) &&
-        Number(pair.rate) > 0,
-    );
-  const proved = proveKinesisIncomePairs({
-    rows,
-    batches,
-    history,
-    context,
-    incomeContext,
-  });
-  const blockers = [
-    ...proved.blockers,
-    ...full.plan.blockers.filter((issue) =>
-      [
-        "source_identity_conflict",
-        "source_policy_conflict",
-        "reference_scope_changed",
-        "reference_ambiguous_match",
-        "reference_account_mapping_conflict",
-      ].includes(issue.reason),
-    ),
-  ];
-  const selected: PlanAction[] = [];
-  const records: KinesisIncomePairRecord[] = [];
-  for (const record of proved.records) {
-    const action = full.plan.actions.find(
-      (action) => action.rowId === Number(record.row.id),
-    );
-    if (
-      !action ||
-      !["insert", "blocked"].includes(action.action) ||
-      action.candidateTransactionIds && action.candidateTransactionIds.length > 0
-    ) {
-      blockers.push({
-        reason: "paired_income_existing_conflict",
-        batchId: Number(record.row.batch_id),
-        rowId: Number(record.row.id),
-        rowOrdinal: record.row.row_index + 1,
-        candidateTransactionIds: action?.candidateTransactionIds ?? [],
-      });
-      continue;
-    }
-    const contested = full.plan.blockers.filter((issue) =>
-      issue.candidateTransactionIds?.includes(Number(record.unit.id)),
-    );
-    if (contested.length > 0) {
-      blockers.push(...contested);
-      continue;
-    }
-    if (!availableRate(record.row)) continue;
-    selected.push({
-      ...action,
-      action: "record_income",
-      source: {
-        ...publicValues({
-          ...record.row,
-          date: record.row.tx_date,
-          dividend_amount_convention: "unknown",
-        }),
-        income_recognition_role: "included_in_units",
-      },
-      incomeProof: {
-        kind: "paired_kinesis_income",
-        unitTransactionId: Number(record.unit.id),
-      },
-    });
-    records.push(record);
-  }
-  for (const repeated of proved.duplicates) {
-    if (!availableRate(repeated.row)) continue;
-    // Every source row receives at least one planned action.
-    const action = full.plan.actions.find(
-      (action) => action.rowId === Number(repeated.row.id),
-    )!;
-    selected.push({
-      ...action,
-      action: ["committed", "duplicate"].includes(repeated.row.status)
-        ? "settled"
-        : "duplicate",
-      existingTransactionId: Number(repeated.current.id),
-      incomeProof: {
-        kind: "paired_kinesis_income",
-        unitTransactionId: Number(repeated.unit.id),
-      },
-    });
-  }
-  return {
-    ...boundedKinesisPlanResult(
-      full,
-      rows,
-      batches,
-      { ...context, incomeContext },
-      proved.proofs,
-      selected,
-      [],
-      blockers,
-      "record_in_kind_income_only",
-    ),
-    incomeRecords: records,
-  };
-}
-
-function kinesisSourceFactsMatchExisting(
-  row: ReconciliationSourceRow,
-  current: HistoryImage,
-  parsed: ParsedPortfolioRow,
-): boolean {
-  if (
-    row.type === "gift" &&
-    parsed.assetAdjustment?.kind === "yield_acquisition" &&
-    parsed.assetAdjustment.basisPolicy === "zero" &&
-    toDecimal(parsed.amount ?? 0).isZero() &&
-    (["amount", "price_per_unit", "fees", "taxes"] as const).every((field) =>
-      toDecimal(current[field] ?? 0).isZero(),
-    )
-  )
-    return true;
-  // A preserved positive gift basis needs a literal valuation and currency.
-  // Stamping an unknown basis would prevent a later reviewed source correction.
-  if (!parsed.currency || (row.type === "gift" && parsed.amount == null))
-    return false;
-  const source = normalizedSource({
-    ...row,
-    units: parsed.units,
-    price_per_unit: parsed.pricePerUnit,
-    amount: parsed.amount,
-    fees: parsed.fees,
-    taxes: parsed.taxes,
-    currency: parsed.currency,
-    fx_rate_to_eur: parsed.fxRateToEur,
-  });
-  return (
-    (
-      [
-        "type",
-        "amount",
-        "units",
-        "price_per_unit",
-        "fees",
-        "taxes",
-        "currency",
-      ] as const
-    ).every((field) => sameValue(field, source[field], current[field])) &&
-    (source.fx_rate_to_eur == null ||
-      sameValue(
-        "fx_rate_to_eur",
-        source.fx_rate_to_eur,
-        current.fx_rate_to_eur,
-      ))
-  );
-}
-
-const KINESIS_CORRECTION_FIELDS = [
-  "amount",
-  "price_per_unit",
-  "fees",
-  "taxes",
-  "currency",
-  "fx_rate_to_eur",
-] as const;
-
-function kinesisCorrectionSource(
-  row: ReconciliationSourceRow,
-  proof: KinesisSourceProof | undefined,
-): NormalizedSource | undefined {
-  if (!proof) return undefined;
-  const parsed = proof.parsed;
-  const source = normalizedSource(row);
-  if (row.type === "buy") {
-    const literal = normalizedSource({
-      ...row,
-      amount: parsed.amount,
-      units: parsed.units,
-      price_per_unit: parsed.pricePerUnit,
-      fees: parsed.fees,
-      taxes: parsed.taxes,
-      currency: parsed.currency,
-      fx_rate_to_eur: parsed.fxRateToEur,
-    });
-    return parsed.currency &&
-      (["units", ...KINESIS_CORRECTION_FIELDS] as const).every((field) =>
-        sameValue(field, source[field] ?? null, literal[field] ?? null),
-      )
-      ? source
-      : undefined;
-  }
-  const basis = verifiedPortfolioPerformanceBasisReference(row);
-  if (
-    row.type !== "gift" ||
-    !basis?.meaningful ||
-    basis.basisPolicy !== "recorded_native" ||
-    Number(basis.accountId) !== Number(row.account_id) ||
-    basis.sourceHash !==
-      batchConfigFields(row.custom_config)?.portfolio_performance_reference?.sourceHash ||
-    (parsed.currency && parsed.currency !== basis.currency) ||
-    !basis.literal.units.every(
-      (unit: { type: string }) => unit.type === "GROSS_VALUE",
-    ) ||
-    !equalNumber(source.fees, "0", 4) ||
-    !equalNumber(source.taxes, "0", 4) ||
-    !equalNumber(source.fx_rate_to_eur, basis.fxRateToEur ?? null, 10) ||
-    !equalNumber(
-      source.price_per_unit,
-      // A matched gift source carries its units.
-      toDecimal(basis.amount).div(row.units!).toFixed(),
-      6,
-    )
-  )
-    return undefined;
-  return source;
-}
-
-function boundedKinesisCorrectionPlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  history: HistoryImage[],
-  batches: ReconciliationBatchScopeRow[],
-  context: ReconciliationReceiptContext,
-  historicalFxContext: HistoricalFxRate[],
-): ReconciliationPlanResult {
-  const { proofs, literalProofs, issues } = proveKinesisCorrectionSources(
-    rows,
-    batches,
-  );
-  const priorProofs = proveKinesisCorrectionSources(
-    context.sources,
-    context.batches,
-  ).proofs;
-  const selected: PlanAction[] = [];
-  const adoptions: PlanAdoption[] = [];
-  const groups = proveRetainedKinesisYieldGroups({
-    rows,
-    batches,
-    history,
-    context,
-  });
-  const groupedRowIds = new Set(groups.reservedRowIds);
-  const blockers = [
-    ...issues,
-    ...groups.blockers,
-    ...full.plan.blockers.filter(
-      (issue) =>
-        [
-          "reference_scope_changed",
-          "source_identity_conflict",
-          "source_policy_conflict",
-          "reference_account_mapping_conflict",
-          "reference_ambiguous_match",
-        ].includes(issue.reason) ||
-        (issue.rowId !== undefined &&
-          proofs.has(issue.rowId) &&
-          ["ambiguous_history", "duplicate_repair_provenance_missing"].includes(
-            issue.reason,
-          )),
-    ),
-  ];
-  for (const group of groups.groups) {
-    const ids = new Set(
-      group.members.map((member) => Number(member.current.id)),
-    );
-    const contested = full.plan.blockers.filter((issue) =>
-      issue.candidateTransactionIds.some((id) => ids.has(Number(id))),
-    );
-    if (contested.length > 0) {
-      blockers.push(...contested);
-      continue;
-    }
-    for (const member of group.members) {
-      const { row, current, recorded } = member;
-      const rowId = Number(row.id);
-      groupedRowIds.add(rowId);
-      if (
-        member.retained?.receipt.policy === "preserve_existing" ||
-        recorded.date === row.tx_date
-      )
-        continue;
-      proofs.set(rowId, member.proof);
-      // Every source row receives at least one planned action.
-      const action = full.plan.actions.find((item) => item.rowId === rowId)!;
-      if (member.retained) {
-        selected.push({
-          ...action,
-          action: ["duplicate", "committed"].includes(row.status)
-            ? "settled"
-            : "duplicate",
-          existingTransactionId: Number(current.id),
-        });
-        continue;
-      }
-      // Yield group members bind gift transactions: full snapshot images.
-      const after = {
-        ...current,
-        date: row.tx_date,
-        account_id: row.account_id,
-        source_record_hash: row.source_record_hash,
-        dedup_fingerprint: row.dedup_fingerprint,
-        dedup_fingerprint_version: row.dedup_fingerprint_version,
-      } as PortfolioTransactionSnapshot;
-      selected.push({
-        ...action,
-        action: "adopt",
-        existingTransactionId: Number(current.id),
-        policy: "prefer_source",
-        existing: publicValues(current),
-        source: publicValues({ ...current, date: row.tx_date }),
-        corrections: ["date"],
-        candidateTransactionIds: [Number(current.id)],
-        dateProof: {
-          kind: "closed_kinesis_yield_group",
-          groupKey: group.key,
-          recordedDate: recorded.date,
-          paymentDate: row.tx_date,
-          memberCount: group.members.length,
-        },
-      });
-      adoptions.push({
-        row,
-        before: current as PortfolioTransactionSnapshot,
-        after,
-        policy: "prefer_source",
-      });
-    }
-  }
-  for (const action of full.plan.actions) {
-    if (groupedRowIds.has(action.rowId)) continue;
-    const row = rows.find((item) => Number(item.id) === action.rowId);
-    const proof =
-      proofs.get(action.rowId) ??
-      (["duplicate", "settled"].includes(action.action)
-        ? literalProofs.get(action.rowId)
-        : undefined);
-    if (!row || !proof) continue;
-    if (action.action === "adopt") {
-      const adoption = full.adoptions.find(
-        (item) => Number(item.row.id) === action.rowId,
-      );
-      const source = kinesisCorrectionSource(row, proof);
-      if (
-        !adoption ||
-        adoption.imported ||
-        adoption.policy !== "prefer_source" ||
-        !source
-      )
-        continue;
-      const before = adoption.before;
-      const after = {
-        ...adoption.after,
-        units: before.units,
-        date: before.date,
-      };
-      const corrections = KINESIS_CORRECTION_FIELDS.filter(
-        (field) => !sameValue(field, before[field], after[field]),
-      );
-      if (
-        corrections.length === 0 ||
-        before.type !== row.type ||
-        before.date !== row.tx_date ||
-        !equalNumber(before.units, row.units, 8) ||
-        (row.type === "gift" && !toDecimal(before.amount ?? 0).gt("0.01")) ||
-        (
-          ["id", "investment_id", "type", "date", "units", "note"] as const
-        ).some((field) => !sameValue(field, before[field], after[field])) ||
-        !KINESIS_CORRECTION_FIELDS.every((field) =>
-          sameValue(
-            field,
-            after[field],
-            sourcePreferredImage(before, source, row)[field],
-          ),
-        ) ||
-        (row.type === "gift" &&
-          !portfolioPerformanceBasisIdentifiesLegacy(row, before))
-      )
-        continue;
-      if (
-        source.currency !== before.currency &&
-        source.currency !== "EUR" &&
-        source.fx_rate_to_eur == null &&
-        !historicalFxContext.some(
-          (rate) =>
-            rate.currency === source.currency &&
-            rate.date === row.tx_date &&
-            rate.rate != null &&
-            toDecimal(rate.rate).gt(0),
-        )
-      )
-        continue;
-      selected.push({ ...action, corrections });
-      adoptions.push({ ...adoption, after });
-    } else if (["duplicate", "settled"].includes(action.action)) {
-      const current = history.filter(
-        (item) =>
-          item.dedup_fingerprint === row.dedup_fingerprint &&
-          item.dedup_fingerprint_version === row.dedup_fingerprint_version &&
-          Number(item.investment_id) === Number(row.investment_id),
-      );
-      const [image] = current;
-      const receipts = context.receipts.filter(
-        (receipt) => Number(receipt.transaction_id) === Number(image?.id),
-      );
-      const [receipt] = receipts;
-      if (
-        !receipt ||
-        !receipts.some((receipt) => receipt.policy === "prefer_source")
-      )
-        continue;
-      const prior = context.sources.find(
-        (item) => Number(item.id) === Number(receipt.staging_row_id),
-      );
-      const priorSource =
-        prior &&
-        kinesisCorrectionSource(prior, priorProofs.get(Number(prior.id)));
-      const correctionReference = context.batches.some(
-        (batch) =>
-          Number(batch.id) === Number(receipt.batch_id) &&
-          batchConfigFields(batch.custom_config)?.portfolio_performance_reference
-            ?.reconciliationScope === "correct_existing_only",
-      );
-      if (
-        !priorSource &&
-        !kinesisCorrectionSource(row, proof) &&
-        !correctionReference
-      )
-        continue;
-      if (
-        current.length !== 1 ||
-        !image ||
-        receipts.length !== 1 ||
-        receipt.policy !== "prefer_source" ||
-        !sameSnapshot(image, receipt.after_data) ||
-        !priorSource ||
-        prior.status !== "duplicate" ||
-        prior.route !== "portfolio" ||
-        Number(prior.batch_id) !== Number(receipt.batch_id) ||
-        image.import_batch_id != null ||
-        Number(image.account_id) !== Number(row.account_id) ||
-        Number(prior.account_id) !== Number(row.account_id) ||
-        Number(prior.investment_id) !== Number(row.investment_id) ||
-        image.type !== row.type ||
-        prior.type !== row.type ||
-        image.date !== row.tx_date ||
-        !equalNumber(image.units, row.units, 8) ||
-        prior.source_record_hash !== row.source_record_hash ||
-        image.source_record_hash !== row.source_record_hash ||
-        prior.dedup_fingerprint !== row.dedup_fingerprint ||
-        portfolioPrimaryRawData(prior.raw_data) !==
-          portfolioPrimaryRawData(row.raw_data) ||
-        priorProofs.get(Number(prior.id))?.sourceFileHash !==
-          proof.sourceFileHash ||
-        !KINESIS_CORRECTION_FIELDS.every((field) =>
-          sameValue(
-            field,
-            image[field],
-            sourcePreferredImage(image, priorSource, prior)[field],
-          ),
-        ) ||
-        (row.type === "buy" &&
-          !kinesisSourceFactsMatchExisting(row, image, proof.parsed))
-      ) {
-        blockers.push({
-          batchId: Number(row.batch_id),
-          rowId: Number(row.id),
-          rowOrdinal: row.row_index + 1,
-          reason: "source_correction_existing_changed",
-          candidateTransactionIds: current.map((item) => Number(item.id)),
-        });
-        continue;
-      }
-      selected.push({
-        ...action,
-        existingTransactionId: Number(image.id),
-      });
-      proofs.set(action.rowId, proof);
-    }
-  }
-  return boundedKinesisPlanResult(
-    full,
-    rows,
-    batches,
-    context,
-    proofs,
-    selected,
-    adoptions,
-    blockers,
-    "correct_existing_only",
-  );
-}
-
-function boundedKinesisAdoptionPlan(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  history: HistoryImage[],
-  batches: ReconciliationBatchScopeRow[],
-  context: ReconciliationReceiptContext,
-): ReconciliationPlanResult {
-  const { proofs, issues } = proveKinesisAdoptionSources(rows, batches);
-  const corrected = boundedKinesisCorrectionPlan(
-    full,
-    rows,
-    history,
-    batches,
-    context,
-    [],
-  );
-  const correctionProofs = proveKinesisCorrectionSources(rows, batches).proofs;
-  const groups = proveRetainedKinesisYieldGroups({
-    rows,
-    batches,
-    history,
-    context,
-  });
-  const selected: PlanAction[] = [];
-  const adoptions: PlanAdoption[] = [];
-  const blockers = [
-    ...issues,
-    ...groups.blockers,
-    ...corrected.plan.blockers.filter(
-      (issue) => issue.reason === "source_correction_existing_changed",
-    ),
-    ...full.plan.blockers.filter(
-      (issue) =>
-        [
-          "reference_scope_changed",
-          "source_identity_conflict",
-          "source_policy_conflict",
-          "reference_account_mapping_conflict",
-          "reference_ambiguous_match",
-        ].includes(issue.reason) ||
-        (issue.rowId !== undefined &&
-          proofs.has(issue.rowId) &&
-          ["ambiguous_history", "duplicate_repair_provenance_missing"].includes(
-            issue.reason,
-          )),
-    ),
-  ];
-  const priorProofs = proveKinesisCorrectionSources(
-    context.sources,
-    context.batches,
-  ).proofs;
-  const currentFor = (row: ReconciliationSourceRow) =>
-    history.filter(
-      (current) =>
-        current.dedup_fingerprint === row.dedup_fingerprint &&
-        current.dedup_fingerprint_version === row.dedup_fingerprint_version &&
-        Number(current.investment_id) === Number(row.investment_id),
-    );
-  const handled = new Set<number>();
-  for (const action of corrected.plan.actions) {
-    if (!["duplicate", "settled"].includes(action.action)) continue;
-    selected.push(action);
-    handled.add(action.rowId);
-    proofs.set(action.rowId, correctionProofs.get(action.rowId)!);
-  }
-  for (const group of groups.groups)
-    for (const member of group.members) {
-      const { row, current } = member;
-      const rowId = Number(row.id);
-      handled.add(rowId);
-      proofs.set(rowId, member.proof);
-      // Every source row receives at least one planned action.
-      const action = full.plan.actions.find((item) => item.rowId === rowId)!;
-      if (member.retained) {
-        selected.push({
-          ...action,
-          action: ["duplicate", "committed"].includes(row.status)
-            ? "settled"
-            : "duplicate",
-          existingTransactionId: Number(current.id),
-        });
-      } else {
-        // Yield group members bind gift transactions: full snapshot images.
-        const after = {
-          ...current,
-          account_id: row.account_id,
-          source_record_hash: row.source_record_hash,
-          dedup_fingerprint: row.dedup_fingerprint,
-          dedup_fingerprint_version: row.dedup_fingerprint_version,
-        } as PortfolioTransactionSnapshot;
-        selected.push({
-          ...action,
-          action: "adopt",
-          existingTransactionId: Number(current.id),
-          policy: "preserve_existing",
-          existing: publicValues(current),
-          source: publicValues(normalizedSource(row)),
-          corrections: [],
-          candidateTransactionIds: [Number(current.id)],
-        });
-        adoptions.push({
-          row,
-          before: current as PortfolioTransactionSnapshot,
-          after,
-          policy: "preserve_existing",
-        });
-      }
-    }
-  for (const action of full.plan.actions) {
-    if (handled.has(action.rowId) || groups.reservedRowIds.has(action.rowId))
-      continue;
-    const row = rows.find((item) => Number(item.id) === action.rowId);
-    const proof = proofs.get(action.rowId);
-    if (!row || !proof) continue;
-    if (action.action === "adopt") {
-      const adoption = full.adoptions.find(
-        (item) => Number(item.row.id) === action.rowId,
-      );
-      if (
-        !adoption ||
-        adoption.imported ||
-        adoption.policy !== "preserve_existing" ||
-        adoption.before.type !== row.type ||
-        adoption.before.date !== row.tx_date ||
-        !equalNumber(adoption.before.units, row.units, 8) ||
-        !kinesisSourceFactsMatchExisting(row, adoption.before, proof.parsed) ||
-        !["buy", "gift"].includes(row.type) ||
-        (["type", ...VALUE_FIELDS, "note"] as const).some(
-          (field) =>
-            !sameValue(field, adoption.before[field], adoption.after[field]),
-        )
-      )
-        continue;
-      selected.push(action);
-      adoptions.push(adoption);
-    } else if (["duplicate", "settled"].includes(action.action)) {
-      const current = currentFor(row);
-      const [image] = current;
-      if (
-        current.length === 1 &&
-        image &&
-        !kinesisSourceFactsMatchExisting(row, image, proof.parsed)
-      )
-        continue;
-      const receipts = context.receipts.filter(
-        (receipt) => Number(receipt.transaction_id) === Number(image?.id),
-      );
-      const [receipt] = receipts;
-      const prior = context.sources.find(
-        (source) => Number(source.id) === Number(receipt?.staging_row_id),
-      );
-      if (
-        current.length !== 1 ||
-        !image ||
-        image.import_batch_id != null ||
-        receipts.length !== 1 ||
-        !receipt ||
-        receipt.policy !== "preserve_existing" ||
-        !sameSnapshot(image, receipt.after_data) ||
-        !prior ||
-        Number(image.account_id) !== Number(row.account_id) ||
-        Number(prior.account_id) !== Number(row.account_id) ||
-        Number(prior.investment_id) !== Number(row.investment_id) ||
-        prior.type !== row.type ||
-        image.type !== row.type ||
-        image.date !== row.tx_date ||
-        !equalNumber(image.units, row.units, 8) ||
-        !priorProofs.has(Number(prior.id)) ||
-        prior.source_record_hash !== row.source_record_hash ||
-        prior.dedup_fingerprint !== row.dedup_fingerprint ||
-        priorProofs.get(Number(prior.id))?.sourceFileHash !==
-          proof.sourceFileHash
-      ) {
-        if (image?.import_batch_id == null)
-          blockers.push({
-            batchId: Number(row.batch_id),
-            rowId: Number(row.id),
-            rowOrdinal: row.row_index + 1,
-            reason: "adoption_scope_receipt_changed",
-            candidateTransactionIds: current.map((item) => Number(item.id)),
-          });
-        continue;
-      }
-      selected.push({
-        ...action,
-        existingTransactionId: Number(image.id),
-      });
-    }
-  }
-  return boundedKinesisPlanResult(
-    full,
-    rows,
-    batches,
-    context,
-    proofs,
-    selected,
-    adoptions,
-    blockers,
-    "adopt_existing_only",
-  );
-}
-
-/** @param context the scope's evidence context, bound into the fingerprint */
-function boundedKinesisPlanResult(
-  full: ReconciliationPlanResult,
-  rows: ReconciliationSourceRow[],
-  batches: ReconciliationBatchScopeRow[],
-  context: object,
-  proofs: Map<number, RowProofBinding>,
-  selected: PlanAction[],
-  adoptions: PlanAdoption[],
-  blockers: PlanIssue[],
-  scope: string,
-): ReconciliationPlanResult {
-  const selectedTransactionIds = new Set(
-    selected.map((action) => action.existingTransactionId),
-  );
-  for (const issue of full.plan.blockers)
-    if (
-      issue.candidateTransactionIds.some((id) =>
-        selectedTransactionIds.has(id),
-      ) &&
-      !blockers.includes(issue)
-    )
-      blockers.push(issue);
-  const selectedRowIds = selected.map((action) => action.rowId);
-  const selectedIds = new Set(selectedRowIds);
-  const deferred = rows.filter(
-    (row) =>
-      !selectedIds.has(Number(row.id)) &&
-      !["committed", "duplicate"].includes(row.status),
-  );
-  const deferredCounts: Record<string, number> = {};
-  for (const row of deferred) {
-    const kind =
-      row.route !== null &&
-      [
-        "cash",
-        "asset_transfer",
-        "asset_adjustment",
-        "account_internal",
-      ].includes(row.route)
-        ? row.route
-        : row.type || "unsupported";
-    deferredCounts[kind] = (deferredCounts[kind] ?? 0) + 1;
-  }
-  const batchProgress = batches.map((batch) => {
-    const pending = deferred.filter(
-      (row) => Number(row.batch_id) === Number(batch.id),
-    );
-    const counts: Record<string, number> = {};
-    for (const row of pending) {
-      const kind =
-        row.route !== null &&
-        [
-          "cash",
-          "asset_transfer",
-          "asset_adjustment",
-          "account_internal",
-        ].includes(row.route)
-          ? row.route
-          : row.type || "unsupported";
-      counts[kind] = (counts[kind] ?? 0) + 1;
-    }
-    return {
-      batchId: Number(batch.id),
-      pending: pending.length,
-      complete: pending.length === 0,
-      deferredCounts: counts,
-    };
-  });
-  return {
-    ...full,
-    adoptions,
-    companions: [],
-    plan: {
-      ...full.plan,
-      actions: selected,
-      blockers,
-      ready: blockers.length === 0,
-      reconciliationScope: scope,
-      selectedRowIds,
-      pending: deferred.length,
-      complete: deferred.length === 0,
-      deferredCounts,
-      batchProgress,
-      summary: Object.fromEntries(
-        Object.keys(full.plan.summary).map((kind) => [
-          kind,
-          selected.filter((action) => action.action === kind).length,
-        ]),
-      ),
-      planFingerprint: fingerprint({
-        full: full.plan.planFingerprint,
-        context,
-        scope,
-        selected,
-        bindings: selectedRowIds.map((id) => ({
-          rowId: id,
-          eventKey: proofs.get(id)!.eventKey,
-          sourceFileHash: proofs.get(id)!.sourceFileHash,
-        })),
-        deferredCounts,
-      }),
-    },
+    crossFormatDuplicates,
+    cashAdoptions,
   };
 }
 
@@ -3233,8 +1147,6 @@ async function loadPlan(
   batchIds: number[],
   adoptPolicy: string | undefined,
   batchPolicies: BatchPolicy[] = [],
-  reconciliationScope = "full",
-  cashFundingPolicy: string | undefined = undefined,
 ) {
   const ids = scopeIds(batchIds);
   const [batches, rows] = await Promise.all([
@@ -3245,46 +1157,6 @@ async function loadPlan(
     throw new ValidationError(
       "Reconciliation scope contains a missing import batch",
     );
-  if (batches.some((batch) => formatOf(batch) === "ibkr_funding_history")) {
-    const ibkrCashContext = await readIbkrCashCorrectionContext();
-    return {
-      ...buildPortfolioImportReconciliationPlan({
-        rows,
-        history: [],
-        batches,
-        adoptPolicy,
-        batchPolicies,
-        reconciliationScope,
-        ibkrCashContext,
-      }),
-      history: [],
-      rows,
-      referenceOriginalBatchIds: [],
-      priorSaxoBatchIds: [],
-      priorKinesisBatchIds: [],
-      priorIncomeBatchIds: [],
-      priorNetworkBatchIds: [],
-      priorCashBatchIds: ibkrCashContext.batches.map((batch) =>
-        Number(batch.id),
-      ),
-    };
-  }
-  if (
-    ["record_in_kind_income_only", "record_cash_only"].includes(
-      reconciliationScope,
-    )
-  ) {
-    const terminal = batches.find(
-      (batch) =>
-        !["awaiting_review", "matching", "complete_with_errors"].includes(
-          batch.status,
-        ),
-    );
-    if (terminal)
-      throw new ValidationError(
-        `Batch ${terminal.id} is not in a reviewable state (status: ${terminal.status})`,
-      );
-  }
   await Promise.all(
     rows
       .filter((row) => row.asset_adjustment_details?.kind === "yield_reversal")
@@ -3303,159 +1175,44 @@ async function loadPlan(
   const history = await readReconciliationHistory([
     ...new Set(rows.map((row) => Number(row.investment_id)).filter(Boolean)),
   ]);
-  const priorProAccounts = await readReconciledProImportAccounts([
+  const accountIds = [
     ...new Set(
       batches.map((batch) => batch.account_id).filter((id) => id != null),
     ),
-  ]);
-  const repairContext = await readDuplicateRepairContext(history);
-  const saxoAdoptionContext = await readSaxoAdoptionContext(history);
-  const fullKinesis =
-    reconciliationScope === "full" &&
-    batches.some((batch) => formatOf(batch) === "kinesis_transaction_history");
-  const kinesisAdoptionContext =
-    reconciliationScope !== "full" || fullKinesis
-      ? reconciliationScope === "record_in_kind_income_only" || fullKinesis
-        ? await readKinesisIncomeUnitContext(history)
-        : await readKinesisAdoptionContext(history)
-      : { receipts: [], sources: [], batches: [] };
-  const incomeRecognitionContext =
-    reconciliationScope === "record_in_kind_income_only" || fullKinesis
-      ? await readIncomeRecognitionContext(history)
-      : { receipts: [], sources: [], batches: [] };
-  const cashContext =
-    reconciliationScope === "record_cash_only" || fullKinesis
-      ? await readKinesisCashContext()
-      : { ledger: [], sources: [], batches: [] };
-  const networkContext = fullKinesis
-    ? await readKinesisNetworkContext(history)
-    : { sources: [], batches: [] };
-  const nativeGiftContext =
-    reconciliationScope === "full"
-      ? await readKinesisNativeGiftContext(history)
-      : { receipts: [], sources: [], batches: [] };
-  const historicalFxContext: HistoricalFxRate[] = [];
-  if (reconciliationScope === "correct_existing_only") {
-    const pairs = new Map<string, HistoricalFxPair>();
-    for (const row of rows) {
-      const basis = verifiedPortfolioPerformanceBasisReference(row);
-      if (
-        !basis?.meaningful ||
-        row.fx_rate_to_eur != null ||
-        row.currency === "EUR" ||
-        !history.some(
-          (current) =>
-            Number(current.investment_id) === Number(row.investment_id) &&
-            current.type === row.type &&
-            current.date === row.tx_date &&
-            equalNumber(current.units, row.units, 8) &&
-            ("currency" in current ? current.currency : undefined) !==
-              row.currency &&
-            toDecimal(current.amount ?? 0).gt("0.01"),
-        )
-      )
-        continue;
-      pairs.set(`${row.currency}:${row.tx_date}`, fxPair(row));
-    }
-    for (const pair of [...pairs.values()].sort((left, right) =>
-      `${left.currency}:${left.date}`.localeCompare(
-        `${right.currency}:${right.date}`,
-      ),
-    )) {
-      const rate = await getStoredRateToEurOnOrBefore(pair.currency, pair.date);
-      historicalFxContext.push({
-        ...pair,
-        rate:
-          rate != null && Number.isFinite(rate) && rate > 0
-            ? String(rate)
-            : null,
-      });
-    }
-  }
-  if (
-    fullKinesis ||
-    ["record_in_kind_income_only", "record_cash_only"].includes(
-      reconciliationScope,
-    )
-  ) {
-    const fullSources = fullKinesis
-      ? proveKinesisCorrectionSources(
-          rows.filter((row) => formatOf(row) === "kinesis_transaction_history"),
-          batches.filter(
-            (batch) => formatOf(batch) === "kinesis_transaction_history",
-          ),
-        )
-      : undefined;
-    const proved = fullKinesis
-      ? {
-          records: rows
-            .filter(
-              (row) =>
-                (row.route === "cash" ||
-                  (row.type === "dividend" &&
-                    row.source_transaction_id?.endsWith(":income"))) &&
-                fullSources?.literalProofs.has(Number(row.id)),
-            )
-            .map((row) => ({ row })),
-          duplicates: [] as Array<{ row: ReconciliationSourceRow }>,
-        }
-      : reconciliationScope === "record_cash_only"
-        ? {
-            // An absent policy is passed through as before; the plan builder
-            // rejects it once these rates are read.
-            records: proveKinesisCashSources(
-              rows,
-              batches,
-              cashFundingPolicy,
-            ).groups.flatMap((group) => group.members),
-            duplicates: [],
-          }
-        : proveKinesisIncomePairs({
-            rows,
-            batches,
-            history,
-            context: kinesisAdoptionContext,
-            incomeContext: incomeRecognitionContext,
-          });
-    const pairs = new Map<string, HistoricalFxPair>();
-    for (const { row } of [...proved.records, ...proved.duplicates])
-      if (row.currency !== "EUR")
-        pairs.set(`${row.currency}:${row.tx_date}`, fxPair(row));
-    const ordered = [...pairs.values()].sort((a, b) =>
-      `${a.currency}:${a.date}`.localeCompare(`${b.currency}:${b.date}`),
-    );
-    // A stale prior quote must not suppress normal historical backfill.
-    const missingDates = new Map<string, string[]>();
-    for (const pair of ordered) {
-      const rate = await getStoredRateToEurOnOrBefore(pair.currency, pair.date);
-      if (rate != null && Number.isFinite(rate) && rate > 0) continue;
-      if (!missingDates.has(pair.currency)) missingDates.set(pair.currency, []);
-      missingDates.get(pair.currency)!.push(pair.date);
-    }
-    await getUnindexedRatesToEurForDates(missingDates);
-    for (const pair of ordered) {
-      const rate = await getStoredRateToEurOnOrBefore(pair.currency, pair.date);
-      historicalFxContext.push({
-        ...pair,
-        rate:
-          rate != null && Number.isFinite(rate) && rate > 0
-            ? String(rate)
-            : null,
-      });
-    }
-  }
-  const referenceOriginalBatchIds = [
-    ...new Set(
-      batches.flatMap(
-        (batch) =>
-          batchConfigFields(batch.custom_config)?.portfolio_performance_reference
-            ?.originalBatchIds ?? [],
-      ),
+  ];
+  const priorProAccounts = await readReconciledProImportAccounts(accountIds);
+  const cashRows = rows.filter(
+    (row) => row.route === "cash" && row.tx_date != null,
+  );
+  const cashDates = cashRows.map((row) => row.tx_date!).sort();
+  const shift = (date: string, days: number) =>
+    new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  const crossFormat: CrossFormatContext = {
+    ledgerSources: await readCrossFormatLedgerSources(accountIds, ids),
+    settledIdentities: await readCrossFormatSettledIdentities(accountIds, ids),
+    cashFingerprints: await readCashLedgerFingerprints(
+      cashRows.map((row) => row.dedup_fingerprint).filter((fp) => fp != null),
     ),
-  ].sort((a, b) => a - b);
-  const referenceOriginalRows = referenceOriginalBatchIds.length > 0
-    ? await readReconciliationSources(referenceOriginalBatchIds)
-    : [];
+    correctedAliases: new Set(
+      (await readActiveIbkrCashReceipts())
+        .map((receipt) => receipt.before_data.snapshot)
+        .filter((snapshot) => snapshot?.dedup_fingerprint)
+        .map(
+          (snapshot) =>
+            `${snapshot.dedup_fingerprint_version}:${snapshot.dedup_fingerprint}`,
+        ),
+    ),
+    manualCash:
+      cashDates.length > 0
+        ? await readManualCashCandidates(
+            accountIds,
+            shift(cashDates[0]!, -7),
+            shift(cashDates.at(-1)!, 7),
+          )
+        : [],
+  };
   return {
     ...buildPortfolioImportReconciliationPlan({
       rows,
@@ -3464,38 +1221,10 @@ async function loadPlan(
       adoptPolicy,
       batchPolicies,
       priorProAccounts,
-      referenceOriginalRows,
-      repairContext,
-      saxoAdoptionContext,
-      kinesisAdoptionContext,
-      historicalFxContext,
-      incomeRecognitionContext,
-      cashContext,
-      cashFundingPolicy,
-      networkContext,
-      nativeGiftContext,
-      reconciliationScope,
+      crossFormat,
     }),
     history,
     rows,
-    referenceOriginalBatchIds,
-    priorSaxoBatchIds: saxoAdoptionContext.batches.map((batch) =>
-      Number(batch.id),
-    ),
-    priorCashBatchIds: cashContext.batches.map((batch) => Number(batch.id)),
-    priorNetworkBatchIds: [
-      ...new Set(
-        [...networkContext.batches, ...nativeGiftContext.batches].map((batch) =>
-          Number(batch.id),
-        ),
-      ),
-    ],
-    priorIncomeBatchIds: incomeRecognitionContext.batches.map((batch) =>
-      Number(batch.id),
-    ),
-    priorKinesisBatchIds: kinesisAdoptionContext.batches.map((batch) =>
-      Number(batch.id),
-    ),
   };
 }
 
@@ -3503,17 +1232,9 @@ export async function previewPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
   batchPolicies = [],
-  reconciliationScope = "full",
-  cashFundingPolicy = undefined,
 }: ReconciliationScopeOptions): Promise<ReconciliationPlan> {
   return withTransaction(async () => {
-    const loaded = await loadPlan(
-      batchIds,
-      adoptPolicy,
-      batchPolicies,
-      reconciliationScope,
-      cashFundingPolicy,
-    );
+    const loaded = await loadPlan(batchIds, adoptPolicy, batchPolicies);
     if (loaded.plan.ready) {
       try {
         assertProjectedHistory(
@@ -3573,13 +1294,11 @@ function projectedReconciliationHistory({
   adoptions,
   history,
   rows,
-  sourceOverrides = new Map(),
 }: {
   plan: Pick<ReconciliationPlan, "actions">;
   adoptions: PlanAdoption[];
   history: HistoryImage[];
   rows: ReconciliationSourceRow[];
-  sourceOverrides?: Map<number, ReconciliationSourceRow>;
 }): ProjectedHistoryEvent[] {
   const replacements = new Map(
     adoptions.map((item) => [Number(item.before.id), item.after]),
@@ -3591,17 +1310,14 @@ function projectedReconciliationHistory({
     .map((action) => ({
       action,
       // Insert, transfer and adjustment actions come from these matched rows.
-      row:
-        sourceOverrides.get(action.rowId) ??
-        rows.find((row) => Number(row.id) === action.rowId)!,
+      row: rows.find((row) => Number(row.id) === action.rowId)!,
     }))
-    .sort(
-      (left, right) =>
-        firstNonZero(
-          left.row.tx_date!.localeCompare(right.row.tx_date!),
-          Number(left.row.batch_id) - Number(right.row.batch_id),
-          left.row.row_index - right.row.row_index,
-        ),
+    .sort((left, right) =>
+      firstNonZero(
+        left.row.tx_date!.localeCompare(right.row.tx_date!),
+        Number(left.row.batch_id) - Number(right.row.batch_id),
+        left.row.row_index - right.row.row_index,
+      ),
     );
   const proposed = proposedActions.map(({ action, row }, index) => ({
     ...(action.action === "transfer"
@@ -3618,13 +1334,8 @@ function projectedReconciliationHistory({
     // Both event tables share a sequence, so reflect their actual writer order.
     id: Number.MAX_SAFE_INTEGER - proposedActions.length + index,
   }));
-  const removedCopies = new Set(
-    adoptions.filter(isRepair).map((item) => Number(item.imported.id)),
-  );
   return [
-    ...history
-      .filter((row) => !removedCopies.has(Number(row.id)))
-      .map((row) => replacements.get(Number(row.id)) ?? row),
+    ...history.map((row) => replacements.get(Number(row.id)) ?? row),
     ...proposed,
   ];
 }
@@ -3634,54 +1345,9 @@ export async function applyPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
   batchPolicies = [],
-  expectedPlanFingerprint,
-  lockedBatchIds = batchIds,
-  reconciliationScope = "full",
-  cashFundingPolicy = undefined,
-}: ReconciliationScopeOptions & {
-  expectedPlanFingerprint?: string | undefined;
-  lockedBatchIds?: number[];
-}) {
-  const {
-    plan,
-    adoptions,
-    companions,
-    history,
-    rows,
-    priorSaxoBatchIds,
-    priorKinesisBatchIds,
-    priorIncomeBatchIds,
-    incomeRecords = [],
-    cashRecords = [],
-    cashCorrections = [],
-    cashCorrectionRepeats = [],
-    priorCashBatchIds = [],
-    priorNetworkBatchIds = [],
-    sourceOverrides = new Map(),
-    networkBindings = [],
-    nativeGiftGroups = [],
-  } = await loadPlan(
-    batchIds,
-    adoptPolicy,
-    batchPolicies,
-    reconciliationScope,
-    cashFundingPolicy,
-  );
-  if (
-    expectedPlanFingerprint !== undefined &&
-    expectedPlanFingerprint !== plan.planFingerprint
-  )
-    throw new ConflictError(
-      "Portfolio history or source selection changed. Review the reconciliation plan again.",
-      { details: { reason: "stale_reconciliation_plan" } },
-    );
-  if (
-    (adoptPolicy !== undefined || plan.batchPolicies.length > 0) &&
-    expectedPlanFingerprint === undefined
-  )
-    throw new ValidationError(
-      "An explicit source policy requires expected_plan_fingerprint from its preview",
-    );
+}: ReconciliationScopeOptions) {
+  const { plan, adoptions, crossFormatDuplicates, cashAdoptions, history, rows } =
+    await loadPlan(batchIds, adoptPolicy, batchPolicies);
   if (!plan.ready)
     throw new ConflictError(
       "Import needs reconciliation before any history can be changed",
@@ -3689,107 +1355,12 @@ export async function applyPortfolioImportReconciliation({
         details: { reason: "reconciliation_required", blockers: plan.blockers },
       },
     );
-  if (
-    priorNetworkBatchIds.some((id) => !lockedBatchIds.includes(id)) ||
-    priorCashBatchIds.some((id) => !lockedBatchIds.includes(id)) ||
-    priorSaxoBatchIds.some((id) => !lockedBatchIds.includes(id)) ||
-    priorKinesisBatchIds.some((id) => !lockedBatchIds.includes(id)) ||
-    priorIncomeBatchIds.some((id) => !lockedBatchIds.includes(id)) ||
-    (await readReconciliationBatchScope(batchIds)).some((batch) =>
-      (
-        batchConfigFields(batch.custom_config)?.portfolio_performance_reference
-          ?.originalBatchIds ?? []
-      ).some((id: unknown) => !lockedBatchIds.includes(Number(id))),
-    ) ||
-    adoptions.some(
-      (item) =>
-        (item.imported &&
-          !lockedBatchIds.includes(Number(item.imported.import_batch_id))) ||
-        (item.priorSaxoReceipt &&
-          !lockedBatchIds.includes(Number(item.priorSaxoReceipt.batch_id))),
-    )
-  )
-    throw new ConflictError(
-      "Duplicate repair provenance changed. Review the source scope again.",
-      { details: { reason: "stale_reconciliation_plan" } },
-    );
   assertProjectedHistory(
     history,
-    projectedReconciliationHistory({
-      plan,
-      adoptions,
-      history,
-      rows,
-      sourceOverrides,
-    }),
+    projectedReconciliationHistory({ plan, adoptions, history, rows }),
   );
-  for (const binding of networkBindings)
-    if (!(await retainKinesisNetworkBinding(binding)))
-      throw new ConflictError("Native custody source changed during import", {
-        details: { reason: "stale_reconciliation_plan" },
-      });
-  const recordedCashByBatch = new Map<number, number>();
-  for (const record of cashRecords) {
-    // classifyKinesisCash returns only grouped members, which carry their proof.
-    const recorded = await recordKinesisCash(record);
-    const id = Number(record.row.batch_id);
-    recordedCashByBatch.set(
-      id,
-      (recordedCashByBatch.get(id) ?? 0) + recorded.recordedCash,
-    );
-  }
-  const recordedIncomeByBatch = new Map<number, number>();
-  for (const record of reconciliationScope === "full" ? [] : incomeRecords) {
-    await recordPairedPortfolioIncome(record);
-    const batchId = Number(record.row.batch_id);
-    recordedIncomeByBatch.set(
-      batchId,
-      (recordedIncomeByBatch.get(batchId) ?? 0) + 1,
-    );
-  }
   const adoptedByBatch = new Map<number, number>();
-  const repairedByBatch = new Map<number, number>();
-  const companionsByBatch = new Map<number, number>();
-  for (const correction of cashCorrections) {
-    await applyIbkrCashCorrection(correction);
-    const batchId = Number(correction.row.batch_id);
-    adoptedByBatch.set(batchId, (adoptedByBatch.get(batchId) ?? 0) + 1);
-  }
-  for (const repeated of cashCorrectionRepeats) {
-    await settleIbkrCashCorrectionRepeat(repeated);
-    const batchId = Number(repeated.row.batch_id);
-    if (!repeated.settled)
-      companionsByBatch.set(batchId, (companionsByBatch.get(batchId) ?? 0) + 1);
-  }
-  for (const { row } of companions) {
-    if (!(await markSaxoCompanionSourceDuplicate(row)))
-      throw new ConflictError(
-        "Saxo companion source changed during reconciliation",
-        { details: { reason: "stale_reconciliation_plan" } },
-      );
-    companionsByBatch.set(
-      Number(row.batch_id),
-      (companionsByBatch.get(Number(row.batch_id)) ?? 0) + 1,
-    );
-  }
-  for (const { row, before, after, policy, imported } of adoptions) {
-    if (imported) {
-      await applyDuplicatePortfolioRepair({
-        row,
-        before,
-        after,
-        // A repair is planned only under an explicit source policy.
-        policy: policy as AdoptPolicy,
-        // History mixes custody events in; a repaired duplicate is a
-        // portfolio transaction.
-        imported: { ...imported, id: asPortfolioTransactionId(imported.id) },
-      });
-      repairedByBatch.set(
-        Number(row.batch_id),
-        (repairedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
-      );
-      continue;
-    }
+  for (const { row, before, after, policy } of adoptions) {
     const persisted = await compareAndSetReconciledTransaction(before, after);
     if (!persisted)
       throw new ConflictError(
@@ -3811,141 +1382,100 @@ export async function applyPortfolioImportReconciliation({
       (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
     );
   }
-  for (const action of plan.actions.filter(
-    (action) =>
-      action.action === "duplicate" &&
-      !action.isCash &&
-      (reconciliationScope !== "full" ||
-        Boolean(action.incomeProof) ||
-        Boolean(action.cashProof) ||
-        sourceOverrides.has(action.rowId)),
-  )) {
-    await markAdoptedSourceDuplicate(action.rowId, action.batchId);
-    companionsByBatch.set(
-      action.batchId,
-      (companionsByBatch.get(action.batchId) ?? 0) + 1,
+  const settledByBatch = new Map(adoptedByBatch);
+  const settle = async (row: ReconciliationSourceRow) => {
+    if (!(await markCrossFormatSourceDuplicate(row)))
+      throw new ConflictError(
+        "An import row changed during reconciliation",
+        { details: { reason: "stale_existing_transaction" } },
+      );
+    settledByBatch.set(
+      Number(row.batch_id),
+      (settledByBatch.get(Number(row.batch_id)) ?? 0) + 1,
     );
-  }
-  return {
-    plan,
-    adoptedByBatch,
-    repairedByBatch,
-    companionsByBatch,
-    recordedIncomeByBatch,
-    recordedCashByBatch,
-    nativeGiftGroups,
-    deferredIncomeRowIds:
-      reconciliationScope === "full"
-        ? incomeRecords.map((record) => Number(record.row.id))
-        : [],
   };
-}
-
-/** Unit writers have finished inside the same locked transaction; bind their actual images. */
-export async function completePortfolioImportIncome({
-  batchIds,
-  rowIds,
-  adoptPolicy,
-  batchPolicies = [],
-}: {
-  batchIds: number[];
-  rowIds: number[];
-  adoptPolicy?: string | undefined;
-  batchPolicies?: BatchPolicy[];
-}): Promise<Map<number, number>> {
-  if (rowIds.length === 0) return new Map<number, number>();
-  const loaded = await loadPlan(batchIds, adoptPolicy, batchPolicies);
-  const selected = new Set(rowIds);
-  const records = (loaded.incomeRecords ?? []).filter((record) =>
-    selected.has(Number(record.row.id)),
-  );
-  if (
-    !loaded.plan.ready ||
-    records.length !== selected.size ||
-    records.some((record) => record.plannedUnitRowId != null)
-  )
-    throw new ConflictError(
-      "Paired acquisition changed during the complete import",
-      {
-        details: { reason: "stale_reconciliation_plan" },
+  for (const row of crossFormatDuplicates) await settle(row);
+  for (const { row, decision } of cashAdoptions) {
+    const [before] = await readIbkrCashImagesForUpdate([
+      decision.transactionId,
+    ]);
+    if (
+      !before ||
+      !before.is_active ||
+      Number(before.account_id) !== Number(row.account_id) ||
+      before.date !== decision.existing.date ||
+      before.currency !== decision.existing.currency ||
+      !equalNumber(before.amount, decision.existing.amount, 4) ||
+      (decision.reason === "manual_cash" &&
+        (before.dedup_fingerprint != null || before.source_record_hash != null))
+    )
+      throw new ConflictError(
+        "An existing cash transaction changed during reconciliation",
+        { details: { reason: "stale_existing_transaction" } },
+      );
+    const binding = (source: { batchId: number; stagingRowId: number }) => ({
+      id: source.stagingRowId,
+      batch_id: source.batchId,
+      account_id: Number(row.account_id),
+      custom_config: null,
+      staging: {},
+    });
+    const imported = { batchId: Number(row.batch_id), stagingRowId: Number(row.id) };
+    const proof: IbkrCashProof =
+      decision.reason === "ibkr_native_funding" && decision.original
+        ? {
+            kind: "ibkr_native_funding",
+            version: 1,
+            original: decision.original,
+            native: imported,
+            sourceBindings: [binding(decision.original), binding(imported)],
+          }
+        : { kind: "cash_adoption", version: 1, sourceBindings: [binding(imported)] };
+    await writeCashAdoption({
+      batchId: Number(row.batch_id),
+      stagingRowId: Number(row.id),
+      policy: decision.policy,
+      before,
+      after: {
+        ...before,
+        amount: decision.after.amount,
+        currency: decision.after.currency as typeof before.currency,
+        dedup_fingerprint: row.dedup_fingerprint,
+        dedup_fingerprint_version: row.dedup_fingerprint_version,
       },
+      proof,
+    });
+    await settle(row);
+    adoptedByBatch.set(
+      Number(row.batch_id),
+      (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
     );
-  const counts = new Map<number, number>();
-  for (const record of records) {
-    await recordPairedPortfolioIncome(record);
-    const id = Number(record.row.batch_id);
-    counts.set(id, (counts.get(id) ?? 0) + 1);
   }
-  return counts;
+  return { plan, adoptedByBatch, settledByBatch };
 }
 
-/** Exact proved rows from the locked scope may bypass only source-readiness errors. */
-export async function getPortfolioImportCompanionRowIds({
-  batchIds,
-  adoptPolicy,
-  batchPolicies = [],
-  reconciliationScope = "full",
-  cashFundingPolicy = undefined,
-}: ReconciliationScopeOptions): Promise<number[]> {
-  const { companions } = await loadPlan(
-    batchIds,
-    adoptPolicy,
-    batchPolicies,
-    reconciliationScope,
-    cashFundingPolicy,
+/** The locked plan's custody events name these accounts. */
+export async function getPortfolioImportPlanAccountIds(
+  options: ReconciliationScopeOptions,
+): Promise<number[]> {
+  const { plan } = await loadPlan(
+    options.batchIds,
+    options.adoptPolicy,
+    options.batchPolicies,
   );
-  return companions.map(({ row }) => Number(row.id));
+  return plan.actions
+    .flatMap((action) => [
+      action.transfer?.sourceAccountId,
+      action.transfer?.destinationAccountId,
+      action.adjustment?.accountId,
+    ])
+    .filter((id) => id != null);
 }
 
-/** Selection is derived from the complete source under the caller's locks. */
-export async function getPortfolioImportScopedSelection({
-  batchIds,
-  adoptPolicy,
-  batchPolicies = [],
-  reconciliationScope = "full",
-  cashFundingPolicy = undefined,
-}: ReconciliationScopeOptions): Promise<ReconciliationPlan> {
-  const loaded = await loadPlan(
-    batchIds,
-    adoptPolicy,
-    batchPolicies,
-    reconciliationScope,
-    cashFundingPolicy,
-  );
-  return loaded.plan;
-}
-
-export async function getPortfolioImportRepairBatchIds({
-  batchIds,
-  adoptPolicy,
-  batchPolicies = [],
-  reconciliationScope = "full",
-  cashFundingPolicy = undefined,
-}: ReconciliationScopeOptions): Promise<number[]> {
-  const loaded = await loadPlan(
-    batchIds,
-    adoptPolicy,
-    batchPolicies,
-    reconciliationScope,
-    cashFundingPolicy,
-  );
-  return [
-    ...new Set(
-      loaded.adoptions
-        .filter(isRepair)
-        .map((item) => Number(item.imported.import_batch_id))
-        .concat(
-          loaded.referenceOriginalBatchIds,
-          loaded.priorSaxoBatchIds,
-          loaded.priorKinesisBatchIds,
-          loaded.priorIncomeBatchIds,
-          loaded.priorCashBatchIds,
-          loaded.priorNetworkBatchIds,
-        ),
-    ),
-  ].sort((a, b) => a - b);
-}
-
+/**
+ * Validate every receipt a batch owns before rollback deletes anything.
+ * Resolves to the batch's active adoption receipts (portfolio and IBKR cash).
+ */
 export async function validatePortfolioImportAdoptionRollback(
   batchId: number,
   removalRows: readonly { id: number | string; investment_id?: unknown }[],
@@ -3953,7 +1483,7 @@ export async function validatePortfolioImportAdoptionRollback(
   const receipts = await getActiveAdoptionReceipts(batchId);
   await validateIbkrCashCorrectionRollback(receipts);
   const portfolioReceipts = receipts.filter(
-    (receipt) => !isIbkrCashCorrectionReceipt(receipt),
+    (receipt) => !isIbkrCashReceipt(receipt),
   );
   const repairs = await getActiveDuplicateRepairReceipts(batchId);
   await validateDuplicatePortfolioRepairRollback(repairs);
@@ -4003,11 +1533,30 @@ export async function validatePortfolioImportAdoptionRollback(
   return receipts;
 }
 
+/** Compare receipt snapshots; an absent accounting role means `standard`. */
+function sameSnapshot(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown> | undefined,
+): boolean {
+  if (!left || !right) return false;
+  const normalize = (image: Record<string, unknown>) => {
+    const { income_recognition_role: role, ...rest } = image;
+    return role == null || role === "standard" ? rest : image;
+  };
+  const leftImage = normalize(left);
+  const rightImage = normalize(right);
+  const keys = Object.keys(leftImage).sort();
+  return (
+    JSON.stringify(keys) === JSON.stringify(Object.keys(rightImage).sort()) &&
+    keys.every((key) => leftImage[key] === rightImage[key])
+  );
+}
+
 export async function restorePortfolioImportAdoptions(
   receipts: readonly ReconciliationJournalRow[],
 ): Promise<void> {
   for (const receipt of receipts) {
-    if (isIbkrCashCorrectionReceipt(receipt)) {
+    if (isIbkrCashReceipt(receipt)) {
       await restoreIbkrCashCorrection(receipt);
       continue;
     }
@@ -4030,51 +1579,5 @@ export async function restorePortfolioImportAdoptions(
       after: restored,
       previousEntryId: Number(receipt.id),
     });
-  }
-}
-
-/** Capture both canonical after-images in the retained literal group source. */
-export async function completePortfolioImportNativeGiftGroups(
-  groups: readonly NativeGiftGroup[],
-): Promise<void> {
-  for (const group of groups) {
-    const ids = [
-      ...new Set(group.members.map((row) => Number(row.investment_id))),
-    ];
-    const history = await readReconciliationHistory(ids);
-    const sources = await readReconciliationSources([
-      ...new Set(group.members.map((row) => Number(row.batch_id))),
-    ]);
-    const after: ReconciliationHistoryEvent[] = [];
-    for (const member of group.members) {
-      const current = history.filter(
-        (row) =>
-          row.dedup_fingerprint === member.dedup_fingerprint &&
-          row.dedup_fingerprint_version === member.dedup_fingerprint_version,
-      );
-      const source = sources.find(
-        (row) => Number(row.id) === Number(member.id),
-      );
-      const [image] = current;
-      if (
-        current.length !== 1 ||
-        !image ||
-        !source ||
-        !["duplicate", "committed"].includes(source.status) ||
-        source.source_record_hash !== member.source_record_hash ||
-        source.raw_data !== member.raw_data ||
-        source.dedup_fingerprint !== member.dedup_fingerprint
-      )
-        throw new ConflictError("Native gift group changed during import", {
-          details: { reason: "network_gift_receipt_changed" },
-        });
-      after.push(image);
-    }
-    const receipt = { version: 1, proof: group.proof, after };
-    for (const member of group.members)
-      if (!(await retainKinesisNativeGiftReceipt(member, receipt)))
-        throw new ConflictError("Native gift group changed during import", {
-          details: { reason: "network_gift_receipt_changed" },
-        });
   }
 }

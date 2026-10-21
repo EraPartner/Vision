@@ -50,7 +50,7 @@ const CAPABILITY: Readonly<
     crypto: [binance, twelveData, yahoo],
     metals: [kinesis, yahoo, twelveData],
   },
-  // NOTE: the /api/research/fundamentals + /scorecard routes do NOT race this
+  // NOTE: the /api/research/scorecard route and the AI chat research tool do NOT race this
   // chain — they call researchAggregator.fetchFundamentals(), which MERGES FMP +
   // Yahoo field-by-field (FMP preferred). This chain is retained for the generic
   // fetch('fundamentals') path and as documented preference.

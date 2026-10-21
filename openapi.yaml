@@ -7,9 +7,11 @@ info:
     Self-hosted financial transaction manager.
     All responses are wrapped in the ADR-026 envelope:
     `{ ok: true, data: T }` on success, `{ ok: false, error: {...} }` on failure.
-    Every request must have one valid Host authority targeting loopback, the configured
-    listener hostname/address, or an exact SERVER_ALLOWED_HOSTS entry. Rejected
-    destinations receive 403 before CORS, body parsing, health and routes.
+    The backend only listens on loopback and has no user or admin authentication
+    (ADR-233). Every request must have one Host authority naming localhost,
+    127.0.0.1 or ::1 with the backend port; other destinations receive 403 before
+    body parsing, health and routes. No CORS headers are sent: clients are
+    same-origin.
 
 servers:
   - url: http://localhost:3000
@@ -148,6 +150,24 @@ components:
               grossIncome: { type: number }
               taxableIncome: { type: number }
               totalPIT: { type: number }
+    ReportDocument:
+      type: object
+      description: >-
+        A print-ready report (ADR-234): a self-contained HTML document with inline
+        styles and no scripts, the Chromium print footer template that fills the
+        reserved 28px bottom margin with page numbers, and the PDF filename.
+      required: [filename, html, footerTemplate]
+      properties:
+        filename:
+          type: string
+          pattern: "^vision-(financial|portfolio|tax)-\\d{4}-\\d{2}-\\d{2}\\.pdf$"
+          description: PDF filename in the form vision-<type>-YYYY-MM-DD.pdf (app timezone date).
+        html:
+          type: string
+          description: Complete A4 report document starting with <!DOCTYPE html>.
+        footerTemplate:
+          type: string
+          description: Chromium printToPDF footerTemplate using pageNumber and totalPages spans.
     ReportRequest:
       type: object
       description: >-
@@ -2728,115 +2748,6 @@ components:
                 limit: { type: integer, minimum: 1, maximum: 200 }
                 offset: { type: integer, minimum: 0, maximum: 1000000 }
 
-    AnalysisInterchangeValue:
-      nullable: true
-      oneOf:
-        - { type: string }
-        - { type: number, format: double }
-        - { type: boolean }
-      description: Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion.
-    AnalysisInterchangeColumn:
-      type: object
-      required: [id, label, type]
-      properties:
-        id: { type: string }
-        label: { type: string }
-        type:
-          type: string
-          enum: [string, integer, decimal, boolean, date]
-    AnalysisInterchangeAttachment:
-      type: object
-      required: [id, fileName, importedAt, sha256, columns, rows]
-      properties:
-        id: { type: string }
-        fileName: { type: string }
-        importedAt: { type: string, format: date-time }
-        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
-        columns:
-          type: array
-          maxItems: 32
-          items: { $ref: "#/components/schemas/AnalysisInterchangeColumn" }
-        rows:
-          type: array
-          maxItems: 1000
-          items:
-            type: object
-            additionalProperties:
-              { $ref: "#/components/schemas/AnalysisInterchangeValue" }
-    AnalysisInterchangeImport:
-      type: object
-      required: [format, attachment, formulaCells]
-      properties:
-        format: { type: string, enum: [csv, xlsx] }
-        attachment:
-          { $ref: "#/components/schemas/AnalysisInterchangeAttachment" }
-        formulaCells: { type: integer, minimum: 0 }
-      description: Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import.
-    AnalysisInterchangeExportPayload:
-      type: object
-      required: [result, context]
-      description: UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned.
-      properties:
-        result:
-          type: object
-          additionalProperties: true
-          required: [requestId, completedAt, rows, columns, window]
-          properties:
-            requestId: { type: string }
-            startedAt: { type: string }
-            completedAt: { type: string }
-            executor: { type: string }
-            columns:
-              type: array
-              items:
-                type: object
-                required: [id, type]
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  type: { type: string }
-            declaredColumns:
-              type: array
-              items:
-                type: object
-                required: [id, type]
-                additionalProperties: true
-                properties:
-                  id: { type: string }
-                  type: { type: string }
-                  label: { type: string }
-            rows:
-              type: array
-              items:
-                type: object
-                additionalProperties: {}
-              description: Original Analysis cells, including JSON/array columns, as returned; no currency conversion.
-            window: { type: object, additionalProperties: true }
-            complete: { type: boolean }
-            coverage: {}
-            transformationCoverage: {}
-            preparationLineage: {}
-            transformationErrors: {}
-            formulaErrors: {}
-            formulaSummaries:
-              type: object
-              additionalProperties:
-                { $ref: "#/components/schemas/AnalysisInterchangeValue" }
-        context:
-          type: object
-          additionalProperties: true
-          required: [name, timezone, workspace]
-          properties:
-            name: { type: string }
-            timezone: { type: string }
-            workspace: { type: string }
-            definitionId: { type: string }
-            definitionVersion: { type: integer }
-            datasetIds: { type: array, items: { type: string } }
-            sourceReferences: { type: array, items: { type: string } }
-            assumptions: {}
-            formulas: {}
-
     AnalysisVisualFilter:
       type: object
       required: [fieldId, operator]
@@ -3576,291 +3487,6 @@ components:
     # Research wire contracts. These are named even where most provider fields
     # are optional so generated clients and the hand-written UI adapters cannot
     # silently drift apart.
-    ResearchPresentationRow:
-      type: object
-      required: [time]
-      description: Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null.
-      properties:
-        time: { type: number }
-      additionalProperties: { type: number, nullable: true }
-
-    ResearchPresentationCompareResult:
-      type: object
-      required: [rows, stats, correlation]
-      properties:
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-        stats:
-          type: array
-          items:
-            type: object
-            required: [symbol, totalReturn, volatility, maxDrawdown]
-            properties:
-              symbol: { type: string }
-              totalReturn: { type: number, nullable: true }
-              volatility: { type: number, nullable: true }
-              maxDrawdown: { type: number, nullable: true }
-              firstTime: { type: number }
-              lastTime: { type: number }
-        correlation:
-          type: object
-          required: [symbols, matrix]
-          properties:
-            symbols: { type: array, items: { type: string } }
-            matrix:
-              type: array
-              items:
-                type: array
-                items: { type: number, nullable: true }
-
-    ResearchPresentationChartResult:
-      type: object
-      required: [rows, oscillatorRows]
-      properties:
-        rows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-        oscillatorRows:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
-
-    ResearchPresentationWatchlistList:
-      type: object
-      required:
-        [
-          distancePercent,
-          absoluteDistancePercent,
-          isAtOrBelowTarget,
-          sinceAddedPercent,
-        ]
-      properties:
-        distancePercent: { type: number, nullable: true }
-        absoluteDistancePercent: { type: number, nullable: true }
-        isAtOrBelowTarget: { type: boolean }
-        sinceAddedPercent: { type: number, nullable: true }
-
-    ResearchPresentationWatchlistResult:
-      type: object
-      required: [list, chart, preview]
-      properties:
-        list: { $ref: "#/components/schemas/ResearchPresentationWatchlistList" }
-        chart:
-          type: object
-          required:
-            [
-              distancePercent,
-              absoluteDistancePercent,
-              isAtOrBelowTarget,
-              hasValidTarget,
-              domain,
-            ]
-          properties:
-            distancePercent: { type: number, nullable: true }
-            absoluteDistancePercent: { type: number, nullable: true }
-            isAtOrBelowTarget: { type: boolean }
-            hasValidTarget: { type: boolean }
-            domain:
-              type: array
-              minItems: 2
-              maxItems: 2
-              items: { type: number }
-        preview:
-          type: object
-          nullable: true
-          required: [absolutePercent, direction]
-          properties:
-            absolutePercent: { type: number }
-            direction: { type: string, enum: [below, above] }
-
-    ResearchPresentationWatchlistBatchResult:
-      type: object
-      required: [entries]
-      properties:
-        entries:
-          type: array
-          items:
-            type: object
-            required: [id, list]
-            properties:
-              id: { type: integer, minimum: 1 }
-              list:
-                {
-                  $ref: "#/components/schemas/ResearchPresentationWatchlistList",
-                }
-
-    ResearchPresentationAnalystResult:
-      type: object
-      nullable: true
-      required: [total, bullFraction, bearFraction, verdictKey, tone, fractions]
-      properties:
-        total: { type: number }
-        bullFraction: { type: number }
-        bearFraction: { type: number }
-        verdictKey:
-          {
-            type: string,
-            enum:
-              [
-                market.strongBuy,
-                market.buy,
-                market.hold,
-                market.sell,
-                market.strongSell,
-              ],
-          }
-        tone: { type: string, enum: [success, destructive, warning] }
-        fractions: { $ref: "#/components/schemas/ResearchAnalystConsensus" }
-
-    ResearchPresentationProviderQuoteResult:
-      type: object
-      nullable: true
-      required: [symbol, name, change, changePercent, currency, exchange, type]
-      properties:
-        symbol: { type: string }
-        name: { type: string }
-        price: { type: number, nullable: true }
-        change: { type: number, nullable: true }
-        changePercent: { type: number, nullable: true }
-        currency: { type: string }
-        exchange: { type: string }
-        type: { type: string }
-
-    ResearchPresentationMarketAddResult:
-      type: object
-      required: [providedCount, isConsistent]
-      properties:
-        derivedAmount: { type: number, nullable: true }
-        derivedUnits: { type: number, nullable: true }
-        derivedPrice: { type: number, nullable: true }
-        effectiveAmount: { type: number, nullable: true }
-        effectiveUnits: { type: number, nullable: true }
-        effectivePrice: { type: number, nullable: true }
-        providedCount: { type: integer, minimum: 0, maximum: 3 }
-        isConsistent: { type: boolean }
-
-    ResearchPresentationSnapshot:
-      type: object
-      required: [kind]
-      description: >-
-        Uploaded JSON discriminated by kind. compare requires series[{symbol,points}]
-        (max 6). chart requires series[{id,field,type,points}] (max 5),
-        indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase,
-        oscillator and nullable oscillatorSeriesId. watchlist requires nullable
-        targetPrice/currentPrice/addedPrice and optional points. watchlistBatch
-        requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000).
-        providerQuote requires points and investment{name,currency,symbol?,priceProvider?},
-        with optional selectedSymbol. analyst requires nullable consensus with all five
-        numeric count fields. marketAdd accepts positive amount/units/price and optional
-        derive (default true). Points require time, with optional nullable numeric
-        close/high/low/volume. There is no point-count truncation; transport is bounded.
-      properties:
-        kind:
-          {
-            type: string,
-            enum:
-              [
-                compare,
-                chart,
-                watchlist,
-                watchlistBatch,
-                providerQuote,
-                analyst,
-                marketAdd,
-              ],
-          }
-        series:
-          type: array
-          items:
-            type: object
-            properties:
-              symbol: { type: string, minLength: 1, maxLength: 64 }
-              id: { type: string, minLength: 1, maxLength: 128 }
-              field: { type: string, enum: [price, volume] }
-              type: { type: string, enum: [line, area, candlestick, bar] }
-              points:
-                type: array
-                items: { $ref: "#/components/schemas/ResearchChartPoint" }
-        indicators:
-          type: array
-          maxItems: 20
-          items:
-            type: object
-            required: [id, type, period, seriesId]
-            properties:
-              id: { type: string, minLength: 1, maxLength: 128 }
-              type: { type: string, enum: [sma, ema, bollinger] }
-              period: { type: integer, minimum: 1, maximum: 500 }
-              seriesId: { type: string, minLength: 1, maxLength: 128 }
-        rebase: { type: boolean }
-        oscillator: { type: string, enum: [none, rsi, macd] }
-        oscillatorSeriesId: { type: string, nullable: true }
-        targetPrice: { type: number, nullable: true }
-        currentPrice: { type: number, nullable: true }
-        addedPrice: { type: number, nullable: true }
-        points:
-          type: array
-          items: { $ref: "#/components/schemas/ResearchChartPoint" }
-        entries:
-          type: array
-          maxItems: 5000
-          items:
-            type: object
-            required: [id, targetPrice, currentPrice, addedPrice]
-            properties:
-              id: { type: integer, minimum: 1 }
-              targetPrice: { type: number }
-              currentPrice: { type: number, nullable: true }
-              addedPrice: { type: number, nullable: true }
-        investment:
-          type: object
-          required: [name, currency]
-          properties:
-            symbol: { type: string, nullable: true }
-            name: { type: string }
-            currency: { type: string }
-            priceProvider: { type: string, nullable: true }
-        selectedSymbol: { type: string, nullable: true }
-        consensus:
-          {
-            $ref: "#/components/schemas/ResearchAnalystConsensus",
-            nullable: true,
-          }
-        amount: { type: number, exclusiveMinimum: 0 }
-        units: { type: number, exclusiveMinimum: 0 }
-        price: { type: number, exclusiveMinimum: 0 }
-        derive: { type: boolean, default: true }
-
-    ResearchPresentationData:
-      type: object
-      required: [kind, result]
-      description: result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null.
-      properties:
-        kind:
-          {
-            type: string,
-            enum:
-              [
-                compare,
-                chart,
-                watchlist,
-                watchlistBatch,
-                providerQuote,
-                analyst,
-                marketAdd,
-              ],
-          }
-        result:
-          nullable: true
-          anyOf:
-            - $ref: "#/components/schemas/ResearchPresentationCompareResult"
-            - $ref: "#/components/schemas/ResearchPresentationChartResult"
-            - $ref: "#/components/schemas/ResearchPresentationWatchlistResult"
-            - $ref: "#/components/schemas/ResearchPresentationWatchlistBatchResult"
-            - $ref: "#/components/schemas/ResearchPresentationProviderQuoteResult"
-            - $ref: "#/components/schemas/ResearchPresentationAnalystResult"
-            - $ref: "#/components/schemas/ResearchPresentationMarketAddResult"
-
     ResearchMeta:
       type: object
       required: [provider, source]
@@ -3884,27 +3510,6 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ResearchSearchItem" }
-
-    ResearchQuote:
-      type: object
-      required: [symbol]
-      properties:
-        symbol: { type: string }
-        name: { type: string, nullable: true }
-        price: { type: number, nullable: true }
-        change: { type: number, nullable: true }
-        changePercent: { type: number, nullable: true }
-        currency: { type: string, nullable: true }
-        exchange: { type: string, nullable: true }
-        type: { type: string, nullable: true }
-        open: { type: number, nullable: true }
-        dayHigh: { type: number, nullable: true }
-        dayLow: { type: number, nullable: true }
-        prevClose: { type: number, nullable: true }
-        volume: { type: number, nullable: true }
-        avgVolume: { type: number, nullable: true }
-        high52w: { type: number, nullable: true }
-        low52w: { type: number, nullable: true }
 
     ResearchChartPoint:
       type: object
@@ -4303,28 +3908,12 @@ components:
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchSearchData" }
-    ResearchQuoteEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
-        - type: object
-          properties:
-            data: { $ref: "#/components/schemas/ResearchQuote", nullable: true }
     ResearchChartEnvelope:
       allOf:
         - $ref: "#/components/schemas/ResearchEnvelopeBase"
         - type: object
           properties:
             data: { $ref: "#/components/schemas/ResearchChartData" }
-    ResearchFundamentalsEnvelope:
-      allOf:
-        - $ref: "#/components/schemas/ResearchEnvelopeBase"
-        - type: object
-          properties:
-            data:
-              {
-                $ref: "#/components/schemas/ResearchFundamentals",
-                nullable: true,
-              }
     ResearchAnalystEnvelope:
       allOf:
         - $ref: "#/components/schemas/ResearchEnvelopeBase"
@@ -7344,317 +6933,181 @@ components:
           type: boolean
 
     # ─── Portfolio Import ─────────────────────────────────────────────────────
-    PortfolioImportReconciliationDateProof:
+    PortfolioImportReconciliationRequest:
       type: object
       additionalProperties: false
+      required: [batch_ids]
       description: >-
-        Present only on a correct_existing_only prefer_source date-only adoption
-        of a proved closed Kinesis yield group. Existing and source dates equal
-        recordedDate and paymentDate respectively. Quantities, type and all
-        financial values are unchanged. memberCount includes unchanged yield
-        anchors, which need not be selected correction actions; complete group
-        closure and atomic selection are proved by the server and bound in the
-        reviewed fingerprint.
-      required: [kind, groupKey, recordedDate, paymentDate, memberCount]
+        Shared preview and commit body. Unknown fields, including the removed
+        reconciliation_scope, cash_funding_policy and expected_plan_fingerprint,
+        are rejected with 400.
       properties:
-        kind: { type: string, enum: [closed_kinesis_yield_group] }
-        groupKey: { type: string, pattern: "^[a-f0-9]{64}$" }
-        recordedDate: { type: string, format: date }
-        paymentDate: { type: string, format: date }
-        memberCount: { type: integer, minimum: 1 }
-
-    PortfolioImportReconciliationIncomeProof:
-      type: object
-      additionalProperties: false
-      required: [kind]
-      anyOf:
-        - required: [unitRowId]
-        - required: [unitTransactionId]
-      description: Present on proved record_income, duplicate or settled paired-income actions in full history or record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full scope requires unitRowId binding the distinct selected Gift action in the same batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do repeated income actions. Repeats also identify the distinct existing income through existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis income/units identity and immutable receipt images, binds proof into the fingerprint, and writes income only after its unit is proved. Each income and unit identity is unique; the proof cannot record income again or add another acquisition.
-      properties:
-        kind: { type: string, enum: [paired_kinesis_income] }
-        unitRowId:
-          {
-            type: integer,
-            format: int64,
-            minimum: 1,
-            maximum: 9007199254740991,
-            description: Required only in full history; output-only staged Gift row ID selected in this review.,
-          }
-        unitTransactionId:
-          {
-            type: integer,
-            format: int64,
-            minimum: 1,
-            maximum: 9007199254740991,
-          }
-
-    PortfolioImportReconciliationCashValues:
-      type: object
-      additionalProperties: false
-      required:
-        [
-          date,
-          amount,
-          currency,
-          accountId,
-          isTransfer,
-          transferSource,
-          transferPeerId,
-        ]
-      description: Signed cash ledger values for a proved source event. Required for a new cash action, optional on proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A separately quoted own-account withdrawal fee is retained as a second negative expense component; the transfer component is net of that fee. Card spending already includes its quoted fee and creates no extra fee row.
-      properties:
-        date: { type: string, format: date }
-        amount: { type: string, pattern: "^-?[0-9]+(\\.[0-9]+)?$" }
-        currency: { type: string, pattern: "^[A-Z]{3}$" }
-        accountId:
-          {
-            type: integer,
-            format: int64,
-            minimum: 1,
-            maximum: 9007199254740991,
-          }
-        isTransfer: { type: boolean }
-        transferSource: { type: string, enum: [brokerage] }
-        transferPeerId: { type: integer, nullable: true, enum: [null] }
-
-    PortfolioImportReconciliationCashProof:
-      type: object
-      additionalProperties: false
-      required:
-        [
-          kind,
-          groupKey,
-          eventKey,
-          eventKind,
-          fileHash,
-          memberCount,
-          componentCount,
-        ]
-      description: Present only in record_cash_only on every cash, duplicate or settled action. The complete original source and all cash balance chains are proved before selection; every group member selects together. memberCount includes new and repeated cash actions, and equals selected group action count. Event identities are unique, and fileHash is common within a source batch/group. Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to the reviewed fingerprint and confirmed own-account funding policy; it does not authorize portfolio or custody actions.
-      properties:
-        kind: { type: string, enum: [closed_kinesis_cash] }
-        groupKey: { type: string, pattern: "^[a-f0-9]{64}$" }
-        eventKey: { type: string, pattern: "^[a-f0-9]{64}$" }
-        eventKind:
-          {
-            type: string,
-            enum: [trade_quote, own_account_funding, card_expense],
-          }
-        fileHash: { type: string, pattern: "^[a-f0-9]{64}$" }
-        memberCount: { type: integer, minimum: 1, maximum: 9007199254740991 }
-        componentCount:
-          {
-            type: integer,
-            enum: [1, 2],
-            description: One ledger component,
-            or two for a separately quoted own-account withdrawal fee.,
-          }
-
-    PortfolioImportReconciliationCounts:
-      type: object
-      required: [imported, duplicates, adopted, repaired, errors]
-      properties:
-        imported: { type: integer, minimum: 0 }
-        duplicates: { type: integer, minimum: 0 }
-        adopted: { type: integer, minimum: 0 }
-        repaired: { type: integer, minimum: 0 }
-        errors: { type: integer, minimum: 0 }
-        recordedCash:
-          type: integer
-          minimum: 0
-          description: Additive aggregate and batch subtotal of newly recorded cash ledger components. In full history it is a subset of imported alongside recordedIncome and ordinary records. In record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be smaller. Repeated settlement records no new cash.
-        recordedIncome:
-          type: integer
-          minimum: 0
-          description: Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In full history it is a subset of imported; the paired Gift is recorded or adopted once in the same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is zero. Missing subtotals remain valid for older full responses.
-
-    PortfolioImportReconciliationCommitResult:
-      allOf:
-        - $ref: "#/components/schemas/PortfolioImportReconciliationCounts"
-        - $ref: "#/components/schemas/PortfolioImportReconciliationScopeProgress"
-        - type: object
-          required: [batches]
-          properties:
-            selectedRowIds:
-              type: array
-              uniqueItems: true
-              description: Present for every bounded scope; server-derived staging IDs, never caller-selectable. Already settled actions need not add to duplicates.
-              items:
+        batch_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            {
+              type: integer,
+              format: int64,
+              minimum: 1,
+              maximum: 9007199254740991,
+            }
+        adopt_policy:
+          type: string
+          enum: [preserve_existing, prefer_source]
+          description: Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
+        batch_policies:
+          type: array
+          maxItems: 100
+          description: Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject.
+          items:
+            type: object
+            additionalProperties: false
+            required: [batch_id, adopt_policy]
+            properties:
+              batch_id:
                 {
                   type: integer,
                   format: int64,
                   minimum: 1,
                   maximum: 9007199254740991,
                 }
+              adopt_policy:
+                { type: string, enum: [preserve_existing, prefer_source] }
+
+    PortfolioImportReconciliationCounts:
+      type: object
+      required: [imported, duplicates, adopted, errors]
+      properties:
+        imported:
+          type: integer
+          minimum: 0
+          description: Newly recorded transactions, including in-kind income recorded with the included_in_units role.
+        duplicates:
+          type: integer
+          minimum: 0
+          description: Settled source rows, including adopted rows.
+        adopted: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+
+    PortfolioImportReconciliationCommitResult:
+      allOf:
+        - $ref: "#/components/schemas/PortfolioImportReconciliationCounts"
+        - type: object
+          required: [batches]
+          properties:
             batches:
               type: array
               items:
                 allOf:
                   - $ref: "#/components/schemas/PortfolioImportReconciliationCounts"
-                  - $ref: "#/components/schemas/PortfolioImportReconciliationScopeProgress"
                   - type: object
                     required: [batch_id]
                     properties:
                       batch_id: { type: integer, format: int64 }
 
-    PortfolioImportReconciliationScopeProgress:
-      type: object
-      description: >-
-        All four fields are emitted for adopt_existing_only, correct_existing_only, record_in_kind_income_only and record_cash_only plans, commit results,
-        and commit batch entries. Preview batchProgress entries use pending,
-        complete and deferredCounts with their batchId, without reconciliationScope.
-        Full-scope responses retain their existing shape and omit these fields.
-        Complete describes source settlement, not the batch lifecycle: every selected
-        batch stays awaiting_review while the overall session has pending events.
-      properties:
-        reconciliationScope:
-          type: string
-          enum:
-            [
-              adopt_existing_only,
-              correct_existing_only,
-              record_in_kind_income_only,
-              record_cash_only,
-            ]
-        pending:
-          type: integer
-          minimum: 0
-          description: Excluded unsettled source rows after selected actions; per-batch counts sum to the session total.
-        complete:
-          type: boolean
-          description: True exactly when pending is zero.
-        deferredCounts:
-          type: object
-          description: >-
-            Pending rows grouped by staged event kind, including dividend, gift,
-            sell, cash, asset_transfer, asset_adjustment, account_internal and
-            unsupported when present. Values sum to pending.
-          additionalProperties: { type: integer, minimum: 0 }
-
     PortfolioImportReconciliationPlan:
-      allOf:
-        - $ref: "#/components/schemas/PortfolioImportReconciliationScopeProgress"
-        - type: object
-          required:
-            [
-              batchIds,
-              adoptPolicy,
-              batchPolicies,
-              planFingerprint,
-              ready,
-              actions,
-              blockers,
-              summary,
-            ]
-          properties:
-            batchIds:
-              type: array
-              items:
+      type: object
+      required:
+        [batchIds, adoptPolicy, batchPolicies, ready, actions, blockers, summary]
+      properties:
+        batchIds:
+          type: array
+          items:
+            {
+              type: integer,
+              format: int64,
+              minimum: 1,
+              maximum: 9007199254740991,
+            }
+        adoptPolicy:
+          type: string
+          nullable: true
+          enum: [preserve_existing, prefer_source, null]
+        batchPolicies:
+          type: array
+          items:
+            type: object
+            required: [batchId, adoptPolicy]
+            properties:
+              batchId:
                 {
                   type: integer,
                   format: int64,
                   minimum: 1,
                   maximum: 9007199254740991,
                 }
-            adoptPolicy:
-              type: string
-              nullable: true
-              enum: [preserve_existing, prefer_source, null]
-            batchPolicies:
-              type: array
-              items:
-                type: object
-                required: [batchId, adoptPolicy]
-                properties:
-                  batchId:
-                    {
-                      type: integer,
-                      format: int64,
-                      minimum: 1,
-                      maximum: 9007199254740991,
-                    }
-                  adoptPolicy:
-                    { type: string, enum: [preserve_existing, prefer_source] }
-            planFingerprint:
-              type: string
-              pattern: "^[a-f0-9]{64}$"
-            ready: { type: boolean }
-            actions:
-              type: array
-              description: Full-scope reviewed actions; attachment/correction selects adopt/duplicate/settled, record_in_kind_income_only selects record_income/duplicate/settled, and record_cash_only selects cash/duplicate/settled only.
-              items:
-                type: object
-                additionalProperties: true
-                properties:
-                  investmentId:
-                    type: integer
-                    format: int64
-                    minimum: 1
-                    maximum: 9007199254740991
-                    nullable: true
-                    description: Resolved investment identity; required on full paired income and its selected Gift action, including bodyless repeats.
-                  existingTransactionId:
-                    type: integer
-                    format: int64
-                    minimum: 1
-                    maximum: 9007199254740991
-                    description: Existing canonical identity for adoption or owned duplicate/settled actions. Full paired income requires distinct existing income and unit identities on repeats.
-                  isCash:
-                    type: boolean
-                    description: True for proven native IBKR funding corrections. existingTransactionId identifies the cash ledger; investmentId is null. Only amount and currency can change, retaining the original date, notes and financial provenance.
-                  dateProof:
-                    $ref: "#/components/schemas/PortfolioImportReconciliationDateProof"
-                  incomeProof:
-                    $ref: "#/components/schemas/PortfolioImportReconciliationIncomeProof"
-                  cashProof:
-                    $ref: "#/components/schemas/PortfolioImportReconciliationCashProof"
-                  cashValues:
-                    $ref: "#/components/schemas/PortfolioImportReconciliationCashValues"
-                  cashFeeValues:
-                    allOf:
-                      - $ref: "#/components/schemas/PortfolioImportReconciliationCashValues"
-                    description: Required on new componentCount=2 own-account withdrawals. Negative same-date/currency/account fee expense with isTransfer=false, brokerage origin and null peer. Main cashValues is the net withdrawal and isTransfer=true; no separate fee is invented for card payments. Optional alongside main values on repeats.
-                  existingCashFeeTransactionId:
-                    type: integer
-                    format: int64
-                    minimum: 1
-                    maximum: 9007199254740991
-                    description: Required on duplicate/settled componentCount=2 repeats; a distinct existing fee transaction whose complete after-image is guarded. Forbidden for single-component actions.
-            blockers:
-              type: array
-              items: { type: object, additionalProperties: true }
-            summary:
-              type: object
-              description: Counts of actions in this plan; narrow scope excludes deferred events.
-              additionalProperties: { type: integer, minimum: 0 }
-            selectedRowIds:
-              type: array
-              uniqueItems: true
-              description: Present for every bounded scope; exactly the distinct row IDs in selected actions, derived by the server.
-              items:
-                {
-                  type: integer,
-                  format: int64,
-                  minimum: 1,
-                  maximum: 9007199254740991,
-                }
-            batchProgress:
-              type: array
-              description: Present only in narrow preview; commit reports progress within batches instead.
-              items:
-                allOf:
-                  - $ref: "#/components/schemas/PortfolioImportReconciliationScopeProgress"
-                  - type: object
-                    required: [batchId, pending, complete, deferredCounts]
-                    properties:
-                      batchId:
-                        {
-                          type: integer,
-                          format: int64,
-                          minimum: 1,
-                          maximum: 9007199254740991,
-                        }
+              adoptPolicy:
+                { type: string, enum: [preserve_existing, prefer_source] }
+        ready: { type: boolean }
+        actions:
+          type: array
+          description: >-
+            One reviewed outcome per selected staged row: insert, adopt, duplicate,
+            duplicate_source, cash, transfer, adjustment, internal_annotation,
+            settled, blocked or policy_required. In-kind income is an insert whose
+            source carries income_recognition_role=included_in_units. Rows that
+            another export of the same broker history records carry
+            crossFormat=true: duplicate_source names the selected twin row,
+            duplicate names the existing transaction, and an adopt with
+            cash=true corrects or adopts an existing brokerage cash transaction
+            (an IBKR CSV movement to the funding workbook's own currency, or a
+            manual entry with the same signed amount and currency within seven
+            days). A near match the owner paired by choosing prefer_source
+            carries policy=prefer_source on its duplicate or duplicate_source.
+          items:
+            type: object
+            additionalProperties: true
+            required: [batchId, rowId, rowOrdinal, action]
+            properties:
+              batchId: { type: integer, format: int64, minimum: 1 }
+              rowId: { type: integer, format: int64, minimum: 1 }
+              rowOrdinal: { type: integer, minimum: 1 }
+              action: { type: string }
+              investmentId:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 9007199254740991
+                nullable: true
+              existingTransactionId:
+                type: integer
+                format: int64
+                minimum: 1
+                maximum: 9007199254740991
+                description: Existing canonical transaction for an adoption or an owned duplicate.
+              crossFormat:
+                type: boolean
+                description: Settled against another export of the same broker history or a manual cash entry.
+              cash:
+                type: boolean
+                description: The existing transaction is brokerage cash, not a portfolio transaction.
+              duplicateOfRowId:
+                type: integer
+                format: int64
+                minimum: 1
+                description: For duplicate_source, the selected staged row that records the same event.
+        blockers:
+          type: array
+          description: >-
+            Rows that cannot be imported yet, each with a reason. Cross-format
+            reasons are cross_format_source_conflict (the other export or an
+            edited ledger row disagrees), ambiguous_funding_history and
+            ambiguous_cash_history (more than one candidate could be the same
+            movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal
+            matches a funding workbook movement in type, account and value, but
+            its date is up to ten days outside the request and completion
+            window) and cross_format_identity_missing (an otherwise identical
+            Saxo CSV and XLSX row without a booking record id on one side). The
+            last two clear only on the selected statements' policy:
+            prefer_source records the pair as one event and preserve_existing
+            keeps both. Nothing in a blocked plan is written.
+          items: { type: object, additionalProperties: true }
+        summary:
+          type: object
+          description: Counts of actions in this plan by action kind.
+          additionalProperties: { type: integer, minimum: 0 }
 
     PortfolioImportBatch:
       type: object
@@ -7718,13 +7171,14 @@ components:
           type: string
           format: binary
           description: >-
-            CSV history, detailed Saxo XLSX, or original IBKR funding XLS/XLSX,
-            maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history
-            and the Transacties, _Transacties, and Bookings sheets. IBKR funding
-            requires portfolio_format=ibkr_funding_history and original Deposit
-            and Withdrawal sheet headers. Workbook structure, size, identifiers,
+            CSV history, detailed Saxo XLSX, or the IBKR funding workbook
+            (XLS or XLSX), maximum 50 MiB. Saxo requires
+            portfolio_format=saxo_transaction_history and the Transacties,
+            _Transacties, and Bookings sheets. IBKR funding requires
+            portfolio_format=ibkr_funding_history and the original Deposit and
+            Withdrawal sheet headers. Workbook structure, size, identifiers,
             formulas and accounting detail are validated before staging.
-            Legacy XLS is accepted only for native IBKR funding history.
+            Legacy XLS is accepted only for the IBKR funding workbook.
         adapter_name:
           type: string
           description: Display label for the import source
@@ -7760,12 +7214,18 @@ components:
             include or affect sleeve cash movements. Automatic source selection
             is a frontend convenience; API callers provide this field. Saxo
             accepts CSV and detailed XLSX; net-only CSV dividends remain review
-            errors because gross income and withholding taxes are unavailable.
-            IBKR Transaction History funding values are statement-base amounts;
-            the native funding workbook proves original amounts and currencies.
-            A separate funding correction scope with prefer_source updates exact
-            existing cash matches and creates no new financial records. Unproved
-            new Transaction History funding records cannot be committed.
+            errors because gross income and withholding taxes are unavailable,
+            unless the reviewed scope or history holds the XLSX record of the
+            same booking. IBKR Transaction History deposits and withdrawals are
+            recorded as ordinary sleeve cash in the statement base currency.
+            ibkr_funding_history records each completed deposit and withdrawal
+            of the IBKR funding workbook in its own currency; open, rejected and
+            cancelled requests are skipped, and included_symbols is rejected.
+            Reconciliation pairs either IBKR export with the other, so each
+            movement is recorded once. Kinesis fiat
+            deposits, withdrawals, card payments and trade cash legs are recorded
+            as ordinary signed sleeve cash whose amount is the literal balance
+            movement, fees included.
             Nexo Pro Spot uses filled quantities, execution prices and literal
             fee currency. Its timestamp retains the exported calendar date;
             the adapter does not establish that it is an execution timestamp.
@@ -8240,88 +7700,6 @@ paths:
           {
             description: "VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan",
           }
-
-  /api/analysis/interchange/import:
-    post:
-      operationId: importAnalysisInterchange
-      summary: Parse a CSV or Vision XLSX scenario attachment without persistence
-      tags: [Analysis]
-      description: Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, format]
-              properties:
-                file: { type: string, format: binary }
-                format: { type: string, enum: [csv, xlsx] }
-      responses:
-        "200":
-          description: Inferred value-only attachment and raw ignored-formula count.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    required: [data]
-                    properties:
-                      data:
-                        {
-                          $ref: "#/components/schemas/AnalysisInterchangeImport",
-                        }
-        "400":
-          {
-            description: Invalid format,
-            file,
-            upload limit,
-            CSV structure or bounds,
-            ZIP/CRC/XML,
-            provenance or attachment bounds.,
-          }
-        "429": { description: API or existing Analysis rate limit exceeded. }
-        "500": { description: Upload source read failed. }
-
-  /api/analysis/interchange/export:
-    post:
-      operationId: exportAnalysisInterchange
-      summary: Export a supplied captured Analysis snapshot as CSV or value-only XLSX
-      tags: [Analysis]
-      description: Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file, format]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
-                format: { type: string, enum: [csv, xlsx] }
-      responses:
-        "200":
-          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx.
-          headers:
-            Content-Disposition: { schema: { type: string } }
-          content:
-            text/csv:
-              schema: { type: string, format: binary }
-            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
-              schema: { type: string, format: binary }
-        "400":
-          {
-            description: Missing or invalid multipart snapshot/format,
-            over 64 MiB input,
-            invalid result/context JSON,
-            or XLSX row limit.,
-          }
-        "429": { description: API or existing Analysis rate limit exceeded. }
-        "500": { description: Upload source read or serialization failed. }
 
   /api/analysis/execute:
     post:
@@ -9239,18 +8617,6 @@ paths:
         "404": { description: Dossier not found }
 
   # ─── Bounded AI research ──────────────────────────────────────────────────
-  /api/ai-research/status:
-    get:
-      summary: Inspect local model, web research, and document capabilities
-      operationId: getAiResearchStatus
-      tags: [AIResearch]
-      responses:
-        "200":
-          description: Configured capabilities without credentials.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-
   /api/ai-research/investigations:
     get:
       summary: List recoverable AI investigation jobs
@@ -9438,43 +8804,6 @@ paths:
       responses:
         "204": { description: Document and derived indexes deleted }
         "404": { description: Document not found }
-
-  /api/ai-research/documents/search/passages:
-    post:
-      summary: Retrieve cited keyword, semantic, or hybrid local passages
-      operationId: searchAiResearchPassages
-      tags: [AIResearch]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [query]
-              properties:
-                query:
-                  type: string
-                  minLength: 1
-                  description: Trimmed before use; a blank query is rejected.
-                mode:
-                  type: string
-                  enum: [hybrid, keyword, semantic]
-                  default: hybrid
-                limit:
-                  type: integer
-                  minimum: 1
-                  default: 8
-                  description: The service caps results at 20.
-      responses:
-        "200":
-          description: Bounded passages with document, version, page, and section locators
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
-        "400":
-          {
-            description: "VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer",
-          }
 
   /api/cross-workspace/commitment-aware-cash:
     post:
@@ -13220,28 +12549,6 @@ paths:
                       data:
                         $ref: "#/components/schemas/UnconvertedAmounts"
 
-  /api/aggregations/cashflow-forecast:
-    get:
-      summary: Monte-Carlo cashflow forecast
-      operationId: getCashflowForecast
-      tags: [Aggregations]
-      parameters:
-        - in: query
-          name: months
-          schema:
-            type: integer
-        - in: query
-          name: currency
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Forecast data
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
-
   /api/aggregations/cashflow-forecast-methods:
     get:
       summary: List available cashflow forecast methods
@@ -15131,7 +14438,12 @@ paths:
 
   /api/reports/financial:
     post:
-      summary: Generate financial report PDF
+      summary: Generate a print-ready financial report document
+      description: >-
+        Returns the financial report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generateFinancialReport
       tags: [Reports]
       requestBody:
@@ -15142,17 +14454,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw financial PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-financial-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready financial report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
@@ -15172,7 +14484,12 @@ paths:
 
   /api/reports/portfolio:
     post:
-      summary: Generate portfolio report PDF
+      summary: Generate a print-ready portfolio report document
+      description: >-
+        Returns the portfolio report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generatePortfolioReport
       tags: [Reports]
       requestBody:
@@ -15183,17 +14500,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw portfolio PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready portfolio report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
@@ -15213,7 +14530,12 @@ paths:
 
   /api/reports/tax:
     post:
-      summary: Generate tax report PDF
+      summary: Generate a print-ready tax report document
+      description: >-
+        Returns the tax report as a self-contained, script-free HTML document
+        with its page-footer template and PDF filename. The backend renders no
+        PDF; the Electron shell prints the document with its own Chromium and a
+        plain browser opens its print dialog (ADR-234).
       operationId: generateTaxReport
       tags: [Reports]
       requestBody:
@@ -15224,17 +14546,17 @@ paths:
               $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Raw tax PDF bytes; no JSON envelope.
-          headers:
-            Content-Disposition:
-              description: Attachment filename in the form vision-tax-YYYY-MM-DD.pdf.
-              schema: { type: string }
-            Content-Length:
-              description: PDF byte count.
-              schema: { type: integer, minimum: 0 }
+          description: Print-ready tax report document in the success envelope.
           content:
-            application/pdf:
-              schema: { type: string, format: binary }
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ReportDocument"
         "400":
           description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
@@ -16217,7 +15539,6 @@ paths:
                                     nexo,
                                     nexo_pro,
                                     saxo,
-                                    native_receipts,
                                   ]
                               sourceAccountIdentities:
                                 type: array
@@ -16226,6 +15547,7 @@ paths:
                               presetKey:
                                 type: string
                                 enum: [ibkr_funding_history]
+                                description: Present when the IBKR file is the funding workbook rather than the Transaction History CSV.
                           detectionError:
                             type: string
                             nullable: true
@@ -16679,173 +16001,24 @@ paths:
       tags: [PortfolioImport]
       description: >-
         Read-only plan across up to 100 staged batches. Detects source duplicates,
-        unique existing transactions, corrections, duplicate repairs, dated
-        transfers, asset fees, zero-basis yield reversals and blockers.
-        Omitted policy allows only exact adoption. Explicit policies require a
-        subsequent commit bound to this plan's fingerprint. No history is changed.
-        Explicit prefer_source may correct an unchanged prior Saxo workbook adoption
-        only when the same verified literal source and active receipt after-image
-        prove identity; the fingerprint binds that original batch and receipt context.
-        Literal Saxo CSV events may be duplicate_source companions of uniquely
-        matching selected detailed workbook events, including net-only dividend
-        errors. Missing, ambiguous or conflicting source context remains blocked.
-        Authenticated IBKR header and statement-currency context may prove currency
-        or separate-withholding corrections for imported-copy repairs and standalone
-        legacy sales. Unique same-date economic claims can narrow copy candidates;
-        other proved copies remain duplicates. Matching windows remain unchanged.
-        Optional reconciliation_scope=adopt_existing_only derives proven existing
-        buy/gift adoptions and receipt-proven duplicate/settled actions from complete
-        freshly captured unfiltered Kinesis sources under explicit preserve_existing.
-        The full source is classified before selection. Narrow review never plans
-        inserts, repairs, cash, custody or adjustments; paired yield income remains
-        deferred. Source/receipt ambiguity still blocks. Pending progress describes
-        excluded unsettled events. Full history may record proved zero-basis paired
-        income after the distinct selected Gift insert/adoption or exact existing
-        unit is proved. incomeProof.unitRowId binds that Gift action; unitTransactionId
-        is present for canonical existing units and repeated income. Source roles
-        retain included-in-units income without adding acquisitions or gains again.
-        Complete already-retained original-document evidence may prove closed yield-group membership
-        through independent positive-basis deposit boundaries, complete interval
-        closure, same-file settled yield anchors and globally unique eight-decimal
-        unit pairing. Members select together or block together, without changing
-        original recorded dates or other canonical fields. Broker payment dates
-        remain source evidence. Grouped actions retain one distinct source row and
-        existing record per adopt; the response shape is unchanged.
-        Optional correct_existing_only uses explicit prefer_source to select only
-        proved financial corrections of unique existing Kinesis buy/gift records
-        plus strict receipt-proven retries. Literal primary purchase fees replace
-        recorded fees. Meaningful gift basis/currency require validated original
-        Portfolio Performance recorded-native evidence and an existing meaningful
-        positive gift basis. Currency changes without literal original FX require
-        usable stored historical-date rate evidence, bound in the fingerprint;
-        corrections use the normal historical cache, and rates
-        at most seven days before the transaction date qualify. Unavailable gifts
-        defer without blocking independent literal-fee corrections. Today's rate
-        never authorizes correction and canonical source FX stays unstamped.
-        Ordinary financial corrections retain dates, types, units, notes and IDs;
-        unknown original FX is not invented. A proved closed yield group may instead
-        produce date-only adopt actions with typed dateProof and corrections exactly
-        [date]. Its changed members use the literal broker payment date together;
-        quantities, type, financial values, notes and IDs stay unchanged. memberCount
-        includes unchanged anchors rather than only correction actions. The server
-        binds complete group closure, original reference and all before/after dates
-        in the fingerprint. This does not permit ordinary nearby-date corrections.
-        The same
-        selected-only progress and deferred lifecycle applies.
-        record_in_kind_income_only requires explicit preserve_existing and zero
-        yield interpretation on complete original unfiltered Kinesis primary
-        source. It selects literal paired income only when a unique proved existing
-        zero-basis acquisition and retained source/receipt after-image agree.
-        Actions use record_income with typed incomeProof; source type is dividend,
-        income_recognition_role is included_in_units, units/price are null,
-        and fees/taxes are zero. Positive literal income is rounded at canonical
-        precision without an invented minimum; the retained raw value may round to zero.
-        No new gift, cash movement, custody, adjustment or financial/date correction
-        is selected. Literal amount is retained separately and not added to gains
-        again. Stored historical proof remains readable; no reference upload is available.
-        Preview and locked commit warm normal historical rates automatically.
-        Conversion requires a usable stored income-date rate within seven days,
-        bound in the fingerprint; unresolved dates defer and current rates do not
-        authorize recording. Canonical source FX stays null.
-        record_cash_only requires complete original unfiltered Kinesis source,
-        explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer.
-        The server proves complete cash balance chains and selects cash/duplicate/settled
-        with typed cashProof. New cashValues carry signed amount, date, currency, account,
-        brokerage origin and null peer; trade quotes and confirmed funding are internal,
-        while card payments remain expenses. imported equals recordedCash; adopted,
-        repaired and recordedIncome are zero. No portfolio, income, custody or adjustment
-        drain runs, no opposite bank row is invented, and other source events stay pending.
-        XML is not applied in this scope; retained reference context remains intact.
-        Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required;
-        confirmed cash-only review is required. Unchanged source-owned settled repeats
-        remain compatible with full review.
-        A separately quoted same-currency funding withdrawal fee produces a second
-        cashFeeValues expense component; the main transfer is net of that fee.
-        cashProof.componentCount is one or two, and two-component repeats identify
-        a distinct existingCashFeeTransactionId. Card spending includes its fee once.
-        Source actions and ledger component counts are distinct.
-        The zero-opening complete source requires no unrelated active ledger rows
-        or routed-account statement balance readings, including zero readings;
-        statement and ledger state are fingerprint-bound and rechecked under locks.
-        Historical date-rate readiness is prepared automatically and fingerprint-bound;
-        unresolved readiness defers the whole group rather than using a current rate.
+        unique existing transactions to adopt, corrections, dated transfers, asset
+        fees, zero-basis yield reversals and blockers. Omitted policy allows only
+        exact adoption; a difference between source and existing facts needs an
+        explicit global or per-batch policy. A repeated source identity is a
+        duplicate. Kinesis fiat cash and IBKR deposits and withdrawals are ordinary
+        cash actions. A zero yield-basis Kinesis distribution is an insert of its
+        literal income with income_recognition_role=included_in_units beside its
+        zero-basis units. No history is changed. ADR-236 removed the bounded
+        reconciliation scopes, cash funding confirmation and plan fingerprints.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: false
-              required: [batch_ids]
-              properties:
-                batch_ids:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items:
-                    {
-                      type: integer,
-                      format: int64,
-                      minimum: 1,
-                      maximum: 9007199254740991,
-                    }
-                adopt_policy:
-                  type: string
-                  enum: [preserve_existing, prefer_source]
-                  description: Preserve recorded facts, or use proven source facts while preserving known original transfer basis.
-                reconciliation_scope:
-                  type: string
-                  enum:
-                    [
-                      full,
-                      adopt_existing_only,
-                      correct_existing_only,
-                      record_in_kind_income_only,
-                      record_cash_only,
-                    ]
-                  default: full
-                  description: >-
-                    Optional additive scope. adopt_existing_only requires Kinesis
-                    sources, explicit global preserve_existing, no conflicting
-                    overrides, no included_symbols/skipped source rows, and verified
-                    complete source capture. Row IDs cannot be supplied by callers.
-                    correct_existing_only instead requires explicit global prefer_source
-                    and either complete Kinesis financial/date proof or a separate native
-                    IBKR funding scope proving exact existing base-currency cash corrections.
-                    record_in_kind_income_only requires explicit global preserve_existing,
-                    zero yield basis and a proved existing zero-basis income/units pair;
-                    retained source proof remains readable and other events remain pending.
-                    record_cash_only requires complete unfiltered Kinesis source,
-                    explicit preserve_existing and cash_funding_policy=own_account_transfer;
-                    only the complete proved cash chain is selected, with no XML application.
-                cash_funding_policy:
-                  type: string
-                  enum: [own_account_transfer]
-                  description: Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                batch_policies:
-                  type: array
-                  maxItems: 100
-                  description: Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once; IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides.
-                  items:
-                    type: object
-                    additionalProperties: false
-                    required: [batch_id, adopt_policy]
-                    properties:
-                      batch_id:
-                        {
-                          type: integer,
-                          format: int64,
-                          minimum: 1,
-                          maximum: 9007199254740991,
-                        }
-                      adopt_policy:
-                        {
-                          type: string,
-                          enum: [preserve_existing, prefer_source],
-                        }
+              $ref: "#/components/schemas/PortfolioImportReconciliationRequest"
       responses:
         "200":
-          description: Review plan; blocked plans still return 200. Narrow scope adds reconciliationScope, selectedRowIds, pending, complete, deferredCounts and batchProgress; actions/summary contain only the selected records. Full response may additionally include proved paired income actions.
+          description: Review plan; blocked plans still return 200.
           content:
             application/json:
               schema:
@@ -16858,7 +16031,7 @@ paths:
                           $ref: "#/components/schemas/PortfolioImportReconciliationPlan",
                         }
         "400":
-          description: Malformed scope or policy, missing batch, or non-reviewable scope
+          description: Malformed or unknown field, missing batch, or non-reviewable scope
 
   /api/portfolio/import/reconciliation/commit:
     post:
@@ -16866,132 +16039,23 @@ paths:
       operationId: commitReviewedPortfolioImports
       tags: [PortfolioImport]
       description: >-
-        Locks and rechecks the complete source scope and projected history against
-        the reviewed fingerprint. Adopts existing records with permanent before
-        and after receipts, inserts missing events in global chronological order,
-        and records dated custody transfers and asset adjustments. Proven imported
-        copies of manual transactions are repaired with permanent dual-row receipts.
-        Any blocker or row failure rolls back the whole operation. Adopted records
-        retain their identity and notes.
-        A proved prior Saxo adoption correction locks the original batch and writes
-        a new reversible receipt without changing original counters or cash records.
-        Proved Saxo CSV companions settle as duplicates before financial inserts;
-        their errors and counters update atomically without inventing gross income.
-        With reconciliation_scope=adopt_existing_only, the same reviewed scope and
-        fingerprint apply only proven Kinesis adoptions and newly settled receipted
-        duplicates. Imported and repaired are zero. The writer returns before any
-        general event drain. Deferred source rows remain unsettled; while pending
-        is nonzero all selected batches remain awaiting_review without completion
-        timestamps, even if individual source progress is complete. Existing guarded
-        immutable adoption/restore receipts support rollback after after-image checks.
-        With correct_existing_only and explicit prefer_source, only proved existing
-        financial corrections, proved whole-group yield payment-date corrections
-        and strict receipted retries are applied. Ordinary financial corrections
-        retain dates; grouped date-only corrections require typed dateProof and
-        unchanged financials. Types, units, notes and IDs stay unchanged. Imported and repaired remain
-        zero; pending source events retain the same review lifecycle and guarded
-        immutable adoption receipt rollback.
-        Full history composes literal paired income with its selected zero-basis Gift
-        insert/adoption or already-proved existing unit in one atomic commit. Output-only
-        incomeProof.unitRowId binds the Gift row; unitTransactionId identifies an
-        existing canonical unit. The actual unit after-image is proved before income
-        is written. recordedIncome and recordedCash are additive subsets of imported
-        at batch and aggregate level; repeated income/cash writes neither again.
-        record_in_kind_income_only records only the reviewed literal paired income
-        as canonical included_in_units dividends. imported equals recordedIncome;
-        adopted/repaired are zero. It creates no acquisitions or cash/custody events
-        and returns before the general event drain. Immutable paired-income receipts
-        bind source and unchanged unit acquisition for repeat and guarded rollback.
-        Other source events retain the same pending review lifecycle.
-        record_cash_only requires complete original unfiltered Kinesis source,
-        explicit preserve_existing and source-bound cash_funding_policy=own_account_transfer.
-        The server proves complete cash balance chains and selects cash/duplicate/settled
-        with typed cashProof. New cashValues carry signed amount, date, currency, account,
-        brokerage origin and null peer; trade quotes and confirmed funding are internal,
-        while card payments remain expenses. imported equals recordedCash; adopted,
-        repaired and recordedIncome are zero. No portfolio, income, custody or adjustment
-        drain runs, no opposite bank row is invented, and other source events stay pending.
-        XML is not applied in this scope; retained reference context remains intact.
-        Ordinary full scope rejects new Kinesis cash with cash_reconciliation_required;
-        confirmed cash-only review is required. Unchanged source-owned settled repeats
-        remain compatible with full review.
-        A separately quoted same-currency funding withdrawal fee produces a second
-        cashFeeValues expense component; the main transfer is net of that fee.
-        cashProof.componentCount is one or two, and two-component repeats identify
-        a distinct existingCashFeeTransactionId. Card spending includes its fee once.
-        Source actions and ledger component counts are distinct.
-        The zero-opening complete source requires no unrelated active ledger rows
-        or routed-account statement balance readings, including zero readings;
-        statement and ledger state are fingerprint-bound and rechecked under locks.
-        Historical date-rate readiness is prepared automatically and fingerprint-bound;
-        unresolved readiness defers the whole group rather than using a current rate.
+        Locks the selected batches and their accounts, rebuilds the plan from the
+        current history and commits it in one transaction. Adopts existing records
+        with permanent before and after receipts, inserts missing events in global
+        chronological order, and records dated custody transfers and asset
+        adjustments. Any blocker or row failure rolls back the whole operation.
+        Adopted records retain their identity and notes. The commit adopts the
+        history as it stands at commit time; an existing transaction that changed
+        or disappeared since it was planned is rejected with a conflict.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: false
-              required: [batch_ids, expected_plan_fingerprint]
-              properties:
-                batch_ids:
-                  type: array
-                  minItems: 1
-                  maxItems: 100
-                  items:
-                    {
-                      type: integer,
-                      format: int64,
-                      minimum: 1,
-                      maximum: 9007199254740991,
-                    }
-                adopt_policy:
-                  type: string
-                  enum: [preserve_existing, prefer_source]
-                reconciliation_scope:
-                  type: string
-                  enum:
-                    [
-                      full,
-                      adopt_existing_only,
-                      correct_existing_only,
-                      record_in_kind_income_only,
-                      record_cash_only,
-                    ]
-                  default: full
-                  description: Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis sources and the matching explicit policy (preserve_existing for attachment/income, prefer_source for corrections). Income requires zero yield basis and already proved units; excluded events remain pending.
-                cash_funding_policy:
-                  type: string
-                  enum: [own_account_transfer]
-                  description: Required only with record_cash_only. Explicit source-bound confirmation that all source cash deposits and withdrawals are transfers between the user's own accounts. Bound in the reviewed fingerprint; no opposite bank leg is created.
-                batch_policies:
-                  type: array
-                  maxItems: 100
-                  description: Exact selected per-batch overrides used by the reviewed preview.
-                  items:
-                    type: object
-                    additionalProperties: false
-                    required: [batch_id, adopt_policy]
-                    properties:
-                      batch_id:
-                        {
-                          type: integer,
-                          format: int64,
-                          minimum: 1,
-                          maximum: 9007199254740991,
-                        }
-                      adopt_policy:
-                        {
-                          type: string,
-                          enum: [preserve_existing, prefer_source],
-                        }
-                expected_plan_fingerprint:
-                  type: string
-                  pattern: "^[a-f0-9]{64}$"
-                  description: Exact fingerprint returned by preview for this source/reconciliation scope, global policy and per-batch overrides; narrow fingerprints also bind selected records, full source proof, receipt context and deferred counts.
+              $ref: "#/components/schemas/PortfolioImportReconciliationRequest"
       responses:
         "200":
-          description: Aggregate and per-batch counts. Narrow scope adds reconciliationScope, pending, complete and deferredCounts at both levels plus top-level selectedRowIds; imported/repaired are zero and partial sessions stay awaiting_review. Full response adds optional recordedIncome/recordedCash subtotals within imported; older responses remain compatible. errors is zero on success and repaired is always emitted.
+          description: Aggregate and per-batch counts; errors is zero on success.
           content:
             application/json:
               schema:
@@ -17004,11 +16068,11 @@ paths:
                           $ref: "#/components/schemas/PortfolioImportReconciliationCommitResult",
                         }
         "400":
-          description: Malformed request or non-reviewable scope
+          description: Malformed request, unknown field or non-reviewable scope
         "404":
           description: A requested batch or account no longer exists
         "409":
-          description: Stale preview, ambiguous existing history, unresolved source facts, invalid projected history or atomic row failure; no changes retained
+          description: Blocked plan (reconciliation_required), changed existing history, unpaired in-kind income, invalid projected history or atomic row failure; no changes retained
 
   /api/portfolio/import/batches/{id}/commit:
     parameters:
@@ -17098,9 +16162,6 @@ paths:
                                 type: array
                                 items:
                                   { type: object, additionalProperties: true }
-                              planFingerprint:
-                                type: string
-                                pattern: "^[a-f0-9]{64}$"
 
   # ─── Admin ────────────────────────────────────────────────────────────────────
   /api/admin:
@@ -17478,84 +16539,7 @@ paths:
                       data:
                         $ref: "#/components/schemas/EndpointList"
 
-  /api/admin/endpoint-liveness:
-    get:
-      summary: Liveness probe for each endpoint
-      operationId: adminEndpointLiveness
-      tags: [Admin]
-      responses:
-        "200":
-          description: Liveness results
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                method: { type: string }
-                                path: { type: string }
-                                live: { type: boolean }
-                          total:
-                            type: integer
-
   # ─── Research (ADR-079) ───────────────────────────────────────────────────────
-  /api/research/presentation:
-    post:
-      summary: Compute Research presentation from submitted data without fetching or persisting
-      operationId: computeResearchPresentation
-      tags: [Research]
-      description: >-
-        Stateless shared TypeScript transformations for Compare, Chart Builder,
-        watchlist list/chart/add previews, provider-history quotes, analyst consensus
-        and market-add two-of-three previews. No provider, database, settings or FX
-        lookup. Original source ordering, warmups, thresholds and currency semantics
-        are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart
-        limit bypasses the global JSON-body size limit without silently truncating history.
-        Numeric JSON is validated as finite numbers; non-finite calculation outputs
-        serialize as null as in the web client. Uses the existing Research market rate limiter.
-      requestBody:
-        required: true
-        description: Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected.
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              additionalProperties: false
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
-      responses:
-        "200":
-          description: Computed kind-specific presentation, standard envelope; no read or write side effects.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Envelope"
-                  - type: object
-                    properties:
-                      data:
-                        {
-                          $ref: "#/components/schemas/ResearchPresentationData",
-                        }
-        "400":
-          description: VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot.
-        "429": { description: Existing Research market rate limit. }
-        "500": { description: File I/O or unexpected calculation failure. }
-
   /api/research/search:
     get:
       summary: Search tickers / securities across research providers
@@ -17575,32 +16559,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResearchSearchEnvelope"
-
-  /api/research/quote:
-    get:
-      summary: Current quote for a symbol
-      operationId: researchQuote
-      tags: [Research]
-      parameters:
-        - in: query
-          name: symbol
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: asset_class
-          schema:
-            type: string
-          description: "Asset class hint for provider routing (e.g. stock, crypto, metals)"
-      responses:
-        "200":
-          description: Quote data with provenance meta (provider, source)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResearchQuoteEnvelope"
-        "400":
-          description: symbol parameter required
 
   /api/research/chart:
     get:
@@ -17635,31 +16593,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResearchChartEnvelope"
-        "400":
-          description: symbol parameter required
-
-  /api/research/fundamentals:
-    get:
-      summary: Fundamentals snapshot for a symbol
-      operationId: researchFundamentals
-      tags: [Research]
-      parameters:
-        - in: query
-          name: symbol
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: asset_class
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Fundamentals data with provenance meta (provider, source)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResearchFundamentalsEnvelope"
         "400":
           description: symbol parameter required
 

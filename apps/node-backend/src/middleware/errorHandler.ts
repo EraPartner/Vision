@@ -2,7 +2,7 @@
  * Centralized error handling middleware with typed error classes.
  *
  * Routes and services throw typed errors (AppError, ValidationError, NotFoundError,
- * ConflictError, UnauthorizedError, ForbiddenError, RateLimitedError, UpstreamError,
+ * ConflictError, ForbiddenError, RateLimitedError, UpstreamError,
  * UpstreamTimeoutError); middleware maps them to the unified API
  * envelope (see docs/adr/026-unified-api-response-envelope.md):
  *   { ok: false, error: { code, message, details? }, meta? }
@@ -63,12 +63,6 @@ export class AppError extends Error {
 export class ValidationError extends AppError {
   constructor(message: string, opts: AppErrorOptions = {}) {
     super(message, { status: 400, code: ApiErrorCode.VALIDATION_ERROR, ...opts });
-  }
-}
-
-export class UnauthorizedError extends AppError {
-  constructor(message = 'Unauthorized', opts = {}) {
-    super(message, { status: 401, code: ApiErrorCode.UNAUTHORIZED, ...opts });
   }
 }
 

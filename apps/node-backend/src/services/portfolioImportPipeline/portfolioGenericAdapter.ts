@@ -28,11 +28,6 @@ import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapt
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.ts";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.ts";
 import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.ts";
-import { verifyKinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts";
-import { parsedDateToYmd } from "../../lib/importDates.ts";
-import type { KinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts";
-import type { IbkrSourceContext } from "../portfolioIbkrPrimaryProof.ts";
-import type { IbkrFundingSourceContext } from "./ibkrFundingHistoryAdapter.ts";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -67,7 +62,6 @@ export interface ParsedPortfolioRow {
         basisStatus: "carried" | "unresolved" | "not_applicable";
         feeUnits?: string | undefined;
         receivedUnits?: string | undefined;
-        networkReceipt?: unknown;
       }
     | undefined;
   assetAdjustment?:
@@ -76,7 +70,6 @@ export interface ParsedPortfolioRow {
         basisPolicy: "zero" | "zero_yield_only" | "carried";
         accountId?: number | undefined;
         eligibleSourceRecordHashes?: string[] | undefined;
-        networkReceipt?: unknown;
       }
     | undefined;
 }
@@ -114,7 +107,6 @@ export const parsedPortfolioRowSchema = z.strictObject({
       basisStatus: z.enum(["carried", "unresolved", "not_applicable"]),
       feeUnits: z.string().optional(),
       receivedUnits: z.string().optional(),
-      networkReceipt: z.unknown().optional(),
     })
     .optional(),
   assetAdjustment: z
@@ -123,7 +115,6 @@ export const parsedPortfolioRowSchema = z.strictObject({
       basisPolicy: z.enum(["zero", "zero_yield_only", "carried"]),
       accountId: z.number().int().positive().optional(),
       eligibleSourceRecordHashes: z.array(z.string()).optional(),
-      networkReceipt: z.unknown().optional(),
     })
     .optional(),
 }) satisfies z.ZodType<ParsedPortfolioRow>;
@@ -143,10 +134,6 @@ export const parsedPortfolioRowsSchema = z.object({
 export type ParsedPortfolioRows = ParsedPortfolioRow[] & {
   skipped?: number | undefined;
   sourceColumns?: string[] | undefined;
-  /** literal statement context the IBKR adapter attaches for primary proof */
-  ibkrSourceContext?: IbkrSourceContext;
-  /** retained workbook context the IBKR funding adapter attaches */
-  ibkrFundingSourceContext?: IbkrFundingSourceContext;
 };
 
 /**
@@ -275,50 +262,12 @@ function rowToParsed(
     sourceAccountIdentity: cell(row, colMap.source_account) || null,
     sourceId: cell(row, colMap.source_id) || null,
   };
-  if (["asset_fee", "asset_transfer_witness"].includes(parsed.typeRaw)) {
-    try {
-      const receiptJson = row.Receipt_JSON;
-      // An absent cell fails like unparseable JSON (reported below).
-      if (receiptJson === undefined) throw new Error("missing receipt");
-      const receipt = JSON.parse(receiptJson) as KinesisNetworkReceipt;
-      const proof = verifyKinesisNetworkReceipt(receipt, parsed.typeRaw);
-      if (
-        parsed.currency !== proof.asset ||
-        parsedDateToYmd(parsed.date) !== proof.date ||
-        parsed.symbolRaw !== proof.asset ||
-        parsed.sourceId !== proof.hash ||
-        parsed.sourceAccountIdentity !== proof.sourceAddress ||
-        Number(parsed.units) !== Number(proof.units) ||
-        [
-          parsed.amount,
-          parsed.pricePerUnit,
-          parsed.fees,
-          parsed.taxes,
-          parsed.fxRateToEur,
-        ].some((value) => value != null && value !== 0)
-      )
-        throw new Error("network source fields");
-      if (parsed.typeRaw === "asset_fee") {
-        parsed.typeRaw = "AssetAdjustment";
-        parsed.assetAdjustment = {
-          kind: "asset_fee",
-          basisPolicy: "carried",
-          networkReceipt: receipt,
-        };
-      } else {
-        parsed.typeRaw = "InternalMovement";
-        parsed.assetTransfer = {
-          direction: "internal",
-          basisStatus: "not_applicable",
-          networkReceipt: receipt,
-        };
-      }
-    } catch {
-      throw new ValidationError(
-        "Native wallet receipt or mapped source fields could not be verified",
-      );
-    }
-  }
+  // Signed native wallet receipts fed the Kinesis network proofs that ADR-236
+  // removed. Refuse them rather than stage them as unknown events.
+  if (["asset_fee", "asset_transfer_witness"].includes(parsed.typeRaw))
+    throw new ValidationError(
+      "Native wallet receipt rows are no longer supported. Import the Kinesis transaction history instead.",
+    );
   return parsed;
 }
 

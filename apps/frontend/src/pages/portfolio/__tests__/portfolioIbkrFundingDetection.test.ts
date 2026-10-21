@@ -135,9 +135,23 @@ describe("IBKR native funding workbook detection", () => {
         );
     });
 
-    it("does not select unproved status, amount, date or source identities", async () => {
+    it("routes any funding method and status to the parser, which skips open requests", async () => {
         for (const [index, value] of [
             [13, "Pending"],
+            [2, "ACH"],
+            [3, "U***0000"],
+        ] as const) {
+            const row = record();
+            row[index] = value;
+            expect(await detectPortfolioImportFile(file([row]))).toMatchObject({
+                source: "ibkr",
+                presetKey: "ibkr_funding_history",
+            });
+        }
+    });
+
+    it("does not select unproved amount, date or source identities", async () => {
+        for (const [index, value] of [
             [12, "123.45"],
             [12, "USD 0.00"],
             [12, "USD 1,23.45"],
@@ -146,7 +160,7 @@ describe("IBKR native funding workbook detection", () => {
             [8, "2024-12-31"],
             [1, ""],
             [3, ""],
-            [2, "Unknown"],
+            [13, ""],
         ] as const) {
             const row = record();
             row[index] = value;

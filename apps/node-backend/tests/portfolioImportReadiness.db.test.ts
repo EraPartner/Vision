@@ -423,7 +423,7 @@ describe.skipIf(!hasTestDatabase())(
       });
     });
 
-    it("requires reviewed repair when a source identity and a nearby manual trade both exist", async () => {
+    it("settles a repeated source identity as a duplicate even beside a nearby manual trade", async () => {
       const position = await seedPosition();
       const source = [{ route: "cash" }, {}];
       expect(
@@ -437,12 +437,17 @@ describe.skipIf(!hasTestDatabase())(
       });
       await manualTrade(position);
       const before = await canonicalCounts(position);
-      await assertBlockedWithoutWrites(
-        position,
-        await stageSource(position, source),
-        "existing_history_overlap",
-        [2],
-      );
+      // ADR-236: an exact fingerprint is a duplicate; the manual trade is
+      // left for the owner instead of planning a duplicate repair.
+      expect(
+        await commitReviewedPortfolioImport({
+          batchId: await stageSource(position, source),
+        }),
+      ).toEqual({
+        imported: 0,
+        duplicates: 2,
+        errors: 0,
+      });
       expect(await canonicalCounts(position)).toEqual(before);
     });
 

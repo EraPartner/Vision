@@ -55,8 +55,6 @@ type LoanType = NonNullable<PlannedPayment["loan_type"]>;
  * negative, money coming IN is positive. Enforced end-to-end —
  *  - routes/plannedTransactions.js force-negates a loan installment
  *    (`-Math.abs(regular_payment_amount)`) on both create and patch,
- *  - calculations/aggregation/cashflowForecast.js buckets positive amounts as
- *    income and negative as expenses,
  *  - plannedMatchService.matchesTolerance() refuses a (planned, tx) pair whose
  *    signs differ, so a bill stored positive can never auto-clear against the
  *    real negative transaction.

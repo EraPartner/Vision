@@ -65,6 +65,17 @@ export interface SplashThemeColors {
   themeSource?: "system" | "light" | "dark" | undefined;
 }
 
+/** A print-ready report document from `POST /api/reports/*` (ADR-234). */
+export interface ReportPrintRequest {
+  html: string;
+  footerTemplate: string;
+}
+
+export interface ReportPrintResult extends ElectronSuccessResult {
+  /** The printed PDF; present only when `success` is true. */
+  pdf?: Uint8Array;
+}
+
 export interface RendererFailurePayload {
   kind: "error" | "resource" | "unhandledrejection";
   name: string;
@@ -145,6 +156,10 @@ export interface ElectronInvokeContract {
     args: [colors: SplashThemeColors];
     result: ElectronSuccessResult;
   };
+  "report:print-pdf": {
+    args: [request: ReportPrintRequest];
+    result: ReportPrintResult;
+  };
 }
 
 export type ElectronInvokeChannel = keyof ElectronInvokeContract;
@@ -203,6 +218,10 @@ export interface ElectronApiBridge {
   onFullScreenChange: ElectronSubscription<"window:fullscreen">;
 }
 
+export interface ElectronReportsBridge {
+  printToPdf: ElectronInvoke<"report:print-pdf">;
+}
+
 export interface ElectronRecoveryBridge {
   retry: ElectronInvoke<"recovery:retry">;
   openLogs: ElectronInvoke<"recovery:open-logs">;
@@ -216,6 +235,7 @@ export interface ElectronBridges {
   electronServices?: ElectronServicesBridge;
   electronAPI?: ElectronApiBridge;
   electronRecovery?: ElectronRecoveryBridge;
+  electronReports?: ElectronReportsBridge;
 }
 
 declare global {

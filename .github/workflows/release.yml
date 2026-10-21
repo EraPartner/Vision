@@ -185,14 +185,6 @@ jobs:
       - name: Generate locales (writes packaging/electron/i18n)
         run: CI=1 bun run generate-locales
 
-      - name: Install pinned native report browser
-        run: |
-          set -euo pipefail
-          BROWSER_PATH=$(apps/node-backend/node_modules/.bin/puppeteer browsers install \
-            chrome-headless-shell@150.0.7871.24 \
-            --format '{{path}}')
-          test -x "$BROWSER_PATH"
-          printf 'VISION_CHROMIUM_SOURCE=%s\n' "$BROWSER_PATH" >> "$GITHUB_ENV"
 
       - name: Install electron deps and build .app + DMG
         env:

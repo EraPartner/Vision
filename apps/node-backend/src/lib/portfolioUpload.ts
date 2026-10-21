@@ -34,7 +34,6 @@ export interface FundingWorkbookSheet {
   sourceFileHash: string;
   sourceFormat: "xls" | "xlsx";
 }
-
 export interface UploadedFileInfo {
   originalname?: string;
   mimetype?: string;

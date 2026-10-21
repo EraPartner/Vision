@@ -312,7 +312,6 @@ describe.skipIf(!hasTestDatabase())(
       expect(
         await commitReviewedPortfolioImports({
           batchIds: [Number(input.id)],
-          expectedPlanFingerprint: plan.planFingerprint,
         }),
       ).toMatchObject({ imported: 2, adopted: 1, errors: 0 });
       const adjustment = (
@@ -407,7 +406,6 @@ describe.skipIf(!hasTestDatabase())(
       expect(plan.ready).toBe(true);
       await commitReviewedPortfolioImports({
         batchIds: [Number(input.id)],
-        expectedPlanFingerprint: plan.planFingerprint,
       });
       const adjustment = await fee(position),
         first = await commitPortfolioAssetAdjustment(adjustment);

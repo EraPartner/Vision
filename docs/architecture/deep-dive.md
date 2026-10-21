@@ -2,8 +2,8 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     architecture,
@@ -13,7 +13,7 @@ tags:
     phase-5,
     dependency-slim-down,
   ]
-description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. CORS and zero-dependency gzip compression are isolated middleware modules.
+description: Comprehensive architectural analysis of Vision's design patterns, data flow, and system organization. The loopback Host guard, CSRF guard and rate limiting are isolated middleware modules.
 aliases:
   [
     architecture deep dive,
@@ -237,7 +237,7 @@ Backend Dependencies:
 ├── Kysely (query builder over pg via query(), migrator over db/migrations/, kysely-codegen types)
 ├── Bun (runtime/package manager)
 └── yahoo-finance2 (market data)
-(Binance prices use fetch; rate limiting, compression and CORS live in dedicated middleware modules)
+(Binance prices use fetch; the Host guard, CSRF guard and rate limiting live in dedicated middleware modules)
 
 Shared:
 └── Zod (request parsing, data and response contracts — backend, frontend, @vision/types)

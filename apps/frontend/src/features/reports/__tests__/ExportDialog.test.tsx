@@ -11,6 +11,7 @@ import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
 // Figures come from the server; the tests build them with the shared engine.
 import { computeBelgianPIT } from "@vision/shared-utils/belgian-tax/pit";
 import * as reportsApi from "@/lib/api/reports";
+import { toast } from "sonner";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { LATEST_TAX_YEAR } from "@/lib/belgianTax";
 import {
@@ -70,7 +71,7 @@ vi.mock("@/components/shared/DatePicker", () => ({
 }));
 
 function stubFinancialSuccess() {
-    vi.mocked(reportsApi.downloadFinancialReport).mockResolvedValue(undefined);
+    vi.mocked(reportsApi.downloadFinancialReport).mockResolvedValue("downloaded");
 }
 
 function stubFinancialError() {
@@ -173,6 +174,26 @@ describe("ExportDialog", () => {
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
         });
     });
+
+    it.each([
+        ["downloaded", 1],
+        ["print-dialog", 0],
+    ] as const)(
+        "a %s export closes the dialog and confirms only a real download",
+        async (result, toasts) => {
+            const success = vi.spyOn(toast, "success");
+            vi.mocked(reportsApi.downloadFinancialReport).mockResolvedValue(result);
+            const user = await openDialog();
+            await user.click(
+                await screen.findByRole("button", { name: /download pdf/i }),
+            );
+            await waitFor(() => {
+                expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+            });
+            expect(success).toHaveBeenCalledTimes(toasts);
+            success.mockRestore();
+        },
+    );
 
     it("download error keeps dialog open", async () => {
         stubFinancialError();

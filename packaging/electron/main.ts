@@ -36,6 +36,7 @@ import path from "node:path";
 import { appRoot } from "./paths";
 import { createSettingsWriter } from "./settings-conflicts";
 import { cleanupLegacyAuditArtifacts } from "./legacy-audit-cleanup";
+import { REPORT_PRINT_PARTITION, createReportPdfPrinter } from "./report-pdf";
 import { isBundleEncrypted } from "./backup/bundle";
 import * as backupCrypto from "./backup/crypto";
 import * as backupRestore from "./backup/restore";
@@ -358,14 +359,17 @@ const RENDERER_READY_TIMEOUT_MS =
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== "0";
 const _bootT0 = Date.now();
 const _bootMarks: { phase: string; ms: number }[] = [];
+function recordBootPhase(phase: string, ms: number): void {
+  _bootMarks.push({ phase, ms });
+  if (BOOT_TRACE_ENABLED) {
+    console.error(`[startup] ${JSON.stringify({ phase, ms })}`);
+  }
+}
 function bootMark(phase: string): () => number {
   const t0 = Date.now();
   return () => {
     const ms = Date.now() - t0;
-    _bootMarks.push({ phase, ms });
-    if (BOOT_TRACE_ENABLED) {
-      console.error(`[startup] ${JSON.stringify({ phase, ms })}`);
-    }
+    recordBootPhase(phase, ms);
     return ms;
   };
 }
@@ -2403,6 +2407,35 @@ registerHandler(
   { senderFailure: { success: false } },
 );
 
+// Report PDFs print in a hidden, script-free window on a dedicated in-memory
+// session (ADR-234). Only the application document may ask; the recovery page
+// has no reports.
+const reportPdfPrinter = createReportPdfPrinter({
+  session: () => session.fromPartition(REPORT_PRINT_PARTITION, { cache: false }),
+  createWindow: (options) => new BrowserWindow(options),
+});
+
+registerHandler(
+  "report:print-pdf",
+  async (event, request) => {
+    let senderOrigin: string | undefined;
+    try {
+      senderOrigin = new URL(event.senderFrame?.url ?? "").origin;
+    } catch {
+      senderOrigin = undefined;
+    }
+    if (senderOrigin !== new URL(appUrl()).origin) {
+      return { success: false, error: "Unauthorized sender" };
+    }
+    try {
+      return { success: true, pdf: await reportPdfPrinter.print(request) };
+    } catch (err) {
+      console.warn("report:print-pdf failed:", errorMessage(err));
+      return { success: false, error: "Report printing failed" };
+    }
+  },
+);
+
 function subscribeAccentColorChanges(): void {
   try {
     systemPreferences.subscribeNotification(
@@ -2521,10 +2554,10 @@ async function launch(): Promise<void> {
           repoRoot: app.isPackaged ? undefined : repoRoot,
           runtimeRoot,
           postgresRuntimeRoot: nativePayloadRoot,
-          browserRuntimeRoot: nativePayloadRoot,
           allowExternalPostgres:
             process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
           runtimeId: NATIVE_RUNTIME_ID,
+          recordBootPhase,
           postgresPort: __IS_DEMO ? DEMO_POSTGRES_PORT : undefined,
           appPort: () => appPort,
           requireRuntimeManifest: app.isPackaged,

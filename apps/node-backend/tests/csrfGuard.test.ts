@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createCsrfGuard } from '../src/middleware/csrfGuard.ts';
+import { createCsrfGuard, loopbackOrigins } from '../src/middleware/csrfGuard.ts';
 import { ForbiddenError } from '../src/middleware/errorHandler.ts';
 import type { ExpressRequest, ExpressResponse } from '../src/types/express.ts';
 import { partial } from './helpers/partial.ts';
@@ -63,14 +63,38 @@ describe('csrfGuard', () => {
     });
   });
 
-  it('allows any Origin when the allowlist is wildcard', () => {
-    const wildcard = createCsrfGuard(() => '*');
-    const next = vi.fn();
-    wildcard(
-      partial<ExpressRequest>({ method: 'POST', headers: { origin: 'https://anything.example' } }),
-      partial<ExpressResponse>({}),
-      next,
-    );
-    expect(next).toHaveBeenCalledWith();
+  it('does not accept a repeated Origin header', () => {
+    const next = run({ method: 'POST', headers: { origin: ['http://localhost:5173', 'http://localhost:5173'] } });
+    expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
+  });
+});
+
+describe('loopbackOrigins', () => {
+  it('lists every loopback spelling of the backend port', () => {
+    expect(loopbackOrigins(3002)).toEqual([
+      'http://localhost:3002',
+      'http://127.0.0.1:3002',
+      'http://[::1]:3002',
+    ]);
+  });
+
+  it('adds the Vite dev server origins only when asked', () => {
+    const origins = loopbackOrigins(3002, { includeDevServer: true });
+    expect(origins).toContain('http://127.0.0.1:8080');
+    expect(origins).toContain('http://localhost:8080');
+    expect(loopbackOrigins(3002)).not.toContain('http://127.0.0.1:8080');
+  });
+
+  it('feeds the guard: a foreign loopback port or LAN origin is rejected', () => {
+    const loopbackGuard = createCsrfGuard(() => loopbackOrigins(3002));
+    for (const origin of ['http://localhost:3000', 'http://192.168.1.5:3002', 'https://localhost:3002']) {
+      const next = vi.fn();
+      loopbackGuard(
+        partial<ExpressRequest>({ method: 'POST', headers: { origin } }),
+        partial<ExpressResponse>({}),
+        next,
+      );
+      expect(next.mock.calls[0]![0], origin).toBeInstanceOf(ForbiddenError);
+    }
   });
 });

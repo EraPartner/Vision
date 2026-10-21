@@ -47,6 +47,7 @@ async function detect(
       .equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     if (!xls && !xlsx) return undefined;
     if (xlsx) assertBoundedWorkbook(bytes);
+    // The IBKR funding workbook is the only supported legacy XLS statement.
     const workbook = XLSX.read(bytes, {
       type: "buffer",
       cellDates: false,

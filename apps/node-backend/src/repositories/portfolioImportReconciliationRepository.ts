@@ -6,8 +6,10 @@ import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { DB, Json } from "../database/schema.generated.ts";
 import {
   batchAccountIdRowSchema,
-  batchConfigFields,
   bigintIdRowSchema,
+  crossFormatLedgerSourceRowSchema,
+  ledgerFingerprintRowSchema,
+  manualCashCandidateRowSchema,
   reconciliationAdjustmentRowSchema,
   reconciliationBatchScopeRowSchema,
   reconciliationJournalRowSchema,
@@ -16,6 +18,8 @@ import {
   reconciliationTransferRowSchema,
 } from "../database/rows/portfolioImport.ts";
 import type {
+  CrossFormatLedgerSourceRow,
+  ManualCashCandidateRow,
   PortfolioTransactionSnapshot,
   ReconciliationBatchScopeRow,
   ReconciliationJournalRow,
@@ -25,6 +29,8 @@ import type { PortfolioAssetAdjustmentRow } from "./portfolioAssetAdjustmentRepo
 import type { PortfolioAssetTransferRow } from "./portfolioAssetTransferRepository.ts";
 
 export type {
+  CrossFormatLedgerSourceRow,
+  ManualCashCandidateRow,
   PortfolioTransactionSnapshot,
   ReconciliationBatchScopeRow,
   ReconciliationJournalRow,
@@ -69,7 +75,6 @@ const snapshot = sql.raw<PortfolioTransactionSnapshot>(
   PORTFOLIO_TRANSACTION_SNAPSHOT_SQL,
 );
 const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
-const json = (value: unknown) => sql<Json>`${JSON.stringify(value)}::json`;
 const anyBigint = (ids: readonly Id[]) => sql<string>`ANY(${ids}::bigint[])`;
 const anyInteger = <T>(ids: readonly number[]) =>
   sql<T>`ANY(${ids}::integer[])`;
@@ -99,9 +104,160 @@ export async function lockReconciliationAccountsAndHistory(
       .orderBy("id")
       .forUpdate()
       .execute();
-  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
+  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments, transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
     db,
   );
+}
+
+/** Formats whose history another format can also export (ADR-236 amendment). */
+const CROSS_FORMATS = [
+  "saxo_transaction_history",
+  "ibkr_transaction_history",
+  "ibkr_funding_history",
+];
+
+/**
+ * Settled staging rows of other batches on these accounts whose ledger event
+ * still exists: a portfolio or cash transaction carries the row's identity.
+ * A rolled-back batch's rows drop out because their transactions are gone.
+ */
+export async function readCrossFormatLedgerSources(
+  accountIds: readonly number[],
+  excludedBatchIds: readonly Id[],
+): Promise<CrossFormatLedgerSourceRow[]> {
+  if (accountIds.length === 0) return [];
+  return checkedRows(
+    crossFormatLedgerSourceRowSchema,
+    sql`SELECT s.id, s.batch_id, s.status, s.route, s.type::text AS type, s.type_raw,
+        to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date, s.units, s.amount, s.currency,
+        s.raw_data, s.source_transaction_id, s.source_account_identity,
+        s.dedup_fingerprint, s.dedup_fingerprint_version,
+        COALESCE(s.user_override_investment_id, s.resolved_investment_id) AS investment_id,
+        b.account_id, b.custom_config,
+        CASE WHEN pt.id IS NOT NULL THEN 'portfolio' ELSE 'cash' END AS ledger,
+        COALESCE(pt.id, t.id) AS transaction_id,
+        to_char(t.date, 'YYYY-MM-DD') AS ledger_date,
+        t.amount AS ledger_amount, t.currency AS ledger_currency
+      FROM portfolio_import_staging_rows s
+      JOIN portfolio_import_batches b ON b.id = s.batch_id
+      LEFT JOIN LATERAL (
+        SELECT p.id FROM portfolio_transactions p
+         WHERE s.route IS DISTINCT FROM 'cash'
+           AND p.dedup_fingerprint = s.dedup_fingerprint
+           AND p.dedup_fingerprint_version = s.dedup_fingerprint_version
+         ORDER BY p.id LIMIT 1) pt ON true
+      LEFT JOIN LATERAL (
+        SELECT c.id, c.date, c.amount, c.currency FROM transactions c
+         WHERE s.route = 'cash' AND c.account_id = b.account_id AND c.is_active
+           AND c.dedup_fingerprint = s.dedup_fingerprint
+           AND c.dedup_fingerprint_version = s.dedup_fingerprint_version
+         ORDER BY c.id LIMIT 1) t ON true
+     WHERE b.account_id = ANY(${accountIds}::integer[])
+       AND NOT (b.id = ANY(${excludedBatchIds}::bigint[]))
+       AND b.custom_config->>'format' = ANY(${CROSS_FORMATS}::text[])
+       AND s.status IN ('committed', 'duplicate')
+       AND s.dedup_fingerprint IS NOT NULL
+       AND (pt.id IS NOT NULL OR t.id IS NOT NULL)
+     ORDER BY s.batch_id, s.row_index, s.id`,
+  );
+}
+
+/**
+ * `version:fingerprint` identities of rows that an earlier review settled as
+ * recorded by another export: duplicate staging rows of the cross-format
+ * batches whose identity no ledger transaction carries. A repeat of such a
+ * row keeps the owner's earlier pairing choice.
+ */
+export async function readCrossFormatSettledIdentities(
+  accountIds: readonly number[],
+  excludedBatchIds: readonly Id[],
+): Promise<Set<string>> {
+  if (accountIds.length === 0) return new Set();
+  const rows = await checkedRows(
+    ledgerFingerprintRowSchema,
+    sql`SELECT DISTINCT s.dedup_fingerprint, s.dedup_fingerprint_version
+      FROM portfolio_import_staging_rows s
+      JOIN portfolio_import_batches b ON b.id = s.batch_id
+     WHERE b.account_id = ANY(${accountIds}::integer[])
+       AND NOT (b.id = ANY(${excludedBatchIds}::bigint[]))
+       AND b.custom_config->>'format' = ANY(${CROSS_FORMATS}::text[])
+       AND s.status = 'duplicate'
+       AND s.dedup_fingerprint IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM portfolio_transactions p
+          WHERE p.dedup_fingerprint = s.dedup_fingerprint
+            AND p.dedup_fingerprint_version = s.dedup_fingerprint_version)
+       AND NOT EXISTS (SELECT 1 FROM transactions c
+          WHERE c.is_active AND c.account_id = b.account_id
+            AND c.dedup_fingerprint = s.dedup_fingerprint
+            AND c.dedup_fingerprint_version = s.dedup_fingerprint_version)`,
+  );
+  return new Set(
+    rows.map(
+      (row) => `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`,
+    ),
+  );
+}
+
+/** The identities among `fingerprints` that an active cash transaction carries. */
+export async function readCashLedgerFingerprints(
+  fingerprints: readonly string[],
+): Promise<Set<string>> {
+  if (fingerprints.length === 0) return new Set();
+  const rows = await checkedRows(
+    ledgerFingerprintRowSchema,
+    sql`SELECT DISTINCT dedup_fingerprint, dedup_fingerprint_version FROM transactions
+     WHERE dedup_fingerprint = ANY(${[...new Set(fingerprints)]}::text[])`,
+  );
+  return new Set(
+    rows.map(
+      (row) => `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`,
+    ),
+  );
+}
+
+/**
+ * Active cash transactions on these accounts that no import owns: no import
+ * identity or source hash. A brokerage import may adopt one as its record.
+ */
+export async function readManualCashCandidates(
+  accountIds: readonly number[],
+  from: string,
+  to: string,
+): Promise<ManualCashCandidateRow[]> {
+  if (accountIds.length === 0) return [];
+  return checkedRows(
+    manualCashCandidateRowSchema,
+    sql`SELECT id, account_id, to_char(date, 'YYYY-MM-DD') AS date, amount, currency
+      FROM transactions
+     WHERE account_id = ANY(${accountIds}::integer[]) AND is_active
+       AND dedup_fingerprint IS NULL AND source_record_hash IS NULL
+       AND date BETWEEN ${from}::date AND ${to}::date
+     ORDER BY date, id`,
+  );
+}
+
+/**
+ * Settle a staged row that another format's record already holds. An
+ * unsupported-event row (status error) is cleared from the error count.
+ * @returns false when the row changed since it was planned
+ */
+export async function markCrossFormatSourceDuplicate(
+  row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
+): Promise<boolean> {
+  const result = await sql`WITH previous AS (
+       SELECT id, status FROM portfolio_import_staging_rows
+        WHERE id = ${row.id} AND batch_id = ${row.batch_id} AND status = ${row.status}
+          AND status IN ('matched', 'error')
+     ), changed AS (
+       UPDATE portfolio_import_staging_rows source SET status = 'duplicate', error_message = NULL
+         FROM previous WHERE source.id = previous.id RETURNING previous.status
+     ) UPDATE portfolio_import_batches
+          SET rows_duplicate = rows_duplicate + (SELECT count(*) FROM changed),
+              rows_error = GREATEST(rows_error - (SELECT count(*) FROM changed WHERE status = 'error'), 0)
+        WHERE id = ${row.batch_id} AND EXISTS (SELECT 1 FROM changed) RETURNING id`.execute(
+    db,
+  );
+  return result.rows.length === 1;
 }
 
 export async function readReconciliationSources(
@@ -214,222 +370,6 @@ export async function readReconciliationBatchScope(
   );
 }
 
-/** Minimal history shape the Kinesis and Saxo context readers inspect. */
-export type ReconciliationHistoryLike = {
-  id: Id;
-  type: string;
-  import_batch_id?: Id | null;
-  dedup_fingerprint?: string | null;
-};
-
-export type ReconciliationContext = {
-  sources: ReconciliationSourceRow[];
-  batches: ReconciliationBatchScopeRow[];
-};
-
-export type ReconciliationReceiptContext = ReconciliationContext & {
-  receipts: ReconciliationJournalRow[];
-};
-
-/** Custody owners retain the exact supplementary native wallet source binding. */
-export async function readKinesisNetworkContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationContext> {
-  const ids = [
-    ...new Set(
-      history
-        .filter((row) => row.type === "asset_transfer")
-        .map((row) => Number(row.import_batch_id))
-        .filter(Boolean),
-    ),
-  ];
-  if (ids.length === 0) return { sources: [], batches: [] };
-  const owners = await readReconciliationSources(ids);
-  const witnessIds = owners
-    .map((row) =>
-      Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
-    )
-    .filter(Boolean);
-  const batchIds = [...new Set([...ids, ...witnessIds])].sort((a, b) => a - b);
-  const [sources, batches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  return { sources, batches };
-}
-
-/** Native gift group owners include generic source batches, not broker-only context. */
-export async function readKinesisNativeGiftContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const ids = history
-    .filter((row) => row.type === "gift" && Boolean(row.dedup_fingerprint))
-    .map((row) => Number(row.id));
-  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_staging_rows as s", "s.id", "a.staging_row_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(ids))
-      .where("a.action", "=", "adopt")
-      .where(sql<boolean>`s.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt'`)
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set([
-      ...receipts.map((row) => Number(row.batch_id)),
-      ...history
-        .filter((row) => row.type === "gift" && row.import_batch_id != null)
-        .map((row) => Number(row.import_batch_id)),
-    ]),
-  ].sort((a, b) => a - b);
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  const [allSources, allBatches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  const retainedIds = new Set(
-    allSources
-      .filter((row) => row.asset_transfer_details?.nativeGiftGroupReceipt)
-      .map((row) => Number(row.batch_id)),
-  );
-  return {
-    receipts,
-    sources: allSources.filter((row) => retainedIds.has(Number(row.batch_id))),
-    batches: allBatches.filter((row) => retainedIds.has(Number(row.id))),
-  };
-}
-
-export async function retainKinesisNetworkBinding({
-  before,
-  after,
-}: {
-  before: ReconciliationSourceRow;
-  after: Pick<ReconciliationSourceRow, "units" | "asset_transfer_details">;
-}): Promise<boolean> {
-  const changed = await db
-    .updateTable("portfolio_import_staging_rows")
-    .set({
-      route: "asset_transfer",
-      type: null,
-      type_raw: "AssetTransfer",
-      units: after.units,
-      asset_transfer_details: json(after.asset_transfer_details),
-    })
-    .where("id", "=", String(before.id))
-    .where("status", "=", "matched")
-    .where("route", "=", before.route)
-    .where("units", "=", before.units)
-    .where("raw_data", "=", before.raw_data)
-    .where("source_record_hash", "=", before.source_record_hash)
-    .where("dedup_fingerprint", "=", before.dedup_fingerprint)
-    .returning("id")
-    .execute();
-  return changed.length === 1;
-}
-
-export async function assertNoActiveKinesisNetworkConsumers(
-  batchId: Id,
-): Promise<void> {
-  const consumers = await db
-    .selectFrom("portfolio_asset_transfers as t")
-    .innerJoin("portfolio_import_staging_rows as s", "s.id", "t.staging_row_id")
-    .select("t.id")
-    .where(
-      sql<boolean>`s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=${batchId}::text`,
-    )
-    .limit(1)
-    .execute();
-  if (consumers.length > 0)
-    throw new Error(
-      "Native wallet evidence is still used by an active broker transfer. Undo that transfer first.",
-    );
-}
-
-/** Active Kinesis adoption images and their retained complete primary sources. */
-export async function readKinesisAdoptionContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const ids = history
-    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
-    .map((row) => Number(row.id));
-  if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(ids))
-      .where("a.action", "=", "adopt")
-      .where(sql<boolean>`b.custom_config->>'format'='kinesis_transaction_history'`)
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
-  ];
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  let batches = await readReconciliationBatchScope(batchIds);
-  const referenced = [
-    ...new Set([
-      ...batchIds,
-      ...batches.flatMap(
-        (batch) =>
-          batchConfigFields(batch.custom_config)
-            ?.portfolio_performance_reference?.effectiveBatchIds ?? [],
-      ),
-    ]),
-  ]
-    .map(Number)
-    .sort((a, b) => a - b);
-  if (referenced.length !== batchIds.length)
-    batches = await readReconciliationBatchScope(referenced);
-  const sources = await readReconciliationSources(referenced);
-  return { receipts, sources, batches };
-}
-
-/** Retained source and immutable receipts that can identify a prior Saxo adoption. */
-export async function readSaxoAdoptionContext(
-  history: readonly ReconciliationHistoryLike[],
-): Promise<ReconciliationReceiptContext> {
-  const transactionIds = history
-    .filter((row) => Boolean(row.dedup_fingerprint) && row.import_batch_id == null)
-    .map((row) => Number(row.id));
-  if (transactionIds.length === 0)
-    return { receipts: [], sources: [], batches: [] };
-  const receipts = await checkedRows(
-    reconciliationJournalRowSchema,
-    db
-      .selectFrom("portfolio_import_reconciliation_journal as a")
-      .innerJoin("portfolio_import_batches as b", "b.id", "a.batch_id")
-      .selectAll("a")
-      .where("a.transaction_id", "=", anyInteger<number>(transactionIds))
-      .where("a.action", "=", "adopt")
-      .where(
-        sql<boolean>`(b.adapter_name = 'saxo_transaction_history'
-          OR b.custom_config->>'format' = 'saxo_transaction_history')`,
-      )
-      .where(activeJournalEntry)
-      .orderBy("a.batch_id")
-      .orderBy("a.id"),
-  );
-  const batchIds = [
-    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
-  ];
-  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
-  const [sources, batches] = await Promise.all([
-    readReconciliationSources(batchIds),
-    readReconciliationBatchScope(batchIds),
-  ]);
-  return { receipts, sources, batches };
-}
-
 export async function readReconciledProImportAccounts(
   accountIds: readonly number[],
 ): Promise<number[]> {
@@ -535,21 +475,6 @@ export async function markAdoptedSourceDuplicate(
     .execute();
 }
 
-export async function markSaxoCompanionSourceDuplicate(
-  row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
-): Promise<boolean> {
-  const result = await sql`WITH previous AS (
-       SELECT id,status FROM portfolio_import_staging_rows
-        WHERE id=${row.id} AND batch_id=${row.batch_id} AND status=${row.status} AND status IN ('matched','error')
-     ), changed AS (
-       UPDATE portfolio_import_staging_rows source SET status='duplicate',error_message=NULL
-        FROM previous WHERE source.id=previous.id RETURNING previous.status
-     ) UPDATE portfolio_import_batches SET rows_duplicate=rows_duplicate+(SELECT count(*) FROM changed),
-       rows_error=rows_error-(SELECT count(*) FROM changed WHERE status='error')
-       WHERE id=${row.batch_id} AND EXISTS(SELECT 1 FROM changed) RETURNING id`.execute(db);
-  return result.rows.length === 1;
-}
-
 export async function getActiveAdoptionReceipts(
   batchId: Id,
 ): Promise<ReconciliationJournalRow[]> {
@@ -563,19 +488,4 @@ export async function getActiveAdoptionReceipts(
       .where(activeJournalEntry)
       .orderBy("a.id"),
   );
-}
-
-export async function retainKinesisNativeGiftReceipt(
-  row: ReconciliationSourceRow,
-  receipt: unknown,
-): Promise<boolean> {
-  const previousDetails =
-    row.asset_transfer_details == null
-      ? null
-      : JSON.stringify(row.asset_transfer_details);
-  const result = await sql`UPDATE portfolio_import_staging_rows SET asset_transfer_details=jsonb_build_object('nativeGiftGroupReceipt',${jsonb(receipt)})
-    WHERE id=${row.id} AND route='portfolio' AND type='gift' AND status IN ('committed','duplicate') AND raw_data=${row.raw_data} AND source_record_hash=${row.source_record_hash} AND dedup_fingerprint=${row.dedup_fingerprint} AND asset_transfer_details::jsonb IS NOT DISTINCT FROM ${previousDetails}::jsonb RETURNING id`.execute(
-    db,
-  );
-  return result.rows.length === 1;
 }

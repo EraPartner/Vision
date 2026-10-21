@@ -20,7 +20,7 @@ vi.mock("../../src/database/connection.ts", () =>
 
 vi.mock("../../src/config/config.ts", () => ({
   default: {
-    admin: { enableResetDb: true, authToken: undefined },
+    admin: { enableResetDb: true },
     isDevelopment: () => true,
   },
 }));

@@ -160,6 +160,16 @@ describe("read-only native statement probe", () => {
     );
     expect(result.detected).toBeNull();
   });
+  it("does not detect an unreadable legacy OLE2 workbook", async () => {
+    const result = await probe(
+      Buffer.concat([
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+        Buffer.alloc(504),
+      ]),
+      "synthetic.xls",
+    );
+    expect(result.detected).toBeNull();
+  });
   it("does not treat an arbitrary ZIP as a workbook", async () => {
     const result = await probe(
       Buffer.from([0x50, 0x4b, 0x03, 0x04]),

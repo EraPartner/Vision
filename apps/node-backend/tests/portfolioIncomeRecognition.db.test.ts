@@ -1,7 +1,8 @@
 /**
  * Durable income recognition on the migrated schema: the receipt snapshot
  * function keeps the pre-income-role image byte-equivalent, the role CHECKs
- * and pairing triggers hold, and the journal is append-only.
+ * and the active-pair guard hold, and in-kind income no longer needs a
+ * receipt (ADR-236).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import pg from "pg";
@@ -110,7 +111,7 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       );
       expect(cas.rows).toHaveLength(1);
     });
-    it("rejects unknown/non-dividend roles and missing durable pairing", async () => {
+    it("rejects unknown/non-dividend roles and accepts in-kind income without a receipt", async () => {
       await expect(
         db.query(
           "UPDATE portfolio_transactions SET income_recognition_role='unknown' WHERE id=$1",
@@ -123,12 +124,15 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
           [oldTxn],
         ),
       ).rejects.toThrow(/chk_portfolio_income/);
-      await expect(
-        db.query(
-          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01',1,'EUR','included_in_units')",
+      const unpaired = (
+        await db.query(
+          "INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,income_recognition_role) VALUES($1,'dividend','2026-01-01',1,'EUR','included_in_units') RETURNING id",
           [investment],
-        ),
-      ).rejects.toThrow(/proved active pair/);
+        )
+      ).rows[0].id;
+      await db.query("DELETE FROM portfolio_transactions WHERE id=$1", [
+        unpaired,
+      ]);
     });
     it("guards unit/income mutation, then restores and deletes income without a permanent history foreign key", async () => {
       const incomeSource = (
@@ -167,11 +171,6 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
       await expect(
         db.query("DELETE FROM portfolio_transactions WHERE id=$1", [income]),
       ).rejects.toThrow(/paired income/);
-      await expect(
-        db.query(
-          "UPDATE portfolio_import_income_recognition_journal SET proof_data=proof_data",
-        ),
-      ).rejects.toThrow(/immutable/);
       await db.query("BEGIN");
       await db.query(
         "INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,previous_entry_id,income_data,unit_data,proof_data) SELECT batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,'restore',id,income_data,unit_data,proof_data FROM portfolio_import_income_recognition_journal WHERE id=$1",

@@ -1,14 +1,19 @@
 ---
 title: ADR-077 Devcontainer Apple Container Runtime
 type: decision
-status: Accepted
+status: superseded
 date: 2026-06-13
+updated: 2026-10-20
 tags: [infrastructure, devcontainer, apple-container, docker, macos]
 description: Migrate the devcontainer launcher from Docker Compose (compose.yaml) to Apple's native container runtime (apple/container), removing the Docker Desktop dependency on macOS.
 aliases: [adr-077, apple-container, devcontainer runtime]
 ---
 
 # ADR-077: Devcontainer Apple/Container Runtime
+
+> [!note] Superseded by [[docs/adr/176-built-in-agent-sandboxes|ADR-176]], which removed
+> `.devcontainer/` on 2026-10-04. The status marker was corrected on 2026-10-20 with
+> [[docs/adr/233-loopback-only-backend|ADR-233]].
 
 ## Status
 Accepted

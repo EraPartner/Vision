@@ -11,7 +11,6 @@ import { asAccountId } from "@vision/types/brands";
 import type { AccountId } from "@vision/types/brands";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
-  batchIdStatusRowSchema,
   committedStagingRowSchema,
   intTotalRowSchema,
   investmentCreationRowSchema,
@@ -184,25 +183,17 @@ export async function lockBatchForUpdate(
 /**
  * Readiness is checked after review account repair, before any canonical write.
  * Returned ordinals deliberately omit source values and investment identities.
- *
- * `provedCompanionRowIds` are excluded because a proof already covers them;
- * `selectedRowIds`, when given, limits the check to that adoption scope.
  */
 export async function getImportReadinessProblems(
   batchId: Id,
   accountId: number | null | undefined,
-  provedCompanionRowIds: Id[] = [],
-  selectedRowIds: Id[] | undefined = undefined,
 ): Promise<Array<{ row_index: number }>> {
   const account = accountId ?? null;
-  const selected = selectedRowIds ?? null;
   return checkedRows(
     stagingRowIndexRowSchema,
     sql`SELECT row_index
        FROM portfolio_import_staging_rows
       WHERE batch_id = ${batchId}
-        AND (${selected}::bigint[] IS NULL OR id=ANY(${selected}::bigint[]))
-        AND NOT (id=ANY(${provedCompanionRowIds}::bigint[]))
         AND (
           status NOT IN ('matched', 'committed', 'duplicate')
           OR (status = 'matched' AND (
@@ -215,22 +206,6 @@ export async function getImportReadinessProblems(
           ))
         )
       ORDER BY row_index`,
-  );
-}
-
-/** Complete only the selected adoption scope; deferred source rows stay reviewable. */
-export async function finalizeAdoptionOnlyBatch(
-  batchId: Id,
-  pending: number,
-  complete: boolean,
-): Promise<{ id: string; status: string } | undefined> {
-  return checkedRow(
-    batchIdStatusRowSchema,
-    sql`UPDATE portfolio_import_batches b SET status=CASE WHEN ${complete}::boolean THEN 'complete' ELSE 'awaiting_review' END,
-       completed_at=CASE WHEN ${complete}::boolean THEN NOW() ELSE NULL END
-     WHERE b.id=${batchId} AND (SELECT count(*) FROM portfolio_import_staging_rows s
-       WHERE s.batch_id=b.id AND s.status NOT IN ('committed','duplicate'))=${pending}::integer
-     RETURNING id,status`,
   );
 }
 

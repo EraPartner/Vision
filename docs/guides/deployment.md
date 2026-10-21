@@ -15,7 +15,7 @@ tags:
     packaging,
     bun,
   ]
-description: Deploy Vision as the native macOS desktop application or as a source backend with operator-managed PostgreSQL 18.
+description: Deploy Vision as the native macOS desktop application or run the loopback-only source backend with operator-managed PostgreSQL 18.
 aliases: [deployment-guide, production-deploy, electron-packaging]
 related_code: ["packaging/electron/", "apps/node-backend/src/main.ts"]
 ---
@@ -27,7 +27,7 @@ Vision supports two deployment shapes:
 | Method            | Use case                            | Database ownership                                          |
 | ----------------- | ----------------------------------- | ----------------------------------------------------------- |
 | Native Electron   | Normal macOS desktop installation   | Vision owns a private bundled PostgreSQL 18 cluster         |
-| Source deployment | Custom server or browser deployment | The operator supplies PostgreSQL 18 and process supervision |
+| Source run        | Running the backend from a checkout | The operator supplies PostgreSQL 18 and process supervision |
 
 The project does not publish or support a product container image. Agent execution uses the
 provider's built-in sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
@@ -56,20 +56,18 @@ The Electron shell is TypeScript compiled into `packaging/electron/out/`. The El
 `out/` tree (without tests and packaging scripts) and `assets/` into `app.asar`
 ([[docs/adr/196-electron-shell-typescript|ADR-196]]).
 
-## Source deployment
+## Source run
 
-Custom server operators provide PostgreSQL 18, a process supervisor, TLS termination, and backups.
-Set the backend environment explicitly:
+A backend started from a checkout serves the same machine only, exactly like the desktop app
+([[docs/adr/233-loopback-only-backend|ADR-233]]). The operator provides PostgreSQL 18, a process
+supervisor and backups. Set the backend environment explicitly:
 
 ```bash
 DATABASE_URL=postgresql://vision_app:<password>@127.0.0.1:5432/financial_transactions
 DATABASE_URL_MIGRATIONS=postgresql://vision_owner:<password>@127.0.0.1:5432/financial_transactions
 PORT=3002
 SERVER_HOST=127.0.0.1
-SERVER_ALLOWED_HOSTS=vision.example.com
 LOG_LEVEL=info
-CORS_ORIGINS=https://vision.example.com
-ADMIN_AUTH_TOKEN=<random-secret>
 ```
 
 Run the guarded migration command before starting the backend:
@@ -86,25 +84,21 @@ role. The grant template at `config/postgres/app-role-grants.sql.tpl` records th
 Apply schema changes only through the repository migrator (`bun run db:migrate`); the backend
 also applies pending migrations before it listens.
 
-## Network and admin security
+## Network boundary
 
-- Bind the backend to loopback unless an authenticated reverse proxy is the explicit boundary.
-- Requests must target a loopback hostname/address, the specific configured bind hostname/address,
-  or an exact hostname in `SERVER_ALLOWED_HOSTS`. Wildcard binds never disable Host validation.
-  A proxy can preserve the public Host above, or rewrite its upstream Host to `127.0.0.1:3002`.
-  The hostname list contains no schemes, ports, or wildcards. `X-Forwarded-Host`, CORS origins,
-  and trusted proxy IPs do not grant destination permission. Invalid or duplicate Host headers
-  receive 403 before preflight, body parsing, health checks, or routes.
-  A proxy that rewrites Host must also reject unknown public hostnames itself: the backend
-  cannot validate a browser authority that the proxy discarded. Keep Vite's host policy enabled
-  for development proxies, which use `changeOrigin: true`.
-- Set `ADMIN_AUTH_TOKEN` whenever the backend is reachable outside the local process boundary.
-- Keep the Cross-Site Request Forgery (CSRF) guard enabled on state-changing admin routes.
-- Terminate Transport Layer Security (TLS) at the reverse proxy for browser deployments.
-- Do not expose PostgreSQL to the public network.
+The API has no user authentication. Its boundary is the machine itself
+([[docs/adr/233-loopback-only-backend|ADR-233]]):
 
-The browser Web App Manifest supplies branding and standalone-window metadata. It does not add an
-offline cache; the backend remains required.
+- The backend refuses to start when `SERVER_HOST` is not a loopback address (`127.0.0.0/8`, `::1`
+  or `localhost`). There is no reverse-proxy, LAN or browser-deployment mode.
+- Every request must name `localhost`, `127.0.0.1` or `::1` with the backend's own port in its
+  `Host` header. Anything else, including a DNS-rebinding hostname, receives 403 before body
+  parsing, health checks or routes. `X-Forwarded-Host` is ignored.
+- The backend sends no CORS headers. The frontend reaches it same-origin: the backend serves the
+  built app, and in development the Vite proxy forwards `/api` with `changeOrigin: true`.
+- The Cross-Site Request Forgery (CSRF) guard rejects cross-site state-changing requests on the
+  whole `/api` plane.
+- Do not expose PostgreSQL to the network.
 
 ## Backup and restore
 
@@ -112,14 +106,14 @@ The desktop app creates complete `.visionbak` bundles containing a custom-format
 attachments, preferences, and a checksum manifest. Restore validates and stages the bundle before
 switching the active database. See [[docs/features/backup-coverage-audit|Backup Coverage Audit]].
 
-Source deployments must use PostgreSQL-native backup tools plus a separately versioned attachment
+Source runs must use PostgreSQL-native backup tools plus a separately versioned attachment
 backup. Verify restore into a disposable database and record the application version and schema
 revision (the highest `public.kysely_migration` name) with each backup. A database dump alone is not a complete Vision backup.
 
 ## Updates
 
 Native packaged updates install a verified macOS release artifact after creating a pre-update
-backup. Source deployments are operator-managed. See
+backup. Source runs are operator-managed. See
 [[docs/features/application-updates|Application Updates]].
 
 ## Monitoring

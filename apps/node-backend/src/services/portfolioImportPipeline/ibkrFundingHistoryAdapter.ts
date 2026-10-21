@@ -1,11 +1,15 @@
-/** Native Client Portal Transaction Status & History funding workbook. */
-import { createHash } from "node:crypto";
+/**
+ * IBKR Client Portal "Transaction Status & History" funding workbook (.xls or
+ * .xlsx). Each completed deposit or withdrawal becomes one brokerage cash row
+ * in its own currency, identified by the account and IBKR reference number.
+ * The Transaction History CSV reports the same movements only in the
+ * statement base currency; the reconciliation plan pairs the two (ADR-236
+ * amendment) so that neither import double counts the other.
+ */
 import { readIbkrFundingWorkbook } from "../../lib/portfolioUpload.ts";
 import type { FundingWorkbookCell } from "../../lib/portfolioUpload.ts";
-import { Decimal, toDecimal } from "../../lib/money.ts";
-import type { DecimalInput } from "../../lib/money.ts";
+import { toDecimal } from "../../lib/money.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
-import type { IbkrFundingEvidence } from "../../repositories/portfolioImportCashRepository.ts";
 import { asCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
 import type { ParsedPortfolioRows } from "./portfolioGenericAdapter.ts";
@@ -40,27 +44,13 @@ const COLUMNS: Record<FundingSheet, string[]> = {
     "Status",
   ],
 };
+/** Statuses of a movement that reached the account. */
+const COMPLETED_STATUS =
+  /^(?:available|sent|completed?|processed|received|credited|disbursed)$/i;
+/** Statuses of a request that never moved money. */
+const OPEN_STATUS =
+  /^(?:pending|processing|requested|rejected|cancell?ed|failed|returned|reversed|expired|on hold)$/i;
 
-interface IbkrFundingSheetDescriptor {
-  sheet: FundingSheet;
-  header_row: 1;
-  source_columns: string[];
-  records: {
-    row_number: number;
-    record_hash: string;
-    source_id: string;
-    source_account_identity: string;
-  }[];
-}
-/** Retained batch context that later authenticates each staged funding row. */
-export interface IbkrFundingSourceContext {
-  version: 1;
-  source_file_hash: string;
-  source_format: "xls" | "xlsx";
-  source_account_identities: string[];
-  sheets: IbkrFundingSheetDescriptor[];
-  record_hashes: string[];
-}
 /** The literal workbook row persisted as `raw_data`. */
 interface IbkrFundingEnvelope {
   schema: "ibkr_funding_workbook_row";
@@ -73,15 +63,24 @@ interface IbkrFundingEnvelope {
   columns: string[];
   cells: FundingWorkbookCell[];
 }
-type FundingRecordEvidence = Omit<
-  IbkrFundingEvidence,
-  "rawData" | "recordHash" | "sourceFileHash" | "sourceFormat"
->;
 
-const hash = (raw: string): string =>
-  createHash("sha256").update(raw, "utf8").digest("hex");
-const validHash = (value: unknown): value is string =>
-  typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+/** One funding movement as the workbook states it. */
+export interface IbkrFundingFacts {
+  type: "deposit" | "withdrawal";
+  /** request date, the staged transaction date */
+  date: string;
+  /** date received (deposit) or processed (withdrawal); request date if blank */
+  completedDate: string;
+  currency: CurrencyCode;
+  /** positive magnitude in the movement's own currency */
+  amount: string;
+  sourceAccount: string;
+  sourceId: string;
+  method: string;
+  status: string;
+  institution: string | undefined;
+}
+
 const equal = (left: unknown, right: unknown): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
 const isFundingSheet = (sheet: unknown): sheet is FundingSheet =>
@@ -92,13 +91,11 @@ const fail: (message: string) => never = (message) => {
   throw new ValidationError(`IBKR funding history ${message}`);
 };
 
-function text(cell: FundingWorkbookCell | undefined, required = false): string {
-  if (cell == null) {
-    if (required) fail("is missing a required literal value");
-    return "";
-  }
+function text(cell: FundingWorkbookCell | undefined): string {
+  if (cell == null) return "";
+  if (cell.type === "number") return cell.value;
   if (cell.type !== "text" || typeof cell.value !== "string")
-    fail("requires literal text cells for its native export fields");
+    fail("requires text cells for its export fields");
   const value = cell.value;
   if (
     value.length > 10000 ||
@@ -108,14 +105,12 @@ function text(cell: FundingWorkbookCell | undefined, required = false): string {
     })
   )
     fail("contains an unsupported literal value");
-  if (required && (!value || value.trim() !== value))
-    fail("contains a blank or altered required value");
-  return value;
+  return value.trim();
 }
 
 function date(value: string | undefined): string {
   if (value === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return fail("requires an ISO calendar date");
+    return fail("requires ISO calendar dates (YYYY-MM-DD)");
   const parsed = new Date(`${value}T00:00:00Z`);
   if (
     Number.isNaN(parsed.getTime()) ||
@@ -130,115 +125,112 @@ function nativeAmount(value: string | undefined): {
   amount: string;
 } {
   const match =
-    /^([A-Z]{3}) ((?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\.\d{2})$/.exec(
+    /^([A-Z]{3}) ((?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)(?:\.\d{1,8})?)$/.exec(
       value ?? "",
     );
   if (!match || !FUNDING_CURRENCIES.has(match[1]!))
-    return fail("requires an explicit native currency and unambiguous amount");
+    return fail("requires an amount with its currency, such as USD 1,000.00");
   const amount = toDecimal(match[2]!.replaceAll(",", ""));
-  if (
-    !amount.gt(0) ||
-    !Number.isFinite(amount.toNumber()) ||
-    amount.gt("999999999999")
-  )
+  if (!amount.gt(0) || amount.gt("999999999999"))
     fail("contains an unsupported funding amount");
-  return { currency: asCurrencyCode(match[1]!), amount: amount.toFixed(2) };
+  return { currency: asCurrencyCode(match[1]!), amount: amount.toFixed() };
 }
 
-function recordEvidence(envelope: IbkrFundingEnvelope): FundingRecordEvidence {
+/**
+ * Read one envelope's movement, or undefined for a request that never moved
+ * money (pending, rejected, cancelled).
+ */
+function movement(envelope: IbkrFundingEnvelope): IbkrFundingFacts | undefined {
   const sheet = envelope?.sheet;
   if (!isFundingSheet(sheet) || !equal(envelope.columns, COLUMNS[sheet]))
     return fail("has an unsupported or changed header layout");
   if (
     !Array.isArray(envelope.cells) ||
-    envelope.cells.length !== envelope.columns.length
+    envelope.cells.length > envelope.columns.length
   )
-    fail("contains an incomplete literal row");
+    fail("contains a row wider than its header");
   const record: Record<string, string> = Object.fromEntries(
     envelope.columns.map((key, index) => [key, text(envelope.cells[index])]),
   );
   for (const key of [
     "Request Date",
     "Reference Number",
-    "Method",
     "Account ID",
-    "Account Title",
     "Amount",
     "Status",
   ])
-    if (!record[key] || record[key].trim() !== record[key])
-      fail("is missing an unaltered required field");
+    if (!record[key]) fail(`is missing ${key} on row ${envelope.row_number}`);
   if (
-    !/^[A-Z][A-Z0-9-]{2,49}$/.test(record["Account ID"]!) ||
+    !/^[A-Z][A-Z0-9*-]{2,49}$/.test(record["Account ID"]!) ||
     !/^[A-Za-z0-9-]{1,100}$/.test(record["Reference Number"]!)
   )
     fail("contains an unsupported account or reference identity");
-  if (record.Method !== "Wire") fail("contains an unsupported funding method");
-  if (record.Status !== (sheet === "Deposit" ? "Available" : "Sent"))
-    fail("contains a funding movement whose completed status is not proved");
+  const status = record.Status!;
+  if (OPEN_STATUS.test(status)) return undefined;
+  if (!COMPLETED_STATUS.test(status))
+    fail(`contains an unknown funding status "${status}"`);
   const requestedDate = date(record["Request Date"]);
-  const completedDate = date(
-    record[sheet === "Deposit" ? "Date Received" : "Date Processed"],
-  );
+  const completed =
+    record[sheet === "Deposit" ? "Date Received" : "Date Processed"];
+  const completedDate = completed ? date(completed) : requestedDate;
   if (completedDate < requestedDate)
     fail("contains inconsistent request and completion dates");
   return {
     type: sheet === "Deposit" ? "deposit" : "withdrawal",
-    direction: sheet === "Deposit" ? "in" : "out",
     date: requestedDate,
     completedDate,
     ...nativeAmount(record.Amount),
     sourceAccount: record["Account ID"]!,
     sourceId: record["Reference Number"]!,
-    reference: record["Reference Number"]!,
-    accountTitle: record["Account Title"]!,
+    method: record.Method || "funding",
+    status,
     institution:
       record[
         sheet === "Deposit" ? "Delivering Institution" : "Receiving Institution"
       ] || undefined,
-    method: record.Method,
-    status: record.Status,
   };
+}
+
+/**
+ * The movement retained in a staged funding row's `raw_data`, or undefined
+ * when the value is not such an envelope.
+ */
+export function ibkrFundingFactsFromRawData(
+  rawData: unknown,
+): IbkrFundingFacts | undefined {
+  try {
+    if (typeof rawData !== "string" || rawData.length > 200000)
+      return undefined;
+    const envelope = JSON.parse(rawData) as IbkrFundingEnvelope;
+    if (envelope?.schema !== "ibkr_funding_workbook_row") return undefined;
+    return movement(envelope);
+  } catch {
+    return undefined;
+  }
 }
 
 export async function parseIbkrFundingHistory(
   filePath: string,
-): Promise<
-  ParsedPortfolioRows & { ibkrFundingSourceContext: IbkrFundingSourceContext }
-> {
+): Promise<ParsedPortfolioRows> {
   const sheets = await readIbkrFundingWorkbook(filePath);
-  const first = sheets[0] ?? fail("contains no funding sheets");
+  if (sheets.length === 0) fail("contains no funding sheets");
   const rows: ParsedPortfolioRows = [];
   const identities = new Set<string>();
   const references = new Set<string>();
-  const titles = new Map<string, string>();
-  const context: IbkrFundingSourceContext = {
-    version: 1,
-    source_file_hash: first.sourceFileHash,
-    source_format: first.sourceFormat,
-    source_account_identities: [],
-    sheets: [],
-    record_hashes: [],
-  };
+  let skipped = 0;
   for (const source of sheets) {
-    const columns = (source.data[0] ?? []).map((cell) => text(cell, true));
+    const columns = (source.data[0] ?? []).map((cell) => text(cell));
     const sheet = source.sheet;
     if (!isFundingSheet(sheet) || !equal(columns, COLUMNS[sheet]))
       return fail(
         "requires the original Deposit or Withdrawal sheet with its complete header",
       );
-    const descriptor: IbkrFundingSheetDescriptor = {
-      sheet,
-      header_row: 1,
-      source_columns: columns,
-      records: [],
-    };
-    context.sheets.push(descriptor);
     for (let index = 1; index < source.data.length; index++) {
       const cells = source.data[index]!;
       if (
         cells.every(
-          (cell) => cell == null || (cell.type === "text" && cell.value === ""),
+          (cell) =>
+            cell == null || (cell.type === "text" && cell.value.trim() === ""),
         )
       )
         continue;
@@ -247,225 +239,49 @@ export async function parseIbkrFundingHistory(
         version: 1,
         source_file_hash: source.sourceFileHash,
         source_format: source.sourceFormat,
-        sheet: source.sheet,
+        sheet,
         header_row: 1,
         row_number: index + 1,
         columns,
         cells,
       };
-      const proof = recordEvidence(envelope);
-      const identity = `${proof.sourceAccount}\u0000${proof.sourceId}`;
+      const facts = movement(envelope);
+      if (!facts) {
+        skipped++;
+        continue;
+      }
+      const identity = `${facts.sourceAccount}\u0000${facts.sourceId}`;
       if (references.has(identity))
         fail("contains duplicate funding references");
       references.add(identity);
-      identities.add(proof.sourceAccount);
-      if (
-        titles.has(proof.sourceAccount) &&
-        titles.get(proof.sourceAccount) !== proof.accountTitle
-      )
-        fail("contains inconsistent account ownership labels");
-      titles.set(proof.sourceAccount, proof.accountTitle);
+      identities.add(facts.sourceAccount);
       const rawData = JSON.stringify(envelope);
       if (Buffer.byteLength(rawData, "utf8") > 100000)
-        fail("contains a literal row exceeding the retained proof limit");
-      const recordHash = hash(rawData);
-      context.record_hashes.push(recordHash);
-      descriptor.records.push({
-        row_number: index + 1,
-        record_hash: recordHash,
-        source_id: proof.sourceId,
-        source_account_identity: proof.sourceAccount,
-      });
+        fail("contains a row exceeding the retained size limit");
       rows.push({
-        date: new Date(`${proof.date}T00:00:00Z`),
-        typeRaw: source.sheet,
+        date: new Date(`${facts.date}T00:00:00Z`),
+        typeRaw: sheet,
         symbolRaw: "",
         nameRaw: "",
         units: null,
         pricePerUnit: null,
-        amount: Number(proof.amount),
+        amount: Number(facts.amount),
         fees: null,
         taxes: null,
-        currency: proof.currency,
+        currency: facts.currency,
         fxRateToEur: null,
-        note: `IBKR ${proof.type} (${proof.method}, ${proof.status})${proof.institution ? ` — ${proof.institution}` : ""}`,
+        note: `IBKR ${facts.type} (${facts.method}, ${facts.status})${facts.institution ? ` — ${facts.institution}` : ""}`,
         rawData,
-        sourceAccountIdentity: proof.sourceAccount,
-        sourceId: proof.sourceId,
+        sourceAccountIdentity: facts.sourceAccount,
+        sourceId: facts.sourceId,
       });
     }
   }
   if (rows.length === 0) fail("contains no completed funding movements");
-  if (identities.size !== 1)
-    fail("must contain one unambiguous broker account");
-  context.source_account_identities = [...identities];
-  rows.skipped = 0;
+  if (identities.size !== 1) fail("must contain one broker account");
+  rows.skipped = skipped;
   rows.sourceColumns = [
-    ...new Set(context.sheets.flatMap((sheet) => sheet.source_columns)),
+    ...new Set(sheets.flatMap((sheet) => COLUMNS[sheet.sheet as FundingSheet])),
   ];
-  return Object.assign(rows, { ibkrFundingSourceContext: context });
-}
-
-/**
- * The staged fields the primary proof reads. Staged rows from several readers
- * reach it, so every value is re-validated rather than trusted.
- */
-export interface IbkrFundingStagedRow {
-  custom_config?: unknown;
-  raw_data?: unknown;
-  source_record_hash?: unknown;
-  route?: unknown;
-  type?: unknown;
-  type_raw?: unknown;
-  tx_date?: unknown;
-  currency?: unknown;
-  source_account_identity?: unknown;
-  source_transaction_id?: unknown;
-  investment_id?: unknown;
-  symbol_raw?: unknown;
-  name_raw?: unknown;
-  amount?: unknown;
-  units?: unknown;
-  price_per_unit?: unknown;
-  fees?: unknown;
-  taxes?: unknown;
-}
-
-// A value toDecimal accepts; anything else made the original proof throw.
-const isDecimalInput = (value: unknown): value is DecimalInput =>
-  value == null ||
-  typeof value === "string" ||
-  typeof value === "number" ||
-  value instanceof Decimal;
-
-/** Validate retained source context and the literal workbook row against staging. */
-export function getIbkrFundingPrimaryEvidence(
-  row: IbkrFundingStagedRow,
-): IbkrFundingEvidence | undefined {
-  try {
-    const config: unknown =
-      typeof row.custom_config === "string"
-        ? JSON.parse(row.custom_config)
-        : row.custom_config;
-    const configRecord: Partial<Record<string, unknown>> =
-      typeof config === "object" && config !== null ? config : {};
-    // Every context field is checked below before it is used.
-    const context = configRecord.ibkr_funding_source_context as
-      IbkrFundingSourceContext | undefined;
-    if (
-      configRecord.format !== "ibkr_funding_history" ||
-      context?.version !== 1 ||
-      !validHash(context.source_file_hash) ||
-      !["xls", "xlsx"].includes(context.source_format) ||
-      !Array.isArray(context.source_account_identities) ||
-      context.source_account_identities.length !== 1 ||
-      !Array.isArray(context.sheets) ||
-      context.sheets.length === 0 ||
-      context.sheets.length > 2 ||
-      !Array.isArray(context.record_hashes) ||
-      context.record_hashes.length === 0 ||
-      context.record_hashes.some((value) => !validHash(value)) ||
-      new Set(context.record_hashes).size !== context.record_hashes.length
-    )
-      return undefined;
-    const references = new Set<string>();
-    const sheetNames = new Set<string>();
-    const hashes: string[] = [];
-    for (const sheet of context.sheets) {
-      if (
-        !isFundingSheet(sheet.sheet) ||
-        sheetNames.has(sheet.sheet) ||
-        sheet.header_row !== 1 ||
-        !equal(sheet.source_columns, COLUMNS[sheet.sheet]) ||
-        !Array.isArray(sheet.records)
-      )
-        return undefined;
-      sheetNames.add(sheet.sheet);
-      let previousRow = 1;
-      for (const record of sheet.records) {
-        if (
-          !Number.isSafeInteger(record.row_number) ||
-          record.row_number <= previousRow ||
-          record.source_account_identity !==
-            context.source_account_identities[0] ||
-          typeof record.source_id !== "string" ||
-          !record.source_id ||
-          references.has(record.source_id) ||
-          !validHash(record.record_hash)
-        )
-          return undefined;
-        previousRow = record.row_number;
-        references.add(record.source_id);
-        hashes.push(record.record_hash);
-      }
-    }
-    if (!equal(hashes, context.record_hashes)) return undefined;
-    const rawData: unknown = row.raw_data;
-    if (
-      typeof rawData !== "string" ||
-      Buffer.byteLength(rawData, "utf8") > 100000
-    )
-      return undefined;
-    let literal: string = rawData;
-    let envelope = JSON.parse(literal);
-    if (typeof envelope.primaryRawData === "string") {
-      literal = envelope.primaryRawData;
-      envelope = JSON.parse(literal);
-    }
-    const recordHash = hash(literal);
-    if (
-      recordHash !== row.source_record_hash ||
-      !context.record_hashes.includes(recordHash) ||
-      envelope.schema !== "ibkr_funding_workbook_row" ||
-      envelope.version !== 1 ||
-      envelope.source_file_hash !== context.source_file_hash ||
-      envelope.source_format !== context.source_format ||
-      envelope.header_row !== 1 ||
-      !Number.isSafeInteger(envelope.row_number) ||
-      envelope.row_number < 2
-    )
-      return undefined;
-    const descriptor = context.sheets.find(
-      (sheet) => sheet.sheet === envelope.sheet,
-    );
-    const retained = descriptor?.records.find(
-      (record) =>
-        record.record_hash === recordHash &&
-        record.row_number === envelope.row_number,
-    );
-    const proof = recordEvidence(envelope);
-    if (
-      !retained ||
-      retained.source_id !== proof.sourceId ||
-      retained.source_account_identity !== proof.sourceAccount ||
-      row.route !== "cash" ||
-      row.type != null ||
-      row.type_raw !== envelope.sheet ||
-      row.tx_date !== proof.date ||
-      row.currency !== proof.currency ||
-      row.source_account_identity !== proof.sourceAccount ||
-      row.source_transaction_id !== proof.sourceId ||
-      row.investment_id != null ||
-      String(row.symbol_raw || "") ||
-      String(row.name_raw || "") ||
-      row.amount == null ||
-      !isDecimalInput(row.amount) ||
-      !toDecimal(row.amount).eq(proof.amount) ||
-      [row.units, row.price_per_unit].some((value) => value != null) ||
-      [row.fees, row.taxes].some(
-        (value) =>
-          value != null && (!isDecimalInput(value) || !toDecimal(value).eq(0)),
-      )
-    )
-      return undefined;
-    return {
-      ...proof,
-      rawData: literal,
-      recordHash,
-      sourceFileHash: context.source_file_hash,
-      sourceFormat: context.source_format,
-    };
-  } catch {
-    return undefined;
-  }
+  return rows;
 }

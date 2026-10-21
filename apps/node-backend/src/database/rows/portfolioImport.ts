@@ -41,15 +41,6 @@ import {
   portfolioTransactionSnapshotSchema,
 } from "./portfolio.ts";
 import type { PortfolioParserConfig } from "../../services/portfolioImportPipeline/portfolioGenericAdapter.ts";
-import type { IbkrFundingSourceContext } from "../../services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
-import type { IbkrSourceContext } from "../../services/portfolioIbkrPrimaryProof.ts";
-import type { KinesisSourceContext } from "../../services/portfolioKinesisAdoptionScope.ts";
-import type {
-  KinesisNetworkBinding,
-  KinesisNetworkReceipt,
-  NativeGiftGroupReceipt,
-} from "../../services/portfolioKinesisNetworkProof.ts";
-import type { KinesisYieldGroupEvidence } from "../../services/portfolioKinesisYieldGroups.ts";
 import type { IbkrCashEnvelope } from "../../repositories/portfolioImportCashRepository.ts";
 
 // ---------------------------------------------------------------------------
@@ -69,34 +60,6 @@ function storedJsonObject<T extends object>(label: string) {
   return z.custom<T>(isJsonObject, { message: `expected ${label} object` });
 }
 
-/** One `routing` entry of a performance reference (per effective batch). */
-export type PortfolioPerformanceReferenceRouting = {
-  batchId: number;
-  accountId: number;
-  originAccountId?: number | null;
-  destinationAccountId?: number | null;
-};
-
-/** A blocker a performance reference recorded against its own batch. */
-export type PortfolioPerformanceReferenceBlocker = {
-  reason: string;
-  batchId?: number;
-  rowOrdinal?: number;
-};
-
-/** `custom_config.portfolio_performance_reference`. */
-export type PortfolioPerformanceReferenceConfig = {
-  effectiveBatchIds: number[];
-  stagingBinding: string;
-  originalStagingBinding?: string;
-  sourceHash?: string;
-  /** e.g. 'adopt_existing_only' | 'correct_existing_only' */
-  reconciliationScope?: string;
-  originalBatchIds?: number[];
-  routing?: PortfolioPerformanceReferenceRouting[];
-  yieldGroupEvidence?: KinesisYieldGroupEvidence;
-};
-
 /**
  * `portfolio_import_batches.custom_config`: the parser definition the batch
  * ran on plus the keys stage and review add to it. Unknown keys stay readable
@@ -107,11 +70,6 @@ export type PortfolioImportBatchConfig = PortfolioParserConfig & {
   source_columns?: string[] | undefined;
   /** stage: records left outside an `included_symbols` scope. */
   scope_excluded_rows?: number;
-  kinesis_source_context?: KinesisSourceContext;
-  ibkr_source_context?: IbkrSourceContext;
-  ibkr_funding_source_context?: IbkrFundingSourceContext;
-  portfolio_performance_reference?: PortfolioPerformanceReferenceConfig;
-  reference_blockers?: PortfolioPerformanceReferenceBlocker[];
   [key: string]: unknown;
 };
 
@@ -147,17 +105,14 @@ export function batchConfigFields(
 
 /**
  * `portfolio_import_staging_rows.asset_transfer_details` (JSON): stage writes
- * `ParsedPortfolioRow.assetTransfer`; review retains a network binding or a
- * native gift receipt on it.
+ * `ParsedPortfolioRow.assetTransfer`. Rows staged before ADR-236 may also
+ * hold network evidence keys, which stay readable as `unknown`.
  */
 export type StagedAssetTransferDetails = {
   direction?: string;
   basisStatus?: string;
   feeUnits?: string;
   receivedUnits?: string;
-  networkReceipt?: KinesisNetworkReceipt;
-  networkBinding?: KinesisNetworkBinding;
-  nativeGiftGroupReceipt?: NativeGiftGroupReceipt;
   [key: string]: unknown;
 };
 
@@ -167,7 +122,6 @@ export type StagedAssetAdjustmentDetails = {
   basisPolicy?: string;
   accountId?: number;
   eligibleSourceRecordHashes?: string[];
-  networkReceipt?: KinesisNetworkReceipt;
   [key: string]: unknown;
 };
 
@@ -265,11 +219,6 @@ export const intTotalRowSchema = z
   .object({ total: pgInt })
   .describe("portfolio import total row");
 
-/** `finalizeAdoptionOnlyBatch`'s `RETURNING id,status` (id is BIGINT). */
-export const batchIdStatusRowSchema = portfolioImportBatchRowSchema
-  .pick({ id: true, status: true })
-  .describe("portfolio import batch id/status row");
-
 /** `SELECT is_brokerage` (pipeline review gate). */
 export const batchBrokerageRowSchema = portfolioImportBatchRowSchema
   .pick({ is_brokerage: true })
@@ -299,7 +248,6 @@ export const commitBatchRowSchema = reconciliationBatchScopeRowSchema
     account_name: z.string().nullable(),
   })
   .describe("portfolio import commit batch row");
-export type CommitBatchRow = z.output<typeof commitBatchRowSchema>;
 
 /** Validate's batch read, joined to the account's import identity. */
 export const validateBatchRowSchema = portfolioImportBatchRowSchema
@@ -321,11 +269,6 @@ export type ValidateBatchRow = z.output<typeof validateBatchRowSchema>;
 export const batchAccountIdRowSchema = z
   .object({ account_id: pgInt })
   .describe("portfolio import batch account row");
-
-/** `SELECT DISTINCT batch_id` / `SELECT id` over portfolio import batches. */
-export const batchIdOnlyRowSchema = z
-  .object({ batch_id: pgBigint })
-  .describe("portfolio import batch_id row");
 
 // ---------------------------------------------------------------------------
 // portfolio_import_staging_rows
@@ -744,10 +687,6 @@ export type CashTransactionSnapshot = z.output<
   typeof cashTransactionSnapshotSchema
 >;
 
-export const cashSnapshotRowSchema = z
-  .object({ snapshot: cashTransactionSnapshotSchema })
-  .describe("cash transaction snapshot row");
-
 /** IBKR_CASH_SNAPSHOT_SQL: the image without categorization and pairing. */
 export const ibkrCashSnapshotSchema = cashTransactionSnapshotSchema.omit({
   category_id: true,
@@ -761,26 +700,63 @@ export const ibkrCashSnapshotRowSchema = z
   .object({ snapshot: ibkrCashSnapshotSchema })
   .describe("ibkr cash snapshot row");
 
-/** `to_jsonb(s)` of `account_statement_balances` (NUMERIC as a JSON number). */
-export const statementBalanceSnapshotSchema = z.object({
-  account_id: pgAccountId,
-  currency: pgCurrency,
-  balance: z.number(),
-  /** DATE in JSON: 'YYYY-MM-DD' */
-  balance_date: z.string(),
-});
-export type StatementBalanceSnapshot = z.output<
-  typeof statementBalanceSnapshotSchema
+/**
+ * A settled staging row of another batch whose ledger event still exists
+ * (`readCrossFormatLedgerSources`). `ledger` names the table of
+ * `transaction_id`; the `ledger_*` columns are set for cash only.
+ */
+export const crossFormatLedgerSourceRowSchema = z
+  .object({
+    id: pgBigint,
+    batch_id: pgBigint,
+    status: z.string(),
+    route: z.string().nullable(),
+    type: z.string().nullable(),
+    type_raw: z.string().nullable(),
+    tx_date: pgDayString.nullable(),
+    units: pgNumeric.nullable(),
+    amount: pgNumeric.nullable(),
+    currency: pgCurrency.nullable(),
+    raw_data: z.string().nullable(),
+    source_transaction_id: z.string().nullable(),
+    source_account_identity: z.string().nullable(),
+    dedup_fingerprint: z.string().nullable(),
+    dedup_fingerprint_version: pgInt.nullable(),
+    investment_id: pgInvestmentId.nullable(),
+    account_id: pgAccountId,
+    custom_config: storedBatchConfigSchema.nullable(),
+    ledger: z.enum(["portfolio", "cash"]),
+    transaction_id: pgInt,
+    ledger_date: pgDayString.nullable(),
+    ledger_amount: pgNumeric.nullable(),
+    ledger_currency: pgCurrency.nullable(),
+  })
+  .describe("cross-format ledger source row");
+export type CrossFormatLedgerSourceRow = z.output<
+  typeof crossFormatLedgerSourceRowSchema
 >;
 
-export const statementBalanceSnapshotRowSchema = z
-  .object({ snapshot: statementBalanceSnapshotSchema })
-  .describe("statement balance snapshot row");
+/** An active cash transaction that no import owns (`readManualCashCandidates`). */
+export const manualCashCandidateRowSchema = z
+  .object({
+    id: pgInt,
+    account_id: pgAccountId,
+    date: pgDayString,
+    amount: pgNumeric,
+    currency: pgCurrency,
+  })
+  .describe("manual cash candidate row");
+export type ManualCashCandidateRow = z.output<
+  typeof manualCashCandidateRowSchema
+>;
 
-/** `SELECT institution,name FROM accounts`. */
-export const accountLabelRowSchema = z
-  .object({ institution: z.string().nullable(), name: z.string() })
-  .describe("portfolio import account label row");
+/** A `(version, fingerprint)` identity present in a ledger table. */
+export const ledgerFingerprintRowSchema = z
+  .object({
+    dedup_fingerprint: z.string(),
+    dedup_fingerprint_version: pgInt,
+  })
+  .describe("ledger fingerprint row");
 
 // ---------------------------------------------------------------------------
 // Duplicate repair

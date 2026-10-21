@@ -4,14 +4,11 @@
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts). The production admin mount
- * (main.ts:276 — `mountRouter(app, '/api/admin', adminRateLimiter,
- * adminCsrfGuard, adminAuthMiddleware, adminRouter)`) is reproduced via the
- * harness's `before` slot with the REAL `createAdminAuthMiddleware`, driven by
- * the same `settings.admin.authToken` value main.ts uses — so a
- * configured token is now actually enforced in tests, previously impossible
- * under the mock-router harness. `adminRateLimiter` (app-level, module-scoped
- * counters) and `adminCsrfGuard` (redundant with the harness's own global CSRF
- * mount, see routeApp.js fidelity map) are intentionally not added again here.
+ * (`mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard,
+ * adminRouter)` in main.ts) is reproduced by the harness. `adminRateLimiter`
+ * (app-level, module-scoped counters) and `adminCsrfGuard` (redundant with the
+ * harness's own global CSRF mount, see routeApp.ts fidelity map) are
+ * intentionally not added again here.
  * `adminMutateLimiter`, declared INSIDE admin.js on individual mutate routes,
  * is exercised for free since the real router is mounted.
  */
@@ -20,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
-import { createAdminAuthMiddleware } from "../../src/middleware/adminAuth.ts";
 import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("https", () => ({
@@ -39,7 +35,7 @@ vi.mock("../../src/database/connection.ts", () =>
 );
 
 const settings = vi.hoisted(() => ({
-  admin: { enableResetDb: false, authToken: undefined as string | undefined },
+  admin: { enableResetDb: false },
   isDevelopment: () => true,
 }));
 
@@ -81,16 +77,7 @@ const getRouteManifest = vi.mocked(rawGetRouteManifest);
 
 const { default: adminRouter } = await import("../../src/routes/admin.ts");
 
-// Mirrors main.ts:43 exactly — a per-request getter so a test can flip
-// settings.admin.authToken between calls and see the guard react.
-const adminAuthMiddleware = createAdminAuthMiddleware(
-  () => settings.admin.authToken,
-);
-
-const api = routeAgent(adminRouter, {
-  mountPath: "/api/admin",
-  before: [adminAuthMiddleware],
-});
+const api = routeAgent(adminRouter, { mountPath: "/api/admin" });
 const BASE = "/api/admin";
 
 describe("Admin Routes", () => {
@@ -99,7 +86,6 @@ describe("Admin Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     settings.admin.enableResetDb = false;
-    settings.admin.authToken = undefined;
     delete process.env.APP_VERSION;
   });
 
@@ -109,47 +95,6 @@ describe("Admin Routes", () => {
     } else {
       process.env.APP_VERSION = initialAppVersion;
     }
-  });
-
-  // Newly on-path: the mock-router harness never ran any middleware, so the
-  // auth guard was never actually exercised even though it protects every
-  // admin request in production.
-  describe("admin auth guard (main.ts:276)", () => {
-    it("passes through with no configured token (loopback-only trust model)", async () => {
-      checkConnection.mockResolvedValue(true);
-      getTableCount.mockResolvedValue(5);
-
-      await api.get(`${BASE}/`).expect(200);
-    });
-
-    it("rejects a request with no Authorization header once a token is configured", async () => {
-      settings.admin.authToken = "secret-token";
-
-      const res = await api.get(`${BASE}/`).expect(401);
-      expect(res.body).toEqual(errEnvelope({ code: "UNAUTHORIZED" }));
-      expect(checkConnection).not.toHaveBeenCalled();
-    });
-
-    it("rejects a request bearing the wrong token", async () => {
-      settings.admin.authToken = "secret-token";
-
-      const res = await api
-        .get(`${BASE}/`)
-        .set("Authorization", "Bearer wrong")
-        .expect(401);
-      expect(res.body).toEqual(errEnvelope({ code: "UNAUTHORIZED" }));
-    });
-
-    it("passes through with the correct bearer token", async () => {
-      settings.admin.authToken = "secret-token";
-      checkConnection.mockResolvedValue(true);
-      getTableCount.mockResolvedValue(5);
-
-      await api
-        .get(`${BASE}/`)
-        .set("Authorization", "Bearer secret-token")
-        .expect(200);
-    });
   });
 
   describe("GET /", () => {
@@ -450,21 +395,6 @@ describe("Admin Routes", () => {
       const res = await api.get(`${BASE}/endpoints`).expect(200);
 
       expect(res.body).toEqual(okEnvelope({ items: manifest, total: 1 }));
-    });
-
-    it("GET /endpoint-liveness returns { items, total } with live flags", async () => {
-      getRouteManifest.mockReturnValue([
-        { method: "GET", path: "/api/health" },
-      ]);
-
-      const res = await api.get(`${BASE}/endpoint-liveness`).expect(200);
-
-      expect(res.body).toEqual(
-        okEnvelope({
-          items: [{ method: "GET", path: "/api/health", live: true }],
-          total: 1,
-        }),
-      );
     });
 
     it("GET /endpoints reports total 0 for an empty manifest", async () => {

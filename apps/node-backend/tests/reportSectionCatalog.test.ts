@@ -6,8 +6,8 @@
  *    refactor changes what a default report renders or in which order. (The
  *    id->renderer wiring lives in services/reports/index.js and is cross-checked
  *    against this catalog at module load by reconcile(); this test imports only
- *    the dependency-free catalog leaf so it does not pull the heavy Puppeteer/
- *    HTML render graph into the coverage denominator.)
+ *    the dependency-free catalog leaf so it does not pull the HTML render
+ *    graph into the coverage denominator.)
  *
  * 2. Guards the frontend mirror: the export dialog's hand-maintained lists in
  *    apps/frontend/src/features/reports/reportSections.ts must offer exactly

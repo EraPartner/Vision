@@ -16,17 +16,16 @@ package "Express Application" {
 package "Middleware" {
   class RateLimiter {
     +globalRateLimiter: mounted on /api before all routers\n  (RATE_LIMIT_GLOBAL_MAX=1000/min, RATE_LIMIT_GLOBAL_WINDOW_MS=60000)\n  per-route limiters stack on top — June 2026
-    +resolveClientIp(req): trusts XFF only from TRUSTED_PROXIES — June 2026
+    +client key: req.socket.remoteAddress (X-Forwarded-For ignored) — ADR-233
     +adminRateLimiter: 500/min observability reads
     +adminMutateLimiter: 30/min destructive ops
     +importRateLimiter: 20/min
-    +reportRateLimiter: 30/min (Puppeteer)
+    +reportRateLimiter: 30/min (report documents)
     +marketRateLimiter: 90/min (Yahoo Finance proxy)
     +investmentRateLimiter: 300/min
     +aggregationRateLimiter: 600/min
     +attachmentRateLimiter: 60/min
     +spaRateLimiter: 600/min (SPA fallback)
-    +ipMatchesRule(ip, rule): CIDR/IP matching for TRUSTED_PROXIES
     note: dev bypasses gated on VISION_DEV=true (fail-safe) — June 2026
   }
 
@@ -44,13 +43,11 @@ package "Middleware" {
 
 
   class Security {
-    +hostGuard: exact destination authority before CORS, body parsing, health and routes; SERVER_ALLOWED_HOSTS adds explicit hosts
-    +cors: middleware/cors.ts (strict allowlist, replaces cors package)
-    +compression: middleware/compression.ts (node:zlib, replaces compression package)
+    +hostGuard: Host must be localhost / 127.0.0.1 / ::1 with the backend port, before body parsing, health and routes (ADR-233)
+    +isLoopbackHost(host): startup refuses a non-loopback bind (ADR-233)
     +securityHeaders: middleware (inline in main.ts)
     +requestLogger: middleware (inline in main.ts)
-    +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
-    +csrfGuard middleware (Sec-Fetch-Site / Origin allowlist; blocks cross-site state-changing requests to /api)
+    +csrfGuard middleware (Sec-Fetch-Site / own loopback origins; blocks cross-site state-changing requests to /api)
   }
 }
 
@@ -197,7 +194,7 @@ package "Routes" {
     +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
     +POST /batches/:id/commit : atomic maintained reviewed commit
     +POST /reconciliation/preview : reviewed multi-batch plan
-    +POST /reconciliation/commit : fingerprint-pinned atomic scope
+    +POST /reconciliation/commit : plan rebuilt under locks, atomic scope
   }
 
   class SettingsRouter {
@@ -230,7 +227,6 @@ package "Routes" {
     +POST /pivot : pivot query
     +POST /extensions/evaluate, /formulas/evaluate : evaluate expressions
     +POST /ai-proposals/preview, /ai-proposals/apply : AI plan proposals
-    +POST /interchange/import, /interchange/export : workbook interchange
     +POST /cancel/:requestId : cancel query
     +POST /drill : contributing records
     +GET,POST /saved : list/create analyses
@@ -318,7 +314,6 @@ package "Routes" {
     +POST /providers/:provider/probe : synthetic probe
     +GET /metrics/requests : in-memory rolling p50/p95 (Phase F)
     +GET /endpoints : live route manifest (Phase F)
-    +GET /endpoint-liveness : route manifest with liveness
     +/api/admin/* : timing-safe bearer auth (ADR-037)
   }
 
@@ -329,7 +324,6 @@ package "Routes" {
     +GET /cashflow-comparison : cash flow comparison
     +GET /average-vs-current : avg vs current spending
     +GET /bank-balances : account balances
-    +GET /cashflow-forecast : N-month forecast (Phase 6)
     +GET /cashflow-forecast-methods, /cashflow-forecast-rolling, /cashflow-forecast-accuracy
     +GET /sankey : income flow diagram (Phase 7)
     +GET /category-pivot, /recipient-by-year, /recipient-pivot, /tag-pivot
@@ -343,9 +337,9 @@ package "Routes" {
   }
 
   class ReportsRouter <<Phase 3-8>> {
-    +POST /financial : PDF financial report (7 sections, Puppeteer)
-    +POST /portfolio : PDF portfolio report (6 sections, Phase 8)
-    +POST /tax : PDF tax report (7 sections, Phase 8)
+    +POST /financial : financial report document (7 sections; Electron prints PDF)
+    +POST /portfolio : portfolio report document (6 sections, Phase 8)
+    +POST /tax : tax report document (7 sections, Phase 8)
   }
 
   class AiRouter <<ADR-024>> {
@@ -358,7 +352,6 @@ package "Routes" {
   }
 
   class AiResearchRouter <<ADR-145, ADR-229>> {
-    +GET /status : local research status
     +GET,POST /investigations; GET,DELETE /investigations/:id
     +POST /investigations/:id/resume, /investigations/:id/cancel
   }
@@ -366,7 +359,6 @@ package "Routes" {
   class AiResearchDocumentsRouter {
     +GET,POST / : list/upload documents
     +GET,DELETE /:id : read/delete document
-    +POST /search/passages : passage search
   }
 
   class AccountsRouter {
@@ -384,9 +376,9 @@ package "Routes" {
   }
 
   class ResearchRouter {
-    +GET /search, /quote, /chart, /fundamentals, /analyst, /news
+    +GET /search, /chart, /analyst, /news
     +GET /macro/search, /macro/series, /scorecard
-    +POST /portfolio-forecast, /presentation
+    +POST /portfolio-forecast
     +GET,POST /mappings; POST /mappings/resolve, /mappings/audit; DELETE /mappings/:id
     +GET /provider-keys; PUT,DELETE /provider-keys/:provider
   }

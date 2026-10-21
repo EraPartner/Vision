@@ -1,14 +1,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  ibkrFundingFactsFromRawData,
   parseIbkrFundingHistory,
-  getIbkrFundingPrimaryEvidence,
 } from "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
-import type { IbkrFundingSourceContext } from "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import { assertPortfolioUploadSupported } from "../src/services/portfolioImportPipeline/uploadSupport.ts";
 
 const DEPOSIT_HEADERS = [
@@ -39,12 +37,11 @@ const WITHDRAWAL_HEADERS = [
   "Status",
 ];
 type SourceRecord = Record<string, unknown>;
-type FundingRows = Awaited<ReturnType<typeof parseIbkrFundingHistory>>;
 const deposit = (overrides: SourceRecord = {}): SourceRecord => ({
   "Request Date": "2025-01-02",
   "Reference Number": "SYNTHETIC-DEP-1",
   Method: "Wire",
-  "Account ID": "SYNTHETIC-ACCOUNT",
+  "Account ID": "U0000000",
   "Account Title": "Synthetic Owner",
   "Delivering Institution": "Synthetic Bank",
   "From Account Number": "SYNTHETIC-SOURCE",
@@ -61,7 +58,7 @@ const withdrawal = (overrides: SourceRecord = {}): SourceRecord => ({
   "Request Date": "2025-01-07",
   "Reference Number": "SYNTHETIC-WITH-1",
   Method: "Wire",
-  "Account ID": "SYNTHETIC-ACCOUNT",
+  "Account ID": "U0000000",
   "Account Title": "Synthetic Owner",
   "Receiving Institution": "Synthetic Bank",
   "Date Processed": "2025-01-08",
@@ -96,19 +93,17 @@ async function writeWorkbook(
   mutate?: (workbook: XLSX.WorkBook) => void,
 ) {
   const workbook = XLSX.utils.book_new();
-  for (const source of sheets) {
-    const cells = [
-      source.headers,
-      ...source.records.map((record) =>
-        source.headers.map((key) => record[key] ?? ""),
-      ),
-    ];
+  for (const source of sheets)
     XLSX.utils.book_append_sheet(
       workbook,
-      XLSX.utils.aoa_to_sheet(cells),
+      XLSX.utils.aoa_to_sheet([
+        source.headers,
+        ...source.records.map((record) =>
+          source.headers.map((key) => record[key] ?? ""),
+        ),
+      ]),
       source.name,
     );
-  }
   mutate?.(workbook);
   await fs.writeFile(
     file,
@@ -116,34 +111,9 @@ async function writeWorkbook(
   );
 }
 
-function stagingRow(parsed: FundingRows[number], rows: FundingRows) {
-  return {
-    custom_config: {
-      format: "ibkr_funding_history",
-      ibkr_funding_source_context: rows.ibkrFundingSourceContext,
-    },
-    route: "cash",
-    type: null,
-    type_raw: parsed.typeRaw,
-    tx_date: parsed.date!.toISOString().slice(0, 10),
-    currency: parsed.currency,
-    amount: parsed.amount,
-    units: null,
-    price_per_unit: null,
-    fees: null,
-    taxes: null,
-    source_account_identity: parsed.sourceAccountIdentity,
-    source_transaction_id: parsed.sourceId,
-    raw_data: parsed.rawData,
-    source_record_hash: createHash("sha256")
-      .update(parsed.rawData)
-      .digest("hex"),
-  };
-}
-
-describe("IBKR native funding history workbook", () => {
+describe("IBKR funding history workbook", () => {
   it.each(["biff8", "xlsx"] as const)(
-    "preserves native currency, request date and literal proof from %s",
+    "reads each movement in its own currency from %s",
     async (format) => {
       await writeWorkbook(undefined, format);
       await assertPortfolioUploadSupported(file, {
@@ -158,7 +128,7 @@ describe("IBKR native funding history workbook", () => {
         currency: "USD",
         fees: null,
         taxes: null,
-        sourceAccountIdentity: "SYNTHETIC-ACCOUNT",
+        sourceAccountIdentity: "U0000000",
         sourceId: "SYNTHETIC-DEP-1",
         fxRateToEur: null,
       });
@@ -173,113 +143,93 @@ describe("IBKR native funding history workbook", () => {
         schema: "ibkr_funding_workbook_row",
         version: 1,
         sheet: "Deposit",
-        header_row: 1,
         row_number: 2,
         source_format: format === "biff8" ? "xls" : "xlsx",
         columns: DEPOSIT_HEADERS,
       });
-      expect(envelope.cells[12]).toEqual({
-        type: "text",
-        value: "USD 1,234.56",
-      });
-      expect(envelope.source_file_hash).toMatch(/^[a-f0-9]{64}$/);
-      expect(rows.ibkrFundingSourceContext.record_hashes).toHaveLength(2);
-      expect(
-        getIbkrFundingPrimaryEvidence(stagingRow(rows[0]!, rows)),
-      ).toMatchObject({
-        type: "deposit",
-        direction: "in",
-        date: "2025-01-02",
-        completedDate: "2025-01-02",
-        amount: "1234.56",
-        currency: "USD",
-        sourceAccount: "SYNTHETIC-ACCOUNT",
-        sourceId: "SYNTHETIC-DEP-1",
-        institution: "Synthetic Bank",
-        status: "Available",
+      expect(ibkrFundingFactsFromRawData(rows[1]!.rawData)).toMatchObject({
+        type: "withdrawal",
+        date: "2025-01-07",
+        completedDate: "2025-01-08",
+        amount: "25.4",
+        currency: "EUR",
+        sourceAccount: "U0000000",
+        sourceId: "SYNTHETIC-WITH-1",
       });
     },
   );
 
-  it("does not require a bank name that the source leaves absent", async () => {
+  it("skips requests that never moved money and counts them", async () => {
     await writeWorkbook([
       sheet("Deposit", DEPOSIT_HEADERS, [
-        deposit({ "Delivering Institution": "" }),
+        deposit(),
+        deposit({ "Reference Number": "SYNTHETIC-DEP-2", Status: "Pending" }),
+        deposit({ "Reference Number": "SYNTHETIC-DEP-3", Status: "Rejected" }),
       ]),
     ]);
     const rows = await parseIbkrFundingHistory(file);
-    expect(
-      getIbkrFundingPrimaryEvidence(stagingRow(rows[0]!, rows))?.institution,
-    ).toBeUndefined();
+    expect(rows.map((row) => row.sourceId)).toEqual(["SYNTHETIC-DEP-1"]);
+    expect(rows.skipped).toBe(2);
+  });
+
+  it("accepts any funding method, a masked account and a blank bank", async () => {
+    await writeWorkbook([
+      sheet("Deposit", DEPOSIT_HEADERS, [
+        deposit({
+          Method: "ACH",
+          "Account ID": "U***0000",
+          "Delivering Institution": "",
+          "Date Received": "",
+        }),
+      ]),
+    ]);
+    const [row] = await parseIbkrFundingHistory(file);
+    expect(ibkrFundingFactsFromRawData(row!.rawData)).toMatchObject({
+      method: "ACH",
+      sourceAccount: "U***0000",
+      institution: undefined,
+      completedDate: "2025-01-02",
+    });
   });
 
   it.each([
-    [{ Status: "Pending" }, /completed status/],
-    [{ Status: "Cancelled" }, /completed status/],
-    [{ Method: "Unknown" }, /funding method/],
-    [{ Amount: "1234.56" }, /explicit native currency/],
-    [{ Amount: "$ 1,234.56" }, /explicit native currency/],
-    [{ Amount: "ZZZ 1,234.56" }, /explicit native currency/],
-    [{ Amount: "USD 1.234,56" }, /explicit native currency/],
-    [{ Amount: "USD 12,34.56" }, /explicit native currency/],
-    [{ Amount: "USD -1.00" }, /explicit native currency/],
+    [{ Status: "Mystery" }, /unknown funding status/],
+    [{ Amount: "1234.56" }, /amount with its currency/],
+    [{ Amount: "$ 1,234.56" }, /amount with its currency/],
+    [{ Amount: "ZZZ 1,234.56" }, /amount with its currency/],
+    [{ Amount: "USD 1.234,56" }, /amount with its currency/],
+    [{ Amount: "USD -1.00" }, /amount with its currency/],
     [{ Amount: "USD 0.00" }, /funding amount/],
     [{ "Request Date": "2025-02-30" }, /invalid calendar/],
     [{ "Date Received": "2025-01-01" }, /inconsistent request/],
-    [{ "Account ID": "" }, /required field/],
-    [{ "Reference Number": "" }, /required field/],
-    [{ "Reference Number": 12345 }, /literal text/],
-  ])("rejects unsupported or unproved native fields", async (fields, error) => {
+    [{ "Account ID": "" }, /missing Account ID/],
+    [{ "Reference Number": "" }, /missing Reference Number/],
+  ])("rejects a row it cannot read safely", async (fields, error) => {
     await writeWorkbook([sheet("Deposit", DEPOSIT_HEADERS, [deposit(fields)])]);
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow(error);
   });
 
-  it("rejects duplicate references, mixed accounts and ownership labels", async () => {
-    for (const rows of [
-      [deposit(), deposit()],
-      [
+  it("rejects duplicate references and mixed accounts", async () => {
+    await writeWorkbook([sheet("Deposit", DEPOSIT_HEADERS, [deposit(), deposit()])]);
+    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/duplicate/);
+    await writeWorkbook([
+      sheet("Deposit", DEPOSIT_HEADERS, [
         deposit(),
-        deposit({
-          "Reference Number": "SYNTHETIC-DEP-2",
-          "Account ID": "SYNTHETIC-OTHER",
-        }),
-      ],
-      [
-        deposit(),
-        deposit({
-          "Reference Number": "SYNTHETIC-DEP-2",
-          "Account Title": "Different Owner",
-        }),
-      ],
-    ]) {
-      await writeWorkbook([sheet("Deposit", DEPOSIT_HEADERS, rows)]);
-      await expect(parseIbkrFundingHistory(file)).rejects.toThrow(
-        /duplicate|unambiguous|ownership/,
-      );
-    }
+        deposit({ "Reference Number": "SYNTHETIC-DEP-2", "Account ID": "U0000001" }),
+      ]),
+    ]);
+    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/one broker account/);
   });
 
-  it("rejects changed headers, formulas, hidden sheets and unrelated workbooks", async () => {
+  it("rejects changed headers, formulas, hidden sheets and unrelated files", async () => {
     await writeWorkbook([
-      sheet(
-        "Deposit",
-        [...DEPOSIT_HEADERS.slice(0, -1), "Amount"],
-        [deposit()],
-      ),
+      sheet("Deposit", [...DEPOSIT_HEADERS.slice(0, -1), "Amount"], [deposit()]),
     ]);
-    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(
-      /complete header/,
-    );
+    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/complete header/);
     await writeWorkbook([sheet("Unrelated", DEPOSIT_HEADERS, [deposit()])]);
-    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(
-      /original Deposit/,
-    );
+    await expect(parseIbkrFundingHistory(file)).rejects.toThrow();
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit!.M2 = {
-        t: "s",
-        v: "USD 1,234.56",
-        f: '"USD 1,234.56"',
-      };
+      workbook.Sheets.Deposit!.M2 = { t: "s", v: "USD 1,234.56", f: '"USD 1,234.56"' };
     });
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/formulas/);
     await writeWorkbook(undefined, "xlsx", (workbook) => {
@@ -290,69 +240,10 @@ describe("IBKR native funding history workbook", () => {
         ],
       };
     });
-    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(
-      /unsupported sheets/,
-    );
+    await expect(parseIbkrFundingHistory(file)).rejects.toThrow();
     await fs.writeFile(file, "<html>not a native workbook</html>");
     await expect(
       assertPortfolioUploadSupported(file, { format: "ibkr_funding_history" }),
-    ).rejects.toThrow(/original XLS/);
-  });
-
-  it("rejects excessive cell bounds before enumerating rows", async () => {
-    await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit!["!ref"] = "A1:N50000";
-    });
-    await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/cell limits/);
-  });
-
-  it("requires full literal context and staging equality for primary evidence", async () => {
-    await writeWorkbook();
-    const rows = await parseIbkrFundingHistory(file);
-    const base = stagingRow(rows[0]!, rows);
-    expect(getIbkrFundingPrimaryEvidence(base)).toBeDefined();
-    for (const fields of [
-      { amount: 1234.55 },
-      { currency: "EUR" },
-      { tx_date: "2025-01-03" },
-      { type_raw: "Withdrawal" },
-      { route: "portfolio" },
-      { type: "buy" },
-      { source_transaction_id: "OTHER" },
-      { source_account_identity: "OTHER" },
-      { fees: 1 },
-      { taxes: 1 },
-      { units: 1 },
-      { source_record_hash: "a".repeat(64) },
-    ])
-      expect(
-        getIbkrFundingPrimaryEvidence({ ...base, ...fields }),
-      ).toBeUndefined();
-    for (const mutate of [
-      (context: IbkrFundingSourceContext) => {
-        context.source_file_hash = "a".repeat(64);
-      },
-      (context: IbkrFundingSourceContext) => {
-        context.record_hashes = [];
-      },
-      (context: IbkrFundingSourceContext) => {
-        context.sheets[0]!.records[0]!.row_number = 3;
-      },
-      (context: IbkrFundingSourceContext) => {
-        context.sheets[0]!.source_columns[0] = "Changed";
-      },
-      (context: IbkrFundingSourceContext) => {
-        context.sheets[0]!.records[0]!.source_id = "OTHER";
-      },
-    ]) {
-      const value = structuredClone(base);
-      mutate(value.custom_config.ibkr_funding_source_context);
-      expect(getIbkrFundingPrimaryEvidence(value)).toBeUndefined();
-    }
-    const wrapped = {
-      ...base,
-      raw_data: JSON.stringify({ primaryRawData: base.raw_data }),
-    };
-    expect(getIbkrFundingPrimaryEvidence(wrapped)).toBeDefined();
+    ).rejects.toThrow(/XLS/);
   });
 });

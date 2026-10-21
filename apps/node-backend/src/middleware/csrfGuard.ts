@@ -1,12 +1,12 @@
 /**
  * CSRF guard for state-changing requests.
  *
- * The API is published on the host loopback, so the realistic cross-origin
- * threat is a malicious web page
- * the user visits issuing fetch()/form POSTs to http://localhost:PORT/... . CORS
- * hides the *response* but does NOT stop the *request* from executing, so a
- * destructive POST (e.g. /api/admin/database/reset) could still fire. This guard
- * rejects cross-site state-changing requests.
+ * The backend only listens on loopback, so the realistic cross-origin threat
+ * is a malicious web page the user visits issuing fetch()/form POSTs to
+ * http://localhost:PORT/... . The browser's same-origin policy hides the
+ * *response* but does NOT stop the *request* from executing, so a destructive
+ * POST (e.g. /api/admin/database/reset) could still fire. This guard rejects
+ * cross-site state-changing requests.
  *
  * Strategy (zero-config, no tokens/cookies needed):
  *   - Safe methods (GET/HEAD/OPTIONS) are never blocked.
@@ -14,9 +14,10 @@
  *     `same-origin` and `none` (user-initiated, e.g. typed URL); reject
  *     `same-site` and `cross-site`.
  *   - When `Sec-Fetch-Site` is absent (older browsers / non-browser clients),
- *     fall back to `Origin`: a present Origin must be on the allowlist; an absent
- *     Origin is treated as a non-browser client (curl, server-to-server, the
- *     Electron main process) and allowed.
+ *     fall back to `Origin`: a present Origin must be one of the backend's own
+ *     loopback origins (plus the Vite dev server's outside production); an
+ *     absent Origin is treated as a non-browser client (curl, server-to-server,
+ *     the Electron main process) and allowed.
  */
 
 import { ForbiddenError } from "./errorHandler.ts";
@@ -28,11 +29,31 @@ import type {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** Vite's development server port (apps/frontend/vite.config.ts). */
+const VITE_DEV_SERVER_PORT = 8080;
+
 /**
- * @param getAllowedOrigins  returns the CORS origin allowlist ('*' for
- *        wildcard, an array, or a single origin string).
+ * Every loopback spelling of the origin the backend serves itself on. With
+ * `includeDevServer`, also the Vite development server's loopback origins:
+ * its proxy forwards the browser's Origin header unchanged.
  */
-export function createCsrfGuard(getAllowedOrigins: () => string | string[]) {
+export function loopbackOrigins(
+  port: number,
+  { includeDevServer = false }: { includeDevServer?: boolean } = {},
+): string[] {
+  const ports = includeDevServer ? [port, VITE_DEV_SERVER_PORT] : [port];
+  return ports.flatMap((p) => [
+    `http://localhost:${p}`,
+    `http://127.0.0.1:${p}`,
+    `http://[::1]:${p}`,
+  ]);
+}
+
+/**
+ * @param getAllowedOrigins  returns the exact origins a state-changing request
+ *        without `Sec-Fetch-Site` may carry (see {@link loopbackOrigins}).
+ */
+export function createCsrfGuard(getAllowedOrigins: () => readonly string[]) {
   return function csrfGuard(
     req: ExpressRequest,
     res: ExpressResponse,
@@ -51,18 +72,9 @@ export function createCsrfGuard(getAllowedOrigins: () => string | string[]) {
     const origin = req.headers.origin;
     if (origin === undefined || origin === "") return next(); // non-browser client
 
-    const allowed = getAllowedOrigins();
-    if (allowed === "*") return next();
-    // `origin` is typed string|string[] (the header type in general), but an
-    // Origin header is never repeated in practice; a duplicate would fail
-    // both branches below exactly as before this cast (array !== any allowed
-    // string, and Array.prototype.includes never matches an array element),
-    // so this only narrows the type, not the behavior.
-    const originValue = origin as string;
-    const isAllowed = Array.isArray(allowed)
-      ? allowed.includes(originValue)
-      : allowed === originValue;
-    if (isAllowed) return next();
+    // A repeated Origin arrives as an array and never matches an entry.
+    if (typeof origin === "string" && getAllowedOrigins().includes(origin))
+      return next();
 
     return next(new ForbiddenError("Cross-origin request blocked"));
   };

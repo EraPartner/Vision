@@ -97,8 +97,8 @@ describe("IBKR Transaction History portfolio adapter", () => {
     });
     expect(rows.at(-1)!.rawData).toContain("Forex Trade Component,EUR.USD,300");
     const repeated = await parseModifiedFixture(chargedStatement);
-    expect(repeated.ibkrSourceContext!.record_hashes).toEqual(
-      rows.ibkrSourceContext!.record_hashes,
+    expect(repeated.map((row) => row.rawData)).toEqual(
+      rows.map((row) => row.rawData),
     );
   });
 
@@ -127,12 +127,6 @@ describe("IBKR Transaction History portfolio adapter", () => {
       expect(rows.skipped).toBe(baseline.skipped! + 1);
       expect(rows.map((row) => row.rawData)).toEqual(
         baseline.map((row) => row.rawData),
-      );
-      expect(rows.ibkrSourceContext!.record_hashes).toEqual(
-        baseline.ibkrSourceContext!.record_hashes,
-      );
-      expect(rows.ibkrSourceContext!.source_file_hash).not.toBe(
-        baseline.ibkrSourceContext!.source_file_hash,
       );
     },
   );
@@ -239,9 +233,6 @@ describe("IBKR Transaction History portfolio adapter", () => {
       currency: "USD",
     });
     expect(rows.sourceColumns!.slice(0, 2)).toEqual(["Account", "Date"]);
-    expect(rows.ibkrSourceContext!.header_record).toContain(
-      "Transaction History,Header,Account,Date,",
-    );
     expect(rows[0]!.rawData).toContain(
       "Transaction History,Data,U0000000,2026-01-02,",
     );

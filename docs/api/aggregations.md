@@ -8,7 +8,7 @@ last_modified: 2026-10-20
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
 tags: [endpoint, api, aggregations, backend, phase-2, phase-6, phase-9, phase-10, phase-d, phase-e, phase-f, phase-g, phase-h, phase-h-v2, decimal, money, cashflow-forecast, multi-method-forecast, statistical-forecasting, ensemble-methods, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience, rolling-window, url-persistence, rolling-cache, rolling-diagnostics, recipient-pivot, tag-pivot, saved-charts, exclusion-filters, ensemble-v2, tags]
-description: Server-computed transaction aggregations with materialized-view source distinction; includes planned cash flow forecast (Phase 6), 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), per-recipient spending pivot for custom charts (April 2026), and per-tag spending pivot for custom charts (June 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field); tag-pivot endpoint added.
+description: Server-computed transaction aggregations with materialized-view source distinction; includes 8-method statistical forecast with empirical-Bayes ensemble v2 (Phase 10 + F), persisted accuracy metrics with fallback-to-memory resilience (Phase D), nightly cache materialization (Phase E), per-category breakdown with reconciliation (Phase G), rolling-window cash flow forecast (Phase H), per-recipient spending pivot for custom charts (April 2026), and per-tag spending pivot for custom charts (June 2026). June 2026: recipient-insights endpoint accepts exclusion params; ensemble weighting upgraded to v2 (sample-size-shrunk RMSE + uniform-blend floor); bank-balances history changed from monthly to daily points (YYYY-MM-DD date field replaces month field); tag-pivot endpoint added.
 aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints, cashflow-forecast, cash-flow-forecast, multi-method-forecast]
 related_code:
   - apps/node-backend/src/routes/aggregations.ts
@@ -39,7 +39,6 @@ related_code:
   - apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx
   - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/components/charts/LineChart.tsx
-  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts
   - db/migrations/0001_baseline.sql
 ---
 
@@ -708,78 +707,6 @@ Aggregated per-recipient spending broken out by calendar year, with support for 
 - Powers year-over-year recipient spending views
 - `meta.source` remains `'live'`; repeated identical requests may reuse the
   five-minute in-process response cache without changing the source label
-
----
-
-### Cash Flow Forecast
-
-N-month forward projection of income and expenses from active, unexecuted planned transactions (Phase 6).
-
-**Path:** `GET /api/aggregations/cashflow-forecast`
-
-**Query Parameters:**
-
-| Parameter | Type    | Default | Max | Description                  |
-| --------- | ------- | ------- | --- | ---------------------------- |
-| `months`  | integer | 3       | 24  | Number of months to forecast |
-
-**Response (data field):**
-
-```json
-{
-  "forecast": [
-    {
-      "month": "2026-05",
-      "income": 3500.0,
-      "expenses": -2150.75,
-      "net": 1349.25,
-      "items": [
-        {
-          "id": 42,
-          "planned_date": "2026-05-01",
-          "currency": "EUR",
-          "amount": 3500.0,
-          "memo": "Salary",
-          "recipient_name": "Employer Inc.",
-          "category_name": "INCOME:SALARY",
-          "is_recurring": false,
-          "recurrence_pattern": null
-        }
-      ]
-    },
-    {
-      "month": "2026-06",
-      "income": 3500.0,
-      "expenses": -2150.75,
-      "net": 1349.25,
-      "items": []
-    }
-  ]
-}
-```
-
-**Field Descriptions:**
-
-| Field      | Type   | Meaning                                             |
-| ---------- | ------ | --------------------------------------------------- |
-| `month`    | string | `YYYY-MM` format                                    |
-| `income`   | number | Sum of positive (incoming) amounts                  |
-| `expenses` | number | Sum of negative (outgoing) amounts (negative value) |
-| `net`      | number | `income + expenses`                                 |
-| `items`    | array  | Forecast line items in this month                   |
-
-**Frontend Usage:**
-
-```typescript
-const envelope = await apiClient.getAggregationCashflowForecast({
-  months: 6,
-});
-// envelope.data.forecast[n].month → "2026-05"
-// envelope.data.forecast[n].net → projected cash position
-// envelope.meta.source → always "live" (computed on-demand)
-```
-
-See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] for details.
 
 ---
 

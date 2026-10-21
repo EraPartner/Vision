@@ -7,11 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
-// The funding adapter pulls in the xlsx reader; it is not under test here.
-vi.mock(
-  "../src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts",
-  () => ({ parseIbkrFundingHistory: vi.fn() }),
-);
 vi.mock(
   "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts",
   () => ({ parseSaxoTransactionHistory: vi.fn() }),

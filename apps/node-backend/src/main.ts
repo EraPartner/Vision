@@ -24,15 +24,8 @@ import {
   createErrorHandler,
   NotFoundError,
 } from "./middleware/errorHandler.ts";
-import {
-  createAdminAuthMiddleware,
-  isLoopbackHost,
-} from "./middleware/adminAuth.ts";
-import { createCsrfGuard } from "./middleware/csrfGuard.ts";
-import { createHostGuard } from "./middleware/hostGuard.ts";
-import { createCorsMiddleware } from "./middleware/cors.ts";
-import { compression } from "./middleware/compression.ts";
-import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.ts";
+import { createCsrfGuard, loopbackOrigins } from "./middleware/csrfGuard.ts";
+import { createHostGuard, isLoopbackHost } from "./middleware/hostGuard.ts";
 import { wrapResponse } from "./middleware/envelope.ts";
 import { requestId } from "./middleware/requestId.ts";
 import { requestMetrics } from "./middleware/requestMetrics.ts";
@@ -40,13 +33,13 @@ import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.t
 import { runWarmupTasks, type WarmupStatus } from "./startup/warmup.ts";
 import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.ts";
 
-const adminAuthMiddleware = createAdminAuthMiddleware(
-  () => settings.admin.authToken,
-);
 // Blocks cross-site state-changing requests (browser CSRF), which the loopback
 // binding alone cannot stop. Mounted across the whole data plane below; the
 // alias documents intent at the (now redundant) admin mount point.
-const csrfGuard = createCsrfGuard(() => settings.api.corsOrigins);
+const csrfAllowedOrigins = loopbackOrigins(settings.server.port, {
+  includeDevServer: !settings.isProduction(),
+});
+const csrfGuard = createCsrfGuard(() => csrfAllowedOrigins);
 const adminCsrfGuard = csrfGuard;
 
 // Import route modules
@@ -103,18 +96,17 @@ const app = express();
 // Request ID — must run first so every other middleware and logger sees `req.id`.
 app.use(requestId);
 
-// Check the destination before CORS can finish OPTIONS or any body/route runs.
+// Check the destination Host before any body parsing or route runs.
 app.use(
   createHostGuard({
     bindHost: settings.server.host,
-    allowedHosts: settings.server.allowedHosts,
+    port: settings.server.port,
   }),
 );
 
 // Request metrics — rolling in-memory window for /api/admin/metrics/requests.
 app.use(requestMetrics);
 
-app.use(createCorsMiddleware(() => settings.api.corsOrigins));
 
 // JSON body parser with size limit
 app.use(express.json({ limit: "1mb" }));
@@ -133,16 +125,8 @@ app.use((req, res, next) => {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
   );
-  if (settings.isProduction()) {
-    res.setHeader(
-      "Strict-Transport-Security",
-      "max-age=63072000; includeSubDomains; preload",
-    );
-  }
   next();
 });
-
-app.use(compression);
 
 // Request logging
 app.use((req, res, next) => {
@@ -266,7 +250,6 @@ mountRouter(
   "/api/admin",
   adminRateLimiter,
   adminCsrfGuard,
-  adminAuthMiddleware,
   adminRouter,
 );
 app.use(IMPORT_RATE_LIMITED_PATHS, importRateLimiter);
@@ -421,31 +404,16 @@ function bootSummary(extraPhase = "backend_total") {
 }
 
 async function start() {
-  if (!settings.admin.authToken) {
-    // A non-loopback bind with no token means /api/admin/* (including
-    // destructive routes) is reachable by anyone who can reach the port, with
-    // no per-request check. Refuse to start rather than rely on a log line —
-    // unless the operator explicitly acknowledges an outer restriction
-    // (ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, set only when a reverse proxy or host
-    // firewall provides an equivalent outer access-control boundary).
-    if (!isLoopbackHost(HOST) && !settings.admin.allowTokenlessNonLoopback) {
-      logger.error(
-        `Refusing to start: bind address '${HOST}' is not loopback and ADMIN_AUTH_TOKEN is not set. ` +
-          "Set ADMIN_AUTH_TOKEN to protect /api/admin/*, bind to 127.0.0.1/localhost, or — only if an " +
-          "outer layer already restricts access (for example, a reverse proxy or host firewall) — " +
-          "set ADMIN_ALLOW_TOKENLESS_NONLOOPBACK=true.",
-      );
-      process.exit(1);
-    }
-    // Loopback without a token is the desktop app's normal setup, so it is
-    // informational there; a tokenless non-loopback bind stays a warning.
-    const log = isLoopbackHost(HOST) ? logger.info : logger.warn;
-    log.call(
-      logger,
-      "ADMIN_AUTH_TOKEN is not set; admin endpoints rely on the bind address and the CSRF " +
-        "guard, which does not block cross-site GET reads. Set ADMIN_AUTH_TOKEN before " +
-        "exposing the port beyond loopback.",
+  // The API has no per-request authentication: the loopback bind, the Host
+  // guard and the CSRF guard are its whole boundary (ADR-233). Any other bind
+  // would expose every route, including destructive admin routes, to the
+  // network, so refuse to start instead.
+  if (!isLoopbackHost(HOST)) {
+    logger.error(
+      `Refusing to start: bind address '${HOST}' is not loopback. ` +
+        "Vision only listens on 127.0.0.1, ::1 or localhost; unset SERVER_HOST or set it to one of those.",
     );
+    process.exit(1);
   }
 
   try {
@@ -648,7 +616,6 @@ async function shutdown(signal?: string) {
   await Promise.allSettled([
     closePool(),
     closeAnalysisPool(),
-    closePuppeteerBrowser(),
   ]);
   clearTimeout(forceExit);
   process.exit(0);

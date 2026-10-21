@@ -49,7 +49,7 @@ SORT title ASC
 - [[docs/security/ai-data-access|AI Data Access Policy]] - Tool allowlist, rate limits, no-external-calls guarantee, audit logging
 - [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]] - Local reliability thresholds and release blockers
 - [[docs/security/dependency-security-remediation-2026-04|Dependency Security Remediation (2026-04)]] - Workspace dependency hardening and validation outcomes
-- Admin auth model (token-or-open + CSRF guard) is documented in [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] and [[docs/security/data-protection|Data Protection]]. The superseded RFC1918 fallback is [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]].
+- The network boundary (loopback-only bind, fixed Host allowlist, CSRF guard, no CORS and no admin token) is documented in [[docs/adr/233-loopback-only-backend|ADR-233]] and [[docs/security/data-protection|Data Protection]]. The superseded admin token is [[docs/adr/063-admin-auth-csrf-guard|ADR-063]]; the older RFC1918 fallback is [[docs/adr/037-admin-auth-localhost-fallback|ADR-037]].
 
 ## Supply Chain Security (2026-05-07)
 
@@ -59,6 +59,15 @@ SORT title ASC
 - **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of the security checks (gitleaks and dependency review in `Repo Checks`, `bun audit` in `Lint`, CodeQL in its own workflow) and setup instructions
 - **GitHub release provenance** - The protected build job creates the packaged-app SBOM and keyless artifact attestations; the release job checks provenance before publishing. GitHub account and workflow authority remain the update trust boundary.
 - **[[docs/guides/contributing|Contributing Guide]]** - Developer setup including pre-commit hook installation (`git config core.hooksPath .githooks`, `brew install gitleaks`)
+
+## Hardening — 2026-10-20
+
+- **Loopback-only backend** — [[docs/adr/233-loopback-only-backend|ADR-233]] makes the backend
+  refuse any non-loopback bind and fixes the Host allowlist to `localhost`, `127.0.0.1` and `::1`
+  with the backend port. It removes the `ADMIN_AUTH_TOKEN` bearer check and its admin UI, the CORS
+  middleware and `CORS_ORIGINS`, `SERVER_ALLOWED_HOSTS`, `TRUSTED_PROXIES`, the gzip middleware and
+  the HSTS header. The CSRF guard's Origin fallback now accepts only the backend's own loopback
+  origins (plus the Vite dev server's outside production).
 
 ## Hardening — 2026-05-29
 

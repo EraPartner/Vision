@@ -779,52 +779,26 @@ Return a static manifest of all registered Express routes.
 
 ---
 
-### GET /api/admin/endpoint-liveness
-
-Return the static route manifest annotated with a `live: true` flag for each entry, confirming that all registered endpoints are reachable.
-
-**Response:** `200 OK` — canonical collection body `{ items, total }`.
-
-```json
-{
-  "items": [
-    { "method": "GET", "path": "/api/transactions", "live": true },
-    { "method": "POST", "path": "/api/transactions", "live": true },
-    { "method": "PATCH", "path": "/api/transactions/:id", "live": true }
-  ],
-  "total": 3
-}
-```
-
-**Notes:**
-
-- Identical source data as `GET /api/admin/endpoints` (same `getRouteManifest()` call), with each entry extended by `live: true`
-- Intended for health/monitoring tooling that needs a single endpoint confirming the route manifest is served and all entries are live
-
----
-
 ## Environment Variables
 
-| Variable           | Description                                                       |
-| ------------------ | ----------------------------------------------------------------- |
-| `APP_VERSION`      | Current application version                                       |
-| `ADMIN_AUTH_TOKEN` | Optional Bearer token required for `/api/admin/*` routes when set |
+| Variable      | Description                 |
+| ------------- | --------------------------- |
+| `APP_VERSION` | Current application version |
 
 ## Security and Rate Limiting
 
 - Database reset is disabled by default (`admin.enableResetDb` setting)
 - Update checks are read-only operations
-- Admin auth follows the **token-or-open + CSRF guard** model per [[docs/adr/063-admin-auth-csrf-guard|ADR-063]] (supersedes the RFC 1918 IP allowlist of ADR-037):
-  - **When `ADMIN_AUTH_TOKEN` is configured:** Requests must include `Authorization: Bearer <token>` (timing-safe compare); otherwise `401 Unauthorized`.
-  - **When `ADMIN_AUTH_TOKEN` is unset:** Admin routes are open at the auth layer — protection is the loopback-only host port binding plus the CSRF guard.
-  - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with an `Origin`-allowlist fallback for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
+- Admin routes have no authentication layer ([[docs/adr/233-loopback-only-backend|ADR-233]], superseding the `ADMIN_AUTH_TOKEN` bearer check of [[docs/adr/063-admin-auth-csrf-guard|ADR-063]]). Protection is the loopback-only bind, the Host guard and the CSRF guard:
+  - **Bind and Host:** the backend refuses to start on a non-loopback address, and every request must name `localhost`, `127.0.0.1` or `::1` with the backend port in `Host` (403 otherwise).
+  - **CSRF guard (all `/api/admin` state-changing requests):** cross-site requests are rejected via `Sec-Fetch-Site` (allow `same-origin`/`none`, reject `cross-site`/`same-site`) with a fallback to the backend's own loopback origins for older/non-browser clients. This blocks a malicious page from POSTing to destructive routes (e.g. `database/reset`) — which the loopback binding alone cannot stop.
+  - No admin route returns `401`; that status no longer exists on `/api/admin/*`.
 - Error responses for admin operations are sanitized to generic `Administrative operation failed` to avoid leaking internals.
 
 ### Network boundary and admin access
 
-Native Electron binds the backend to loopback. A custom source deployment must preserve that
-boundary or set `ADMIN_AUTH_TOKEN` behind an authenticated reverse proxy. The CSRF guard remains
-required because network binding is not a browser-origin control.
+Native Electron and source runs bind the backend to loopback; there is no reverse-proxy or LAN
+mode. The CSRF guard remains required because network binding is not a browser-origin control.
 
 ### Rate Limits
 

@@ -16,7 +16,6 @@ import { bigintIdRowSchema } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { parseWithConfig } from "./portfolioGenericAdapter.ts";
-import { captureKinesisSourceContext } from "../portfolioKinesisAdoptionScope.ts";
 import {
   normalizeCreatedBatchId,
   runImportStageLifecycle,
@@ -106,27 +105,14 @@ export async function stageBatch({
         .where("id", "=", String(batchId))
         .execute(),
     parseRows: async () => {
+      if (
+        customConfig.format === "ibkr_funding_history" &&
+        customConfig.included_symbols
+      )
+        throw new Error(
+          "IBKR funding history cannot be filtered by investment symbol",
+        );
       const parsed = await parseWithConfig(filePath, customConfig);
-      if (customConfig.format === "ibkr_funding_history") {
-        if (customConfig.included_symbols)
-          throw new Error(
-            "IBKR funding history cannot be filtered by investment symbol",
-          );
-        const context = parsed.ibkrFundingSourceContext;
-        await mergeBatchConfig(
-          batchId,
-          "ibkr_funding_source_context",
-          sql`${JSON.stringify(context)}::jsonb`,
-        );
-      }
-      if (customConfig.format === "kinesis_transaction_history") {
-        const context = await captureKinesisSourceContext(filePath, parsed);
-        await mergeBatchConfig(
-          batchId,
-          "kinesis_source_context",
-          sql`${JSON.stringify(context)}::jsonb`,
-        );
-      }
       const rows = applyPortfolioAssetScope(
         parsed,
         customConfig.included_symbols,
@@ -142,13 +128,6 @@ export async function stageBatch({
           batchId,
           "source_columns",
           sql`${rows.sourceColumns}::text[]`,
-        );
-      const ibkrSourceContext = rows.ibkrSourceContext;
-      if (ibkrSourceContext)
-        await mergeBatchConfig(
-          batchId,
-          "ibkr_source_context",
-          sql`${JSON.stringify(ibkrSourceContext)}::jsonb`,
         );
       return rows;
     },
@@ -209,7 +188,6 @@ function applyPortfolioAssetScope(
   );
   result.skipped = rows.skipped;
   result.sourceColumns = rows.sourceColumns;
-  Object.assign(result, { ibkrSourceContext: rows.ibkrSourceContext });
   return result;
 }
 

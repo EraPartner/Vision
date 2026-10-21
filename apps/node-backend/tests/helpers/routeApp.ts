@@ -27,14 +27,7 @@
  *   createErrorHandler(...)   main.ts:395  typed errors → `{ ok:false, error }`
  *
  * ── Deliberately NOT reproduced (and why) ─────────────────────────────────
- *   CORS reflection           main.ts:117      response headers only; needs the
- *                                              real settings allowlist.
  *   security headers          main.ts:125-146  response headers only.
- *   gzip response compression main.ts:148      wraps `res.write`/`res.end`;
- *                                              would obscure streamed-body and
- *                                              Content-Length assertions.
- *                                              Pass it via `before` if a suite
- *                                              needs it.
  *   request logging           main.ts:150-156  noise.
  *   globalRateLimiter and the per-mount limiters
  *                             main.ts:244, 261-338
@@ -102,8 +95,8 @@ export interface RouteAppOptions {
    * passes; set false only to prove the guard's effect.
    */
   csrf?: boolean;
-  /** Allowlist handed to the CSRF guard (main.ts:49 passes `settings.api.corsOrigins`). */
-  corsOrigins?: string | string[];
+  /** Origins the CSRF guard accepts without Sec-Fetch-Site (main.ts passes `loopbackOrigins(port)`). */
+  allowedOrigins?: readonly string[];
   /** Body-size limit (main.ts:123; default `'1mb'`). */
   jsonLimit?: string;
   /**
@@ -129,7 +122,7 @@ export function createRouteApp(
     before = [],
     after = [],
     csrf = true,
-    corsOrigins = [],
+    allowedOrigins = [],
     jsonLimit = '1mb',
     isProduction = () => false,
   } = options;
@@ -143,7 +136,7 @@ export function createRouteApp(
   // main.ts:123
   app.use(express.json({ limit: jsonLimit }));
   // main.ts:252 — CSRF backstop across the whole /api data plane.
-  if (csrf) app.use(createCsrfGuard(() => corsOrigins));
+  if (csrf) app.use(createCsrfGuard(() => allowedOrigins));
   // main.ts:159 — attaches res.ok(data, meta?) before any router runs.
   app.use(wrapResponse);
 

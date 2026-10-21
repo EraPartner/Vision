@@ -100,7 +100,7 @@ describe("Research route parameter guards", () => {
   });
 
   describe("symbol requireds", () => {
-    it.each(["/quote", "/chart", "/analyst", "/news"])(
+    it.each(["/chart", "/analyst", "/news"])(
       "GET %s rejects a missing/empty symbol",
       async (path) => {
         const res1 = await api.get(`${BASE}${path}`).expect(400);
@@ -117,20 +117,20 @@ describe("Research route parameter guards", () => {
     );
 
     it("trims the first entry of an array-valued symbol like a scalar", async () => {
-      await api.get(`${BASE}/quote?symbol=%20%20&symbol=MSFT`).expect(400);
+      await api.get(`${BASE}/chart?symbol=%20%20&symbol=MSFT`).expect(400);
       expect(researchAggregator.fetch).not.toHaveBeenCalled();
 
-      await api.get(`${BASE}/quote?symbol=%20AAPL%20&symbol=MSFT`).expect(200);
+      await api.get(`${BASE}/chart?symbol=%20AAPL%20&symbol=MSFT`).expect(200);
       expect(researchAggregator.fetch).toHaveBeenLastCalledWith(
-        "quote",
+        "chart",
         expect.objectContaining({ symbol: "AAPL" }),
       );
     });
 
     it("uses the first entry of an array-valued symbol and trims scalars", async () => {
-      await api.get(`${BASE}/quote?symbol=AAPL&symbol=MSFT`).expect(200);
+      await api.get(`${BASE}/chart?symbol=AAPL&symbol=MSFT`).expect(200);
       expect(researchAggregator.fetch).toHaveBeenCalledWith(
-        "quote",
+        "chart",
         expect.objectContaining({ symbol: "AAPL" }),
       );
 

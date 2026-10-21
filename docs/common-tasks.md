@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     moc,
@@ -46,7 +46,7 @@ aliases:
 | Create a database migration             | [[docs/guides/migrations\|Migration Guide]]                                          | [[docs/reference/scripts#Database & Migration Scripts\|Migration Scripts]]                  |
 | Debug a database issue                  | [[docs/troubleshooting\|Troubleshooting]]                                            | [[docs/reference/database-triggers\|Triggers]]                                              |
 | Configure environment variables         | [[docs/reference/environment-variables\|Environment Variables]]                      | [[docs/guides/backend-configuration\|Backend Configuration]]                                |
-| Protect admin endpoints with token auth | [[docs/reference/environment-variables\|Environment Variables]] (`ADMIN_AUTH_TOKEN`) | [[docs/api/admin\|Admin API]], [[docs/security/index\|Security]]                            |
+| Understand how admin endpoints are protected | [[docs/adr/233-loopback-only-backend\|ADR-233]] (loopback-only backend) | [[docs/api/admin\|Admin API]], [[docs/security/data-protection\|Data Protection]]                            |
 | Set up the project locally              | [[docs/guides/setup\|Setup Guide]]                                                   | [[docs/reference/scripts\|Scripts Reference]]                                               |
 | Package for macOS distribution          | [[docs/guides/deployment#packaging-for-macos\|Packaging for macOS]]                  | [[docs/architecture/electron\|Electron Architecture]]                                       |
 | Deploy to production                    | [[docs/guides/deployment\|Deployment Guide]]                                         | [[docs/reference/environment-variables\|Environment Variables]]                             |

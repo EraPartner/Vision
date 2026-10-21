@@ -3,7 +3,7 @@
  * (ADR-216): a dividend or a recorded tax whose currency has no stored
  * exchange rate is left out of the figures and flagged, never added 1:1.
  *
- * Only the PDF engine is replaced: the report HTML it would print is the
+ * The report route returns the print-ready HTML; that document is the
  * rendered output under test.
  */
 import {
@@ -13,13 +13,7 @@ import {
   describe,
   expect,
   it,
-  vi,
 } from "vitest";
-
-vi.mock("../src/services/reports/puppeteerRenderer.ts", () => ({
-  renderHtmlToPdf: vi.fn(async () => Buffer.from("%PDF-synthetic")),
-  closeBrowser: vi.fn(),
-}));
 
 import {
   acquireDbSuiteLock,
@@ -32,7 +26,7 @@ import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { invalidatePortfolioCaches } from "../src/services/info/cache.ts";
-import { renderHtmlToPdf } from "../src/services/reports/puppeteerRenderer.ts";
+
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import reportsRouter from "../src/routes/reports.ts";
@@ -97,7 +91,7 @@ describeDb(
 
     beforeEach(async () => {
       await reset();
-      vi.mocked(renderHtmlToPdf).mockClear();
+
       await setRate("USD", "0.9", today);
       usdFund = await investment("USD", "USD");
       // No stored XYZ rate anywhere.
@@ -122,8 +116,8 @@ describeDb(
       });
 
       expect(res.status).toBe(200);
-      expect(res.headers["content-type"]).toContain("application/pdf");
-      const html = vi.mocked(renderHtmlToPdf).mock.calls[0]![0];
+      expect(res.headers["content-type"]).toContain("application/json");
+      const html = String(bodyAt(res, "data", "html"));
       // 100 USD × 0.9; the 50 XYZ is neither added 1:1 (140) nor dropped silently.
       expect(html).toContain("Total: EUR 90.00");
       expect(html).not.toContain("EUR 140.00");

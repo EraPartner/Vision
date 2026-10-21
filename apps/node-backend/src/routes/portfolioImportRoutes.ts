@@ -742,16 +742,6 @@ const reconciliationScopeSchema = z.strictObject({
     .min(1)
     .max(100),
   adopt_policy: z.enum(["preserve_existing", "prefer_source"]).optional(),
-  reconciliation_scope: z
-    .enum([
-      "full",
-      "adopt_existing_only",
-      "correct_existing_only",
-      "record_in_kind_income_only",
-      "record_cash_only",
-    ])
-    .optional(),
-  cash_funding_policy: z.enum(["own_account_transfer"]).optional(),
   batch_policies: z
     .array(
       z.strictObject({
@@ -762,11 +752,7 @@ const reconciliationScopeSchema = z.strictObject({
     .max(100)
     .optional(),
 });
-const reconciliationCommitSchema = reconciliationScopeSchema.extend({
-  expected_plan_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-});
 const reconciliationScopeInput = bareMessages(reconciliationScopeSchema);
-const reconciliationCommitInput = bareMessages(reconciliationCommitSchema);
 
 router.post("/reconciliation/preview", async (req, res) => {
   const input = parseInput(reconciliationScopeInput, req.body);
@@ -774,8 +760,6 @@ router.post("/reconciliation/preview", async (req, res) => {
     await previewPortfolioImportReconciliation({
       batchIds: input.batch_ids,
       adoptPolicy: input.adopt_policy,
-      reconciliationScope: input.reconciliation_scope,
-      cashFundingPolicy: input.cash_funding_policy,
       batchPolicies: input.batch_policies?.map((policy) => ({
         batchId: policy.batch_id,
         adoptPolicy: policy.adopt_policy,
@@ -785,17 +769,14 @@ router.post("/reconciliation/preview", async (req, res) => {
 });
 
 router.post("/reconciliation/commit", async (req, res) => {
-  const input = parseInput(reconciliationCommitInput, req.body);
+  const input = parseInput(reconciliationScopeInput, req.body);
   const result = await commitReviewedPortfolioImports({
     batchIds: input.batch_ids,
     adoptPolicy: input.adopt_policy,
-    reconciliationScope: input.reconciliation_scope,
-    cashFundingPolicy: input.cash_funding_policy,
     batchPolicies: input.batch_policies?.map((policy) => ({
       batchId: policy.batch_id,
       adoptPolicy: policy.adopt_policy,
     })),
-    expectedPlanFingerprint: input.expected_plan_fingerprint,
   });
   logger.info("[portfolio-import] reviewed scope committed", {
     batchCount: result.batches.length,

@@ -130,7 +130,7 @@ SORT path ASC
 ## Authentication Notes
 
 - Most endpoints are currently workspace-internal and do not require user auth.
-- `/api/admin/*` supports optional Bearer-token protection via `ADMIN_AUTH_TOKEN`; when configured, requests must include `Authorization: Bearer <token>`.
+- `/api/admin/*` has no authentication: like every route it relies on the loopback-only bind, the Host guard and the CSRF guard ([[docs/adr/233-loopback-only-backend|ADR-233]]). The `ADMIN_AUTH_TOKEN` bearer check was removed.
 
 ## Response Envelope (ADR-026)
 

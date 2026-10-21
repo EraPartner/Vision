@@ -13,13 +13,13 @@ export async function assertPortfolioUploadSupported(
   filePath: string | URL,
   config: { format?: string },
 ) {
-  const format = await detectPortfolioFileFormat(filePath);
   if (config.format === "ibkr_funding_history") {
     await parseIbkrFundingHistory(
       filePath instanceof URL ? fileURLToPath(filePath) : filePath,
     );
     return;
   }
+  const format = await detectPortfolioFileFormat(filePath);
   if (format === "csv") return;
   if (format !== "xlsx" || config.format !== "saxo_transaction_history")
     throw new ValidationError(

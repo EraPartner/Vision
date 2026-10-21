@@ -795,5 +795,5 @@ The named OpenAPI investment history response matches the existing runtime:
 millisecond bounds; unparseable/non-finite values leave a bound absent. `db_only` defaults true.
 The former documented `start_date`/`end_date` parameters remain accepted but ignored and are
 deprecated in favor of the actual bounds. Clients can map timestamp/price fields structurally
-to submitted chart points for [[docs/api/research#POST /api/research/presentation|the stateless
-presentation API]], retaining existing historical source/provider behavior.
+to chart points for the browser presentation helpers in `packages/shared-utils/src/research/presentation.ts`,
+retaining existing historical source/provider behavior.

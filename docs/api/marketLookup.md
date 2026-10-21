@@ -2,8 +2,8 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - api
   - market
@@ -329,6 +329,5 @@ Code links: [[apps/node-backend/tests/routes/marketLookup.test.ts]], [[apps/node
 OpenAPI now names the unchanged collection shapes: search returns `{items}` without `total`,
 while quote and news return `{items,total}`. Search rows require symbol/name/type/exchange and
 carry no required currency. Provider quote/news leaves can be absent or null as documented by
-the runtime contracts. Derived analyst/provider-history/market-add display values are available
-without another provider call through [[docs/api/research#POST /api/research/presentation|Research
-presentation]].
+the runtime contracts. Derived analyst/provider-history/market-add display values are computed in the
+browser by `packages/shared-utils/src/research/presentation.ts` without another provider call.

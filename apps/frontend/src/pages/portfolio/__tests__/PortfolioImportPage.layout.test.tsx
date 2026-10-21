@@ -17,7 +17,7 @@ it("starts with file selection and reveals mappings after choosing a CSV", async
     const user = userEvent.setup();
     renderWithApp(<PortfolioImportPage />);
     expect(
-        await screen.findByLabelText("Statements (CSV or XLSX)"),
+        await screen.findByLabelText("Statements (CSV, XLSX or XLS)"),
     ).toHaveAttribute("multiple");
     expect(
         screen.getByText("Advanced single-file import").closest("details"),

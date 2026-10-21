@@ -74,7 +74,6 @@ import type {
     ResearchFundamentals,
     ResearchNewsArticle,
     ResearchNewsResponse,
-    ResearchQuote,
     ResearchMeta,
     ResearchScorecard,
     ResearchScorecardResponse,
@@ -197,9 +196,6 @@ export type _KeysResearchSearch = Expect<
         ResponseData<operations["researchSearch"]>
     >
 >;
-export type _KeysResearchQuote = Expect<
-    KeysSubsetOf<ResearchQuote, ResponseData<operations["researchQuote"]>>
->;
 export type _KeysResearchChart = Expect<
     KeysSubsetOf<
         ResearchChartResponse,
@@ -209,7 +205,7 @@ export type _KeysResearchChart = Expect<
 export type _KeysResearchFundamentals = Expect<
     KeysSubsetOf<
         ResearchFundamentals,
-        ResponseData<operations["researchFundamentals"]>
+        Schemas["ResearchFundamentals"]
     >
 >;
 export type _KeysResearchAnalyst = Expect<

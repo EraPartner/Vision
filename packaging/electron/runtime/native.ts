@@ -1,4 +1,4 @@
-import { verifyRuntimeManifest } from "./runtime-manifest";
+import { verifyRuntimeManifestOnLaunch } from "./runtime-manifest";
 export {
   verifyRuntimeManifest,
 } from "./runtime-manifest";
@@ -17,8 +17,9 @@ import {
 
 export const POSTGRES_MAJOR = 18;
 export const POSTGRES_MINOR = 6;
-export const CHROMIUM_VERSION = "150.0.7871.24";
 export const DEFAULT_POSTGRES_PORT = 54329;
+/** Records the last full payload verification, below the runtime's nativeRoot. */
+export const RUNTIME_VERIFICATION_MARKER = "runtime-verification.json";
 const DEFAULT_APP_PORT = 3002;
 export const LOOPBACK_HOST = "127.0.0.1";
 export const RUNTIME_MANAGED_MATERIALIZED_VIEWS = Object.freeze([
@@ -36,7 +37,6 @@ export const NATIVE_APPLICATION_ENV_KEYS = Object.freeze([
   "FMP_API_KEY",
   "ALPHA_VANTAGE_API_KEY",
   "FRED_API_KEY",
-  "ADMIN_AUTH_TOKEN",
 ]);
 
 const CHILD_ENV_ALLOWLIST = [
@@ -694,7 +694,6 @@ export interface NativeBackendEnvOptions {
   paths: Pick<NativeRuntimePaths, "attachments" | "cache" | "env">;
   runtimeRoot?: string | undefined;
   repoRoot?: string | undefined;
-  tools: { chrome?: string | undefined };
   syntheticOffline?: boolean | undefined;
 }
 
@@ -704,7 +703,6 @@ export function buildNativeBackendEnv({
   paths,
   runtimeRoot,
   repoRoot,
-  tools,
   syntheticOffline,
 }: NativeBackendEnvOptions): ChildEnv {
   const resolvedRuntimeRoot = runtimeRoot || repoRoot;
@@ -721,9 +719,7 @@ export function buildNativeBackendEnv({
     VISION_RUNTIME_ROOT: resolvedRuntimeRoot,
     VISION_NATIVE_ENV_FILE: paths.env,
     VISION_DIST_DIR: path.join(resolvedRuntimeRoot, "dist"),
-    PUPPETEER_EXECUTABLE_PATH: tools.chrome,
     OLLAMA_URL: "http://127.0.0.1:11434",
-    ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
     VISION_SYNTHETIC_SMOKE_OFFLINE: syntheticOffline ? "1" : undefined,
   });
 }
@@ -859,85 +855,6 @@ function findFirstExecutable(
     if (executableExists(candidate)) return candidate;
   }
   return undefined;
-}
-
-export function bundledChromiumPath(
-  runtimeRoot: string | undefined,
-): string | undefined {
-  if (!runtimeRoot) return undefined;
-  const chromiumRoot = path.join(path.resolve(runtimeRoot), "chromium");
-  const metadataPath = path.join(chromiumRoot, "runtime.json");
-  let metadata: unknown;
-  try {
-    metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return undefined;
-    const wrapped: NativeRuntimeError = new Error(
-      "Packaged Chromium metadata is invalid",
-    );
-    wrapped.code = "CHROMIUM_RUNTIME_CORRUPT";
-    throw wrapped;
-  }
-  if (
-    !isRecord(metadata) ||
-    metadata.version !== 1 ||
-    metadata.browser !== "chrome-headless-shell" ||
-    metadata.browserVersion !== CHROMIUM_VERSION ||
-    metadata.platform !== process.platform ||
-    metadata.architecture !== process.arch ||
-    typeof metadata.executableRelative !== "string" ||
-    path.isAbsolute(metadata.executableRelative) ||
-    metadata.executableRelative.split(/[\\/]/).includes("..")
-  ) {
-    const error: NativeRuntimeError = new Error(
-      "Packaged Chromium metadata does not match this Vision build",
-    );
-    error.code = "CHROMIUM_RUNTIME_MISMATCH";
-    throw error;
-  }
-  const executable = path.resolve(
-    chromiumRoot,
-    ...metadata.executableRelative.split("/"),
-  );
-  if (
-    !executable.startsWith(`${path.resolve(chromiumRoot)}${path.sep}`) ||
-    !executableExists(executable)
-  ) {
-    const error: NativeRuntimeError = new Error(
-      "Packaged Chromium executable is missing or unsafe",
-    );
-    error.code = "CHROMIUM_RUNTIME_CORRUPT";
-    throw error;
-  }
-  return executable;
-}
-
-export function discoverChrome(
-  explicitPath: string | undefined,
-  runtimeRoot: string | undefined,
-): string | undefined {
-  return findFirstExecutable([
-    explicitPath,
-    process.env.PUPPETEER_EXECUTABLE_PATH,
-    bundledChromiumPath(runtimeRoot),
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-    "/opt/homebrew/bin/chromium",
-    "/usr/local/bin/chromium",
-  ]);
-}
-
-export function assertNativeChromeAvailable(
-  chromePath: string | undefined,
-): string {
-  if (chromePath) return chromePath;
-  const error: NativeRuntimeError = new Error(
-    "Vision's packaged Chrome Headless Shell was not found. Reinstall Vision or prepare the native runtime before starting.",
-  );
-  error.code = "NATIVE_CHROMIUM_NOT_FOUND";
-  throw error;
 }
 
 function resolveBun(
@@ -1165,15 +1082,15 @@ export interface NativeRuntimeOptions {
   repoRoot?: string | undefined;
   runtimeRoot?: string | undefined;
   postgresRuntimeRoot?: string | undefined;
-  browserRuntimeRoot?: string | undefined;
   runtimeId?: string | undefined;
   postgresPort?: number | string | undefined;
   appPort?: number | (() => number) | undefined;
   postgresBinDir?: string | undefined;
   allowExternalPostgres?: boolean | undefined;
   bunPath?: string | undefined;
-  chromePath?: string | undefined;
   requireRuntimeManifest?: boolean | undefined;
+  /** Receives named startup timings, e.g. the runtime payload verification. */
+  recordBootPhase?: ((phase: string, ms: number) => void) | undefined;
   syntheticOffline?: boolean | undefined;
   runFile?: RunFile | undefined;
   spawnProcess?: SpawnProcess | undefined;
@@ -1199,7 +1116,6 @@ export interface NativeRuntimePaths {
 export interface NativeTools extends DiscoveredPostgres {
   bun: string | undefined;
   compiledBackend: string | undefined;
-  chrome: string | undefined;
 }
 
 export interface DatabaseSwitchToken {
@@ -1243,9 +1159,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     : repoRoot;
   const postgresRuntimeRoot = options.postgresRuntimeRoot
     ? path.resolve(options.postgresRuntimeRoot)
-    : runtimeRoot;
-  const browserRuntimeRoot = options.browserRuntimeRoot
-    ? path.resolve(options.browserRuntimeRoot)
     : runtimeRoot;
   const runtimeId = normalizeRuntimeId(options.runtimeId || "vision");
   const postgresPort = validateNetworkPort(
@@ -1360,10 +1273,20 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   async function discover(): Promise<
     NativeTools & { postgresVersion: number }
   > {
-    if (runtimeRoot)
-      await verifyRuntimeManifest(runtimeRoot, {
+    if (runtimeRoot) {
+      // Full hashing once per installed payload; a size check afterwards (ADR-235).
+      const started = Date.now();
+      const verification = await verifyRuntimeManifestOnLaunch(runtimeRoot, {
         required: options.requireRuntimeManifest === true,
+        markerPath: path.join(paths.nativeRoot, RUNTIME_VERIFICATION_MARKER),
       });
+      if (verification.status === "verified") {
+        options.recordBootPhase?.(
+          `runtime_manifest_${verification.mode}`,
+          Date.now() - started,
+        );
+      }
+    }
     const postgres = await discoverPostgres18({
       binDir: options.postgresBinDir,
       runtimeRoot: postgresRuntimeRoot,
@@ -1385,7 +1308,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       ...postgres,
       bun,
       compiledBackend,
-      chrome: discoverChrome(options.chromePath, browserRuntimeRoot),
     };
     return { ...tools, postgresVersion: POSTGRES_MAJOR };
   }
@@ -2149,7 +2071,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   async function start(): Promise<StartResult> {
     await assertNativeActive();
     const config = await bootstrapDatabase();
-    assertNativeChromeAvailable(tools?.chrome);
     const command = await backendCommand();
     const existing = await readJson(paths.pid).catch(() => undefined);
     const existingPid = probeableProcessId(optionalFieldsOf(existing)?.pid);
@@ -2197,7 +2118,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       paths,
       runtimeRoot,
       repoRoot,
-      tools: requireTools(),
       syntheticOffline: options.syntheticOffline === true,
     });
     const logFd = fs.openSync(paths.backendLog, "a", 0o600);

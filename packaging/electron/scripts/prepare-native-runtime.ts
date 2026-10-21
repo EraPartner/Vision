@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 import { appRoot } from "../paths";
 import { preparePostgresRuntime } from "./prepare-postgres-runtime";
-import { prepareChromiumRuntime } from "./prepare-chromium-runtime";
+
 import { replaceGeneratedDirectory } from "./replace-generated-directory";
 
 export interface ManifestEntry {
@@ -229,10 +229,7 @@ export function run(): void {
       sourceBin: process.env.VISION_POSTGRES_SOURCE_BIN,
       destination: path.join(stagingRoot, "postgres"),
     });
-    prepareChromiumRuntime({
-      source: process.env.VISION_CHROMIUM_SOURCE,
-      destination: path.join(stagingRoot, "chromium"),
-    });
+
     fs.mkdirSync(path.join(stagingRoot, "licenses"), { recursive: true });
     fs.copyFileSync(
       path.join(electronRoot, "resources", "licenses", "PostgreSQL.txt"),

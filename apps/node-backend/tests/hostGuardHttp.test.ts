@@ -5,7 +5,6 @@ import express from "express";
 import type { ErrorRequestHandler } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHostGuard } from "../src/middleware/hostGuard.ts";
-import { createCorsMiddleware } from "../src/middleware/cors.ts";
 
 const servers: http.Server[] = [];
 async function listen(handler: http.RequestListener) {
@@ -47,11 +46,10 @@ function request(
     },
   );
 }
-function backend(allowedHosts: string[] = []) {
+function backend(port?: number) {
   const app = express();
   const effects: string[] = [];
-  app.use(createHostGuard({ allowedHosts }));
-  app.use(createCorsMiddleware(() => ["http://localhost"]));
+  app.use(createHostGuard({ port }));
   app.use(express.json());
   app.use((req, res) => {
     effects.push(req.path);
@@ -97,7 +95,7 @@ describe("Host boundary over real HTTP sockets", () => {
         );
     expect(effects).toHaveLength(9);
   });
-  it("rejects hostile, missing and duplicate Host before preflight, parsing and routes", async () => {
+  it("rejects hostile and missing Host before parsing and routes", async () => {
     const { app, effects } = backend();
     const port = await listen(app);
     const malformed = {
@@ -111,7 +109,6 @@ describe("Host boundary over real HTTP sockets", () => {
     for (const headers of [
       "Host: hostile.example",
       "",
-      "Host: localhost\r\nhOsT: hostile.example",
     ])
       for (const options of [
         { method: "OPTIONS" },
@@ -129,53 +126,17 @@ describe("Host boundary over real HTTP sockets", () => {
       }
     expect(effects).toEqual([]);
   });
-  it.each([false, true])(
-    "enforces the public authority when proxy rewrite=%s",
-    async (rewrite) => {
-      const { app, effects } = backend(rewrite ? [] : ["vision.example"]);
-      const upstreamPort = await listen(app);
-      const proxy = express();
-      proxy.use(createHostGuard({ allowedHosts: ["vision.example"] }));
-      proxy.use((req, res) => {
-        const forwarded = http.request(
-          {
-            hostname: "127.0.0.1",
-            port: upstreamPort,
-            path: req.url,
-            method: req.method,
-            headers: {
-              ...req.headers,
-              host: rewrite ? `127.0.0.1:${upstreamPort}` : req.headers.host,
-            },
-          },
-          (upstream) => {
-            res.writeHead(upstream.statusCode!, upstream.headers);
-            upstream.pipe(res);
-          },
-        );
-        forwarded.on("error", () => res.status(502).end());
-        req.pipe(forwarded);
-      });
-      proxy.use(((error, _req, res, _next) =>
-        res
-          .status(error.statusCode || error.status || 500)
-          .send(error.message)) satisfies ErrorRequestHandler);
-      const proxyPort = await listen(proxy);
-      expect((await request(proxyPort, "Host: vision.example")).status).toBe(
-        200,
-      );
-      expect((await request(proxyPort, "Host: hostile.example")).status).toBe(
-        403,
-      );
-      expect(
-        (
-          await request(
-            proxyPort,
-            "Host: vision.example\r\nHost: hostile.example",
-          )
-        ).status,
-      ).toBe(403);
-      expect(effects).toEqual(["/health"]);
-    },
-  );
+  it("rejects a loopback Host that names another port", async () => {
+    let app: http.RequestListener = () => {};
+    const port = await listen((req, res) => app(req, res));
+    const fixture = backend(port);
+    app = fixture.app;
+    expect((await request(port, `Host: 127.0.0.1:${port}`)).status).toBe(200);
+    for (const host of ["localhost", `localhost:${port + 1}`]) {
+      const result = await request(port, `Host: ${host}`);
+      expect(result.status, host).toBe(403);
+      expect(result.response).toContain("Invalid request host");
+    }
+    expect(fixture.effects).toEqual(["/health"]);
+  });
 });

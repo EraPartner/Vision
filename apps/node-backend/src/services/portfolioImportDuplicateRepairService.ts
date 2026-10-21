@@ -1,11 +1,12 @@
+/**
+ * Undo of duplicate repairs applied before ADR-236. New imports no longer
+ * repair an imported copy against a manual twin; existing repair receipts stay
+ * reversible through batch rollback.
+ */
 import { ConflictError } from "../middleware/errorHandler.ts";
 import { isDeepStrictEqual } from "node:util";
+import { compareAndSetReconciledTransaction } from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
-  compareAndSetReconciledTransaction,
-  markAdoptedSourceDuplicate,
-} from "../repositories/portfolioImportReconciliationRepository.ts";
-import {
-  deleteExactImportedCopy,
   getActiveDuplicateRepairReceipts,
   insertDuplicateRepairReceipt,
   readFullRepairTransaction,
@@ -19,10 +20,6 @@ import type {
   DuplicateRepairJournalRow,
   RepairBatchSnapshot,
 } from "../repositories/portfolioImportDuplicateRepairRepository.ts";
-import type {
-  PortfolioTransactionSnapshot,
-  ReconciliationSourceRow,
-} from "../repositories/portfolioImportReconciliationRepository.ts";
 
 export { getActiveDuplicateRepairReceipts };
 /** The financial image of a full repair snapshot, without its timestamps. */
@@ -38,94 +35,6 @@ const conflict = () =>
     "Duplicate repair history or provenance changed. Review is required.",
     { details: { reason: "duplicate_repair_changed" } },
   );
-
-/** Caller holds sorted source-batch, account and portfolio writer locks. */
-export async function applyDuplicatePortfolioRepair({
-  row,
-  before,
-  after,
-  imported,
-  policy,
-}: {
-  row: Pick<ReconciliationSourceRow, "id" | "batch_id">;
-  before: PortfolioTransactionSnapshot;
-  after: PortfolioTransactionSnapshot;
-  /** Pass the whole imported row: `same()` compares every field with the stored copy. */
-  imported: Pick<PortfolioTransactionSnapshot, "id" | "import_batch_id">;
-  policy: DuplicateRepairJournalRow["policy"];
-}): Promise<void> {
-  const legacy = await readFullRepairTransaction(before.id);
-  const existingCopy = await readFullRepairTransaction(imported.id);
-  const originalBatchId = Number(imported.import_batch_id);
-  const state = await readOriginalRepairState(originalBatchId, imported.id);
-  const [source] = state.originalStaging;
-  if (
-    !legacy ||
-    !existingCopy ||
-    !same(financialRepairImage(legacy), before) ||
-    !same(financialRepairImage(existingCopy), imported) ||
-    state.originalStaging.length !== 1 ||
-    !source ||
-    source.status !== "committed" ||
-    !state.originalBatch ||
-    !["complete", "complete_with_errors"].includes(
-      state.originalBatch.status,
-    ) ||
-    state.originalBatch.rows_imported < 1
-  )
-    throw conflict();
-  const { originalBatch } = state;
-  const receiptBefore = {
-    legacy,
-    imported: existingCopy,
-    originalBatch,
-    originalStaging: state.originalStaging,
-  };
-  // Clear the proven staging pointer before deleting its imported copy. The
-  // foreign key otherwise clears it first and makes the guarded update stale.
-  const changedSource = await replaceRepairStaging(source, {
-    ...source,
-    status: "duplicate",
-    committed_txn_id: null,
-  });
-  if (!changedSource) throw conflict();
-  if (!(await deleteExactImportedCopy(existingCopy))) throw conflict();
-  if (
-    !(await compareAndSetReconciledTransaction(
-      before,
-      after,
-      legacy.updated_at,
-    ))
-  )
-    throw conflict();
-  const changedBatch = await replaceRepairBatch(originalBatch, {
-    ...originalBatch,
-    rows_imported: originalBatch.rows_imported - 1,
-    rows_duplicate: originalBatch.rows_duplicate + 1,
-  });
-  if (!changedBatch) throw conflict();
-  // The legacy row was just updated under the caller's locks.
-  const legacyAfter = await readFullRepairTransaction(before.id);
-  if (!legacyAfter) throw conflict();
-  const receiptAfter = {
-    legacy: legacyAfter,
-    imported: null,
-    originalBatch: changedBatch,
-    originalStaging: [changedSource],
-  };
-  await insertDuplicateRepairReceipt({
-    batchId: Number(row.batch_id),
-    stagingRowId: Number(row.id),
-    originalBatchId,
-    legacyId: Number(before.id),
-    importedId: Number(imported.id),
-    action: "repair",
-    policy,
-    before: receiptBefore,
-    after: receiptAfter,
-  });
-  await markAdoptedSourceDuplicate(Number(row.id), Number(row.batch_id));
-}
 
 /** Compare every after-image before any normal batch deletion or restoration. */
 export async function validateDuplicatePortfolioRepairRollback(

@@ -22,8 +22,6 @@ export interface ExpressRequest {
   query: Record<string, unknown>;
   body: unknown;
   headers: Record<string, string | string[] | undefined>;
-  /** Node wire headers, before duplicate-field normalization. */
-  rawHeaders?: string[] | undefined;
   /** Request id stamped by middleware/requestId.ts. */
   id?: string | undefined;
   method: string;
@@ -32,8 +30,6 @@ export interface ExpressRequest {
   originalUrl: string;
   url: string;
   route?: { path?: string | undefined } | undefined;
-  /** Deprecated Node alias for `socket`; still read defensively. */
-  connection?: { remoteAddress?: string | undefined } | undefined;
   socket?: { remoteAddress?: string | undefined } | undefined;
   ip?: string | undefined;
   get: (name: string) => string | undefined;
@@ -70,14 +66,14 @@ export interface ExpressResponse {
   statusCode: number;
   headersSent: boolean;
   writableEnded: boolean;
-  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts) and, reassigned wholesale, by middleware/compression.ts's gzip wrapper. */
+  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts). */
   // Method syntax so Node's overloaded `write`/`end` stay assignable.
   write(
     chunk: ResponseChunk,
     encoding?: BufferEncoding | ResponseCallback,
     cb?: ResponseCallback,
   ): boolean;
-  /** Same overload shape as `write` above; middleware/compression.ts's gzip wrapper reassigns this too. */
+  /** Same overload shape as `write` above. */
   end(
     chunk?: ResponseChunk | ResponseCallback,
     encoding?: BufferEncoding | ResponseCallback,
@@ -85,14 +81,10 @@ export interface ExpressResponse {
   ): ExpressResponse | void;
   /** Express's `res.sendFile`, used by routes/attachments.js's download endpoint. */
   sendFile?: (path: string, callback?: (err?: Error) => void) => void;
-  /** Node's `http.ServerResponse#writeHead`, used by middleware/cors.ts's CORS preflight short-circuit. */
-  writeHead?: (statusCode: number) => ExpressResponse;
   getHeader?: (name: string) => number | string | string[] | undefined;
   removeHeader?: (name: string) => void;
   /** Express's `res.type`, used by main.ts's SPA fallback. */
   type?: (contentType: string) => ExpressResponse;
-  /** Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by middleware/compression.ts's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`. */
-  emit?: (event: string, ...args: unknown[]) => boolean;
   destroy?: (err?: Error) => void;
   /** Attached by middleware/envelope.ts's `wrapResponse`. */
   ok?: (data: unknown, meta?: ResponseMeta) => ExpressResponse;

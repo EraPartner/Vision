@@ -1,9 +1,13 @@
 /**
  * Report routes.
  *
- * POST /api/reports/financial  — Puppeteer-rendered financial report.
- * POST /api/reports/portfolio  — Puppeteer-rendered portfolio report.
- * POST /api/reports/tax        — Puppeteer-rendered tax report.
+ * POST /api/reports/financial  — print-ready financial report document.
+ * POST /api/reports/portfolio  — print-ready portfolio report document.
+ * POST /api/reports/tax        — print-ready tax report document.
+ *
+ * Each returns `{ filename, html, footerTemplate }` in the success envelope.
+ * The backend renders no PDF: the Electron shell prints the HTML with its own
+ * Chromium and a plain browser opens its print dialog (ADR-234).
  *
  * All POST bodies are validated with Zod. Theme tokens are forwarded by the
  * frontend so the PDF matches the active app theme; each is constrained to the
@@ -13,7 +17,7 @@
  */
 
 import { Router } from "express";
-import type { ExpressResponse } from "../types/express.ts";
+import type { Response } from "express";
 import { z } from "zod";
 import { generateReport } from "../services/reports/index.ts";
 import { HSL_COMPONENT_RE } from "../services/reports/themeCss.ts";
@@ -168,32 +172,29 @@ function parseReportBody(body: unknown) {
 export { parseReportBody as __parseReportBody };
 
 /**
- * Generate and send one PDF response while keeping Express concerns in the
+ * Generate and send one report document while keeping Express concerns in the
  * route layer.
  */
 async function sendReport(
-  res: ExpressResponse,
+  res: Response,
   options: Parameters<typeof generateReport>[0],
 ) {
   const controller = new AbortController();
   const cancel = () => {
     if (!res.writableEnded) controller.abort();
   };
-  res.once?.("close", cancel);
+  res.once("close", cancel);
   try {
-    const { pdf, filename } = await generateReport({
+    const document = await generateReport({
       ...options,
       signal: controller.signal,
     });
     if (controller.signal.aborted || res.writableEnded) return;
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.setHeader("Content-Length", pdf.length);
-    res.end(pdf);
+    res.ok(document);
   } catch (error) {
     if (!controller.signal.aborted) throw error;
   } finally {
-    res.removeListener?.("close", cancel);
+    res.removeListener("close", cancel);
   }
 }
 

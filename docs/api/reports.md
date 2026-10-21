@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags:
   - api
   - reports
@@ -13,7 +13,7 @@ tags:
   - phase-5
   - phase-6
   - phase-7
-  - puppeteer
+  - electron-print
   - theme-aware
   - pagination
   - footer
@@ -24,7 +24,7 @@ tags:
   - white-bar-fix
   - table-overflow-fix
   - page-continuation
-description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers, white-bar fix, and table-overflow fix. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers; tax endpoint accepts optional taxProfile and precomputedPIT for Belgian tax rules. Three existing POST endpoints (financial, portfolio, tax) return binary PDF downloads; legacy GET was removed in ADR-038.
+description: Report endpoints that build print-ready, theme-aware report documents from modular sections; the Electron shell prints them to PDF with its own Chromium (ADR-234). Phase 5 adds paginated footers, white-bar fix, and table-overflow fix. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers; tax endpoint accepts optional taxProfile and precomputedPIT for Belgian tax rules. The three POST endpoints (financial, portfolio, tax) return a ReportDocument envelope; legacy GET was removed in ADR-038.
 aliases:
   - reports
   - pdf export
@@ -35,24 +35,40 @@ related_code:
   - apps/node-backend/src/services/reports/sectionHelpers.ts
   - apps/node-backend/src/services/reports/dataFetcher.ts
   - apps/node-backend/src/services/reports/sections/
-  - apps/node-backend/src/services/reports/puppeteerRenderer.ts
   - apps/node-backend/src/routes/reports.ts
   - apps/frontend/src/lib/api/reports.ts
+  - packaging/electron/report-pdf.ts
+  - packages/types/src/contracts/reports.ts
   - apps/frontend/src/lib/themeTokens.ts
 ---
 
 # Reports API
 
-Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign). Successful responses return raw PDF bytes (`application/pdf`) with `Content-Disposition` and `Content-Length`. Validation failures use the standard [[docs/adr/026-unified-api-response-envelope|ADR-026 JSON envelope]].
+The backend builds a **print-ready report document**; it renders no PDF and bundles no browser
+([[docs/adr/234-electron-report-pdf-printing|ADR-234]]). Successful responses use the standard
+[[docs/adr/026-unified-api-response-envelope|ADR-026 JSON envelope]] with a `ReportDocument`:
 
-The OpenAPI contract now describes the existing binary response and shared validated request for all
-three routes. This corrects stale JSON-envelope responses and top-level `start_date`, `end_date`,
-and `year` fields in the specification; it changes no route or backend behavior. Callers
-must use a binary download transport rather than the envelope-decoding API client. The endpoint
-count remains 309 HTTP operations (336 including health and Electron IPC).
-This is a breaking correction for clients generated from the old specification: success is binary
-and the obsolete date properties are removed. Existing callers that already send the runtime
-request and download PDF bytes retain the same behavior.
+```json
+{
+  "ok": true,
+  "data": {
+    "filename": "vision-financial-2026-10-20.pdf",
+    "html": "<!DOCTYPE html>…",
+    "footerTemplate": "<style>…</style><div>…<span class=\"pageNumber\"></span>…</div>"
+  }
+}
+```
+
+`html` is a complete A4 document with inline styles and no scripts. `footerTemplate` is the
+Chromium print footer ("Vision | Confidential | page X / Y") for the reserved 28px bottom margin.
+The Electron shell prints the document through the `report:print-pdf` invoke channel and the
+browser downloads the PDF. In a plain browser (no Electron bridge) the frontend opens the browser
+print dialog on the document; the user saves it as PDF there, without the page-number footer.
+
+> [!warning] Breaking change (2026-10-20)
+> Until ADR-234 these routes returned raw `application/pdf` bytes with `Content-Disposition` and
+> `Content-Length`, rendered by a bundled Chrome Headless Shell through Puppeteer. Clients that
+> expected PDF bytes must print the returned document instead. Request bodies are unchanged.
 
 **Key Features:**
 
@@ -145,11 +161,11 @@ request and download PDF bytes retain the same behavior.
 
 ## Rate Limiting
 
-All `/api/reports/*` endpoints are subject to a 30 req/min route-group limiter (`reportRateLimiter`; bypassed in development). The low limit prevents fork-bombing: every POST request forks a headless Chromium process. See [[docs/security/rate-limiting|Rate Limiting]] for details.
+All `/api/reports/*` endpoints are subject to a 30 req/min route-group limiter (`reportRateLimiter`; bypassed in development). Every POST runs report aggregation queries and builds a full HTML document, so the limit keeps one client from monopolising the database. See [[docs/security/rate-limiting|Rate Limiting]] for details.
 
 ## CSS Injection Hardening (2026-05-29)
 
-Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the frontend as HSL component strings and interpolated verbatim into a `:root {}` CSS block rendered by Puppeteer. An unconstrained string at this point is a CSS injection / `url()`-SSRF vector.
+Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the frontend as HSL component strings and interpolated verbatim into a `:root {}` CSS block that Chromium prints. An unconstrained string at this point is a CSS injection / `url()` exfiltration vector. The Electron print window also blocks all network access and serves the document with `default-src 'none'`.
 
 **Current protection (defense-in-depth):**
 
@@ -260,15 +276,9 @@ by all three routes, but only the tax route forwards them to rendering.
 
 All sections except `plannedOutlook`.
 
-**Response Headers**
-
-```
-Content-Type: application/pdf
-Content-Disposition: attachment; filename="vision-financial-YYYY-MM-DD.pdf"
-Content-Length: <byte-count>
-```
-
-**Response body:** Raw PDF binary stream (A4 page size, portrait orientation).
+**Response body:** `{ "ok": true, "data": ReportDocument }` with `filename`
+`vision-financial-YYYY-MM-DD.pdf`, the script-free A4 portrait `html` document and its
+`footerTemplate`. The Electron shell prints it to PDF.
 
 **Error Response (400)**
 
@@ -308,8 +318,8 @@ const response = await fetch("/api/reports/financial", {
   }),
 });
 
-const blob = await response.blob();
-// Trigger download or process binary stream
+const { data } = await response.json();
+// data.html is printed to PDF by window.electronReports.printToPdf in the desktop app
 ```
 
 ### POST /api/reports/portfolio
@@ -412,21 +422,25 @@ The frontend helper:
 
 1. Resolves active theme tokens from DOM CSS custom properties
 2. Assembles POST body with user selections
-3. Fetches as a Blob
-4. Creates an object URL and triggers browser download
+3. Reads the envelope and checks it against `ReportDocumentSchema` (`@vision/types/contracts`)
+4. In Electron, calls `window.electronReports.printToPdf({ html, footerTemplate })` and downloads
+   the returned PDF bytes as `filename`; it resolves `"downloaded"`
+5. In a plain browser, prints the document from a hidden `srcdoc` frame (the browser print dialog)
+   and resolves `"print-dialog"`; the export dialog then skips its "Report downloaded" toast
 
-No `apiRequest` wrapper is used because the response is a binary stream.
+It uses `fetch` directly rather than `apiRequest`, so no short client timeout is added to a
+queued report.
 
 ## Implementation Notes
 
 ### Architecture
 
-- **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`): Routes by report type, builds HTML, invokes Puppeteer
-- **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
+- **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`): Routes by report type, builds the HTML document and footer template
+- **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ filename, html, footerTemplate }` from the dispatcher and sends it with `res.ok`
 - **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`): Parallel Promise.allSettled loads selected sources; requested source failures reject the export
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
 - **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders
-- **Puppeteer renderer** (`puppeteerRenderer.js`): Headless Chrome → PDF buffer
+- **Electron printer** (`packaging/electron/report-pdf.ts`): Hidden, sandboxed, script-free window on an in-memory session → `webContents.printToPDF` (A4, backgrounds, 28px footer margin); one print at a time with a 60 s timeout
 
 ### Data Sources
 
@@ -468,10 +482,10 @@ portfolio transaction totals use another report currency. This changes no tax-la
 `reportConcurrency.ts` admits two active reports and up to eight waiting requests before database
 fetches or HTML allocation. Further requests receive HTTP 503 with the standard error envelope;
 clients can retry later. A disconnected queued request is removed. An active disconnected request
-closes its owned Chromium page promptly if rendering has started. Its slot remains held until
-source/render work and page cleanup settle. Cancellation is checked before and after rendering;
-the route does not write a PDF or forward a cancellation error to a disconnected response. There
-is no short client timeout added. The PDF remains buffered before a successful binary response.
+keeps its slot until its source work settles. Cancellation is checked before the document is
+assembled; the route does not write a document or forward a cancellation error to a disconnected
+response. There is no short client timeout added. PDF printing happens afterwards in the Electron
+main process, which prints one report at a time.
 See [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 
 ### Performance
@@ -481,22 +495,24 @@ See [[docs/adr/208-bounded-report-pipeline|ADR-208]].
   including row-contract violations. Only deliberately skipped sources are null. Successful empty
   results remain empty: zero tax/dividend totals can describe no activity, but never a failed query.
   A failed snapshot request cannot fall back to current holdings.
-- **PDF buffering**: Entire report is generated before the route sends it to the client
+- **Document buffering**: The entire report document is generated before the route sends it
 - **Typical size**: 2–10 MB depending on transaction volume
 
 ### Dependencies
 
-- **Puppeteer 24.42.0**: Headless Chrome for print-to-PDF (added Phase 3)
+- **Electron `webContents.printToPDF`**: the desktop shell's own Chromium prints the document
+  (ADR-234; Puppeteer and the bundled Chrome Headless Shell were removed)
 - **Zod**: Schema validation for request body
 
 ### Shutdown Behavior
 
-Backend gracefully closes Puppeteer browser on SIGINT/SIGTERM via `closePuppeteerBrowser()` exported from `puppeteerRenderer.js`.
+The backend holds no browser process; shutdown closes only its database pools.
 
 ## Related
 
 - [[docs/api/index|API index]] — available operation groups
 - [[docs/reference/api-endpoint-matrix|Endpoint matrix]] — operation inventory and contract correction
 - [[docs/features/pdf-report-export|PDF Report Export feature doc]] — user-facing feature
+- [[docs/adr/234-electron-report-pdf-printing|ADR-234]] — Electron prints report PDFs
 - [[docs/api/aggregations|Aggregations API]] — source data endpoints
 - [[docs/adr/026-unified-api-response-envelope|ADR-026]] — why this route does _not_ use the standard envelope

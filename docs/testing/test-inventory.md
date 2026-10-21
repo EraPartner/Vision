@@ -3,7 +3,7 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-10-20
-last_modified: 2026-10-19
+last_modified: 2026-10-20
 updated: 2026-10-20
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -172,7 +172,6 @@ Expanded to cover additional boot-time endpoints so more pages render without pe
 | `/api/info/exchange-rates`                                | { total_rates, rates, source, is_stale }      | **Phase A** |
 | `/api/market/news`                                        | { articles: [] }                              | **Phase A** |
 | `/api/import/batches`                                     | { items: [], total: 0, limit, offset }        | **Phase A** |
-| `/api/admin/endpoint-liveness`                            | { items: [], total: 0 }                       | Phase 0     |
 
 ### Hook Unit Tests (2026-05-01, updated 2026-08-26)
 

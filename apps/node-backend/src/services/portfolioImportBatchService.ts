@@ -1,21 +1,13 @@
 import { lockAccountsForLedgerMutation } from "../repositories/accountLifecycleLock.ts";
 import { protectPlannedExecutions } from "../repositories/plannedExecutionGuard.ts";
-import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
-import { validateKinesisCashRollback } from "./portfolioImportCashService.ts";
 import { scheduleRefresh } from "./materializedViewService.ts";
 import {
   guardOriginalIbkrCashRollback,
-  isIbkrCashCorrectionReceipt,
-} from "./portfolioIbkrCashReconciliation.ts";
+  isIbkrCashReceipt,
+  readOwnedKinesisCashFeeIds,
+} from "./portfolioImportLegacyReceipts.ts";
 import { scheduleReconcile } from "./transferReconciliationService.ts";
-import {
-  proveKinesisNetworkBindings,
-  proveKinesisNativeGiftGroups,
-} from "./portfolioKinesisNetworkProof.ts";
-import {
-  restorePairedPortfolioIncomeForBatch,
-  readPairedIncomeRollbackBatchIds,
-} from "../repositories/portfolioIncomeRecognitionRepository.ts";
+import { restorePairedPortfolioIncomeForBatch } from "../repositories/portfolioIncomeRecognitionRepository.ts";
 /**
  * Portfolio import batch service — the route-facing seam over
  * portfolioImportBatchRepository (eslint vision-local/no-repo-direct-from-route).
@@ -46,11 +38,6 @@ import {
   getActiveAdoptionReceipts,
   lockReconciliationAccountsAndHistory,
   readReconciliationSources,
-  readReconciliationBatchScope,
-  assertNoActiveKinesisNetworkConsumers,
-  readReconciliationHistory,
-  readKinesisNetworkContext,
-  readKinesisNativeGiftContext,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import type {
   PortfolioImportBatchLockRow,
@@ -492,27 +479,19 @@ export async function resolveInvestmentRows({
  */
 export async function rollbackBatch(batchId: number) {
   const repairScope = await getActiveDuplicateRepairReceipts(batchId);
-  const pairedScope = await readPairedIncomeRollbackBatchIds(batchId);
-  const nativeScope = await readReconciliationSources([batchId]);
   const cashScope = (await getActiveAdoptionReceipts(batchId)).filter(
-    isIbkrCashCorrectionReceipt,
+    isIbkrCashReceipt,
   );
-  const nativeBatchIds = nativeScope
-    .map((row) =>
-      Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
-    )
-    .filter(Boolean);
   let deletedCash = 0;
   return withTransaction(async (client) => {
     deletedCash = 0;
     // Share the batch-first lock order with review resolution. This closes the
     // route pre-check race and prevents resolution from creating a holding while
     // rollback already owns staging rows (the opposite order could deadlock).
+    // Pre-ADR-236 receipts also name the batches whose rows they changed.
     const lockIds = [
       ...new Set([
         batchId,
-        ...pairedScope,
-        ...nativeBatchIds,
         ...cashScope.flatMap((receipt) =>
           receipt.after_data.proof.sourceBindings.map((binding) =>
             Number(binding.batch_id),
@@ -559,20 +538,12 @@ export async function rollbackBatch(batchId: number) {
         "Duplicate repair provenance changed. Refresh the import before undoing it.",
         { details: { reason: "stale_reconciliation_plan" } },
       );
-    if (
-      (await readPairedIncomeRollbackBatchIds(batchId)).some(
-        (id) => !lockIds.includes(id),
-      )
-    )
-      throw new ConflictError("Paired income provenance changed", {
-        details: { reason: "stale_reconciliation_plan" },
-      });
     const rows = await getCommittedRows(batchId);
     const activeAdoptions = await getActiveAdoptionReceipts(batchId);
     if (
       activeAdoptions.some(
         (receipt) =>
-          isIbkrCashCorrectionReceipt(receipt) &&
+          isIbkrCashReceipt(receipt) &&
           receipt.after_data.proof.sourceBindings.some(
             (binding) => !lockIds.includes(Number(binding.batch_id)),
           ),
@@ -585,97 +556,45 @@ export async function rollbackBatch(batchId: number) {
         },
       );
     const custodySourceRows = await readReconciliationSources([batchId]);
-    if (lockedBatch != null)
-      await lockReconciliationAccountsAndHistory(
-        [
-          ...new Set(
-            [
-              ...custodySourceRows.map(
-                (row) => row.asset_adjustment_details?.accountId,
-              ),
-              ...custodySourceRows.flatMap((row) => [
-                row.asset_transfer_details?.networkBinding?.originAccountId,
-                row.asset_transfer_details?.networkBinding
-                  ?.destinationAccountId,
-              ]),
-              ...activeAdoptions.flatMap((receipt) =>
-                isIbkrCashCorrectionReceipt(receipt)
-                  ? [
-                      receipt.before_data.snapshot.account_id,
-                      receipt.after_data.snapshot.account_id,
-                    ]
-                  : [
-                      receipt.before_data.account_id,
-                      receipt.after_data.account_id,
-                    ],
-              ),
-              ...activeRepairs.flatMap((receipt) => [
-                receipt.before_data.legacy.account_id,
-                receipt.after_data.legacy.account_id,
-                // A repair's before-image holds the imported copy it deleted.
-                receipt.before_data.imported!.account_id,
-              ]),
-            ]
-              .concat(
-                lockedBatch.account_id,
-                batchConfigFields(lockedBatch.custom_config)
-                  ?.transfer_destination_account_id,
-                batchConfigFields(lockedBatch.custom_config)
-                  ?.transfer_origin_account_id,
-              )
-              .filter((id) => id != null),
-          ),
-        ].sort((a, b) => a - b),
-      );
-
-    await assertNoActiveKinesisNetworkConsumers(batchId);
-    if (
-      custodySourceRows.some(
-        (row) =>
-          row.asset_transfer_details?.networkBinding ??
-          row.asset_transfer_details?.networkReceipt ??
-          row.asset_transfer_details?.nativeGiftGroupReceipt ??
-          row.asset_adjustment_details?.networkReceipt,
-      )
-    ) {
-      const nativeHistory = await readReconciliationHistory([
+    await lockReconciliationAccountsAndHistory(
+      [
         ...new Set(
-          custodySourceRows
-            .map((row) => Number(row.investment_id))
-            .filter(Boolean),
-        ),
-      ]);
-      const nativeContext = await readKinesisNetworkContext(nativeHistory);
-      const nativeBatches = await readReconciliationBatchScope([batchId]);
-      if (
-        custodySourceRows.some(
-          (row) =>
-            row.asset_transfer_details?.networkBinding &&
-            !lockIds.includes(
-              Number(row.asset_transfer_details.networkBinding.witnessBatchId),
+          [
+            ...custodySourceRows.map(
+              (row) => row.asset_adjustment_details?.accountId,
             ),
-        ) ||
-        proveKinesisNetworkBindings(
-          custodySourceRows,
-          nativeBatches,
-          nativeHistory,
-          nativeContext,
-        ).blockers.length > 0 ||
-        proveKinesisNativeGiftGroups(
-          custodySourceRows,
-          nativeBatches,
-          nativeHistory,
-          await readKinesisNativeGiftContext(nativeHistory),
-        ).blockers.length > 0
-      )
-        throw new ConflictError(
-          "Native wallet source evidence changed. Refresh before undoing this import.",
-          { details: { reason: "network_receipt_changed" } },
-        );
-    }
-    await lockKinesisCashLedger();
+            ...activeAdoptions.flatMap((receipt) =>
+              isIbkrCashReceipt(receipt)
+                ? [
+                    receipt.before_data.snapshot.account_id,
+                    receipt.after_data.snapshot.account_id,
+                  ]
+                : [
+                    receipt.before_data.account_id,
+                    receipt.after_data.account_id,
+                  ],
+            ),
+            ...activeRepairs.flatMap((receipt) => [
+              receipt.before_data.legacy.account_id,
+              receipt.after_data.legacy.account_id,
+              // A repair's before-image holds the imported copy it deleted.
+              receipt.before_data.imported!.account_id,
+            ]),
+          ]
+            .concat(
+              lockedBatch.account_id,
+              batchConfigFields(lockedBatch.custom_config)
+                ?.transfer_destination_account_id,
+              batchConfigFields(lockedBatch.custom_config)
+                ?.transfer_origin_account_id,
+            )
+            .filter((id) => id != null),
+        ),
+      ].sort((a, b) => a - b),
+    );
+
     await guardOriginalIbkrCashRollback(batchId);
-    const ownedCashIds = await validateKinesisCashRollback(batchId);
+    const ownedCashIds = await readOwnedKinesisCashFeeIds(batchId);
 
     // Brokerage flag for the route guard (see docstring). Committed cash rows
     // can only exist on a brokerage batch (resolveAndCheck writes route='cash'

@@ -424,11 +424,6 @@ describe.skipIf(!enabled)("Live backend API contracts (E5)", () => {
         );
     });
 
-    it("GET /api/admin/endpoint-liveness returns { items, total }", async () => {
-        const data = await get("/api/admin/endpoint-liveness");
-        validate(collectionSchema(), data, "GET /api/admin/endpoint-liveness");
-    });
-
     it("GET /api/admin/database/stats returns shape", async () => {
         const data = await get("/api/admin/database/stats");
         validate(

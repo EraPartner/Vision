@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
+last_modified: 2026-10-21
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 293
+api_operation_count: 284
 tags:
   [
     reference,
@@ -39,7 +39,7 @@ tags:
     pdf-report,
     db-maintenance,
     db-data-editor,
-    puppeteer,
+    electron-print,
     reports,
     multi-method-forecast,
     accuracy-persistence,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 293 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 284 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **293 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **284 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -90,7 +90,15 @@ aliases:
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
 >
+> **2026-10-20 — unused operations removed (BREAKING for direct HTTP callers only, count 293 → 284):** no frontend, Electron, script or AI-chat caller used these nine operations, so they are gone: `POST /api/analysis/interchange/import` and `POST /api/analysis/interchange/export` (the browser parses and writes CSV/XLSX itself with `@vision/shared-utils/analysis`), `POST /api/research/presentation` (the browser computes presentations with `@vision/shared-utils/research/presentation`), `GET /api/research/quote` and `GET /api/research/fundamentals` (the UI uses `/api/research/chart`, `/api/research/scorecard` and `/api/market/quote`; the AI chat research tool still calls the aggregator directly), `GET /api/ai-research/status`, `POST /api/ai-research/documents/search/passages` (the AI chat and investigation tools still search passages in-process), `GET /api/admin/endpoint-liveness` (the Admin Endpoints page reads `GET /api/admin/endpoints` and `GET /api/admin/metrics/requests`, which remain), and `GET /api/aggregations/cashflow-forecast` (the non-Monte-Carlo planned-transaction projection; the `cashflow-forecast-methods`, `-rolling` and `-accuracy` operations are unchanged).
+>
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
+>
+> **2026-10-21 — cross-export portfolio imports (ADR-236 amendment, additive, operation count unchanged):** portfolio uploads accept `portfolio_format=ibkr_funding_history` again, for the IBKR funding workbook as `.xls` or `.xlsx`; its completed deposits and withdrawals stage in their own currency. The probe reports `presetKey: ibkr_funding_history` for that workbook. Reconciliation plans pair a Saxo CSV with its detailed XLSX and an IBKR Transaction History CSV with its funding workbook, in any order or together, and adopt matching manual brokerage cash: actions gain `crossFormat`, `cash` and `duplicateOfRowId`, and blockers gain `cross_format_source_conflict`, `ambiguous_funding_history`, `ambiguous_cash_history`, `funding_date_mismatch` and `cross_format_identity_missing`; the last two clear on the existing `batchPolicies`/`adoptPolicy` (`prefer_source` pairs, `preserve_existing` keeps both), and a paired near match's action carries `policy: prefer_source`. Request fields are unchanged. See [[docs/adr/236-simplify-portfolio-import-reconciliation#Amendment: cross-export imports (2026-10-21)|the ADR-236 amendment]].
+>
+> **2026-10-20 — portfolio reconciliation simplified (ADR-236, BREAKING, operation count unchanged):** `POST /api/portfolio/import/reconciliation/preview` and `/commit` take only `batch_ids`, `adopt_policy` and `batch_policies`; `reconciliation_scope`, `cash_funding_policy` and `expected_plan_fingerprint` are rejected with `400`. Plans drop `planFingerprint`, `selectedRowIds`, `pending`, `complete`, `deferredCounts`, `batchProgress` and the cash, income and date proof fields; commit results drop `repaired`, `recordedIncome` and `recordedCash`, and the `409` details drop `planFingerprint`. Commit rebuilds the plan at commit time and returns `409 stale_existing_transaction` when an existing transaction changed. Portfolio uploads no longer accept the `ibkr_funding_history` format or `.xls` workbooks, and the probe no longer reports `native_receipts` or `presetKey`. Kinesis fiat and IBKR deposits and withdrawals commit as ordinary brokerage cash. See [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
+>
+> **2026-10-20 — reports return print-ready documents (ADR-234, BREAKING, operation count unchanged):** `POST /api/reports/financial`, `/portfolio` and `/tax` keep their request bodies but now answer `200` with the success envelope `{ ok: true, data: { filename, html, footerTemplate } }` instead of `application/pdf` bytes with `Content-Disposition`/`Content-Length`. The backend no longer bundles or launches a browser. The Electron shell prints `html` to PDF through the new `report:print-pdf` invoke channel (`window.electronReports.printToPdf`); a plain browser opens its print dialog on the document. Breaking for any client that expected PDF bytes; the shipped frontend is updated. See [[docs/adr/234-electron-report-pdf-printing|ADR-234]].
 >
 > **2026-10-20 — audit history removed (ADR-231, BREAKING, count 299 → 293):** the six private `POST /api/internal/audit/{verify,read,retention-plan,retention-prune,checkpoint,update-decision}` operations, the `AuditBridgeToken` security scheme and the `Audit*` schemas are gone. `PUT /api/investments/transactions/broker` no longer stores receipts: its receipt drops `receipt_id` and `created_at`, a request whose rows already sit on `to_account_id` returns `replayed: true` with `changed_count: 0` and no write, and reusing an `idempotency_key` with a different body is no longer `409`. Split routes ignore `x-actor`; the database editor no longer returns `403` for audit tables. The `electronAudit` bridge and its six `audit:*` IPC channels are removed. See [[docs/adr/231-remove-audit-history|ADR-231]].
 >
@@ -149,9 +157,10 @@ aliases:
 >
 > **Absent and empty are unchanged** — `?category_ids=`, `?category_id=` still mean "no filter" and answer 200. Non-breaking for shipped callers: the Transactions page and the Imports Export card build these with `ids.join(',')` from `number[]` state and omit empty values; nothing in the frontend sends `account_ids`. `openapi.yaml` already typed the four scalars `integer` (now annotated `format: int32, minimum: 1`, and the two comma lists carry a documented `pattern`), so the implementation moved _onto_ the published contract. See [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 
-Every HTTP operation first checks its destination Host authority. Unlisted, malformed, or
-duplicate authorities return 403 before CORS and body parsing. See
-[[docs/security/data-protection]] and [[docs/guides/deployment]] for exact hostname permissions.
+Every HTTP operation first checks its destination Host authority: only `localhost`, `127.0.0.1`
+or `::1` with the backend port pass; anything else returns 403 before body parsing. No operation
+sends CORS headers ([[docs/adr/233-loopback-only-backend|ADR-233]]). See
+[[docs/security/data-protection]] and [[docs/guides/deployment]].
 Generic custom CSV uploads accept `number_format`; ambiguous automatic values and unsupported
 encodings return 400. Saved parser configs retain this option. See [[docs/api/imports]] and
 [[docs/api/portfolio-imports]].
@@ -171,13 +180,13 @@ batch joins the lock scope; a new reversible receipt preserves the original tran
 notes. This adds supported reconciliation behavior without changing operation paths or shapes.
 Matching CSV rows, including net-only dividends, may settle as duplicate evidence against a
 selected detailed Saxo workbook after literal header, identity and financial proofs. Only proved
-companions receive readiness exceptions; their status/error counters update in the atomic commit.
+companions receive readiness exceptions; their status/error counters update in the atomic commit. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 IBKR staging retains literal header and Summary currency context. Verified context can support
 currency and separate-withholding corrections for imported-copy repairs or standalone legacy sales.
 Unique same-date economic claims narrow overlapping copy candidates; proved different copies stay
 duplicates. Missing or ambiguous evidence blocks. Operation paths, response shapes and match windows
-remain unchanged.
+remain unchanged. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 > Generic portfolio uploads accept additive optional `source_id_column` and `source_account_column` mappings for literal provider identity. Omitted mappings preserve the existing configuration shape; see [[docs/api/portfolio-imports|Portfolio imports]].
 
@@ -192,14 +201,14 @@ source rows. Transaction DTOs add the read-only `income_recognition_role` and po
 dividends/income/gains. Archived ordinary calculations remain unchanged. Role setters are rejected; old
 absent role means standard. No operation is added or removed; these fields and optional scope are
 additive. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/api/portfolio-imports]],
-[[docs/api/investments]] and [[docs/api/portfolio-summary]].
+[[docs/api/investments]] and [[docs/api/portfolio-summary]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 Full history can compose paired income with its one selected zero-basis Gift action.
 Output-only `incomeProof.unitRowId` binds the same batch and investment; existing units and income
 repeats also require canonical unit identity. The unit is proved before income is written in the
 same atomic commit. Full `recordedIncome` and `recordedCash` are additive subtotals within
 `imported`; older responses may omit them. Exact owned cash repeats remain compatible, while new
-Kinesis cash still requires its confirmed bounded review. No operation or scope is added.
+Kinesis cash still requires its confirmed bounded review. No operation or scope is added. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 ## Integrity and report contract changes (2026-10-11)
 
@@ -245,7 +254,7 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST   | `/api/cross-workspace/rebalance`             | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells; supports Awesome's five 20% sleeves (ADR-098) | —          | [[docs/features/portfolio\|Portfolio]] |
 | POST   | `/api/cross-workspace/commitment-aware-cash` | Estimate a 90-day candidate cash cap from spendable balances, pending planned and recurring items, and an editable reserve floor                           | —          | [[docs/features/portfolio\|Portfolio]] |
 
-## Analysis Workspace (21 operations — ADR-144)
+## Analysis Workspace (19 operations — ADR-144)
 
 | Method           | Path                                  | Description                                                | Rate Limit  | Doc                             |
 | ---------------- | ------------------------------------- | ---------------------------------------------------------- | ----------- | ------------------------------- |
@@ -253,8 +262,6 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST             | `/api/analysis/extensions/evaluate`   | Preparation, calendar comparisons, scenarios and Goal Seek | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog         | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL               | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/interchange/import`   | Read-only CSV/Vision XLSX scenario parsing with original typed values and ignored-formula count | 600 req/min | [[docs/api/analysis\|Analysis]] |
-| POST             | `/api/analysis/interchange/export`   | Raw CSV/XLSX from captured snapshot; 64 MiB file, XLSX 100,000 rows, no query rerun | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution               | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records                | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -268,18 +275,16 @@ behavioral compatibility changes; clients must handle the documented errors and 
 | POST             | `/api/analysis/saved/:id/restore`     | Restore a prior definition as a new version                | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/saved/:id/ai-proposal` | Generate an inspectable local-model edit proposal          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 
-## AI Research (12 operations)
+## AI Research (10 operations)
 
 | Method      | Path                                             | Description                                                        | Rate Limit          | Doc                                   |
 | ----------- | ------------------------------------------------ | ------------------------------------------------------------------ | ------------------- | ------------------------------------- |
-| GET         | `/api/ai-research/status`                        | Inspect local research and provider readiness                      | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST   | `/api/ai-research/investigations`                | List or start recoverable local jobs                               | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/investigations/:id`            | Inspect or delete one investigation                                | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/resume`     | Resume completed checkpoints                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | POST        | `/api/ai-research/investigations/:id/cancel`     | Cancel queued or active work                                       | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 | GET, POST   | `/api/ai-research/documents`                     | List or locally index selected research documents                  | attachment/standard | [[docs/api/ai-research\|AI Research]] |
 | GET, DELETE | `/api/ai-research/documents/:id`                 | Inspect or delete a document and its derived passages              | attachment/standard | [[docs/api/ai-research\|AI Research]] |
-| POST        | `/api/ai-research/documents/search/passages`     | Retrieve cited local document passages                             | 600 req/min         | [[docs/api/ai-research\|AI Research]] |
 
 ## Research Dossiers (9 operations — ADR-153)
 
@@ -442,11 +447,8 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 
 | Method | Path                                    | Description                                                                                                                                                                                                                                                                                                                                 | Rate Limit | Doc                             |
 | ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
-| POST | `/api/research/presentation` | Stateless submitted-data Compare/chart/watchlist/provider-quote/analyst/market-add; single multipart JSON file ≤64 MiB; no provider/database/FX access | — | [[docs/api/research\|Research]] |
 | GET    | `/api/research/search`                  | Search tickers / securities by name or symbol; returns `{ items: [] }` when query is blank                                                                                                                                                                                                                                                  | —          | [[docs/api/research\|Research]] |
-| GET    | `/api/research/quote`                   | Current quote for `symbol` (+ optional `asset_class` hint for provider routing)                                                                                                                                                                                                                                                             | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/chart`                   | Historical chart points; `range` default `1mo` (1d/5d/1mo/3mo/6mo/1y/2y/5y/max); optional `provider` param pins preferred provider (ADR-081)                                                                                                                                                                                                | —          | [[docs/api/research\|Research]] |
-| GET    | `/api/research/fundamentals`            | Extended fundamentals snapshot merged from FMP + Yahoo in parallel (FMP preferred per field, Yahoo fills gaps; `meta.provider` may be `"fmp+yahoo"`); fields: P/E, EPS, market cap + ADR-081: sector, pegRatio, payoutRatio, grossMargin, operatingMargin, debtToEquity, currentRatio, revenueGrowth, freeCashFlow, fcfYield, …; 12 h cache | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/analyst`                 | Analyst consensus + price targets + recent rating actions; 24 h cache                                                                                                                                                                                                                                                                       | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/news`                    | News articles for a symbol; 2 h cache                                                                                                                                                                                                                                                                                                       | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/macro/search`            | Search macroeconomic series (CPI, rates, unemployment, …); fan-out union across FRED (open) + Eurostat/DBnomics (curated catalog); items carry `{ provider, seriesId, title, region, units, source }` (ADR-082); 1 h cache                                                                                                                  | —          | [[docs/api/research\|Research]] |
@@ -486,7 +488,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 ## Portfolio Import — ADR-078
 
 All routes mounted at `/api/portfolio/import`; `importRateLimiter` applies to uploads, probe, and commits only. The pipeline stages,
-validates, and matches CSV history or supported Saxo XLSX. Maintained formats always require review.
+validates, and matches CSV history, supported Saxo XLSX or the IBKR funding XLS/XLSX. Maintained formats always require review.
 Non-brokerage generic imports auto-commit only with no name matches, unresolved rows, or errors;
 exact symbols and explicit provider aliases use `match_source='symbol'`. Commit processes dates
 in ascending order and preserves source order within a date. See
@@ -509,8 +511,8 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full-history reconciliation of the selected batches (ADR-236)                                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/commit`                       | Commit the reviewed batches atomically against the history as it stands at commit time                            | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments — Phase 5A
 
@@ -576,6 +578,10 @@ in ascending order and preserves source order within a date. See
 
 ## Admin
 
+Admin operations have no authentication layer and never return `401`; the `ADMIN_AUTH_TOKEN`
+bearer check was removed by [[docs/adr/233-loopback-only-backend|ADR-233]] (non-breaking for the
+desktop app, which never set a token).
+
 | Method | Path                                              | Description                                                                                                                                  | Rate Limit         | Doc                       |
 | ------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------- |
 | GET    | `/api/admin`                                      | Admin status                                                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
@@ -594,7 +600,6 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/admin/providers/:provider/probe`            | Active on-demand probe for one provider                                                                                                      | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/metrics/requests`                     | Rolling request metrics per route (in-memory, 15 min)                                                                                        | —                  | [[docs/api/admin\|Admin]] |
 | GET    | `/api/admin/endpoints`                            | Static endpoint manifest from Express router                                                                                                 | —                  | [[docs/api/admin\|Admin]] |
-| GET    | `/api/admin/endpoint-liveness`                    | Route manifest annotated with `live: true` per entry                                                                                         | —                  | [[docs/api/admin\|Admin]] |
 
 ## Belgian Tax — Native phase 3 prerequisite
 
@@ -607,7 +612,7 @@ in ascending order and preserves source order within a date. See
 
 ## Reports — Phase 3 / Phase 5 / Phase 7
 
-Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
+Server-side report document generation (Phase 3) with PDF printing by the Electron shell's own Chromium ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns the `ReportDocument` envelope (`filename`, script-free `html`, `footerTemplate`); the backend renders no PDF.
 
 The 2026-10-13 OpenAPI correction declares the existing binary PDF response and shared request
 `currency`, `period`, `sections`, `theme`, exclusion IDs and optional tax context. It removes stale
@@ -620,9 +625,9 @@ correction is breaking for them, while runtime-compatible callers retain existin
 
 | Method | Path                     | Description                                                                                                                                                                                                                                    | Rate Limit | Doc                                                    |
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
-| POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/financial` | Generate financial report document (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/portfolio` | Generate portfolio report document (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/tax`       | Generate tax report document (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
 ## Aggregations — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
@@ -636,7 +641,6 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/cashflow-comparison`        | Current vs. historical daily flow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/average-vs-current`         | Average vs. current period metrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/bank-balances`              | Cash-bearing account balances and history; excludes holdings-only wallet/exchange cash; rows expose canonical `account_id` for entity joins                                                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/api/aggregations\|Aggregations]] |
-| GET    | `/api/aggregations/cashflow-forecast`          | N-month forward cash flow from planned transactions (Phase 6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/sankey`                     | Balanced income/funding-gap→spending→category flow graph for d3-sankey, with stable category IDs and localized reserved labels (Phase 7)                                                                                                                                                                                                                                                                                                                                                                                       | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-methods`  | Multi-method cash flow forecast for current month (8 methods; actual-to-date plus always-applied `scheduled_actual`; optional planned overlay; optional category breakdown)                                                                                                                                                                                                                                                                                                                                                    | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/cashflow-forecast-rolling`  | Rolling-window forecast: past `days_back` days actuals + next `days_forward` days statistical projection on a date axis (defaults 90/90, max 365 each, sum ≤ 730). Reuses 8-method engine with date-keyed payload, window-relative cumulative anchor; rolling-specific MC defaults (500 paths, P25/P75 percentiles) lower cost for broad horizons; accepts `include_backtest` param for lazy-loaded walk-forward backtest diagnostics (only enabled when user opens diagnostics sheet); uses MC rolling cache with 6-hour TTL. | —          | [[docs/api/aggregations\|Aggregations]] |
@@ -701,9 +705,9 @@ share mutation invalidation. This query scope adds no operation. See [[docs/api/
 
 **Streaming Lifecycle:** Frontend pre-creates conversation via POST `/api/ai/conversations`, then streams via POST `/api/ai/chat/stream`. Stream lives in module-level `aiChatStreamStore`; user can navigate away and stream continues. On completion, TanStack Query cache invalidates to hydrate persisted messages. Sidebar shows pulsing indicator for active streams via `useStreamingConversationIds()`.
 
-## IPC Contract — Electron Desktop (23 invoke channels, 6 event channels)
+## IPC Contract — Electron Desktop (24 invoke channels, 6 event channels)
 
-Electron-specific inter-process communication is grouped into five context bridges. The complete
+Electron-specific inter-process communication is grouped into six context bridges. The complete
 argument and result types are owned by `packaging/electron/electron-api.d.ts` and re-exported as
 `@vision/types/electron`.
 
@@ -714,6 +718,13 @@ argument and result types are owned by `packaging/electron/electron-api.d.ts` an
 | `electronServices` |               2 |              0 |
 | `electronAPI`      |               7 |              4 |
 | `electronRecovery` |               2 |              2 |
+| `electronReports`  |               1 |              0 |
+
+`report:print-pdf` (`electronReports.printToPdf({ html, footerTemplate })`) prints a report
+document from `POST /api/reports/*` in a hidden, sandboxed window with JavaScript disabled, no
+preload, denied permissions and no network, on a dedicated in-memory session. Only the
+application document may call it. It returns `{ success: true, pdf: Uint8Array }` or
+`{ success: false, error }` ([[docs/adr/234-electron-report-pdf-printing|ADR-234]]).
 
 The backup operations remain:
 
@@ -769,7 +780,7 @@ See [[docs/api/info.md|Info & Analytics API]] for deprecation notes on the remov
 ## Related
 
 - [[docs/api/index|API Index]]
-- [[docs/api/portfolio-imports|Portfolio Imports API]] — full-history and bounded Kinesis reconciliation contracts
+- [[docs/api/portfolio-imports|Portfolio Imports API]] — full-history reconciliation contract
 - [[docs/reference/error-codes\|Error Codes Reference]]
 - [[docs/reference/code-patterns\|Code Patterns Reference]]
 - [[docs/security/rate-limiting\|Rate Limiting]]
@@ -782,9 +793,9 @@ The optional Kinesis `record_cash_only` scope requires explicit preservation and
 counts. Brokerage-origin movements and expenses have no invented peer. Other portfolio/income/custody
 rows remain pending; repeated proved cash is a no-op. These optional fields are additive with no
 operation changes. See [[docs/api/portfolio-imports]] and
-[[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+[[docs/adr/189-proved-brokerage-cash-history|ADR-189]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 
 Native IBKR funding workbooks use the additive `ibkr_funding_history` format on the existing
 portfolio upload paths. Its separate source-preferred correction scope preserves cash IDs,
 authenticates original/native evidence, and creates no new financial rows. Bank uploads remain
-CSV-only. See [[docs/api/portfolio-imports#IBKR native funding correction scope]].
+CSV-only. See [[docs/api/portfolio-imports]]. Superseded by [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].

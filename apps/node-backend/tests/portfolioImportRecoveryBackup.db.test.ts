@@ -9,8 +9,15 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { hasTestDatabase } from "./setup/db.ts";
 import { migrateDatabase } from "./setup/migratedDatabase.ts";
-import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
 
+/** A cash transaction's full image, as Kinesis cash receipts recorded it. */
+const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
+  'amount',t.amount::text,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance::text,
+  'account_id',t.account_id,'recipient_id',t.recipient_id,'recipient_bank_account_id',t.recipient_bank_account_id,
+  'category_id',t.category_id,'is_active',t.is_active,'import_batch_id',t.import_batch_id,
+  'source_record_hash',t.source_record_hash,'dedup_fingerprint',t.dedup_fingerprint,
+  'dedup_fingerprint_version',t.dedup_fingerprint_version,'is_transfer',t.is_transfer,
+  'transfer_source',t.transfer_source,'transfer_peer_id',t.transfer_peer_id)`;
 const run = promisify(execFile);
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -314,7 +321,7 @@ describe.skipIf(
     if (directory) await fs.rm(directory, { recursive: true, force: true });
   });
 
-  it("restores populated journals, lot allocation receipts, source provenance and protection triggers from an encrypted production bundle", async () => {
+  it("restores populated journals, lot allocation receipts, source provenance and custody protection triggers from an encrypted production bundle", async () => {
     const expected = await snapshot(source);
     for (const name of tableNames)
       expect(expected[name]!.length).toBeGreaterThan(0);
@@ -374,19 +381,6 @@ describe.skipIf(
     ).toBe(head);
     await expect(
       restored.query(
-        "UPDATE portfolio_import_reconciliation_journal SET policy='exact'",
-      ),
-    ).rejects.toThrow("immutable");
-    await expect(
-      restored.query("DELETE FROM portfolio_import_duplicate_repair_journal"),
-    ).rejects.toThrow("immutable");
-    await expect(
-      restored.query(
-        "UPDATE portfolio_import_income_recognition_journal SET proof_data=proof_data",
-      ),
-    ).rejects.toThrow("immutable");
-    await expect(
-      restored.query(
         "UPDATE portfolio_transactions SET note='Break active unit image' WHERE type='gift'",
       ),
     ).rejects.toThrow(/paired income/);
@@ -428,16 +422,6 @@ describe.skipIf(
     await expect(
       restored.query("DELETE FROM portfolio_import_batches"),
     ).rejects.toThrow(/foreign key constraint|immutable/);
-    await expect(
-      restored.query(
-        "UPDATE portfolio_import_staging_rows SET raw_data='Changed cash receipt' WHERE route='cash'",
-      ),
-    ).rejects.toThrow(/immutable/);
-    await expect(
-      restored.query(
-        "DELETE FROM portfolio_import_staging_rows WHERE route='cash'",
-      ),
-    ).rejects.toThrow(/immutable/);
     expect(
       (
         await restored.query(

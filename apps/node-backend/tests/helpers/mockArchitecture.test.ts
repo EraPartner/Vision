@@ -119,7 +119,6 @@ describe("shared database and currency mock architecture", () => {
     const allowedPartialReal = new Set([
       "dataImport.db.test",
       "portfolioImportRollback.db.test",
-      "portfolioKinesisCashScope.db.test",
     ]);
     const offenders: string[] = [];
 

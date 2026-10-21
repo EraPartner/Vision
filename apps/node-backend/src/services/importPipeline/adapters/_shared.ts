@@ -580,11 +580,6 @@ export function stripTerminalRecordDelimiter(raw: unknown): string {
  * when there is none (csv-parse treats an absent and an undefined `columns`
  * alike, as `false`).
  */
-export function sourceColumnsOption(columns: string[] | undefined): {
-  columns?: string[];
-} {
-  return columns === undefined ? {} : { columns };
-}
 
 export function parseCsvText<T extends CsvRecord = Record<string, string>>(
   content: string,

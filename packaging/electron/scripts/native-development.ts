@@ -90,7 +90,6 @@ export async function main(): Promise<void> {
     repoRoot,
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: nativePayloadRoot,
-    browserRuntimeRoot: nativePayloadRoot,
     allowExternalPostgres:
       process.env.VISION_ALLOW_EXTERNAL_POSTGRES === "true",
     runtimeId: "vision_dev",
@@ -118,14 +117,13 @@ export async function main(): Promise<void> {
         paths: runtime.paths,
         runtimeRoot: repoRoot,
         repoRoot,
-        tools,
       }),
       NODE_ENV: "development",
       ENVIRONMENT: "development",
       VISION_DEV: "true",
     };
     const frontendEnv = safeChildEnv({
-      VITE_API_URL: `http://127.0.0.1:${appPort}`,
+      VISION_DEV_API_TARGET: `http://127.0.0.1:${appPort}`,
     });
     const bun = tools.bun;
     // Discovery leaves bun unset when no candidate exists; spawn() used to

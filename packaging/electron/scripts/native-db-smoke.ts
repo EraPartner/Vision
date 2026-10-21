@@ -21,7 +21,6 @@ async function main(): Promise<void> {
     repoRoot,
     runtimeRoot: repoRoot,
     postgresRuntimeRoot: nativePayloadRoot,
-    browserRuntimeRoot: nativePayloadRoot,
     runtimeId,
     appPort: 3002,
     postgresPort: Number(process.env.VISION_POSTGRES_PORT || 54329),

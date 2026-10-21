@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ElectronInvokeChannel } from "../electron-api";
 import {
+  MAX_REPORT_FOOTER_CHARS,
+  MAX_REPORT_HTML_CHARS,
   REJECT_INVALID,
   createIpcArgumentContracts,
   isValidHslComponents,
@@ -271,6 +273,34 @@ test("theme:persist-splash accepts only HSL component strings", () => {
       success: false,
     });
   }
+});
+
+test("report:print-pdf accepts only a bounded HTML document and footer", () => {
+  const html = "<!DOCTYPE html>\n<html><body>Report</body></html>";
+  assert.deepEqual(
+    accept("report:print-pdf", { html, footerTemplate: "<div></div>", x: 1 }),
+    [{ html, footerTemplate: "<div></div>" }],
+  );
+  for (const invalid of [
+    undefined,
+    "<!DOCTYPE html>",
+    { html: "<html></html>", footerTemplate: "" },
+    { html: 42, footerTemplate: "" },
+    { html, footerTemplate: undefined },
+    { html, footerTemplate: "x".repeat(MAX_REPORT_FOOTER_CHARS + 1) },
+    {
+      html: html + "x".repeat(MAX_REPORT_HTML_CHARS),
+      footerTemplate: "",
+    },
+  ]) {
+    const result = reject("report:print-pdf", [invalid]);
+    assert.equal((result as { success?: boolean }).success, false);
+  }
+  reject(
+    "report:print-pdf",
+    [{ html, footerTemplate: "" }, "extra"],
+    "Unexpected IPC arguments",
+  );
 });
 
 test("shared helpers keep their previous decisions", () => {

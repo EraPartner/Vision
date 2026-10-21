@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared native payload prerequisites for Vision.app and Vision Demo.app.
-# Source after REPO_PATH and CHROMIUM_VERSION are set.
+# Source after REPO_PATH is set.
 
 VISION_NATIVE_BUILD_TEMP_ROOT=""
 
@@ -42,20 +42,6 @@ prepare_native_macos_build() {
   cd "$REPO_PATH/packaging/electron" || return 1
   bun install --frozen-lockfile
 
-  local puppeteer="$REPO_PATH/apps/node-backend/node_modules/.bin/puppeteer"
-  if [ ! -x "$puppeteer" ]; then
-    echo "ERROR: the locked Puppeteer browser installer is missing after dependency installation."
-    return 1
-  fi
-
-  echo "==> Preparing pinned Chrome Headless Shell $CHROMIUM_VERSION..."
-  VISION_CHROMIUM_SOURCE="$($puppeteer browsers install \
-    "chrome-headless-shell@$CHROMIUM_VERSION" --format '{{path}}')"
-  if [ ! -x "$VISION_CHROMIUM_SOURCE" ]; then
-    echo "ERROR: the pinned Chrome Headless Shell executable was not produced."
-    return 1
-  fi
-  export VISION_CHROMIUM_SOURCE
 
   echo "==> Building Vision's frontend in an isolated staging directory..."
   local temp_base="${TMPDIR:-/tmp}"

@@ -19,15 +19,12 @@ vi.mock("../../src/services/aiResearchDocuments.ts", () => ({
 import {
   getResearchDocument as rawGetResearchDocument,
   ingestResearchDocument as rawIngestResearchDocument,
-  searchResearchDocuments as rawSearchResearchDocuments,
 } from "../../src/services/aiResearchDocuments.ts";
 
 const getResearchDocument = vi.mocked(rawGetResearchDocument);
 const ingestResearchDocument = vi.mocked(rawIngestResearchDocument);
-const searchResearchDocuments = vi.mocked(rawSearchResearchDocuments);
 
 type IngestResult = Awaited<ReturnType<typeof rawIngestResearchDocument>>;
-type SearchResult = Awaited<ReturnType<typeof rawSearchResearchDocuments>>;
 
 const { default: documentsRouter } =
   await import("../../src/routes/aiResearchDocuments.ts");
@@ -78,47 +75,5 @@ describe("AI research document request validation", () => {
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
     expect(bodyAt(res, "error", "message")).toMatch(/^title: /);
     expect(ingestResearchDocument).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [{}, /^query: /],
-    [{ query: "   " }, /^query: /],
-    [{ query: "risk", mode: "fuzzy" }, /^mode: /],
-    [{ query: "risk", limit: "5" }, /^limit: /],
-    [{ query: "risk", limit: 0 }, /^limit: /],
-  ])("rejects passage search body %j", async (body, message) => {
-    const res = await api
-      .post(`${BASE}/search/passages`)
-      .send(body)
-      .expect(400);
-    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
-    expect(bodyAt(res, "error", "message")).toMatch(message);
-    expect(searchResearchDocuments).not.toHaveBeenCalled();
-  });
-
-  it("forwards a valid passage search, trimmed", async () => {
-    searchResearchDocuments.mockResolvedValue({
-      items: [],
-    } as unknown as SearchResult);
-    await api
-      .post(`${BASE}/search/passages`)
-      .send({ query: "  risk  ", mode: "keyword", limit: 50 })
-      .expect(200);
-    expect(searchResearchDocuments).toHaveBeenCalledWith({
-      query: "risk",
-      mode: "keyword",
-      limit: 50,
-    });
-  });
-
-  // Every service throw used to be relabelled "The research document search
-  // was rejected" (400), so a database outage blamed the caller.
-  it("reports a service failure after validation as a server error", async () => {
-    searchResearchDocuments.mockRejectedValue(new Error("connection refused"));
-    const res = await api
-      .post(`${BASE}/search/passages`)
-      .send({ query: "risk" })
-      .expect(500);
-    expect(bodyAt(res, "error", "code")).toBe("INTERNAL_SERVER_ERROR");
   });
 });

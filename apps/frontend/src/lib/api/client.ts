@@ -19,17 +19,16 @@ import type { z } from "zod";
 import { env } from "@/lib/env";
 import logger from "@/lib/logger";
 import { apiEventBus } from "@/lib/devtools/apiEventBus";
-import { getAdminToken } from "@/lib/adminToken";
 
-// In a production build the frontend is served by the backend on the SAME origin
-// (Electron resolves a random host port per app — see packaging/electron/main.ts
-// resolveAppPort), so API calls must target that origin, not a hardcoded port.
-// A hardcoded localhost:3002 made every app on a non-3002 port read an empty/wrong
-// backend and fall into the onboarding wizard. Dev (Vite proxy) and tests (MSW on
-// :3002) keep the explicit fallback so their behaviour is unchanged.
+// The API is always same-origin (ADR-233): in the desktop app the backend serves
+// the frontend (Electron resolves a random host port per app — see
+// packaging/electron/main.ts resolveAppPort), and in development the Vite proxy
+// forwards /api to the backend. The backend sends no CORS headers, so a
+// cross-origin base URL cannot work. Tests (MSW on :3002) keep the explicit
+// fallback.
 export const API_BASE_URL =
     env.VITE_API_URL ||
-    (import.meta.env.PROD && typeof window !== "undefined"
+    (import.meta.env.MODE !== "test" && typeof window !== "undefined"
         ? window.location.origin
         : "http://localhost:3002");
 
@@ -329,15 +328,9 @@ export async function apiRequest<T>(
 ): Promise<T> {
     const { schema, ...init } = options;
     const requestId = generateRequestId();
-    // Attach the admin Bearer token only when one is stored. With no token the
-    // header is omitted and the backend's loopback/private-network allowlist
-    // applies — identical to prior behaviour. The backend ignores the header on
-    // non-admin routes, so attaching it globally is safe.
-    const adminToken = getAdminToken();
     const headers: HeadersInit = {
         "Content-Type": "application/json",
         "X-Request-Id": requestId,
-        ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
         ...init.headers,
     };
 

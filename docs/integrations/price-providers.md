@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-19
-last_modified: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+last_modified: 2026-10-20
+updated: 2026-10-20
 tags:
   [
     integration,
@@ -324,7 +324,7 @@ All five adapters are wired (Yahoo needs no key; Twelve Data, Finnhub, FMP, and 
 > The capability map (`capabilityMap.js`) was reordered so that **Yahoo leads the `quote`, `chart`, and `news` default chains**, with paid providers (Twelve Data, Finnhub, FMP, Alpha Vantage) as fallbacks. Yahoo is keyless and carries no contractual per-day cap, so routing it first avoids burning paid-tier quota on the highest-frequency data types. The aggregator's fall-through semantics are unchanged — a Yahoo failure still routes to Twelve Data → Finnhub → …. `fundamentals.default` remains FMP-first (Yahoo's fundamentals depth is shallower). See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--yahoo-first-provider-ordering-for-quote--chart--news-2026-06-16|ADR-079 follow-up note (2026-06-16)]] for the full change table and rationale.
 
 > [!info] Fundamentals: one composed data type, not raced (2026-06-16)
-> **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/fundamentals` and `GET /api/research/scorecard` call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
+> **Fundamentals is the only data type that is composed rather than raced.** `GET /api/research/scorecard` and the AI chat research tool call `researchAggregator.fetchFundamentals()`, which fetches **FMP and Yahoo in parallel** and merges their fields with FMP preferred. FMP-only fields (e.g. `interestCoverage`) and Yahoo-only fields (e.g. `forwardPE`, `freeCashFlow`) both appear in every response — the result is the union. `meta.provider` is `"fmp+yahoo"` when both contribute, or the single provider name when only one responds. All other research data types (quote, chart, news, analyst, search) continue to use the race-to-first capability-map chain unchanged. See [[docs/adr/079-multi-provider-research-aggregation#follow-up-note--fundamentals-merged-across-fmp--yahoo-2026-06-16|ADR-079 follow-up note (2026-06-16)]].
 
 > [!info] Macro vertical (ADR-082, 2026-06-17) — provider-pinned, never persisted
 > The macroeconomic data vertical adds **three new adapters** to the research aggregation layer: `fredAdapter` (keyed via `FRED_API_KEY`), `eurostatAdapter` (keyless, first-party), and `dbnomicsAdapter` (keyless). Unlike the equity data types above, **macro series are provider-pinned, not raced** — a series code (e.g. `CPIAUCSL` on FRED) identifies exactly one provider. Two aggregator functions handle this: `searchMacro(query)` fans out across all usable macro adapters in parallel (union, not race), and `fetchMacroSeries({ provider, seriesId, range })` routes to exactly one provider with no fallback chain.

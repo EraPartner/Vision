@@ -1,9 +1,6 @@
 import { Router } from "express";
 import type { ExpressRequest } from "../types/express.ts";
 import { z } from "zod";
-import settings from "../config/config.ts";
-import { getOllamaClient } from "../integrations/ollama/client.ts";
-import type { OllamaModelSummary } from "../integrations/ollama/client.ts";
 import {
   aiInvestigationRequestSchema,
   aiInvestigationScopeSchema,
@@ -27,49 +24,6 @@ const resumeInvestigationSchema = z.strictObject({
 function id(req: ExpressRequest): string {
   return parseInput(uuid, req.params.id);
 }
-router.get("/status", async (_req, res) => {
-  let localModels: OllamaModelSummary[] = [];
-  let localStatus;
-  try {
-    localModels = await getOllamaClient().listModels();
-    localStatus = "available";
-  } catch {
-    localStatus = "unavailable";
-  }
-  res.ok({
-    defaultRoute: "local",
-    providers: [
-      {
-        id: "ollama",
-        route: "local",
-        status: localStatus,
-        models: localModels,
-        configuredContextTokens: settings.ollama.numCtx,
-        supportsTools: true,
-        supportsEmbeddings: Boolean(settings.ollama.embeddingModel),
-      },
-    ],
-    web: {
-      enabled: settings.aiResearch.web.enabled,
-      searchLimitPerJob: settings.aiResearch.web.maxSearches,
-      pageLimitPerJob: settings.aiResearch.web.maxPages,
-    },
-    localDocuments: {
-      supportedMediaTypes: ["text/plain", "text/markdown", "text/html"],
-      pdfSupported: false,
-    },
-    orchestration: {
-      maxConcurrentJobs: 1,
-      maxPlanSteps: 24,
-      maxDetailedReplans: 1,
-      maxLocalRetrySteps: 3,
-      parallelToolExecution: false,
-      resourcePolicy:
-        "Jobs and tools are serialized to bound local CPU and memory use.",
-    },
-  });
-});
-
 router.get("/investigations", async (_req, res) => {
   const items = await listInvestigations();
   res.ok({ items, total: items.length });

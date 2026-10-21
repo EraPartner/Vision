@@ -2,8 +2,8 @@
 title: How to Add a New API Endpoint
 type: guide
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-20
+updated: 2026-10-20
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
 aliases: [add api, new endpoint, create endpoint, api tutorial]
@@ -249,8 +249,8 @@ CREATE TABLE "<resource>" (
 ```
 
 Add `NNNN_add_<resource>_table.down.sql` with `DROP TABLE "<resource>";`, then run
-`bun run db:migrate`, `bun run db:codegen` and `bun run db:lint`. Add the table to
-`BACKUP_COVERED_TABLES` in `apps/node-backend/src/backup/coverage.ts`. See
+`bun run db:migrate`, `bun run db:codegen` and `bun run db:lint`. The backup is a whole-database
+`pg_dump`, so a new table needs no backup registration. See
 [[docs/guides/migrations|Database Migration Guide]].
 
 ### 6. Add Tests

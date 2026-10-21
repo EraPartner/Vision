@@ -22,8 +22,6 @@ related_code:
   - apps/node-backend/src/routes/analysis.ts
   - packages/shared-utils/src/analysis/workbook.ts
   - packages/shared-utils/src/analysis/interchange.ts
-  - apps/node-backend/src/services/analysisInterchangeService.ts
-  - apps/node-backend/src/routes/analysisInterchange.ts
   - apps/node-backend/src/services/analysisExecutor.ts
   - apps/node-backend/src/services/savedAnalysisService.ts
 ---
@@ -110,13 +108,11 @@ pipeline as formula previews and saved refresh.
 
 ## Excel workbook interchange
 
-Browser compatibility modules now use shared TypeScript under `packages/shared-utils/src/analysis/`.
-Additive read-only multipart import/export operations expose that behavior to API clients;
-see [[docs/api/analysis#Read-only CSV and workbook interchange|the exact contract]]. Exports consume
-captured result/context without rerunning Analysis; 64 MiB file transport retains the XLSX
-100,000-row capability beyond the global 1 MB JSON limit. Import retains the effective
-10,000,000-byte parser cap, 1,000-row/32-column attachment bounds and caller-owned five-attachment
-cap. Browser File/crypto/XML adapters remain; golden fixtures compare them with the Node adapter.
+Import and export run in the browser with shared TypeScript under
+`packages/shared-utils/src/analysis/`; there is no server interchange operation
+(see [[docs/api/analysis#CSV and workbook interchange|the Analysis API]]). Exports consume the
+captured result/context without rerunning Analysis. Import keeps the 10,000,000-byte parser cap,
+1,000-row/32-column attachment bounds and the five-attachment cap.
 
 
 XLSX exports Results, typed Assumptions, Provenance, Formula definitions and Summary results.

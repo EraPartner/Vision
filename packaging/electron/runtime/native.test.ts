@@ -24,8 +24,6 @@ import {
   databaseConfigFromEnv,
   validateApplicationEnv,
   buildNativeBackendEnv,
-  assertNativeChromeAvailable,
-  bundledChromiumPath,
   isPortFree,
   isDetailedHealthReady,
   lastStartupError,
@@ -298,7 +296,6 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_init",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(calls),
     });
     await runtime.discover();
@@ -395,7 +392,6 @@ test("managed PostgreSQL provisions roles, database and extensions in one sessio
       postgresRuntimeRoot: runtimeRoot,
       runtimeId,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile,
     });
     await runtime.ensureLayout();
@@ -481,7 +477,6 @@ test("managed PostgreSQL upgrades observability config for an existing cluster",
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_observability_upgrade",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(),
     });
     await runtime.discover();
@@ -534,7 +529,6 @@ test("managed PostgreSQL restarts a warm cluster after observability config chan
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_observability_restart",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       isPortFree: async () => true,
       spawnPostgresProcess: () => {
         spawned = true;
@@ -609,7 +603,6 @@ test("managed PostgreSQL quarantines an interrupted first initialization before 
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_recovery",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(),
     });
     await runtime.discover();
@@ -650,7 +643,6 @@ test("managed PostgreSQL fails closed when its private port is occupied", async 
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_collision",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       isPortFree: async () => false,
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
@@ -697,7 +689,6 @@ test("managed PostgreSQL shutdown targets only Vision's exact data directory", a
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_managed_stop",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: postgresFixtureRunFile(calls),
     });
     await runtime.ensureLayout();
@@ -846,7 +837,6 @@ test("database activation applies materialized-view ownership inside the staging
       runtimeId: "vision_restore_owner_test",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile,
     });
 
@@ -923,7 +913,6 @@ test("native seed SQL is applied transactionally with an argument array", async 
       runtimeId,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args: [...args] });
         if (args[0] === "--version") {
@@ -1025,7 +1014,6 @@ test("native PostgreSQL readiness pins every probe to one loopback TCP port", as
       postgresBinDir: binDir,
       postgresPort: 55_432,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         calls.push({ executable: path.basename(executable), args });
         if (args[0] === "--version") {
@@ -1080,7 +1068,6 @@ test("external PostgreSQL fails with an actionable observability prerequisite", 
       runtimeId: "vision_external_observability",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
           return {
@@ -1121,7 +1108,7 @@ test("native application environment accepts only fixed keys and single-line val
   assert.deepEqual(
     validateApplicationEnv({
       FRED_API_KEY: "key",
-      ADMIN_AUTH_TOKEN: "existing-admin-token",
+      ADMIN_AUTH_TOKEN: "retired-admin-token",
       OPENAI_API_ENABLED: "true",
       OPENAI_API_KEY: "synthetic-openai-key",
       ADMIN_TOKEN: "wrong-contract",
@@ -1129,7 +1116,6 @@ test("native application environment accepts only fixed keys and single-line val
     }),
     {
       FRED_API_KEY: "key",
-      ADMIN_AUTH_TOKEN: "existing-admin-token",
     },
   );
   assert.throws(
@@ -1207,7 +1193,6 @@ test("native first start persists and unreferences an argument-array backend chi
       appPort: 43_210,
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       isPortFree: async () => true,
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
@@ -1279,7 +1264,7 @@ test("startup error is read from the last failed backend start in the log", () =
   assert.equal(lastStartupError("[ERROR] Failed to start application {broken"), undefined);
 });
 
-test("packaged backend environment pins native data, migration, browser, and loopback paths", () => {
+test("packaged backend environment pins native data, migration, and loopback paths", () => {
   const runtimeRoot =
     "/Applications/Vision.app/Contents/Resources/native-runtime";
   const env = buildNativeBackendEnv({
@@ -1297,9 +1282,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
         "/Users/test/Library/Application Support/Vision/native/vision/cache",
     },
     runtimeRoot,
-    tools: {
-      chrome: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    },
   });
 
   assert.equal(env.SERVER_HOST, "127.0.0.1");
@@ -1307,64 +1289,10 @@ test("packaged backend environment pins native data, migration, browser, and loo
   assert.equal(env.VISION_RUNTIME_ROOT, runtimeRoot);
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
-  assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
   assert.equal(
     env.VISION_NATIVE_ENV_FILE,
     "/Users/test/Library/Application Support/Vision/native/vision/runtime.env",
   );
-  assert.equal(
-    env.PUPPETEER_EXECUTABLE_PATH,
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  );
-});
-
-test("native backend startup requires a supported browser for PDF reports", () => {
-  assert.equal(
-    assertNativeChromeAvailable(
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    ),
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  );
-  assert.throws(
-    () => assertNativeChromeAvailable(undefined),
-    hasCode("NATIVE_CHROMIUM_NOT_FOUND"),
-  );
-});
-
-test("packaged Chromium discovery is pinned and rejects metadata traversal", async () => {
-  const temp = await fs.promises.mkdtemp(
-    path.join(os.tmpdir(), "vision-chromium-metadata-"),
-  );
-  const chromiumRoot = path.join(temp, "chromium");
-  const executable = path.join(chromiumRoot, "root", "chrome-headless-shell");
-  const metadataPath = path.join(chromiumRoot, "runtime.json");
-  try {
-    await fs.promises.mkdir(path.dirname(executable), { recursive: true });
-    await fs.promises.writeFile(executable, "#!/bin/sh\nexit 0\n", {
-      mode: 0o755,
-    });
-    const metadata = {
-      version: 1,
-      browser: "chrome-headless-shell",
-      browserVersion: "150.0.7871.24",
-      platform: process.platform,
-      architecture: process.arch,
-      executableRelative: "root/chrome-headless-shell",
-    };
-    await fs.promises.writeFile(metadataPath, JSON.stringify(metadata));
-    assert.equal(bundledChromiumPath(temp), executable);
-
-    await fs.promises.writeFile(
-      metadataPath,
-      JSON.stringify({ ...metadata, executableRelative: "../../Chrome" }),
-    );
-    assert.throws(
-      () => bundledChromiumPath(temp),
-      hasCode("CHROMIUM_RUNTIME_MISMATCH"),
-    );
-  } finally {
-    await fs.promises.rm(temp, { recursive: true, force: true });
-  }
 });
 
 test("attachment replacement verifies content and atomically replaces the destination", async () => {
@@ -1514,7 +1442,6 @@ test("native custom dump validation rejects corrupt or truncated input", async (
       runtimeId: "vision_corrupt_dump",
       postgresBinDir: binDir,
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: async (executable, args) => {
         if (args[0] === "--version") {
           return {
@@ -1553,7 +1480,6 @@ for (const phase of ["before", "between", "after"] as const) {
       postgresRuntimeRoot: fixture.runtimeRoot,
       runtimeId: "vision_recovery_test",
       bunPath: "/bin/echo",
-      chromePath: "/bin/echo",
       runFile: async (file, args, options) => {
         const sql = args[args.indexOf("--command") + 1] ?? "";
         if (sql.includes("SHOW server_version_num"))

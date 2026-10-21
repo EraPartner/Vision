@@ -2,6 +2,7 @@
 title: ADR-098 Cross-Workspace Features — NW Projection, Cash-Aware Rebalancing, Unified Tax
 type: adr
 date: 2026-06-19
+updated: 2026-10-20
 tags: [adr, net-worth, projection, rebalancing, tax, marital-quotient, cross-workspace, adr-081, adr-085, adr-089, saved-plans, rebalance-plans]
 description: Three features that compose all three workspaces — a net-worth/FI projection cone (cash-flow forecast + holdings + research forecast), cash-aware rebalancing (research targets + actual weights + available budgeting cash), and a unified tax view (earned income + realized gains + dividend income, owner-allocated for the marital quotient).
 aliases: [net worth projection, FI projection, cash-aware rebalancing, unified tax view]
@@ -142,6 +143,13 @@ Frontend type: `RebalancePlan` interface in `apps/frontend/src/lib/api/crossWork
 
 No rows changed. `POST /api/cross-workspace/rebalance` and `GET/PUT /api/settings/:key` already existed;
 the only change is that `rebalance_plans` is now a recognized settings key with server-side validation.
+
+## Implementation note (2026-10-20) — unused projection cone removed
+
+The net-worth / FI projection cone was never wired to a route, page or AI tool. Its pure
+`projectNetWorth` core in `services/crossWorkspaceAnalytics.ts` was reachable only through a
+test-only export and was removed with its unit tests. Cash-aware rebalancing is unchanged. A future
+projection feature would be designed afresh.
 
 ## Related
 - [[docs/adr/index|All ADRs]]

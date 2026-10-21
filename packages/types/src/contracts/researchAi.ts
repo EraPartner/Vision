@@ -11,25 +11,6 @@ import { z } from "zod";
 const CountSchema = z.number().int().nonnegative();
 const RouteSchema = z.literal("local");
 
-/** `GET /api/ai-research/status`. */
-export const AiResearchStatusSchema = z.looseObject({
-  defaultRoute: z.string(),
-  providers: z.array(
-    z.looseObject({
-      id: z.string(),
-      route: RouteSchema,
-      status: z.string(),
-      models: z.array(z.unknown()),
-    }),
-  ),
-  web: z.looseObject({ enabled: z.boolean() }),
-  localDocuments: z.looseObject({
-    supportedMediaTypes: z.array(z.string()),
-    pdfSupported: z.boolean(),
-  }),
-  orchestration: z.looseObject({}),
-});
-
 /** aiInvestigationRepository's `COLUMNS` projection. */
 export const AiInvestigationSchema = z.looseObject({
   id: z.string(),

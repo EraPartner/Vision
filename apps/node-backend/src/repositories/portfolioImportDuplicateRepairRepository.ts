@@ -1,11 +1,10 @@
+/** Read and restore duplicate repairs applied before ADR-236. */
 import { sql } from "kysely";
-import type { PortfolioTransactionId } from "@vision/types/brands";
 import { checkedRow, checkedRows, db } from "../database/db.ts";
 import type { Json } from "../database/schema.generated.ts";
 import {
   bigintIdRowSchema,
   duplicateRepairJournalRowSchema,
-  intIdRowSchema,
   repairBatchSnapshotRowSchema,
   repairStagingSnapshotRowSchema,
   repairTransactionSnapshotRowSchema,
@@ -18,7 +17,6 @@ import type {
   RepairTransactionSnapshot,
 } from "../database/rows/portfolioImport.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "./portfolioImportReconciliationRepository.ts";
-import type { ReconciliationHistoryEvent } from "./portfolioImportReconciliationRepository.ts";
 
 export type {
   DuplicateRepairJournalRow,
@@ -37,79 +35,6 @@ const STAGING = sql<RepairStagingSnapshot>`to_jsonb(s) || jsonb_build_object('id
 const BATCH = sql<RepairBatchSnapshot>`to_jsonb(b) || jsonb_build_object('id',b.id::text,'source_size_bytes',b.source_size_bytes::text)`;
 const jsonb = (value: unknown) => sql<Json>`${JSON.stringify(value)}::jsonb`;
 const anyBigint = (ids: readonly Id[]) => sql<string>`ANY(${ids}::bigint[])`;
-
-export async function readDuplicateRepairContext(
-  history: readonly ReconciliationHistoryEvent[],
-): Promise<{
-  transactions: RepairTransactionSnapshot[];
-  batches: RepairBatchSnapshot[];
-  staging: RepairStagingSnapshot[];
-  knownTransactionIds: number[];
-}> {
-  const transactionIds = history
-    .filter((row) => row.type !== "asset_transfer")
-    .map((row) => Number(row.id));
-  const batchIds = [
-    ...new Set(
-      history.map((row) => Number(row.import_batch_id)).filter(Boolean),
-    ),
-  ];
-  const transactions = transactionIds.length > 0
-    ? (
-        await checkedRows(
-          repairTransactionSnapshotRowSchema,
-          db
-            .selectFrom("portfolio_transactions as pt")
-            .select(FULL_TRANSACTION.as("snapshot"))
-            .where(
-              "pt.id",
-              "=",
-              sql<PortfolioTransactionId>`ANY(${transactionIds}::integer[])`,
-            )
-            .orderBy("pt.id"),
-        )
-      ).map((row) => row.snapshot)
-    : [];
-  const batches = batchIds.length > 0
-    ? (
-        await checkedRows(
-          repairBatchSnapshotRowSchema,
-          db
-            .selectFrom("portfolio_import_batches as b")
-            .select(BATCH.as("snapshot"))
-            .where("b.id", "=", anyBigint(batchIds))
-            .orderBy("b.id"),
-        )
-      ).map((row) => row.snapshot)
-    : [];
-  const staging = batchIds.length > 0
-    ? (
-        await checkedRows(
-          repairStagingSnapshotRowSchema,
-          db
-            .selectFrom("portfolio_import_staging_rows as s")
-            .select(STAGING.as("snapshot"))
-            .where("s.batch_id", "=", anyBigint(batchIds))
-            .orderBy("s.id"),
-        )
-      ).map((row) => row.snapshot)
-    : [];
-  const known = transactionIds.length > 0
-    ? (
-        await checkedRows(
-          intIdRowSchema,
-          sql`SELECT a.transaction_id AS id FROM portfolio_import_reconciliation_journal a WHERE a.action='adopt' AND a.transaction_id=ANY(${transactionIds}::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
-    UNION SELECT a.legacy_transaction_id AS id FROM portfolio_import_duplicate_repair_journal a WHERE a.action='repair' AND a.legacy_transaction_id=ANY(${transactionIds}::integer[]) AND NOT EXISTS(SELECT 1 FROM portfolio_import_duplicate_repair_journal r WHERE r.previous_entry_id=a.id)`,
-        )
-      ).map((row) => Number(row.id))
-    : [];
-  return {
-    transactions,
-    batches,
-    staging,
-    knownTransactionIds: known.sort((a, b) => a - b),
-  };
-}
 
 export async function readFullRepairTransaction(
   id: Id,
@@ -160,15 +85,6 @@ export async function readRepairStagingByIds(
         .orderBy("s.id"),
     )
   ).map((row) => row.snapshot);
-}
-
-export async function deleteExactImportedCopy(
-  imported: RepairTransactionSnapshot,
-): Promise<boolean> {
-  const result = await sql`DELETE FROM portfolio_transactions pt WHERE pt.id=${imported.id} AND ${FULL_TRANSACTION}=normalize_portfolio_income_snapshot(${jsonb(imported)}) RETURNING pt.id`.execute(
-    db,
-  );
-  return result.rows.length === 1;
 }
 
 export async function replaceRepairStaging(

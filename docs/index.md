@@ -177,7 +177,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> [Open the visualizer](flow-visualizer.html#api-request) for 71 components and 43 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
+> [Open the visualizer](flow-visualizer.html#api-request) for 69 components and 43 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |
@@ -704,7 +704,7 @@ See [[docs/features/pdf-report-export|PDF Report Feature]] (Phase 3-8), [[docs/a
 - **Database Maintenance UI** (`GET /api/admin/db/stats`, `POST /api/admin/db/vacuum`): Real-time table statistics display and per-table/bulk VACUUM ANALYZE operations. Uses raw database client (not pool) because VACUUM cannot run in transactions. Frontend page at `/admin/db`.
 - **Sankey Flow Visualization** (`GET /api/aggregations/sankey`): Interactive income→category flow diagram via d3-sankey showing top 12 categories + Savings node. New "Flow" tab in Statistics page with year selector. Backend service in `aggregation/sankey.js` with top-12 category aggregation and savings calculation.
 - **Rolling Average Overlays**: New utility `computeRollingAverage()` (window-based moving average with null-handling) + BarChart overlay support. MonthlyChart toggle displays 3-month rolling average line overlay. Helps identify trends beneath seasonal noise.
-- **PDF Financial Report Export** (`POST /api/reports/financial`): Server-side PDF generation via Puppeteer (headless Chrome). `pdfkit` removed (ADR-038). Supports theme-aware styling, modular sections, period filtering, and filter-exclusion dual-chart comparison. "Export PDF" button in StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
+- **PDF Financial Report Export** (`POST /api/reports/financial`): Server-side report generation, originally rendered via Puppeteer (headless Chrome); since ADR-234 the Electron shell prints the returned document. `pdfkit` removed (ADR-038). Supports theme-aware styling, modular sections, period filtering, and filter-exclusion dual-chart comparison. "Export PDF" button in StatisticsPage header. API client method `downloadFinancialReport()` handles browser download flow.
 - **Endpoint Matrix Updated**: All 150 endpoints now documented including Phase 7 additions.
 
 See [[docs/features/database-maintenance|DB Maintenance]], [[docs/features/sankey-flow|Sankey Flow]], [[docs/features/rolling-averages|Rolling Averages]], [[docs/features/pdf-report-export|PDF Reports]], [[docs/api/aggregations|Aggregations API]], [[docs/api/admin|Admin API]]

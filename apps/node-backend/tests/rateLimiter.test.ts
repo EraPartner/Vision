@@ -12,7 +12,6 @@ import {
   adminRateLimiter,
   importRateLimiter,
   rateLimiter,
-  __ipMatchesRule as ipMatchesRule,
 } from "../src/middleware/rateLimiter.ts";
 import { RateLimitedError } from "../src/middleware/errorHandler.ts";
 import type { ExpressRequest, ExpressResponse } from "../src/types/express.ts";
@@ -27,7 +26,7 @@ function createRequest({
     req.ip = ip;
   }
   if (remoteAddress !== undefined) {
-    req.connection = { remoteAddress };
+    req.socket = { remoteAddress };
   }
   return req;
 }
@@ -120,7 +119,7 @@ describe("rateLimiter middleware", () => {
     expect(next.mock.calls[0]![0]).toBeUndefined();
   });
 
-  it("falls back to remoteAddress when req.ip is unavailable", () => {
+  it("keys requests by the socket peer address", () => {
     const now = 5_000_000;
     vi.spyOn(Date, "now").mockReturnValue(now);
 
@@ -217,21 +216,20 @@ describe("rateLimiter middleware", () => {
     expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
-  it("ignores X-Forwarded-For when no trusted proxy is configured (socket-keyed)", () => {
-    // Default settings mock has no security.trustedProxies → XFF must not mint a
-    // fresh bucket. Two requests from the same socket but different spoofed XFF
-    // share one bucket, so the second trips the 1/min limit.
+  it("ignores X-Forwarded-For entirely (socket-keyed)", () => {
+    // Two requests from the same socket but different spoofed XFF share one
+    // bucket, so the second trips the 1/min limit.
     const now = 9_000_000;
     vi.spyOn(Date, "now").mockReturnValue(now);
 
     const limiter = rateLimiter({
       windowMs: 1_000,
       maxRequests: 1,
-      keyPrefix: "test-xff-untrusted",
+      keyPrefix: "test-xff-ignored",
     });
     const make = (xff: string) =>
       partial<ExpressRequest>({
-        socket: { remoteAddress: "203.0.113.9" },
+        socket: { remoteAddress: "127.0.0.1" },
         headers: { "x-forwarded-for": xff },
       });
 
@@ -241,18 +239,6 @@ describe("rateLimiter middleware", () => {
 
     expect(blockedNext).toHaveBeenCalledTimes(1);
     expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
-  });
-
-  it("ipMatchesRule matches exact IPs and IPv4 CIDR ranges", () => {
-    expect(ipMatchesRule("172.18.0.1", "172.18.0.1")).toBe(true);
-    expect(ipMatchesRule("172.18.0.5", "172.18.0.0/16")).toBe(true);
-    expect(ipMatchesRule("172.19.0.5", "172.18.0.0/16")).toBe(false);
-    expect(ipMatchesRule("10.0.0.7", "10.0.0.0/8")).toBe(true);
-    expect(ipMatchesRule("11.0.0.7", "10.0.0.0/8")).toBe(false);
-    expect(ipMatchesRule("192.168.1.1", "0.0.0.0/0")).toBe(true);
-    expect(ipMatchesRule("::1", "::1")).toBe(true);
-    expect(ipMatchesRule("192.168.1.1", "192.168.1.0/33")).toBe(false); // invalid mask
-    expect(ipMatchesRule("not-an-ip", "10.0.0.0/8")).toBe(false);
   });
 
   it("cleans up stale entries on the interval sweep", async () => {

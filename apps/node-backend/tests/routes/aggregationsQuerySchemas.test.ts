@@ -17,7 +17,6 @@ const envelope: CalcSpy = async () => ({ data: {}, meta: {} });
 
 const categoryBreakdownSpy = vi.fn(envelope);
 const sankeySpy = vi.fn(envelope);
-const forecastSpy = vi.fn(envelope);
 const forecastMethodsSpy = vi.fn(envelope);
 const monthlySpy = vi.fn(envelope);
 const bankBalancesSpy = vi.fn(envelope);
@@ -29,12 +28,6 @@ vi.mock("../../src/services/calculations/aggregation/category.ts", () => ({
 vi.mock("../../src/services/calculations/aggregation/sankey.ts", () => ({
   computeSankeyFlow: (o: Record<string, unknown>) => sankeySpy(o),
 }));
-vi.mock(
-  "../../src/services/calculations/aggregation/cashflowForecast.ts",
-  () => ({
-    computeCashflowForecast: (o: Record<string, unknown>) => forecastSpy(o),
-  }),
-);
 vi.mock("../../src/services/calculations/forecast/index.ts", () => ({
   computeCashflowForecast: (o: Record<string, unknown>) =>
     forecastMethodsSpy(o),
@@ -111,10 +104,7 @@ describe("aggregation query schemas — lenient knobs keep their defaults", () =
     });
   });
 
-  it("falls back on an unparseable months / currency / sankey year", async () => {
-    await get("/cashflow-forecast?months=abc").expect(200);
-    expect(forecastSpy).toHaveBeenCalledWith({ months: 3 });
-
+  it("falls back on an unparseable currency / sankey year", async () => {
     await get("/bank-balances?target_currency=euro").expect(200);
     expect(bankBalancesSpy).toHaveBeenCalledWith({ targetCurrency: "EUR" });
 

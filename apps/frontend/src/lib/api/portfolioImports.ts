@@ -9,11 +9,7 @@ import {
 import { postMultipartImport } from "@/lib/api/helpers";
 import { importProgressSchema, type CsvNumberFormat } from "@/lib/api/imports";
 import { readSseStream } from "@/lib/api/sse";
-import {
-    CurrencyCodeSchema,
-    asAccountId,
-    asInvestmentId,
-} from "@vision/types/brands";
+import { asAccountId, asInvestmentId } from "@vision/types/brands";
 import type { AccountId, InvestmentId } from "@vision/types/brands";
 import type { ImportProgress } from "@/types/apiClient";
 import type { AssetClass } from "@vision/types/assetClasses";
@@ -498,28 +494,6 @@ export function rollbackPortfolioImportBatch(
 
 export type PortfolioReconciliationPolicy =
     "preserve_existing" | "prefer_source";
-const reconciliationModeSchema = z.enum([
-    "full",
-    "adopt_existing_only",
-    "correct_existing_only",
-    "record_in_kind_income_only",
-    "record_cash_only",
-]);
-
-export type PortfolioReconciliationMode = z.infer<
-    typeof reconciliationModeSchema
->;
-const reconciliationMetadata = {
-    reconciliationScope: reconciliationModeSchema.optional(),
-    pending: z.number().int().nonnegative().optional(),
-    complete: z.boolean().optional(),
-    deferredCounts: z
-        .record(z.string(), z.number().int().nonnegative())
-        .optional(),
-};
-const selectedRowIdsSchema = z
-    .array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER))
-    .refine((ids) => new Set(ids).size === ids.length);
 const batchPolicySchema = z.object({
     batchId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     adoptPolicy: z.enum(["preserve_existing", "prefer_source"]),
@@ -627,40 +601,14 @@ const reconciliationBlockerSchema = z.object({
     batchId: z.number().int().positive(),
     rowId: z.number().int().positive().optional(),
     rowOrdinal: z.number().int().positive().optional(),
-    referenceTransactionId: z.string().uuid().optional(),
     reason: z.string(),
     candidateTransactionIds: z.array(z.number()),
 });
-const cashValuesSchema = z.strictObject({
-    date: z.iso.date(),
-    amount: z.string().regex(/^-?\d+(?:\.\d+)?$/),
-    currency: CurrencyCodeSchema,
-    accountId: z
-        .number()
-        .int()
-        .positive()
-        .max(Number.MAX_SAFE_INTEGER)
-        .transform(asAccountId),
-    isTransfer: z.boolean(),
-    transferSource: z.literal("brokerage"),
-    transferPeerId: z.null(),
-});
-const cashProofSchema = z.strictObject({
-    kind: z.literal("closed_kinesis_cash"),
-    groupKey: z.string().regex(/^[a-f0-9]{64}$/),
-    eventKey: z.string().regex(/^[a-f0-9]{64}$/),
-    eventKind: z.enum(["trade_quote", "own_account_funding", "card_expense"]),
-    fileHash: z.string().regex(/^[a-f0-9]{64}$/),
-    memberCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    componentCount: z.union([z.literal(1), z.literal(2)]),
-});
+const positiveId = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const reconciliationPlanSchema = z.looseObject({
-    ...reconciliationMetadata,
-    selectedRowIds: selectedRowIdsSchema.optional(),
     batchIds: z.array(z.number().int().positive()),
     adoptPolicy: z.enum(["preserve_existing", "prefer_source"]).nullable(),
     batchPolicies: z.array(batchPolicySchema).max(100).default([]),
-    planFingerprint: z.string().min(1),
     ready: z.boolean(),
     actions: z.array(
         z
@@ -669,90 +617,33 @@ const reconciliationPlanSchema = z.looseObject({
                 rowId: z.number().int().positive(),
                 rowOrdinal: z.number().int().positive(),
                 action: z.string(),
-                investmentId: z
-                    .number()
-                    .int()
-                    .positive()
-                    .max(Number.MAX_SAFE_INTEGER)
+                investmentId: positiveId
                     .transform(asInvestmentId)
                     .nullable()
                     .optional(),
-                isCash: z.boolean().optional(),
                 policy: z
                     .enum(["exact", "preserve_existing", "prefer_source"])
+                    .nullable()
                     .optional(),
-                existingTransactionId: z
-                    .number()
-                    .int()
-                    .positive()
-                    .max(Number.MAX_SAFE_INTEGER)
-                    .optional(),
-                importedTransactionId: z
-                    .number()
-                    .int()
-                    .positive()
-                    .max(Number.MAX_SAFE_INTEGER)
-                    .optional(),
-                originalBatchId: z
-                    .number()
-                    .int()
-                    .positive()
-                    .max(Number.MAX_SAFE_INTEGER)
-                    .optional(),
+                existingTransactionId: positiveId.optional(),
                 source: reconciliationValuesSchema.optional(),
                 existing: reconciliationValuesSchema.optional(),
-                importedExisting: reconciliationValuesSchema.optional(),
                 adjustment: z
                     .object({
                         date: z.string(),
                         units: z.string(),
                         kind: z.enum(["yield_reversal", "asset_fee"]),
                         basisPolicy: z.enum(["zero_yield_only", "carried"]),
-                        accountId: z
-                            .number()
-                            .int()
-                            .positive()
-                            .max(Number.MAX_SAFE_INTEGER)
-                            .transform(asAccountId),
+                        accountId: positiveId.transform(asAccountId),
                     })
                     .optional(),
                 corrections: z.array(z.string()).optional(),
-                cashValues: cashValuesSchema.optional(),
-                cashFeeValues: cashValuesSchema.optional(),
-                cashProof: cashProofSchema.optional(),
-                existingCashFeeTransactionId: z
-                    .number()
-                    .int()
-                    .positive()
-                    .max(Number.MAX_SAFE_INTEGER)
-                    .optional(),
-                incomeProof: z
-                    .strictObject({
-                        kind: z.literal("paired_kinesis_income"),
-                        unitRowId: z
-                            .number()
-                            .int()
-                            .positive()
-                            .max(Number.MAX_SAFE_INTEGER)
-                            .optional(),
-                        unitTransactionId: z
-                            .number()
-                            .int()
-                            .positive()
-                            .max(Number.MAX_SAFE_INTEGER)
-                            .optional(),
-                    })
-                    .optional(),
-                dateProof: z
-                    .strictObject({
-                        kind: z.literal("closed_kinesis_yield_group"),
-                        groupKey: z.string().regex(/^[a-f0-9]{64}$/),
-                        recordedDate: z.iso.date(),
-                        paymentDate: z.iso.date(),
-                        memberCount: z.number().int().positive(),
-                    })
-                    .optional(),
                 economicsProven: z.boolean().optional(),
+                /** Settled by another export of the same broker history. */
+                crossFormat: z.boolean().optional(),
+                /** The existing transaction is brokerage cash. */
+                cash: z.boolean().optional(),
+                duplicateOfRowId: positiveId.optional(),
                 transfer: z
                     .object({
                         date: z.string(),
@@ -774,48 +665,12 @@ const reconciliationPlanSchema = z.looseObject({
             })
             .superRefine((action, context) => {
                 if (
-                    action.isCash &&
                     action.action === "adopt" &&
-                    (action.investmentId != null ||
-                        action.policy !== "prefer_source" ||
-                        action.existingTransactionId === undefined ||
-                        action.corrections == null ||
-                        action.corrections.length === 0 ||
-                        action.corrections.some(
-                            (field) => !["amount", "currency"].includes(field),
-                        ) ||
-                        action.source?.date !== action.existing?.date ||
-                        [action.source, action.existing].some(
-                            (values) =>
-                                !values ||
-                                !z.iso.date().safeParse(values.date).success ||
-                                typeof values.currency !== "string" ||
-                                !/^[A-Z]{3}$/.test(values.currency) ||
-                                values.amount == null ||
-                                (typeof values.amount === "string" &&
-                                    !values.amount.trim()) ||
-                                !Number.isFinite(Number(values.amount)) ||
-                                Number(values.amount) === 0,
-                        ))
+                    action.existingTransactionId === undefined
                 )
                     context.addIssue({
                         code: "custom",
-                        message: "Incomplete cash correction evidence",
-                    });
-                if (
-                    action.action === "repair_duplicate" &&
-                    (action.existingTransactionId === undefined ||
-                        action.importedTransactionId === undefined ||
-                        action.originalBatchId === undefined ||
-                        !action.source ||
-                        !action.existing ||
-                        !action.importedExisting ||
-                        action.existingTransactionId ===
-                            action.importedTransactionId)
-                )
-                    context.addIssue({
-                        code: "custom",
-                        message: "Incomplete duplicate repair evidence",
+                        message: "Adoption without an existing transaction",
                     });
                 if (action.action === "adjustment" && !action.adjustment)
                     context.addIssue({
@@ -831,370 +686,20 @@ export type PortfolioReconciliationPlan = z.infer<
     typeof reconciliationPlanSchema
 >;
 
-function verifiedDateCorrection(
-    action: PortfolioReconciliationPlan["actions"][number],
-) {
-    const { dateProof, source, existing } = action;
-    return Boolean(
-        dateProof &&
-        source &&
-        existing &&
-        action.corrections?.length === 1 &&
-        action.corrections[0] === "date" &&
-        dateProof.recordedDate !== dateProof.paymentDate &&
-        existing.date === dateProof.recordedDate &&
-        source.date === dateProof.paymentDate &&
-        existing.type === "gift" &&
-        ["amount", "price_per_unit", "fees", "taxes"].every(
-            (field) => existing[field] == null || Number(existing[field]) === 0,
-        ) &&
-        [
-            "type",
-            "units",
-            "amount",
-            "price_per_unit",
-            "fees",
-            "taxes",
-            "currency",
-            "fx_rate_to_eur",
-            "dividend_amount_convention",
-        ].every((field) => source[field] === existing[field]),
-    );
-}
-
-function verifiedDateProofGroups(
-    actions: PortfolioReconciliationPlan["actions"],
-) {
-    const groups = new Map<
-        string,
-        {
-            paymentDate: string;
-            memberCount: number;
-            transactionIds: Set<number>;
-        }
-    >();
-    const matchedTransactionIds = new Set<number>();
-    for (const action of actions) {
-        if (!action.dateProof) continue;
-        const { groupKey, paymentDate, memberCount } = action.dateProof;
-        const group = groups.get(groupKey);
-        if (
-            action.action !== "adopt" ||
-            action.existingTransactionId === undefined ||
-            matchedTransactionIds.has(action.existingTransactionId) ||
-            !verifiedDateCorrection(action) ||
-            (group &&
-                (group.paymentDate !== paymentDate ||
-                    group.memberCount !== memberCount ||
-                    group.transactionIds.has(action.existingTransactionId)))
-        )
-            return false;
-        const transactionIds = group?.transactionIds ?? new Set<number>();
-        transactionIds.add(action.existingTransactionId);
-        if (transactionIds.size > memberCount) return false;
-        matchedTransactionIds.add(action.existingTransactionId);
-        groups.set(groupKey, { paymentDate, memberCount, transactionIds });
-    }
-    return true;
-}
-
-function verifiedIncomeProofActions(
-    actions: PortfolioReconciliationPlan["actions"],
-    full = false,
-) {
-    const unitIds = new Set<number>();
-    const unitRowIds = new Set<number>();
-    const existingIncomeIds = new Set<number>();
-    const incomes = full
-        ? actions.filter(
-              (action) =>
-                  action.incomeProof !== undefined ||
-                  action.action === "record_income",
-          )
-        : actions;
-    const valid = incomes.every((action) => {
-        const proof = action.incomeProof;
-        if (
-            !proof ||
-            !["record_income", "duplicate", "settled"].includes(
-                action.action,
-            ) ||
-            action.dateProof ||
-            (action.corrections != null && action.corrections.length > 0) ||
-            action.cashProof ||
-            action.cashValues ||
-            action.cashFeeValues ||
-            action.transfer ||
-            action.adjustment ||
-            action.policy === "prefer_source" ||
-            (proof.unitTransactionId !== undefined &&
-                unitIds.has(proof.unitTransactionId))
-        )
-            return false;
-        if (proof.unitTransactionId !== undefined)
-            unitIds.add(proof.unitTransactionId);
-        if (full) {
-            if (
-                proof.unitRowId === undefined ||
-                unitRowIds.has(proof.unitRowId)
-            )
-                return false;
-            unitRowIds.add(proof.unitRowId);
-            const units = actions.filter(
-                (candidate) => candidate.rowId === proof.unitRowId,
-            );
-            const unit = units[0];
-            const unitDate = unit?.source?.date ?? unit?.existing?.date;
-            const incomeDate = action.source?.date ?? action.existing?.date;
-            if (
-                units.length !== 1 ||
-                unit === undefined ||
-                unit === action ||
-                unit.batchId !== action.batchId ||
-                !["insert", "adopt", "duplicate", "settled"].includes(
-                    unit.action,
-                ) ||
-                unit.incomeProof ||
-                unit.cashProof ||
-                (unit.source && unit.source.type !== "gift") ||
-                (unit.existing && unit.existing.type !== "gift") ||
-                (unitDate != null &&
-                    incomeDate != null &&
-                    unitDate !== incomeDate) ||
-                (unit.source &&
-                    (["amount", "price_per_unit", "fees", "taxes"].some(
-                        (field) => Number(unit.source?.[field] ?? 0) !== 0,
-                    ) ||
-                        (unit.source.income_recognition_role != null &&
-                            unit.source.income_recognition_role !==
-                                "standard"))) ||
-                unit.investmentId == null ||
-                action.investmentId == null ||
-                unit.investmentId !== action.investmentId
-            )
-                return false;
-            if (unit.action === "insert") {
-                if (
-                    action.action !== "record_income" ||
-                    proof.unitTransactionId !== undefined ||
-                    unit.source?.type !== "gift" ||
-                    Number(unit.source.units) <= 0 ||
-                    !Number.isFinite(Number(unit.source.units)) ||
-                    ["amount", "price_per_unit", "fees", "taxes"].some(
-                        (field) => Number(unit.source?.[field] ?? 0) !== 0,
-                    )
-                )
-                    return false;
-            } else if (
-                proof.unitTransactionId === undefined ||
-                unit.existingTransactionId !== proof.unitTransactionId
-            )
-                return false;
-        } else if (
-            proof.unitTransactionId === undefined ||
-            proof.unitRowId !== undefined
-        )
-            return false;
-        if (action.action === "record_income") {
-            const source = action.source;
-            return Boolean(
-                source &&
-                action.existingTransactionId === undefined &&
-                source.type === "dividend" &&
-                source.income_recognition_role === "included_in_units" &&
-                source.units === null &&
-                source.price_per_unit === null &&
-                source.fx_rate_to_eur == null &&
-                source.amount !== null &&
-                source.amount !== undefined &&
-                String(source.amount).trim() &&
-                Number.isFinite(Number(source.amount)) &&
-                Number(source.amount) >= 0 &&
-                z.iso.date().safeParse(source.date).success &&
-                typeof source.currency === "string" &&
-                source.currency !== "" &&
-                ["fees", "taxes"].every(
-                    (field) => Number(source[field] ?? 0) === 0,
-                ),
-            );
-        }
-        const incomeId = action.existingTransactionId;
-        if (
-            incomeId === undefined ||
-            incomeId === proof.unitTransactionId ||
-            existingIncomeIds.has(incomeId) ||
-            (action.source && action.source.type !== "dividend") ||
-            (action.existing &&
-                (action.existing.type !== "dividend" ||
-                    (action.existing.income_recognition_role != null &&
-                        action.existing.income_recognition_role !==
-                            "included_in_units")))
-        )
-            return false;
-        existingIncomeIds.add(incomeId);
-        return true;
-    });
-    return valid && [...unitIds].every((id) => !existingIncomeIds.has(id));
-}
-
-function verifiedCashProofActions(
-    actions: PortfolioReconciliationPlan["actions"],
-) {
-    const groups = new Map<
-        string,
-        {
-            batchId: number;
-            fileHash: string;
-            memberCount: number;
-            count: number;
-        }
-    >();
-    const eventKeys = new Set<string>();
-    const existingIds = new Set<number>();
-    for (const action of actions) {
-        const proof = action.cashProof;
-        const values = action.cashValues;
-        const fee = action.cashFeeValues;
-        if (
-            !proof ||
-            !["cash", "duplicate", "settled"].includes(action.action) ||
-            action.incomeProof ||
-            action.dateProof ||
-            action.transfer ||
-            action.adjustment ||
-            action.source ||
-            action.existing ||
-            action.importedExisting ||
-            (action.corrections != null && action.corrections.length > 0) ||
-            action.importedTransactionId !== undefined ||
-            action.originalBatchId !== undefined ||
-            action.policy === "prefer_source" ||
-            eventKeys.has(proof.eventKey)
-        )
-            return false;
-        eventKeys.add(proof.eventKey);
-        if (action.action === "cash") {
-            if (
-                !values ||
-                action.existingTransactionId !== undefined ||
-                action.existingCashFeeTransactionId !== undefined
-            )
-                return false;
-        } else {
-            if (
-                action.existingTransactionId === undefined ||
-                existingIds.has(action.existingTransactionId)
-            )
-                return false;
-            existingIds.add(action.existingTransactionId);
-            if (proof.componentCount === 2) {
-                if (
-                    action.existingCashFeeTransactionId === undefined ||
-                    existingIds.has(action.existingCashFeeTransactionId)
-                )
-                    return false;
-                existingIds.add(action.existingCashFeeTransactionId);
-            }
-        }
-        if (
-            proof.componentCount === 1 &&
-            (fee || action.existingCashFeeTransactionId !== undefined)
-        )
-            return false;
-        if (
-            proof.componentCount === 2 &&
-            (proof.eventKind !== "own_account_funding" ||
-                Boolean(values) !== Boolean(fee) ||
-                (values &&
-                    fee &&
-                    (Number(values.amount) >= 0 ||
-                        Number(fee.amount) >= 0 ||
-                        !Number.isFinite(Number(fee.amount)) ||
-                        fee.isTransfer ||
-                        fee.accountId !== values.accountId ||
-                        fee.date !== values.date ||
-                        fee.currency !== values.currency)))
-        )
-            return false;
-        if (
-            values &&
-            (values.isTransfer !== (proof.eventKind !== "card_expense") ||
-                !Number.isFinite(Number(values.amount)) ||
-                Number(values.amount) === 0 ||
-                (proof.eventKind === "card_expense" &&
-                    Number(values.amount) >= 0))
-        )
-            return false;
-        const group = groups.get(proof.groupKey);
-        if (
-            group &&
-            (group.batchId !== action.batchId ||
-                group.fileHash !== proof.fileHash ||
-                group.memberCount !== proof.memberCount)
-        )
-            return false;
-        groups.set(proof.groupKey, {
-            batchId: action.batchId,
-            fileHash: proof.fileHash,
-            memberCount: proof.memberCount,
-            count: (group?.count ?? 0) + 1,
-        });
-    }
-    return [...groups.values()].every(
-        (group) => group.count === group.memberCount,
-    );
-}
-
-function verifiedRecordedSubtotals(result: ReviewedPortfolioImportResult) {
-    for (const field of ["recordedIncome", "recordedCash"] as const) {
-        const count = result[field];
-        if (count === undefined) {
-            if (result.batches.some((batch) => batch[field] !== undefined))
-                return false;
-        } else if (
-            result.batches.some((batch) => batch[field] === undefined) ||
-            count !==
-                result.batches.reduce(
-                    (sum, batch) => sum + (batch[field] ?? 0),
-                    0,
-                )
-        )
-            return false;
-    }
-    return (
-        (result.recordedIncome ?? 0) + (result.recordedCash ?? 0) <=
-            result.imported &&
-        result.batches.every(
-            (batch) =>
-                (batch.recordedIncome ?? 0) + (batch.recordedCash ?? 0) <=
-                batch.imported,
-        )
-    );
-}
-
 const reviewedImportResultSchema = z.looseObject({
-    ...reconciliationMetadata,
-    selectedRowIds: selectedRowIdsSchema.optional(),
     batches: z.array(
         z.looseObject({
-            ...reconciliationMetadata,
             batch_id: z.number().int().positive(),
             imported: z.number().int().nonnegative(),
             duplicates: z.number().int().nonnegative(),
             adopted: z.number().int().nonnegative(),
-            repaired: z.number().int().nonnegative(),
             errors: z.number().int().nonnegative(),
-            recordedIncome: z.number().int().nonnegative().optional(),
-            recordedCash: z.number().int().nonnegative().optional(),
         }),
     ),
     imported: z.number().int().nonnegative(),
     duplicates: z.number().int().nonnegative(),
     adopted: z.number().int().nonnegative(),
-    repaired: z.number().int().nonnegative(),
     errors: z.number().int().nonnegative(),
-    recordedIncome: z.number().int().nonnegative().optional(),
-    recordedCash: z.number().int().nonnegative().optional(),
 });
 export type ReviewedPortfolioImportResult = z.infer<
     typeof reviewedImportResultSchema
@@ -1204,13 +709,11 @@ export interface PortfolioReconciliationScope {
     batchIds: number[];
     adoptPolicy?: PortfolioReconciliationPolicy | undefined;
     batchPolicies?: PortfolioBatchPolicy[] | undefined;
-    reconciliationScope?: PortfolioReconciliationMode | undefined;
-    cashFundingPolicy?: "own_account_transfer" | undefined;
 }
 
 function reconciliationRequest(scope: PortfolioReconciliationScope) {
     const batchIds = z
-        .array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER))
+        .array(positiveId)
         .min(1)
         .max(100)
         .parse(scope.batchIds);
@@ -1218,9 +721,6 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
         .array(batchPolicySchema)
         .max(100)
         .parse(scope.batchPolicies ?? []);
-    const reconciliationScope = reconciliationModeSchema.parse(
-        scope.reconciliationScope ?? "full",
-    );
     if (
         new Set(overrides.map((item) => item.batchId)).size !==
             overrides.length ||
@@ -1230,56 +730,9 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
             "Statement policies must identify distinct selected batches",
         );
     }
-    if (
-        reconciliationScope === "adopt_existing_only" &&
-        batchIds.some(
-            (batchId) =>
-                (overrides.find((item) => item.batchId === batchId)
-                    ?.adoptPolicy ?? scope.adoptPolicy) !== "preserve_existing",
-        )
-    )
-        throw new Error("Source attachment requires preserving existing facts");
-    if (
-        reconciliationScope === "correct_existing_only" &&
-        (scope.adoptPolicy !== "prefer_source" ||
-            overrides.some((item) => item.adoptPolicy !== "prefer_source"))
-    )
-        throw new Error("Existing corrections require explicit source facts");
-    if (
-        reconciliationScope === "record_in_kind_income_only" &&
-        (scope.adoptPolicy !== "preserve_existing" ||
-            overrides.some((item) => item.adoptPolicy !== "preserve_existing"))
-    )
-        throw new Error(
-            "In-kind income requires preserving proved existing units",
-        );
-    if (
-        reconciliationScope === "record_cash_only" &&
-        (scope.adoptPolicy !== "preserve_existing" ||
-            overrides.some(
-                (item) => item.adoptPolicy !== "preserve_existing",
-            ) ||
-            scope.cashFundingPolicy !== "own_account_transfer")
-    )
-        throw new Error(
-            "Cash recording requires preserving existing facts and confirmed own-account funding",
-        );
-    if (
-        reconciliationScope !== "record_cash_only" &&
-        scope.cashFundingPolicy !== undefined
-    )
-        throw new Error(
-            "Cash funding confirmation requires the cash-only scope",
-        );
     return {
         batch_ids: batchIds,
-        ...(reconciliationScope !== "full"
-            ? { reconciliation_scope: reconciliationScope }
-            : {}),
         ...(scope.adoptPolicy ? { adopt_policy: scope.adoptPolicy } : {}),
-        ...(scope.cashFundingPolicy
-            ? { cash_funding_policy: scope.cashFundingPolicy }
-            : {}),
         ...(overrides.length > 0
             ? {
                   batch_policies: [...overrides]
@@ -1293,41 +746,13 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
     };
 }
 
-function verifiedReconciliationScope(
-    result: {
-        reconciliationScope?: PortfolioReconciliationMode | undefined;
-        pending?: number | undefined;
-        complete?: boolean | undefined;
-        deferredCounts?: Record<string, number> | undefined;
-    },
-    expectedScope: PortfolioReconciliationMode,
-) {
-    if ((result.reconciliationScope ?? "full") !== expectedScope) return false;
-    if (
-        (expectedScope !== "full" ||
-            result.complete !== undefined ||
-            result.pending !== undefined ||
-            result.deferredCounts !== undefined) &&
-        (result.pending === undefined ||
-            result.complete === undefined ||
-            result.deferredCounts === undefined)
-    )
-        return false;
-    return (
-        !(
-            result.pending !== undefined &&
-            result.complete !== undefined &&
-            result.complete !== (result.pending === 0)
-        ) &&
-        !(
-            result.pending !== undefined &&
-            result.deferredCounts !== undefined &&
-            Object.values(result.deferredCounts).reduce(
-                (count, value) => count + value,
-                0,
-            ) !== result.pending
-        )
-    );
+const sortedIds = (ids: readonly number[]) =>
+    JSON.stringify([...ids].sort((a, b) => a - b));
+
+function unverifiedResponse(): Error {
+    const error = new Error("Unverified portfolio import response");
+    error.name = "PortfolioImportResponseError";
+    return error;
 }
 
 export async function previewPortfolioImportReconciliation(
@@ -1343,146 +768,6 @@ export async function previewPortfolioImportReconciliation(
     );
     if (
         !parsed.success ||
-        !verifiedReconciliationScope(
-            parsed.data,
-            scope.reconciliationScope ?? "full",
-        ) ||
-        (parsed.data.actions.some((action) => action.dateProof) &&
-            (scope.reconciliationScope !== "correct_existing_only" ||
-                !verifiedDateProofGroups(parsed.data.actions))) ||
-        (parsed.data.actions.some(
-            (action) =>
-                action.incomeProof !== undefined ||
-                action.action === "record_income",
-        ) &&
-            !["full", "record_in_kind_income_only"].includes(
-                scope.reconciliationScope ?? "full",
-            )) ||
-        (["full", "record_in_kind_income_only"].includes(
-            scope.reconciliationScope ?? "full",
-        ) &&
-            !verifiedIncomeProofActions(
-                parsed.data.actions,
-                (scope.reconciliationScope ?? "full") === "full",
-            )) ||
-        (parsed.data.actions.some(
-            (action) =>
-                action.cashProof !== undefined ||
-                action.cashValues !== undefined ||
-                action.cashFeeValues !== undefined ||
-                action.existingCashFeeTransactionId !== undefined,
-        ) &&
-            ((scope.reconciliationScope ?? "full") === "full"
-                ? !verifiedCashProofActions(
-                      parsed.data.actions.filter(
-                          (action) =>
-                              action.cashProof !== undefined ||
-                              action.cashValues !== undefined ||
-                              action.cashFeeValues !== undefined ||
-                              action.existingCashFeeTransactionId !== undefined,
-                      ),
-                  ) ||
-                  parsed.data.actions.some(
-                      (action) =>
-                          action.cashProof &&
-                          !["duplicate", "settled"].includes(action.action),
-                  )
-                : scope.reconciliationScope !== "record_cash_only")) ||
-        (scope.reconciliationScope === "record_cash_only" &&
-            !verifiedCashProofActions(parsed.data.actions)) ||
-        (scope.reconciliationScope !== undefined &&
-            scope.reconciliationScope !== "full" &&
-            (!parsed.data.selectedRowIds ||
-                parsed.data.actions.some(
-                    (action) =>
-                        !(
-                            scope.reconciliationScope ===
-                            "record_in_kind_income_only"
-                                ? ["record_income", "duplicate", "settled"]
-                                : scope.reconciliationScope ===
-                                    "record_cash_only"
-                                  ? ["cash", "duplicate", "settled"]
-                                  : ["adopt", "duplicate", "settled"]
-                        ).includes(action.action) ||
-                        (scope.reconciliationScope ===
-                            "record_in_kind_income_only" &&
-                            action.action === "record_income" &&
-                            (!action.incomeProof ||
-                                action.dateProof !== undefined ||
-                                (action.corrections != null &&
-                                    action.corrections.length > 0) ||
-                                action.existingTransactionId !== undefined ||
-                                action.source?.type !== "dividend" ||
-                                action.source?.income_recognition_role !==
-                                    "included_in_units" ||
-                                action.source?.units !== null ||
-                                action.source?.price_per_unit !== null ||
-                                action.source?.fx_rate_to_eur != null ||
-                                action.source?.amount === null ||
-                                action.source?.amount === undefined ||
-                                (typeof action.source.amount === "string" &&
-                                    !action.source.amount.trim()) ||
-                                !Number.isFinite(
-                                    Number(action.source?.amount),
-                                ) ||
-                                Number(action.source?.amount) < 0 ||
-                                !z.iso.date().safeParse(action.source?.date)
-                                    .success ||
-                                typeof action.source?.currency !== "string" ||
-                                action.source.currency === "" ||
-                                ["fees", "taxes"].some(
-                                    (field) =>
-                                        Number(action.source?.[field] ?? 0) !==
-                                        0,
-                                ))) ||
-                        ([
-                            "adopt_existing_only",
-                            "record_in_kind_income_only",
-                            "record_cash_only",
-                        ].includes(scope.reconciliationScope ?? "") &&
-                            action.policy === "prefer_source") ||
-                        (scope.reconciliationScope ===
-                            "correct_existing_only" &&
-                            action.action === "adopt" &&
-                            (action.policy !== "prefer_source" ||
-                                action.existingTransactionId === undefined ||
-                                action.corrections == null ||
-                                action.corrections.length === 0 ||
-                                (action.dateProof
-                                    ? !verifiedDateCorrection(action)
-                                    : action.source?.date !==
-                                          action.existing?.date ||
-                                      action.corrections?.some(
-                                          (field) =>
-                                              ![
-                                                  "amount",
-                                                  "price_per_unit",
-                                                  "fees",
-                                                  "taxes",
-                                                  "currency",
-                                                  "fx_rate_to_eur",
-                                              ].includes(field),
-                                      )))),
-                ) ||
-                JSON.stringify(
-                    [...parsed.data.selectedRowIds].sort((a, b) => a - b),
-                ) !==
-                    JSON.stringify(
-                        parsed.data.actions
-                            .map((action) => action.rowId)
-                            .sort((a, b) => a - b),
-                    ) ||
-                Object.entries(parsed.data.summary).some(
-                    ([kind, count]) =>
-                        count !==
-                        parsed.data.actions.filter(
-                            (action) => action.action === kind,
-                        ).length,
-                ) ||
-                parsed.data.actions.some(
-                    (action) =>
-                        !Object.hasOwn(parsed.data.summary, action.action),
-                ))) ||
         parsed.data.actions.some(
             (action) => !scope.batchIds.includes(action.batchId),
         ) ||
@@ -1492,102 +777,27 @@ export async function previewPortfolioImportReconciliation(
         JSON.stringify(parsed.data.batchPolicies) !==
             JSON.stringify(overrides) ||
         parsed.data.adoptPolicy !== (scope.adoptPolicy ?? null) ||
-        JSON.stringify([...parsed.data.batchIds].sort((a, b) => a - b)) !==
-            JSON.stringify([...scope.batchIds].sort((a, b) => a - b))
-    ) {
-        const error = new Error("Unverified portfolio import response");
-        error.name = "PortfolioImportResponseError";
-        throw error;
-    }
+        sortedIds(parsed.data.batchIds) !== sortedIds(scope.batchIds)
+    )
+        throw unverifiedResponse();
     return parsed.data;
 }
 
 export async function commitReviewedPortfolioImports(
-    scope: PortfolioReconciliationScope & { expectedPlanFingerprint: string },
+    scope: PortfolioReconciliationScope,
 ): Promise<ReviewedPortfolioImportResult> {
     const result = await apiRequest<unknown>(
         "/api/portfolio/import/reconciliation/commit",
-        {
-            method: "POST",
-            body: JSON.stringify({
-                ...reconciliationRequest(scope),
-                expected_plan_fingerprint: z
-                    .string()
-                    .min(1)
-                    .parse(scope.expectedPlanFingerprint),
-            }),
-        },
+        { method: "POST", body: JSON.stringify(reconciliationRequest(scope)) },
     );
     const parsed = reviewedImportResultSchema.safeParse(result);
     if (
         !parsed.success ||
-        !verifiedReconciliationScope(
-            parsed.data,
-            scope.reconciliationScope ?? "full",
-        ) ||
-        !verifiedRecordedSubtotals(parsed.data) ||
-        (scope.reconciliationScope !== undefined &&
-            scope.reconciliationScope !== "full" &&
-            (!parsed.data.selectedRowIds ||
-                (!["record_in_kind_income_only", "record_cash_only"].includes(
-                    scope.reconciliationScope,
-                ) &&
-                    parsed.data.imported !== 0) ||
-                parsed.data.repaired !== 0)) ||
-        (scope.reconciliationScope === "record_in_kind_income_only" &&
-            (parsed.data.recordedIncome === undefined ||
-                parsed.data.imported !== parsed.data.recordedIncome ||
-                parsed.data.adopted !== 0 ||
-                parsed.data.batches.some(
-                    (batch) =>
-                        batch.recordedIncome === undefined ||
-                        batch.recordedIncome !== batch.imported ||
-                        batch.adopted !== 0 ||
-                        batch.repaired !== 0,
-                ) ||
-                parsed.data.recordedIncome !==
-                    parsed.data.batches.reduce(
-                        (sum, batch) => sum + (batch.recordedIncome ?? 0),
-                        0,
-                    ))) ||
-        (scope.reconciliationScope === "record_cash_only" &&
-            (parsed.data.recordedCash === undefined ||
-                parsed.data.imported !== parsed.data.recordedCash ||
-                parsed.data.adopted !== 0 ||
-                (parsed.data.recordedIncome ?? 0) !== 0 ||
-                parsed.data.batches.some(
-                    (batch) =>
-                        batch.recordedCash === undefined ||
-                        batch.recordedCash !== batch.imported ||
-                        batch.adopted !== 0 ||
-                        batch.repaired !== 0 ||
-                        (batch.recordedIncome ?? 0) !== 0,
-                ) ||
-                parsed.data.recordedCash !==
-                    parsed.data.batches.reduce(
-                        (sum, batch) => sum + (batch.recordedCash ?? 0),
-                        0,
-                    ))) ||
-        parsed.data.batches.some(
-            (batch) =>
-                !verifiedReconciliationScope(
-                    batch,
-                    scope.reconciliationScope ?? "full",
-                ),
-        ) ||
-        (parsed.data.pending !== undefined &&
-            (parsed.data.batches.some((batch) => batch.pending === undefined) ||
-                parsed.data.pending !==
-                    parsed.data.batches.reduce(
-                        (count, batch) => count + (batch.pending ?? 0),
-                        0,
-                    ))) ||
         parsed.data.errors !== 0 ||
-        parsed.data.batches.some((batch) => batch.errors !== 0) ||
         parsed.data.batches.some(
-            (batch) => batch.duplicates < batch.adopted + batch.repaired,
+            (batch) => batch.errors !== 0 || batch.duplicates < batch.adopted,
         ) ||
-        (["imported", "duplicates", "adopted", "repaired"] as const).some(
+        (["imported", "duplicates", "adopted"] as const).some(
             (field) =>
                 parsed.data[field] !==
                 parsed.data.batches.reduce(
@@ -1595,15 +805,9 @@ export async function commitReviewedPortfolioImports(
                     0,
                 ),
         ) ||
-        JSON.stringify(
-            parsed.data.batches
-                .map((batch) => batch.batch_id)
-                .sort((a, b) => a - b),
-        ) !== JSON.stringify([...scope.batchIds].sort((a, b) => a - b))
-    ) {
-        const error = new Error("Unverified portfolio import response");
-        error.name = "PortfolioImportResponseError";
-        throw error;
-    }
+        sortedIds(parsed.data.batches.map((batch) => batch.batch_id)) !==
+            sortedIds(scope.batchIds)
+    )
+        throw unverifiedResponse();
     return parsed.data;
 }
