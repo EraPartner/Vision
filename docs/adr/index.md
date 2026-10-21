@@ -283,6 +283,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+[[docs/adr/242-backup-before-boot-migrations|ADR-242]] (2026-10-21, accepted): the desktop app takes a `.visionbak` backup before the backend applies pending migrations to an existing database, stops the launch if it fails, and removes audit-history leftovers only after migration 0004 is recorded.
 ### 2026-10-21: Edit-check hook for shell edits (accepted)
 
 [[docs/adr/238-edit-check-hook-for-shell-edits|ADR-238]] runs the ADR-227 edit-check hook after

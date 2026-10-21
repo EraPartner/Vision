@@ -38,12 +38,22 @@ interface LegacyAuditCleanupOptions {
   userDataDir: string;
   /** Native runtime id (`vision`, `vision_demo`, ...). */
   runtimeName: string;
+  /**
+   * Resolves true once the live database has applied the migration that
+   * retired audit history. Until then nothing is removed and no marker is
+   * written, so a failed upgrade can still go back to the previous build.
+   */
+  retirementApplied: () => Promise<boolean>;
   execFile?: LegacyCleanupExecFile;
   log: LegacyCleanupLog;
   platform?: NodeJS.Platform;
 }
 
-type LegacyAuditCleanupResult = "skipped" | "completed" | "incomplete";
+type LegacyAuditCleanupResult =
+  | "skipped"
+  | "deferred"
+  | "completed"
+  | "incomplete";
 
 /**
  * Keychain service the retired helper used, or undefined for runtimes that
@@ -156,13 +166,15 @@ function removeKeychainItem(
 }
 
 /**
- * Remove the retired audit-history leftovers once. Never throws: failures are
- * logged as warnings. A folder failure leaves the marker unwritten so the next
- * launch retries; a Keychain failure does not.
+ * Remove the retired audit-history leftovers once, after the database has
+ * applied the retiring migration. Never throws: failures are logged as
+ * warnings. A deferred run or a folder failure leaves the marker unwritten so
+ * the next launch retries; a Keychain failure does not.
  */
 export async function cleanupLegacyAuditArtifacts({
   userDataDir,
   runtimeName,
+  retirementApplied,
   execFile = nodeExecFile,
   log,
   platform = process.platform,
@@ -170,6 +182,12 @@ export async function cleanupLegacyAuditArtifacts({
   try {
     const markerPath = path.join(path.resolve(userDataDir), MARKER_FILE);
     if (await exists(markerPath)) return "skipped";
+    if (!(await retirementApplied())) {
+      log.info(
+        "[legacy-audit-cleanup] audit history is not retired in the database yet; left in place",
+      );
+      return "deferred";
+    }
 
     const directoryDone = await removeLegacyDirectory(userDataDir, log);
     const service = legacyAuditKeychainService(runtimeName);

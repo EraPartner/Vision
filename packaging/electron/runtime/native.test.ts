@@ -1290,6 +1290,130 @@ test("native first start persists and unreferences an argument-array backend chi
   }
 });
 
+test("start runs the pre-migration hook only when the database is behind the packaged chain", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-premigrate-"),
+  );
+  try {
+    const binDir = path.join(temp, "bin");
+    await fs.promises.mkdir(binDir);
+    for (const tool of POSTGRES_TOOLS) {
+      await fs.promises.writeFile(path.join(binDir, tool), "test", {
+        mode: 0o755,
+      });
+    }
+    const runtimeRoot = path.join(temp, "runtime");
+    const migrations = path.join(runtimeRoot, "db", "migrations");
+    await fs.promises.mkdir(migrations, { recursive: true });
+    for (const name of [
+      "0001_baseline.sql",
+      "0002_remove_cloud_ai.sql",
+      "0002_remove_cloud_ai.down.sql",
+      "0003_remove_life_scenarios.sql",
+      "0009_future.down.sql",
+    ]) {
+      await fs.promises.writeFile(path.join(migrations, name), "SELECT 1;");
+    }
+
+    let totalSpawned = 0;
+    const run = async (
+      appliedHead: string,
+      beforeMigrations: (pending: {
+        appliedHead: string;
+        packagedHead: string;
+      }) => Promise<void>,
+    ) => {
+      let spawned = 0;
+      const runtime = createNativeRuntime({
+        userDataDir: path.join(temp, `user-${appliedHead || "fresh"}`),
+        repoRoot,
+        runtimeRoot,
+        runtimeId: "vision_premigrate_test",
+        appPort: 43_211,
+        postgresBinDir: binDir,
+        bunPath: "/bin/echo",
+        isPortFree: async () => true,
+        runFile: async (executable, args) => {
+          if (args[0] === "--version") {
+            return {
+              stdout: `${path.basename(executable)} (PostgreSQL) 18.6`,
+              stderr: "",
+            };
+          }
+          if (path.basename(executable) === "pg_isready") {
+            return { stdout: "accepting connections", stderr: "" };
+          }
+          if (
+            args.some((arg) =>
+              arg.includes?.("SHOW server_version_num; SHOW listen_addresses;"),
+            )
+          ) {
+            return { stdout: "180006\nlocalhost\n/test/data\n", stderr: "" };
+          }
+          if (args.includes("SHOW shared_preload_libraries;")) {
+            return { stdout: "pg_stat_statements\n", stderr: "" };
+          }
+          if (args.some((arg) => arg.includes?.("to_regclass"))) {
+            return { stdout: appliedHead ? "t\n" : "f\n", stderr: "" };
+          }
+          if (args.some((arg) => arg.includes?.("max(name)"))) {
+            return { stdout: `${appliedHead}\n`, stderr: "" };
+          }
+          if (
+            args.some((arg) => arg.includes?.("SELECT 1 FROM pg_roles")) ||
+            args.some((arg) => arg.includes?.("SELECT 1 FROM pg_database"))
+          ) {
+            return { stdout: "1\n", stderr: "" };
+          }
+          return { stdout: "", stderr: "" };
+        },
+        spawnProcess: () => {
+          spawned += 1;
+          totalSpawned += 1;
+          return fakeChild({ pid: 223_344 });
+        },
+      });
+      try {
+        await runtime.start({ beforeMigrations });
+      } finally {
+        await fs.promises.unlink(runtime.paths.pid).catch(() => {});
+      }
+      return spawned;
+    };
+
+    const calls: { appliedHead: string; packagedHead: string }[] = [];
+    const record = async (pending: {
+      appliedHead: string;
+      packagedHead: string;
+    }) => {
+      calls.push(pending);
+    };
+    assert.equal(await run("0002_remove_cloud_ai", record), 1);
+    assert.deepEqual(calls, [
+      {
+        appliedHead: "0002_remove_cloud_ai",
+        packagedHead: "0003_remove_life_scenarios",
+      },
+    ]);
+    // Up to date, or a brand-new database without a ledger: no backup.
+    assert.equal(await run("0003_remove_life_scenarios", record), 1);
+    assert.equal(await run("", record), 1);
+    assert.equal(calls.length, 1);
+
+    // A failed backup must keep the migrating backend from starting.
+    const spawnedBefore = totalSpawned;
+    await assert.rejects(
+      run("0001_baseline", async () => {
+        throw new Error("disk full");
+      }),
+      /disk full/,
+    );
+    assert.equal(totalSpawned, spawnedBefore);
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
 test("startup error is read from the last failed backend start in the log", () => {
   const log = [
     `2026-10-19T18:37:01.000Z [ERROR] Failed to start application {"error":"old"}`,

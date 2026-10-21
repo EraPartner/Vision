@@ -166,7 +166,10 @@ check on the next launch. The `[startup]` log shows `runtime_manifest_full` or
 ## Updates and reports
 
 Native updates create a backup, verify the selected release artifact and checksum, install it, and
-retain rollback state until the updated app opens successfully. Report PDFs print in a hidden,
+retain rollback state until the updated app opens successfully. Independently of how the app was
+updated, a launch whose packaged migrations are ahead of the database first writes a `.visionbak`
+to `~/Library/Application Support/Vision/pre-update-backups` and does not start the backend if
+that backup fails ([[docs/adr/242-backup-before-boot-migrations|ADR-242]]). Report PDFs print in a hidden,
 sandboxed, script-free Electron window with no network access (ADR-234). Ollama remains an
 optional host integration and defaults to its loopback endpoint;
 see [[docs/integrations/ollama|Ollama Integration]].

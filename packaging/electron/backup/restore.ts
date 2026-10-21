@@ -197,9 +197,19 @@ export function assertBackupSchemaCompatible(
   );
 }
 
+export interface BundleBackupOptions {
+  /**
+   * The caller guarantees no backend is running (PostgreSQL is up), so the
+   * capture is already quiescent and must not stop or restart the backend.
+   * Used by the pre-migration backup at launch.
+   */
+  backendStopped?: boolean;
+}
+
 export async function runBundleBackup(
   destDir: string,
   frontendStateJson: unknown = null,
+  { backendStopped = false }: BundleBackupOptions = {},
 ): Promise<BundleBackupResult> {
   if (!destDir) throw new Error("No backup directory configured");
   const nativeRuntime = getNativeRuntime();
@@ -210,13 +220,19 @@ export async function runBundleBackup(
   const dbSqlPath = path.join(tmpDir, "db.sql");
   const attachmentsDir = path.join(tmpDir, "attachments");
   try {
-    if (!ctx.withBackupSnapshot)
-      throw new Error("Consistent native backup capture is unavailable");
-    const schemaHead = await ctx.withBackupSnapshot(async () => {
+    const capture = async () => {
       await nativeRuntime.dumpDatabase(dbSqlPath, { format: "plain" });
       await nativeRuntime.exportAttachments(attachmentsDir);
       return nativeRuntime.getSchemaHead();
-    });
+    };
+    let schemaHead: string | undefined;
+    if (backendStopped) {
+      schemaHead = await capture();
+    } else {
+      if (!ctx.withBackupSnapshot)
+        throw new Error("Consistent native backup capture is unavailable");
+      schemaHead = await ctx.withBackupSnapshot(capture);
+    }
     let frontendState: unknown = null;
     if (frontendStateJson) {
       try {

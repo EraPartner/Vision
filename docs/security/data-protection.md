@@ -535,7 +535,9 @@ key, not row contents) and no longer refuses any table with `403`. Split routes 
 Restore no longer compares a receipt or warns about audit continuity, and updates are no longer
 recorded or gated by a bridge; the update checksum check remains.
 
-On launch, `packaging/electron/legacy-audit-cleanup.ts` deletes the leftover `audit-anchor/`
+On launch, once the database records migration `0004_remove_audit_history`
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]),
+`packaging/electron/legacy-audit-cleanup.ts` deletes the leftover `audit-anchor/`
 folder (receipt, `safeStorage`-encrypted HMAC key and any transfer journal) and the Keychain item
 (service `com.vaultvoyager.vision.audit-witness` or `com.vaultvoyager.vision-demo.audit-witness`,
 account `latest-checkpoint`). The folder path is resolved strictly inside `userData`; a symbolic

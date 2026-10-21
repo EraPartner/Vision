@@ -372,9 +372,19 @@ token exists any more, a matching healthy backend left running by a previous lau
 (`start()` in `packaging/electron/runtime/native.ts` returns `already-running`) instead of being
 restarted.
 
+Before `start()` spawns a backend that will migrate an existing database, it compares the highest
+packaged `db/migrations` name with the database's `public.kysely_migration` head. When the
+database is behind, the `beforeMigrations` hook from `launch()` writes a `.visionbak` bundle to
+`<userData>/pre-update-backups` through the same transport as the update button; PostgreSQL is up
+and no backend runs, so no snapshot restart is needed. A failed backup aborts the launch before any
+migration. Vision Demo passes no hook
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]).
+
 At each launch until it records completion, `launch()` in `packaging/electron/main.ts` calls
 `cleanupLegacyAuditArtifacts()` from `packaging/electron/legacy-audit-cleanup.ts` without awaiting
-it. The cleanup removes `<userData>/audit-anchor` (a symbolic link is unlinked, its target left
+it, after the backend start. It first waits for `/health` and checks that the database lists
+`0004_remove_audit_history` (`getAppliedMigrations()`); until then it removes nothing and writes no
+marker (ADR-242). The cleanup removes `<userData>/audit-anchor` (a symbolic link is unlinked, its target left
 alone) and, on macOS, deletes the login-keychain generic password with account
 `latest-checkpoint` and service `com.vaultvoyager.vision.audit-witness` or
 `com.vaultvoyager.vision-demo.audit-witness` through `/usr/bin/security`. It never throws and logs
