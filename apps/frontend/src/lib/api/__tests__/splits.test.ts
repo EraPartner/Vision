@@ -21,7 +21,7 @@ const OWED_DETAIL = {
   recipient_id: 4,
   recipient_name: "Alex",
   amount_paid: 5,
-  transaction_date: "2025-01-14T23:00:00.000Z",
+  transaction_date: "2025-01-15",
   transaction_memo: null,
   transaction_amount: -50,
   transaction_currency: "EUR",

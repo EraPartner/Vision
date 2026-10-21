@@ -16,7 +16,7 @@ import { closePool } from "../src/database/connection.ts";
 import { addDaysYmd, todayAppDateString } from "../src/lib/timezone.ts";
 import { invalidatePortfolioCaches } from "../src/services/info/cache.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
-import { computeDailySnapshots } from "../src/services/portfolio/snapshotBuilder.ts";
+import { computeAndStoreSnapshots } from "../src/services/portfolio/snapshotBuilder.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
 import portfolioSummaryRouter from "../src/routes/info/portfolioSummary.ts";
@@ -42,6 +42,7 @@ async function txn(id: number, type: string, date: string, amount: number) {
 
 async function reset() {
   const pool = getTestPool()!;
+  await pool.query("DELETE FROM portfolio_performance_snapshots");
   await pool.query("DELETE FROM portfolio_transactions");
   await pool.query("DELETE FROM investments");
   await pool.query("DELETE FROM exchange_rates");
@@ -86,7 +87,7 @@ describeDb("accrued interest per principal segment (real DB)", () => {
     expect(summary.accruedInterest).toBe(267.12);
     expect(summary.currentValue).toBe(15267.12);
 
-    const history = await computeDailySnapshots("EUR");
+    const history = await computeAndStoreSnapshots("EUR");
     const latest = history.at(-1)!;
     expect(latest.snapshot_date).toBe(today);
     expect(latest.cash_value).toBeCloseTo(15267.12, 2);
@@ -103,7 +104,7 @@ describeDb("accrued interest per principal segment (real DB)", () => {
     const summary = await accrued();
     expect(summary.accruedInterest).toBe(64.11);
 
-    const latest = (await computeDailySnapshots("EUR")).at(-1)!;
+    const latest = (await computeAndStoreSnapshots("EUR")).at(-1)!;
     expect(latest.cash_value).toBeCloseTo(6064.11, 2);
   });
 });
