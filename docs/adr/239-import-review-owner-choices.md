@@ -16,7 +16,7 @@ tags:
     bug-sweep,
     adr-236,
   ]
-description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same specialized export format, so regular same-size purchases import; remaining look-alikes get per-row owner choices (row_choices: keep_both or same_transaction); previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
+description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same specialized export format, so regular same-size purchases import; remaining look-alikes and Saxo pairs without a booking record id get per-row owner choices (row_choices: keep_both or same_transaction), and preserve_existing no longer keeps both twins of such a pair; previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
 aliases: [adr-239, row choices, keep both, import number conventions]
 related_code:
   [
@@ -70,16 +70,23 @@ is surfaced for the owner instead of being settled by a score.
   from; that id pairs only with a workbook row whose record id equals it and whose own
   `Transactie-ID` and `Booking Id` differ from it, since the adapter takes the record id first. Cash
   rows without that id meet the existing `cross_format_identity_missing` block by direction
-  (deposit or withdrawal), date, account and amount, and the existing statement policy resolves it.
+  (deposit or withdrawal), date, account and amount.
+- **Identity-missing pairs are answered per row.** Keeping both twins of a
+  `cross_format_identity_missing` pair could count one event twice, so the statement-wide
+  `preserve_existing` no longer resolves it: a policy chosen for other rows of the statement must
+  not decide this one. It clears on `prefer_source` (one event) or on the row's own
+  `row_choices` answer: `same_transaction` records the pair once, `keep_both` keeps both. A
+  per-row answer outranks the statement policy; answers that disagree across a pair keep it
+  blocked. With several look-alikes only `keep_both` applies.
 - **Candidates.** A nearby history candidate is unassigned or on the row's own account. An
   imported candidate recorded from the row's own specialized export format under a different source
   id is a different event and is no candidate. Ids of another export format say nothing about the
   row and never exclude a candidate. A generic CSV mapping names no export (different tools share
   it), so its ids never exclude a candidate either.
 - **Owner choices.** Preview and commit accept `row_choices`: `keep_both` records the row as a new
-  transaction; `same_transaction` (single candidate only) settles it as a duplicate. Plans echo the
-  applied `rowChoices`. The portfolio import session offers **Keep both** and **Same transaction**
-  on those blockers.
+  transaction; `same_transaction` (single candidate or Saxo twin only) settles it as a duplicate.
+  Plans echo the applied `rowChoices`. The portfolio import session offers **Keep both** and
+  **Same transaction** on those blockers and on `cross_format_identity_missing`.
 - **Truthful counts.** A cash row whose identity the ledger already holds previews as `duplicate`
   with `cash: true`. Reconciliation commit counts `imported`, `duplicates` and `adopted` disjointly;
   the legacy single-batch commit keeps counting adopted rows among its duplicates. The bank import
@@ -96,7 +103,8 @@ double counts or drops a real purchase without telling the owner.
 ## Consequences
 
 - **Breaking for direct HTTP callers.** Reconciliation commit `duplicates` no longer includes
-  adopted rows. The app is updated.
+  adopted rows. A `cross_format_identity_missing` row no longer clears on `preserve_existing`;
+  callers answer it with `row_choices`. The app is updated.
 - Regular same-size purchases import without owner action. A look-alike on the same account
   without a distinguishing source id still blocks, now with a way through.
 - Rows with numbers that the file cannot settle, or trades whose numbers disagree with their

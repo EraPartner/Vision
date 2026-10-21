@@ -426,6 +426,68 @@ describe("reviewed portfolio import sessions", () => {
         expect(previews.at(-1)).toMatchObject(choice);
         expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
     });
+    it("asks per row about a Saxo pair without a booking record id and commits that answer", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>;
+                previews.push(body);
+                const choices = (body.row_choices ?? []) as Array<{
+                    batch_id: number;
+                    row_id: number;
+                    choice: string;
+                }>;
+                const reviewed = {
+                    ...plan(),
+                    rowChoices: choices.map((item) => ({
+                        batchId: item.batch_id,
+                        rowId: item.row_id,
+                        choice: item.choice,
+                    })),
+                };
+                if (choices.length > 0) return ok(reviewed);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "cross_format_identity_missing",
+                    candidateTransactionIds: [99],
+                };
+                return ok({
+                    ...reviewed,
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/no booking record id.*"Keep both"/),
+        ).toBeVisible();
+        expect(screen.getByRole("button", { name: "Keep both" })).toBeVisible();
+        await user.click(
+            screen.getByRole("button", { name: "Same transaction" }),
+        );
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Import reviewed history",
+            }),
+        );
+        await screen.findByText(/new records;/);
+        const choice = {
+            row_choices: [
+                { batch_id: 11, row_id: 1, choice: "same_transaction" },
+            ],
+        };
+        expect(previews.at(-1)).toMatchObject(choice);
+        expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
+    });
     it.each(["inconsistent_totals"] as const)(
         "rejects a commit result with %s",
         async () => {

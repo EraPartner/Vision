@@ -257,10 +257,16 @@ const blockerKeys: Record<string, string> = {
     ambiguous_cash_history: "ambiguousCash",
 };
 
-/** Blockers the owner settles per row: keep both, or (assigned only) the same transaction. */
+/** Blockers the owner settles per row with "Keep both". */
 const choosableBlockers = [
     "existing_assigned_or_imported_history",
     "ambiguous_history",
+    "cross_format_identity_missing",
+];
+/** Of those, the ones with a single counterpart that "Same transaction" names. */
+const sameTransactionBlockers = [
+    "existing_assigned_or_imported_history",
+    "cross_format_identity_missing",
 ];
 
 interface Props {
@@ -1311,8 +1317,13 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                     "portfolioImport.session.choice.keepBoth",
                                                                 )}
                                                             </Button>
-                                                            {blocker.reason ===
-                                                                "existing_assigned_or_imported_history" && (
+                                                            {sameTransactionBlockers.includes(
+                                                                blocker.reason,
+                                                            ) &&
+                                                                blocker
+                                                                    .candidateTransactionIds
+                                                                    .length <=
+                                                                    1 && (
                                                                 <Button
                                                                     type="button"
                                                                     size="sm"

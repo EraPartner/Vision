@@ -722,7 +722,12 @@ export function buildPortfolioImportReconciliationPlan({
   const cashAdoptions: PlanCashAdoption[] = [];
   const prepared: PreparedRow[] = [];
   const crossFormatDecisions = crossFormat
-    ? planCrossFormatSources({ rows, context: crossFormat, policyOf })
+    ? planCrossFormatSources({
+        rows,
+        context: crossFormat,
+        policyOf,
+        rowChoiceOf: choiceOf,
+      })
     : new Map<number, CrossFormatDecision>();
   const inKindIncome = inKindIncomeRows(rows, batches);
   const zeroYieldBatches = new Set(

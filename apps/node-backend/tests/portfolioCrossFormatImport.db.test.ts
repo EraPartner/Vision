@@ -95,6 +95,17 @@ async function commitChoosing(
   });
 }
 
+/** The owner's per-row answer for each row blocked without a booking record id. */
+async function identityAnswers(
+  choice: "keep_both" | "same_transaction",
+  ...batchIds: number[]
+) {
+  const { blockers } = await previewPortfolioImportReconciliation({ batchIds });
+  return blockers
+    .filter((blocker) => blocker.reason === "cross_format_identity_missing")
+    .map((blocker) => ({ batchId: blocker.batchId, rowId: blocker.rowId!, choice }));
+}
+
 async function blockerReasons(...batchIds: number[]) {
   const preview = await previewPortfolioImportReconciliation({ batchIds });
   return {
@@ -1105,14 +1116,37 @@ describeDb("one broker history through more than one export", () => {
       expect(await portfolio(exm)).toEqual([XLSX_BUY]);
     });
 
-    it("records both trades on the keep choice", async () => {
+    it("records both trades only on the owner's per-row keep choice", async () => {
       const sleeve = await account("Saxo");
       const exm = await investment("EXM");
       const { csv, workbook } = await stageBoth(sleeve);
-      expect(await commitChoosing("preserve_existing", csv, workbook)).toMatchObject({ imported: 2 });
+      // Preserving existing facts for the statements is no answer for this row.
+      await expect(commitChoosing("preserve_existing", csv, workbook)).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(await portfolio(exm)).toEqual([]);
+      const [answer] = await identityAnswers("keep_both", csv, workbook);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv, workbook],
+          batchPolicies: [csv, workbook].map((batchId) => ({ batchId, adoptPolicy: "preserve_existing" })),
+          rowChoices: [answer!],
+        }),
+      ).toMatchObject({ imported: 2 });
       const trades = await portfolio(exm);
       expect(trades).toHaveLength(2);
       expect(trades).toEqual(expect.arrayContaining([expect.objectContaining(CSV_BUY), XLSX_BUY]));
+    });
+
+    it("records the pair once when the owner names it the same transaction", async () => {
+      const sleeve = await account("Saxo");
+      const exm = await investment("EXM");
+      const { csv, workbook } = await stageBoth(sleeve);
+      const [answer] = await identityAnswers("same_transaction", csv, workbook);
+      expect(
+        await commitReviewedPortfolioImports({ batchIds: [csv, workbook], rowChoices: [answer!] }),
+      ).toMatchObject({ imported: 1, duplicates: 1 });
+      expect(await portfolio(exm)).toHaveLength(1);
     });
 
     it("blocks the CSV after the workbook, then settles it on the pair choice", async () => {
@@ -1137,7 +1171,14 @@ describeDb("one broker history through more than one export", () => {
         ready: false,
         reasons: ["cross_format_identity_missing"],
       });
-      expect(await commitChoosing("preserve_existing", workbook)).toMatchObject({ imported: 1 });
+      await expect(commitChoosing("preserve_existing", workbook)).rejects.toMatchObject({ status: 409 });
+      expect(await portfolio(exm)).toHaveLength(1);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [workbook],
+          rowChoices: await identityAnswers("keep_both", workbook),
+        }),
+      ).toMatchObject({ imported: 1 });
       expect(await portfolio(exm)).toHaveLength(2);
     });
   });
@@ -1345,8 +1386,32 @@ describeDb("one broker history through more than one export", () => {
         "saxo_transaction_history",
         sleeve,
       );
-      expect(await commitChoosing("preserve_existing", csv)).toMatchObject({ imported: 2 });
+      await expect(commitChoosing("preserve_existing", csv)).rejects.toMatchObject({ status: 409 });
+      expect(await cash(sleeve)).toEqual(SAXO_CASH);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv],
+          rowChoices: await identityAnswers("keep_both", csv),
+        }),
+      ).toMatchObject({ imported: 2 });
       expect(await cash(sleeve)).toHaveLength(4);
+    });
+
+    it("settles the movements as recorded when the owner names them the same", async () => {
+      const sleeve = await account("Saxo");
+      await commit(await stage(await saxoXlsx("cash", [103, 104]), "saxo_transaction_history", sleeve));
+      const csv = await stage(
+        await saxoCsv("cash-blank", [], blankRecord(true)),
+        "saxo_transaction_history",
+        sleeve,
+      );
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv],
+          rowChoices: await identityAnswers("same_transaction", csv),
+        }),
+      ).toMatchObject({ imported: 0, duplicates: 2 });
+      expect(await cash(sleeve)).toEqual(SAXO_CASH);
     });
   });
 });

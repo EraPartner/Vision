@@ -393,11 +393,15 @@ it for its own repeat imports, not to pair with the workbook. A committed CSV ba
 source columns (an older import) cannot show which column its id came from: its id counts as the
 booking record only when it equals the workbook row's record id and that record id is none of the
 workbook row's own `Transactie-ID` or `Booking Id` values; otherwise the pair blocks as above. The
-owner resolves either with the statement policy: "Use detailed source facts" (`prefer_source`)
-records them as one event, by the same outcome as the strict pair in the table above, and
-"Preserve existing facts" (`preserve_existing`) keeps both, without offering the other export's
-transaction as a likely copy again. A repeat import of a paired row settles as a duplicate
-without asking again.
+statement policy "Use detailed source facts" (`prefer_source`) resolves either by recording them as
+one event, by the same outcome as the strict pair in the table above. A `funding_date_mismatch`
+also resolves with "Preserve existing facts" (`preserve_existing`), which keeps both. A
+`cross_format_identity_missing` row does not: keeping both could count one event twice, so a
+statement-wide choice made for other rows never decides it. The owner answers that row in the
+review instead: **Same transaction** records the pair once, and **Keep both** records both
+without offering the other export's transaction as a likely copy again (with several look-alikes,
+only **Keep both** applies). A repeat import of a paired row settles as a duplicate without asking
+again.
 
 Cash adoptions and corrections are written to the cash reconciliation journal and restored by
 rolling back their batch. A CSV batch cannot be rolled back while a funding correction depends on

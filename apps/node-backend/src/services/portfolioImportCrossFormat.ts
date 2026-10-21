@@ -449,10 +449,13 @@ export function planCrossFormatSources({
   rows,
   context,
   policyOf,
+  rowChoiceOf = () => undefined,
 }: {
   rows: readonly StagedRow[];
   context: CrossFormatContext;
   policyOf: (row: StagedRow) => string | undefined;
+  /** the owner's answer for one row (`row_choices`) */
+  rowChoiceOf?: (row: StagedRow) => "keep_both" | "same_transaction" | undefined;
 }): Map<number, CrossFormatDecision> {
   const decisions = new Map<number, CrossFormatDecision>();
   const decide = (row: StagedRow, decision: CrossFormatDecision) => {
@@ -495,6 +498,27 @@ export function planCrossFormatSources({
     );
     if (chosen.size !== 1) return undefined;
     return chosen.has("prefer_source") ? "pair" : "keep";
+  };
+  /**
+   * The owner's choice for a Saxo pair that only lacks a booking record id.
+   * Keeping both could count one event twice, so the statement-wide
+   * `preserve_existing` never decides it: only a per-row answer does
+   * (`same_transaction` pairs, `keep_both` keeps both), or `prefer_source`,
+   * which records the pair once. A per-row answer outranks the statement
+   * policy; answers that disagree across the pair leave it blocked.
+   */
+  const identityChoiceOf = (
+    ...pair: StagedRow[]
+  ): { kind: "pair"; policy?: "prefer_source" } | { kind: "keep" } | undefined => {
+    const answers = new Set(
+      pair.map(rowChoiceOf).filter((answer) => answer !== undefined),
+    );
+    if (answers.size === 0)
+      return choiceOf(...pair) === "pair"
+        ? { kind: "pair", policy: "prefer_source" }
+        : undefined;
+    if (answers.size !== 1) return undefined;
+    return answers.has("same_transaction") ? { kind: "pair" } : { kind: "keep" };
   };
   /** Rows the owner chose to keep apart from their near match. */
   const kept = new Map<number, number[]>();
@@ -609,14 +633,14 @@ export function planCrossFormatSources({
     saxoTwins,
   );
   for (const [csvRow, workbookRow] of saxoInPlan.pairs) {
-    const choice = choiceOf(csvRow, workbookRow);
-    if (choice === "pair")
+    const choice = identityChoiceOf(csvRow, workbookRow);
+    if (choice?.kind === "pair")
       decide(csvRow, {
         kind: "duplicate_source",
         duplicateOfRowId: Number(workbookRow.id),
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") {
+    else if (choice?.kind === "keep") {
       keep(csvRow);
       keep(workbookRow);
     } else
@@ -627,12 +651,15 @@ export function planCrossFormatSources({
           candidateTransactionIds: [],
         });
   }
+  // With several look-alikes only keeping the row apart is a clear answer.
   for (const row of [...saxoInPlan.ambiguous, ...saxoInPlan.ambiguousRight])
-    decide(row, {
-      kind: "blocked",
-      reason: "cross_format_identity_missing",
-      candidateTransactionIds: [],
-    });
+    if (rowChoiceOf(row) === "keep_both") keep(row);
+    else
+      decide(row, {
+        kind: "blocked",
+        reason: "cross_format_identity_missing",
+        candidateTransactionIds: [],
+      });
   const saxoLedgerRows = context.ledgerSources.filter(
     (source, index, all) =>
       formatOf(source) === SAXO &&
@@ -648,14 +675,14 @@ export function planCrossFormatSources({
     saxoTwins,
   );
   for (const [row, source] of saxoToLedger.pairs) {
-    const choice = choiceOf(row);
-    if (choice === "pair")
+    const choice = identityChoiceOf(row);
+    if (choice?.kind === "pair")
       decide(row, {
         kind: "duplicate",
         existingTransactionId: source.transaction_id,
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") keep(row, [source.transaction_id]);
+    else if (choice?.kind === "keep") keep(row, [source.transaction_id]);
     else
       decide(row, {
         kind: "blocked",
@@ -663,14 +690,18 @@ export function planCrossFormatSources({
         candidateTransactionIds: [source.transaction_id],
       });
   }
-  for (const row of saxoToLedger.ambiguous)
-    decide(row, {
-      kind: "blocked",
-      reason: "cross_format_identity_missing",
-      candidateTransactionIds: [
-        ...saxoToLedger.ambiguousRight,
-      ].map((source) => source.transaction_id),
-    });
+  for (const row of saxoToLedger.ambiguous) {
+    const candidates = [...saxoToLedger.ambiguousRight].map(
+      (source) => source.transaction_id,
+    );
+    if (rowChoiceOf(row) === "keep_both") keep(row, candidates);
+    else
+      decide(row, {
+        kind: "blocked",
+        reason: "cross_format_identity_missing",
+        candidateTransactionIds: candidates,
+      });
+  }
 
   // IBKR funding: CSV base-currency movements and native workbook movements.
   type CsvItem = { row: StagedRow; facts: IbkrCsvFunding };

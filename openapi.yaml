@@ -7068,10 +7068,11 @@ components:
           description: >-
             The owner's answer for staged rows that resemble an existing
             transaction on the same account (existing_assigned_or_imported_history
-            or ambiguous_history). keep_both records the row as a new
+            or ambiguous_history), or a Saxo row without a booking record id
+            (cross_format_identity_missing). keep_both records the row as a new
             transaction; same_transaction settles it as a duplicate of its single
-            existing candidate. Each row may occur at most once; a row outside
-            the selected batches rejects with 400.
+            existing candidate or Saxo twin. Each row may occur at most once; a
+            row outside the selected batches rejects with 400.
           items:
             type: object
             additionalProperties: false
@@ -7239,13 +7240,17 @@ components:
             matches a funding workbook movement in type, account and value, but
             its date is up to ten days outside the request and completion
             window) and cross_format_identity_missing (an otherwise identical
-            Saxo CSV and XLSX row without a booking record id on one side). The
-            last two clear only on the selected statements' policy:
-            prefer_source records the pair as one event and preserve_existing
-            keeps both. existing_assigned_or_imported_history (a same-size trade
-            within seven days that this account already holds, without a
-            differing source id of the same export) and ambiguous_history clear
-            on row_choices. Nothing in a blocked plan is written.
+            Saxo CSV and XLSX row without a booking record id on one side).
+            funding_date_mismatch clears only on the selected statements'
+            policy: prefer_source records the pair as one event and
+            preserve_existing keeps both. cross_format_identity_missing clears
+            on prefer_source (one event) or on row_choices (same_transaction
+            records the pair once, keep_both keeps both); preserve_existing
+            leaves it blocked. existing_assigned_or_imported_history (a
+            same-size trade within seven days that this account already holds,
+            without a differing source id of the same specialized export
+            format) and ambiguous_history clear on row_choices. Nothing in a
+            blocked plan is written.
           items: { type: object, additionalProperties: true }
         summary:
           type: object

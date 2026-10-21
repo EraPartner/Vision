@@ -7586,7 +7586,7 @@ export interface components {
                 /** @enum {string} */
                 adopt_policy: "preserve_existing" | "prefer_source";
             }[];
-            /** @description The owner's answer for staged rows that resemble an existing transaction on the same account (existing_assigned_or_imported_history or ambiguous_history). keep_both records the row as a new transaction; same_transaction settles it as a duplicate of its single existing candidate. Each row may occur at most once; a row outside the selected batches rejects with 400. */
+            /** @description The owner's answer for staged rows that resemble an existing transaction on the same account (existing_assigned_or_imported_history or ambiguous_history), or a Saxo row without a booking record id (cross_format_identity_missing). keep_both records the row as a new transaction; same_transaction settles it as a duplicate of its single existing candidate or Saxo twin. Each row may occur at most once; a row outside the selected batches rejects with 400. */
             row_choices?: {
                 /** Format: int64 */
                 batch_id: number;
@@ -7657,7 +7657,7 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. existing_assigned_or_imported_history (a same-size trade within seven days that this account already holds, without a differing source id of the same export) and ambiguous_history clear on row_choices. Nothing in a blocked plan is written. */
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). funding_date_mismatch clears only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. cross_format_identity_missing clears on prefer_source (one event) or on row_choices (same_transaction records the pair once, keep_both keeps both); preserve_existing leaves it blocked. existing_assigned_or_imported_history (a same-size trade within seven days that this account already holds, without a differing source id of the same specialized export format) and ambiguous_history clear on row_choices. Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];
