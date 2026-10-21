@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
@@ -121,7 +121,8 @@ are rejected. Use the per-currency statement-balance endpoints below.
 
 Create or replace one authoritative statement reading. The body is
 `{ balance: number, date: "YYYY-MM-DD" }`; `currency` must be an uppercase ISO code. The account's
-reading is stored only in `account_statement_balances`.
+reading is stored only in `account_statement_balances`. The response is the stored reading,
+`{ account_id, currency, balance, balance_date, links }`, with `balance` as a JSON number.
 
 ### DELETE /api/accounts/:id/statement-balances/:currency
 
@@ -338,8 +339,10 @@ are filtered only for the fallback when the declared partition is absent: one re
 foreign partition is treated as a mislabelled single-currency account; otherwise the base is zero
 in the declared currency. `POST /api/accounts/:id/reconcile` accepts an optional `currency`, then
 accepts that exact partition or creates an adjustment in it, leaving every other native currency
-partition and statement reading unchanged. The Reconcile dialog shows a currency selector for
-accounts marked `multi_currency_cash`.
+partition and statement reading unchanged. Its response carries `mode`, `drift`, `currency`,
+`statement_balance`, `computed_balance` and `transaction` (the adjustment row
+`{ id, amount, transfer_source }`, or `null` for `accept`); every money field is a JSON number.
+The Reconcile dialog shows a currency selector for accounts marked `multi_currency_cash`.
 
 ### AddAccountDialog — name-required guard
 

@@ -10229,7 +10229,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @enum {string} */
+                            mode: "accept" | "adjustment";
+                            drift: number;
+                            currency: string;
+                            statement_balance: number;
+                            computed_balance: number;
+                            /** @description The adjustment row (mode `adjustment`), else null. */
+                            transaction: {
+                                id: number;
+                                amount: number;
+                                transfer_source: string;
+                            } | null;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
             /** @description No drift to resolve, no statement balance, or an invalid mode */
@@ -10274,7 +10290,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            account_id: number;
+                            currency: string;
+                            balance: number;
+                            /** Format: date */
+                            balance_date: string;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
             /** @description Invalid balance */

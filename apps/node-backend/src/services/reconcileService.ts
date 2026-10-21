@@ -247,7 +247,10 @@ export async function reconcileAccount(
       currency: reconcileCurrency,
       statement_balance: statement,
       computed_balance: statement, // computed now equals statement after the delta
-      transaction: ins ?? null,
+      // NUMERIC arrives as a decimal string; the API sends money as numbers.
+      transaction: ins
+        ? { ...ins, amount: toNumber(toDecimal(ins.amount)) }
+        : null,
     };
   });
 }

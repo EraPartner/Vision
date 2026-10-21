@@ -9397,7 +9397,38 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required:
+                          [
+                            mode,
+                            drift,
+                            currency,
+                            statement_balance,
+                            computed_balance,
+                            transaction,
+                            links,
+                          ]
+                        properties:
+                          mode: { type: string, enum: [accept, adjustment] }
+                          drift: { type: number }
+                          currency: { type: string }
+                          statement_balance: { type: number }
+                          computed_balance: { type: number }
+                          transaction:
+                            type: object
+                            nullable: true
+                            description: The adjustment row (mode `adjustment`), else null.
+                            required: [id, amount, transfer_source]
+                            properties:
+                              id: { type: integer }
+                              amount: { type: number }
+                              transfer_source: { type: string }
+                          links: { type: array, items: {} }
         "400":
           description: No drift to resolve, no statement balance, or an invalid mode
         "404":
@@ -9432,7 +9463,21 @@ paths:
           description: Stored statement reading
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Envelope" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required:
+                          [account_id, currency, balance, balance_date, links]
+                        properties:
+                          account_id: { type: integer }
+                          currency: { type: string }
+                          balance: { type: number }
+                          balance_date: { type: string, format: date }
+                          links: { type: array, items: {} }
         "400": { description: Invalid balance, date, or currency }
         "404": { description: Account not found }
     delete:
