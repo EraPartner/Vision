@@ -162,6 +162,42 @@ export async function readCrossFormatLedgerSources(
   );
 }
 
+/**
+ * `version:fingerprint` identities of rows that an earlier review settled as
+ * recorded by another export: duplicate staging rows of the cross-format
+ * batches whose identity no ledger transaction carries. A repeat of such a
+ * row keeps the owner's earlier pairing choice.
+ */
+export async function readCrossFormatSettledIdentities(
+  accountIds: readonly number[],
+  excludedBatchIds: readonly Id[],
+): Promise<Set<string>> {
+  if (accountIds.length === 0) return new Set();
+  const rows = await checkedRows(
+    ledgerFingerprintRowSchema,
+    sql`SELECT DISTINCT s.dedup_fingerprint, s.dedup_fingerprint_version
+      FROM portfolio_import_staging_rows s
+      JOIN portfolio_import_batches b ON b.id = s.batch_id
+     WHERE b.account_id = ANY(${accountIds}::integer[])
+       AND NOT (b.id = ANY(${excludedBatchIds}::bigint[]))
+       AND b.custom_config->>'format' = ANY(${CROSS_FORMATS}::text[])
+       AND s.status = 'duplicate'
+       AND s.dedup_fingerprint IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM portfolio_transactions p
+          WHERE p.dedup_fingerprint = s.dedup_fingerprint
+            AND p.dedup_fingerprint_version = s.dedup_fingerprint_version)
+       AND NOT EXISTS (SELECT 1 FROM transactions c
+          WHERE c.is_active AND c.account_id = b.account_id
+            AND c.dedup_fingerprint = s.dedup_fingerprint
+            AND c.dedup_fingerprint_version = s.dedup_fingerprint_version)`,
+  );
+  return new Set(
+    rows.map(
+      (row) => `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`,
+    ),
+  );
+}
+
 /** The identities among `fingerprints` that an active cash transaction carries. */
 export async function readCashLedgerFingerprints(
   fingerprints: readonly string[],

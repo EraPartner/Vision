@@ -40,6 +40,7 @@ import {
   markCrossFormatSourceDuplicate,
   readCashLedgerFingerprints,
   readCrossFormatLedgerSources,
+  readCrossFormatSettledIdentities,
   readManualCashCandidates,
   readReconciliationBatchScope,
   readReconciliationHistory,
@@ -697,7 +698,10 @@ export function buildPortfolioImportReconciliationPlan({
       actions.push({ ...rowAction(row), action: "settled" });
       continue;
     }
-    const decision = crossFormatDecisions.get(Number(row.id));
+    const crossDecision = crossFormatDecisions.get(Number(row.id));
+    // A row kept apart from its near match takes the ordinary path below.
+    const decision =
+      crossDecision?.kind === "kept_apart" ? undefined : crossDecision;
     if (decision) {
       const base = {
         ...rowAction(row),
@@ -716,6 +720,8 @@ export function buildPortfolioImportReconciliationPlan({
           ...base,
           action: "duplicate_source",
           duplicateOfRowId: decision.duplicateOfRowId,
+          // A near match the owner paired by choosing prefer_source.
+          ...(decision.policy ? { policy: decision.policy } : {}),
         });
         crossFormatDuplicates.push(row);
       } else if (decision.kind === "duplicate") {
@@ -723,6 +729,7 @@ export function buildPortfolioImportReconciliationPlan({
           ...base,
           action: "duplicate",
           existingTransactionId: decision.existingTransactionId,
+          ...(decision.policy ? { policy: decision.policy } : {}),
         });
         crossFormatDuplicates.push(row);
       } else {
@@ -937,9 +944,15 @@ export function buildPortfolioImportReconciliationPlan({
       row,
       source,
       proof,
-      candidates: history.filter((current) =>
-        nearbyCandidate(row, source, current, proof),
-      ),
+      candidates: history.filter((current) => {
+        const keptApart = crossFormatDecisions.get(Number(row.id));
+        return (
+          !(
+            keptApart?.kind === "kept_apart" &&
+            keptApart.transactionIds.includes(Number(current.id))
+          ) && nearbyCandidate(row, source, current, proof)
+        );
+      }),
       baseAction,
       inKindIncome: income,
     });
@@ -1178,6 +1191,7 @@ async function loadPlan(
       .slice(0, 10);
   const crossFormat: CrossFormatContext = {
     ledgerSources: await readCrossFormatLedgerSources(accountIds, ids),
+    settledIdentities: await readCrossFormatSettledIdentities(accountIds, ids),
     cashFingerprints: await readCashLedgerFingerprints(
       cashRows.map((row) => row.dedup_fingerprint).filter((fp) => fp != null),
     ),

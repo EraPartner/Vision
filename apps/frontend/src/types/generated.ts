@@ -7566,7 +7566,7 @@ export interface components {
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
             ready: boolean;
-            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. */
             actions: ({
                 /** Format: int64 */
                 batchId: number;
@@ -7593,7 +7593,7 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement). Nothing in a blocked plan is written. */
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];

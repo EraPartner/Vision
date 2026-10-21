@@ -7054,7 +7054,8 @@ components:
             cash=true corrects or adopts an existing brokerage cash transaction
             (an IBKR CSV movement to the funding workbook's own currency, or a
             manual entry with the same signed amount and currency within seven
-            days).
+            days). A near match the owner paired by choosing prefer_source
+            carries policy=prefer_source on its duplicate or duplicate_source.
           items:
             type: object
             additionalProperties: true
@@ -7094,7 +7095,14 @@ components:
             reasons are cross_format_source_conflict (the other export or an
             edited ledger row disagrees), ambiguous_funding_history and
             ambiguous_cash_history (more than one candidate could be the same
-            movement). Nothing in a blocked plan is written.
+            movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal
+            matches a funding workbook movement in type, account and value, but
+            its date is up to ten days outside the request and completion
+            window) and cross_format_identity_missing (an otherwise identical
+            Saxo CSV and XLSX row without a booking record id on one side). The
+            last two clear only on the selected statements' policy:
+            prefer_source records the pair as one event and preserve_existing
+            keeps both. Nothing in a blocked plan is written.
           items: { type: object, additionalProperties: true }
         summary:
           type: object
