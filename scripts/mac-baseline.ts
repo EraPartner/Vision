@@ -7,9 +7,11 @@
  * It launches each app with Chromium's --remote-debugging-port switch (a launch
  * argument only: normal launches, fuses, sandbox and CSP are unchanged), drives
  * scripted scrolls and page switches over the DevTools protocol, and records
- * one `sudo powermetrics` stream for the whole run. Each UI tier is set through
- * the app's own settings API, measured after a fresh launch, and the original
- * setting is restored at the end.
+ * one `sudo powermetrics` stream for the whole run. Each UI tier (and, with
+ * --full-effects, each state of the "Full effects" switch) is set through the
+ * app's own settings API, measured after a fresh launch, and the original
+ * setting is restored at the end. --repeat measures every combination several
+ * times so later phases can tell a win from run-to-run noise.
  */
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -84,6 +86,11 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --app <path>          App bundle to measure; repeat for several
                         (default: ${DEFAULT_APPS.join(", ")} when present)
   --tiers <list>        Comma list of reduced,standard,enhanced (default: all)
+  --full-effects <list> Comma list of off,on for the "Full effects" switch
+                        (default: off)
+  --repeat <n>          Measure every tier/switch combination n times, each
+                        from a fresh launch, and report median and min–max
+                        (default 1)
   --idle <s>            Idle window per tier (default 60)
   --sustained <s>       Sustained scroll/switch run per tier (default 300)
   --cooldown <s>        Wait with the app closed before each measured launch (default 60)
@@ -99,6 +106,8 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
 interface Options {
   apps: string[];
   tiers: Tier[];
+  fullEffects: boolean[];
+  repeat: number;
   idleSeconds: number;
   sustainedSeconds: number;
   cooldownSeconds: number;
@@ -116,6 +125,8 @@ function parseOptions(argv: string[]): Options | null {
     options: {
       app: { type: "string", multiple: true },
       tiers: { type: "string" },
+      "full-effects": { type: "string" },
+      repeat: { type: "string" },
       idle: { type: "string" },
       sustained: { type: "string" },
       cooldown: { type: "string" },
@@ -148,10 +159,26 @@ function parseOptions(argv: string[]): Options | null {
   for (const tier of tiers) {
     if (!TIERS.includes(tier as Tier)) throw new Error(`Unknown tier: ${tier}`);
   }
+  const fullEffects = (values["full-effects"] ?? "off")
+    .split(",")
+    .map((state) => state.trim())
+    .filter(Boolean)
+    .map((state) => {
+      if (state !== "off" && state !== "on")
+        throw new Error(`--full-effects takes off and/or on, not ${state}`);
+      return state === "on";
+    });
+  if (fullEffects.length === 0)
+    throw new Error("--full-effects needs off, on or off,on");
+  const repeat = number(values.repeat, 1, "repeat");
+  if (!Number.isInteger(repeat) || repeat < 1)
+    throw new Error("--repeat must be a whole number ≥ 1");
   const apps = values.app ?? DEFAULT_APPS.filter((app) => fs.existsSync(app));
   return {
     apps: apps.map((app) => path.resolve(app)),
     tiers: tiers as Tier[],
+    fullEffects: [...new Set(fullEffects)],
+    repeat,
     idleSeconds: number(values.idle, quick ? 10 : 60, "idle"),
     sustainedSeconds: number(values.sustained, quick ? 30 : 300, "sustained"),
     cooldownSeconds: number(values.cooldown, quick ? 5 : 60, "cooldown"),
@@ -557,11 +584,16 @@ async function readSettings(origin: string): Promise<SettingRecord> {
   return (await settingsRequest(origin, "GET")) as SettingRecord;
 }
 
-async function writeTier(origin: string, tier: Tier): Promise<void> {
+async function writeTier(
+  origin: string,
+  tier: Tier,
+  fullEffects: boolean,
+): Promise<void> {
   const current = await readSettings(origin);
   const value = {
     ...(current.value as Record<string, unknown>),
     visualEffects: tier,
+    fullEffects,
   };
   await settingsRequest(origin, "PUT", { value, expected: current.expected });
 }
@@ -883,6 +915,8 @@ async function measureTier(
   ctx: Context,
   app: RunningApp,
   tier: Tier,
+  fullEffects: boolean,
+  run: number,
   label: string,
 ): Promise<TierResult> {
   const warnings: string[] = [];
@@ -894,6 +928,11 @@ async function measureTier(
   if (effective !== tier) {
     warnings.push(
       `effective tier is ${effective}, not ${tier} (auto-adapt for a large display?)`,
+    );
+  }
+  if (state.classes.includes("fx-full") !== fullEffects) {
+    warnings.push(
+      `Full effects is ${state.classes.includes("fx-full") ? "on" : "off"} in the window, not ${fullEffects ? "on" : "off"} (app build without the switch?)`,
     );
   }
   const afterLaunch = memorySnapshot(app);
@@ -991,6 +1030,8 @@ async function measureTier(
 
   return {
     tier,
+    fullEffects,
+    run,
     effective: { tier: effective, classes: state.classes },
     page: {
       innerWidth: state.innerWidth,
@@ -1047,17 +1088,39 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
     result.originalTier = TIERS.includes(originalTier as Tier)
       ? (originalTier as Tier)
       : null;
-    for (const tier of ctx.options.tiers) {
-      await writeTier(running.origin, tier);
-      dirty = true;
-      await quitApp(running);
-      running = undefined;
-      log(`${info.name} ${tier}: cooldown ${ctx.options.cooldownSeconds} s`);
-      await sleep(ctx.options.cooldownSeconds * 1000);
-      running = await launchApp(info, logPath);
-      result.tiers.push(
-        await measureTier(ctx, running, tier, `${slug}-${tier}`),
-      );
+    // Repeats are the outer loop so slow drift (heat, background work)
+    // spreads over every combination instead of piling onto one.
+    const { repeat } = ctx.options;
+    for (let run = 1; run <= repeat; run += 1) {
+      for (const tier of ctx.options.tiers) {
+        for (const fullEffects of ctx.options.fullEffects) {
+          const name = [
+            tier,
+            fullEffects ? "full" : null,
+            repeat > 1 ? `run ${run}/${repeat}` : null,
+          ]
+            .filter(Boolean)
+            .join(" ");
+          await writeTier(running.origin, tier, fullEffects);
+          dirty = true;
+          await quitApp(running);
+          running = undefined;
+          log(`${info.name} ${name}: cooldown ${ctx.options.cooldownSeconds} s`);
+          await sleep(ctx.options.cooldownSeconds * 1000);
+          running = await launchApp(info, logPath);
+          const label = [
+            slug,
+            tier,
+            fullEffects ? "full" : null,
+            repeat > 1 ? `r${run}` : null,
+          ]
+            .filter(Boolean)
+            .join("-");
+          result.tiers.push(
+            await measureTier(ctx, running, tier, fullEffects, run, label),
+          );
+        }
+      }
     }
   } catch (error) {
     result.error = (error as Error).message;
@@ -1187,11 +1250,13 @@ async function main(): Promise<number> {
   });
 
   const results: BaselineResults = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     startedAt: new Date().toISOString(),
     finishedAt: "",
     options: {
       tiers: options.tiers,
+      fullEffects: options.fullEffects.map((on) => (on ? "on" : "off")),
+      repeat: options.repeat,
       idleSeconds: options.idleSeconds,
       sustainedSeconds: options.sustainedSeconds,
       cooldownSeconds: options.cooldownSeconds,

@@ -21,8 +21,8 @@ Terminal on the Mac, never in CI.
 - Launches the app binary with Chromium's `--remote-debugging-port` switch on a free loopback
   port. That switch is a launch argument only: normal launches, the packaged fuses, the renderer
   sandbox and the CSP are unchanged, and the app code has no measurement hook.
-- Sets each UI tier (`reduced`, `standard`, `enhanced`) through the app's own
-  `/api/settings/app_settings` endpoint, quits, waits a cooldown, and relaunches, so each tier is
+- Sets each UI tier (`reduced`, `standard`, `enhanced`), and optionally the Full effects switch,
+  through the app's own `/api/settings/app_settings` endpoint, quits, waits a cooldown, and relaunches, so each tier is
   measured from a fresh launch. The original setting is restored at the end, also after Ctrl-C.
 - Runs one `sudo powermetrics` stream (`cpu_power,gpu_power,thermal,tasks`, 1 s samples) for the
   whole run and slices it per phase.
@@ -46,6 +46,7 @@ WindowServer (compositing cost lands there). CPU % is CPU time per wall second o
    ```bash
    bun scripts/mac-baseline.ts --quick --tiers standard   # ~5 min smoke run
    bun scripts/mac-baseline.ts                            # full run, about an hour
+   bun scripts/mac-baseline.ts --full-effects off,on --repeat 3   # switch off vs on, 3 runs each
    ```
 
 3. Enter the sudo password once when asked (for `powermetrics`). Leave the Vision window in front
@@ -54,7 +55,19 @@ WindowServer (compositing cost lands there). CPU % is CPU time per wall second o
 Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summary.md`,
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
-`--sustained`, `--cooldown`, `--pages`, `--no-powermetrics`, `--no-trace`).
+`--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
+`--no-trace`).
+
+## Full effects and repeats
+
+`--full-effects off,on` measures every tier with the "Full effects" switch
+([[docs/adr/244-full-effects-switch|ADR-244]]) off and on; the script writes `fullEffects` with the
+tier and checks the window's `fx-full` class. `--repeat <n>` measures every tier and switch
+combination n times, each from a fresh launch, with the repeats as the outer loop so drift spreads
+over all combinations. The summary opens with a headline table per app and tier: median and
+min–max per switch state, the change of the medians, and "beyond noise" only when the off and on
+ranges do not overlap (at least two runs per side). Later phases use the same rule before they
+claim a win.
 
 > [!warning] Side effects
 > Each app is launched once per tier plus once for setup. If backup-on-quit is enabled, every

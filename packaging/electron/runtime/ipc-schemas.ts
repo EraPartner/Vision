@@ -419,6 +419,7 @@ export function createIpcArgumentContracts({
       invalidResult: { success: false },
     },
     "app:get-accent-color": { validate: noArguments, invalidResult: null },
+    "app:display-is-internal": { validate: noArguments, invalidResult: null },
     "theme:persist-splash": {
       validate: splashThemeArguments,
       invalidResult: { success: false },

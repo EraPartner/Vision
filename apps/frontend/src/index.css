@@ -596,11 +596,12 @@
        treatment, but do not blur the same pixels again on persistent cards,
        chrome, hero surfaces, or the full-width top bar. The semantic
        card-material marker distinguishes thin Cards from small transient
-       thin controls, which retain their local blur for hierarchy. */
+       thin controls, which retain their local blur for hierarchy. The "Full
+       effects" switch (fx-full) keeps both blur passes, as before ADR-129. */
     @supports (
         (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
     ) {
-        html.electron-mac.vibrancy
+        html.electron-mac.vibrancy:not(.fx-full)
             :is(
                 .glass,
                 .glass-regular,
@@ -1542,6 +1543,150 @@
     :root.fx-idle-atmosphere .liquid-canvas::before,
     :root.fx-idle-atmosphere .liquid-canvas::after {
         animation-play-state: paused;
+    }
+
+    /* ------------------------------------------------------------------
+     * "Full effects" switch (AppSettings.fullEffects -> :root.fx-full, set by
+     * VisualEffectsController). Off by default.
+     *
+     * Restores, as they were, the effects removed or reduced to save GPU
+     * work (docs/features/appearance.md, "Full effects"). Each rule keeps its
+     * original tier scope; reduced motion, reduced transparency, the reduced
+     * tier, the large-display freeze and the idle pause still apply.
+     * Component-level restores (card material, chart tooltips and scrub
+     * pills, chat glass, chart stagger) read the same switch via
+     * useFullEffects.
+     * ------------------------------------------------------------------ */
+
+    /* Continuous aurora drift (#329 stepped it to 100ms steps), also under
+       the live WebGL aurora (21775a26 froze the blobs there). Longhands, so
+       the idle pause's animation-play-state still applies; :not() keeps the
+       large-display freeze. */
+    @media (prefers-reduced-motion: no-preference) {
+        :root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::before {
+            animation-name: aurora-drift-a-smooth;
+            animation-duration: 64s;
+            animation-timing-function: var(--ease-in-out-quart);
+            animation-iteration-count: infinite;
+            animation-direction: alternate;
+        }
+
+        :root.fx-full:not(.fx-static-atmosphere) .liquid-canvas::after {
+            animation-name: aurora-drift-b-smooth;
+            animation-duration: 76s;
+            animation-timing-function: var(--ease-in-out-quart);
+            animation-iteration-count: infinite;
+            animation-direction: alternate;
+        }
+    }
+
+    @keyframes aurora-drift-a-smooth {
+        from {
+            transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        to {
+            transform: translate3d(14vw, 9vh, 0) scale(1.18);
+        }
+    }
+
+    @keyframes aurora-drift-b-smooth {
+        from {
+            transform: translate3d(0, 0, 0) scale(1.12);
+        }
+
+        to {
+            transform: translate3d(-11vw, -7vh, 0) scale(0.96);
+        }
+    }
+
+    @supports (
+        (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
+    ) {
+        @media (prefers-reduced-transparency: no-preference) {
+            /* Frosted modal overlay on every tier (f80ccd18 kept it only at
+               enhanced): the pre-tier Tailwind backdrop-blur-md over
+               bg-background/40, /50 for alert dialogs. */
+            :root.fx-full .modal-overlay {
+                background: hsl(var(--background) / 0.4);
+                -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+            }
+
+            :root.fx-full .modal-overlay-strong {
+                background: hsl(var(--background) / 0.5);
+            }
+
+            /* Frosted frozen column in the category pivot table (21775a26
+               made it opaque): no saturate, which muddies the narrow column. */
+            :root.fx-full .table-sticky-col {
+                background: hsl(var(--card) / 0.72);
+                -webkit-backdrop-filter: blur(12px);
+                backdrop-filter: blur(12px);
+            }
+
+            :root.fx-full.fx-enhanced .table-sticky-col {
+                background: hsl(var(--card) / 0.55);
+                -webkit-backdrop-filter: blur(16px);
+                backdrop-filter: blur(16px);
+            }
+        }
+    }
+
+    /* The frozen column stays opaque on the reduced tier: with no blur, the
+       value cells scrolling under it would ghost through. */
+    :root.fx-full.fx-reduced .table-sticky-col {
+        background: hsl(var(--card));
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    /* Dark-mode double halo on every heading and all canvas text (21775a26
+       narrowed it to a single 8px halo on the PageHeader title/subtitle). */
+    .dark.fx-full h1,
+    .dark.fx-full h2,
+    .dark.fx-full h3,
+    .dark.fx-full .font-display,
+    .dark.fx-full .canvas-text,
+    .dark.fx-full .canvas-text :is(h1, h2, h3, p, span, div) {
+        text-shadow:
+            0 1px 2px hsl(var(--background) / 0.6),
+            0 2px 14px hsl(var(--background) / 0.45);
+    }
+
+    /* Animated hover shadow and border on interactive cards (8461b2c0
+       replaced it with a pre-rendered ::after opacity fade). The shadow sits
+       on the card itself again, so overflow-hidden cards show it too. The
+       former --ease-out-quint token no longer exists; --ease-glide is the
+       current card curve. */
+    :root.fx-full .premium-frame.premium-frame-interactive {
+        transition:
+            border-color var(--duration-normal) var(--ease-glide),
+            box-shadow var(--duration-normal) var(--ease-glide),
+            translate var(--duration-fast) var(--ease-glide),
+            transform var(--duration-press) ease-out;
+    }
+
+    :root.fx-full .premium-frame-interactive::after {
+        content: none;
+    }
+
+    :root.fx-full .premium-frame-interactive:hover {
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.22) inset,
+            0 12px 30px hsl(var(--glass-shadow) / 0.1);
+    }
+
+    :root.fx-full.dark .premium-frame-interactive:hover {
+        box-shadow:
+            0 1px 0 hsl(var(--glass-highlight) / 0.12) inset,
+            0 18px 40px hsl(var(--glass-shadow) / 0.48);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        :root.fx-full .premium-frame.premium-frame-interactive {
+            transition: none;
+        }
     }
 
     @media print {

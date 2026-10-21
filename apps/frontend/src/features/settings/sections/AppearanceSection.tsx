@@ -222,6 +222,18 @@ export const AppearanceSection = memo(function AppearanceSection() {
                         onCheckedChange={handleAutoAdaptChange}
                     />
                 </SettingRow>
+
+                <SettingRow
+                    title={t('settings.appearance.fullEffects')}
+                    description={t('settings.appearance.fullEffectsHint')}
+                    htmlFor="full-effects"
+                >
+                    <Switch
+                        id="full-effects"
+                        checked={appSettings.fullEffects ?? false}
+                        onCheckedChange={(v) => updateAppSettings({ fullEffects: v })}
+                    />
+                </SettingRow>
             </SettingsGroup>
 
             {/* Accessibility — colorblind-safe gain/loss palette (loss: orange vs red) */}

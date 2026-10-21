@@ -80,6 +80,25 @@ export function persistSplashTheme(colors: SplashThemeColors): void {
         });
 }
 
+/** Whether the desktop app has a built-in-display check (main process). */
+export function canCheckBuiltInDisplay(): boolean {
+    return typeof getElectronAPI()?.displayIsInternal === "function";
+}
+
+/**
+ * Whether the window sits on a built-in panel (the Mac's own screen), or null
+ * outside Electron / when unknown.
+ */
+export async function getDisplayIsBuiltIn(): Promise<boolean | null> {
+    const api = getElectronAPI();
+    if (!api?.displayIsInternal) return null;
+    try {
+        return await api.displayIsInternal();
+    } catch {
+        return null;
+    }
+}
+
 /** macOS system accent color as RRGGBBAA hex, or null outside Electron/macOS. */
 export async function getSystemAccentColor(): Promise<string | null> {
     const api = getElectronAPI();

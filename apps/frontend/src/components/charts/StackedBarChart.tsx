@@ -14,6 +14,7 @@ import { BottomAxis, LeftAxis } from "./ChartAxis";
 import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartKeyboardNav } from "./keyboardNav";
 
@@ -87,6 +88,8 @@ function StackedBarLayerInner<Datum>({
     onEnter,
     onLeave,
 }: StackedBarLayerProps<Datum>) {
+    // "Full effects" restores the uncapped stagger tail.
+    const staggerCap = useFullEffects() ? Infinity : 0.4;
     return (
         <BarStack<StackRow<Datum>, string>
             data={rows}
@@ -125,7 +128,7 @@ function StackedBarLayerInner<Datum>({
                                     // don't run seconds of settle animation.
                                     delay: Math.min(
                                         bar.index * 0.02 + stack.index * 0.03,
-                                        0.4,
+                                        staggerCap,
                                     ),
                                 }}
                                 onPointerEnter={() =>

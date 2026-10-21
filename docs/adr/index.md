@@ -283,6 +283,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-21: Full effects switch (accepted)
+
+[[docs/adr/244-full-effects-switch|ADR-244]] adds `AppSettings.fullEffects` (off by default), which restores the effects removed or reduced to save GPU work within each tier's scope, exempts built-in panels from the ADR-075 large-display cap, and lets `scripts/mac-baseline.ts` measure the switch off and on with repeats.
+
 ### 2026-10-21: Backup before boot migrations (accepted)
 
 [[docs/adr/242-backup-before-boot-migrations|ADR-242]] has the desktop app take a `.visionbak` backup before the backend applies pending migrations to an existing database, stop the launch if it fails, and remove audit-history leftovers only after migration 0004 is recorded.

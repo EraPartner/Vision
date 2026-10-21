@@ -3,6 +3,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
 /**
  * Static content keeps its glass material and rests under the pointer.
@@ -10,9 +11,12 @@ import { cn } from "@/lib/utils";
  * A prominent total is a visual emphasis choice, not a click affordance.
  * Interactive lift uses Tailwind's translate property; reduced-motion CSS
  * cancels it with matching specificity in index.css.
+ *
+ * Ordinary cards use the thin material (ADR-132). The "Full effects" switch
+ * restores the original 20px `glass-regular` material.
  */
 const cardVariants = cva(
-    "card-material glass-thin premium-frame relative rounded-card corner-continuous text-card-foreground",
+    "card-material premium-frame relative rounded-card corner-continuous text-card-foreground",
     {
         variants: {
             variant: {
@@ -37,10 +41,15 @@ export interface CardProps
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
     ({ className, variant, asChild = false, ...props }, ref) => {
         const Comp = asChild ? Slot : "div";
+        const fullEffects = useFullEffects();
         return (
             <Comp
                 ref={ref}
-                className={cn(cardVariants({ variant }), className)}
+                className={cn(
+                    cardVariants({ variant }),
+                    fullEffects ? "glass-regular" : "glass-thin",
+                    className,
+                )}
                 {...props}
             />
         );

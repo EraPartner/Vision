@@ -146,6 +146,7 @@ describe("Settings Routes", () => {
         adminMode: false,
         visualEffects: "standard",
         autoAdaptDisplay: true,
+        fullEffects: false,
         startupSection: "budgeting",
         colorblindGainLoss: false,
       });

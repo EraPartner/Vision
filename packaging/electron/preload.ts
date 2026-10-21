@@ -204,6 +204,9 @@ const electronAPI: ElectronApiBridge = {
   /** Enable the macOS under-window material only for the effective enhanced tier. */
   setVibrancy: (enabled) => ipcRenderer.invoke("app:set-vibrancy", enabled),
 
+  /** Whether the window sits on a built-in panel (null when unknown). */
+  displayIsInternal: () => ipcRenderer.invoke("app:display-is-internal"),
+
   /** macOS accent color as RRGGBBAA hex, or null when unavailable. */
   getAccentColor: () => ipcRenderer.invoke("app:get-accent-color"),
 

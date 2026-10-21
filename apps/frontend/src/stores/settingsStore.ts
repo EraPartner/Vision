@@ -88,6 +88,13 @@ export interface AppSettings {
     visualEffects: VisualEffectsTier;
     /** Cap the effective tier at 'reduced' while the window sits on a large display. */
     autoAdaptDisplay: boolean;
+    /**
+     * Restore the effects that were removed or reduced to save GPU work
+     * (docs/features/appearance.md, "Full effects"). Off by default, so the
+     * everyday look is unchanged; on, each tier gets those effects back within
+     * its own scope (reduced still has no backdrop glass or aurora).
+     */
+    fullEffects: boolean;
     /** Section whose main page the app opens on at launch. */
     startupSection: StartupSection;
     /** Auto-clear a planned payment when an imported/created transaction unambiguously matches it. */
@@ -143,6 +150,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     adminMode: false,
     visualEffects: "standard",
     autoAdaptDisplay: true,
+    fullEffects: false,
     startupSection: "budgeting",
     autoClearPlannedOnMatch: true,
     colorblindGainLoss: false,
@@ -222,6 +230,7 @@ const storedAppSettingsSchema = z.looseObject({
         ] as const satisfies readonly VisualEffectsTier[])
         .catch(DEFAULT_APP_SETTINGS.visualEffects),
     autoAdaptDisplay: z.boolean().catch(DEFAULT_APP_SETTINGS.autoAdaptDisplay),
+    fullEffects: z.boolean().catch(DEFAULT_APP_SETTINGS.fullEffects),
     startupSection: z
         .enum([
             "budgeting",

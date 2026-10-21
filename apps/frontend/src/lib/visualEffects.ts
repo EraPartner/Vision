@@ -10,16 +10,29 @@ import type { VisualEffectsTier } from '@/stores/settingsStore';
  */
 export const LARGE_DISPLAY_PHYSICAL_PX = 6_000_000;
 
-export function isLargeDisplay(screenWidth: number, screenHeight: number, dpr: number): boolean {
+export function isLargeDisplay(
+    screenWidth: number,
+    screenHeight: number,
+    dpr: number,
+    builtIn: boolean | null = null,
+): boolean {
+    // A built-in panel is never "large": the cap exists for external 4K/5K
+    // outputs. A MacBook Air in a "More Space" scaled mode (1680x1050 @2x =
+    // 7.06 MP backing store on a 4.1 MP panel) would otherwise trip it. The
+    // panel ships matched to its own GPU, so pixel count alone is the wrong
+    // signal there. builtIn is null outside the desktop app (no display
+    // API), where the pixel heuristic applies as before.
+    if (builtIn === true) return false;
     return screenWidth * screenHeight * dpr * dpr > LARGE_DISPLAY_PHYSICAL_PX;
 }
 
 /** Whether the display the window currently sits on is large. */
-export function currentDisplayIsLarge(): boolean {
+export function currentDisplayIsLarge(builtIn: boolean | null = null): boolean {
     return isLargeDisplay(
         window.screen.width,
         window.screen.height,
         window.devicePixelRatio > 0 ? window.devicePixelRatio : 1,
+        builtIn,
     );
 }
 
