@@ -62,6 +62,7 @@ const SETTINGS_KEY = "theme_settings";
 const VARIANT_STORAGE_KEY = "vision_theme_variant";
 const THEME_STORAGE_KEY = "vision_theme";
 const BOOT_PALETTE_STORAGE_KEY = "vision_boot_palette";
+const MODE_STORAGE_KEY = "vision_theme_mode";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -287,12 +288,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!isLoaded) return;
         const palette = themes[variant][theme];
+        // public/theme-boot.js reads these before first paint: it re-resolves
+        // "system" mode itself and uses the palette only for its own theme.
         const bootPalette = {
+            theme,
             base: palette.background,
             foreground: palette.foreground,
             glow: palette.primary,
         };
         try {
+            localStorage.setItem(MODE_STORAGE_KEY, mode);
             localStorage.setItem(
                 BOOT_PALETTE_STORAGE_KEY,
                 JSON.stringify(bootPalette),

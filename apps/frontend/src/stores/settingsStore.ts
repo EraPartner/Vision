@@ -124,6 +124,13 @@ export interface ThemeSchedule {
 
 // ─── Defaults ────────────────────────────────────────────────────────────────
 
+function initialTheme(): Theme {
+    if (typeof document === "undefined") return "dark";
+    return document.documentElement.classList.contains("dark")
+        ? "dark"
+        : "light";
+}
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultCurrency: DEFAULT_CURRENCY,
     dateFormat: "DD/MM/YYYY",
@@ -432,7 +439,9 @@ export const useSettingsStore = create<SettingsStore>((set, get, store) => ({
         }),
 
     // ── Theme ─────────────────────────────────────────────────────────────────
-    theme: "dark",
+    // Start from the class public/theme-boot.js set before first paint, so the
+    // first commit does not toggle the theme before settings load.
+    theme: initialTheme(),
     themeMode: "dark",
     themeSchedule: DEFAULT_THEME_SCHEDULE,
     themeVariant: "default",
