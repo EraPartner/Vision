@@ -27,6 +27,7 @@ import {
   loadLatestRatesToEur,
 } from "./currency/latestRateConversion.ts";
 import { toAppDateString } from "../lib/timezone.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import splitRepository, {
   formatSplit,
@@ -342,7 +343,7 @@ export async function getOwedByRecipient(
   const rows = await splitRepository.getOwedByRecipientRows(recipientId, page);
   return rows.map((row) => ({
     ...formatSplit(row),
-    transaction_date: row.transaction_date,
+    transaction_date: toWireDate(row.transaction_date),
     transaction_memo: row.transaction_memo,
     transaction_amount: toNumber(toDecimal(row.transaction_amount)),
     transaction_currency: row.transaction_currency,

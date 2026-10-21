@@ -7,6 +7,7 @@ import {
 } from "../brands.ts";
 import {
   WireCurrencySchema,
+  WireDateSchema,
   WireTimestampSchema,
   wireListOf,
 } from "./common.ts";
@@ -66,10 +67,10 @@ export const OwedSummaryListSchema = wireListOf(OwedSummaryItemSchema).extend({
 
 /**
  * `splitService.getOwedByRecipient`: a split plus its parent transaction.
- * `transaction_date` is the raw pg `Date`, so it serializes as a timestamp.
+ * `transaction_date` is the transaction's calendar day (`YYYY-MM-DD`).
  */
 export const OwedDetailItemSchema = SplitSchema.extend({
-  transaction_date: WireTimestampSchema,
+  transaction_date: WireDateSchema,
   transaction_memo: z.string().nullable(),
   transaction_amount: z.number(),
   transaction_currency: WireCurrencySchema.nullable(),
