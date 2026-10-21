@@ -254,6 +254,7 @@ const blockerKeys: Record<string, string> = {
     cross_format_identity_missing: "crossFormatIdentity",
     cross_format_identity_ambiguous: "crossFormatIdentityAmbiguous",
     funding_date_mismatch: "fundingDateMismatch",
+    funding_date_ambiguous: "fundingDateAmbiguous",
     ambiguous_funding_history: "ambiguousFunding",
     ambiguous_cash_history: "ambiguousCash",
 };
@@ -264,11 +265,14 @@ const choosableBlockers = [
     "ambiguous_history",
     "cross_format_identity_missing",
     "cross_format_identity_ambiguous",
+    "funding_date_mismatch",
+    "funding_date_ambiguous",
 ];
 /** Of those, the ones with a single counterpart that "Same transaction" names. */
 const sameTransactionBlockers = [
     "existing_assigned_or_imported_history",
     "cross_format_identity_missing",
+    "funding_date_mismatch",
 ];
 
 interface Props {

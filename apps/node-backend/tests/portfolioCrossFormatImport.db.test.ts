@@ -95,15 +95,24 @@ async function commitChoosing(
   });
 }
 
-/** The owner's per-row answer for each row blocked without a booking record id. */
-async function identityAnswers(
+/** The owner's per-row answer for each row blocked for this reason. */
+async function answers(
+  reason: string,
   choice: "keep_both" | "same_transaction",
   ...batchIds: number[]
 ) {
   const { blockers } = await previewPortfolioImportReconciliation({ batchIds });
   return blockers
-    .filter((blocker) => blocker.reason === "cross_format_identity_missing")
+    .filter((blocker) => blocker.reason === reason)
     .map((blocker) => ({ batchId: blocker.batchId, rowId: blocker.rowId!, choice }));
+}
+
+/** The owner's per-row answer for each row blocked without a booking record id. */
+async function identityAnswers(
+  choice: "keep_both" | "same_transaction",
+  ...batchIds: number[]
+) {
+  return answers("cross_format_identity_missing", choice, ...batchIds);
 }
 
 async function blockerReasons(...batchIds: number[]) {
@@ -190,6 +199,9 @@ const IBKR_LINES = {
   // The same 100 USD, booked three days after the workbook's request and receipt.
   depositLate:
     "Transaction History,Data,2026-01-08,U0000000,Cash deposit,Deposit,-,-,-,-,85.0,-,85.0,0.85,-,-,1",
+  // Eight days after a second 100 USD workbook deposit on 2026-01-10.
+  depositLater:
+    "Transaction History,Data,2026-01-18,U0000000,Cash deposit,Deposit,-,-,-,-,85.0,-,85.0,0.85,-,-,1",
   // Fifteen days later: too far to be the same movement.
   depositFar:
     "Transaction History,Data,2026-01-20,U0000000,Cash deposit,Deposit,-,-,-,-,85.0,-,85.0,0.85,-,-,1",
@@ -268,6 +280,7 @@ const FUNDING = {
   usd: deposit("2026-01-05", "REF-1", "USD 100.00"),
   chf: deposit("2026-01-20", "REF-3", "CHF 50.00"),
   pending: deposit("2026-01-25", "REF-4", "USD 999.00", "Pending"),
+  usdLater: deposit("2026-01-10", "REF-5", "USD 100.00"),
   eur: [
     "2026-01-06",
     "REF-2",
@@ -991,19 +1004,168 @@ describeDb("one broker history through more than one export", () => {
       expect(await cash(sleeve)).toEqual([USD]);
     });
 
-    it("records both movements when the owner keeps them apart", async () => {
+    it("records both movements only on the owner's per-row keep choice", async () => {
       const sleeve = await account("IBKR");
       const { csv, funding } = await stageBoth(sleeve, "xlsx");
-      expect(await commitChoosing("preserve_existing", csv, funding)).toMatchObject({
-        imported: 2,
-        duplicates: 0,
+      // Preserving existing facts for the statements is no answer for this row.
+      await expect(commitChoosing("preserve_existing", csv, funding)).rejects.toMatchObject({
+        status: 409,
       });
+      expect(await cash(sleeve)).toEqual([]);
+      const [answer] = await answers("funding_date_mismatch", "keep_both", csv, funding);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv, funding],
+          batchPolicies: [csv, funding].map((batchId) => ({ batchId, adoptPolicy: "preserve_existing" })),
+          rowChoices: [answer!],
+        }),
+      ).toMatchObject({ imported: 2, duplicates: 0 });
       expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
       const repeats = [
         await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve),
         await stage(await fundingWorkbook("late-funding", "xls", ["usd"], []), "ibkr_funding_history", sleeve),
       ];
       expect(await commit(...repeats)).toMatchObject({ imported: 0 });
+      expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
+    });
+
+    it("records the movement once when the owner names it the same transaction, and keeps that for repeats", async () => {
+      const sleeve = await account("IBKR");
+      const { csv, funding } = await stageBoth(sleeve);
+      const [answer] = await answers("funding_date_mismatch", "same_transaction", csv, funding);
+      const preview = await previewPortfolioImportReconciliation({
+        batchIds: [csv, funding],
+        rowChoices: [answer!],
+      });
+      expect(preview).toMatchObject({ ready: true, summary: { duplicate_source: 1 } });
+      expect(
+        preview.actions.find((action) => action.action === "duplicate_source"),
+      ).not.toHaveProperty("policy");
+      expect(
+        await commitReviewedPortfolioImports({ batchIds: [csv, funding], rowChoices: [answer!] }),
+      ).toMatchObject({ imported: 1, duplicates: 1 });
+      expect(await cash(sleeve)).toEqual([USD]);
+      expect(
+        await commit(
+          await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve),
+        ),
+      ).toMatchObject({ imported: 0, duplicates: 1 });
+      expect(
+        await commit(
+          await stage(await fundingWorkbook("late-funding", "xlsx", ["usd"], []), "ibkr_funding_history", sleeve),
+        ),
+      ).toMatchObject({ imported: 0 });
+      expect(await cash(sleeve)).toEqual([USD]);
+    });
+
+    it("keeps the pair blocked when the per-row answers disagree, and lets an answer outrank the statement policy", async () => {
+      const sleeve = await account("IBKR");
+      const { csv, funding } = await stageBoth(sleeve);
+      const { blockers } = await previewPortfolioImportReconciliation({ batchIds: [csv, funding] });
+      const rowOf = (batchId: number) =>
+        blockers.find((blocker) => blocker.batchId === batchId)!.rowId!;
+      await expect(
+        commitReviewedPortfolioImports({
+          batchIds: [csv, funding],
+          rowChoices: [
+            { batchId: csv, rowId: rowOf(csv), choice: "same_transaction" },
+            { batchId: funding, rowId: rowOf(funding), choice: "keep_both" },
+          ],
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await cash(sleeve)).toEqual([]);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv, funding],
+          batchPolicies: [csv, funding].map((batchId) => ({ batchId, adoptPolicy: "prefer_source" })),
+          rowChoices: [{ batchId: csv, rowId: rowOf(csv), choice: "keep_both" }],
+        }),
+      ).toMatchObject({ imported: 2, duplicates: 0 });
+      expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
+    });
+
+    it("offers only keeping apart when several near movements cannot be matched one to one", async () => {
+      const sleeve = await account("IBKR");
+      // 2026-01-08 lies near both workbook deposits, 2026-01-18 near the second only.
+      const csv = await stage(
+        await ibkrCsv("late-two", ["depositLate", "depositLater"]),
+        "ibkr_transaction_history",
+        sleeve,
+      );
+      const funding = await stage(
+        await fundingWorkbook("late-two-funding", "xls", ["usd", "usdLater"], []),
+        "ibkr_funding_history",
+        sleeve,
+      );
+      expect(await blockerReasons(csv, funding)).toEqual({
+        ready: false,
+        reasons: ["funding_date_ambiguous"],
+      });
+      for (const adoptPolicy of ["prefer_source", "preserve_existing"] as const)
+        await expect(commitChoosing(adoptPolicy, csv, funding)).rejects.toMatchObject({
+          status: 409,
+        });
+      await expect(
+        commitReviewedPortfolioImports({
+          batchIds: [csv, funding],
+          rowChoices: await answers("funding_date_ambiguous", "same_transaction", csv, funding),
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await cash(sleeve)).toEqual([]);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv, funding],
+          rowChoices: await answers("funding_date_ambiguous", "keep_both", csv, funding),
+        }),
+      ).toMatchObject({ imported: 4, duplicates: 0 });
+      expect(await cash(sleeve)).toEqual([
+        USD,
+        LATE_EUR,
+        { ...USD, date: "2026-01-10" },
+        { ...LATE_EUR, date: "2026-01-18" },
+      ]);
+    });
+
+    it("blocks the funding workbook after the CSV, then corrects the CSV deposit on the same-transaction answer", async () => {
+      const sleeve = await account("IBKR");
+      await commit(await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve));
+      const funding = await stage(
+        await fundingWorkbook("late-funding", "xls", ["usd"], []),
+        "ibkr_funding_history",
+        sleeve,
+      );
+      await expect(commitChoosing("preserve_existing", funding)).rejects.toMatchObject({ status: 409 });
+      expect(await cash(sleeve)).toEqual([LATE_EUR]);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [funding],
+          rowChoices: await answers("funding_date_mismatch", "same_transaction", funding),
+        }),
+      ).toMatchObject({ imported: 0, adopted: 1 });
+      expect(await cash(sleeve)).toEqual([{ ...USD, date: "2026-01-08" }]);
+      const repeats = [
+        await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve),
+        await stage(await fundingWorkbook("late-funding", "xlsx", ["usd"], []), "ibkr_funding_history", sleeve),
+      ];
+      expect(await blockerReasons(...repeats)).toEqual({ ready: true, reasons: [] });
+      expect(await commit(...repeats)).toMatchObject({ imported: 0 });
+      expect(await cash(sleeve)).toEqual([{ ...USD, date: "2026-01-08" }]);
+    });
+
+    it("keeps the funding workbook beside the CSV deposit on the keep answer", async () => {
+      const sleeve = await account("IBKR");
+      await commit(await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve));
+      const funding = await stage(
+        await fundingWorkbook("late-funding", "xls", ["usd"], []),
+        "ibkr_funding_history",
+        sleeve,
+      );
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [funding],
+          rowChoices: await answers("funding_date_mismatch", "keep_both", funding),
+        }),
+      ).toMatchObject({ imported: 1, adopted: 0 });
       expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
     });
 
@@ -1047,13 +1209,42 @@ describeDb("one broker history through more than one export", () => {
       expect(await cash(sleeve)).toEqual([USD]);
     });
 
-    it("keeps the CSV beside the funding workbook on the keep choice", async () => {
+    it("settles the CSV after the funding workbook on the same-transaction answer without asking again", async () => {
       const sleeve = await account("IBKR");
       await commit(
         await stage(await fundingWorkbook("late-funding", "xlsx", ["usd"], []), "ibkr_funding_history", sleeve),
       );
       const csv = await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve);
-      expect(await commitChoosing("preserve_existing", csv)).toMatchObject({ imported: 1 });
+      const rowChoices = await answers("funding_date_mismatch", "same_transaction", csv);
+      const preview = await previewPortfolioImportReconciliation({ batchIds: [csv], rowChoices });
+      expect(preview).toMatchObject({ ready: true, summary: { duplicate: 1 } });
+      expect(
+        preview.actions.find((action) => action.action === "duplicate"),
+      ).not.toHaveProperty("policy");
+      expect(
+        await commitReviewedPortfolioImports({ batchIds: [csv], rowChoices }),
+      ).toMatchObject({ imported: 0, duplicates: 1 });
+      expect(await cash(sleeve)).toEqual([USD]);
+      const again = await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve);
+      expect(await blockerReasons(again)).toEqual({ ready: true, reasons: [] });
+      expect(await commit(again)).toMatchObject({ imported: 0, duplicates: 1 });
+      expect(await cash(sleeve)).toEqual([USD]);
+    });
+
+    it("keeps the CSV beside the funding workbook only on the per-row keep choice", async () => {
+      const sleeve = await account("IBKR");
+      await commit(
+        await stage(await fundingWorkbook("late-funding", "xlsx", ["usd"], []), "ibkr_funding_history", sleeve),
+      );
+      const csv = await stage(await ibkrCsv("late", ["depositLate"]), "ibkr_transaction_history", sleeve);
+      await expect(commitChoosing("preserve_existing", csv)).rejects.toMatchObject({ status: 409 });
+      expect(await cash(sleeve)).toEqual([USD]);
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [csv],
+          rowChoices: await answers("funding_date_mismatch", "keep_both", csv),
+        }),
+      ).toMatchObject({ imported: 1 });
       expect(await cash(sleeve)).toEqual([USD, LATE_EUR]);
     });
 

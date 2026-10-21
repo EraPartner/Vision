@@ -522,6 +522,100 @@ describe("reviewed portfolio import sessions", () => {
             screen.queryByRole("button", { name: "Same transaction" }),
         ).toBeNull();
     });
+    it("asks per row about an IBKR movement dated outside its funding workbook window and commits that answer", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>;
+                previews.push(body);
+                const choices = (body.row_choices ?? []) as Array<{
+                    batch_id: number;
+                    row_id: number;
+                    choice: string;
+                }>;
+                const reviewed = {
+                    ...plan(),
+                    rowChoices: choices.map((item) => ({
+                        batchId: item.batch_id,
+                        rowId: item.row_id,
+                        choice: item.choice,
+                    })),
+                };
+                if (choices.length > 0) return ok(reviewed);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "funding_date_mismatch",
+                    candidateTransactionIds: [99],
+                };
+                return ok({
+                    ...reviewed,
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/request and completion dates.*"Keep both"/),
+        ).toBeVisible();
+        expect(
+            screen.getByRole("button", { name: "Same transaction" }),
+        ).toBeVisible();
+        await user.click(screen.getByRole("button", { name: "Keep both" }));
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Import reviewed history",
+            }),
+        );
+        await screen.findByText(/new records;/);
+        const choice = {
+            row_choices: [{ batch_id: 11, row_id: 1, choice: "keep_both" }],
+        };
+        expect(previews.at(-1)).toMatchObject(choice);
+        expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
+    });
+    it("offers only Keep both when several IBKR movements near their workbook dates cannot be matched one to one", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                previews.push((await request.json()) as Record<string, unknown>);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "funding_date_ambiguous",
+                    candidateTransactionIds: [],
+                };
+                return ok({
+                    ...plan(),
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/Several IBKR deposits or withdrawals/),
+        ).toBeVisible();
+        expect(screen.getByRole("button", { name: "Keep both" })).toBeVisible();
+        expect(
+            screen.queryByRole("button", { name: "Same transaction" }),
+        ).toBeNull();
+    });
     it.each(["inconsistent_totals"] as const)(
         "rejects a commit result with %s",
         async () => {

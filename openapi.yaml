@@ -7068,10 +7068,13 @@ components:
           description: >-
             The owner's answer for staged rows that resemble an existing
             transaction on the same account (existing_assigned_or_imported_history
-            or ambiguous_history), or a Saxo row without a booking record id
-            (cross_format_identity_missing). keep_both records the row as a new
-            transaction; same_transaction settles it as a duplicate of its single
-            existing candidate or Saxo twin. Each row may occur at most once; a
+            or ambiguous_history), a Saxo row without a booking record id
+            (cross_format_identity_missing, cross_format_identity_ambiguous), or
+            an IBKR funding movement dated just outside its workbook twin's
+            window (funding_date_mismatch, funding_date_ambiguous). keep_both
+            records the row as a new transaction; same_transaction settles it
+            as a duplicate of its single existing candidate, Saxo twin or IBKR
+            funding twin. Each row may occur at most once; a
             row outside the selected batches rejects with 400.
           items:
             type: object
@@ -7239,17 +7242,19 @@ components:
             movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal
             matches a funding workbook movement in type, account and value, but
             its date is up to ten days outside the request and completion
-            window) and cross_format_identity_missing (an otherwise identical
-            Saxo CSV and XLSX row without a booking record id on one side),
+            window), funding_date_ambiguous (several such IBKR look-alikes that
+            cannot be matched one to one; clears only on the row_choices answer
+            keep_both), cross_format_identity_missing (an otherwise identical
+            Saxo CSV and XLSX row without a booking record id on one side) and
             cross_format_identity_ambiguous (several such Saxo look-alikes that
             cannot be matched one to one; clears only on the row_choices answer
             keep_both).
-            funding_date_mismatch clears only on the selected statements'
-            policy: prefer_source records the pair as one event and
-            preserve_existing keeps both. cross_format_identity_missing clears
-            on prefer_source (one event) or on row_choices (same_transaction
+            funding_date_mismatch and cross_format_identity_missing clear on
+            prefer_source (one event) or on row_choices (same_transaction
             records the pair once, keep_both keeps both); preserve_existing
-            leaves it blocked. existing_assigned_or_imported_history (a
+            leaves them blocked. A per-row answer outranks the statement policy,
+            and answers that disagree across a pair leave it blocked.
+            existing_assigned_or_imported_history (a
             same-size trade within seven days that this account already holds,
             without a differing source id of the same specialized export
             format) and ambiguous_history clear on row_choices. Nothing in a
