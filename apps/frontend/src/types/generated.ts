@@ -16216,7 +16216,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Row preview with staged data */
+            /** @description Row preview with staged data. Each row carries already_imported (the ledger already holds its import identity, so commit settles it as a duplicate), and the response's already_imported counts them. */
             200: {
                 headers: {
                     [name: string]: unknown;

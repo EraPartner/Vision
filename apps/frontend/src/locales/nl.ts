@@ -1689,6 +1689,8 @@ const nl: Record<string, string> = {
   'importReview.accounts.newBadge': 'nieuwe rekening wordt aangemaakt',
   'importReview.accounts.title': 'Rekeningen',
   'importReview.accounts.unspecified': 'geen rekening opgegeven',
+  'importReview.alreadyImported.badge': 'Al geïmporteerd',
+  'importReview.alreadyImported.summary': '{n} rijen staan al in je grootboek. Ze worden als duplicaat overgeslagen.',
   'importReview.approve': '{n} rijen importeren',
   'importReview.back': 'Terug naar Import',
   'importReview.category': 'Categorie',

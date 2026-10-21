@@ -145,7 +145,13 @@ export async function getPreviewRows(
                         AND oc.path_name = oc.general || ':' || oc.detail
                  THEN NULL ELSE oc.path_name END AS override_category_path,
             rmp.pattern AS matched_pattern_text,
-            rmp.pattern_kind AS matched_pattern_kind
+            rmp.pattern_kind AS matched_pattern_kind,
+            -- Commit settles a row whose identity the ledger holds as a duplicate.
+            EXISTS (
+              SELECT 1 FROM transactions t
+               WHERE t.dedup_fingerprint = isr.dedup_fingerprint
+                 AND t.dedup_fingerprint_version = isr.dedup_fingerprint_version
+            ) AS already_imported
            FROM import_staging_rows isr
            LEFT JOIN recipients r
              ON r.id = COALESCE(isr.user_override_recipient_id, isr.resolved_recipient_id)

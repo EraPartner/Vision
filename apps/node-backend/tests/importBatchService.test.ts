@@ -50,6 +50,7 @@ function previewRow(
     override_category_path: null,
     matched_pattern_text: null,
     matched_pattern_kind: null,
+    already_imported: false,
     ...overrides,
   };
 }
@@ -170,6 +171,7 @@ describe("getImportBatchPreview", () => {
     await expect(getImportBatchPreview(1)).resolves.toEqual({
       groups: [],
       totals: { exact: 0, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+      already_imported: 0,
     });
   });
 

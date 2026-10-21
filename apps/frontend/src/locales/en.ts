@@ -1689,6 +1689,8 @@ const en: Record<string, string> = {
   'importReview.accounts.newBadge': 'new account will be created',
   'importReview.accounts.title': 'Accounts',
   'importReview.accounts.unspecified': 'unspecified account',
+  'importReview.alreadyImported.badge': 'Already imported',
+  'importReview.alreadyImported.summary': '{n} rows are already in your ledger. They are skipped as duplicates.',
   'importReview.approve': 'Import {n} rows',
   'importReview.back': 'Back to import',
   'importReview.category': 'Category',

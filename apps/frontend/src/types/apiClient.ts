@@ -72,6 +72,8 @@ export interface ImportStagingRow {
     matched_pattern_id: number | null;
     user_override_recipient_id: RecipientId | null;
     override_category_id: CategoryId | null;
+    /** The ledger already holds this row; commit counts it as a duplicate. */
+    already_imported?: boolean;
 }
 
 export interface ImportPreviewGroup {
@@ -99,6 +101,8 @@ export interface ImportPreviewResponse {
         new: number;
         unresolved: number;
     };
+    /** Rows commit will settle as duplicates; absent on older servers. */
+    already_imported?: number;
 }
 
 export interface NetWorthSnapshot {

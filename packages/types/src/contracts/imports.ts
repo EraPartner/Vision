@@ -103,6 +103,8 @@ export const ImportStagingRowSchema = z.looseObject({
   matched_pattern_id: IdSchema.nullable(),
   user_override_recipient_id: RecipientIdSchema.nullable(),
   override_category_id: CategoryIdSchema.nullable(),
+  /** The ledger already holds this row's import identity; commit skips it. */
+  already_imported: z.boolean().optional(),
 });
 
 /** `GET /api/import/batches/:id/preview` (`buildImportBatchPreview`). */
@@ -125,6 +127,8 @@ export const ImportPreviewSchema = z.looseObject({
     }),
   ),
   totals: z.record(z.string(), CountSchema),
+  /** Rows commit will settle as duplicates (`already_imported`). */
+  already_imported: CountSchema.optional(),
 });
 
 /** `mapRow` (repositories/customParserConfigRepository.ts). */

@@ -344,6 +344,7 @@ export default function ImportReviewPage() {
 
     const totalRows =
         preview?.groups.reduce((sum, g) => sum + g.row_count, 0) ?? 0;
+    const alreadyImported = preview?.already_imported ?? 0;
 
     const handleDiscard = async () => {
         const ok = await confirm({
@@ -421,6 +422,16 @@ export default function ImportReviewPage() {
                             </li>
                         ))}
                     </List>
+                    {alreadyImported > 0 && (
+                        <p
+                            role="status"
+                            className="border-t border-border/50 px-6 py-3 type-body text-label-secondary"
+                        >
+                            {t("importReview.alreadyImported.summary", {
+                                n: alreadyImported,
+                            })}
+                        </p>
+                    )}
                 </CardContent>
             </Card>
 
@@ -693,6 +704,17 @@ export default function ImportReviewPage() {
                                                             {row.memo}
                                                         </span>
                                                     )}
+                                                    {row.already_imported ===
+                                                        true && (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="shrink-0"
+                                                        >
+                                                            {t(
+                                                                "importReview.alreadyImported.badge",
+                                                            )}
+                                                        </Badge>
+                                                    )}
                                                     <span
                                                         className={cn(
                                                             "ml-auto shrink-0 font-medium tabular-nums",
@@ -777,7 +799,9 @@ export default function ImportReviewPage() {
                                 {t("importReview.committing")}
                             </>
                         ) : (
-                            t("importReview.approve", { n: totalRows })
+                            t("importReview.approve", {
+                                n: totalRows - alreadyImported,
+                            })
                         )}
                     </Button>
                 </div>
