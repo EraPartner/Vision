@@ -694,7 +694,9 @@ the packaged main process. The window-open handler denies every new Electron
 window; a renderer link with `target="_blank"` reaches `shell.openExternal` only
 when `externalBrowserUrl` (`packaging/electron/runtime/renderer-security.ts`)
 accepts it: an absolute `http:` or `https:` URL without credentials, outside the
-app's own origin and every loopback host. `file:`, `javascript:`, `data:`,
+app's own origin and every loopback or unspecified host (`localhost`, 127.0.0.0/8,
+0.0.0.0/8, `::1`, `::`, and those IPv4 addresses embedded in IPv6 such as
+`::ffff:127.0.0.1`). `file:`, `javascript:`, `data:`,
 `mailto:` and custom schemes are dropped. Attachments do not use links: the
 renderer fetches their bytes and saves them with `downloadBlob`.
 

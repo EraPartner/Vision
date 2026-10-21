@@ -21,12 +21,76 @@ export function isTrustedRendererUrl(
   return false;
 }
 
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
+const LOOPBACK_HOSTS = new Set(["localhost"]);
+
+/** 127.0.0.0/8 (loopback) and 0.0.0.0/8 (unspecified, "this host"). */
+function isLocalIpv4(octets: readonly number[]): boolean {
+  return octets[0] === 127 || octets[0] === 0;
+}
+
+/**
+ * The eight 16-bit groups of a bracketed IPv6 hostname as the URL parser
+ * normalizes it (lowercase hex, `::` compression, no embedded dotted IPv4),
+ * or undefined for any other hostname.
+ */
+function ipv6Groups(host: string): number[] | undefined {
+  const match = /^\[([0-9a-f:]+)\]$/.exec(host);
+  if (!match) return undefined;
+  const [head = "", tail, extra] = match[1]!.split("::");
+  if (extra !== undefined) return undefined;
+  const parse = (part: string) =>
+    part ? part.split(":").map((group) => Number.parseInt(group, 16)) : [];
+  const left = parse(head);
+  const right = tail === undefined ? [] : parse(tail);
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (tail === undefined && missing !== 0)) return undefined;
+  const groups = [...left, ...new Array<number>(missing).fill(0), ...right];
+  return groups.every((group) => Number.isInteger(group) && group <= 0xffff)
+    ? groups
+    : undefined;
+}
+
+/**
+ * Whether an IPv6 hostname reaches this machine: `::` (unspecified), `::1`
+ * (loopback), or an IPv4-mapped (`::ffff:a.b.c.d`), IPv4-translated
+ * (`::ffff:0:a.b.c.d`) or IPv4-compatible (`::a.b.c.d`) form of a loopback
+ * or unspecified IPv4 address.
+ */
+function isLocalIpv6(host: string): boolean {
+  const groups = ipv6Groups(host);
+  if (!groups) return false;
+  const embedded = [
+    groups[6]! >> 8,
+    groups[6]! & 0xff,
+    groups[7]! >> 8,
+    groups[7]! & 0xff,
+  ];
+  const zeros = (count: number) =>
+    groups.slice(0, count).every((group) => group === 0);
+  if (zeros(7) && groups[7]! <= 1) return true;
+  return (
+    ((zeros(5) && (groups[5] === 0 || groups[5] === 0xffff)) ||
+      (zeros(4) && groups[4] === 0xffff && groups[5] === 0)) &&
+    isLocalIpv4(embedded)
+  );
+}
+
+/** Whether a URL hostname names this machine rather than a public host. */
+function isLocalHost(hostname: string): boolean {
+  // A fully qualified name may end in a dot: `localhost.` is still local.
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (LOOPBACK_HOSTS.has(host) || host.endsWith(".localhost")) return true;
+  // The URL parser already normalized decimal, octal and hex IPv4 forms.
+  const ipv4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(host);
+  if (ipv4) return isLocalIpv4(ipv4.slice(1).map(Number));
+  return isLocalIpv6(host);
+}
 
 /**
  * Returns the normalized URL a renderer link may open in the OS browser, or
  * undefined. Only absolute http(s) URLs without credentials qualify. The app's
- * own origin and every loopback host are refused, so a link can never hand the
+ * own origin and every loopback or unspecified host (IPv4, IPv6, or IPv4
+ * embedded in IPv6) are refused, so a link can never hand the
  * local backend (or another local service) to the system browser.
  */
 export function externalBrowserUrl(
@@ -46,13 +110,7 @@ export function externalBrowserUrl(
   } catch {
     return undefined;
   }
-  const host = url.hostname.toLowerCase();
-  if (
-    LOOPBACK_HOSTS.has(host) ||
-    host.endsWith(".localhost") ||
-    /^127\.\d+\.\d+\.\d+$/.test(host)
-  )
-    return undefined;
+  if (isLocalHost(url.hostname)) return undefined;
   return url.href;
 }
 

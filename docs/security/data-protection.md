@@ -375,7 +375,9 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 - Implementation: the handler always returns `{ action: 'deny' }`. It hands the URL to
   `shell.openExternal` only when `externalBrowserUrl` in
   `packaging/electron/runtime/renderer-security.ts` accepts it: a parsed absolute `http:`/`https:`
-  URL with no credentials that is neither the app's own origin nor a loopback host
+  URL with no credentials that is neither the app's own origin nor a loopback or unspecified host
+  (`localhost`, 127.0.0.0/8, 0.0.0.0/8, `::1`, `::`, or such an IPv4 address embedded in IPv6, as
+  in `::ffff:127.0.0.1`)
 - Impact: `target="_blank"` links to public web pages open in the OS browser; `file:`,
   `javascript:`, `data:` and custom schemes, and links back to the local backend, are dropped.
   Attachments are fetched and saved in the renderer instead of opened in a window
