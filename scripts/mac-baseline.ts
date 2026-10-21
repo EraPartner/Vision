@@ -1145,6 +1145,19 @@ async function main(): Promise<number> {
   caffeinate.unref();
 
   const warnings: string[] = [];
+  const machine = machineInfo();
+  // Background work (Spotlight, Shortcuts, updates) skews whole-machine power.
+  const busy = (run("ps", ["-Ao", "pcpu=,comm=", "-r"]) ?? "")
+    .split("\n")
+    .map((line) => /^\s*([\d.]+)\s+(.*)$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .filter((match) => Number(match[1]) >= 25 && !/Vision/.test(match[2] ?? ""))
+    .map((match) => `${path.basename(match[2] ?? "")} ${match[1]}%`);
+  if (busy.length > 0) {
+    warnings.push(
+      `busy processes at start (whole-machine GPU/power numbers include them): ${busy.join(", ")}`,
+    );
+  }
   let recorder: PowermetricsRecorder | null = null;
   if (options.powermetrics) {
     log("sudo is needed once for powermetrics:");
@@ -1188,7 +1201,7 @@ async function main(): Promise<number> {
       trace: options.trace,
       quick: options.quick,
     },
-    machine: machineInfo(),
+    machine,
     repoHead: run("git", [
       "-C",
       path.join(import.meta.dirname, ".."),
