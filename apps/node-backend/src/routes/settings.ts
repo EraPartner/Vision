@@ -340,6 +340,7 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
     adminMode: false,
     visualEffects: "standard",
     autoAdaptDisplay: true,
+    fullEffects: false,
     startupSection: "budgeting",
     colorblindGainLoss: false,
   },

@@ -23,6 +23,14 @@ describe("isLargeDisplay", () => {
         expect(isLargeDisplay(1280, 800, 2)).toBe(false);
     });
 
+    it("never treats a built-in panel as large, even in a More Space scaled mode", () => {
+        // M1 Air "More Space": 1680x1050 @2x = 7.06M backing px > threshold.
+        expect(isLargeDisplay(1680, 1050, 2)).toBe(true);
+        expect(isLargeDisplay(1680, 1050, 2, true)).toBe(false);
+        // External 4K stays large when the desktop app says it is external.
+        expect(isLargeDisplay(1920, 1080, 2, false)).toBe(true);
+    });
+
     it("treats 1080p and QHD externals at 1× as not large", () => {
         expect(isLargeDisplay(1920, 1080, 1)).toBe(false);
         expect(isLargeDisplay(2560, 1440, 1)).toBe(false);

@@ -152,6 +152,7 @@ export interface ElectronInvokeContract {
     result: ElectronSuccessResult;
   };
   "app:get-accent-color": { args: []; result: string | null };
+  "app:display-is-internal": { args: []; result: boolean | null };
   "theme:persist-splash": {
     args: [colors: SplashThemeColors];
     result: ElectronSuccessResult;
@@ -211,6 +212,8 @@ export interface ElectronApiBridge {
   setLanguage?: ElectronInvoke<"app:set-language">;
   setVibrancy?: ElectronInvoke<"app:set-vibrancy">;
   getAccentColor: ElectronInvoke<"app:get-accent-color">;
+  /** Built-in panel check for the large-display effects cap. */
+  displayIsInternal?: ElectronInvoke<"app:display-is-internal">;
   persistSplashTheme?: ElectronInvoke<"theme:persist-splash">;
   onAccentColorChanged: ElectronSubscription<"app:accent-color-changed">;
   onMenuAction: ElectronSubscription<"menu:action">;

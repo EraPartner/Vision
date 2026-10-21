@@ -15,6 +15,7 @@ import { ChartTooltip, type ChartTooltipDatum } from "./ChartTooltip";
 import { useChartKeyboardNav } from "./keyboardNav";
 import { CHART_NEUTRAL, getChartColor } from "./palette";
 import { durations, easings } from "@/lib/motion";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface BarSeries<Datum> {
@@ -143,6 +144,8 @@ function BarLayerInner<Datum>({
     onEnter,
     onLeave,
 }: BarLayerProps<Datum>) {
+    // "Full effects" restores the uncapped stagger tail.
+    const staggerCap = useFullEffects() ? Infinity : 0.4;
     return (
         <>
             {data.map((d, di) => {
@@ -183,7 +186,7 @@ function BarLayerInner<Datum>({
                                     // Clamp the stagger tail so a decade of months
                                 // doesn't run ~4s of entrance animation; past
                                 // ~0.4s the stagger is already imperceptible.
-                                delay: Math.min((di * series.length + si) * 0.015, 0.4),
+                                delay: Math.min((di * series.length + si) * 0.015, staggerCap),
                                 }}
                                 onPointerEnter={() =>
                                     onEnter(d, x + bw / 2, yTop, di)
@@ -222,7 +225,7 @@ function BarLayerInner<Datum>({
                                 // Clamp the stagger tail so a decade of months
                                 // doesn't run ~4s of entrance animation; past
                                 // ~0.4s the stagger is already imperceptible.
-                                delay: Math.min((di * series.length + si) * 0.015, 0.4),
+                                delay: Math.min((di * series.length + si) * 0.015, staggerCap),
                             }}
                             onPointerEnter={() =>
                                 onEnter(d, xStart + w, y + bh / 2, di)

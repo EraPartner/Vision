@@ -134,7 +134,12 @@ function TableView({
     return (
         <div className="max-h-72 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60">
             <Table>
-                <TableHeader className="sticky top-0 bg-card">
+                <TableHeader
+                    className={cn(
+                        "sticky top-0",
+                        appSettings.fullEffects ? "glass-thin" : "bg-card",
+                    )}
+                >
                     <TableRow>
                         {cols.map((col) => (
                             <TableHead key={col} className="h-8 px-2">

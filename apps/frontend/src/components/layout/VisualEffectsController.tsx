@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
+import { useFullEffects, useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
 
 /**
  * Renders nothing; tags <html> with the visual-effects state (ADR-075):
@@ -12,6 +12,11 @@ import { useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
  * - `fx-static-atmosphere` — large display but the user kept a higher tier
  *   (auto-adapt off): the aurora blobs stay visible but stop drifting, so
  *   the compositor can go idle between frames.
+ * - `fx-full` — the "Full effects" switch is on: index.css restores the
+ *   effects that were removed or reduced to save GPU work (smooth aurora
+ *   drift, frosted modal overlay, frosted pivot column, dark-mode halo,
+ *   animated card hover shadow, web blur under vibrancy). Components read
+ *   the same switch through useFullEffects for class-level restores.
  * - `fx-idle-atmosphere` — the window is blurred or the tab hidden: the
  *   aurora drift is paused. While it runs, every backdrop-filter surface
  *   (sidebar, topbar, all glass cards) re-blurs on every vsync because the
@@ -21,6 +26,7 @@ import { useVisualEffectsTier } from '@/hooks/useVisualEffectsTier';
  */
 export function VisualEffectsController() {
     const { tier, largeDisplay } = useVisualEffectsTier();
+    const fullEffects = useFullEffects();
 
     useEffect(() => {
         const root = document.documentElement;
@@ -31,6 +37,14 @@ export function VisualEffectsController() {
             root.classList.remove('fx-reduced', 'fx-enhanced', 'fx-static-atmosphere');
         };
     }, [tier, largeDisplay]);
+
+    useEffect(() => {
+        const root = document.documentElement;
+        root.classList.toggle('fx-full', fullEffects);
+        return () => {
+            root.classList.remove('fx-full');
+        };
+    }, [fullEffects]);
 
     useEffect(() => {
         const root = document.documentElement;

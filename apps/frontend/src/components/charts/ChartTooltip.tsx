@@ -1,5 +1,6 @@
 /**
- * ChartTooltip — opaque tooltip surface for visx charts.
+ * ChartTooltip — opaque tooltip surface for visx charts (glass-thick under
+ * the "Full effects" switch, as before the moving-blur removal).
  *
  * Renders into a portal with viewport-aware positioning:
  *  - Default placement: centered above the anchor point.
@@ -16,6 +17,7 @@ import { createPortal } from "react-dom";
 
 import { durations, easings } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
 export interface ChartTooltipDatum {
     readonly label: string;
@@ -107,6 +109,7 @@ export function ChartTooltip({
     className,
 }: ChartTooltipProps) {
     const reduce = useReducedMotion();
+    const fullEffects = useFullEffects();
     const anchorRef = useRef<HTMLSpanElement>(null);
     const positionerRef = useRef<HTMLDivElement | null>(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -235,7 +238,10 @@ export function ChartTooltip({
                             ease: easings.outExpo,
                         }}
                         className={cn(
-                            "min-w-[140px] max-w-[260px] rounded-card corner-continuous border border-border/60 bg-popover px-3 py-2 type-footnote text-popover-foreground shadow-elevation-3",
+                            "min-w-[140px] max-w-[260px] rounded-card corner-continuous border border-border/60 px-3 py-2 type-footnote text-popover-foreground",
+                            fullEffects
+                                ? "glass-thick shadow-glass-elevated"
+                                : "bg-popover shadow-elevation-3",
                             className,
                         )}
                     >

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { useOllamaModels, useOllamaStatus } from "@/hooks/useOllamaStatus";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
 interface ChatComposerProps {
     onSend: (message: string) => void;
@@ -38,6 +39,7 @@ export function ChatComposer({
     onUseToolsChange,
 }: ChatComposerProps) {
     const { t } = useLanguage();
+    const fullEffects = useFullEffects();
     const [value, setValue] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const modelId = useId();
@@ -77,7 +79,13 @@ export function ChatComposer({
     };
 
     return (
-        <div className="border-t border-border/60 bg-card px-4 py-3">
+        <div
+            className={
+                fullEffects
+                    ? "glass-thin !border-x-0 !border-b-0 px-4 py-3"
+                    : "border-t border-border/60 bg-card px-4 py-3"
+            }
+        >
             <div className="mx-auto flex max-w-3xl flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <div className="flex items-center gap-2">

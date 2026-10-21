@@ -49,6 +49,7 @@ describe("migrateAppSettings — blob validation", () => {
             adminMode: true,
             visualEffects: "enhanced",
             autoAdaptDisplay: false,
+            fullEffects: true,
             startupSection: "portfolio",
             autoClearPlannedOnMatch: false,
             colorblindGainLoss: true,

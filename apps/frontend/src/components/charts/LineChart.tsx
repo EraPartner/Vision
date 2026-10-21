@@ -28,6 +28,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useFullEffects } from "@/hooks/useVisualEffectsTier";
 
 export interface LineSeries<Datum> {
     readonly key: string;
@@ -189,6 +190,7 @@ function Inner<Datum>({
     const { appSettings } = useAppSettings();
     const formatPercent = usePercentFormatter();
     const reduce = useReducedMotion();
+    const fullEffects = useFullEffects();
 
     const { innerWidth, innerHeight, stableXAccessor, xScale } =
         useCartesianFrame({
@@ -608,7 +610,10 @@ function Inner<Datum>({
                       return (
                           <div
                               className={cn(
-                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 type-footnote font-medium tabular-nums shadow-elevation-1",
+                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 type-footnote font-medium tabular-nums",
+                                  fullEffects
+                                      ? "glass-thick"
+                                      : "border border-border/60 bg-card shadow-elevation-1",
                                   rising
                                       ? "text-gain"
                                       : b - a < 0

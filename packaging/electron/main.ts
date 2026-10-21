@@ -2384,6 +2384,24 @@ registerHandler(
   { senderFailure: { success: false } },
 );
 
+// Whether the main window sits on a built-in panel (the Mac's own screen).
+// The renderer's large-display effects cap (ADR-075, lib/visualEffects.ts)
+// exempts built-in panels: a MacBook in a "More Space" scaled mode reports
+// more backing pixels than the 6 MP threshold, but the threshold exists for
+// external 4K/5K outputs. null when the window or display is unknown.
+registerHandler(
+  "app:display-is-internal",
+  () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
+    try {
+      return screen.getDisplayMatching(mainWindow.getBounds()).internal;
+    } catch {
+      return null;
+    }
+  },
+  { senderFailure: null },
+);
+
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor(): string | null {
   try {
