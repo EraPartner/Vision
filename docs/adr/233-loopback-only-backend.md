@@ -33,6 +33,9 @@ Accepted on 2026-10-20. Supersedes the `ADMIN_AUTH_TOKEN` bearer check of
 corrected to superseded by ADR-176. The `ADMIN_AUTH_TOKEN` passthrough recorded in
 [[docs/adr/113-native-macos-runtime|ADR-113]] no longer exists.
 
+Amended by [[docs/adr/237-cross-site-guard-for-every-method|ADR-237]] (2026-10-21): the CSRF guard now
+also blocks cross-site safe methods, closing the open decision below.
+
 ## Date
 
 2026-10-20

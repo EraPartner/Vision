@@ -2,8 +2,8 @@
 title: Security - Data Protection & CSP
 type: security
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags: [security, csp, same-origin, loopback, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, host-guard, dns-rebinding, zip-bomb, response-cap, content-length]
 description: Content Security Policy, the loopback-only network boundary, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). 2026-10-20: CORS, the admin token and proxy support removed; the backend is loopback-only (ADR-233). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
@@ -110,7 +110,7 @@ The backend sends no CORS headers and does not answer CORS preflights
 ([[docs/adr/233-loopback-only-backend|ADR-233]]). Every legitimate client is same-origin: the
 packaged renderer loads the backend's own origin, and in development the Vite proxy forwards `/api`
 from the dev server's origin. A page on any other origin therefore cannot read API responses. The
-CSRF guard below still stops cross-site state-changing requests from executing, because the
+CSRF guard below still stops cross-site requests of every method from executing, because the
 same-origin policy hides responses but does not block requests.
 
 ---
@@ -450,10 +450,10 @@ with the backend's own port. IP spellings are canonicalized first (`127.1`, `0x7
 `[0:0:0:0:0:0:0:1]` match). Missing, malformed or foreign Host values, including a DNS-rebinding
 hostname, receive 403. `X-Forwarded-Host`, Origin and fetch metadata cannot bypass it.
 
-**`csrfGuard.ts` — `createCsrfGuard`** — blocks cross-site state-changing browser requests across
-`/api`. Strategy (zero-config, no tokens/cookies):
+**`csrfGuard.ts` — `createCsrfGuard`** — blocks cross-site browser requests of every method across
+`/api` ([[docs/adr/237-cross-site-guard-for-every-method|ADR-237]]). `/health` and SPA navigations
+are outside it. Strategy (zero-config, no tokens/cookies):
 
-- `GET`/`HEAD`/`OPTIONS` are always allowed.
 - `Sec-Fetch-Site` header (sent by Chrome 76+, Firefox 90+, Safari 16.4+) is authoritative:
   - `same-origin` or `none` (typed URL, curl, Electron IPC): allow.
   - `same-site` or `cross-site`: reject with 403.
@@ -471,9 +471,9 @@ app.use("/api", csrfGuard);
 mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminRouter);
 ```
 
-> [!warning] Cross-site GET reads
-> The CSRF guard does not block safe methods. A cross-site page cannot read the response (no
-> CORS), but a GET still executes. Guarding safe methods is an open decision.
+> [!note] Cross-site GET requests
+> Since ADR-237 the guard also blocks cross-site `GET`, `HEAD` and `OPTIONS`, so a cross-site page
+> can no longer run aggregations, provider calls or timing probes through the API.
 
 Code links: [[apps/node-backend/src/middleware/hostGuard.ts]], [[apps/node-backend/src/middleware/csrfGuard.ts]]
 

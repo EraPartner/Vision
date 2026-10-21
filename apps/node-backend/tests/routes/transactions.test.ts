@@ -732,6 +732,25 @@ describe("Transaction Routes", () => {
       expect(bodyAt(prod, "error", "message")).not.toBe(PROD_5XX_MESSAGE);
     });
 
+    it("the CSRF guard blocks a cross-site GET and allows a same-origin one", async () => {
+      transactionRepository.getAllWithCount.mockResolvedValue({ rows: [], total: 0 });
+
+      const blocked = await api
+        .get("/api/transactions/")
+        .set("Sec-Fetch-Site", "cross-site")
+        .expect(403);
+      expect(blocked.body).toEqual(
+        errEnvelope({ code: "FORBIDDEN", message: "Cross-site request blocked" }),
+      );
+      expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+
+      await api
+        .get("/api/transactions/")
+        .set("Sec-Fetch-Site", "same-origin")
+        .expect(200);
+      expect(transactionRepository.getAllWithCount).toHaveBeenCalledTimes(1);
+    });
+
     it("the CSRF guard blocks a cross-site POST before the router runs", async () => {
       const res = await api
         .post("/api/transactions/")

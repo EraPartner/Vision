@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-10-21
 tags:
   [
     guide,
@@ -96,8 +96,8 @@ The API has no user authentication. Its boundary is the machine itself
   parsing, health checks or routes. `X-Forwarded-Host` is ignored.
 - The backend sends no CORS headers. The frontend reaches it same-origin: the backend serves the
   built app, and in development the Vite proxy forwards `/api` with `changeOrigin: true`.
-- The Cross-Site Request Forgery (CSRF) guard rejects cross-site state-changing requests on the
-  whole `/api` plane.
+- The Cross-Site Request Forgery (CSRF) guard rejects cross-site requests of every method on the
+  whole `/api` plane (ADR-237).
 - Do not expose PostgreSQL to the network.
 
 ## Backup and restore

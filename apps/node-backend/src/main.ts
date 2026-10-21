@@ -33,7 +33,7 @@ import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.t
 import { runWarmupTasks, type WarmupStatus } from "./startup/warmup.ts";
 import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.ts";
 
-// Blocks cross-site state-changing requests (browser CSRF), which the loopback
+// Blocks cross-site requests of every method (browser CSRF, ADR-237), which the loopback
 // binding alone cannot stop. Mounted across the whole data plane below; the
 // alias documents intent at the (now redundant) admin mount point.
 const csrfAllowedOrigins = loopbackOrigins(settings.server.port, {
