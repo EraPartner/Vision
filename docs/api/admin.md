@@ -750,6 +750,8 @@ Retrieve rolling request metrics per route from the in-memory window (last 15 mi
 **Notes:**
 
 - Metrics are in-memory only and reset on backend restart
+- `path` is the full mounted route pattern (for example `/api/admin/database/tables/:table/mutate`),
+  for failed requests too, so it lines up with `GET /api/admin/endpoints`
 - Routes with zero traffic in the window are omitted
 - `error_rate` is `errors / count` (0–1)
 - Latency percentiles are computed from the rolling bucket window

@@ -405,6 +405,37 @@ describe("Admin Routes", () => {
       expect(res.body).toEqual(okEnvelope({ items: [], total: 0 }));
     });
   });
+
+  describe("GET /metrics/requests", () => {
+    // Regression: a failure handled by the app-level error handler was
+    // recorded after the router had restored req.baseUrl, so it showed up as
+    // "POST /database/tables/:table/mutate" and never lined up with the
+    // endpoint manifest.
+    it("records a failed request under its full mounted route path", async () => {
+      await api
+        .post(`${BASE}/database/tables/transactions/mutate`)
+        .send({ changes: "not-an-array" })
+        .expect(400);
+
+      const res = await api.get(`${BASE}/metrics/requests`).expect(200);
+      const items = bodyAt(res, "data", "items") as Array<{
+        method: string;
+        path: string;
+        errors: number;
+      }>;
+
+      expect(items).toContainEqual(
+        expect.objectContaining({
+          method: "POST",
+          path: "/api/admin/database/tables/:table/mutate",
+          errors: 1,
+        }),
+      );
+      expect(items.map((item) => item.path)).not.toContain(
+        "/database/tables/:table/mutate",
+      );
+    });
+  });
 });
 
 function mockGitHubReleaseBody(body: string) {
