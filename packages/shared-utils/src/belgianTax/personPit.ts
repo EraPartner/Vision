@@ -752,6 +752,63 @@ export function computeInvestmentSideCalc(
     return { dividendWhtReclaim, savingsInterestTax };
 }
 
+/** The tax credits charged on a tax, per kind. Their sum is the applied total. */
+export interface AppliedTaxCreditParts {
+    /** Reduction for pensions (arts 147-153). */
+    pension: number;
+    /** Service-voucher credit (dienstencheques / titres-services). */
+    serviceVouchers: number;
+    /** Every other tax reduction (donations, childcare, pension savings, ...). */
+    otherReductions: number;
+    /** Regional own-home credit. */
+    ownHome: number;
+}
+
+/**
+ * Split the credits charged on a tax (`applied` = min(sum of the credits, tax)) into their
+ * kinds for the breakdown rows. The reduction for pensions is charged first (special finance
+ * law art. 5/2 §2, 4°, a); the other credits share what is left. That share is shown in a fixed
+ * presentation order (service vouchers, other reductions, own-home credit last, the credit the
+ * engine reports as lost when the tax runs out). Only the split of the rows depends on that
+ * order: the applied total, and so the tax, does not.
+ */
+export function splitAppliedTaxCredits(
+    applied: number,
+    credits: {
+        pension: number;
+        reductionsTotal: number;
+        serviceVouchers: number;
+        ownHome: number;
+    },
+): AppliedTaxCreditParts {
+    let left = Math.max(applied, 0);
+    const take = (amount: number) => {
+        const part = Math.min(Math.max(amount, 0), left);
+        left -= part;
+        return part;
+    };
+    const pension = take(credits.pension);
+    const serviceVouchers = take(credits.serviceVouchers);
+    const otherReductions = take(credits.reductionsTotal - credits.serviceVouchers);
+    const ownHome = take(credits.ownHome);
+    return { pension, serviceVouchers, otherReductions, ownHome };
+}
+
+/** Sum the per-kind parts of several taxes (household members). */
+export function addAppliedTaxCreditParts(
+    parts: readonly AppliedTaxCreditParts[],
+): AppliedTaxCreditParts {
+    return parts.reduce<AppliedTaxCreditParts>(
+        (acc, p) => ({
+            pension: acc.pension + p.pension,
+            serviceVouchers: acc.serviceVouchers + p.serviceVouchers,
+            otherReductions: acc.otherReductions + p.otherReductions,
+            ownHome: acc.ownHome + p.ownHome,
+        }),
+        { pension: 0, serviceVouchers: 0, otherReductions: 0, ownHome: 0 },
+    );
+}
+
 export interface CalculationBreakdownValues {
     table: BelgianTaxYearTable;
     grossIncome: number;
@@ -769,11 +826,12 @@ export interface CalculationBreakdownValues {
     maritalQuotientTransfer: number;
     maritalQuotientBenefit: number;
     personalExemptionBenefit: number;
-    /** Reduction for pensions (arts 147-153); adds a row when > 0. */
-    pensionReduction: number;
-    ownHomeCredit: number;
-    serviceVoucherCredit: number;
-    federalTaxCredits: number;
+    /**
+     * The applied credits (`federalTaxCredits`) split into their parts by
+     * {@link splitAppliedTaxCredits}; one row per part > 0, so the credit rows
+     * add up to exactly the credits charged on the tax.
+     */
+    appliedCredits: AppliedTaxCreditParts;
     federalPITBeforeExemption: number;
     federalPITAfterReductions: number;
     communalSurchargePercent: number;
@@ -865,27 +923,34 @@ export function buildCalculationBreakdown(
                   },
               ]
             : []),
-        ...(v.pensionReduction > 0
-            ? [{ label: "Pension reduction (arts 147-153)", amount: -v.pensionReduction }]
+        // The applied credits, one row per kind: they add up to the credits charged on the
+        // tax, so no row repeats another (a total row used to repeat all of them).
+        ...(v.appliedCredits.pension > 0
+            ? [
+                  {
+                      label: "Pension reduction (arts 147-153)",
+                      amount: -v.appliedCredits.pension,
+                  },
+              ]
             : []),
-        ...(v.ownHomeCredit > 0
-            ? [{ label: "Own-home credit", amount: -v.ownHomeCredit }]
-            : []),
-        ...(v.serviceVoucherCredit > 0
+        ...(v.appliedCredits.serviceVouchers > 0
             ? [
                   {
                       label: "Service-voucher credit (dienstencheques)",
-                      amount: -v.serviceVoucherCredit,
+                      amount: -v.appliedCredits.serviceVouchers,
                   },
               ]
             : []),
-        ...(v.federalTaxCredits > 0
+        ...(v.appliedCredits.otherReductions > 0
             ? [
                   {
-                      label: "Tax Credits (reductions)",
-                      amount: -v.federalTaxCredits,
+                      label: "Other tax reductions",
+                      amount: -v.appliedCredits.otherReductions,
                   },
               ]
+            : []),
+        ...(v.appliedCredits.ownHome > 0
+            ? [{ label: "Own-home credit", amount: -v.appliedCredits.ownHome }]
             : []),
         // Position total, not a deduction step: gross PIT before the exemption
         // benefit and credits listed above. (Was mislabeled "before credits".)

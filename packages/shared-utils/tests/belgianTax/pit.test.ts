@@ -1784,6 +1784,91 @@ describe("reduction for pensions under married_joint (arts 147-153, per spouse b
     });
 });
 
+describe("breakdown credit rows reconcile to the applied credits", () => {
+    const CREDIT_ROWS = [
+        "Pension reduction (arts 147-153)",
+        "Service-voucher credit (dienstencheques)",
+        "Other tax reductions",
+        "Own-home credit",
+    ];
+    const creditRows = (result: ReturnType<typeof computeWithParity>) =>
+        result.breakdown.filter((r) => CREDIT_ROWS.includes(r.label));
+    const amountOf = (result: ReturnType<typeof computeWithParity>, label: string) =>
+        result.breakdown.find((r) => r.label === label)?.amount;
+
+    test("the own-home credit and a donation are each listed once", () => {
+        // Flemish woonbonus 608 (1,520 × 40%) and a donation reduction; the credits charged
+        // are their sum. A total row used to list all of them again (2 × the credits).
+        const result = computeWithParity(
+            profile({
+                grossAnnualIncome: 50_000,
+                region: "flanders",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2015,
+                mortgageRegion: "flanders",
+                mortgageInterestPaid: 2_000,
+                mortgageCapitalRepaid: 3_000,
+                charitableDonations: 1_000,
+                charitableDonationsEligible: true,
+            }),
+        );
+        expect(result.ownHomeCredit).toBeCloseTo(608, 1);
+        expect(amountOf(result, "Own-home credit")).toBeCloseTo(-result.ownHomeCredit, 9);
+        expect(amountOf(result, "Other tax reductions")).toBeCloseTo(
+            -(result.federalTaxCredits - result.ownHomeCredit),
+            9,
+        );
+        expect(amountOf(result, "Other tax reductions")).toBeLessThan(0);
+        // The rows add up to the applied credits, and the tax steps from before the
+        // exemption to after the credits (Flanders: no autonomy factor).
+        const credits = creditRows(result).reduce((s, r) => s + r.amount, 0);
+        expect(credits).toBeCloseTo(-result.federalTaxCredits, 9);
+        expect(
+            result.federalPITBeforeExemption - result.personalExemptionBenefit + credits,
+        ).toBeCloseTo(result.federalPITAfterReductions, 9);
+    });
+
+    test("service vouchers are listed apart from the other reductions, not twice", () => {
+        const result = computeWithParity(
+            profile({
+                grossAnnualIncome: 50_000,
+                region: "wallonia",
+                serviceVoucherCount: 100,
+                serviceVoucherEligible: true,
+                charitableDonations: 1_000,
+                charitableDonationsEligible: true,
+            }),
+        );
+        expect(result.serviceVoucherCredit).toBeGreaterThan(0);
+        expect(amountOf(result, "Service-voucher credit (dienstencheques)")).toBeCloseTo(
+            -result.serviceVoucherCredit,
+            9,
+        );
+        const credits = creditRows(result).reduce((s, r) => s + r.amount, 0);
+        expect(credits).toBeCloseTo(-result.federalTaxCredits, 9);
+    });
+
+    test("credits capped at the tax list only the part charged", () => {
+        // 12,000 pension: tax 272.50, pension reduction charged first takes all of it; the
+        // own-home credit finds no tax left and gets no row.
+        const result = computeWithParity(
+            profile({
+                employmentType: "retired",
+                grossAnnualIncome: 12_000,
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2015,
+                mortgageRegion: "flanders",
+                mortgageInterestPaid: 2_000,
+                mortgageCapitalRepaid: 3_000,
+            }),
+        );
+        expect(result.ownHomeCredit).toBeGreaterThan(0);
+        expect(amountOf(result, "Own-home credit")).toBeUndefined();
+        const credits = creditRows(result).reduce((s, r) => s + r.amount, 0);
+        expect(credits).toBeCloseTo(-result.federalTaxCredits, 9);
+    });
+});
+
 describe("art. 147 al. 1, 2°, b-c: activity income left out of the pension proportion", () => {
     const t25 = getTaxTable(2025);
 
