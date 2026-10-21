@@ -1147,12 +1147,13 @@ function deriveSplashPalette(
       primary,
     );
   if (!m) return undefined;
-  if (
-    theme?.mode === "light" &&
-    isValidHslComponents(theme.surface) &&
-    isValidHslComponents(theme.text)
-  ) {
-    return { base: theme.surface, glow: primary, foreground: theme.text };
+  if (theme?.mode === "light") {
+    // Fallbacks are the light `--background` / `--foreground` in tokens.css.
+    return {
+      base: isValidHslComponents(theme.surface) ? theme.surface : "40 36% 96%",
+      glow: primary,
+      foreground: isValidHslComponents(theme.text) ? theme.text : "200 20% 9%",
+    };
   }
   const [, hue, satText] = m;
   const sat = Number(satText);
@@ -1163,8 +1164,20 @@ function deriveSplashPalette(
   };
 }
 
-function splashDataUrl(): string {
+// In "follow system" mode the persisted colors belong to the appearance of the
+// last run. If macOS has switched since, paint the current appearance with the
+// default palette for it instead of the stale one. Needs nativeTheme.themeSource
+// set first (launch step 0).
+function readLaunchSplashTheme(): SplashThemeColors | undefined {
   const theme = readSplashTheme();
+  if (theme?.themeSource !== "system") return theme;
+  const mode = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+  if (theme.mode === mode) return theme;
+  return { ...theme, mode, surface: undefined, text: undefined };
+}
+
+function splashDataUrl(): string {
+  const theme = readLaunchSplashTheme();
   const derived = deriveSplashPalette(
     theme?.background || DEFAULT_BRAND_PRIMARY,
     theme,
@@ -1299,7 +1312,7 @@ function hslToHex(h: number, s: number, l: number): string {
 
 function splashBackgroundColor(): string {
   try {
-    const theme = readSplashTheme();
+    const theme = readLaunchSplashTheme();
     const derived = deriveSplashPalette(
       theme?.background || DEFAULT_BRAND_PRIMARY,
       theme,

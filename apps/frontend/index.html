@@ -35,51 +35,12 @@
       name="theme-color"
     />
 
-    <!-- Prevent flash-of-light before first paint. This MUST be a plain inline
-         script: a `type="module"` script (even /src/theme-flash.ts) is folded into
-         the deferred main bundle in a production build, so it runs only after the
-         ~400 KB gz entry and default-route preload graph executes — too late to stop the flash. Keep this in sync
-         with theme-flash.ts's class toggle (localStorage key `vision_theme`). -->
-    <script>
-      (function () {
-        try {
-          document.documentElement.classList.toggle(
-            "dark",
-            localStorage.getItem("vision_theme") !== "light",
-          );
-        } catch (e) {
-          document.documentElement.classList.add("dark");
-        }
-        try {
-          var bootPalette = JSON.parse(
-            localStorage.getItem("vision_boot_palette") || "null",
-          );
-          var hsl =
-            /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/;
-          if (
-            bootPalette &&
-            hsl.test(bootPalette.base) &&
-            hsl.test(bootPalette.foreground) &&
-            hsl.test(bootPalette.glow)
-          ) {
-            document.documentElement.style.setProperty(
-              "--vision-boot-bg",
-              bootPalette.base,
-            );
-            document.documentElement.style.setProperty(
-              "--vision-boot-fg",
-              bootPalette.foreground,
-            );
-            document.documentElement.style.setProperty(
-              "--vision-boot-glow",
-              bootPalette.glow,
-            );
-          }
-        } catch (e) {
-          /* Invalid optional boot palette: keep the selected base theme. */
-        }
-      })();
-    </script>
+    <!-- Prevent a flash of the wrong theme before first paint. This MUST be a
+         plain, render-blocking external script: the packaged CSP
+         (`script-src 'self'`) blocks inline scripts, and a `type="module"`
+         script (even /src/theme-flash.ts) is folded into the deferred main
+         bundle, so it runs too late. See public/theme-boot.js. -->
+    <script src="/theme-boot.js"></script>
     <!-- Palette VARIANT (accent colors only — does not affect the light/dark base
          that causes the flash) is applied here; deferred bundling is acceptable. -->
     <script src="/src/theme-flash.ts" type="module"></script>
@@ -94,7 +55,7 @@
          placeholder and the shell that replaces it are the same surface; the
          literal fallbacks match tokens.css (:root / .dark) for the dev server,
          where the stylesheet is injected by JS and is not present at first
-         paint. The light/dark class is already on <html> (inline script above),
+         paint. The light/dark class is already on <html> (theme-boot.js above),
          so both themes are correct with no flash. -->
     <style>
       #boot-splash {

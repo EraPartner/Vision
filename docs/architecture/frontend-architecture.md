@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-21
+updated: 2026-10-21
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -1191,10 +1191,14 @@ Enables utilities such as `text-gain`, `text-loss`, `bg-gain/12`, `bg-loss/12`, 
 
 ### FOUC Prevention
 
-The plain inline script in `index.html` selects light/dark and applies a validated three-token boot
-palette before first paint. `theme-flash.ts` then applies the complete palette before React mounts.
-`ThemeHydration` refreshes the boot cache whenever mode or variant changes. This prevents both a base
-theme flash and the former pre-mount re-tint of the static boot placeholder.
+`public/theme-boot.js`, a render-blocking classic script in the `index.html` head, selects light/dark
+and applies a validated three-token boot palette before first paint. It is an external file because
+the packaged CSP (`script-src 'self'`) blocks inline scripts. In follow-system mode it re-resolves
+`prefers-color-scheme` instead of trusting the last run's theme, and it applies the boot palette only
+for the theme it was saved under. `theme-flash.ts` then applies the complete palette before React
+mounts, and the settings store starts from the class the boot script set. `ThemeHydration` refreshes
+`vision_theme`, `vision_theme_mode` and the boot palette whenever mode or variant changes. This
+prevents both a base theme flash and the former pre-mount re-tint of the static boot placeholder.
 
 ### Settings Integration
 
