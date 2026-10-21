@@ -399,8 +399,8 @@ also resolves with "Preserve existing facts" (`preserve_existing`), which keeps 
 `cross_format_identity_missing` row does not: keeping both could count one event twice, so a
 statement-wide choice made for other rows never decides it. The owner answers that row in the
 review instead: **Same transaction** records the pair once, and **Keep both** records both
-without offering the other export's transaction as a likely copy again (with several look-alikes,
-only **Keep both** applies). A repeat import of a paired row settles as a duplicate without asking
+without offering the other export's transaction as a likely copy again (several look-alikes block as
+`cross_format_identity_ambiguous`, where only **Keep both** is offered). A repeat import of a paired row settles as a duplicate without asking
 again.
 
 Cash adoptions and corrections are written to the cash reconciliation journal and restored by

@@ -657,7 +657,7 @@ export function planCrossFormatSources({
     else
       decide(row, {
         kind: "blocked",
-        reason: "cross_format_identity_missing",
+        reason: "cross_format_identity_ambiguous",
         candidateTransactionIds: [],
       });
   const saxoLedgerRows = context.ledgerSources.filter(
@@ -698,7 +698,7 @@ export function planCrossFormatSources({
     else
       decide(row, {
         kind: "blocked",
-        reason: "cross_format_identity_missing",
+        reason: "cross_format_identity_ambiguous",
         candidateTransactionIds: candidates,
       });
   }

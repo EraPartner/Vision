@@ -825,7 +825,8 @@ is none of its own `Transactie-ID` or `Booking Id` values). Both clear on the se
 clears on `preserve_existing`, which keeps both. `cross_format_identity_missing` never clears on
 `preserve_existing`, since keeping both could count one event twice: the owner answers that row
 with `row_choices` instead, `same_transaction` recording the pair once (without a `policy`) and
-`keep_both` keeping both. With several look-alikes only `keep_both` applies. A per-row answer
+`keep_both` keeping both. With several look-alikes the rows block as
+`cross_format_identity_ambiguous` instead, which only `keep_both` clears. A per-row answer
 outranks the statement policy; answers or policies that disagree across the pair keep it blocked.
 A later import of a row the owner paired settles the same way without asking again.
 An `adjustment` action carries `adjustment` detail with `date`, `units`, `kind`, `basisPolicy`, and

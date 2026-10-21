@@ -86,7 +86,8 @@ is surfaced for the owner instead of being settled by a score.
 - **Owner choices.** Preview and commit accept `row_choices`: `keep_both` records the row as a new
   transaction; `same_transaction` (single candidate or Saxo twin only) settles it as a duplicate.
   Plans echo the applied `rowChoices`. The portfolio import session offers **Keep both** and
-  **Same transaction** on those blockers and on `cross_format_identity_missing`.
+  **Same transaction** on those blockers and on `cross_format_identity_missing`; several Saxo
+  look-alikes block as `cross_format_identity_ambiguous`, which offers only **Keep both**.
 - **Truthful counts.** A cash row whose identity the ledger already holds previews as `duplicate`
   with `cash: true`. Reconciliation commit counts `imported`, `duplicates` and `adopted` disjointly;
   the legacy single-batch commit keeps counting adopted rows among its duplicates. The bank import

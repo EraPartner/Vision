@@ -488,6 +488,40 @@ describe("reviewed portfolio import sessions", () => {
         expect(previews.at(-1)).toMatchObject(choice);
         expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
     });
+    it("offers only Keep both when several Saxo look-alikes cannot be matched one to one", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                previews.push((await request.json()) as Record<string, unknown>);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "cross_format_identity_ambiguous",
+                    candidateTransactionIds: [],
+                };
+                return ok({
+                    ...plan(),
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/cannot be matched one to one/),
+        ).toBeVisible();
+        expect(screen.getByRole("button", { name: "Keep both" })).toBeVisible();
+        expect(
+            screen.queryByRole("button", { name: "Same transaction" }),
+        ).toBeNull();
+    });
     it.each(["inconsistent_totals"] as const)(
         "rejects a commit result with %s",
         async () => {

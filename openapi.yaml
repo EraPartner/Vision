@@ -7240,7 +7240,10 @@ components:
             matches a funding workbook movement in type, account and value, but
             its date is up to ten days outside the request and completion
             window) and cross_format_identity_missing (an otherwise identical
-            Saxo CSV and XLSX row without a booking record id on one side).
+            Saxo CSV and XLSX row without a booking record id on one side),
+            cross_format_identity_ambiguous (several such Saxo look-alikes that
+            cannot be matched one to one; clears only on the row_choices answer
+            keep_both).
             funding_date_mismatch clears only on the selected statements'
             policy: prefer_source records the pair as one event and
             preserve_existing keeps both. cross_format_identity_missing clears
