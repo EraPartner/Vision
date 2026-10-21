@@ -662,6 +662,35 @@ export function nativeEnvContents(
   ].join("\n");
 }
 
+/**
+ * Secrets of removed features (cloud AI and AI reference mapping). Older
+ * runtime env files may still hold them; they are stripped from the file on
+ * the next layout check and never passed to a backend or migration child.
+ */
+export const RETIRED_NATIVE_ENV_KEYS: ReadonlySet<string> = new Set([
+  "OPENAI_API_KEY",
+  "OPENAI_API_ENABLED",
+  "AI_REFERENCE_MAPPING_KEY",
+]);
+
+/** Removes every line that assigns a retired key; other lines stay byte-identical. */
+export function stripRetiredNativeEnv(contents: string): string {
+  const lines = String(contents || "").split("\n");
+  const kept = lines.filter((line) => {
+    const key = /^\s*([A-Z_][A-Z0-9_]*)\s*=/.exec(line)?.[1];
+    return !key || !RETIRED_NATIVE_ENV_KEYS.has(key);
+  });
+  return kept.length === lines.length ? contents : kept.join("\n");
+}
+
+function withoutRetiredEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !RETIRED_NATIVE_ENV_KEYS.has(key)),
+  );
+}
+
 export function ensureNativeAdminEnv(
   contents: string,
   names: Pick<RuntimeNames, "adminRole">,
@@ -710,7 +739,7 @@ export function buildNativeBackendEnv({
     throw new Error("Native backend runtime root is unavailable");
   }
   return safeChildEnv({
-    ...runtimeEnv,
+    ...withoutRetiredEnv(runtimeEnv),
     SERVER_HOST: LOOPBACK_HOST,
     PORT: String(port),
     NODE_ENV: "production",
@@ -1231,7 +1260,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         0o600,
       );
     } else {
-      const upgraded = ensureNativeAdminEnv(existing, names);
+      const upgraded = stripRetiredNativeEnv(
+        ensureNativeAdminEnv(existing, names),
+      );
       databaseConfigFromEnv(upgraded);
       if (upgraded !== existing) await writeAtomic(paths.env, upgraded, 0o600);
       await fs.promises.chmod(paths.env, 0o600);
@@ -2013,7 +2044,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         timeout: 15 * 60_000,
         maxBuffer: 32 * 1024 * 1024,
         env: safeChildEnv({
-          ...runtimeEnv,
+          ...withoutRetiredEnv(runtimeEnv),
           VISION_RUNTIME_ROOT: runtimeRoot || repoRoot,
         }),
       },

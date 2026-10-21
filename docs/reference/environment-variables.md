@@ -2,8 +2,8 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     reference,
@@ -126,7 +126,9 @@ disable a runtime's independent auto-loading; see [[docs/guides/backend-configur
 > `OPENAI_API_*`, `AGENTCLOAK_*` and `AI_REFERENCE_MAPPING_KEY` were removed with the OpenAI API
 > route, AgentCloak and scoped reversible references
 > ([[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]]). Leftover lines in `.env.local`
-> or the packaged `runtime.env` are ignored; you can delete them.
+> are ignored; you can delete them. The desktop app removes `OPENAI_API_KEY`,
+> `OPENAI_API_ENABLED` and `AI_REFERENCE_MAPPING_KEY` from the packaged `runtime.env` on its next
+> launch and never passes them to the backend or migration process.
 
 ## Kinesis Price Provider
 

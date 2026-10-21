@@ -1153,6 +1153,44 @@ test("native first-start layout is restrictive and safely resumable", async () =
   }
 });
 
+test("native layout strips retired secrets from an existing env file once", async () => {
+  const temp = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), "vision-native-retired-env-"),
+  );
+  try {
+    const runtime = createNativeRuntime({
+      userDataDir: temp,
+      repoRoot: repoRoot,
+      runtimeId: "vision_retired_env_test",
+    });
+    await runtime.ensureLayout();
+    const current = await fs.promises.readFile(runtime.paths.env, "utf8");
+    await fs.promises.writeFile(
+      runtime.paths.env,
+      [
+        current.replace(/\n$/, ""),
+        "OPENAI_API_KEY=sk-synthetic-retired",
+        "OPENAI_API_ENABLED=true",
+        "AI_REFERENCE_MAPPING_KEY=synthetic-mapping-key",
+        "FRED_API_KEY=kept",
+        "",
+      ].join("\n"),
+      { mode: 0o600 },
+    );
+
+    await runtime.ensureLayout();
+    const cleaned = await fs.promises.readFile(runtime.paths.env, "utf8");
+    assert.equal(cleaned, `${current}FRED_API_KEY=kept\n`);
+    await runtime.ensureLayout();
+    assert.equal(
+      await fs.promises.readFile(runtime.paths.env, "utf8"),
+      cleaned,
+    );
+  } finally {
+    await fs.promises.rm(temp, { recursive: true, force: true });
+  }
+});
+
 test("native first start persists and unreferences an argument-array backend child", async () => {
   const temp = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "vision-native-start-"),
@@ -1272,6 +1310,10 @@ test("packaged backend environment pins native data, migration, and loopback pat
       DATABASE_URL: "postgresql://vision_app:redacted@127.0.0.1:5432/vision",
       DATABASE_URL_MIGRATIONS:
         "postgresql://vision_owner:redacted@127.0.0.1:5432/vision",
+      OPENAI_API_KEY: "sk-synthetic-retired",
+      OPENAI_API_ENABLED: "true",
+      AI_REFERENCE_MAPPING_KEY: "synthetic-mapping-key",
+      FRED_API_KEY: "kept",
     },
     port: 43123,
     paths: {
@@ -1289,6 +1331,14 @@ test("packaged backend environment pins native data, migration, and loopback pat
   assert.equal(env.VISION_RUNTIME_ROOT, runtimeRoot);
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
+  assert.equal(env.FRED_API_KEY, "kept");
+  for (const retired of [
+    "OPENAI_API_KEY",
+    "OPENAI_API_ENABLED",
+    "AI_REFERENCE_MAPPING_KEY",
+  ]) {
+    assert.equal(retired in env, false, retired);
+  }
   assert.equal(
     env.VISION_NATIVE_ENV_FILE,
     "/Users/test/Library/Application Support/Vision/native/vision/runtime.env",
