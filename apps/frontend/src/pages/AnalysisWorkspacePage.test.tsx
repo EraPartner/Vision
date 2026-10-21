@@ -251,7 +251,9 @@ describe("AnalysisWorkspacePage", () => {
         expect(screen.getByRole("heading", { name: /Present/ })).toHaveFocus();
         await user.click(screen.getByText("Refine this analysis"));
         expect(screen.getByLabelText("Expression")).toHaveValue("1 + 2");
-    });
+        // ~1 s locally; userEvent typing plus three runs passed 5 s on a
+        // loaded CI shard (PR #348), like the portfolio page flows.
+    }, 15_000);
 
     it("marks changed queries as outdated until a successful rerun", async () => {
         const user = userEvent.setup();
@@ -277,7 +279,7 @@ describe("AnalysisWorkspacePage", () => {
                 screen.queryByText(/Results need updating/),
             ).not.toBeInTheDocument(),
         );
-    });
+    }, 15_000);
 
     it("shows one result view and preserves chart choices when switching views", async () => {
         const user = userEvent.setup();
