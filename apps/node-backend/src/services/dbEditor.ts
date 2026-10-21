@@ -33,6 +33,7 @@ import {
 } from "../middleware/errorHandler.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 import type { QueryRunner } from "../types/rows.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 
 /**
  * Column metadata for one table column, as introspected from
@@ -312,6 +313,29 @@ export async function getTableMeta(table: string): Promise<TableMeta> {
 
 // ── Reads (browse / filter / sort / paginate) ───────────────────────────────
 
+/**
+ * pg reads DATE as a local-midnight Date, which JSON-serializes as the
+ * previous day's UTC timestamp east of UTC. The editor shows and round-trips
+ * the cell text, so DATE (and DATE[]) values go out as calendar days.
+ */
+function withWireDates(
+  row: Record<string, unknown> | undefined,
+  columns: ColumnMeta[],
+): Record<string, unknown> | undefined {
+  if (!row) return row;
+  for (const column of columns) {
+    const value = row[column.name];
+    if (column.udtName === "date" && value instanceof Date) {
+      row[column.name] = toWireDate(value);
+    } else if (column.udtName === "_date" && Array.isArray(value)) {
+      row[column.name] = value.map((item: unknown) =>
+        item instanceof Date ? toWireDate(item) : item,
+      );
+    }
+  }
+  return row;
+}
+
 function buildFilterFragment(
   filter: Filter,
   params: unknown[],
@@ -531,6 +555,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
         : null;
     for (const row of rows) {
       for (const column of cursorColumns) delete row[column.valueKey];
+      withWireDates(row, columns);
     }
     await client.query("COMMIT");
     return {
@@ -719,7 +744,10 @@ async function applyOne(
   if (change.op === "insert") {
     const { sql, params } = buildMutationSql(table, change, ctx);
     const res = await client.query(sql, params);
-    const after = res.rows[0] as Record<string, unknown> | undefined;
+    const after = withWireDates(
+      res.rows[0] as Record<string, unknown> | undefined,
+      [...ctx.colMeta.values()],
+    );
     return { op: "insert", pk: pickPk(after, ctx.primaryKey), after };
   }
 
@@ -766,7 +794,10 @@ async function applyOne(
   if (change.op === "delete") {
     return { op: "delete", pk: change.pk };
   }
-  const after = res.rows[0] as Record<string, unknown> | undefined;
+  const after = withWireDates(
+    res.rows[0] as Record<string, unknown> | undefined,
+    [...ctx.colMeta.values()],
+  );
   return { op: "update", pk: change.pk, after };
 }
 
