@@ -120,6 +120,7 @@ const SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
     <dict><key>pid</key><integer>101</integer><key>name</key><string>Vision Helper (GPU)</string><key>cputime_ms_per_s</key><real>40</real><key>gputime_ms_per_s</key><real>300</real></dict>
     <dict><key>pid</key><integer>102</integer><key>name</key><string>Vision Helper (GPU)</string><key>cputime_ms_per_s</key><real>10</real><key>gputime_ms_per_s</key><real>100</real></dict>
     <dict><key>pid</key><integer>7</integer><key>name</key><string>Safari &amp; Co</string><key>cputime_ms_per_s</key><real>99</real></dict>
+    <dict><key>pid</key><integer>8</integer><key>name</key><string>revisiond</string><key>cputime_ms_per_s</key><real>9</real></dict>
     <dict><key>pid</key><integer>300</integer><key>name</key><string>WindowServer</string><key>cputime_ms_per_s</key><real>20</real><key>flag</key><true/></dict>
   </array>
 </dict>
@@ -138,6 +139,17 @@ test("parses powermetrics plist samples", () => {
   assert.equal(sample.gpuPowerMw, 1500);
   assert.equal(sample.combinedPowerMw, 2400.5);
   assert.equal(sample.gpuFreqMhz, 708);
+  // Active frequency comes from DVFM residency when present (freq in MHz).
+  const dvfm = SAMPLE.replace(
+    "<key>gpu_energy</key><integer>1500</integer>",
+    "<key>gpu_energy</key><integer>1500</integer><key>dvfm_states</key><array>" +
+      "<dict><key>freq</key><integer>396</integer><key>used_ratio</key><real>0.3</real></dict>" +
+      "<dict><key>freq</key><integer>1278</integer><key>used_ratio</key><real>0.1</real></dict></array>",
+  );
+  assert.equal(
+    Math.round((extractSample(parsePlist(dvfm), 0).gpuFreqMhz ?? 0) * 10) / 10,
+    616.5,
+  );
   assert.equal(sample.gpuActivePercent, 75);
   assert.equal(sample.thermalPressure, "Nominal");
   assert.deepEqual(

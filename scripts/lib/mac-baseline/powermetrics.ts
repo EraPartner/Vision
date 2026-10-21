@@ -165,7 +165,7 @@ export interface PowerSample {
 
 /** Process names kept from the tasks sampler. */
 export const TASK_NAME_FILTER =
-  /vision|postgres|ollama|windowserver|bun|electron/i;
+  /(^|[^a-z])vision|postgres|ollama|llama|windowserver|electron/i;
 
 /** Power in mW from a `*_power` key, else from `*_energy` (mJ) over the interval. */
 function power(
@@ -197,7 +197,7 @@ export function extractSample(
   const elapsedNs = num(root, "elapsed_ns");
   const elapsedSeconds = elapsedNs === null ? null : elapsedNs / 1e9;
   const idleRatio = num(gpu, "idle_ratio");
-  const freqHz = num(gpu, "freq_hz");
+  const gpuFreqMhz = activeGpuFrequency(gpu);
   const tasks: TaskSample[] = [];
   if (Array.isArray(root.tasks)) {
     for (const task of root.tasks) {
@@ -227,12 +227,36 @@ export function extractSample(
     combinedPowerMw:
       num(processor, "combined_power", "package_power") ??
       power([processor], "package", elapsedSeconds),
-    gpuFreqMhz: freqHz === null ? null : freqHz / 1e6,
+    gpuFreqMhz,
     gpuActivePercent: idleRatio === null ? null : (1 - idleRatio) * 100,
     thermalPressure:
       typeof root.thermal_pressure === "string" ? root.thermal_pressure : null,
     tasks,
   };
+}
+
+/**
+ * Mean GPU frequency while active (MHz), from the residency per DVFM state.
+ * `gpu.freq_hz` is averaged over idle time too, and macOS 27 reports it in
+ * MHz despite its name, so it is only the fallback.
+ */
+function activeGpuFrequency(gpu: Dict | undefined): number | null {
+  if (gpu && Array.isArray(gpu.dvfm_states)) {
+    let weighted = 0;
+    let used = 0;
+    for (const state of gpu.dvfm_states) {
+      if (!isDict(state)) continue;
+      const freq = num(state, "freq");
+      const ratio = num(state, "used_ratio");
+      if (freq === null || ratio === null) continue;
+      weighted += freq * ratio;
+      used += ratio;
+    }
+    if (used > 0) return weighted / used;
+  }
+  const freq = num(gpu, "freq_hz");
+  if (freq === null || freq === 0) return null;
+  return freq > 100_000 ? freq / 1e6 : freq;
 }
 
 /** Split a growing plist stream into complete documents; returns the rest. */
@@ -418,6 +442,13 @@ export class PowermetricsRecorder {
                   this.keysSeen.add(`${nested}.${key}`);
               }
             }
+            if (Array.isArray(parsed.tasks)) {
+              for (const task of parsed.tasks) {
+                if (!isDict(task)) continue;
+                for (const key of Object.keys(task))
+                  this.keysSeen.add(`tasks[].${key}`);
+              }
+            }
           }
           const sample = extractSample(parsed, receivedAt);
           this.samples.push(sample);
@@ -427,6 +458,11 @@ export class PowermetricsRecorder {
                 gpu: parsed.gpu,
                 thermal_pressure: parsed.thermal_pressure,
                 elapsed_ns: parsed.elapsed_ns,
+                // Full task list for the first samples, so task key names
+                // and process naming can be checked after a run.
+                ...(this.samples.length <= 5
+                  ? { tasks: parsed.tasks, all_tasks: parsed.all_tasks }
+                  : {}),
               }
             : null;
           out.write(`${JSON.stringify({ ...sample, raw })}\n`);
