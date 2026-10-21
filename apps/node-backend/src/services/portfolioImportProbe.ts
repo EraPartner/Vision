@@ -2,8 +2,10 @@
 import fs from "node:fs/promises";
 import { parse } from "csv-parse/sync";
 import readExcelFile from "read-excel-file/node";
+import * as XLSX from "xlsx";
 import {
   detectPortfolioImportRecords,
+  detectIbkrFundingWorkbook,
   type DetectedPortfolioImport,
 } from "@vision/shared-utils/portfolio-import-detection";
 import {
@@ -36,12 +38,33 @@ async function detect(
   filename: string,
 ): Promise<DetectedPortfolioImport | undefined> {
   const name = filename.toLowerCase();
-  if (name.endsWith(".xlsx")) {
+  if (name.endsWith(".xls") || name.endsWith(".xlsx")) {
+    const xls = bytes
+      .subarray(0, 8)
+      .equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
     const xlsx = bytes
       .subarray(0, 4)
       .equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
-    if (!xlsx) return undefined;
-    assertBoundedWorkbook(bytes);
+    if (!xls && !xlsx) return undefined;
+    if (xlsx) assertBoundedWorkbook(bytes);
+    // The IBKR funding workbook is the only supported legacy XLS statement.
+    const workbook = XLSX.read(bytes, {
+      type: "buffer",
+      cellDates: false,
+      cellFormula: true,
+      cellText: false,
+      bookVBA: true,
+      WTF: true,
+    });
+    const funding = detectIbkrFundingWorkbook(workbook, XLSX.utils);
+    if (funding) return funding;
+    if (
+      xls ||
+      workbook.SheetNames.some((sheet) =>
+        ["Deposit", "Withdrawal"].includes(sheet),
+      )
+    )
+      return undefined;
     const sheets = await readExcelFile(bytes, { parseNumber: (raw) => raw });
     const matches = sheets
       .map((sheet) => detectPortfolioImportRecords(sheet.data))

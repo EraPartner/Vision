@@ -105,6 +105,13 @@ export async function stageBatch({
         .where("id", "=", String(batchId))
         .execute(),
     parseRows: async () => {
+      if (
+        customConfig.format === "ibkr_funding_history" &&
+        customConfig.included_symbols
+      )
+        throw new Error(
+          "IBKR funding history cannot be filtered by investment symbol",
+        );
       const parsed = await parseWithConfig(filePath, customConfig);
       const rows = applyPortfolioAssetScope(
         parsed,

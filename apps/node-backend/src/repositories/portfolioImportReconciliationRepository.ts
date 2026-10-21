@@ -7,6 +7,9 @@ import type { DB, Json } from "../database/schema.generated.ts";
 import {
   batchAccountIdRowSchema,
   bigintIdRowSchema,
+  crossFormatLedgerSourceRowSchema,
+  ledgerFingerprintRowSchema,
+  manualCashCandidateRowSchema,
   reconciliationAdjustmentRowSchema,
   reconciliationBatchScopeRowSchema,
   reconciliationJournalRowSchema,
@@ -15,6 +18,8 @@ import {
   reconciliationTransferRowSchema,
 } from "../database/rows/portfolioImport.ts";
 import type {
+  CrossFormatLedgerSourceRow,
+  ManualCashCandidateRow,
   PortfolioTransactionSnapshot,
   ReconciliationBatchScopeRow,
   ReconciliationJournalRow,
@@ -24,6 +29,8 @@ import type { PortfolioAssetAdjustmentRow } from "./portfolioAssetAdjustmentRepo
 import type { PortfolioAssetTransferRow } from "./portfolioAssetTransferRepository.ts";
 
 export type {
+  CrossFormatLedgerSourceRow,
+  ManualCashCandidateRow,
   PortfolioTransactionSnapshot,
   ReconciliationBatchScopeRow,
   ReconciliationJournalRow,
@@ -97,9 +104,124 @@ export async function lockReconciliationAccountsAndHistory(
       .orderBy("id")
       .forUpdate()
       .execute();
-  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments IN SHARE ROW EXCLUSIVE MODE`.execute(
+  await sql`LOCK TABLE portfolio_transactions, portfolio_asset_transfers, portfolio_asset_adjustments, transactions IN SHARE ROW EXCLUSIVE MODE`.execute(
     db,
   );
+}
+
+/** Formats whose history another format can also export (ADR-236 amendment). */
+const CROSS_FORMATS = [
+  "saxo_transaction_history",
+  "ibkr_transaction_history",
+  "ibkr_funding_history",
+];
+
+/**
+ * Settled staging rows of other batches on these accounts whose ledger event
+ * still exists: a portfolio or cash transaction carries the row's identity.
+ * A rolled-back batch's rows drop out because their transactions are gone.
+ */
+export async function readCrossFormatLedgerSources(
+  accountIds: readonly number[],
+  excludedBatchIds: readonly Id[],
+): Promise<CrossFormatLedgerSourceRow[]> {
+  if (accountIds.length === 0) return [];
+  return checkedRows(
+    crossFormatLedgerSourceRowSchema,
+    sql`SELECT s.id, s.batch_id, s.status, s.route, s.type::text AS type, s.type_raw,
+        to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date, s.units, s.amount, s.currency,
+        s.raw_data, s.source_transaction_id, s.source_account_identity,
+        s.dedup_fingerprint, s.dedup_fingerprint_version,
+        COALESCE(s.user_override_investment_id, s.resolved_investment_id) AS investment_id,
+        b.account_id, b.custom_config,
+        CASE WHEN pt.id IS NOT NULL THEN 'portfolio' ELSE 'cash' END AS ledger,
+        COALESCE(pt.id, t.id) AS transaction_id,
+        to_char(t.date, 'YYYY-MM-DD') AS ledger_date,
+        t.amount AS ledger_amount, t.currency AS ledger_currency
+      FROM portfolio_import_staging_rows s
+      JOIN portfolio_import_batches b ON b.id = s.batch_id
+      LEFT JOIN LATERAL (
+        SELECT p.id FROM portfolio_transactions p
+         WHERE s.route IS DISTINCT FROM 'cash'
+           AND p.dedup_fingerprint = s.dedup_fingerprint
+           AND p.dedup_fingerprint_version = s.dedup_fingerprint_version
+         ORDER BY p.id LIMIT 1) pt ON true
+      LEFT JOIN LATERAL (
+        SELECT c.id, c.date, c.amount, c.currency FROM transactions c
+         WHERE s.route = 'cash' AND c.account_id = b.account_id AND c.is_active
+           AND c.dedup_fingerprint = s.dedup_fingerprint
+           AND c.dedup_fingerprint_version = s.dedup_fingerprint_version
+         ORDER BY c.id LIMIT 1) t ON true
+     WHERE b.account_id = ANY(${accountIds}::integer[])
+       AND NOT (b.id = ANY(${excludedBatchIds}::bigint[]))
+       AND b.custom_config->>'format' = ANY(${CROSS_FORMATS}::text[])
+       AND s.status IN ('committed', 'duplicate')
+       AND s.dedup_fingerprint IS NOT NULL
+       AND (pt.id IS NOT NULL OR t.id IS NOT NULL)
+     ORDER BY s.batch_id, s.row_index, s.id`,
+  );
+}
+
+/** The identities among `fingerprints` that an active cash transaction carries. */
+export async function readCashLedgerFingerprints(
+  fingerprints: readonly string[],
+): Promise<Set<string>> {
+  if (fingerprints.length === 0) return new Set();
+  const rows = await checkedRows(
+    ledgerFingerprintRowSchema,
+    sql`SELECT DISTINCT dedup_fingerprint, dedup_fingerprint_version FROM transactions
+     WHERE dedup_fingerprint = ANY(${[...new Set(fingerprints)]}::text[])`,
+  );
+  return new Set(
+    rows.map(
+      (row) => `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`,
+    ),
+  );
+}
+
+/**
+ * Active cash transactions on these accounts that no import owns: no import
+ * identity or source hash. A brokerage import may adopt one as its record.
+ */
+export async function readManualCashCandidates(
+  accountIds: readonly number[],
+  from: string,
+  to: string,
+): Promise<ManualCashCandidateRow[]> {
+  if (accountIds.length === 0) return [];
+  return checkedRows(
+    manualCashCandidateRowSchema,
+    sql`SELECT id, account_id, to_char(date, 'YYYY-MM-DD') AS date, amount, currency
+      FROM transactions
+     WHERE account_id = ANY(${accountIds}::integer[]) AND is_active
+       AND dedup_fingerprint IS NULL AND source_record_hash IS NULL
+       AND date BETWEEN ${from}::date AND ${to}::date
+     ORDER BY date, id`,
+  );
+}
+
+/**
+ * Settle a staged row that another format's record already holds. An
+ * unsupported-event row (status error) is cleared from the error count.
+ * @returns false when the row changed since it was planned
+ */
+export async function markCrossFormatSourceDuplicate(
+  row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
+): Promise<boolean> {
+  const result = await sql`WITH previous AS (
+       SELECT id, status FROM portfolio_import_staging_rows
+        WHERE id = ${row.id} AND batch_id = ${row.batch_id} AND status = ${row.status}
+          AND status IN ('matched', 'error')
+     ), changed AS (
+       UPDATE portfolio_import_staging_rows source SET status = 'duplicate', error_message = NULL
+         FROM previous WHERE source.id = previous.id RETURNING previous.status
+     ) UPDATE portfolio_import_batches
+          SET rows_duplicate = rows_duplicate + (SELECT count(*) FROM changed),
+              rows_error = GREATEST(rows_error - (SELECT count(*) FROM changed WHERE status = 'error'), 0)
+        WHERE id = ${row.batch_id} AND EXISTS (SELECT 1 FROM changed) RETURNING id`.execute(
+    db,
+  );
+  return result.rows.length === 1;
 }
 
 export async function readReconciliationSources(

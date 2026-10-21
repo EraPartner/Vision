@@ -73,11 +73,17 @@ export interface IbkrCashSourceBinding {
   custom_config: unknown;
   staging: Record<string, unknown>;
 }
-/** The stored proof of an applied IBKR funding correction (read only). */
+/**
+ * The stored proof of an applied cash adoption: an IBKR funding workbook row
+ * that corrected a base-currency Transaction History deposit to its own
+ * currency (`ibkr_native_funding`, also written before ADR-236), or an
+ * imported cash row that adopted a manual transaction (`cash_adoption`).
+ */
 export interface IbkrCashProof {
-  kind: "ibkr_native_funding";
+  kind: "ibkr_native_funding" | "cash_adoption";
   version: 1;
-  original: { batchId: number; [key: string]: unknown };
+  /** the batch whose committed transaction was corrected, if any */
+  original?: { batchId: number; [key: string]: unknown };
   primaryReference?: { batchId: number; [key: string]: unknown };
   sourceBindings: IbkrCashSourceBinding[];
   [key: string]: unknown;
@@ -125,6 +131,49 @@ async function compareAndSetIbkrCashImage(
   return row.snapshot;
 }
 
+/**
+ * Apply one planned cash adoption: change the transaction's amount, currency
+ * and identity from `before` to `after` only if it still equals `before`, and
+ * journal both images so batch rollback can restore it. The caller holds the
+ * batch, account and transactions locks.
+ */
+export async function writeCashAdoption({
+  batchId,
+  stagingRowId,
+  policy,
+  before,
+  after,
+  proof,
+}: {
+  batchId: number;
+  stagingRowId: number;
+  policy: "exact" | "preserve_existing" | "prefer_source";
+  before: IbkrCashSnapshot;
+  after: IbkrCashSnapshot;
+  proof: IbkrCashProof;
+}): Promise<IbkrCashSnapshot> {
+  const persisted = await compareAndSetIbkrCashImage(before, after);
+  const envelope = (snapshot: IbkrCashSnapshot): IbkrCashEnvelope => ({
+    ledgerKind: "cash",
+    version: 1,
+    snapshot,
+    proof,
+  });
+  await db
+    .insertInto("portfolio_import_reconciliation_journal")
+    .values({
+      batch_id: batchId,
+      staging_row_id: stagingRowId,
+      transaction_id: before.id,
+      action: "adopt",
+      policy,
+      before_data: jsonb(envelope(before)),
+      after_data: jsonb(envelope(persisted)),
+    })
+    .execute();
+  return persisted;
+}
+
 /** Undo one applied IBKR funding correction and append its inverse receipt. */
 export async function writeIbkrCashRestoration(
   receipt: IbkrCashReceipt,
@@ -146,7 +195,7 @@ export async function writeIbkrCashRestoration(
       staging_row_id: receipt.staging_row_id,
       transaction_id: receipt.transaction_id,
       action: "restore",
-      policy: "prefer_source",
+      policy: receipt.policy,
       before_data: jsonb(receipt.after_data),
       after_data: jsonb(receipt.before_data),
       previous_entry_id: receipt.id,

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import * as XLSX from "xlsx";
 import { probePortfolioImport } from "../src/services/portfolioImportProbe.ts";
 
 const files: string[] = [];
@@ -32,6 +33,50 @@ const headers = [
   "Starting_Balance",
   "Closing_Balance",
 ];
+const fundingHeaders = [
+  "Request Date",
+  "Reference Number",
+  "Method",
+  "Account ID",
+  "Account Title",
+  "Delivering Institution",
+  "From Account Number",
+  "Routing Number",
+  "Date Received",
+  "Date Available for Trading",
+  "Date Available for Withdrawal - Original Bank",
+  "Date Available for Withdrawal - Other Bank",
+  "Amount",
+  "Status",
+];
+function fundingWorkbook(
+  type: "xls" | "xlsx",
+  mutate?: (sheet: XLSX.WorkSheet, workbook: XLSX.WorkBook) => void,
+) {
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.aoa_to_sheet([
+    fundingHeaders,
+    [
+      "2026-01-01",
+      "SYNTHETIC1",
+      "Wire",
+      "UDEMO1",
+      "Synthetic account",
+      "Synthetic Bank",
+      "",
+      "",
+      "2026-01-02",
+      "",
+      "",
+      "",
+      "EUR 10.00",
+      "Available",
+    ],
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, "Deposit");
+  mutate?.(sheet, workbook);
+  return XLSX.write(workbook, { type: "buffer", bookType: type }) as Buffer;
+}
 describe("read-only native statement probe", () => {
   it("detects every source account beyond the header preview prefix", async () => {
     const rows = Array.from(
@@ -86,7 +131,36 @@ describe("read-only native statement probe", () => {
     expect(result.previewError).toBeNull();
     expect(result.preview?.rows[0]).toEqual(["2026-01-01", "open quote"]);
   });
-  it("does not detect a legacy OLE2 workbook", async () => {
+  it.each(["xls", "xlsx"] as const)(
+    "detects text-only original IBKR funding %s",
+    async (type) => {
+      const result = await probe(fundingWorkbook(type), `synthetic.${type}`);
+      expect(result.detected).toEqual({
+        source: "ibkr",
+        sourceAccountIdentities: ["UDEMO1"],
+        presetKey: "ibkr_funding_history",
+      });
+    },
+  );
+  it("refuses formula-bearing IBKR funding even when the cached value looks valid", async () => {
+    const result = await probe(
+      fundingWorkbook("xlsx", (sheet) => {
+        sheet["M2"] = { t: "s", v: "EUR 10.00", f: '"EUR 10.00"' };
+      }),
+      "synthetic.xlsx",
+    );
+    expect(result.detected).toBeNull();
+  });
+  it("refuses hidden primary funding sheets", async () => {
+    const result = await probe(
+      fundingWorkbook("xlsx", (_, workbook) => {
+        workbook.Workbook = { Sheets: [{ name: "Deposit", Hidden: 1 }] };
+      }),
+      "synthetic.xlsx",
+    );
+    expect(result.detected).toBeNull();
+  });
+  it("does not detect an unreadable legacy OLE2 workbook", async () => {
     const result = await probe(
       Buffer.concat([
         Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),

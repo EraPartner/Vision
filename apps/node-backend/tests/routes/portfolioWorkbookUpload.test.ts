@@ -129,11 +129,11 @@ describe("portfolio workbook multipart boundary", () => {
     expect(bodyAt(response, "error", "message")).toContain("do not reconcile");
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
-  it("rejects workbook with an unrelated selected parser and rejects legacy Excel", async () => {
+  it("rejects workbook with an unrelated selected parser and rejects legacy Excel outside IBKR funding", async () => {
     await writeSyntheticWorkbook(file);
     await request("/csv/custom", "nexo_transaction_history").expect(400);
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
-    // Legacy OLE2 workbooks are not a supported statement format.
+    // A legacy OLE2 workbook is accepted only as IBKR funding history.
     const legacy = path.join(directory, "history.xls");
     await fs.writeFile(
       legacy,
@@ -156,7 +156,7 @@ describe("portfolio workbook multipart boundary", () => {
       })
       .expect(400);
     expect(bodyAt(rejected, "error", "message")).toContain(
-      "File must be a CSV or XLSX workbook",
+      "IBKR XLS/XLSX funding history",
     );
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });

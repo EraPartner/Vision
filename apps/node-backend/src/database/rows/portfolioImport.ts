@@ -700,6 +700,64 @@ export const ibkrCashSnapshotRowSchema = z
   .object({ snapshot: ibkrCashSnapshotSchema })
   .describe("ibkr cash snapshot row");
 
+/**
+ * A settled staging row of another batch whose ledger event still exists
+ * (`readCrossFormatLedgerSources`). `ledger` names the table of
+ * `transaction_id`; the `ledger_*` columns are set for cash only.
+ */
+export const crossFormatLedgerSourceRowSchema = z
+  .object({
+    id: pgBigint,
+    batch_id: pgBigint,
+    status: z.string(),
+    route: z.string().nullable(),
+    type: z.string().nullable(),
+    type_raw: z.string().nullable(),
+    tx_date: pgDayString.nullable(),
+    units: pgNumeric.nullable(),
+    amount: pgNumeric.nullable(),
+    currency: pgCurrency.nullable(),
+    raw_data: z.string().nullable(),
+    source_transaction_id: z.string().nullable(),
+    source_account_identity: z.string().nullable(),
+    dedup_fingerprint: z.string().nullable(),
+    dedup_fingerprint_version: pgInt.nullable(),
+    investment_id: pgInvestmentId.nullable(),
+    account_id: pgAccountId,
+    custom_config: storedBatchConfigSchema.nullable(),
+    ledger: z.enum(["portfolio", "cash"]),
+    transaction_id: pgInt,
+    ledger_date: pgDayString.nullable(),
+    ledger_amount: pgNumeric.nullable(),
+    ledger_currency: pgCurrency.nullable(),
+  })
+  .describe("cross-format ledger source row");
+export type CrossFormatLedgerSourceRow = z.output<
+  typeof crossFormatLedgerSourceRowSchema
+>;
+
+/** An active cash transaction that no import owns (`readManualCashCandidates`). */
+export const manualCashCandidateRowSchema = z
+  .object({
+    id: pgInt,
+    account_id: pgAccountId,
+    date: pgDayString,
+    amount: pgNumeric,
+    currency: pgCurrency,
+  })
+  .describe("manual cash candidate row");
+export type ManualCashCandidateRow = z.output<
+  typeof manualCashCandidateRowSchema
+>;
+
+/** A `(version, fingerprint)` identity present in a ledger table. */
+export const ledgerFingerprintRowSchema = z
+  .object({
+    dedup_fingerprint: z.string(),
+    dedup_fingerprint_version: pgInt,
+  })
+  .describe("ledger fingerprint row");
+
 // ---------------------------------------------------------------------------
 // Duplicate repair
 // ---------------------------------------------------------------------------

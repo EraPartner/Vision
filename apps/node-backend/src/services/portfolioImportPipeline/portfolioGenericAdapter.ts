@@ -23,6 +23,7 @@ import {
   parseDateWithFormat,
 } from "../importPipeline/adapters/_shared.ts";
 import { parseIbkrTransactionHistory } from "./ibkrTransactionHistoryAdapter.ts";
+import { parseIbkrFundingHistory } from "./ibkrFundingHistoryAdapter.ts";
 import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapter.ts";
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.ts";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.ts";
@@ -160,6 +161,7 @@ export interface PortfolioParserConfig {
   /** specialized statement format */
   format?:
     | "ibkr_transaction_history"
+    | "ibkr_funding_history"
     | "kinesis_transaction_history"
     | "nexo_transaction_history"
     | "nexo_pro_spot_history"
@@ -294,6 +296,9 @@ async function parseFormat(
   filePath: string,
   config: PortfolioParserConfig,
 ): Promise<ParsedPortfolioRows> {
+  if (config.format === "ibkr_funding_history") {
+    return parseIbkrFundingHistory(filePath);
+  }
   if (config.format === "ibkr_transaction_history") {
     return parseIbkrTransactionHistory(filePath, config);
   }

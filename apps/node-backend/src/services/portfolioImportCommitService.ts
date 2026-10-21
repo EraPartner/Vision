@@ -105,18 +105,38 @@ async function commitLockedScope(
   // routing decision must use the state protected by the acquired locks.
   for (const accountId of accountIds)
     await assertPortfolioImportAccount(accountId);
-  for (const batch of batches)
-    await assertPortfolioImportReadiness({
-      batchId: Number(batch.id),
-      batch,
-      accountId: batch.account_id,
-      reconciliationPlanned: true,
+  // Apply first: rows that another export already records (a Saxo CSV
+  // dividend beside its workbook, say) settle here, and readiness then checks
+  // what the canonical commit still has to write. Any failure rolls back both.
+  const assertReady = async () => {
+    for (const batch of batches)
+      await assertPortfolioImportReadiness({
+        batchId: Number(batch.id),
+        batch,
+        accountId: batch.account_id,
+        reconciliationPlanned: true,
+      });
+  };
+  let applied;
+  try {
+    applied = await applyPortfolioImportReconciliation({
+      batchIds: ids,
+      adoptPolicy,
+      batchPolicies,
     });
-  const { adoptedByBatch } = await applyPortfolioImportReconciliation({
-    batchIds: ids,
-    adoptPolicy,
-    batchPolicies,
-  });
+  } catch (error) {
+    // An unready plan writes nothing. Report the source-level reason (an
+    // incomplete row, say) when readiness has one, as it did before.
+    if (
+      error instanceof ConflictError &&
+      (error.details as { reason?: string } | undefined)?.reason ===
+        "reconciliation_required"
+    )
+      await assertReady();
+    throw error;
+  }
+  const { adoptedByBatch, settledByBatch } = applied;
+  await assertReady();
   const scheduledRows = (await readReconciliationSources(ids))
     .filter((row) => row.status === "matched")
     .sort((left, right) =>
@@ -136,7 +156,7 @@ async function commitLockedScope(
   const results = batches.map((batch) => ({
     batch_id: Number(batch.id),
     imported: 0,
-    duplicates: adoptedByBatch.get(Number(batch.id)) ?? 0,
+    duplicates: settledByBatch.get(Number(batch.id)) ?? 0,
     adopted: adoptedByBatch.get(Number(batch.id)) ?? 0,
     errors: 0,
   }));

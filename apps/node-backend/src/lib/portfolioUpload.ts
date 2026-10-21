@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import multer from "multer";
 import readExcelFile from "read-excel-file/node";
+import * as XLSX from "xlsx";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { csvUploadErrorTranslator } from "./csvUpload.ts";
 
@@ -13,7 +14,7 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MAX_WORKBOOK_BYTES = 100 * 1024 * 1024;
 const MAX_WORKBOOK_ENTRIES = 1000;
 const MAX_WORKBOOK_CELLS = 500000;
-const FILE_TYPE_ERROR = "File must be a CSV or XLSX workbook";
+const FILE_TYPE_ERROR = "File must be a CSV, XLSX or supported XLS workbook";
 
 export type WorkbookNumber = { type: "number"; raw: string };
 export type WorkbookCell = string | boolean | Date | WorkbookNumber | null;
@@ -22,6 +23,17 @@ export type PortfolioWorkbookSheet = {
   data: WorkbookCell[][];
   sourceFileHash: string;
 };
+export type FundingWorkbookCell =
+  | { type: "text"; value: string }
+  | { type: "number"; value: string }
+  | { type: "boolean"; value: boolean }
+  | null;
+export interface FundingWorkbookSheet {
+  sheet: string;
+  data: FundingWorkbookCell[][];
+  sourceFileHash: string;
+  sourceFormat: "xls" | "xlsx";
+}
 export interface UploadedFileInfo {
   originalname?: string;
   mimetype?: string;
@@ -40,7 +52,9 @@ function isLikelyPortfolioFile(file: UploadedFileInfo | undefined) {
     (name.endsWith(".xlsx") &&
       (commonMime ||
         mime ===
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) ||
+    (name.endsWith(".xls") &&
+      (commonMime || mime === "application/vnd.ms-excel"))
   );
 }
 
@@ -241,6 +255,117 @@ export async function readPortfolioWorkbook(
     ...sheet,
     sourceFileHash,
   })) as PortfolioWorkbookSheet[];
+}
+
+/**
+ * The native IBKR funding export is binary XLS. Read it separately so the
+ * existing Saxo XML-number reader remains unchanged. Formulas, hidden sheets
+ * and macro content cannot become primary financial evidence.
+ */
+export async function readIbkrFundingWorkbook(
+  filePath: string | URL,
+): Promise<FundingWorkbookSheet[]> {
+  const format = await detectPortfolioFileFormat(filePath);
+  if (format !== "xls" && format !== "xlsx")
+    throw new ValidationError(
+      "IBKR funding history requires an original XLS or XLSX workbook",
+    );
+  const bytes = await fs.readFile(filePath);
+  if (bytes.length > MAX_UPLOAD_BYTES)
+    throw new ValidationError("File size exceeds maximum of 50MB");
+  if (format === "xlsx") assertBoundedWorkbook(bytes);
+  let workbook: XLSX.WorkBook;
+  try {
+    workbook = XLSX.read(bytes, {
+      type: "buffer",
+      cellDates: false,
+      cellFormula: true,
+      cellText: false,
+      bookVBA: true,
+      WTF: true,
+    });
+  } catch {
+    throw new ValidationError("IBKR funding workbook could not be read safely");
+  }
+  if (
+    workbook.vbaraw ||
+    workbook.SheetNames.length > 2 ||
+    workbook.SheetNames.length === 0 ||
+    new Set(workbook.SheetNames).size !== workbook.SheetNames.length ||
+    workbook.Workbook?.Sheets?.some((sheet) => (sheet.Hidden ?? 0) !== 0)
+  )
+    throw new ValidationError(
+      "IBKR funding workbook contains unsupported sheets or macros",
+    );
+  const sourceFileHash = crypto
+    .createHash("sha256")
+    .update(bytes)
+    .digest("hex");
+  let cellCount = 0;
+  return workbook.SheetNames.map((sheet) => {
+    const source = workbook.Sheets[sheet];
+    const reference = source?.["!ref"];
+    if (
+      !source ||
+      !reference ||
+      (source["!type"] && source["!type"] !== "sheet") ||
+      (source["!merges"]?.length ?? 0) > 0
+    )
+      throw new ValidationError(
+        "IBKR funding workbook contains an unsupported sheet layout",
+      );
+    const range = XLSX.utils.decode_range(reference);
+    cellCount += (range.e.r + 1) * (range.e.c + 1);
+    if (
+      range.s.r !== 0 ||
+      range.s.c !== 0 ||
+      range.e.r < 0 ||
+      range.e.c < 0 ||
+      range.e.c > 99 ||
+      cellCount > MAX_WORKBOOK_CELLS
+    )
+      throw new ValidationError(
+        "IBKR funding workbook exceeds safe cell limits",
+      );
+    for (const [coordinate, cell] of Object.entries(source)) {
+      if (coordinate.startsWith("!")) continue;
+      const location = XLSX.utils.decode_cell(coordinate);
+      if (
+        !/^[A-Z]+[1-9]\d*$/.test(coordinate) ||
+        location.r > range.e.r ||
+        location.c > range.e.c ||
+        cell.f != null ||
+        cell.F != null
+      )
+        throw new ValidationError(
+          "IBKR funding workbook contains formulas or cells outside its declared range",
+        );
+    }
+    const data: FundingWorkbookCell[][] = [];
+    for (let row = 0; row <= range.e.r; row++) {
+      const values: FundingWorkbookCell[] = [];
+      for (let column = 0; column <= range.e.c; column++) {
+        const cell = source[XLSX.utils.encode_cell({ r: row, c: column })];
+        if (cell?.f != null || cell?.F != null)
+          throw new ValidationError(
+            "IBKR funding workbook formulas are not supported",
+          );
+        if (!cell || cell.t === "z") values.push(null);
+        else if (cell.t === "s")
+          values.push({ type: "text", value: String(cell.v) });
+        else if (cell.t === "n" && Number.isFinite(cell.v))
+          values.push({ type: "number", value: String(cell.v) });
+        else if (cell.t === "b")
+          values.push({ type: "boolean", value: Boolean(cell.v) });
+        else
+          throw new ValidationError(
+            "IBKR funding workbook contains an unsupported cell type",
+          );
+      }
+      data.push(values);
+    }
+    return { sheet, data, sourceFileHash, sourceFormat: format };
+  });
 }
 
 export { isLikelyPortfolioFile as __isLikelyPortfolioFile };

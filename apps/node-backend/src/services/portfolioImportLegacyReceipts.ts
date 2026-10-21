@@ -77,7 +77,8 @@ export function isIbkrCashReceipt<T extends CashReceiptLike>(
     after?.ledgerKind === "cash" &&
     before.version === 1 &&
     after.version === 1 &&
-    after.proof?.kind === "ibkr_native_funding"
+    (after.proof?.kind === "ibkr_native_funding" ||
+      after.proof?.kind === "cash_adoption")
   );
 }
 

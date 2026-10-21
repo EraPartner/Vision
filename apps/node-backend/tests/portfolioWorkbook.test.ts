@@ -48,7 +48,7 @@ describe("portfolio XLSX upload and reader", () => {
         originalname: "history.xls",
         mimetype: "application/vnd.ms-excel",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       isLikelyPortfolioFile({
         originalname: "history.xlsx",
@@ -93,7 +93,7 @@ describe("portfolio XLSX upload and reader", () => {
       assertPortfolioUploadSupported(file, {
         format: "saxo_transaction_history",
       }),
-    ).rejects.toThrow(/Saxo XLSX transaction history$/);
+    ).rejects.toThrow(/Saxo XLSX.*IBKR XLS/);
     await fs.writeFile(file, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     await expect(readPortfolioWorkbook(file)).rejects.toThrow(/Invalid XLSX/);
     const bytes = await writeSyntheticWorkbook(file);

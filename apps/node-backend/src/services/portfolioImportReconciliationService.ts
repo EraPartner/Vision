@@ -8,8 +8,10 @@
  * row gains the source identity and account, and the batch journals a
  * before/after receipt so rollback can restore it. An inexact candidate needs
  * the reviewer's choice: keep the existing values (`preserve_existing`) or use
- * the imported ones (`prefer_source`). Everything else is inserted by the
- * ordinary commit pipeline.
+ * the imported ones (`prefer_source`). A row that another export of the same
+ * broker, or a manual cash entry, already records is settled by the
+ * cross-format rules (portfolioImportCrossFormat.ts). Everything else is
+ * inserted by the ordinary commit pipeline.
  */
 import { partitionOversellDeficits } from "@vision/shared-utils/portfolio";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
@@ -35,11 +37,26 @@ import {
   getActiveAdoptionReceipts,
   insertReconciliationReceipt,
   markAdoptedSourceDuplicate,
+  markCrossFormatSourceDuplicate,
+  readCashLedgerFingerprints,
+  readCrossFormatLedgerSources,
+  readManualCashCandidates,
   readReconciliationBatchScope,
   readReconciliationHistory,
   readReconciliationSources,
   readReconciledProImportAccounts,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
+import {
+  readActiveIbkrCashReceipts,
+  readIbkrCashImagesForUpdate,
+  writeCashAdoption,
+} from "../repositories/portfolioImportCashRepository.ts";
+import type { IbkrCashProof } from "../repositories/portfolioImportCashRepository.ts";
+import { planCrossFormatSources } from "./portfolioImportCrossFormat.ts";
+import type {
+  CrossFormatContext,
+  CrossFormatDecision,
+} from "./portfolioImportCrossFormat.ts";
 import {
   getActiveDuplicateRepairReceipts,
   financialRepairImage,
@@ -132,6 +149,10 @@ export interface PlanAction {
   corrections?: string[];
   economicsProven?: boolean;
   policy?: string | null;
+  /** settled by another export of the same broker or a manual cash entry */
+  crossFormat?: boolean;
+  /** the existing transaction is brokerage cash, not a portfolio row */
+  cash?: boolean;
   transfer?: {
     date: string;
     units: string;
@@ -173,6 +194,13 @@ export interface ReconciliationPlanInput {
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[] | undefined;
   priorProAccounts?: number[] | undefined;
+  /** ledger evidence for rows another export or a manual entry records */
+  crossFormat?: CrossFormatContext | undefined;
+}
+/** A planned cash adoption: a funding correction or a manual cash twin. */
+export interface PlanCashAdoption {
+  row: ReconciliationSourceRow;
+  decision: Extract<CrossFormatDecision, { kind: "adopt_cash" }>;
 }
 export interface PlanAdoption {
   row: ReconciliationSourceRow;
@@ -193,6 +221,9 @@ export interface ReconciliationPlan {
 export interface ReconciliationPlanResult {
   plan: ReconciliationPlan;
   adoptions: PlanAdoption[];
+  /** rows another export already records; commit settles them as duplicates */
+  crossFormatDuplicates: ReconciliationSourceRow[];
+  cashAdoptions: PlanCashAdoption[];
 }
 /** The batch selection and policies every locked plan read takes. */
 export interface ReconciliationScopeOptions {
@@ -558,14 +589,11 @@ export function buildPortfolioImportReconciliationPlan({
   adoptPolicy,
   batchPolicies = [],
   priorProAccounts = [],
+  crossFormat = undefined,
 }: ReconciliationPlanInput): ReconciliationPlanResult {
   if (adoptPolicy !== undefined && !isPolicy(adoptPolicy))
     throw new ValidationError(
       "adopt_policy must be preserve_existing or prefer_source",
-    );
-  if (batches.some((batch) => formatOf(batch) === "ibkr_funding_history"))
-    throw new ValidationError(
-      "IBKR native funding history imports are no longer supported; import the IBKR Transaction History CSV instead",
     );
   const canonicalPolicies = canonicalBatchPolicies(batchPolicies, batches);
   const overrides = new Map(
@@ -579,7 +607,12 @@ export function buildPortfolioImportReconciliationPlan({
   const actions: PlanAction[] = [];
   const blockers: PlanIssue[] = [];
   const adoptions: PlanAdoption[] = [];
+  const crossFormatDuplicates: ReconciliationSourceRow[] = [];
+  const cashAdoptions: PlanCashAdoption[] = [];
   const prepared: PreparedRow[] = [];
+  const crossFormatDecisions = crossFormat
+    ? planCrossFormatSources({ rows, context: crossFormat, policyOf })
+    : new Map<number, CrossFormatDecision>();
   const inKindIncome = inKindIncomeRows(rows, batches);
   const zeroYieldBatches = new Set(
     batches
@@ -662,6 +695,75 @@ export function buildPortfolioImportReconciliationPlan({
   for (const row of rows) {
     if (["committed", "duplicate"].includes(row.status)) {
       actions.push({ ...rowAction(row), action: "settled" });
+      continue;
+    }
+    const decision = crossFormatDecisions.get(Number(row.id));
+    if (decision) {
+      const base = {
+        ...rowAction(row),
+        investmentId:
+          row.investment_id == null ? null : Number(row.investment_id),
+        crossFormat: true,
+      };
+      if (decision.kind === "blocked")
+        addBlocker(
+          row,
+          decision.reason,
+          decision.candidateTransactionIds.map((id) => ({ id })),
+        );
+      else if (decision.kind === "duplicate_source") {
+        actions.push({
+          ...base,
+          action: "duplicate_source",
+          duplicateOfRowId: decision.duplicateOfRowId,
+        });
+        crossFormatDuplicates.push(row);
+      } else if (decision.kind === "duplicate") {
+        actions.push({
+          ...base,
+          action: "duplicate",
+          existingTransactionId: decision.existingTransactionId,
+        });
+        crossFormatDuplicates.push(row);
+      } else {
+        const source = {
+          date: row.tx_date,
+          amount:
+            decision.kind === "adopt_cash"
+              ? decision.after.amount
+              : decision.existing.amount,
+          currency:
+            decision.kind === "adopt_cash"
+              ? decision.after.currency
+              : decision.existing.currency,
+        };
+        const corrections = (["date", "amount", "currency"] as const).filter(
+          (field) =>
+            field === "amount"
+              ? !equalNumber(source.amount, decision.existing.amount, 4)
+              : source[field] !== decision.existing[field],
+        );
+        const cash = {
+          ...base,
+          investmentId: null,
+          cash: true,
+          existingTransactionId: decision.transactionId,
+          existing: decision.existing,
+          source,
+          corrections,
+        };
+        if (decision.kind === "policy_required") {
+          actions.push({ ...cash, action: "policy_required" });
+          blockers.push({
+            ...rowAction(row),
+            reason: "source_policy_required",
+            candidateTransactionIds: [decision.transactionId],
+          });
+        } else {
+          actions.push({ ...cash, action: "adopt", policy: decision.policy });
+          cashAdoptions.push({ row, decision });
+        }
+      }
       continue;
     }
     if (
@@ -1010,6 +1112,8 @@ export function buildPortfolioImportReconciliationPlan({
       ),
     },
     adoptions,
+    crossFormatDuplicates,
+    cashAdoptions,
   };
 }
 
@@ -1058,11 +1162,43 @@ async function loadPlan(
   const history = await readReconciliationHistory([
     ...new Set(rows.map((row) => Number(row.investment_id)).filter(Boolean)),
   ]);
-  const priorProAccounts = await readReconciledProImportAccounts([
+  const accountIds = [
     ...new Set(
       batches.map((batch) => batch.account_id).filter((id) => id != null),
     ),
-  ]);
+  ];
+  const priorProAccounts = await readReconciledProImportAccounts(accountIds);
+  const cashRows = rows.filter(
+    (row) => row.route === "cash" && row.tx_date != null,
+  );
+  const cashDates = cashRows.map((row) => row.tx_date!).sort();
+  const shift = (date: string, days: number) =>
+    new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  const crossFormat: CrossFormatContext = {
+    ledgerSources: await readCrossFormatLedgerSources(accountIds, ids),
+    cashFingerprints: await readCashLedgerFingerprints(
+      cashRows.map((row) => row.dedup_fingerprint).filter((fp) => fp != null),
+    ),
+    correctedAliases: new Set(
+      (await readActiveIbkrCashReceipts())
+        .map((receipt) => receipt.before_data.snapshot)
+        .filter((snapshot) => snapshot?.dedup_fingerprint)
+        .map(
+          (snapshot) =>
+            `${snapshot.dedup_fingerprint_version}:${snapshot.dedup_fingerprint}`,
+        ),
+    ),
+    manualCash:
+      cashDates.length > 0
+        ? await readManualCashCandidates(
+            accountIds,
+            shift(cashDates[0]!, -7),
+            shift(cashDates.at(-1)!, 7),
+          )
+        : [],
+  };
   return {
     ...buildPortfolioImportReconciliationPlan({
       rows,
@@ -1071,6 +1207,7 @@ async function loadPlan(
       adoptPolicy,
       batchPolicies,
       priorProAccounts,
+      crossFormat,
     }),
     history,
     rows,
@@ -1195,11 +1332,8 @@ export async function applyPortfolioImportReconciliation({
   adoptPolicy,
   batchPolicies = [],
 }: ReconciliationScopeOptions) {
-  const { plan, adoptions, history, rows } = await loadPlan(
-    batchIds,
-    adoptPolicy,
-    batchPolicies,
-  );
+  const { plan, adoptions, crossFormatDuplicates, cashAdoptions, history, rows } =
+    await loadPlan(batchIds, adoptPolicy, batchPolicies);
   if (!plan.ready)
     throw new ConflictError(
       "Import needs reconciliation before any history can be changed",
@@ -1234,7 +1368,76 @@ export async function applyPortfolioImportReconciliation({
       (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
     );
   }
-  return { plan, adoptedByBatch };
+  const settledByBatch = new Map(adoptedByBatch);
+  const settle = async (row: ReconciliationSourceRow) => {
+    if (!(await markCrossFormatSourceDuplicate(row)))
+      throw new ConflictError(
+        "An import row changed during reconciliation",
+        { details: { reason: "stale_existing_transaction" } },
+      );
+    settledByBatch.set(
+      Number(row.batch_id),
+      (settledByBatch.get(Number(row.batch_id)) ?? 0) + 1,
+    );
+  };
+  for (const row of crossFormatDuplicates) await settle(row);
+  for (const { row, decision } of cashAdoptions) {
+    const [before] = await readIbkrCashImagesForUpdate([
+      decision.transactionId,
+    ]);
+    if (
+      !before ||
+      !before.is_active ||
+      Number(before.account_id) !== Number(row.account_id) ||
+      before.date !== decision.existing.date ||
+      before.currency !== decision.existing.currency ||
+      !equalNumber(before.amount, decision.existing.amount, 4) ||
+      (decision.reason === "manual_cash" &&
+        (before.dedup_fingerprint != null || before.source_record_hash != null))
+    )
+      throw new ConflictError(
+        "An existing cash transaction changed during reconciliation",
+        { details: { reason: "stale_existing_transaction" } },
+      );
+    const binding = (source: { batchId: number; stagingRowId: number }) => ({
+      id: source.stagingRowId,
+      batch_id: source.batchId,
+      account_id: Number(row.account_id),
+      custom_config: null,
+      staging: {},
+    });
+    const imported = { batchId: Number(row.batch_id), stagingRowId: Number(row.id) };
+    const proof: IbkrCashProof =
+      decision.reason === "ibkr_native_funding" && decision.original
+        ? {
+            kind: "ibkr_native_funding",
+            version: 1,
+            original: decision.original,
+            native: imported,
+            sourceBindings: [binding(decision.original), binding(imported)],
+          }
+        : { kind: "cash_adoption", version: 1, sourceBindings: [binding(imported)] };
+    await writeCashAdoption({
+      batchId: Number(row.batch_id),
+      stagingRowId: Number(row.id),
+      policy: decision.policy,
+      before,
+      after: {
+        ...before,
+        amount: decision.after.amount,
+        currency: decision.after.currency as typeof before.currency,
+        dedup_fingerprint: row.dedup_fingerprint,
+        dedup_fingerprint_version: row.dedup_fingerprint_version,
+      },
+      proof,
+    });
+    await settle(row);
+    adoptedByBatch.set(
+      Number(row.batch_id),
+      (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
+    );
+  }
+  return { plan, adoptedByBatch, settledByBatch };
 }
 
 /** The locked plan's custody events name these accounts. */
