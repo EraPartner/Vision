@@ -21,6 +21,41 @@ export function isTrustedRendererUrl(
   return false;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]);
+
+/**
+ * Returns the normalized URL a renderer link may open in the OS browser, or
+ * undefined. Only absolute http(s) URLs without credentials qualify. The app's
+ * own origin and every loopback host are refused, so a link can never hand the
+ * local backend (or another local service) to the system browser.
+ */
+export function externalBrowserUrl(
+  candidate: string,
+  appUrl: string,
+): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+  if (url.username || url.password || !url.hostname) return undefined;
+  try {
+    if (url.origin === new URL(appUrl).origin) return undefined;
+  } catch {
+    return undefined;
+  }
+  const host = url.hostname.toLowerCase();
+  if (
+    LOOPBACK_HOSTS.has(host) ||
+    host.endsWith(".localhost") ||
+    /^127\.\d+\.\d+\.\d+$/.test(host)
+  )
+    return undefined;
+  return url.href;
+}
+
 export function isAllowedPermissionCheck(
   permission: string,
   requestingOrigin: string,

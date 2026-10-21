@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     architecture,
@@ -679,7 +679,13 @@ copyright and AGPL-3.0 license line for the macOS About panel. The former
 Windows/Linux Help-menu About item and its `menu.about` key were removed by
 [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
 The repository and documentation Help items use fixed HTTPS destinations from
-the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
+the packaged main process. The window-open handler denies every new Electron
+window; a renderer link with `target="_blank"` reaches `shell.openExternal` only
+when `externalBrowserUrl` (`packaging/electron/runtime/renderer-security.ts`)
+accepts it: an absolute `http:` or `https:` URL without credentials, outside the
+app's own origin and every loopback host. `file:`, `javascript:`, `data:`,
+`mailto:` and custom schemes are dropped. Attachments do not use links: the
+renderer fetches their bytes and saves them with `downloadBlob`.
 
 > [!warning] Manual sync point
 > `GO_MENU_ROUTES` in `packaging/electron/main.ts` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.

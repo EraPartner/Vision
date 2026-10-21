@@ -372,8 +372,13 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 **setWindowOpenHandler Denial**
 
 - Prevents renderer-initiated `window.open()` from spawning new windows
-- Implementation: `mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))`
-- Impact: Blocks JavaScript `window.open()` calls and link targets `target="_blank"`; users must explicitly select & open links via right-click → "Open in Browser"
+- Implementation: the handler always returns `{ action: 'deny' }`. It hands the URL to
+  `shell.openExternal` only when `externalBrowserUrl` in
+  `packaging/electron/runtime/renderer-security.ts` accepts it: a parsed absolute `http:`/`https:`
+  URL with no credentials that is neither the app's own origin nor a loopback host
+- Impact: `target="_blank"` links to public web pages open in the OS browser; `file:`,
+  `javascript:`, `data:` and custom schemes, and links back to the local backend, are dropped.
+  Attachments are fetched and saved in the renderer instead of opened in a window
 
 **will-navigate Whitelist**
 

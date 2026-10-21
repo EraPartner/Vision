@@ -48,6 +48,7 @@ import {
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
 import {
+  externalBrowserUrl,
   isAllowedPermissionCheck,
   isTrustedRendererUrl,
 } from "./runtime/renderer-security";
@@ -1391,11 +1392,14 @@ function createWindow(): BrowserWindow {
     if (mainWindow && !mainWindow.isDestroyed())
       mainWindow.webContents.send("window:fullscreen", false);
   });
-  // The renderer's fixed About links open in the OS browser. Every new-window
-  // request is still denied inside Electron, and arbitrary URLs never reach
-  // shell.openExternal.
+  // Every new-window request is denied inside Electron. Renderer links with
+  // target="_blank" (news, payment URLs, Ollama help, About links) open in the
+  // OS browser only when they are plain http(s) URLs outside the app's own
+  // loopback origin; file:, javascript: and custom schemes never reach
+  // shell.openExternal. Attachments download through fetch in the renderer.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    openTrustedExternalUrl(url);
+    const external = externalBrowserUrl(url, appUrl());
+    if (external) void shell.openExternal(external);
     return { action: "deny" };
   });
 

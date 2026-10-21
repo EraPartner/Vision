@@ -11,7 +11,7 @@ import {
     Paperclip,
     Trash2,
     Upload,
-    ExternalLink,
+    Download,
     Loader2,
     AlertCircle,
 } from "lucide-react";
@@ -25,8 +25,10 @@ import {
     uploadAttachment,
     deleteAttachment,
     getAttachmentDownloadUrl,
+    fetchAttachmentBlob,
     type Attachment,
 } from "@/lib/api/attachments";
+import { downloadBlob } from "@/lib/downloadBlob";
 import { attachmentKeys, useAttachments } from "@/hooks/useAttachments";
 import type { TransactionId } from "@vision/types/brands";
 
@@ -54,6 +56,27 @@ function AttachmentRow({
     const { t } = useLanguage();
     const url = getAttachmentDownloadUrl(attachment.id);
     const isImage = attachment.mime_type.startsWith("image/");
+    const [downloading, setDownloading] = useState(false);
+    const downloadLabel = t("aria.downloadAttachment", {
+        name: attachment.filename,
+    });
+
+    // The desktop app denies new windows, so a target="_blank" link would do
+    // nothing there. Fetch the bytes and save them through downloadBlob.
+    async function handleDownload() {
+        if (downloading) return;
+        setDownloading(true);
+        try {
+            const blob = await fetchAttachmentBlob(attachment.id);
+            downloadBlob(blob, attachment.filename);
+        } catch (err) {
+            toast.error(t("txPage.downloadAttachmentError"), {
+                description: apiErrorToMessage(err, t),
+            });
+        } finally {
+            setDownloading(false);
+        }
+    }
 
     return (
         <div className="group flex items-center gap-2 py-1.5">
@@ -61,37 +84,47 @@ function AttachmentRow({
                 aria-hidden="true"
                 className="h-3.5 w-3.5 shrink-0 text-label-tertiary"
             />
-            <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 flex-1 items-center gap-1 rounded-chip type-body text-foreground underline-offset-4 hover:underline focus-ring"
+            <button
+                type="button"
+                onClick={() => void handleDownload()}
+                disabled={downloading}
+                aria-label={downloadLabel}
+                className="flex min-w-0 flex-1 items-center gap-1 rounded-chip text-left type-body text-foreground underline-offset-4 hover:underline focus-ring disabled:opacity-60"
                 title={attachment.filename}
             >
                 <span className="truncate">{attachment.filename}</span>
-                <ExternalLink
-                    aria-hidden="true"
-                    className="h-3 w-3 shrink-0 text-label-tertiary"
-                />
-            </a>
+                {downloading ? (
+                    <Loader2
+                        aria-hidden="true"
+                        className="h-3 w-3 shrink-0 animate-spin text-label-tertiary"
+                    />
+                ) : (
+                    <Download
+                        aria-hidden="true"
+                        className="h-3 w-3 shrink-0 text-label-tertiary"
+                    />
+                )}
+            </button>
             <span className="shrink-0 type-footnote tabular-nums text-label-secondary">
                 {formatBytes(attachment.size_bytes)}
             </span>
             {isImage && (
-                <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <button
+                    type="button"
+                    onClick={() => void handleDownload()}
+                    disabled={downloading}
+                    tabIndex={-1}
+                    aria-hidden="true"
                     className="rounded-chip focus-ring"
                 >
                     <img
                         src={url}
-                        alt={attachment.filename}
+                        alt=""
                         loading="lazy"
                         decoding="async"
                         className="h-6 w-6 shrink-0 rounded-chip border border-border/60 object-cover"
                     />
-                </a>
+                </button>
             )}
             <Button
                 variant="ghost"

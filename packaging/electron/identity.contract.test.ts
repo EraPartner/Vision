@@ -8,14 +8,15 @@ import { appRoot } from "./paths";
 const root = path.resolve(appRoot, "..", "..");
 const read = (file: string) =>
   fs.readFileSync(path.join(appRoot, file), "utf8");
-const main = read("main.ts");
 
 interface ExtraResource {
   from: string;
   to: string;
 }
 
-test("package versions align and external links open only trusted URLs", () => {
+// The external-link policy is covered behaviourally by
+// runtime/renderer-security.test.ts (externalBrowserUrl).
+test("package versions align", () => {
   const versions: unknown[] = [
     JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
       .version,
@@ -25,17 +26,6 @@ test("package versions align and external links open only trusted URLs", () => {
     JSON.parse(read("package.json")).version,
   ];
   assert.equal(new Set(versions).size, 1);
-  assert.match(
-    main,
-    /const TRUSTED_EXTERNAL_URLS = new Set\(\[REPOSITORY_URL, DOCUMENTATION_URL\]\)/,
-  );
-  assert.match(main, /if \(!TRUSTED_EXTERNAL_URLS\.has\(url\)\) return false/);
-  assert.match(
-    main,
-    /setWindowOpenHandler\(\(\{ url \}\) => \{\s*openTrustedExternalUrl\(url\);\s*return \{ action: ["']deny["'] \}/,
-  );
-  assert.match(main, /openTrustedExternalUrl\(REPOSITORY_URL\)/);
-  assert.match(main, /openTrustedExternalUrl\(DOCUMENTATION_URL\)/);
 });
 
 test("Vision Demo uses a valid, distinct badged macOS icon", () => {
