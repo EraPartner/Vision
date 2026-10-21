@@ -159,8 +159,13 @@ The amendment restores the inputs without restoring the proof frameworks:
   account, currency and signed amount within seven days; a different date needs a policy.
 - **Safety.** Indistinguishable candidates pair by count; anything that cannot pair one to one
   blocks (`ambiguous_funding_history`, `ambiguous_cash_history`), and disagreeing twins or a CSV
-  deposit edited after import block with `cross_format_source_conflict`. Nothing is dropped: an
-  unpaired row imports normally or blocks with a reason. Commit applies these settlements before
+  deposit edited after import block with `cross_format_source_conflict`. A near match never
+  imports silently: an IBKR movement whose value matches but whose CSV date is up to ten days
+  outside the window blocks with `funding_date_mismatch`, and an otherwise identical Saxo pair
+  without a booking record id on one side blocks with `cross_format_identity_missing`. The owner
+  decides through the existing statement policy: `prefer_source` pairs them, `preserve_existing`
+  keeps both; staged duplicates of paired rows remember the choice for repeats. Nothing is
+  dropped: an unpaired row imports normally or blocks with a reason. Commit applies these settlements before
   the readiness check and re-reads each cash transaction under lock, so a change since planning is
   `stale_existing_transaction`. The ordinary fingerprint dedup still makes every repeat a no-op.
 - **Undo.** Cash adoptions and corrections write the existing cash reconciliation journal

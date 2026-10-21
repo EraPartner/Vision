@@ -808,7 +808,14 @@ within seven days. A manual entry on another date needs a policy (`policy_requir
 `source_policy_required`). The cross-export blocker reasons are `cross_format_source_conflict`
 (the other export disagrees, or the earlier CSV row was edited since import),
 `ambiguous_funding_history` and `ambiguous_cash_history` (more candidates than rows could be the
-same movement).
+same movement), `funding_date_mismatch` (an IBKR CSV deposit or withdrawal matches a funding
+workbook movement in type, account and value, but its date is up to ten days outside the
+request–completion window) and `cross_format_identity_missing` (an otherwise identical Saxo CSV
+and XLSX row, one without a booking record id). These last two clear only on the selected
+statements' `batchPolicies` or `adoptPolicy`: `prefer_source` records the pair as one event, and
+the paired `duplicate` or `duplicate_source` carries `policy: prefer_source`; `preserve_existing`
+keeps both. Conflicting policies across the pair keep it blocked. A later import of a row the
+owner paired settles the same way without asking again.
 An `adjustment` action carries `adjustment` detail with `date`, `units`, `kind`, `basisPolicy`, and
 `accountId`; `summary.adjustment` counts newly planned adjustment events. Their staging financial
 `type` is null, and their ledger owns source linkage. Staging ordinals include adapter-derived rows

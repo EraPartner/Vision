@@ -368,6 +368,17 @@ than guessing. A Saxo pair that disagrees, or a CSV deposit edited after import,
 `cross_format_source_conflict`: the edit is neither overwritten nor duplicated. Rows that no other
 export records import normally, so a partial workbook only settles what it covers.
 
+A near match never imports silently. An IBKR CSV movement whose type, account and native × rate
+value match a funding movement, but whose date is up to ten days outside the request–completion
+window, blocks with `funding_date_mismatch`. A Saxo CSV and XLSX row without a booking record id
+on one side (the workbook always has one, since it joins its sheets on it) blocks with
+`cross_format_identity_missing` when route, type, instrument, units, cash and date agree. The
+owner resolves either with the statement policy: "Use detailed source facts" (`prefer_source`)
+records them as one event, by the same outcome as the strict pair in the table above, and
+"Preserve existing facts" (`preserve_existing`) keeps both, without offering the other export's
+transaction as a likely copy again. A repeat import of a paired row settles as a duplicate
+without asking again.
+
 Cash adoptions and corrections are written to the cash reconciliation journal and restored by
 rolling back their batch. A CSV batch cannot be rolled back while a funding correction depends on
 its transaction. Settled companion rows clear their error counters, and commit applies these
