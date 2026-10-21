@@ -605,9 +605,23 @@ export function calculateCostBasisByMethod(
   return calculateCostBasis(txns, opts); // default: weighted_avg
 }
 
+/** How a transaction moves fixed-income principal (as in the summary core's totalInvested). */
+const PRINCIPAL_DIRECTION: Readonly<Record<string, 1 | -1>> = {
+  buy: 1,
+  gift: 1,
+  sell: -1,
+  return_of_capital: -1,
+};
+
 /**
  * Calculate accrued simple interest for fixed-income assets.
  * Clock starts from last interest payment date, or first buy if no payments yet.
+ *
+ * Interest accrues per principal segment: a top-up, withdrawal or return of
+ * capital after the start date changes the principal from its own date on, so
+ * each period earns interest on the principal actually held then. `principal`
+ * is the principal after every transaction in `txns`; earlier segments are
+ * derived from it by backing out the later changes.
  *
  * @param principal - Current invested principal
  * @param interestRate - Annual rate as a percentage (e.g. 3.5 for 3.5%)
@@ -615,28 +629,60 @@ export function calculateCostBasisByMethod(
  * @returns Accrued interest amount
  */
 export function calculateAccruedInterest(
-  txns: readonly Pick<PortfolioTxnLike, "type" | "date">[],
+  txns: readonly Pick<
+    PortfolioTxnLike,
+    "type" | "date" | "amount" | "nativeFxMultiplier"
+  >[],
   principal: number,
   interestRate: number,
   todayYmd: string,
 ): number {
   if (!interestRate || principal <= 0) return 0;
 
+  const ymd = (date: string) => String(date).slice(0, 10);
   const sortedDesc = [...txns].sort((a, b) => b.date.localeCompare(a.date));
   const lastInterestTxn = sortedDesc.find((t) => t.type === "interest");
   const firstBuyTxn = [...txns]
     .filter((t) => t.type === "buy")
     .sort((a, b) => a.date.localeCompare(b.date))[0];
 
-  const startDate = lastInterestTxn?.date || firstBuyTxn?.date;
-  if (!startDate) return 0;
+  const startRaw = lastInterestTxn?.date || firstBuyTxn?.date;
+  if (!startRaw) return 0;
+  const startDate = ymd(startRaw);
 
-  const daysSinceStart = Math.max(0, daysBetweenYmd(startDate, todayYmd));
+  const ZERO = toDecimal(0);
+  // Walk principal changes after the start, newest first: the principal held
+  // before a change is the principal after it minus that change.
+  let segmentPrincipal = toDecimal(principal);
+  let segmentEnd = todayYmd;
+  let principalDays = ZERO;
+  for (const txn of sortedDesc) {
+    const direction = PRINCIPAL_DIRECTION[txn.type];
+    const at = ymd(txn.date);
+    if (direction === undefined || at <= startDate) continue;
+    if (at < segmentEnd) {
+      principalDays = principalDays.plus(
+        Decimal.max(segmentPrincipal, ZERO).times(
+          daysBetweenYmd(at, segmentEnd),
+        ),
+      );
+      segmentEnd = at;
+    }
+    const change = toDecimal(txn.amount ?? 0).times(
+      toDecimal(txn.nativeFxMultiplier ?? 1),
+    );
+    segmentPrincipal = segmentPrincipal.minus(change.times(direction));
+  }
+  if (startDate < segmentEnd) {
+    principalDays = principalDays.plus(
+      Decimal.max(segmentPrincipal, ZERO).times(
+        daysBetweenYmd(startDate, segmentEnd),
+      ),
+    );
+  }
 
   return toNumber(
-    toDecimal(principal)
-      .times(toDecimal(interestRate).div(100).div(365))
-      .times(daysSinceStart),
+    principalDays.times(toDecimal(interestRate).div(100).div(365)),
   );
 }
 

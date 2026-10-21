@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     feature,
@@ -186,12 +186,18 @@ See [[docs/adr/065-daily-gap-fill-dense-asset-history|ADR-065]] for the full dec
 ```
 value = runningInvested + accruedInterest
 
-accruedInterest = runningInvested × (interestRate / 100 / 365)
-                  × calendarDaysBetween(startDate, day)
+accruedInterest = (interestRate / 100 / 365)
+                  × Σ principal × calendarDaysBetween(segmentStart, segmentEnd)
+                    over the principal segments from startDate to day
 
 startDate = date of most recent `interest` transaction
             OR date of first `buy` transaction if no interest payments yet
 ```
+
+Since 2026-10-21 a buy, gift, sell or return of capital after `startDate` starts a new principal
+segment on its own date, in the snapshot history and in `calculateAccruedInterest` alike. Before,
+the principal on the valued day applied to the whole period, so a top-up overstated and a
+withdrawal understated the accrued interest.
 
 An `interest` transaction resets the accrual clock to that date (matching how a real interest payment zeroes the owed amount). `calendarDaysBetween` uses `APP_TIMEZONE` per ADR-009.
 

@@ -249,15 +249,18 @@ describe('calculateAccruedInterest', () => {
     );
   });
 
-  it('proportional to principal: doubling principal doubles accrued interest', () => {
+  it('proportional to principal: doubling principal and every deposit doubles accrued interest', () => {
     fc.assert(
       fc.property(
         fc.double({ min: 1, max: 100_000, noNaN: true }),
         fc.double({ min: 0.01, max: 30, noNaN: true }),
         fc.array(arbBuy, { minLength: 1, maxLength: 5 }),
         (principal, rate, txns) => {
+          // Interest accrues per principal segment, so later deposits shape
+          // the earlier segments: scale them with the principal.
+          const doubled = txns.map((txn) => ({ ...txn, amount: txn.amount * 2 }));
           const single = calculateAccruedInterest(txns, principal, rate);
-          const double = calculateAccruedInterest(txns, principal * 2, rate);
+          const double = calculateAccruedInterest(doubled, principal * 2, rate);
           if (single > 0) {
             expect(double).toBeCloseTo(single * 2, 6);
           }

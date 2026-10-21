@@ -93,6 +93,28 @@ export interface NonUnitRunningState {
   lastInterestDate: string | null;
   /** 'YYYY-MM-DD' */
   firstBuyDate: string | null;
+  /**
+   * 'YYYY-MM-DD' start of the current principal segment: the accrual start
+   * (last interest date or first buy), moved to each later principal change.
+   */
+  segmentStart: string | null;
+  /** Σ principal × days of the closed segments since the accrual start. */
+  closedPrincipalDays: Decimal;
+}
+
+/**
+ * Close the open principal segment at `day`, so a principal change from `day`
+ * on accrues at the new principal (mirrors calculateAccruedInterest).
+ */
+function closePrincipalSegment(state: NonUnitRunningState, day: string) {
+  if (state.segmentStart === null || day <= state.segmentStart) return;
+  const principal = state.runningInvested.gt(0)
+    ? state.runningInvested
+    : toDecimal(0);
+  state.closedPrincipalDays = state.closedPrincipalDays.plus(
+    principal.times(calendarDaysBetween(state.segmentStart, day)),
+  );
+  state.segmentStart = day;
 }
 
 /**
@@ -706,6 +728,8 @@ export async function computeDailySnapshots(
       runningAppreciation: toDecimal(0),
       lastInterestDate: null,
       firstBuyDate: null,
+      segmentStart: null,
+      closedPrincipalDays: toDecimal(0),
     });
   }
 
@@ -722,6 +746,8 @@ export async function computeDailySnapshots(
       const inv = investmentsById.get(tx.investmentId);
       const nonUnitInv = nonUnitInvestmentsById.get(tx.investmentId);
       const nonUnitS = nonUnitState.get(tx.investmentId);
+      // Any principal change below starts a new accrual segment today.
+      if (nonUnitS) closePrincipalSegment(nonUnitS, day);
 
       if (tx.type === "buy" || tx.type === "gift") {
         cumulativeInvested = cumulativeInvested.plus(converted);
@@ -759,8 +785,10 @@ export async function computeDailySnapshots(
             tx.type === "buy";
           if (includeForInvested)
             nonUnitS.runningInvested = nonUnitS.runningInvested.plus(converted);
-          if (tx.type === "buy" && !nonUnitS.firstBuyDate)
+          if (tx.type === "buy" && !nonUnitS.firstBuyDate) {
             nonUnitS.firstBuyDate = day;
+            nonUnitS.segmentStart ??= day;
+          }
         }
       } else if (tx.type === "asset_transfer") {
         if (!fullyAssignedUnitInvestments.has(tx.investmentId))
@@ -911,6 +939,8 @@ export async function computeDailySnapshots(
       } else if (tx.type === "interest" && nonUnitS) {
         // Resets the accrual clock to match calculateAccruedInterest.
         nonUnitS.lastInterestDate = day;
+        nonUnitS.segmentStart = day;
+        nonUnitS.closedPrincipalDays = toDecimal(0);
       } else if (tx.type === "appreciation" && nonUnitS) {
         nonUnitS.runningAppreciation =
           nonUnitS.runningAppreciation.plus(converted);
@@ -989,14 +1019,19 @@ export async function computeDailySnapshots(
 
       let invValue;
       if (isFixedIncome) {
-        // accruedInterest = principal × dailyRate × days(startDate → day)
+        // accruedInterest = dailyRate × Σ principal × days per principal
+        // segment since the last interest date (or first buy).
         let accrued = toDecimal(0);
         if (inv.interestRate > 0 && state.runningInvested.gt(0)) {
-          const startDate = state.lastInterestDate || state.firstBuyDate;
-          if (startDate) {
-            const days = Math.max(0, calendarDaysBetween(startDate, day));
+          if (state.segmentStart) {
+            const days = Math.max(
+              0,
+              calendarDaysBetween(state.segmentStart, day),
+            );
             const dailyRate = toDecimal(inv.interestRate).div(100).div(365);
-            accrued = state.runningInvested.times(dailyRate).times(days);
+            accrued = state.closedPrincipalDays
+              .plus(state.runningInvested.times(days))
+              .times(dailyRate);
           }
         }
         invValue = state.runningInvested.plus(accrued);
