@@ -250,6 +250,8 @@ const blockerKeys: Record<string, string> = {
     unresolved_zero_yield_policy: "zeroYield",
     projected_history_conflict: "projectedHistory",
     cross_format_source_conflict: "crossFormat",
+    cross_format_identity_missing: "crossFormatIdentity",
+    funding_date_mismatch: "fundingDateMismatch",
     ambiguous_funding_history: "ambiguousFunding",
     ambiguous_cash_history: "ambiguousCash",
 };
