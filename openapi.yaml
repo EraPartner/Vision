@@ -7047,7 +7047,14 @@ components:
             One reviewed outcome per selected staged row: insert, adopt, duplicate,
             duplicate_source, cash, transfer, adjustment, internal_annotation,
             settled, blocked or policy_required. In-kind income is an insert whose
-            source carries income_recognition_role=included_in_units.
+            source carries income_recognition_role=included_in_units. Rows that
+            another export of the same broker history records carry
+            crossFormat=true: duplicate_source names the selected twin row,
+            duplicate names the existing transaction, and an adopt with
+            cash=true corrects or adopts an existing brokerage cash transaction
+            (an IBKR CSV movement to the funding workbook's own currency, or a
+            manual entry with the same signed amount and currency within seven
+            days).
           items:
             type: object
             additionalProperties: true
@@ -7069,8 +7076,25 @@ components:
                 minimum: 1
                 maximum: 9007199254740991
                 description: Existing canonical transaction for an adoption or an owned duplicate.
+              crossFormat:
+                type: boolean
+                description: Settled against another export of the same broker history or a manual cash entry.
+              cash:
+                type: boolean
+                description: The existing transaction is brokerage cash, not a portfolio transaction.
+              duplicateOfRowId:
+                type: integer
+                format: int64
+                minimum: 1
+                description: For duplicate_source, the selected staged row that records the same event.
         blockers:
           type: array
+          description: >-
+            Rows that cannot be imported yet, each with a reason. Cross-format
+            reasons are cross_format_source_conflict (the other export or an
+            edited ledger row disagrees), ambiguous_funding_history and
+            ambiguous_cash_history (more than one candidate could be the same
+            movement). Nothing in a blocked plan is written.
           items: { type: object, additionalProperties: true }
         summary:
           type: object
@@ -7139,11 +7163,14 @@ components:
           type: string
           format: binary
           description: >-
-            CSV history or detailed Saxo XLSX, maximum 50 MiB. Saxo requires
+            CSV history, detailed Saxo XLSX, or the IBKR funding workbook
+            (XLS or XLSX), maximum 50 MiB. Saxo requires
             portfolio_format=saxo_transaction_history and the Transacties,
-            _Transacties, and Bookings sheets. Workbook structure, size,
-            identifiers, formulas and accounting detail are validated before
-            staging. Legacy XLS workbooks are rejected.
+            _Transacties, and Bookings sheets. IBKR funding requires
+            portfolio_format=ibkr_funding_history and the original Deposit and
+            Withdrawal sheet headers. Workbook structure, size, identifiers,
+            formulas and accounting detail are validated before staging.
+            Legacy XLS is accepted only for the IBKR funding workbook.
         adapter_name:
           type: string
           description: Display label for the import source
@@ -7167,6 +7194,7 @@ components:
           type: string
           enum:
             - ibkr_transaction_history
+            - ibkr_funding_history
             - kinesis_transaction_history
             - nexo_transaction_history
             - nexo_pro_spot_history
@@ -7178,9 +7206,15 @@ components:
             include or affect sleeve cash movements. Automatic source selection
             is a frontend convenience; API callers provide this field. Saxo
             accepts CSV and detailed XLSX; net-only CSV dividends remain review
-            errors because gross income and withholding taxes are unavailable.
-            IBKR Transaction History deposits and withdrawals are recorded as
-            ordinary sleeve cash in the statement base currency. Kinesis fiat
+            errors because gross income and withholding taxes are unavailable,
+            unless the reviewed scope or history holds the XLSX record of the
+            same booking. IBKR Transaction History deposits and withdrawals are
+            recorded as ordinary sleeve cash in the statement base currency.
+            ibkr_funding_history records each completed deposit and withdrawal
+            of the IBKR funding workbook in its own currency; open, rejected and
+            cancelled requests are skipped, and included_symbols is rejected.
+            Reconciliation pairs either IBKR export with the other, so each
+            movement is recorded once. Kinesis fiat
             deposits, withdrawals, card payments and trade cash legs are recorded
             as ordinary signed sleeve cash whose amount is the literal balance
             movement, fees included.
@@ -15502,6 +15536,10 @@ paths:
                                 type: array
                                 items:
                                   type: string
+                              presetKey:
+                                type: string
+                                enum: [ibkr_funding_history]
+                                description: Present when the IBKR file is the funding workbook rather than the Transaction History CSV.
                           detectionError:
                             type: string
                             nullable: true

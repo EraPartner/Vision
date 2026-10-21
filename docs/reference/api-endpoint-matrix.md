@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
+last_modified: 2026-10-21
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -93,6 +93,8 @@ aliases:
 > **2026-10-20 — unused operations removed (BREAKING for direct HTTP callers only, count 293 → 284):** no frontend, Electron, script or AI-chat caller used these nine operations, so they are gone: `POST /api/analysis/interchange/import` and `POST /api/analysis/interchange/export` (the browser parses and writes CSV/XLSX itself with `@vision/shared-utils/analysis`), `POST /api/research/presentation` (the browser computes presentations with `@vision/shared-utils/research/presentation`), `GET /api/research/quote` and `GET /api/research/fundamentals` (the UI uses `/api/research/chart`, `/api/research/scorecard` and `/api/market/quote`; the AI chat research tool still calls the aggregator directly), `GET /api/ai-research/status`, `POST /api/ai-research/documents/search/passages` (the AI chat and investigation tools still search passages in-process), `GET /api/admin/endpoint-liveness` (the Admin Endpoints page reads `GET /api/admin/endpoints` and `GET /api/admin/metrics/requests`, which remain), and `GET /api/aggregations/cashflow-forecast` (the non-Monte-Carlo planned-transaction projection; the `cashflow-forecast-methods`, `-rolling` and `-accuracy` operations are unchanged).
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
+>
+> **2026-10-21 — cross-export portfolio imports (ADR-236 amendment, additive, operation count unchanged):** portfolio uploads accept `portfolio_format=ibkr_funding_history` again, for the IBKR funding workbook as `.xls` or `.xlsx`; its completed deposits and withdrawals stage in their own currency. The probe reports `presetKey: ibkr_funding_history` for that workbook. Reconciliation plans pair a Saxo CSV with its detailed XLSX and an IBKR Transaction History CSV with its funding workbook, in any order or together, and adopt matching manual brokerage cash: actions gain `crossFormat`, `cash` and `duplicateOfRowId`, and blockers gain `cross_format_source_conflict`, `ambiguous_funding_history` and `ambiguous_cash_history`. Request fields are unchanged. See [[docs/adr/236-simplify-portfolio-import-reconciliation#Amendment: cross-export imports (2026-10-21)|the ADR-236 amendment]].
 >
 > **2026-10-20 — portfolio reconciliation simplified (ADR-236, BREAKING, operation count unchanged):** `POST /api/portfolio/import/reconciliation/preview` and `/commit` take only `batch_ids`, `adopt_policy` and `batch_policies`; `reconciliation_scope`, `cash_funding_policy` and `expected_plan_fingerprint` are rejected with `400`. Plans drop `planFingerprint`, `selectedRowIds`, `pending`, `complete`, `deferredCounts`, `batchProgress` and the cash, income and date proof fields; commit results drop `repaired`, `recordedIncome` and `recordedCash`, and the `409` details drop `planFingerprint`. Commit rebuilds the plan at commit time and returns `409 stale_existing_transaction` when an existing transaction changed. Portfolio uploads no longer accept the `ibkr_funding_history` format or `.xls` workbooks, and the probe no longer reports `native_receipts` or `presetKey`. Kinesis fiat and IBKR deposits and withdrawals commit as ordinary brokerage cash. See [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 >
@@ -486,7 +488,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 ## Portfolio Import — ADR-078
 
 All routes mounted at `/api/portfolio/import`; `importRateLimiter` applies to uploads, probe, and commits only. The pipeline stages,
-validates, and matches CSV history or supported Saxo XLSX. Maintained formats always require review.
+validates, and matches CSV history, supported Saxo XLSX or the IBKR funding XLS/XLSX. Maintained formats always require review.
 Non-brokerage generic imports auto-commit only with no name matches, unresolved rows, or errors;
 exact symbols and explicit provider aliases use `match_source='symbol'`. Commit processes dates
 in ascending order and preserves source order within a date. See

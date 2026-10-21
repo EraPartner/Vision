@@ -7566,7 +7566,7 @@ export interface components {
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
             ready: boolean;
-            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). */
             actions: ({
                 /** Format: int64 */
                 batchId: number;
@@ -7581,9 +7581,19 @@ export interface components {
                  * @description Existing canonical transaction for an adoption or an owned duplicate.
                  */
                 existingTransactionId?: number;
+                /** @description Settled against another export of the same broker history or a manual cash entry. */
+                crossFormat?: boolean;
+                /** @description The existing transaction is brokerage cash, not a portfolio transaction. */
+                cash?: boolean;
+                /**
+                 * Format: int64
+                 * @description For duplicate_source, the selected staged row that records the same event.
+                 */
+                duplicateOfRowId?: number;
             } & {
                 [key: string]: unknown;
             })[];
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement). Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];
@@ -7612,7 +7622,7 @@ export interface components {
         PortfolioImportUpload: {
             /**
              * Format: binary
-             * @description CSV history or detailed Saxo XLSX, maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS workbooks are rejected.
+             * @description CSV history, detailed Saxo XLSX, or the IBKR funding workbook (XLS or XLSX), maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. IBKR funding requires portfolio_format=ibkr_funding_history and the original Deposit and Withdrawal sheet headers. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS is accepted only for the IBKR funding workbook.
              */
             file: string;
             /** @description Display label for the import source */
@@ -7629,10 +7639,10 @@ export interface components {
              */
             yield_basis_policy?: "zero";
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. IBKR Transaction History deposits and withdrawals are recorded as ordinary sleeve cash in the statement base currency. Kinesis fiat deposits, withdrawals, card payments and trade cash legs are recorded as ordinary signed sleeve cash whose amount is the literal balance movement, fees included. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable, unless the reviewed scope or history holds the XLSX record of the same booking. IBKR Transaction History deposits and withdrawals are recorded as ordinary sleeve cash in the statement base currency. ibkr_funding_history records each completed deposit and withdrawal of the IBKR funding workbook in its own currency; open, rejected and cancelled requests are skipped, and included_symbols is rejected. Reconciliation pairs either IBKR export with the other, so each movement is recorded once. Kinesis fiat deposits, withdrawals, card payments and trade cash legs are recorded as ordinary signed sleeve cash whose amount is the literal balance movement, fees included. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
+            portfolio_format?: "ibkr_transaction_history" | "ibkr_funding_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -16146,6 +16156,11 @@ export interface operations {
                                 /** @enum {string} */
                                 source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
                                 sourceAccountIdentities: string[];
+                                /**
+                                 * @description Present when the IBKR file is the funding workbook rather than the Transaction History CSV.
+                                 * @enum {string}
+                                 */
+                                presetKey?: "ibkr_funding_history";
                             } | null;
                             /** @enum {string|null} */
                             detectionError: "parse_error" | null;

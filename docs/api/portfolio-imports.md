@@ -3,10 +3,10 @@ title: API - Portfolio Imports
 type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
-description: Portfolio CSV/Saxo XLSX staging, one full-history reviewed reconciliation, reversible adoption receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+description: Portfolio CSV, Saxo XLSX and IBKR funding XLS/XLSX staging, cross-export deduplication, one full-history reviewed reconciliation, reversible adoption receipts, and dated custody/unit adjustments with original basis
+date: 2026-10-21
+updated: 2026-10-21
+last_modified: 2026-10-21
 tags:
   [
     api,
@@ -39,7 +39,10 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/ibkrFundingHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportReconciliationService.ts"
+  - "apps/node-backend/src/services/portfolioImportCrossFormat.ts"
+  - "apps/node-backend/src/repositories/portfolioImportCashRepository.ts"
   - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.ts"
   - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
   - "apps/node-backend/src/services/portfolioImportLegacyReceipts.ts"
@@ -72,7 +75,8 @@ related_code:
 
 ## Overview
 
-The Portfolio Imports API accepts CSV history and detailed Saxo XLSX workbooks. It imports trades
+The Portfolio Imports API accepts CSV history, detailed Saxo XLSX workbooks and the IBKR funding
+workbook (XLS or XLSX). It imports trades
 into `portfolio_transactions`, routes brokerage cash to `transactions`, and stores dated custody
 events in `portfolio_asset_transfers` and unit removals in `portfolio_asset_adjustments`. Reviewed
 adoption keeps the original transaction ID. The API is parallel to budgeting import (`/api/import`) and uses stage, validate,
@@ -139,9 +143,9 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 
 | Field                             | Type    | Required | Description                                                                                                                                                                                 |
 | --------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`                            | File    | Yes      | CSV or maintained workbook (max 50 MiB); Saxo XLSX requires `saxo_transaction_history`; legacy XLS is rejected                                                                             |
+| `file`                            | File    | Yes      | CSV or maintained workbook (max 50 MiB); Saxo XLSX requires `saxo_transaction_history`; the IBKR funding XLS/XLSX requires `ibkr_funding_history`; other legacy XLS is rejected                 |
 | `adapter_name`                    | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                                                                                   |
-| `portfolio_format`                | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, `nexo_pro_spot_history`, or `saxo_transaction_history`. Omit for generic mapping |
+| `portfolio_format`                | string  | No       | Specialized parser: `ibkr_transaction_history`, `ibkr_funding_history`, `kinesis_transaction_history`, `nexo_transaction_history`, `nexo_pro_spot_history`, or `saxo_transaction_history`. Omit for generic mapping |
 | `date_format`                     | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                                                                                  |
 | `separator`                       | string  | No       | Single-character CSV delimiter; default `,`                                                                                                                                                 |
 | `encoding`                        | string  | No       | File encoding; default `utf-8`                                                                                                                                                              |
@@ -192,11 +196,21 @@ column without the numeric value. Maintained preset numeric rules remain unchang
 (`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and true `windows-1252` decoding.
 Unsupported encodings return 400. See [[docs/features/portfolio-import]].
 
-The upload filter accepts CSV and XLSX filename/MIME combinations; the error for anything else is
-`File must be a CSV or XLSX workbook`. After temporary upload, byte inspection identifies ZIP
-workbooks independently of the temporary filename. XLSX requires the Saxo format and a valid
-maintained workbook before batch creation. ADR-236 removed the IBKR funding XLS/XLSX format. Bank
-CSV upload endpoints are unchanged.
+The upload filter accepts CSV, XLSX and XLS filename/MIME combinations; the error for anything
+else is `File must be a CSV, XLSX or supported XLS workbook`. After temporary upload, byte
+inspection identifies ZIP and OLE2 workbooks independently of the temporary filename. XLSX
+requires the Saxo or IBKR funding format and a valid maintained workbook before batch creation;
+XLS is accepted only for `ibkr_funding_history`. Bank CSV upload endpoints are unchanged.
+
+`ibkr_funding_history` reads the Deposit and Withdrawal sheets of the IBKR Transaction Status &
+History export (SheetJS reads both XLS and XLSX). Each completed request (status Available, Sent,
+Completed, Processed, Received, Credited or Disbursed) stages one brokerage cash row in its own
+currency, from the `Amount` text such as `USD 1,000.00`, dated by the request date and identified
+by the account ID and reference number. Pending, rejected, cancelled and other open requests are
+skipped and counted; an unknown status, a changed header, formulas, hidden sheets, duplicate
+references or more than one account reject the file. `included_symbols` is rejected for this
+format. Each row's literal cells are kept in `raw_data` with the `ibkr_funding_workbook_row`
+schema.
 
 Workbook parsing limits are 1,000 ZIP entries, 100 MiB expanded content, and 500,000 parsed cells.
 Archive validation rejects duplicate names, encrypted entries, unsupported layouts or compression,
@@ -220,7 +234,10 @@ also increase `skipped` because they report valuation, not cash. Other signed ca
 retain their deposit or withdrawal behavior. This is a non-breaking parsing correction. Existing
 generic requests are unchanged.
 
-IBKR deposits and withdrawals commit as ordinary brokerage cash in the statement base currency.
+IBKR Transaction History deposits and withdrawals commit as ordinary brokerage cash in the
+statement base currency. When the funding workbook is imported too, in either order or together,
+reconciliation pairs each CSV movement with its workbook row and records it once in the
+workbook's own currency (see [[docs/adr/236-simplify-portfolio-import-reconciliation#Amendment: cross-export imports (2026-10-21)|the ADR-236 amendment]]).
 Batches staged before ADR-236 may still carry `ibkr_source_context`; it is no longer written or
 read.
 
@@ -302,8 +319,11 @@ preferred for source identity; zero placeholders are ignored. CSV trades retain 
 price in `Instrumentvaluta`, with account costs converted using `Omrekeningskoers`. CSV dividends
 contain only net bookings and therefore stage errors that direct the user to the detailed workbook.
 
-ADR-236 removed the Saxo companion proof: a CSV and a detailed workbook of the same period are no
-longer matched to each other. Import the detailed workbook for that period instead of both files.
+A CSV and a detailed workbook of the same period can be imported in either order or together.
+Reconciliation pairs their rows by account, source account and `Bk Record Id`, so each event is
+recorded once; the workbook's values win and a CSV dividend with a workbook twin settles without
+its error. Rows whose date, type, instrument, units or cash disagree block with
+`cross_format_source_conflict`.
 
 The XLSX adapter requires `Transacties`, `_Transacties`, and `Bookings` sheets and joins them by
 account and booking-record ID. It validates metadata, identifiers, execution quantities/prices,
@@ -359,7 +379,7 @@ Kinesis. These maintained format options are additive. Generic mapping remains a
 
 ### POST /api/portfolio/import/csv/stream
 
-SSE-streaming portfolio history import. Accepts the same CSV/Saxo XLSX request body as the custom
+SSE-streaming portfolio history import. Accepts the same CSV/XLSX/XLS request body as the custom
 endpoint. Workbook preflight happens before streaming, so invalid input returns an HTTP 400
 rather than creating a batch. Valid input uses the existing progress and terminal events.
 
@@ -736,10 +756,12 @@ committed rows are not recategorized.
 ## Multi-batch reconciliation
 
 Portfolio Performance XML upload and reference application are unavailable. Primary imports accept
-supported broker CSV or Saxo XLSX files.
+supported broker CSV, Saxo XLSX or IBKR funding XLS/XLSX files.
 [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]] removed the bounded scopes, the
 Kinesis, IBKR, Saxo and Portfolio Performance proofs, duplicate repair and the plan fingerprint.
-Receipts written earlier stay readable and are restored on batch rollback.
+Receipts written earlier stay readable and are restored on batch rollback. Its amendment adds
+cross-export pairing for Saxo CSV and XLSX, for the IBKR Transaction History CSV and funding
+workbook, and for manual brokerage cash entries.
 
 > [!warning] Breaking change (ADR-236)
 > Preview and commit reject `reconciliation_scope`, `cash_funding_policy` and
@@ -775,6 +797,18 @@ applied policy, and transfer detail when applicable. Kinds include `insert`, `ad
 `policy_required`. In-kind income is an `insert` whose `source.income_recognition_role` is
 `included_in_units`. Blockers identify `batchId`, `rowId`, one-based staging `rowOrdinal`, `reason`,
 and candidate IDs.
+
+Rows that another export of the same broker history records carry `crossFormat: true`.
+`duplicate_source` names the selected twin in `duplicateOfRowId`; `duplicate` names the existing
+transaction; an `adopt` with `cash: true` names an existing brokerage cash transaction, with its
+`existing` and `source` date, amount and currency and the `corrections`. A cash adoption either
+corrects an earlier IBKR CSV movement to the funding workbook's own amount and currency, or adopts
+a manual cash entry (no import fingerprint) with the same account, currency and signed amount
+within seven days. A manual entry on another date needs a policy (`policy_required`,
+`source_policy_required`). The cross-export blocker reasons are `cross_format_source_conflict`
+(the other export disagrees, or the earlier CSV row was edited since import),
+`ambiguous_funding_history` and `ambiguous_cash_history` (more candidates than rows could be the
+same movement).
 An `adjustment` action carries `adjustment` detail with `date`, `units`, `kind`, `basisPolicy`, and
 `accountId`; `summary.adjustment` counts newly planned adjustment events. Their staging financial
 `type` is null, and their ledger owns source linkage. Staging ordinals include adapter-derived rows
@@ -831,6 +865,12 @@ adjustments count in `imported` alongside other new canonical events. Runtime fa
   }
 }
 ```
+
+Commit applies the plan's adoptions and cross-export settlements before its readiness check, so a
+Saxo CSV dividend settled by its workbook twin no longer blocks; a blocked plan still reports the
+source-level reason (`incomplete_source`) when there is one. Rolling back a funding workbook batch
+restores the CSV movement it corrected; rolling back the CSV batch underneath that correction is
+rejected.
 
 Adopted rows are also counted as duplicates because they create no second financial transaction.
 In-kind income counts in `imported`. The legacy single-batch commit response retains its existing

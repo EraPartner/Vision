@@ -1,16 +1,16 @@
 {
-  "generatedOn": "2026-10-20",
+  "generatedOn": "2026-10-21",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 886,
+  "totalFiles": 889,
   "counts": {
-    "simulated-dom": 257,
-    "unit-script-or-contract-needs-review": 283,
+    "simulated-dom": 258,
+    "unit-script-or-contract-needs-review": 284,
     "property-test": 12,
     "mocked-unit-or-service": 195,
     "live-http-contract": 2,
     "source-or-file-contract": 13,
-    "database-test": 93,
+    "database-test": 94,
     "native-runtime-or-filesystem-test": 31
   },
   "identicalSourceGroups": [],
@@ -1763,6 +1763,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/frontend/src/pages/portfolio/__tests__/portfolioIbkrFundingDetection.test.ts",
+      "inferredBoundary": "simulated-dom",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/frontend/src/pages/portfolio/__tests__/portfolioImportDetection.test.ts",
       "inferredBoundary": "simulated-dom",
       "decision": "retain unless detailed reviewed ledger says otherwise"
@@ -2629,6 +2634,11 @@
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
+      "path": "apps/node-backend/tests/ibkrFundingHistoryAdapter.test.ts",
+      "inferredBoundary": "unit-script-or-contract-needs-review",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
       "path": "apps/node-backend/tests/ibkrTransactionHistoryAdapter.test.ts",
       "inferredBoundary": "source-or-file-contract",
       "decision": "retain unless detailed reviewed ledger says otherwise",
@@ -3147,6 +3157,11 @@
     {
       "path": "apps/node-backend/tests/portfolioBrokerRetagService.test.ts",
       "inferredBoundary": "mocked-unit-or-service",
+      "decision": "retain unless detailed reviewed ledger says otherwise"
+    },
+    {
+      "path": "apps/node-backend/tests/portfolioCrossFormatImport.db.test.ts",
+      "inferredBoundary": "database-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },
     {
