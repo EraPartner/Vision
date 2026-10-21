@@ -170,6 +170,11 @@ currency, retains each literal `Transaction History,Data` CSV record in staging 
 applies these format-specific rules:
 
 - `-` symbol, currency, price, quantity, and fee placeholders become missing values.
+- Numbers use IBKR's decimal point with comma thousands, so `1,500` is 1500. A cell that is only
+  valid with a decimal comma, such as `4,25`, keeps that single reading. A buy or sell whose
+  quantity × price × `Multiplier` × exchange rate misses its base-currency gross amount by more
+  than 1 % (at least 0.01) stages as `Unsupported IBKR event: <type>` for review instead of
+  importing.
 - Buy/sell units and prices stay in `Price Currency`. The base-currency gross amount is omitted so
   the shared 2-of-3 rule derives `amount = units × price`; base-currency commission is converted
   back with the statement exchange rate. An exported rate is stamped as `fx_rate_to_eur` only for
@@ -319,6 +324,15 @@ normalizes ordinary and non-breaking header spaces, reads Dutch and English trad
 reduces `ticker:venue` cells to the ticker. `Bk Record Id` is the preferred immutable source ID;
 zero placeholder IDs are not treated as transaction identities.
 
+A Saxo CSV does not name its decimal separator, so the adapter reads it from the file: cells whose
+two readings differ in validity (`-181.63`, `1.234,56`) prove a separator, and when they all prove
+the same one, the whole file uses it, so `Koop 1,500 @ 20.00 USD` is 1500 units. A file without
+that proof, or with both, reads each cell on its own, and a cell that still reads two ways
+(`1,500`, `1.500`) stages as an unsupported row naming the value. A CSV trade whose units × price ×
+`Omrekeningskoers` misses its booked amount by more than its costs plus 1 % (at least 1) also
+stages as unsupported for review. Workbook actions are read in the separator that matches the
+typed `Traded Quantity` and `Prijs`.
+
 The canonical detailed workbook requires one `Transacties`, `_Transacties`, and `Bookings` sheet.
 Main rows join to execution and booking detail by `(Rekening-ID, Bk Record Id)`. Missing, duplicate,
 or orphaned detail, conflicting metadata, invalid booking signs, and totals that fail to reconcile
@@ -372,7 +386,10 @@ A near match never imports silently. An IBKR CSV movement whose type, account an
 value match a funding movement, but whose date is up to ten days outside the request–completion
 window, blocks with `funding_date_mismatch`. A Saxo CSV and XLSX row without a booking record id
 on one side (the workbook always has one, since it joins its sheets on it) blocks with
-`cross_format_identity_missing` when route, type, instrument, units, cash and date agree. The
+`cross_format_identity_missing` when route, type, instrument, units, cash and date agree; a
+deposit or withdrawal, which has no portfolio type, pairs by direction. Only the CSV's literal
+`Bk Record Id` is that identity: a CSV row that keeps only a `Transactie-ID` or `Booking Id` uses
+it for its own repeat imports, not to pair with the workbook. The
 owner resolves either with the statement policy: "Use detailed source facts" (`prefer_source`)
 records them as one event, by the same outcome as the strict pair in the table above, and
 "Preserve existing facts" (`preserve_existing`) keeps both, without offering the other export's
@@ -471,9 +488,15 @@ must not lose its base-fee proof and appear as a new acquisition after staging.
 A plausible Pro trade with exact net or fee-explained gross units in that extended window blocks
 instead of inserting when its economics remain unproven. A proven execution in another currency
 does not establish an exchange rate.
-The candidate must also be unassigned and have no import batch or fingerprint. Ambiguous matches,
-already assigned/imported candidates, and conflicting per-batch policies remain blockers rather
-than choices made by a score. Source corrections additionally require proven economics and
+A candidate is either unassigned or on the row's own account; a transaction on another account is
+never the row's copy. An imported candidate whose source id differs from the row's, in the same
+export format, is a different event, so a regular same-size purchase (for example a monthly plan)
+imports beside the earlier one. Only an unassigned candidate without an import batch or fingerprint
+can be adopted. A remaining assigned or imported candidate (`existing_assigned_or_imported_history`)
+or an ambiguous match (`ambiguous_history`) blocks until the owner answers that row in the review:
+**Keep both** (`keep_both`) records it as a new transaction, and **Same transaction**
+(`same_transaction`, single candidate only) settles it as a duplicate of the existing one.
+Conflicting per-batch policies remain blockers rather than choices made by a score. Source corrections additionally require proven economics and
 currency conversion; preserving existing values does not silently make those corrections.
 
 Exact financial matches use implicit `exact` adoption. Adoption preserves the existing transaction

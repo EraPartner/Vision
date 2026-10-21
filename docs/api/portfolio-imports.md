@@ -778,19 +778,25 @@ session. This is a read-only database transaction; it creates no canonical rows 
 {
   "batch_ids": [42, 43],
   "adopt_policy": "preserve_existing",
-  "batch_policies": [{ "batch_id": 43, "adopt_policy": "prefer_source" }]
+  "batch_policies": [{ "batch_id": 43, "adopt_policy": "prefer_source" }],
+  "row_choices": [{ "batch_id": 42, "row_id": 901, "choice": "keep_both" }]
 }
 ```
 
 `batch_ids` contains 1–100 numeric safe-integer IDs in `1..9007199254740991`. The service deduplicates and sorts
 scope IDs. `adopt_policy` is optional and permits `preserve_existing` or `prefer_source`; absent
 policy permits automatic exact adoption only. Optional `batch_policies` contains at most 100
-unique selected batch IDs with the same policy enum and overrides the global choice. Objects are
+unique selected batch IDs with the same policy enum and overrides the global choice. Optional
+`row_choices` answers rows that resemble an existing transaction: `keep_both` records the row as a
+new transaction, and `same_transaction` settles it as a duplicate of its single existing
+candidate. Each staged row of the selected batches may occur once. Objects are
 strict; unknown fields reject. The JSON scope uses the same safe-integer ceiling as existing
 BIGSERIAL batch path IDs.
 
 The envelope's `data` uses camelCase: `batchIds`, `adoptPolicy` (null for automatic exact matching),
-`batchPolicies`, `ready`, `actions`, `blockers`, and `summary`. Actions identify
+`batchPolicies`, `rowChoices` (the applied choices, sorted), `ready`, `actions`, `blockers`, and
+`summary`. A cash row whose identity the cash ledger already holds is a `duplicate` with
+`cash: true`, so the summary counts what commit settles. Actions identify
 batch/staging row, investment, source and existing values, candidate transaction IDs, corrections,
 applied policy, and transfer detail when applicable. Kinds include `insert`, `adopt`, `duplicate`,
 `duplicate_source`, `cash`, `transfer`, `adjustment`, `internal_annotation`, `settled`, `blocked`, and
@@ -825,7 +831,10 @@ The planner requires one-to-one legacy attribution, exact source identity, compl
 proven economics for source corrections, known incoming basis, and usable custody counterpart
 accounts. It rejects ambiguous history, prior assigned/imported legacy candidates, unexplained
 currency corrections, source-policy conflicts, and missing Pro companions. Ordinary nearby legacy
-matching uses seven calendar days. Literal Nexo Pro proof can extend to 31 days only with exact
+matching uses seven calendar days. A candidate must be unassigned or on the row's own account, and
+never carries a different source id of the same export than the row, so a regular same-size
+purchase imports. A remaining assigned or imported candidate
+(`existing_assigned_or_imported_history`) or `ambiguous_history` clears on `row_choices`. Literal Nexo Pro proof can extend to 31 days only with exact
 executed price, exact units/base-fee explanation, and equivalent cash; raw evidence also binds
 staged date, explicit quote fee, and zero tax. Ambiguous matches still block. A ready plan also
 validates all projected custody events and new/worsened account oversells. See
@@ -833,7 +842,7 @@ validates all projected custody events and new/worsened account oversells. See
 
 ### POST /api/portfolio/import/reconciliation/commit
 
-Submit the same `batch_ids`, `adopt_policy` and `batch_policies` as the preview. Commit locks the
+Submit the same `batch_ids`, `adopt_policy`, `batch_policies` and `row_choices` as the preview. Commit locks the
 selected batches, their accounts and the portfolio writer, then rebuilds the plan from current
 history in the same transaction; it adopts the history as it stands at commit time. A blocked plan
 returns `409 reconciliation_required` with its blockers. An existing transaction that changed or
@@ -879,9 +888,11 @@ source-level reason (`incomplete_source`) when there is one. Rolling back a fund
 restores the CSV movement it corrected; rolling back the CSV batch underneath that correction is
 rejected.
 
-Adopted rows are also counted as duplicates because they create no second financial transaction.
-In-kind income counts in `imported`. The legacy single-batch commit response retains its existing
-counts.
+`imported`, `duplicates` and `adopted` are disjoint: an adopted row counts only in `adopted`,
+although its staging row (and the batch's `rows_duplicate` counter) settles as a duplicate. In the
+example, one row was adopted and one other row was already recorded. In-kind income counts in
+`imported`. The legacy single-batch commit response, which has no `adopted` field, keeps counting
+adopted rows among its `duplicates`.
 
 | Status            | Meaning                                                                                                                                                        |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |

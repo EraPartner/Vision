@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-20
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
+last_modified: 2026-10-21
 tags:
   [
     api,
@@ -533,7 +533,11 @@ Returns staging rows grouped by effective recipient with match-source badges and
 
 - `id` — positive `int64` import batch id, represented as a safe JavaScript number (must be in `awaiting_review` or `matched` status)
 
-**Response:** unified envelope with `data: { batch_id, groups[], totals }`. Each group:
+**Response:** unified envelope with `data: { batch_id, groups[], totals, already_imported }`.
+`already_imported` counts the rows whose import identity the ledger already holds; each such row
+carries `already_imported: true`. Commit settles them as duplicates, so the review can show what
+commit will skip. Pre-fingerprint ledger rows that commit field-matches are not flagged. Each
+group:
 
 | Field                                                                  | Type                 | Description                                                                    |
 | ---------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------ |
