@@ -353,9 +353,10 @@ export async function readReconciliationHistory(
 }
 
 /**
- * The immutable source id each imported transaction was recorded from: the
- * settled staging row that carries its identity, with that batch's format.
- * Transactions recorded without a source id are absent.
+ * The immutable source ids each imported transaction was recorded from: every
+ * settled staging row that carries its identity, with that batch's
+ * specialized export format. Generic CSV batches name no export format, and
+ * transactions recorded without a source id are absent.
  */
 export async function readHistorySourceIds(
   transactionIds: readonly number[],
@@ -363,8 +364,8 @@ export async function readHistorySourceIds(
   if (transactionIds.length === 0) return [];
   return checkedRows(
     historySourceIdRowSchema,
-    sql`SELECT DISTINCT ON (pt.id) pt.id, s.source_transaction_id,
-        COALESCE(b.custom_config->>'format', b.adapter_name) AS format
+    sql`SELECT DISTINCT pt.id, s.source_transaction_id,
+        b.custom_config->>'format' AS format
       FROM portfolio_transactions pt
       JOIN portfolio_import_staging_rows s
         ON s.dedup_fingerprint = pt.dedup_fingerprint
@@ -374,8 +375,8 @@ export async function readHistorySourceIds(
      WHERE pt.id = ANY(${transactionIds}::integer[])
        AND pt.dedup_fingerprint IS NOT NULL
        AND NULLIF(btrim(s.source_transaction_id), '') IS NOT NULL
-       AND COALESCE(b.custom_config->>'format', b.adapter_name) IS NOT NULL
-     ORDER BY pt.id, s.id`,
+       AND NULLIF(b.custom_config->>'format', '') IS NOT NULL
+     ORDER BY pt.id, format, s.source_transaction_id`,
   );
 }
 

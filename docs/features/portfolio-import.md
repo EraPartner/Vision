@@ -490,8 +490,9 @@ instead of inserting when its economics remain unproven. A proven execution in a
 does not establish an exchange rate.
 A candidate is either unassigned or on the row's own account; a transaction on another account is
 never the row's copy. An imported candidate whose source id differs from the row's, in the same
-export format, is a different event, so a regular same-size purchase (for example a monthly plan)
-imports beside the earlier one. Only an unassigned candidate without an import batch or fingerprint
+specialized export format, is a different event, so a regular same-size purchase (for example a
+monthly plan) imports beside the earlier one. Ids of another export format, and ids from a generic
+CSV mapping that different tools share, never rule a candidate out. Only an unassigned candidate without an import batch or fingerprint
 can be adopted. A remaining assigned or imported candidate (`existing_assigned_or_imported_history`)
 or an ambiguous match (`ambiguous_history`) blocks until the owner answers that row in the review:
 **Keep both** (`keep_both`) records it as a new transaction, and **Same transaction**

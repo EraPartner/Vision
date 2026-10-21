@@ -487,6 +487,65 @@ describe("portfolio history adoption plan", () => {
     expect(same.adoptions).toHaveLength(0);
   });
 
+  describe("source ids of an already-imported look-alike", () => {
+    const imported = legacy({
+      account_id: 7,
+      dedup_fingerprint: "d".repeat(64),
+      dedup_fingerprint_version: 1,
+    });
+    const build = (
+      staged: Record<string, unknown>,
+      recorded: readonly string[],
+    ) =>
+      buildPortfolioImportReconciliationPlan({
+        rows: loose<ReconciliationSourceRow[]>([source(staged)]),
+        history: loose<HistoryImage[]>([imported]),
+        batches: loose<ReconciliationBatchScopeRow[]>([
+          { id: 1, account_id: 7, status: "awaiting_review" },
+        ]),
+        historySourceIds: new Map([[40, recorded]]),
+      }).plan;
+
+    it("imports a trade of the same export under another source id", () => {
+      expect(
+        build({ source_transaction_id: "XYZ" }, [
+          "saxo_transaction_history\u0000ABC",
+        ]),
+      ).toMatchObject({ ready: true, summary: { insert: 1 } });
+    });
+
+    it("asks about a trade another export recorded, whatever its id", () => {
+      for (const staged of [
+        {
+          source_transaction_id: "ABC",
+          custom_config: {},
+          adapter_name: "portfolio_generic",
+        },
+        {
+          source_transaction_id: "XYZ",
+          custom_config: { format: "ibkr_transaction_history" },
+        },
+      ])
+        expect(
+          build(staged, ["saxo_transaction_history\u0000ABC"]).blockers,
+        ).toEqual([
+          expect.objectContaining({
+            reason: "existing_assigned_or_imported_history",
+            candidateTransactionIds: [40],
+          }),
+        ]);
+    });
+
+    it("asks when the same export also recorded the row's own id", () => {
+      expect(
+        build({ source_transaction_id: "XYZ" }, [
+          "saxo_transaction_history\u0000ABC",
+          "saxo_transaction_history\u0000XYZ",
+        ]).blockers,
+      ).toHaveLength(1);
+    });
+  });
+
   it("recognizes a canonical immutable fingerprint as a no-op first", () => {
     const result = plan(
       [source()],

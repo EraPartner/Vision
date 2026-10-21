@@ -831,9 +831,10 @@ The planner requires one-to-one legacy attribution, exact source identity, compl
 proven economics for source corrections, known incoming basis, and usable custody counterpart
 accounts. It rejects ambiguous history, prior assigned/imported legacy candidates, unexplained
 currency corrections, source-policy conflicts, and missing Pro companions. Ordinary nearby legacy
-matching uses seven calendar days. A candidate must be unassigned or on the row's own account, and
-never carries a different source id of the same export than the row, so a regular same-size
-purchase imports. A remaining assigned or imported candidate
+matching uses seven calendar days. A candidate must be unassigned or on the row's own account.
+An imported candidate recorded under a different source id of the row's own specialized export
+format is no candidate, so a regular same-size purchase imports; ids of another format, and ids
+from a generic CSV mapping (which different tools share), never exclude a candidate. A remaining assigned or imported candidate
 (`existing_assigned_or_imported_history`) or `ambiguous_history` clears on `row_choices`. Literal Nexo Pro proof can extend to 31 days only with exact
 executed price, exact units/base-fee explanation, and equivalent cash; raw evidence also binds
 staged date, explicit quote fee, and zero tax. Ambiguous matches still block. A ready plan also

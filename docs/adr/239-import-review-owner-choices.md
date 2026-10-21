@@ -16,7 +16,7 @@ tags:
     bug-sweep,
     adr-236,
   ]
-description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same export, so regular same-size purchases import; remaining look-alikes get per-row owner choices (row_choices: keep_both or same_transaction); previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
+description: "Accepted on 2026-10-21 after the 2026-10-21 bug sweep. Saxo CSV cash rows pair with the workbook on the literal Bk Record Id and by cash direction; nearby history candidates are limited to the row's own account and never carry a different source id of the same specialized export format, so regular same-size purchases import; remaining look-alikes get per-row owner choices (row_choices: keep_both or same_transaction); previews report rows already in the ledger as duplicates and commit counts are disjoint; Saxo and IBKR numbers are read in the export's own convention, and trades whose units x price x rate miss the booked amount stage as unsupported rows for review."
 aliases: [adr-239, row choices, keep both, import number conventions]
 related_code:
   [
@@ -69,8 +69,10 @@ is surfaced for the owner instead of being settled by a score.
   rows without that id meet the existing `cross_format_identity_missing` block by direction
   (deposit or withdrawal), date, account and amount, and the existing statement policy resolves it.
 - **Candidates.** A nearby history candidate is unassigned or on the row's own account. An
-  imported candidate whose recorded source id of the same export format differs from the row's is
-  a different event and is no candidate.
+  imported candidate recorded from the row's own specialized export format under a different source
+  id is a different event and is no candidate. Ids of another export format say nothing about the
+  row and never exclude a candidate. A generic CSV mapping names no export (different tools share
+  it), so its ids never exclude a candidate either.
 - **Owner choices.** Preview and commit accept `row_choices`: `keep_both` records the row as a new
   transaction; `same_transaction` (single candidate only) settles it as a duplicate. Plans echo the
   applied `rowChoices`. The portfolio import session offers **Keep both** and **Same transaction**

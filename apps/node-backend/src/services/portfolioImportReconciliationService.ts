@@ -199,8 +199,11 @@ export interface ReconciliationPlanInput {
   priorProAccounts?: number[] | undefined;
   /** ledger evidence for rows another export or a manual entry records */
   crossFormat?: CrossFormatContext | undefined;
-  /** `format\0source id` of each imported history transaction that has one */
-  historySourceIds?: ReadonlyMap<number, string> | undefined;
+  /**
+   * Every `format\0source id` an imported history transaction was recorded
+   * from, for the specialized export formats only.
+   */
+  historySourceIds?: ReadonlyMap<number, readonly string[]> | undefined;
   /** the owner's answer for rows that resemble an existing transaction */
   rowChoices?: RowChoice[] | undefined;
 }
@@ -621,12 +624,18 @@ function canonicalRowChoices(
   );
 }
 
-/** The import format and normalized source id of a staged row, if it has one. */
-function stagedSourceId(row: ReconciliationSourceRow): string | undefined {
-  const format = formatOf(row) ?? row.adapter_name;
+/**
+ * The specialized export format and normalized source id of a staged row, if
+ * it has both. A generic CSV mapping names no export: different tools share
+ * it, so its ids cannot tell two transactions apart.
+ */
+function stagedSourceId(
+  row: ReconciliationSourceRow,
+): { format: string; key: string } | undefined {
+  const format = formatOf(row);
   const id = normalizeIdentityText(row.source_transaction_id);
   return typeof format === "string" && format && id
-    ? `${format}\u0000${id}`
+    ? { format, key: `${format}\u0000${id}` }
     : undefined;
 }
 
@@ -683,7 +692,8 @@ export function buildPortfolioImportReconciliationPlan({
   /**
    * An existing transaction may record the same event as the staged row only
    * on the same account (or none yet, for a manual entry an import adopts),
-   * and never when both carry different source ids of the same export.
+   * and never when it was recorded from the same export format under a
+   * different source id. Ids of another format say nothing either way.
    */
   const mayRecordSameEvent = (
     row: ReconciliationSourceRow,
@@ -699,7 +709,11 @@ export function buildPortfolioImportReconciliationPlan({
       ? undefined
       : historySourceIds.get(Number(current.id));
     const staged = stagedSourceId(row);
-    return !(recorded && staged && recorded !== staged);
+    if (!recorded || !staged) return true;
+    const sameFormat = recorded.filter((key) =>
+      key.startsWith(`${staged.format}\u0000`),
+    );
+    return sameFormat.length === 0 || sameFormat.includes(staged.key);
   };
   const actions: PlanAction[] = [];
   const blockers: PlanIssue[] = [];
@@ -1303,22 +1317,22 @@ async function loadPlan({
   const history = await readReconciliationHistory([
     ...new Set(rows.map((row) => Number(row.investment_id)).filter(Boolean)),
   ]);
-  const historySourceIds = new Map(
-    (
-      await readHistorySourceIds(
-        history
-          .filter(
-            (current) =>
-              current.dedup_fingerprint != null &&
-              !isOneOf(["asset_transfer", "asset_adjustment"], current.type),
-          )
-          .map((current) => Number(current.id)),
+  const historySourceIds = new Map<number, string[]>();
+  for (const source of await readHistorySourceIds(
+    history
+      .filter(
+        (current) =>
+          current.dedup_fingerprint != null &&
+          !isOneOf(["asset_transfer", "asset_adjustment"], current.type),
       )
-    ).map((source) => [
-      Number(source.id),
-      `${source.format}\u0000${normalizeIdentityText(source.source_transaction_id)}`,
-    ]),
-  );
+      .map((current) => Number(current.id)),
+  )) {
+    const id = normalizeIdentityText(source.source_transaction_id);
+    if (!id) continue;
+    const keys = historySourceIds.get(Number(source.id)) ?? [];
+    keys.push(`${source.format}\u0000${id}`);
+    historySourceIds.set(Number(source.id), keys);
+  }
   const accountIds = [
     ...new Set(
       batches.map((batch) => batch.account_id).filter((id) => id != null),

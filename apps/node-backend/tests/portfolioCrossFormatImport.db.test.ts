@@ -1162,6 +1162,54 @@ describeDb("one broker history through more than one export", () => {
       ).toMatchObject({ imported: 1, duplicates: 0 });
       expect(await portfolio(exm)).toHaveLength(2);
     });
+
+    it("asks about a Saxo trade that a generic CSV with its own ids carries again", async () => {
+      const sleeve = await account("Saxo");
+      const exm = await investment("EXM");
+      await commit(await stage(await saxoXlsx("first", [101]), "saxo_transaction_history", sleeve));
+      const [{ id: recorded }] = (
+        await pool.query("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])
+      ).rows;
+      const file = path.join(directory, "tracker.csv");
+      await fs.writeFile(
+        file,
+        "Id,Date,Type,Symbol,Units,Price,Amount,Fees,Taxes,Currency\nT-9,2025-01-10,buy,EXM,10,18,180,1,0.63,EUR\n",
+      );
+      const generic = (
+        await runPortfolioImportPipeline({
+          filePath: file,
+          adapterName: "portfolio_generic",
+          customConfig: {
+            date_format: "%Y-%m-%d",
+            column_mapping: {
+              date: "Date",
+              type: "Type",
+              symbol: "Symbol",
+              units: "Units",
+              price: "Price",
+              amount: "Amount",
+              fees: "Fees",
+              taxes: "Taxes",
+              currency: "Currency",
+              source_id: "Id",
+            },
+          },
+          defaultAssetClass: "stock",
+          isBrokerage: true,
+          accountId: sleeve,
+        })
+      ).batchId;
+      const preview = await previewPortfolioImportReconciliation({ batchIds: [generic] });
+      expect(preview.summary.insert).toBe(0);
+      expect(preview.blockers).toEqual([
+        expect.objectContaining({
+          reason: "existing_assigned_or_imported_history",
+          candidateTransactionIds: [Number(recorded)],
+        }),
+      ]);
+      await expect(commit(generic)).rejects.toMatchObject({ status: 409 });
+      expect(await portfolio(exm)).toHaveLength(1);
+    });
   });
 
   describe("Saxo CSV deposits and withdrawals without a booking record id", () => {
