@@ -15,6 +15,34 @@ async function loadSql(referenceDate: string): Promise<string> {
   return String(demoSeedSql);
 }
 
+test("Demo seed transfer rows survive the startup transfer reconciler", async () => {
+  // The backend's reconciler releases every is_transfer row with source
+  // 'auto' or 'manual' that has no peer, turning it into income or spending.
+  // The seed never writes transfer_peer_id, so it must flag only system-owned
+  // transfer rows (for example the liability principal paydowns).
+  const sql = await loadSql("2026-06-17");
+  const rows = sql
+    .split("\n")
+    .filter((line) => line.startsWith("INSERT INTO transactions ("));
+  assert.ok(rows.length > 0);
+  const flagged = rows
+    .map((line) => /,(true|false),(NULL|'[a-z]+')\);$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .filter(([, isTransfer]) => isTransfer === "true");
+  assert.equal(
+    rows.filter((line) => /,(true|false),(NULL|'[a-z]+')\);$/.test(line))
+      .length,
+    rows.length,
+  );
+  assert.ok(flagged.length > 0, "expected the liability paydown rows");
+  for (const [, , source] of flagged) {
+    assert.ok(
+      source !== "NULL" && !["'auto'", "'manual'"].includes(source ?? ""),
+      `unpaired transfer row uses reconciler-owned source ${source}`,
+    );
+  }
+});
+
 test("Demo seed destinations are explicit generated directories", () => {
   assert.equal(
     assertSafeDemoSeedDestination(
