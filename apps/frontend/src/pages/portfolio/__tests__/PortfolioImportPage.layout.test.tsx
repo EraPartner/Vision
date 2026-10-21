@@ -17,7 +17,7 @@ it("starts with file selection and reveals mappings after choosing a CSV", async
     const user = userEvent.setup();
     renderWithApp(<PortfolioImportPage />);
     expect(
-        await screen.findByLabelText("Statements (CSV or XLSX)"),
+        await screen.findByLabelText("Statements (CSV, XLSX or XLS)"),
     ).toHaveAttribute("multiple");
     expect(
         screen.getByText("Advanced single-file import").closest("details"),
@@ -29,7 +29,7 @@ it("starts with file selection and reveals mappings after choosing a CSV", async
         .getByText("Advanced single-file import")
         .closest("details")!
         .querySelector<HTMLInputElement>('input[type="file"]')!;
-    expect(input).toHaveAttribute("accept", ".csv,.xlsx");
+    expect(input).toHaveAttribute("accept", ".csv,.xlsx,.xls");
     expect(screen.getByRole("combobox", { name: "Parser" })).toHaveTextContent(
         "Detect automatically",
     );

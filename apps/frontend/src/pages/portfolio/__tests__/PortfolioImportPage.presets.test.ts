@@ -6,13 +6,17 @@ import {
 } from "../portfolioImportPresets";
 
 describe("PortfolioImportPage maintained presets", () => {
-    it("offers no native receipt or IBKR funding preset", () => {
+    it("offers no native receipt preset", () => {
         expect(portfolioImportPresetConfig("native_receipts")).toBeUndefined();
-        expect(
-            portfolioImportPresetConfig("ibkr_funding_history"),
-        ).toBeUndefined();
     });
     it.each([
+        {
+            source: "ibkr_funding_history",
+            format: "ibkr_funding_history",
+            dateColumn: "Request Date",
+            symbolColumn: "Reference Number",
+            hint: "portfolioImport.ibkrFundingParserHint",
+        },
         {
             source: "nexo",
             format: "nexo_transaction_history",

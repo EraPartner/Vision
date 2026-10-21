@@ -2,7 +2,10 @@ import { parse } from "csv-parse/browser/esm/sync";
 import type { Account } from "@/types/api";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
 
-import { detectPortfolioImportRecords } from "@vision/shared-utils/portfolio-import-detection";
+import {
+    detectPortfolioImportRecords,
+    detectIbkrFundingWorkbook,
+} from "@vision/shared-utils/portfolio-import-detection";
 import type {
     DetectedPortfolioImport,
     PortfolioImportSource,
@@ -11,6 +14,7 @@ import type { AccountId } from "@vision/types/brands";
 export { detectPortfolioImportRecords } from "@vision/shared-utils/portfolio-import-detection";
 export type { DetectedPortfolioImport } from "@vision/shared-utils/portfolio-import-detection";
 const MAX_STATEMENT_BYTES = 50 * 1024 * 1024;
+const IBKR_FUNDING_SHEETS = new Set(["Deposit", "Withdrawal"]);
 
 export function resolveDetectedPortfolioAccount(
     detected: DetectedPortfolioImport,
@@ -52,18 +56,40 @@ export async function detectPortfolioImportFile(
         throw new Error("Portfolio statement exceeds the upload limit");
     const bytes = await readFileBytes(file);
     const fileName = file.name.toLowerCase();
-    if (fileName.endsWith(".xlsx")) {
+    if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
         const signature = new Uint8Array(
             bytes,
             0,
-            Math.min(4, bytes.byteLength),
+            Math.min(8, bytes.byteLength),
         );
+        const xls =
+            signature.length === 8 &&
+            [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1].every(
+                (value, index) => value === signature[index],
+            );
         const xlsx =
-            signature.length === 4 &&
+            signature.length >= 4 &&
             [0x50, 0x4b, 0x03, 0x04].every(
                 (value, index) => value === signature[index],
             );
-        if (!xlsx) return undefined;
+        if (!xls && !xlsx) return undefined;
+        // IBKR's funding workbook is .xls or .xlsx; only SheetJS reads BIFF.
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(bytes, {
+            type: "array",
+            cellDates: false,
+            cellFormula: true,
+            cellText: false,
+            bookVBA: true,
+            WTF: true,
+        });
+        const funding = detectIbkrFundingWorkbook(workbook, XLSX.utils);
+        if (funding) return funding;
+        if (
+            xls ||
+            workbook.SheetNames.some((name) => IBKR_FUNDING_SHEETS.has(name))
+        )
+            return undefined;
         const { default: readExcelFile } =
             await import("read-excel-file/browser");
         const sheets = await readExcelFile(bytes, {

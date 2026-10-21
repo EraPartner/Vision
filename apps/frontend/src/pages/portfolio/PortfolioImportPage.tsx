@@ -154,12 +154,14 @@ export function PortfolioImportPage() {
                 setDetected(result ? { file, result } : undefined);
                 if (result)
                     setConfig((previous) => ({
-                        ...portfolioImportPresetConfig(result.source)!,
+                        ...portfolioImportPresetConfig(
+                            result.presetKey ?? result.source,
+                        )!,
                         ...(accountChosenManually.current
                             ? { accountId: previous.accountId }
                             : {}),
                     }));
-                else if (/\.xlsx$/i.test(file.name)) setDetectionFailed(true);
+                else if (/\.xlsx?$/i.test(file.name)) setDetectionFailed(true);
             })
             .catch(() => {
                 if (isCurrent()) setDetectionFailed(true);
@@ -394,6 +396,7 @@ export function PortfolioImportPage() {
                             onFileSelect={handleFileSelect}
                             label={t("portfolioImport.fileLabel")}
                             allowWorkbook
+                            allowLegacyWorkbook
                         />
 
                         {/* Detected columns of the selected file */}
@@ -436,6 +439,14 @@ export function PortfolioImportPage() {
                                         <span className="inline-flex items-center gap-2">
                                             <Bookmark className="h-3.5 w-3.5 text-primary" />
                                             {t("portfolioImport.ibkrParser")}
+                                        </span>
+                                    </SelectItem>
+                                    <SelectItem value="ibkr_funding_history">
+                                        <span className="inline-flex items-center gap-2">
+                                            <Bookmark className="h-3.5 w-3.5 text-primary" />
+                                            {t(
+                                                "portfolioImport.ibkrFundingParser",
+                                            )}
                                         </span>
                                     </SelectItem>
                                     <SelectItem value="kinesis">

@@ -68,6 +68,7 @@ export interface PortfolioCustomConfig {
     /** Format-specific parser. Omit for the generic column mapper. */
     format?:
         | "ibkr_transaction_history"
+        | "ibkr_funding_history"
         | "kinesis_transaction_history"
         | "nexo_transaction_history"
         | "nexo_pro_spot_history"
@@ -638,6 +639,11 @@ const reconciliationPlanSchema = z.looseObject({
                     .optional(),
                 corrections: z.array(z.string()).optional(),
                 economicsProven: z.boolean().optional(),
+                /** Settled by another export of the same broker history. */
+                crossFormat: z.boolean().optional(),
+                /** The existing transaction is brokerage cash. */
+                cash: z.boolean().optional(),
+                duplicateOfRowId: positiveId.optional(),
                 transfer: z
                     .object({
                         date: z.string(),

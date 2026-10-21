@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/portfolioImports";
 import { PortfolioImportSession } from "../PortfolioImportSession";
 import { portfolioImportPresetConfig } from "../portfolioImportPresets";
+import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
 import { asAccountId } from "@vision/types/brands";
 
 const api = "http://localhost:3002/api/portfolio/import";
@@ -623,6 +624,28 @@ describe("reviewed portfolio import sessions", () => {
             sessionStorage.getItem("vision.portfolio-import.latest-session.v1"),
         ).toBeNull();
     });
+
+    it.each(["biff8", "xlsx"] as const)(
+        "stages an IBKR %s funding workbook with its own parser",
+        async (format) => {
+            const user = userEvent.setup();
+            renderWithApp(
+                <PortfolioImportSession
+                    accounts={[...accounts, account(3, "IBKR")]}
+                />,
+            );
+            const input = await screen.findByLabelText(/Statements \(CSV/);
+            expect(input).toHaveAttribute("accept", ".csv,.xlsx,.xls");
+            await selectAndStage(user, [ibkrFundingStatement(format)]);
+            expect(screen.getByText("IBKR funding history")).toBeVisible();
+            expect(
+                screen.queryByLabelText("Assets to include"),
+            ).not.toBeInTheDocument();
+            expect(uploads).toHaveLength(1);
+            expect(uploads[0]).toContain("ibkr_funding_history");
+            expect(uploads[0]).not.toContain("included_symbols");
+        },
+    );
 
     it("reviews in-kind income as a new record beside its zero-basis Gift and settled cash", async () => {
         const units = {

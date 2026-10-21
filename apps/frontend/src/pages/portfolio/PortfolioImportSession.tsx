@@ -72,6 +72,7 @@ const storedSessionSchema = z
                         "nexo_pro",
                         "saxo",
                     ]),
+                    presetKey: z.literal("ibkr_funding_history").optional(),
                     sourceAccountIdentities: z.array(z.string()),
                 })
                 .optional(),
@@ -199,6 +200,11 @@ const sourceLabels = {
     nexo_pro: "portfolioImport.nexoProParser",
     saxo: "portfolioImport.saxoParser",
 };
+/** The parser label of a detected statement; IBKR has two exports. */
+const detectedLabel = (detected: DetectedPortfolioImport) =>
+    detected.presetKey === "ibkr_funding_history"
+        ? "portfolioImport.ibkrFundingParser"
+        : sourceLabels[detected.source];
 const actions = [
     "insert",
     "adopt",
@@ -243,6 +249,9 @@ const blockerKeys: Record<string, string> = {
     missing_adjustment_identity: "identity",
     unresolved_zero_yield_policy: "zeroYield",
     projected_history_conflict: "projectedHistory",
+    cross_format_source_conflict: "crossFormat",
+    ambiguous_funding_history: "ambiguousFunding",
+    ambiguous_cash_history: "ambiguousCash",
 };
 
 interface Props {
@@ -580,7 +589,9 @@ export function PortfolioImportSession({ accounts }: Props) {
             );
             try {
                 const config = {
-                    ...portfolioImportPresetConfig(item.detected!.source)!,
+                    ...portfolioImportPresetConfig(
+                        item.detected!.presetKey ?? item.detected!.source,
+                    )!,
                     accountId: item.accountId,
                     includedSymbols: item.includedSymbols,
                     transferDestinationAccountId:
@@ -782,7 +793,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     <Input
                         id="portfolio-session-files"
                         type="file"
-                        accept=".csv,.xlsx"
+                        accept=".csv,.xlsx,.xls"
                         multiple
                         disabled={locked}
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
@@ -805,9 +816,9 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         <p className="type-caption text-label-secondary">
                                             {t(
                                                 item.detected
-                                                    ? sourceLabels[
-                                                          item.detected.source
-                                                      ]
+                                                    ? detectedLabel(
+                                                          item.detected,
+                                                      )
                                                     : "portfolioImport.session.detecting",
                                             )}
                                         </p>
@@ -870,7 +881,9 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         )}
                                     </p>
                                 )}
-                                {item.detected && (
+                                {/* Funding rows carry no asset to scope. */}
+                                {item.detected &&
+                                    item.detected.presetKey === undefined && (
                                     <div className="space-y-2">
                                         <Label
                                             htmlFor={`asset-scope-${item.id}`}
