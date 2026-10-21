@@ -1080,4 +1080,81 @@ describeDb("one broker history through more than one export", () => {
       expect(await portfolio(exm)).toHaveLength(2);
     });
   });
+
+  describe("Saxo CSV deposits and withdrawals without a booking record id", () => {
+    /** The CSV cash rows with a blank Bk Record Id, optionally keeping Booking Id. */
+    const blankRecord = (keepBookingId: boolean) =>
+      saxoSheets([103, 104]).map((sheet) => ({
+        ...sheet,
+        records: sheet.records.map((record) => ({
+          ...record,
+          "Bk Record Id": "",
+          "Transactie-ID": "",
+          ...(keepBookingId ? {} : { "Booking Id": "" }),
+        })),
+      }));
+
+    for (const [variant, keepBookingId] of [
+      ["every id blank", false],
+      ["only a Booking Id", true],
+    ] as const) {
+      it(`never records the movements twice after the workbook (${variant})`, async () => {
+        const sleeve = await account("Saxo");
+        expect(
+          await commit(await stage(await saxoXlsx("cash", [103, 104]), "saxo_transaction_history", sleeve)),
+        ).toMatchObject({ imported: 2 });
+        const csv = await stage(
+          await saxoCsv("cash-blank", [], blankRecord(keepBookingId)),
+          "saxo_transaction_history",
+          sleeve,
+        );
+        expect(await blockerReasons(csv)).toEqual({
+          ready: false,
+          reasons: ["cross_format_identity_missing"],
+        });
+        await expect(commit(csv)).rejects.toMatchObject({ status: 409 });
+        expect(await cash(sleeve)).toEqual(SAXO_CASH);
+        expect(await commitChoosing("prefer_source", csv)).toMatchObject({
+          imported: 0,
+          duplicates: 2,
+        });
+        expect(await cash(sleeve)).toEqual(SAXO_CASH);
+      });
+    }
+
+    it("blocks the pair in one review and records the workbook once on the pair choice", async () => {
+      const sleeve = await account("Saxo");
+      const csv = await stage(
+        await saxoCsv("cash-blank", [], blankRecord(true)),
+        "saxo_transaction_history",
+        sleeve,
+      );
+      const workbook = await stage(
+        await saxoXlsx("cash", [103, 104]),
+        "saxo_transaction_history",
+        sleeve,
+      );
+      expect(await blockerReasons(csv, workbook)).toEqual({
+        ready: false,
+        reasons: ["cross_format_identity_missing"],
+      });
+      expect(await commitChoosing("prefer_source", csv, workbook)).toMatchObject({
+        imported: 2,
+        duplicates: 2,
+      });
+      expect(await cash(sleeve)).toEqual(SAXO_CASH);
+    });
+
+    it("records both on the keep choice", async () => {
+      const sleeve = await account("Saxo");
+      await commit(await stage(await saxoXlsx("cash", [103, 104]), "saxo_transaction_history", sleeve));
+      const csv = await stage(
+        await saxoCsv("cash-blank", [], blankRecord(false)),
+        "saxo_transaction_history",
+        sleeve,
+      );
+      expect(await commitChoosing("preserve_existing", csv)).toMatchObject({ imported: 2 });
+      expect(await cash(sleeve)).toHaveLength(4);
+    });
+  });
 });

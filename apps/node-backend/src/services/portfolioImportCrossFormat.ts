@@ -192,14 +192,49 @@ function isSaxoWorkbookRow(row: Pick<StagedRow, "raw_data">): boolean {
   );
 }
 
+/**
+ * The row's literal `Bk Record Id`. The workbook joins its sheets on it, so
+ * its source id is always that record. A CSV row falls back to `Transactie-ID`
+ * or `Booking Id` for its own identity when the record id is blank; those ids
+ * are not the workbook's, so only the literal CSV cell counts here.
+ */
+function saxoBookingRecord(row: StagedRow | CrossFormatLedgerSourceRow) {
+  if (isSaxoWorkbookRow(row)) return text(row.source_transaction_id);
+  const columns = batchConfigFields(row.custom_config)?.source_columns;
+  if (!Array.isArray(columns) || typeof row.raw_data !== "string") return "";
+  try {
+    const records: string[][] = parse(row.raw_data, {
+      relax_column_count: true,
+      relax_quotes: true,
+    });
+    // \s covers the byte-order mark and the no-break spaces Saxo writes.
+    const column = columns.findIndex(
+      (header) => String(header).replace(/\s/g, " ").trim() === "Bk Record Id",
+    );
+    if (records.length !== 1 || column < 0) return "";
+    const record = text(records[0]?.[column]);
+    return /^0+$/.test(record) ? "" : record;
+  } catch {
+    return "";
+  }
+}
+
 /** The booking record of one Saxo account, whichever export staged it. */
 function saxoKey(row: StagedRow | CrossFormatLedgerSourceRow) {
   if (formatOf(row) !== SAXO || row.account_id == null) return undefined;
   const account = text(row.source_account_identity);
-  const record = text(row.source_transaction_id);
+  const record = saxoBookingRecord(row);
   return account && record
     ? `${row.account_id}\u0000${account}\u0000${record}`
     : undefined;
+}
+
+/** A Saxo cash movement's direction: 1 in, -1 out, undefined otherwise. */
+function saxoCashDirection(row: Pick<StagedRow, "type" | "type_raw">) {
+  return classifyBrokerageRow({
+    kind: row.type ?? row.type_raw,
+    hasInstrument: false,
+  }).direction;
 }
 
 /** Facts both Saxo exports state identically for one booking record. */
@@ -486,8 +521,11 @@ export function planCrossFormatSources({
     identityOf(left) !== identityOf(right) &&
     !!left.route &&
     left.route === right.route &&
-    !!left.type &&
-    left.type === right.type &&
+    // Deposits and withdrawals carry no portfolio type: pair them by direction.
+    (left.route === "cash"
+      ? saxoCashDirection(left) !== undefined &&
+        saxoCashDirection(left) === saxoCashDirection(right)
+      : !!left.type && left.type === right.type) &&
     (left.route !== "portfolio" ||
       (left.investment_id != null && right.investment_id != null)) &&
     (left.units == null) === (right.units == null) &&
