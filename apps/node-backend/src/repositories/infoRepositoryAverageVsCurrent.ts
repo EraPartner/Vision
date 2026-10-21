@@ -132,12 +132,16 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   ]);
 
   // Groups without a stored rate are left out of both windows and counted.
+  // Each (date, currency) group converts at the rate of its own date, like the
+  // monthly summary, so a past month does not move with today's rate.
   const unconverted = createUnconvertedTally();
   const countOf = (row: { cnt: string }) => nanToZero(parseInt(row.cnt, 10));
+  const byDate = { useHistoricalRatesByDate: true, dateField: 'date' } as const;
   const { converted: past6Converted } = partitionConvertedRows(
     await convertRowsToEur(
       mapRowsForAmountConversion(past6Rows, 'amount', false),
-      targetCurrency
+      targetCurrency,
+      byDate,
     ),
     countOf,
     unconverted,
@@ -192,7 +196,8 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   const { converted: currentConverted } = partitionConvertedRows(
     await convertRowsToEur(
       mapRowsForAmountConversion(currentRows, 'amount', false),
-      targetCurrency
+      targetCurrency,
+      byDate,
     ),
     countOf,
     unconverted,
