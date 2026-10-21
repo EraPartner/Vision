@@ -122,8 +122,10 @@ test(
   () => {
     const run = (settings: string[]) => {
       const values = settings.map((key) => `('${key}')`).join(", ");
+      // A PostgreSQL client from the test host; override with TEST_PSQL_BIN.
+      const psql = process.env.TEST_PSQL_BIN || "psql";
       const stdout = execFileSync(
-        "psql",
+        psql,
         [
           process.env.TEST_DATABASE_URL ?? "",
           "--tuples-only",
