@@ -368,13 +368,34 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 
 ### Large-display detection (`isLargeDisplay`)
 
-`screen.width × screen.height × devicePixelRatio² > 6,000,000` physical px. The threshold sits between the MacBook Air M1 built-in panel (~5.2M px) and 4K outputs (~8.3M px); 1080p/QHD externals at 1× stay below it. Re-evaluated by `useVisualEffectsTier` on `resize` plus a 5-second property-read poll (no DOM event fires reliably on display drag).
+`screen.width × screen.height × devicePixelRatio² > 6,000,000` physical px, except on a built-in panel ([[docs/adr/244-full-effects-switch|ADR-244]]): the desktop app asks the main process whether the window's display is internal (`app:display-is-internal`), and a built-in panel is never large, so a MacBook in a "More Space" scaled mode (1680×1050 @2× = 7.06M backing px) keeps the chosen tier. The threshold sits between the MacBook Air M1 built-in panel (~5.2M px) and 4K outputs (~8.3M px); 1080p/QHD externals at 1× stay below it. Re-evaluated by `useVisualEffectsTier` on `resize` plus a 5-second property-read poll (no DOM event fires reliably on display drag).
+
+### Full effects switch (ADR-244, 2026-10-21)
+
+`AppSettings.fullEffects: boolean` (default `false`), Settings → Appearance → Visual effects → "Full effects". `VisualEffectsController` sets `fx-full` on `<html>`; components read it with `useFullEffects()`. On, it restores within each tier's own scope:
+
+| Effect | Removed by | Restored as |
+| --- | --- | --- |
+| Smooth aurora drift | #329 (100ms steps) | `aurora-drift-*-smooth`, `--ease-in-out-quart`, every frame |
+| CSS blobs drifting under the WebGL aurora | 21775a26 | Same smooth drift under `fx-webgl-live` |
+| Frosted modal overlay below enhanced | f80ccd18 | 12px blur over `background / 0.4` (`/0.5` alert dialogs), all tiers |
+| Glass chart tooltip and scrub delta pills | 21775a26 | `glass-thick` (+ `shadow-glass-elevated` on the tooltip) |
+| Frosted pivot frozen column | 21775a26 | 12px blur over `card / 0.72`; enhanced 16px over `card / 0.55`; reduced opaque |
+| Nested glass in AI chat | 21775a26 | `glass-thin` composer and tool-table header |
+| Dark-mode double halo on headings and canvas text | 21775a26 | 2px + 14px text-shadow |
+| 20px card material | 023f27a5 (ADR-132) | Card `glass-regular` |
+| Web blur under native vibrancy | ADR-129 | Vibrancy blur-removal rule skipped |
+| Animated card hover shadow and border | 8461b2c0 | 260ms `box-shadow` + `border-color` transition on interactive cards |
+| Bar chart stagger cap (0.4s) | fab7a771 | Uncapped stagger |
+
+Reduced motion, reduced transparency, the reduced tier, `fx-static-atmosphere` and `fx-idle-atmosphere` still apply. The WebGL aurora and native vibrancy stay enhanced-only.
 
 ### Application points
 
 **`VisualEffectsController`** (`components/layout/VisualEffectsController.tsx`) — renders null, mounted in `AppLayout`. Tags `<html>`:
 
 - `fx-reduced` — effective tier is `reduced`. `index.css` carries a class-selector mirror of the `prefers-reduced-transparency` block (both blocks are deliberately duplicated; the media block must work before React mounts).
+- `fx-full` — the Full effects switch is on (see above).
 - `fx-static-atmosphere` — large display but user kept a higher tier: aurora blobs stop drifting (`animation: none`) so the compositor can idle. Since 2026-08-09 the WebGL `ShaderAurora` participates too: `AppLayout` passes the same condition as a `staticAtmosphere` prop and the canvas holds a single static frame instead of looping (before this, its ~30 fps redraw kept forcing the full-backdrop recomposite the class exists to avoid).
 
 **Aurora drift cadence** — The CSS aurora blobs advance in 100ms `steps()` (keyframes sample `--ease-in-out-quart` every 4s; both drifts share the 100ms grid), so at rest the window redraws, and every glass surface re-blurs, 10 times a second instead of on every vsync. The sub-pixel per-frame motion it drops was below one 8-bit colour step (2026-10-20).
@@ -395,7 +416,7 @@ When the display is auto-capped, a note styled `text-primary` explains the situa
 | `apps/frontend/src/components/layout/shaderAuroraMode.ts`                | Pure `resolveAuroraMode()` — ShaderAurora loop/static/stopped decision        |
 | `apps/frontend/src/components/layout/__tests__/shaderAuroraMode.test.ts` | 10 unit tests for the mode decision                                           |
 | `apps/frontend/src/stores/settingsStore.ts`                              | Persisted state + `migrateAppSettings`; `sessionTierOverride` (non-persisted) |
-| `apps/frontend/src/lib/__tests__/visualEffects.test.ts`                  | 17 unit tests (13 original + 4 override cases)                                |
+| `apps/frontend/src/lib/__tests__/visualEffects.test.ts`                  | 18 unit tests (13 original + 4 override cases + built-in panel)              |
 
 ### Retired enhancedEffects migration
 

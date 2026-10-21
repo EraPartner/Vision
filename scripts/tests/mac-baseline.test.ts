@@ -15,6 +15,14 @@ import {
   parseTopMem,
   summarizeRoles,
 } from "../lib/mac-baseline/processes.ts";
+import {
+  beyondNoise,
+  comparisonRows,
+  spreadOf,
+  variantLabel,
+  type BaselineResults,
+  type TierResult,
+} from "../lib/mac-baseline/report.ts";
 import { findSegments, summarizeTrace } from "../lib/mac-baseline/trace.ts";
 
 test("parses macOS and procps CPU times", () => {
@@ -267,4 +275,67 @@ test("trace summaries split at page markers", () => {
   assert.deepEqual(summary.rendererTopEvents, [
     { name: "Paint", count: 1, totalMs: 2 },
   ]);
+});
+
+test("spread and off/on comparison only claim differences beyond noise", () => {
+  assert.equal(spreadOf([null, undefined]), null);
+  assert.deepEqual(spreadOf([3, 1, 2, null]), {
+    n: 3,
+    median: 2,
+    min: 1,
+    max: 3,
+  });
+
+  const off = spreadOf([10, 11, 12]);
+  const overlapping = spreadOf([12, 13, 14]);
+  const separate = spreadOf([20, 21, 22]);
+  assert.equal(beyondNoise(off, overlapping), false);
+  assert.equal(beyondNoise(off, separate), true);
+  // One run per side has no range, so nothing is claimed.
+  assert.equal(beyondNoise(spreadOf([10]), spreadOf([30])), false);
+
+  const tier = (fullEffects: boolean, run: number, gpuPowerMw: number) =>
+    ({
+      tier: "standard",
+      fullEffects,
+      run,
+      launch: { spawnToRendererReadyMs: null, phases: {} },
+      memory: { afterLaunch: {}, afterIdle: {}, afterSustained: null },
+      idle: {
+        wallMs: 1000,
+        cpu: {},
+        power: { gpuPowerMw },
+        seconds: 1,
+        page: "/",
+      },
+      scroll: null,
+      pageSwitch: null,
+      sustained: null,
+    }) as unknown as TierResult;
+  const results = {
+    apps: [
+      {
+        app: { name: "Vision" },
+        tiers: [
+          tier(false, 1, 100),
+          tier(true, 1, 300),
+          tier(false, 2, 110),
+          tier(true, 2, 320),
+        ],
+      },
+    ],
+  } as unknown as BaselineResults;
+  assert.deepEqual(comparisonRows(results), [
+    [
+      "Vision",
+      "standard",
+      "Idle GPU mW",
+      "105 (100–110)",
+      "310 (300–320)",
+      "+195%",
+      "yes",
+    ],
+  ]);
+  assert.equal(variantLabel(tier(true, 2, 0)), "standard full #2");
+  assert.equal(variantLabel(tier(false, 1, 0)), "standard");
 });

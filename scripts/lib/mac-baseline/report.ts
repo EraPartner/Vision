@@ -45,7 +45,11 @@ export interface PageSwitch {
 
 export interface TierResult {
   tier: Tier;
-  /** Effective tier from <html> classes, plus atmosphere flags. */
+  /** The "Full effects" switch (AppSettings.fullEffects) for this launch. */
+  fullEffects: boolean;
+  /** 1-based repeat number (--repeat). */
+  run: number;
+  /** Effective tier from <html> classes, plus atmosphere and fx-full flags. */
   effective: { tier: Tier; classes: string[] };
   page: {
     innerWidth: number;
@@ -92,7 +96,8 @@ export interface AppResult {
 }
 
 export interface BaselineResults {
-  schemaVersion: 1;
+  /** 2 adds TierResult.fullEffects and TierResult.run. */
+  schemaVersion: 2;
   startedAt: string;
   finishedAt: string;
   options: Record<string, unknown>;
@@ -131,13 +136,24 @@ function table(header: string[], rows: string[][]): string {
   );
 }
 
-function median(values: number[]): number | null {
+export function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2
     ? (sorted[middle] as number)
     : ((sorted[middle - 1] as number) + (sorted[middle] as number)) / 2;
+}
+
+/** "standard", "standard full", "standard full #2". */
+export function variantLabel(tier: TierResult): string {
+  return [
+    tier.tier,
+    tier.fullEffects ? "full" : null,
+    tier.run > 1 ? `#${tier.run}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function rowsFor(
@@ -148,7 +164,162 @@ function rowsFor(
   for (const app of results.apps) {
     for (const tier of app.tiers) {
       const row = build(app, tier);
-      if (row) rows.push([app.app.name, tier.tier, ...row]);
+      if (row) rows.push([app.app.name, variantLabel(tier), ...row]);
+    }
+  }
+  return rows;
+}
+
+/** Headline metrics compared across repeats and between switch off and on. */
+export const SPREAD_METRICS: readonly {
+  key: string;
+  label: string;
+  digits: number;
+  read: (tier: TierResult) => number | null | undefined;
+}[] = [
+  {
+    key: "idleAppCpu",
+    label: "Idle app CPU %",
+    digits: 1,
+    read: (t) => t.idle.cpu.appTotal?.cpuPercent,
+  },
+  {
+    key: "idleGpuActive",
+    label: "Idle GPU active %",
+    digits: 1,
+    read: (t) => t.idle.power?.gpuActivePercent,
+  },
+  {
+    key: "idleGpuMw",
+    label: "Idle GPU mW",
+    digits: 0,
+    read: (t) => t.idle.power?.gpuPowerMw,
+  },
+  {
+    key: "scrollFps",
+    label: "Scroll FPS",
+    digits: 1,
+    read: (t) => t.scroll?.frames.fps,
+  },
+  {
+    key: "scrollGpuMw",
+    label: "Scroll GPU mW",
+    digits: 0,
+    read: (t) => t.scroll?.power?.gpuPowerMw,
+  },
+  {
+    key: "switchGpuMw",
+    label: "Page-switch GPU mW",
+    digits: 0,
+    read: (t) => t.pageSwitch?.power?.gpuPowerMw,
+  },
+  {
+    key: "sustainedGpuMw",
+    label: "Sustained GPU mW",
+    digits: 0,
+    read: (t) => t.sustained?.power?.gpuPowerMw,
+  },
+  {
+    key: "sustainedPackageMw",
+    label: "Sustained package mW",
+    digits: 0,
+    read: (t) => t.sustained?.power?.combinedPowerMw,
+  },
+  {
+    key: "launchMs",
+    label: "Launch ms",
+    digits: 0,
+    read: (t) => t.launch.spawnToRendererReadyMs,
+  },
+  {
+    key: "memoryAfterLaunchMb",
+    label: "App memory after launch MB",
+    digits: 0,
+    read: (t) => t.memory.afterLaunch.appTotal?.footprintMb,
+  },
+];
+
+export interface Spread {
+  n: number;
+  median: number;
+  min: number;
+  max: number;
+}
+
+export function spreadOf(values: (number | null | undefined)[]): Spread | null {
+  const finite = values.filter(
+    (value): value is number =>
+      typeof value === "number" && Number.isFinite(value),
+  );
+  if (finite.length === 0) return null;
+  return {
+    n: finite.length,
+    median: median(finite) as number,
+    min: Math.min(...finite),
+    max: Math.max(...finite),
+  };
+}
+
+/**
+ * Off vs on is "beyond noise" only when the two ranges over the repeats do
+ * not overlap. With one run per side there is no range, so it is never
+ * claimed.
+ */
+export function beyondNoise(off: Spread | null, on: Spread | null): boolean {
+  if (!off || !on || off.n < 2 || on.n < 2) return false;
+  return off.max < on.min || on.max < off.min;
+}
+
+function formatSpread(spread: Spread | null, digits: number): string {
+  if (!spread) return dash;
+  if (spread.n === 1) return fmt(spread.median, digits);
+  return `${fmt(spread.median, digits)} (${fmt(spread.min, digits)}–${fmt(spread.max, digits)})`;
+}
+
+interface VariantGroup {
+  app: string;
+  tier: Tier;
+  off: TierResult[];
+  on: TierResult[];
+}
+
+function groupVariants(results: BaselineResults): VariantGroup[] {
+  const groups = new Map<string, VariantGroup>();
+  for (const app of results.apps) {
+    for (const tier of app.tiers) {
+      const key = `${app.app.name}|${tier.tier}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = { app: app.app.name, tier: tier.tier, off: [], on: [] };
+        groups.set(key, group);
+      }
+      (tier.fullEffects ? group.on : group.off).push(tier);
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Rows of: app, tier, metric, off, on, delta of medians, beyond noise. */
+export function comparisonRows(results: BaselineResults): string[][] {
+  const rows: string[][] = [];
+  for (const group of groupVariants(results)) {
+    for (const metric of SPREAD_METRICS) {
+      const off = spreadOf(group.off.map(metric.read));
+      const on = spreadOf(group.on.map(metric.read));
+      if (!off && !on) continue;
+      const delta =
+        off && on && off.median !== 0
+          ? `${on.median - off.median >= 0 ? "+" : ""}${fmt(((on.median - off.median) / Math.abs(off.median)) * 100, 0)}%`
+          : dash;
+      rows.push([
+        group.app,
+        group.tier,
+        metric.label,
+        formatSpread(off, metric.digits),
+        formatSpread(on, metric.digits),
+        delta,
+        off && on ? (beyondNoise(off, on) ? "yes" : "no") : dash,
+      ]);
     }
   }
   return rows;
@@ -169,6 +340,22 @@ export function renderSummary(results: BaselineResults): string {
       .join(", ")}.`,
   );
   out.push("");
+
+  const comparison = comparisonRows(results);
+  if (comparison.length > 0) {
+    out.push("## Headline: Full effects off vs on (median, min–max over repeats)");
+    out.push(
+      'A difference counts as beyond noise only when the off and on ranges do not overlap (needs --repeat 2 or more). Delta is on vs off, relative to the off median.',
+    );
+    out.push("");
+    out.push(
+      table(
+        ["App", "Tier", "Metric", "Off", "On", "Delta", "Beyond noise"],
+        comparison,
+      ),
+    );
+    out.push("");
+  }
 
   out.push("## App bundles");
   out.push(
@@ -428,7 +615,7 @@ export function renderSummary(results: BaselineResults): string {
           ]),
       ...app.tiers.flatMap((tier) =>
         tier.warnings.map(
-          (warning) => `${app.app.name} ${tier.tier}: ${warning}`,
+          (warning) => `${app.app.name} ${variantLabel(tier)}: ${warning}`,
         ),
       ),
     ]),
