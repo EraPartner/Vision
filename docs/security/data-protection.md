@@ -372,8 +372,15 @@ Limited IPC channel exposure through preload scripts. Only validated functions a
 **setWindowOpenHandler Denial**
 
 - Prevents renderer-initiated `window.open()` from spawning new windows
-- Implementation: `mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))`
-- Impact: Blocks JavaScript `window.open()` calls and link targets `target="_blank"`; users must explicitly select & open links via right-click → "Open in Browser"
+- Implementation: the handler always returns `{ action: 'deny' }`. It hands the URL to
+  `shell.openExternal` only when `externalBrowserUrl` in
+  `packaging/electron/runtime/renderer-security.ts` accepts it: a parsed absolute `http:`/`https:`
+  URL with no credentials that is neither the app's own origin nor a loopback or unspecified host
+  (`localhost`, 127.0.0.0/8, 0.0.0.0/8, `::1`, `::`, or such an IPv4 address embedded in IPv6, as
+  in `::ffff:127.0.0.1`)
+- Impact: `target="_blank"` links to public web pages open in the OS browser; `file:`,
+  `javascript:`, `data:` and custom schemes, and links back to the local backend, are dropped.
+  Attachments are fetched and saved in the renderer instead of opened in a window
 
 **will-navigate Whitelist**
 
@@ -530,7 +537,9 @@ key, not row contents) and no longer refuses any table with `403`. Split routes 
 Restore no longer compares a receipt or warns about audit continuity, and updates are no longer
 recorded or gated by a bridge; the update checksum check remains.
 
-On launch, `packaging/electron/legacy-audit-cleanup.ts` deletes the leftover `audit-anchor/`
+On launch, once the database records migration `0004_remove_audit_history`
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]),
+`packaging/electron/legacy-audit-cleanup.ts` deletes the leftover `audit-anchor/`
 folder (receipt, `safeStorage`-encrypted HMAC key and any transfer journal) and the Keychain item
 (service `com.vaultvoyager.vision.audit-witness` or `com.vaultvoyager.vision-demo.audit-witness`,
 account `latest-checkpoint`). The folder path is resolved strictly inside `userData`; a symbolic

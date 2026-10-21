@@ -2,8 +2,8 @@
 title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     algorithms,
@@ -398,8 +398,11 @@ For each day from seed_date to today:
      b. lastInterestDate tracks most recent `interest` transaction (resets clock)
      c. firstBuyDate tracks first `buy` transaction
      d. startDate = lastInterestDate ?? firstBuyDate
-     e. accruedInterest = runningInvested × (interestRate/100/365)
-                          × calendarDaysBetween(startDate, day)
+     e. accruedInterest = (interestRate/100/365)
+                          × Σ principal × days per principal segment since startDate
+        (a buy, gift, sell or return of capital after startDate starts a new
+        segment on its own date; since 2026-10-21, before that today's
+        principal applied to the whole period)
      f. value = runningInvested + accruedInterest
   4. Investment component — real estate:
      a. runningInvested accumulates buy amounts (minus sells)

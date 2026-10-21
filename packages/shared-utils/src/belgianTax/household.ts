@@ -38,6 +38,7 @@ import {
     type QuotientTransfer,
 } from "./maritalQuotient.ts";
 import {
+    addAppliedTaxCreditParts,
     addBracketTax,
     buildCalculationBreakdown,
     clampAtZero,
@@ -48,6 +49,7 @@ import {
     computePensionReduction,
     computeProfessionalExpenseClaim,
     pensionActivityExclusionFraction,
+    splitAppliedTaxCredits,
     computeProgressiveTax,
     computeTaxReductions,
     qualifyingDonations,
@@ -1063,10 +1065,17 @@ export function toBelgianTaxCalculation(
         maritalQuotientTransfer,
         maritalQuotientBenefit,
         personalExemptionBenefit,
-        pensionReduction,
-        ownHomeCredit,
-        serviceVoucherCredit,
-        federalTaxCredits: appliedTaxCredits,
+        // Split per partner: each partner's credits are capped at that partner's tax.
+        appliedCredits: addAppliedTaxCreditParts(
+            all.map((p) =>
+                splitAppliedTaxCredits(p.reductionsApplied, {
+                    pension: p.pensionReduction,
+                    reductionsTotal: p.reductions.total,
+                    serviceVouchers: p.reductions.serviceVouchers,
+                    ownHome: p.ownHomeCredit,
+                }),
+            ),
+        ),
         federalPITBeforeExemption,
         federalPITAfterReductions,
         communalSurchargePercent: household.communalSurchargePercent,

@@ -47,7 +47,9 @@ import {
 } from "./runtime/ipc-schemas";
 import * as updater from "./updater";
 import { createRuntimeProvider } from "./runtime";
+import type { PendingMigrations } from "./runtime/native";
 import {
+  externalBrowserUrl,
   isAllowedPermissionCheck,
   isTrustedRendererUrl,
 } from "./runtime/renderer-security";
@@ -1391,11 +1393,14 @@ function createWindow(): BrowserWindow {
     if (mainWindow && !mainWindow.isDestroyed())
       mainWindow.webContents.send("window:fullscreen", false);
   });
-  // The renderer's fixed About links open in the OS browser. Every new-window
-  // request is still denied inside Electron, and arbitrary URLs never reach
-  // shell.openExternal.
+  // Every new-window request is denied inside Electron. Renderer links with
+  // target="_blank" (news, payment URLs, Ollama help, About links) open in the
+  // OS browser only when they are plain http(s) URLs outside the app's own
+  // loopback origin; file:, javascript: and custom schemes never reach
+  // shell.openExternal. Attachments download through fetch in the renderer.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    openTrustedExternalUrl(url);
+    const external = externalBrowserUrl(url, appUrl());
+    if (external) void shell.openExternal(external);
     return { action: "deny" };
   });
 
@@ -2507,6 +2512,65 @@ app.on("open-file", (event, filePath) => {
 // ── Launch flow ───────────────────────────────────────────────────────────────
 let workDir: string | null = null;
 
+/**
+ * ADR-242: the backend applies pending migrations at boot, and some of them
+ * delete data. Before the runtime spawns a backend that will migrate an
+ * existing database, take the same bundle backup as the in-app update button
+ * into <userData>/pre-update-backups. PostgreSQL is up and no backend runs
+ * yet, so the capture is already quiescent. A failure aborts the start.
+ */
+async function backupBeforeMigrations(
+  pending: PendingMigrations,
+): Promise<void> {
+  console.log(
+    `[pre-migration-backup] database at ${pending.appliedHead}, this build ships ${pending.packagedHead}; backing up before migrating`,
+  );
+  setSplashStatus("splash.backingUp");
+  try {
+    const backupDir = path.join(app.getPath("userData"), "pre-update-backups");
+    fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+    const result = await runBundleBackup(backupDir, null, {
+      backendStopped: true,
+    });
+    console.log(
+      `[pre-migration-backup] saved ${path.basename(result.file)}${result.encrypted ? " (encrypted)" : ""}`,
+    );
+    if (result.warning) console.warn(`[pre-migration-backup] ${result.warning}`);
+  } catch (error) {
+    const message = String(errorMessage(error));
+    console.error(`[pre-migration-backup] failed: ${message}`);
+    throw new Error(
+      t("app.preMigrationBackupFailed", { error: message }, message),
+    );
+  } finally {
+    setSplashStatus("splash.startingServices");
+  }
+}
+
+// Migration that dropped the audit-history tables. Its on-disk receipts and
+// Keychain witness are removed only once the database has applied it, so a
+// failed upgrade can still fall back to the previous build with them intact.
+const LEGACY_AUDIT_REMOVAL_MIGRATION = "0004_remove_audit_history";
+
+async function cleanupLegacyAuditAfterMigration(
+  runtime: RuntimeProvider,
+): Promise<void> {
+  await cleanupLegacyAuditArtifacts({
+    userDataDir: app.getPath("userData"),
+    runtimeName: NATIVE_RUNTIME_ID,
+    log: { info: console.log, warn: console.warn },
+    retirementApplied: async () => {
+      await runtime.waitUntilReady({
+        attempts: HEALTH_POLL_BUILD_ATTEMPTS,
+        intervalMs: HEALTH_POLL_INTERVAL_MS,
+      });
+      return (await runtime.getAppliedMigrations()).includes(
+        LEGACY_AUDIT_REMOVAL_MIGRATION,
+      );
+    },
+  });
+}
+
 async function launch(): Promise<void> {
   const endLaunch = bootMark("launch");
 
@@ -2539,14 +2603,6 @@ async function launch(): Promise<void> {
   setupApplicationMenu();
   setupDockMenu();
   subscribeAccentColorChanges();
-
-  // Remove the retired audit-history receipt folder and Keychain item once.
-  // Fire-and-forget: it logs its own outcome and never throws.
-  void cleanupLegacyAuditArtifacts({
-    userDataDir: app.getPath("userData"),
-    runtimeName: NATIVE_RUNTIME_ID,
-    log: { info: console.log, warn: console.warn },
-  });
 
   {
     const endNative = bootMark("native_runtime_start");
@@ -2589,14 +2645,19 @@ async function launch(): Promise<void> {
           console.warn(finalized.resetCleanupWarning);
         }
       }
+      // The Demo database is synthetic and reseeded at the packaged schema
+      // head, so only real Vision backs up before boot-time migrations.
+      const startOptions = __IS_DEMO
+        ? {}
+        : { beforeMigrations: backupBeforeMigrations };
       try {
         setSplashStatus("splash.startingServices");
         try {
-          await activeRuntime.start();
+          await activeRuntime.start(startOptions);
         } catch (error) {
           if (errorField(error, "code") !== "PORT_COLLISION") throw error;
           await repickAppPort();
-          await activeRuntime.start();
+          await activeRuntime.start(startOptions);
         }
         if (preparedDemo?.switchToken) {
           await activeRuntime.waitUntilReady({ detailed: true });
@@ -2617,6 +2678,7 @@ async function launch(): Promise<void> {
       endNative();
       setSplashStatus("splash.waitingApp");
       pollAndLoad({ building: true });
+      void cleanupLegacyAuditAfterMigration(activeRuntime);
       if (!__IS_DEMO) setupManualShellUpdater();
       endLaunch();
       return;

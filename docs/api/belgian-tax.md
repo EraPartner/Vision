@@ -2,8 +2,8 @@
 title: Belgian Tax Computation API
 type: endpoint
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-21
+updated: 2026-10-21
 method: GET, POST
 path: /api/belgian-tax
 tags: [api, tax, belgian]
@@ -74,14 +74,20 @@ units dividends do not enter dividend income/WHT estimates.
 
 Source scope preserves `usePortfolioTaxData` rather than introducing fiscal changes: first 500 name-ordered investment metadata rows, newest 1000 ordinary transactions
 per investment, and the canonical all-holdings summaries (`active=false`) from
-[[docs/api/portfolio-summary|Portfolio Summary]]. Ordinary recorded costs use latest stored rates
-over fallbacks and retain the existing original-amount display fallback when a currency rate is
-unavailable, even when a transaction stores dated FX. Since 2026-10-19 archived gains and current
+[[docs/api/portfolio-summary|Portfolio Summary]]. Since 2026-10-21 ordinary recorded amounts
+(taxes, fees, dividends and TOB legs) convert at their transaction date's rate: the stamped
+`fx_rate_to_eur`, else the stored rate on or before the date; the latest stored rate is only the
+fallback for a transaction without a dated rate
+([[docs/adr/240-portfolio-tax-per-tax-year|ADR-240]]). Since 2026-10-19 archived gains and current
 values come from those canonical summaries (dated FX, configured cost-basis method), matching the
 web portfolio ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]); before that they used
 the current-FX `archivedPresentation`. A historical
-selection changes recorded cost/dividend/buy-leg years, manual adjustment keys and annual tax tables;
-realized/unrealized gains and current-value estimates remain the current all-time holdings figures.
+selection changes recorded cost/dividend/TOB-leg years, manual adjustment keys and annual tax tables.
+Since 2026-10-21 realized gains (and the CGT/Reynders estimates and effective tax rate built on
+them) are the viewed tax year's: the summary replayed through 31 December of that year minus the
+summary through 31 December of the year before (ADR-240). Unrealized gains and current-value
+estimates remain the current holdings figures. The TOB estimate and recorded TOB count sale legs
+as well as purchases (WDRT art. 122).
 PIT retains the selected overview's frozen-first number and existing currency behavior. Monthly
 series include transaction months with zero costs and exclude manual adjustments. Explicit tax/fee
 transactions retain existing breakdown bucket precedence, which can differ from aggregate recorded
@@ -124,8 +130,9 @@ Household rows are omitted for single-person households and legacy frozen filing
 household result.
 
 Recorded portfolio taxes include active and inactive investments, explicit tax transactions and
-per-transaction tax fields. They use the latest stored FX rates rather than portfolio flow-date
-FX. Since 2026-10-19 there are no static fallback rates and no original-amount fallback: an amount
+per-transaction tax fields. Since 2026-10-21 they convert at each transaction date's rate
+(stamped `fx_rate_to_eur`, else the stored on-or-before rate) and fall back to the latest stored
+rate only without a dated rate (ADR-240). Since 2026-10-19 there are no static fallback rates and no original-amount fallback: an amount
 without a stored rate is left out. Both dashboards add (additively) `unconvertedCurrencies` and
 `incompleteFigures`, the response fields that miss such an amount (for this dashboard
 `portfolioTaxesForYear`, `totalTaxIncludingPortfolio`, `totalTaxIncludingPropertyEstimate`, and

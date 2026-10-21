@@ -18,9 +18,25 @@ export const RUNTIME_MANAGED_USER_SETTINGS = Object.freeze([
   "transfers_backfilled",
 ] as const);
 
+/**
+ * Key prefixes the backend writes on its own after it reports ready. Warmup
+ * records each daily job's last run as `daily_job_<name>`
+ * (apps/node-backend/src/startup/dailyJobs.ts), so a post-start comparison
+ * must not count those rows as user settings.
+ */
+export const RUNTIME_MANAGED_USER_SETTING_PREFIXES = Object.freeze([
+  "daily_job_",
+] as const);
+
 const RUNTIME_MANAGED_USER_SETTINGS_SQL = RUNTIME_MANAGED_USER_SETTINGS.map(
   (key) => `'${key}'`,
 ).join(", ");
+
+// LIKE treats "_" as a wildcard; escape it so the prefix matches literally.
+const RUNTIME_MANAGED_USER_SETTING_PREFIX_SQL =
+  RUNTIME_MANAGED_USER_SETTING_PREFIXES.map(
+    (prefix) => `AND key NOT LIKE '${prefix.replaceAll("_", "\\_")}%'`,
+  ).join(" ");
 
 export const DATABASE_STATS_SQL = [
   "CREATE TEMP TABLE vision_migration_table_counts (table_name text PRIMARY KEY, row_count bigint NOT NULL)",
@@ -50,6 +66,7 @@ export const DATABASE_STATS_SQL = [
    SELECT 'stable:user_settings', count(*)::text
    FROM public.user_settings
    WHERE key NOT IN (${RUNTIME_MANAGED_USER_SETTINGS_SQL})
+     ${RUNTIME_MANAGED_USER_SETTING_PREFIX_SQL}
    UNION ALL
    SELECT 'table:' || table_name, row_count::text
    FROM pg_temp.vision_migration_table_counts

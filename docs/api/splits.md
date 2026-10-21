@@ -2,8 +2,8 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   - api
   - splits
@@ -170,6 +170,7 @@ counted, not added.
       "transaction_id": 100,
       "recipient_id": 2,
       "amount": 50.0,
+      "transaction_date": "2025-01-14",
       "transaction_recipient_name": "CARD PAYMENT - CURRENT",
       "transaction_memo": "Dinner split",
       "transaction_currency": "EUR",
@@ -190,6 +191,9 @@ counted, not added.
   }
 }
 ```
+
+`transaction_date` is the parent transaction's calendar day (`YYYY-MM-DD`), whatever the backend
+time zone.
 
 `transaction_recipient_name` and `transaction_memo` are returned so clients can present the split source using both fields (for example in the Owes detail list).
 
@@ -222,6 +226,7 @@ Important behavior:
 
 - Content type: `text/csv`
 - Header: `Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment`
+- `Date` is the transaction's calendar day as `YYYY-MM-DD`, like the transaction CSV export.
 
 **Error Responses:**
 

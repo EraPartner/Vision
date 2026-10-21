@@ -20,7 +20,7 @@ it.each(["0", "-1", "12,,3"])(
                         {
                             ...SPLIT_STUB,
                             remaining: 25,
-                            transaction_date: "2026-10-11T00:00:00.000Z",
+                            transaction_date: "2026-10-11",
                             transaction_memo: null,
                             bank_account: null,
                             transaction_amount: -25,

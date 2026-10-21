@@ -2,8 +2,8 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 last_modified: 2026-10-20
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
@@ -226,7 +226,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | Price provider caches (HTTP)                       | ❌ Excluded | Re-fetched on demand                                                                                                                                                                                          |
 | Electron `safeStorage` passphrase                  | ❌ Excluded | User re-enters passphrase post-restore. safeStorage is accessed lazily — only when a passphrase blob is already stored — to avoid macOS Keychain prompts for users who have not configured backup encryption. |
 | `settings.json` (Electron-local)                   | ❌ Excluded | Contains backup dir config + deviceId; meaningless on new machine                                                                                                                                             |
-| Legacy Electron `audit-anchor/` folder             | ❌ Excluded | Retired by ADR-231. `legacy-audit-cleanup.ts` deletes it once at launch, with the macOS Keychain audit-witness item.                                                                                          |
+| Legacy Electron `audit-anchor/` folder             | ❌ Excluded | Retired by ADR-231. `legacy-audit-cleanup.ts` deletes it once, with the macOS Keychain audit-witness item, after the database records migration 0004 (ADR-242).                                              |
 
 The encrypted reference tables are backed up to preserve job and checkpoint consistency. On the
 same installation, a restored in-flight job can restore its provider-form checkpoint while the

@@ -57,6 +57,7 @@ import {
     computeTaxReductions,
     isChildcareDeducted,
     resolveMortgageRegime,
+    splitAppliedTaxCredits,
     type ForfaitCategory,
 } from "./personPit.ts";
 
@@ -503,10 +504,12 @@ export function computeBelgianPIT(
         maritalQuotientTransfer: quotient.transfer,
         maritalQuotientBenefit: quotient.benefit,
         personalExemptionBenefit,
-        pensionReduction: appliedPensionReduction,
-        ownHomeCredit,
-        serviceVoucherCredit,
-        federalTaxCredits: appliedTaxCredits,
+        appliedCredits: splitAppliedTaxCredits(appliedTaxCredits, {
+            pension: appliedPensionReduction,
+            reductionsTotal: reductions.total,
+            serviceVouchers: serviceVoucherCredit,
+            ownHome: ownHomeCredit,
+        }),
         federalPITBeforeExemption,
         federalPITAfterReductions,
         communalSurchargePercent: profile.communalSurchargePercent,

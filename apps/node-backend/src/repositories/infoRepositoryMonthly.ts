@@ -59,6 +59,22 @@ interface MonthTotals {
   transaction_count: number;
 }
 
+/**
+ * Round income and spending to cents, and derive the net from those rounded
+ * parts so that net_amount = total_income + total_spending holds exactly in
+ * the response (rounding the unrounded net could differ by a cent).
+ */
+function roundMonthTotals<T extends MonthTotals>(m: T): T {
+  const total_spending = roundToCents(m.total_spending);
+  const total_income = roundToCents(m.total_income);
+  return {
+    ...m,
+    total_spending,
+    total_income,
+    net_amount: roundToCents(toDecimal(total_income).plus(total_spending)),
+  };
+}
+
 export async function getMonthlyFinancialSummary(
   excludedCategoryIds: number[] = [],
   targetCurrency = "EUR",
@@ -240,13 +256,12 @@ export async function getMonthlyFinancialSummary(
 
     const months = Object.values(monthMap)
       .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
-      .map((m) => ({
-        ...m,
-        period_end: formatDateToYmd(new Date(m.year, m.month, 0)),
-        total_spending: roundToCents(m.total_spending),
-        total_income: roundToCents(m.total_income),
-        net_amount: roundToCents(m.net_amount),
-      }));
+      .map((m) =>
+        roundMonthTotals({
+          ...m,
+          period_end: formatDateToYmd(new Date(m.year, m.month, 0)),
+        }),
+      );
 
     return {
       months,
@@ -416,12 +431,7 @@ export async function getMonthlyFinancialSummary(
 
   const months = Object.values(monthMap)
     .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.month - b.month))
-    .map((m) => ({
-      ...m,
-      total_spending: roundToCents(m.total_spending),
-      total_income: roundToCents(m.total_income),
-      net_amount: roundToCents(m.net_amount),
-    }));
+    .map(roundMonthTotals);
 
   return {
     months,

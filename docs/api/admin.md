@@ -406,6 +406,8 @@ Paginated, filterable, sortable read of table rows. Runs inside a `BEGIN; SET TR
 
 The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT(*)`, so large tables do not pay an unbounded count scan on every page. Hidden PostgreSQL text projections preserve exact cursor boundaries, including timestamp microseconds; those fields are removed before the response. `total` is present only when a short first page proves the exact total. The UI keeps prior cursors locally to support Previous. Changing the sort or filters starts again at page one.
 
+`DATE` cells (and `DATE[]` elements) are calendar-day strings (`YYYY-MM-DD`) in `/rows` and in the `after` rows of `/mutate`, whatever the backend time zone, so saving an unchanged date keeps the same day.
+
 The raw `where` parameter was removed. Use only the structured, parameterized `filters` array. A malformed cursor or one reused with different sort or filter state returns `400 Bad Request`.
 
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of
@@ -748,6 +750,8 @@ Retrieve rolling request metrics per route from the in-memory window (last 15 mi
 **Notes:**
 
 - Metrics are in-memory only and reset on backend restart
+- `path` is the full mounted route pattern (for example `/api/admin/database/tables/:table/mutate`),
+  for failed requests too, so it lines up with `GET /api/admin/endpoints`
 - Routes with zero traffic in the window are omitted
 - `error_rate` is `errors / count` (0–1)
 - Latency percentiles are computed from the rolling bucket window

@@ -177,12 +177,12 @@ beforeEach(() => {
                 batches: (body.batch_ids as number[]).map((batch_id) => ({
                     batch_id,
                     imported: 2,
-                    duplicates: 2,
+                    duplicates: 1,
                     adopted: 1,
                     errors: 0,
                 })),
                 imported: 2 * (body.batch_ids as number[]).length,
-                duplicates: 2 * (body.batch_ids as number[]).length,
+                duplicates: (body.batch_ids as number[]).length,
                 adopted: (body.batch_ids as number[]).length,
                 errors: 0,
             });
@@ -364,9 +364,167 @@ describe("reviewed portfolio import sessions", () => {
             expect(commits).toHaveLength(0);
         },
     );
-    it.each(["inconsistent_totals", "adopted_beyond_duplicates"] as const)(
+    it("lets the owner keep a row that resembles an existing transaction and commits that choice", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>;
+                previews.push(body);
+                const choices = (body.row_choices ?? []) as Array<{
+                    batch_id: number;
+                    row_id: number;
+                    choice: string;
+                }>;
+                const reviewed = {
+                    ...plan(),
+                    rowChoices: choices.map((item) => ({
+                        batchId: item.batch_id,
+                        rowId: item.row_id,
+                        choice: item.choice,
+                    })),
+                };
+                if (choices.length > 0) return ok(reviewed);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "existing_assigned_or_imported_history",
+                    candidateTransactionIds: [99],
+                };
+                return ok({
+                    ...reviewed,
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(
+                /resembles a transaction this account already holds/,
+            ),
+        ).toBeVisible();
+        expect(
+            screen.getByRole("button", { name: "Same transaction" }),
+        ).toBeVisible();
+        await user.click(screen.getByRole("button", { name: "Keep both" }));
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Import reviewed history",
+            }),
+        );
+        await screen.findByText(/new records;/);
+        const choice = {
+            row_choices: [{ batch_id: 11, row_id: 1, choice: "keep_both" }],
+        };
+        expect(previews.at(-1)).toMatchObject(choice);
+        expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
+    });
+    it("asks per row about a Saxo pair without a booking record id and commits that answer", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>;
+                previews.push(body);
+                const choices = (body.row_choices ?? []) as Array<{
+                    batch_id: number;
+                    row_id: number;
+                    choice: string;
+                }>;
+                const reviewed = {
+                    ...plan(),
+                    rowChoices: choices.map((item) => ({
+                        batchId: item.batch_id,
+                        rowId: item.row_id,
+                        choice: item.choice,
+                    })),
+                };
+                if (choices.length > 0) return ok(reviewed);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "cross_format_identity_missing",
+                    candidateTransactionIds: [99],
+                };
+                return ok({
+                    ...reviewed,
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/no booking record id.*"Keep both"/),
+        ).toBeVisible();
+        expect(screen.getByRole("button", { name: "Keep both" })).toBeVisible();
+        await user.click(
+            screen.getByRole("button", { name: "Same transaction" }),
+        );
+        await user.click(
+            await screen.findByRole("button", {
+                name: "Import reviewed history",
+            }),
+        );
+        await screen.findByText(/new records;/);
+        const choice = {
+            row_choices: [
+                { batch_id: 11, row_id: 1, choice: "same_transaction" },
+            ],
+        };
+        expect(previews.at(-1)).toMatchObject(choice);
+        expect(commits).toEqual([{ batch_ids: [11], ...choice }]);
+    });
+    it("offers only Keep both when several Saxo look-alikes cannot be matched one to one", async () => {
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                previews.push((await request.json()) as Record<string, unknown>);
+                const blocker = {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    reason: "cross_format_identity_ambiguous",
+                    candidateTransactionIds: [],
+                };
+                return ok({
+                    ...plan(),
+                    ready: false,
+                    actions: [{ ...blocker, action: "blocked" }],
+                    blockers: [blocker],
+                    summary: { blocked: 1 },
+                });
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioImportSession accounts={accounts} />);
+        await selectAndStage(user);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        expect(
+            await screen.findByText(/cannot be matched one to one/),
+        ).toBeVisible();
+        expect(screen.getByRole("button", { name: "Keep both" })).toBeVisible();
+        expect(
+            screen.queryByRole("button", { name: "Same transaction" }),
+        ).toBeNull();
+    });
+    it.each(["inconsistent_totals"] as const)(
         "rejects a commit result with %s",
-        async (defect) => {
+        async () => {
             server.use(
                 http.post(
                     `${api}/reconciliation/commit`,
@@ -377,14 +535,14 @@ describe("reviewed portfolio import sessions", () => {
                         const batch = {
                             batch_id: 11,
                             imported: 0,
-                            duplicates: defect === "inconsistent_totals" ? 1 : 0,
-                            adopted: defect === "inconsistent_totals" ? 0 : 1,
+                            duplicates: 1,
+                            adopted: 0,
                             errors: 0,
                         };
                         return ok({
                             batches: [batch],
                             imported: 0,
-                            duplicates: defect === "inconsistent_totals" ? 2 : 0,
+                            duplicates: 2,
                             adopted: batch.adopted,
                             errors: 0,
                         });

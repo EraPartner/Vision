@@ -165,26 +165,100 @@ export function enrichInvestmentCosts(
   };
 }
 
-/** TOB (stock-exchange tax) actually recorded on `buy` txns in `txYear`. */
+/**
+ * TOB rate and per-leg cap for an investment's asset class, or null when the
+ * class is not a security the TOB covers here. ETFs default to the
+ * accumulating-fund rate unless `etfStructure === 'distributing'`.
+ */
+function tobRateFor(
+  inv: PortfolioTaxInvestment,
+  taxTable: BelgianTaxYearTable,
+): { rate: number; cap: number } | null {
+  const tobRates = taxTable.tob;
+  switch (inv.assetClass) {
+    case "bond":
+      return tobRates.bonds;
+    case "stock":
+      return tobRates.sharesAndOther;
+    case "etf":
+      return inv.etfStructure === "distributing"
+        ? tobRates.distributingFunds
+        : tobRates.accumulatingFunds;
+    default:
+      return null;
+  }
+}
+
+/** The TOB legs: the tax is due separately on the purchase and on the sale (WDRT art. 122, 1°). */
+function isTobLeg(txn: PortfolioTaxTxn): boolean {
+  return txn.type === "buy" || txn.type === "sell";
+}
+
+/** Statutory TOB of one leg: rate × traded amount, capped per leg (WDRT arts 121, 123, 124). */
+function statutoryTob(
+  params: { rate: number; cap: number },
+  txn: PortfolioTaxTxn,
+  convert: ConvertFn,
+): Decimal {
+  const amount = convert(Math.abs(Number(txn.amount) || 0), txn.currency);
+  return Decimal.min(new Decimal(amount).times(params.rate), params.cap);
+}
+
+/**
+ * The TOB part of the taxes recorded on a `sell`, in the target currency.
+ *
+ * The TOB is due on the sale as on the purchase. Before capital-gains tax
+ * applies (`cgtActive` false) a sell's recorded taxes are its TOB. From then
+ * on the same field can also hold capital-gains tax withheld by the broker,
+ * so only the part up to the statutory TOB of the leg counts as TOB. An asset
+ * class without a TOB rate has no TOB part.
+ */
+export function recordedSellTob(
+  inv: PortfolioTaxInvestment,
+  txn: PortfolioTaxTxn,
+  taxTable: BelgianTaxYearTable,
+  convert: ConvertFn,
+  cgtActive: boolean,
+): number {
+  if (txn.type !== "sell") return 0;
+  const params = tobRateFor(inv, taxTable);
+  if (!params) return 0;
+  const taxes = convert(Number(txn.taxes) || 0, txn.currency);
+  if (taxes <= 0) return 0;
+  if (!cgtActive) return taxes;
+  return Decimal.min(taxes, statutoryTob(params, txn, convert)).toNumber();
+}
+
+/**
+ * TOB (stock-exchange tax) actually recorded in `txYear`: the taxes on `buy`
+ * txns, and the TOB part of the taxes on `sell` txns ({@link recordedSellTob}).
+ */
 export function computeTobRecorded(
   investments: readonly PortfolioTaxInvestment[],
   txYear: number,
+  taxTable: BelgianTaxYearTable,
   convert: ConvertFn,
 ): number {
+  const cgtActive = taxTable.capitalGainsTaxRate > 0;
   const terms: number[] = [];
   for (const inv of investments) {
     for (const txn of inv.transactions) {
       if (yearOf(txn.date) !== txYear) continue;
       if (txn.type === "buy")
         terms.push(convert(Number(txn.taxes) || 0, txn.currency));
+      else if (txn.type === "sell")
+        terms.push(recordedSellTob(inv, txn, taxTable, convert, cgtActive));
     }
   }
   return sumDecimal(terms).toNumber();
 }
 
 /**
- * Auto-TOB: estimated stock-exchange tax on `buy` legs, capped per leg. ETFs
- * default to the accumulating-fund rate unless `etfStructure === 'distributing'`.
+ * Auto-TOB: estimated stock-exchange tax on every `buy` and `sell` leg, capped
+ * per leg. The TOB is due separately on the purchase and on the sale at the
+ * same rate and cap (WDRT arts 120-124); its base is the amount paid by the
+ * buyer or received by the seller, broker fees excluded. ETFs default to the
+ * accumulating-fund rate unless `etfStructure === 'distributing'`.
  */
 export function computeTobAutoEstimate(
   investments: readonly PortfolioTaxInvestment[],
@@ -192,33 +266,13 @@ export function computeTobAutoEstimate(
   taxTable: BelgianTaxYearTable,
   convert: ConvertFn,
 ): number {
-  const tobRates = taxTable.tob;
-  const rateForInvestment = (
-    inv: PortfolioTaxInvestment,
-  ): { rate: number; cap: number } | null => {
-    switch (inv.assetClass) {
-      case "bond":
-        return tobRates.bonds;
-      case "stock":
-        return tobRates.sharesAndOther;
-      case "etf":
-        return inv.etfStructure === "distributing"
-          ? tobRates.distributingFunds
-          : tobRates.accumulatingFunds;
-      default:
-        return null;
-    }
-  };
   const legs: Decimal[] = [];
   for (const inv of investments) {
-    const params = rateForInvestment(inv);
+    const params = tobRateFor(inv, taxTable);
     if (!params) continue;
     for (const txn of inv.transactions) {
-      if (txn.type !== "buy" || yearOf(txn.date) !== txYear) continue;
-      const amount = convert(Math.abs(Number(txn.amount) || 0), txn.currency);
-      legs.push(
-        Decimal.min(new Decimal(amount).times(params.rate), params.cap),
-      );
+      if (!isTobLeg(txn) || yearOf(txn.date) !== txYear) continue;
+      legs.push(statutoryTob(params, txn, convert));
     }
   }
   return sumDecimal(legs).toNumber();

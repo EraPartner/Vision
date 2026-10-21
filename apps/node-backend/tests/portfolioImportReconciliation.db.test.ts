@@ -433,7 +433,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     expect(result).toMatchObject({
       imported: 0,
       adopted: 1,
-      duplicates: 1,
+      duplicates: 0,
       errors: 0,
     });
     const current = (
@@ -625,7 +625,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const result = await commitReviewedPortfolioImports({
       batchIds: [two, one],
     });
-    expect(result).toMatchObject({ adopted: 1, imported: 0, duplicates: 2 });
+    expect(result).toMatchObject({ adopted: 1, imported: 0, duplicates: 1 });
     expect(
       (
         await pool.query(

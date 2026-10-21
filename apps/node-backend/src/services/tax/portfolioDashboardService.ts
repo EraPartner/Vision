@@ -13,6 +13,41 @@ import {
 } from "../currency/latestRateConversion.ts";
 import settingsService from "../settingsService.ts";
 import { getTaxOverview } from "./overviewService.ts";
+import { restateAtTransactionDateRates } from "./transactionDateFx.ts";
+import { roundMoney, subtract } from "../../lib/money.ts";
+
+/**
+ * Realized gain per investment from the sells of tax year `year` only (ADR-240),
+ * in `target`: the canonical summary's realized gain through the year's end
+ * minus that through the previous year's end. Both replays are the portfolio
+ * summary's own (configured cost-basis method, each sell against the cost
+ * basis built up to it, dated FX), so the years add up to the lifetime figure
+ * the portfolio shows.
+ */
+async function realizedGainsInYear(
+  target: string,
+  year: number,
+): Promise<Map<number, number>> {
+  const [through, before] = await Promise.all([
+    getPortfolioSummary(target, {
+      activeInvestmentsOnly: false,
+      throughDate: `${year}-12-31`,
+    }),
+    getPortfolioSummary(target, {
+      activeInvestmentsOnly: false,
+      throughDate: `${year - 1}-12-31`,
+    }),
+  ]);
+  const earlier = new Map(
+    before.summaries.map((inv) => [inv.id, inv.realizedGain]),
+  );
+  return new Map(
+    through.summaries.map((inv) => [
+      inv.id,
+      roundMoney(subtract(inv.realizedGain, earlier.get(inv.id) ?? 0), 2),
+    ]),
+  );
+}
 
 export async function getPortfolioTaxDashboard(
   year?: number,
@@ -40,9 +75,14 @@ export async function getPortfolioTaxDashboard(
       investmentIds: metadata.rows.map((inv) => inv.id),
       perInvestmentLimit: 1000,
     });
+  const [realizedInYear, datedTransactions] = await Promise.all([
+    realizedGainsInYear(target, overview.year),
+    // Recorded costs, dividends and TOB legs at their own date's rate.
+    restateAtTransactionDateRates(transactions, target),
+  ]);
   const canonical = new Map(holdings.summaries.map((inv) => [inv.id, inv]));
   const byInvestment = new Map<number, typeof transactions>();
-  for (const txn of transactions) {
+  for (const txn of datedTransactions) {
     const bucket = byInvestment.get(txn.investment_id) ?? [];
     bucket.push(txn);
     byInvestment.set(txn.investment_id, bucket);
@@ -54,6 +94,8 @@ export async function getPortfolioTaxDashboard(
     return [
       {
         ...summary,
+        // The tax year's realized gain, not the lifetime figure.
+        realizedGain: realizedInYear.get(inv.id) ?? 0,
         assetClass: inv.asset_class,
         transactions: (byInvestment.get(inv.id) ?? []).map((txn) => ({
           ...txn,
@@ -63,9 +105,10 @@ export async function getPortfolioTaxDashboard(
       },
     ];
   }) satisfies PortfolioDashboardInvestment[];
-  // Latest stored rates only (ADR-216). A currency without one converts to
-  // undefined: the dashboard leaves that amount out and flags the figures it
-  // feeds (`unconvertedCurrencies`, `incompleteFigures`).
+  // Amounts still in another currency (no dated rate) convert at the latest
+  // stored rates (ADR-216). A currency without one converts to undefined: the
+  // dashboard leaves that amount out and flags the figures it feeds
+  // (`unconvertedCurrencies`, `incompleteFigures`).
   const convert = (amount: number, source?: string) => {
     const from = (source ?? "EUR").toUpperCase();
     if (from === target) return amount;

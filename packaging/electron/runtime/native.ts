@@ -295,6 +295,49 @@ export function preBaselineBackupError(): NativeRuntimeError {
 const SCHEMA_LEDGER_SQL =
   "SELECT to_regclass('public.kysely_migration') IS NOT NULL;";
 const SCHEMA_HEAD_SQL = "SELECT max(name) FROM public.kysely_migration;";
+const APPLIED_MIGRATIONS_SQL =
+  "SELECT name FROM public.kysely_migration ORDER BY name;";
+
+/**
+ * Highest `NNNN_name` migration in a `db/migrations` directory (rollback
+ * files excluded), or "" when the directory is absent or holds none. The
+ * backend applies exactly this chain at boot (`VISION_RUNTIME_ROOT/db/migrations`).
+ */
+export function migrationChainHead(migrationsDir: string): string {
+  let names: string[];
+  try {
+    names = fs.readdirSync(migrationsDir);
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return "";
+    throw error;
+  }
+  return (
+    names
+      .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
+      .filter((name) => !name.endsWith(".down.sql"))
+      .map((name) => name.slice(0, -".sql".length))
+      .sort()
+      .at(-1) ?? ""
+  );
+}
+
+/** Migrations the packaged backend will apply to an existing database at boot. */
+export interface PendingMigrations {
+  /** Highest migration recorded in the database's ledger. */
+  appliedHead: string;
+  /** Highest migration shipped with this install. */
+  packagedHead: string;
+}
+
+export interface NativeStartOptions {
+  /**
+   * Runs after PostgreSQL is ready and before the backend (which migrates at
+   * boot) is spawned, only when an existing database is behind the packaged
+   * migration chain. A rejection aborts the start: no backend is spawned, so
+   * no migration runs without the backup the hook was meant to take.
+   */
+  beforeMigrations?: ((pending: PendingMigrations) => Promise<void>) | undefined;
+}
 
 export function assertPostgres18Version(label: string, output: string): number {
   const major = parsePostgresMajor(output);
@@ -662,6 +705,35 @@ export function nativeEnvContents(
   ].join("\n");
 }
 
+/**
+ * Secrets of removed features (cloud AI and AI reference mapping). Older
+ * runtime env files may still hold them; they are stripped from the file on
+ * the next layout check and never passed to a backend or migration child.
+ */
+export const RETIRED_NATIVE_ENV_KEYS: ReadonlySet<string> = new Set([
+  "OPENAI_API_KEY",
+  "OPENAI_API_ENABLED",
+  "AI_REFERENCE_MAPPING_KEY",
+]);
+
+/** Removes every line that assigns a retired key; other lines stay byte-identical. */
+export function stripRetiredNativeEnv(contents: string): string {
+  const lines = String(contents || "").split("\n");
+  const kept = lines.filter((line) => {
+    const key = /^\s*([A-Z_][A-Z0-9_]*)\s*=/.exec(line)?.[1];
+    return !key || !RETIRED_NATIVE_ENV_KEYS.has(key);
+  });
+  return kept.length === lines.length ? contents : kept.join("\n");
+}
+
+function withoutRetiredEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !RETIRED_NATIVE_ENV_KEYS.has(key)),
+  );
+}
+
 export function ensureNativeAdminEnv(
   contents: string,
   names: Pick<RuntimeNames, "adminRole">,
@@ -710,7 +782,7 @@ export function buildNativeBackendEnv({
     throw new Error("Native backend runtime root is unavailable");
   }
   return safeChildEnv({
-    ...runtimeEnv,
+    ...withoutRetiredEnv(runtimeEnv),
     SERVER_HOST: LOOPBACK_HOST,
     PORT: String(port),
     NODE_ENV: "production",
@@ -1231,7 +1303,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         0o600,
       );
     } else {
-      const upgraded = ensureNativeAdminEnv(existing, names);
+      const upgraded = stripRetiredNativeEnv(
+        ensureNativeAdminEnv(existing, names),
+      );
       databaseConfigFromEnv(upgraded);
       if (upgraded !== existing) await writeAtomic(paths.env, upgraded, 0o600);
       await fs.promises.chmod(paths.env, 0o600);
@@ -2013,7 +2087,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         timeout: 15 * 60_000,
         maxBuffer: 32 * 1024 * 1024,
         env: safeChildEnv({
-          ...runtimeEnv,
+          ...withoutRetiredEnv(runtimeEnv),
           VISION_RUNTIME_ROOT: runtimeRoot || repoRoot,
         }),
       },
@@ -2068,7 +2142,22 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     });
   }
 
-  async function start(): Promise<StartResult> {
+  /** The packaged migrations an existing database has not applied yet. */
+  async function pendingMigrations(): Promise<PendingMigrations | undefined> {
+    if (!runtimeRoot) return undefined;
+    const packagedHead = migrationChainHead(
+      path.join(runtimeRoot, "db", "migrations"),
+    );
+    if (!packagedHead) return undefined;
+    // A database without a ledger is new: there is no user data to protect.
+    const appliedHead = await getSchemaHead();
+    if (!appliedHead || packagedHead <= appliedHead) return undefined;
+    return { appliedHead, packagedHead };
+  }
+
+  async function start(
+    startOptions: NativeStartOptions = {},
+  ): Promise<StartResult> {
     await assertNativeActive();
     const config = await bootstrapDatabase();
     const command = await backendCommand();
@@ -2108,6 +2197,10 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       );
       error.code = "PORT_COLLISION";
       throw error;
+    }
+    if (startOptions.beforeMigrations) {
+      const pending = await pendingMigrations();
+      if (pending) await startOptions.beforeMigrations(pending);
     }
     const runtimeEnv = parseEnvFile(
       await fs.promises.readFile(paths.env, "utf8"),
@@ -2274,6 +2367,47 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       async (env) =>
         (await readSchemaLedger(targetDatabase, config, env, 10_000)).head ||
         "",
+    );
+  }
+
+  /** Every migration name in the live database's ledger; [] without a ledger. */
+  async function getAppliedMigrations(): Promise<string[]> {
+    const config = await ensureLayout();
+    if (!tools) await discover();
+    const database = validateIdentifier(config.database, "database name");
+    return withPgPass(
+      config,
+      config.ownerRole,
+      config.ownerPassword,
+      async (env) => {
+        const { head } = await readSchemaLedger(database, config, env, 10_000);
+        if (!head) return [];
+        const result = await runFile(
+          path.join(requireTools().binDir, "psql"),
+          [
+            "-h",
+            LOOPBACK_HOST,
+            "-p",
+            String(config.port),
+            "-U",
+            config.ownerRole,
+            "-d",
+            database,
+            "--tuples-only",
+            "--no-align",
+            "--no-psqlrc",
+            "--set",
+            "ON_ERROR_STOP=1",
+            "--command",
+            APPLIED_MIGRATIONS_SQL,
+          ],
+          { timeout: 10_000, env },
+        );
+        return result.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+      },
     );
   }
 
@@ -2947,6 +3081,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     health,
     waitUntilReady,
     getSchemaHead,
+    getAppliedMigrations,
+    pendingMigrations,
     dumpDatabase,
     exportAttachments,
     replaceAttachments,

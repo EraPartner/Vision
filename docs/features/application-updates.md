@@ -2,7 +2,7 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-10-19
+date: 2026-10-21
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged-app update path with backup, checksum verification, and rollback boundaries; source checkouts update outside the app.
 aliases: [update system, application updater]
@@ -36,6 +36,13 @@ database in order, performs the install, and keeps rollback state until the upda
 
 Backup and restore use the same native transport as manual `.visionbak` operations. An in-progress
 database switch blocks update work.
+
+The backend applies pending migrations when it boots, and some migrations delete data. So every
+launch, whether after this updater or a manual install, compares the packaged migration chain with
+the database. When the database is behind, the app writes another `.visionbak` to the same
+`pre-update-backups` folder before it starts the backend, and stops with an error instead of
+migrating when that backup fails. Vision Demo is excluded
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]).
 
 ## Packaged native update
 

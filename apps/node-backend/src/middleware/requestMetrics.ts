@@ -98,12 +98,41 @@ function percentile(sorted: number[], p: number): number | null {
   return sorted[Math.max(0, idx)] ?? null;
 }
 
-function normalizeRoute(req: ExpressRequest): string {
+function normalizeRoute(req: ExpressRequest, matchedPath: string | undefined): string {
   // Unmatched routes (no req.route) collapse to a single bucket per method
   // to prevent URL scanners/bots from inflating the stores Map.
   if (!req.route) return `${req.method} <unmatched>`;
+  if (matchedPath !== undefined) return `${req.method} ${matchedPath}`;
   const base = req.baseUrl ?? '';
   return `${req.method} ${base}${req.route.path}`;
+}
+
+/**
+ * Record the full mounted path when the router matches a route. A router
+ * restores `req.baseUrl` when an error leaves it for the app-level error
+ * handler, so by `finish` a failed `POST /api/admin/database/tables/:table/mutate`
+ * would read as `POST /database/tables/:table/mutate`. The router assigns
+ * `req.route` while its own `baseUrl` is still set, so capture it then.
+ */
+function trackMatchedPath(req: ExpressRequest): () => string | undefined {
+  let route: unknown = req.route;
+  let matchedPath: string | undefined;
+  try {
+    Object.defineProperty(req, 'route', {
+      configurable: true,
+      enumerable: true,
+      get: () => route,
+      set: (next: unknown) => {
+        route = next;
+        const path = (next as { path?: unknown } | null | undefined)?.path;
+        matchedPath =
+          typeof path === 'string' ? `${req.baseUrl ?? ''}${path}` : undefined;
+      },
+    });
+  } catch {
+    // A frozen or exotic request object: fall back to reading at finish.
+  }
+  return () => matchedPath;
 }
 
 /**
@@ -115,11 +144,12 @@ export function requestMetrics(
   next: ExpressNextFunction,
 ) {
   const startMs = Date.now();
+  const matchedPath = trackMatchedPath(req);
 
   res.on('finish', () => {
     const durationMs = Date.now() - startMs;
     const now = Date.now();
-    const routeKey = normalizeRoute(req);
+    const routeKey = normalizeRoute(req, matchedPath());
     const store = getOrCreateStore(routeKey);
     if (!store) return;
 

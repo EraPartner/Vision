@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-21
+updated: 2026-10-21
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -508,6 +508,8 @@ Get bank accounts for a recipient.
 | Parameter | Type    | Default | Description                 |
 | --------- | ------- | ------- | --------------------------- |
 | `active`  | boolean | `true`  | Filter active-only accounts |
+
+**Response:** canonical collection body `{ items: [...bank accounts], total }` (unpaginated).
 
 ### POST /api/recipients/:id/bank-accounts
 

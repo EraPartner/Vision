@@ -454,13 +454,96 @@ describe("portfolio history adoption plan", () => {
 
   it("blocks existing assigned or stamped transactions instead of treating them as new", () => {
     expect(
-      plan([source()], [legacy({ account_id: 9 })], "preserve_existing").plan
+      plan([source()], [legacy({ account_id: 7 })], "preserve_existing").plan
         .blockers[0]!.reason,
     ).toBe("existing_assigned_or_imported_history");
     expect(
       plan([source()], [legacy({ import_batch_id: "8" })], "preserve_existing")
         .plan.blockers[0]!.reason,
     ).toBe("existing_assigned_or_imported_history");
+  });
+
+  it("never offers a transaction of another account as the row's copy", () => {
+    const result = plan([source()], [legacy({ account_id: 9 })]);
+    expect(result.plan.ready).toBe(true);
+    expect(result.plan.summary.insert).toBe(1);
+  });
+
+  it("lets the owner keep a similar row apart or name it the same transaction", () => {
+    const build = (choice: "keep_both" | "same_transaction") =>
+      buildPortfolioImportReconciliationPlan({
+        rows: loose<ReconciliationSourceRow[]>([source()]),
+        history: loose<HistoryImage[]>([legacy({ account_id: 7 })]),
+        batches: loose<ReconciliationBatchScopeRow[]>([
+          { id: 1, account_id: 7, status: "awaiting_review" },
+        ]),
+        rowChoices: [{ batchId: 1, rowId: 10, choice }],
+      });
+    const kept = build("keep_both");
+    expect(kept.plan).toMatchObject({ ready: true, summary: { insert: 1 } });
+    const same = build("same_transaction");
+    expect(same.plan).toMatchObject({ ready: true, summary: { insert: 0, duplicate: 1 } });
+    expect(same.settledDuplicates).toHaveLength(1);
+    expect(same.adoptions).toHaveLength(0);
+  });
+
+  describe("source ids of an already-imported look-alike", () => {
+    const imported = legacy({
+      account_id: 7,
+      dedup_fingerprint: "d".repeat(64),
+      dedup_fingerprint_version: 1,
+    });
+    const build = (
+      staged: Record<string, unknown>,
+      recorded: readonly string[],
+    ) =>
+      buildPortfolioImportReconciliationPlan({
+        rows: loose<ReconciliationSourceRow[]>([source(staged)]),
+        history: loose<HistoryImage[]>([imported]),
+        batches: loose<ReconciliationBatchScopeRow[]>([
+          { id: 1, account_id: 7, status: "awaiting_review" },
+        ]),
+        historySourceIds: new Map([[40, recorded]]),
+      }).plan;
+
+    it("imports a trade of the same export under another source id", () => {
+      expect(
+        build({ source_transaction_id: "XYZ" }, [
+          "saxo_transaction_history\u0000ABC",
+        ]),
+      ).toMatchObject({ ready: true, summary: { insert: 1 } });
+    });
+
+    it("asks about a trade another export recorded, whatever its id", () => {
+      for (const staged of [
+        {
+          source_transaction_id: "ABC",
+          custom_config: {},
+          adapter_name: "portfolio_generic",
+        },
+        {
+          source_transaction_id: "XYZ",
+          custom_config: { format: "ibkr_transaction_history" },
+        },
+      ])
+        expect(
+          build(staged, ["saxo_transaction_history\u0000ABC"]).blockers,
+        ).toEqual([
+          expect.objectContaining({
+            reason: "existing_assigned_or_imported_history",
+            candidateTransactionIds: [40],
+          }),
+        ]);
+    });
+
+    it("asks when the same export also recorded the row's own id", () => {
+      expect(
+        build({ source_transaction_id: "XYZ" }, [
+          "saxo_transaction_history\u0000ABC",
+          "saxo_transaction_history\u0000XYZ",
+        ]).blockers,
+      ).toHaveLength(1);
+    });
   });
 
   it("recognizes a canonical immutable fingerprint as a no-op first", () => {

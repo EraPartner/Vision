@@ -1123,6 +1123,7 @@ describe("Import Routes", () => {
           override_category_detail: null,
           matched_pattern_text: null,
           matched_pattern_kind: null,
+          already_imported: false,
         },
       ]);
 
@@ -1168,6 +1169,7 @@ describe("Import Routes", () => {
           override_category_detail: "Tools",
           matched_pattern_text: null,
           matched_pattern_kind: null,
+          already_imported: false,
         },
       ]);
 

@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-21
+updated: 2026-10-21
 tags:
   [
     architecture,
@@ -345,7 +345,8 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    and all table counts, then starts the backend. It finalizes the atomic database switch only
    after detailed readiness and stable user-data counts. The post-start `user_settings`
    comparison excludes only the runtime-owned `transfers_backfilled` and
-   `fx_full_history_repair_done` maintenance markers; ordinary settings remain protected. Failure
+   `fx_full_history_repair_done` maintenance markers and the `daily_job_*` last-run markers that
+   warmup writes after readiness; ordinary settings remain protected. Failure
    restores the previous Demo database before startup exits.
 
 ### Backend Startup
@@ -371,9 +372,19 @@ token exists any more, a matching healthy backend left running by a previous lau
 (`start()` in `packaging/electron/runtime/native.ts` returns `already-running`) instead of being
 restarted.
 
+Before `start()` spawns a backend that will migrate an existing database, it compares the highest
+packaged `db/migrations` name with the database's `public.kysely_migration` head. When the
+database is behind, the `beforeMigrations` hook from `launch()` writes a `.visionbak` bundle to
+`<userData>/pre-update-backups` through the same transport as the update button; PostgreSQL is up
+and no backend runs, so no snapshot restart is needed. A failed backup aborts the launch before any
+migration. Vision Demo passes no hook
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]).
+
 At each launch until it records completion, `launch()` in `packaging/electron/main.ts` calls
 `cleanupLegacyAuditArtifacts()` from `packaging/electron/legacy-audit-cleanup.ts` without awaiting
-it. The cleanup removes `<userData>/audit-anchor` (a symbolic link is unlinked, its target left
+it, after the backend start. It first waits for `/health` and checks that the database lists
+`0004_remove_audit_history` (`getAppliedMigrations()`); until then it removes nothing and writes no
+marker (ADR-242). The cleanup removes `<userData>/audit-anchor` (a symbolic link is unlinked, its target left
 alone) and, on macOS, deletes the login-keychain generic password with account
 `latest-checkpoint` and service `com.vaultvoyager.vision.audit-witness` or
 `com.vaultvoyager.vision-demo.audit-witness` through `/usr/bin/security`. It never throws and logs
@@ -679,7 +690,15 @@ copyright and AGPL-3.0 license line for the macOS About panel. The former
 Windows/Linux Help-menu About item and its `menu.about` key were removed by
 [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
 The repository and documentation Help items use fixed HTTPS destinations from
-the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
+the packaged main process. The window-open handler denies every new Electron
+window; a renderer link with `target="_blank"` reaches `shell.openExternal` only
+when `externalBrowserUrl` (`packaging/electron/runtime/renderer-security.ts`)
+accepts it: an absolute `http:` or `https:` URL without credentials, outside the
+app's own origin and every loopback or unspecified host (`localhost`, 127.0.0.0/8,
+0.0.0.0/8, `::1`, `::`, and those IPv4 addresses embedded in IPv6 such as
+`::ffff:127.0.0.1`). `file:`, `javascript:`, `data:`,
+`mailto:` and custom schemes are dropped. Attachments do not use links: the
+renderer fetches their bytes and saves them with `downloadBlob`.
 
 > [!warning] Manual sync point
 > `GO_MENU_ROUTES` in `packaging/electron/main.ts` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.

@@ -8,7 +8,7 @@ last_modified: 2026-10-21
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 284
+api_operation_count: 285
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 284 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 285 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **284 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **285 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -90,11 +90,15 @@ aliases:
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
 >
+> **2026-10-21 — API dates and spec drift (count 284 → 285):** `GET /api` (the static service identity, plain JSON without the envelope) was served but missing from `openapi.yaml`; it is now declared. Response fixes, breaking only for clients that parsed the old wrong values: `GET /api/splits/owed/:id` sends `transaction_date` as `YYYY-MM-DD` (it was the previous day's UTC timestamp east of UTC); the owed CSV export writes `YYYY-MM-DD` in its Date column (it wrote `Date.toString()`); `PUT /api/accounts/:id/statement-balances/:currency` returns `balance` and `POST /api/accounts/:id/reconcile` returns `transaction.amount` as JSON numbers (they were decimal strings); the DB editor's `/rows` and `/mutate` send `DATE` cells as `YYYY-MM-DD`. `GET /api/admin/metrics/requests` records failed requests under their full mounted path. Spec-only corrections (the responses did not change): nullable fields on `Transaction`, `Category`, `Recipient`, `PlannedTransaction` and `PortfolioTransaction`; the aggregation `{ data, meta: { computedAt, source } }` wrapper; `{ items, total }` for `GET /api/recipients/:id/bank-accounts`; no `meta.provider` on the portfolio-forecast, mapping and provider-key research operations; and the `502` and `404` statuses the routes already returned.
+>
 > **2026-10-20 — unused operations removed (BREAKING for direct HTTP callers only, count 293 → 284):** no frontend, Electron, script or AI-chat caller used these nine operations, so they are gone: `POST /api/analysis/interchange/import` and `POST /api/analysis/interchange/export` (the browser parses and writes CSV/XLSX itself with `@vision/shared-utils/analysis`), `POST /api/research/presentation` (the browser computes presentations with `@vision/shared-utils/research/presentation`), `GET /api/research/quote` and `GET /api/research/fundamentals` (the UI uses `/api/research/chart`, `/api/research/scorecard` and `/api/market/quote`; the AI chat research tool still calls the aggregator directly), `GET /api/ai-research/status`, `POST /api/ai-research/documents/search/passages` (the AI chat and investigation tools still search passages in-process), `GET /api/admin/endpoint-liveness` (the Admin Endpoints page reads `GET /api/admin/endpoints` and `GET /api/admin/metrics/requests`, which remain), and `GET /api/aggregations/cashflow-forecast` (the non-Monte-Carlo planned-transaction projection; the `cashflow-forecast-methods`, `-rolling` and `-accuracy` operations are unchanged).
 >
 > **2026-10-20 — cloud AI, Codex and AgentCloak removed (ADR-229, BREAKING, count 312 → 299):** the eight `/api/ai-research/agentcloak-desktop` and `/api/ai-research/disclosures/*` operations (`GET`/`PUT` agentcloak-desktop, `POST` disclosures/preview, `GET`/`POST` disclosures/grants, `POST` disclosures/grants/:id/revoke, `GET`/`DELETE` disclosures/records) and the five `/api/admin/codex-experimental/{status,session,login,synthetic-turn,logout}` operations are gone. `POST /api/ai-research/investigations` accepts `route: "local"` only and rejects the removed `publicQuestion`, `grantId`, `selectedSummary`, `selectedEvidence` and `referenceScopeId` fields; investigation rows no longer return `grantId`; `GET /api/ai-research/status` no longer has the `openai` block or the `openai-api` provider. See [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
 >
 > **2026-10-21 — cross-export portfolio imports (ADR-236 amendment, additive, operation count unchanged):** portfolio uploads accept `portfolio_format=ibkr_funding_history` again, for the IBKR funding workbook as `.xls` or `.xlsx`; its completed deposits and withdrawals stage in their own currency. The probe reports `presetKey: ibkr_funding_history` for that workbook. Reconciliation plans pair a Saxo CSV with its detailed XLSX and an IBKR Transaction History CSV with its funding workbook, in any order or together, and adopt matching manual brokerage cash: actions gain `crossFormat`, `cash` and `duplicateOfRowId`, and blockers gain `cross_format_source_conflict`, `ambiguous_funding_history`, `ambiguous_cash_history`, `funding_date_mismatch` and `cross_format_identity_missing`; the last two clear on the existing `batchPolicies`/`adoptPolicy` (`prefer_source` pairs, `preserve_existing` keeps both), and a paired near match's action carries `policy: prefer_source`. Request fields are unchanged. See [[docs/adr/236-simplify-portfolio-import-reconciliation#Amendment: cross-export imports (2026-10-21)|the ADR-236 amendment]].
+>
+> **2026-10-21 — import review owner choices and truthful counts (ADR-239, BREAKING for the reconciliation commit counts, operation count unchanged):** `POST /api/portfolio/import/reconciliation/preview` and `/commit` accept optional `row_choices` (`keep_both` or `same_transaction` per staged row) and plans echo `rowChoices`. Nearby history candidates are limited to the row's own account and to transactions without a different source id of the same specialized export format. `cross_format_identity_missing` also clears on `row_choices` (`same_transaction` records the Saxo pair once, `keep_both` keeps both) and no longer on `preserve_existing`, which now leaves it blocked. A cash row the ledger already holds previews as `duplicate` with `cash: true`. The commit result's `imported`, `duplicates` and `adopted` are now disjoint: adopted rows no longer also count as duplicates. `GET /api/import/batches/:id/preview` rows gain `already_imported` and the response gains an `already_imported` count. See [[docs/adr/239-import-review-owner-choices|ADR-239]].
 >
 > **2026-10-20 — portfolio reconciliation simplified (ADR-236, BREAKING, operation count unchanged):** `POST /api/portfolio/import/reconciliation/preview` and `/commit` take only `batch_ids`, `adopt_policy` and `batch_policies`; `reconciliation_scope`, `cash_funding_policy` and `expected_plan_fingerprint` are rejected with `400`. Plans drop `planFingerprint`, `selectedRowIds`, `pending`, `complete`, `deferredCounts`, `batchProgress` and the cash, income and date proof fields; commit results drop `repaired`, `recordedIncome` and `recordedCash`, and the `409` details drop `planFingerprint`. Commit rebuilds the plan at commit time and returns `409 stale_existing_transaction` when an existing transaction changed. Portfolio uploads no longer accept the `ibkr_funding_history` format or `.xls` workbooks, and the probe no longer reports `native_receipts` or `presetKey`. Kinesis fiat and IBKR deposits and withdrawals commit as ordinary brokerage cash. See [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]].
 >
@@ -577,6 +581,7 @@ in ascending order and preserves source order within a date. See
 | ------ | ------------------ | ---------------------------------------- | ---------- | --------------------------- |
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
+| GET    | `/api`             | Static service identity (no envelope)    | —          | [[docs/api/health\|Health]] |
 
 ## Admin
 

@@ -23,6 +23,8 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
 }));
 vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: vi.fn(),
+  // No stored historical rates: only rates stamped on a transaction are dated.
+  getHistoricalRateIndex: vi.fn(async () => new Map()),
 }));
 import settingsService from "../../src/services/settingsService.ts";
 import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.ts";
@@ -269,6 +271,27 @@ describe("Native Tax dashboard source contract", () => {
         (y) => y.year,
       ),
     ).toContain(2024);
+  });
+  it("converts a recorded portfolio tax at its transaction-date rate", async () => {
+    vi.mocked(
+      portfolioTransactionRepository.getRowsForPortfolioMath,
+    ).mockResolvedValue([
+      {
+        type: "tax",
+        date: "2025-01-01",
+        amount: 100,
+        taxes: 0,
+        fees: 0,
+        currency: "USD",
+        fx_rate_to_eur: "0.5",
+      },
+    ] as never);
+    vi.mocked(listLatestStoredRates).mockResolvedValue({
+      rows: [{ currency_code: "USD", rate_to_eur: "0.8" }] as never,
+    });
+    const response = await api.get(path).expect(200);
+    // 100 USD at the 0.5 stamped on 2025-01-01 (ADR-085), not today's 0.8.
+    expect(bodyAt(response, "data", "portfolioTaxesForYear")).toBe(50);
   });
   it("returns failed financial reads as errors rather than an empty setup prompt", async () => {
     vi.mocked(computeCategoryPivot).mockRejectedValue(

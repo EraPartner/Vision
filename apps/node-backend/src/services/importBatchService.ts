@@ -26,6 +26,7 @@ type ImportPreviewGroupRow = Pick<
   | "matched_pattern_id"
   | "user_override_recipient_id"
   | "override_category_id"
+  | "already_imported"
 >;
 
 export interface ImportPreviewGroup {
@@ -102,6 +103,7 @@ function buildImportBatchPreview(rows: ImportPreviewRow[]) {
       matched_pattern_id: row.matched_pattern_id,
       user_override_recipient_id: row.user_override_recipient_id,
       override_category_id: row.override_category_id ?? null,
+      already_imported: row.already_imported,
     });
   }
 
@@ -120,7 +122,9 @@ function buildImportBatchPreview(rows: ImportPreviewRow[]) {
     const source = row.match_source ?? "unresolved";
     totals[source] = (totals[source] ?? 0) + 1;
   }
-  return { groups, totals };
+  // Rows commit will settle as duplicates, so the review can say so up front.
+  const alreadyImported = rows.filter((row) => row.already_imported).length;
+  return { groups, totals, already_imported: alreadyImported };
 }
 
 export async function getImportBatchPreview(batchId: number) {

@@ -25,7 +25,7 @@ import { Decimal, toDecimal } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 import { classifyBrokerageRow } from "./importPipeline/brokerageRouting.ts";
-import { parseAmountField } from "./importPipeline/adapters/_shared.ts";
+import { ibkrNumber } from "./portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts";
 import { ibkrFundingFactsFromRawData } from "./portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import type { IbkrFundingFacts } from "./portfolioImportPipeline/ibkrFundingHistoryAdapter.ts";
 import type {
@@ -192,14 +192,101 @@ function isSaxoWorkbookRow(row: Pick<StagedRow, "raw_data">): boolean {
   );
 }
 
+/**
+ * The row's literal `Bk Record Id`. The workbook joins its sheets on it, so
+ * its source id is always that record. A CSV row falls back to `Transactie-ID`
+ * or `Booking Id` for its own identity when the record id is blank; those ids
+ * are not the workbook's, so only the literal CSV cell counts here.
+ */
+function saxoBookingRecord(row: StagedRow | CrossFormatLedgerSourceRow) {
+  if (isSaxoWorkbookRow(row)) return text(row.source_transaction_id);
+  const columns = batchConfigFields(row.custom_config)?.source_columns;
+  if (!Array.isArray(columns) || typeof row.raw_data !== "string") return "";
+  try {
+    const records: string[][] = parse(row.raw_data, {
+      relax_column_count: true,
+      relax_quotes: true,
+    });
+    // \s covers the byte-order mark and the no-break spaces Saxo writes.
+    const column = columns.findIndex(
+      (header) => String(header).replace(/\s/g, " ").trim() === "Bk Record Id",
+    );
+    if (records.length !== 1 || column < 0) return "";
+    const record = text(records[0]?.[column]);
+    return /^0+$/.test(record) ? "" : record;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * The source id of a Saxo CSV row from a batch that kept no source columns,
+ * keyed like {@link saxoKey}. Such a row cannot show which column its id came
+ * from: the adapter takes `Bk Record Id`, else `Transactie-ID`, else
+ * `Booking Id`. It is the booking record only once a workbook row proves it
+ * (see {@link saxoWorkbookRecordIsOwnId}).
+ */
+function saxoLegacyCsvKey(row: StagedRow | CrossFormatLedgerSourceRow) {
+  if (
+    formatOf(row) !== SAXO ||
+    isSaxoWorkbookRow(row) ||
+    row.account_id == null ||
+    Array.isArray(batchConfigFields(row.custom_config)?.source_columns)
+  )
+    return undefined;
+  const account = text(row.source_account_identity);
+  const record = text(row.source_transaction_id);
+  return account && record && !/^0+$/.test(record)
+    ? `${row.account_id}\u0000${account}\u0000${record}`
+    : undefined;
+}
+
+/**
+ * Whether a workbook row's booking record id is none of its own
+ * `Transactie-ID` or `Booking Id` values. Then a CSV row of the same event
+ * whose id equals that record id can only have taken it from `Bk Record Id`.
+ */
+function saxoWorkbookRecordIsOwnId(row: StagedRow): boolean {
+  if (!isSaxoWorkbookRow(row)) return false;
+  const record = text(row.source_transaction_id);
+  try {
+    const provenance = JSON.parse(String(row.raw_data)) as {
+      records?: Array<{ headers?: unknown; cells?: unknown }>;
+    };
+    if (!Array.isArray(provenance.records) || provenance.records.length === 0)
+      return false;
+    const others = new Set<string>();
+    for (const item of provenance.records) {
+      if (!Array.isArray(item.headers) || !Array.isArray(item.cells))
+        return false;
+      item.headers.forEach((header, index) => {
+        const name = String(header).replace(/\s/g, " ").trim();
+        if (name === "Transactie-ID" || name === "Booking Id")
+          others.add(text((item.cells as unknown[])[index]));
+      });
+    }
+    return !!record && !others.has(record);
+  } catch {
+    return false;
+  }
+}
+
 /** The booking record of one Saxo account, whichever export staged it. */
 function saxoKey(row: StagedRow | CrossFormatLedgerSourceRow) {
   if (formatOf(row) !== SAXO || row.account_id == null) return undefined;
   const account = text(row.source_account_identity);
-  const record = text(row.source_transaction_id);
+  const record = saxoBookingRecord(row);
   return account && record
     ? `${row.account_id}\u0000${account}\u0000${record}`
     : undefined;
+}
+
+/** A Saxo cash movement's direction: 1 in, -1 out, undefined otherwise. */
+function saxoCashDirection(row: Pick<StagedRow, "type" | "type_raw">) {
+  return classifyBrokerageRow({
+    kind: row.type ?? row.type_raw,
+    hasInstrument: false,
+  }).direction;
 }
 
 /** Facts both Saxo exports state identically for one booking record. */
@@ -267,8 +354,8 @@ function ibkrCsvFunding(
         .trim()
         .replace(/^-$/, "");
     const kind = field("Transaction Type");
-    const gross = parseAmountField(field("Gross Amount"));
-    const rate = parseAmountField(field("Exchange Rate"));
+    const gross = ibkrNumber(field("Gross Amount")) ?? NaN;
+    const rate = ibkrNumber(field("Exchange Rate")) ?? NaN;
     if (
       (kind !== "Deposit" && kind !== "Withdrawal") ||
       !Number.isFinite(gross) ||
@@ -362,10 +449,13 @@ export function planCrossFormatSources({
   rows,
   context,
   policyOf,
+  rowChoiceOf = () => undefined,
 }: {
   rows: readonly StagedRow[];
   context: CrossFormatContext;
   policyOf: (row: StagedRow) => string | undefined;
+  /** the owner's answer for one row (`row_choices`) */
+  rowChoiceOf?: (row: StagedRow) => "keep_both" | "same_transaction" | undefined;
 }): Map<number, CrossFormatDecision> {
   const decisions = new Map<number, CrossFormatDecision>();
   const decide = (row: StagedRow, decision: CrossFormatDecision) => {
@@ -409,6 +499,27 @@ export function planCrossFormatSources({
     if (chosen.size !== 1) return undefined;
     return chosen.has("prefer_source") ? "pair" : "keep";
   };
+  /**
+   * The owner's choice for a Saxo pair that only lacks a booking record id.
+   * Keeping both could count one event twice, so the statement-wide
+   * `preserve_existing` never decides it: only a per-row answer does
+   * (`same_transaction` pairs, `keep_both` keeps both), or `prefer_source`,
+   * which records the pair once. A per-row answer outranks the statement
+   * policy; answers that disagree across the pair leave it blocked.
+   */
+  const identityChoiceOf = (
+    ...pair: StagedRow[]
+  ): { kind: "pair"; policy?: "prefer_source" } | { kind: "keep" } | undefined => {
+    const answers = new Set(
+      pair.map(rowChoiceOf).filter((answer) => answer !== undefined),
+    );
+    if (answers.size === 0)
+      return choiceOf(...pair) === "pair"
+        ? { kind: "pair", policy: "prefer_source" }
+        : undefined;
+    if (answers.size !== 1) return undefined;
+    return answers.has("same_transaction") ? { kind: "pair" } : { kind: "keep" };
+  };
   /** Rows the owner chose to keep apart from their near match. */
   const kept = new Map<number, number[]>();
   const keep = (row: StagedRow, transactionIds: number[] = []) =>
@@ -424,9 +535,16 @@ export function planCrossFormatSources({
       workbooks.set(key, row);
   }
   const saxoLedger = new Map<string, CrossFormatLedgerSourceRow[]>();
+  const saxoLegacyLedger = new Map<string, CrossFormatLedgerSourceRow[]>();
   for (const source of context.ledgerSources) {
     const key = saxoKey(source);
     if (key) saxoLedger.set(key, [...(saxoLedger.get(key) ?? []), source]);
+    const legacyKey = saxoLegacyCsvKey(source);
+    if (legacyKey)
+      saxoLegacyLedger.set(legacyKey, [
+        ...(saxoLegacyLedger.get(legacyKey) ?? []),
+        source,
+      ]);
   }
   for (const row of open) {
     const key = saxoKey(row);
@@ -445,7 +563,14 @@ export function planCrossFormatSources({
       );
       continue;
     }
-    const recorded = saxoLedger.get(key) ?? [];
+    const proven = saxoLedger.get(key) ?? [];
+    // A CSV recorded before batches kept their source columns counts only
+    // when this workbook row proves its id is the booking record. Otherwise
+    // it stays a keyless twin below.
+    const recorded =
+      proven.length === 0 && saxoWorkbookRecordIsOwnId(row)
+        ? (saxoLegacyLedger.get(key) ?? [])
+        : proven;
     // The same export repeated keeps its ordinary fingerprint duplicate path.
     if (
       recorded.length === 0 ||
@@ -486,8 +611,11 @@ export function planCrossFormatSources({
     identityOf(left) !== identityOf(right) &&
     !!left.route &&
     left.route === right.route &&
-    !!left.type &&
-    left.type === right.type &&
+    // Deposits and withdrawals carry no portfolio type: pair them by direction.
+    (left.route === "cash"
+      ? saxoCashDirection(left) !== undefined &&
+        saxoCashDirection(left) === saxoCashDirection(right)
+      : !!left.type && left.type === right.type) &&
     (left.route !== "portfolio" ||
       (left.investment_id != null && right.investment_id != null)) &&
     (left.units == null) === (right.units == null) &&
@@ -505,14 +633,14 @@ export function planCrossFormatSources({
     saxoTwins,
   );
   for (const [csvRow, workbookRow] of saxoInPlan.pairs) {
-    const choice = choiceOf(csvRow, workbookRow);
-    if (choice === "pair")
+    const choice = identityChoiceOf(csvRow, workbookRow);
+    if (choice?.kind === "pair")
       decide(csvRow, {
         kind: "duplicate_source",
         duplicateOfRowId: Number(workbookRow.id),
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") {
+    else if (choice?.kind === "keep") {
       keep(csvRow);
       keep(workbookRow);
     } else
@@ -523,12 +651,15 @@ export function planCrossFormatSources({
           candidateTransactionIds: [],
         });
   }
+  // With several look-alikes only keeping the row apart is a clear answer.
   for (const row of [...saxoInPlan.ambiguous, ...saxoInPlan.ambiguousRight])
-    decide(row, {
-      kind: "blocked",
-      reason: "cross_format_identity_missing",
-      candidateTransactionIds: [],
-    });
+    if (rowChoiceOf(row) === "keep_both") keep(row);
+    else
+      decide(row, {
+        kind: "blocked",
+        reason: "cross_format_identity_ambiguous",
+        candidateTransactionIds: [],
+      });
   const saxoLedgerRows = context.ledgerSources.filter(
     (source, index, all) =>
       formatOf(source) === SAXO &&
@@ -544,14 +675,14 @@ export function planCrossFormatSources({
     saxoTwins,
   );
   for (const [row, source] of saxoToLedger.pairs) {
-    const choice = choiceOf(row);
-    if (choice === "pair")
+    const choice = identityChoiceOf(row);
+    if (choice?.kind === "pair")
       decide(row, {
         kind: "duplicate",
         existingTransactionId: source.transaction_id,
-        policy: "prefer_source",
+        ...(choice.policy ? { policy: choice.policy } : {}),
       });
-    else if (choice === "keep") keep(row, [source.transaction_id]);
+    else if (choice?.kind === "keep") keep(row, [source.transaction_id]);
     else
       decide(row, {
         kind: "blocked",
@@ -559,14 +690,18 @@ export function planCrossFormatSources({
         candidateTransactionIds: [source.transaction_id],
       });
   }
-  for (const row of saxoToLedger.ambiguous)
-    decide(row, {
-      kind: "blocked",
-      reason: "cross_format_identity_missing",
-      candidateTransactionIds: [
-        ...saxoToLedger.ambiguousRight,
-      ].map((source) => source.transaction_id),
-    });
+  for (const row of saxoToLedger.ambiguous) {
+    const candidates = [...saxoToLedger.ambiguousRight].map(
+      (source) => source.transaction_id,
+    );
+    if (rowChoiceOf(row) === "keep_both") keep(row, candidates);
+    else
+      decide(row, {
+        kind: "blocked",
+        reason: "cross_format_identity_ambiguous",
+        candidateTransactionIds: candidates,
+      });
+  }
 
   // IBKR funding: CSV base-currency movements and native workbook movements.
   type CsvItem = { row: StagedRow; facts: IbkrCsvFunding };

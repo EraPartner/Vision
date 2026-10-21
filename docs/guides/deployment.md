@@ -113,7 +113,9 @@ revision (the highest `public.kysely_migration` name) with each backup. A databa
 ## Updates
 
 Native packaged updates install a verified macOS release artifact after creating a pre-update
-backup. Source runs are operator-managed. See
+backup. The packaged app also backs up before the backend applies pending migrations at launch,
+whichever way it was installed
+([[docs/adr/242-backup-before-boot-migrations|ADR-242]]). Source runs are operator-managed. See
 [[docs/features/application-updates|Application Updates]].
 
 ## Monitoring

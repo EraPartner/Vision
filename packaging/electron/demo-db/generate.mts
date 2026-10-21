@@ -627,8 +627,11 @@ for (let y = 2024; y <= 2026; y++) {
 // ===== Liability ledger (ADR-092: liabilities as negative accounts) =====
 // The mortgage is its own account (type=liability), surfacing in net worth as a negative
 // balance. Quarterly principal-paydown entries lift the balance from -205 000 toward ~-185 250.
-// Marked is_transfer so they never inflate income/spending (the cash leg is the monthly
-// mortgage payment already on the checking account).
+// The cash leg is the monthly mortgage payment already on the checking account, so these rows
+// have no peer. They are the balance-adjustment rows that reconciling the liability against its
+// amortization schedule writes (ADR-094: is_transfer=true, transfer_source='adjustment'), which
+// keeps them out of income/spending. 'manual' would be wrong: the transfer reconciler releases
+// every unpaired 'auto'/'manual' row at startup, turning these into +1 975 income.
 for (let y = 2024; y <= 2026; y++) {
   for (let m = 1; m <= 12; m += 3) {
     if (y === 2026 && m > 6) break;
@@ -641,7 +644,7 @@ for (let y = 2024; y <= 2026; y++) {
         "Kapitaalaflossing hypotheek",
         null,
         ACCT.MORTGAGE,
-        { isTransfer: true, transferSource: "manual" },
+        { isTransfer: true, transferSource: "adjustment" },
       ),
     );
   }

@@ -41,6 +41,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
+import { getImportBatchPreview } from "../src/services/importBatchService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
@@ -863,6 +864,34 @@ describeDb("importPipeline commit (real Postgres)", () => {
     await stageRow(reimport, 1, { memo: "TEA\t", bank_account: "BE00 OTHER" });
     expect(await commitBatch({ batchId: reimport })).toMatchObject({
       imported: 0,
+      duplicates: 2,
+      errors: 0,
+    });
+  });
+
+  it("flags already-imported rows in the review preview, as commit then counts them", async () => {
+    const first = await newBatch();
+    await stageRow(first, 0, { memo: "COFFEE" });
+    await stageRow(first, 1, { memo: "BREAD" });
+    await commitBatch({ batchId: first });
+
+    const again = await newBatch();
+    await stageRow(again, 0, { memo: "COFFEE" });
+    await stageRow(again, 1, { memo: "BREAD" });
+    await stageRow(again, 2, { memo: "MILK" });
+    const preview = await getImportBatchPreview(again);
+    expect(preview.already_imported).toBe(2);
+    expect(
+      preview.groups
+        .flatMap((group) => group.rows)
+        .map((row) => [row.memo, row.already_imported]),
+    ).toEqual([
+      ["COFFEE", true],
+      ["BREAD", true],
+      ["MILK", false],
+    ]);
+    expect(await commitBatch({ batchId: again })).toMatchObject({
+      imported: 1,
       duplicates: 2,
       errors: 0,
     });

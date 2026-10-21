@@ -283,6 +283,18 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-21: Backup before boot migrations (accepted)
+
+[[docs/adr/242-backup-before-boot-migrations|ADR-242]] has the desktop app take a `.visionbak` backup before the backend applies pending migrations to an existing database, stop the launch if it fails, and remove audit-history leftovers only after migration 0004 is recorded.
+
+### 2026-10-21: Portfolio tax per tax year (accepted)
+
+[[docs/adr/240-portfolio-tax-per-tax-year|ADR-240]] makes the Belgian portfolio-tax dashboard use the viewed tax year's realized gains and transaction-date FX, and counts the TOB on the sale as well as the purchase; supersedes the dashboard statements of ADR-216.
+
+### 2026-10-21: Import review owner choices (accepted)
+
+[[docs/adr/239-import-review-owner-choices|ADR-239]] pairs Saxo CSV cash with the workbook by `Bk Record Id` and direction, limits nearby candidates to the row's own account and source id, adds per-row `row_choices` (keep both or same transaction), makes preview duplicate counts and disjoint commit counts match what commit writes, and reads Saxo and IBKR numbers in the export's own convention, holding back trades whose numbers disagree.
+
 ### 2026-10-21: Edit-check hook for shell edits (accepted)
 
 [[docs/adr/238-edit-check-hook-for-shell-edits|ADR-238]] runs the ADR-227 edit-check hook after

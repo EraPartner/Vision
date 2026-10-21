@@ -18,6 +18,7 @@ import {
 import { validateId } from "../middleware/validation.ts";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import { escapeCsvValue } from "../lib/csv.ts";
+import { toWireDate } from "../lib/dateFormat.ts";
 import { assertCurrency } from "../lib/validation.ts";
 import { optionalQueryString } from "../lib/httpParams.ts";
 import { listBody } from "../lib/pagination.ts";
@@ -69,7 +70,7 @@ const listPageQuerySchema = optionalPaginationQuery({ maxLimit: 1000 });
 
 function buildOwedExportCsvRow(row: OwedExportRow): string {
   return [
-    escapeCsvValue(row.date),
+    escapeCsvValue(toWireDate(row.date)),
     escapeCsvValue(row.bank_account),
     escapeCsvValue(row.recipient_name),
     escapeCsvValue(row.memo),

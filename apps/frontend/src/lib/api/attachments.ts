@@ -4,6 +4,7 @@
 
 import { AttachmentListSchema } from '@vision/types/contracts';
 import { API_BASE_URL, apiRequest, rawFetch, parseEnvelopeError } from '@/lib/api/client';
+import { requestBlob } from '@/lib/api/helpers';
 import type { TransactionId } from "@vision/types/brands";
 
 export interface Attachment {
@@ -47,7 +48,16 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
     await apiRequest<void>(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
 }
 
-/** Build the URL to download/view an attachment in the browser. */
+/** Build the URL that serves an attachment (used for inline thumbnails). */
 export function getAttachmentDownloadUrl(attachmentId: string): string {
     return `${API_BASE_URL}/api/attachments/${attachmentId}/download`;
+}
+
+/**
+ * Fetch an attachment's bytes. The desktop app denies every new window, so a
+ * `target="_blank"` link cannot open attachments there; callers save the Blob
+ * with `downloadBlob` instead, which works in browsers and Electron alike.
+ */
+export function fetchAttachmentBlob(attachmentId: string): Promise<Blob> {
+    return requestBlob(`/api/attachments/${attachmentId}/download`);
 }

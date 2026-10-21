@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
-date: 2026-10-08
-updated: 2026-10-13
+date: 2026-10-21
+updated: 2026-10-21
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
@@ -195,6 +195,9 @@ CREATE TABLE attachments (
 The [[apps/frontend/src/components/shared/AttachmentPanel.tsx]] component handles file upload, display, and deletion:
 - Uses TanStack Query for state management and cache invalidation
 - Shows image thumbnails with hover-reveal delete button
+- Downloads an attachment through `fetchAttachmentBlob` plus `downloadBlob` when the filename or
+  thumbnail is clicked, so it works in the desktop app, which denies new windows. A failed
+  download shows `toast.error(t('txPage.downloadAttachmentError'))`
 - Displays loading state during upload
 - Provides user-friendly error messages — **delete failures** (Aug 2026) show `toast.error(t('txPage.deleteAttachmentError'))`; previously a failed delete only reset the row's spinner with no message, looking like a silent no-op
 

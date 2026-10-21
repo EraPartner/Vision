@@ -11,6 +11,7 @@ import {
   computeCgtEstimate,
   computeDividendWht,
   leaveOutUnconverted,
+  recordedSellTob,
   type PortfolioTaxInvestment,
   type MaybeConvertFn,
   type UnconvertedFigures,
@@ -92,12 +93,18 @@ export function buildPortfolioTaxDashboard(input: {
     (s, i) => s + convertTotals(i.unrealizedGain || 0, i.currency),
     0,
   );
+  const table = getTaxTable(year);
+  const cgtActive = table.capitalGainsTaxRate > 0;
+  const convertBreakdowns = convertFor("taxBreakdown", "feeBreakdown");
   const breakdowns = buildPortfolioCostBreakdowns({
     summaries,
     year,
-    convert: convertFor("taxBreakdown", "feeBreakdown"),
+    convert: convertBreakdowns,
     manualTaxes: totalManualTaxes,
     manualFees: totalManualFees,
+    sellTransactionTax: (inv, txn) =>
+      recordedSellTob(inv, txn, table, convertBreakdowns, cgtActive),
+    capitalGainsTaxActive: cgtActive,
     labels: {
       capitalGainsTax: "tax.capitalGainsTax",
       dividendWithholding: "tax.dividendWithholding",
@@ -133,8 +140,6 @@ export function buildPortfolioTaxDashboard(input: {
         month.fees += convertTrend(Number(txn.amount) || 0, txn.currency);
       month.fees += convertTrend(Number(txn.fees) || 0, txn.currency);
     }
-  const table = getTaxTable(year);
-  const cgtActive = table.capitalGainsTaxRate > 0;
   const split = computeRealizedGainSplit(
     summaries,
     convertFor("estimates.reyndersEstimate", "estimates.cgtEstimate"),
@@ -151,6 +156,7 @@ export function buildPortfolioTaxDashboard(input: {
     tobRecorded: computeTobRecorded(
       summaries,
       year,
+      table,
       convertFor("estimates.tobRecorded"),
     ),
     tobAutoEstimate: computeTobAutoEstimate(

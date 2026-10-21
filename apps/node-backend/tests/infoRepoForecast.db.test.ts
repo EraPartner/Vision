@@ -614,6 +614,24 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     // ADR-083 transfer exclusion (was a PIN: the module counted transfer legs)
     // ───────────────────────────────────────────────────────────────────────────
+    describe("average vs current spending FX", () => {
+      it("converts each past day at its own stored rate, like the monthly summary", async () => {
+        await seedBase();
+        await insertRate("USD", monthDay(1, 5), "0.5", false);
+        await insertRate("USD", "CURRENT_DATE", "0.8", true);
+        await insertTxn({
+          dateExpr: monthDay(1, 5),
+          amount: "-100.00",
+          currency: "USD",
+        });
+
+        const r = await getAverageVsCurrentSpending("EUR");
+        // One observed month: 100 USD at that day's 0.5, not today's 0.8.
+        expect(r.past_6_months.months_counted).toBe(1);
+        expect(r.past_6_months.avg_monthly_spending).toBe(50);
+      });
+    });
+
     describe("ADR-083 internal-transfer exclusion", () => {
       // Was pinned as a discrepancy: every query in infoRepositoryForecast.js
       // filtered on `t.is_active = true` only, with no getIncludeTransfers() call

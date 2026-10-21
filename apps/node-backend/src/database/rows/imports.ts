@@ -263,6 +263,7 @@ export const importPreviewRowSchema = importStagingRowSchema
     override_category_path: z.string().nullable(),
     matched_pattern_text: z.string().nullable(),
     matched_pattern_kind: z.string().nullable(),
+    already_imported: z.boolean(),
   })
   .describe("import preview row");
 export type ImportPreviewRow = z.output<typeof importPreviewRowSchema>;

@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-10-21
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -102,7 +102,8 @@ runtime bootstrap state, not application data.
 
 The previous Demo database remains available until detailed readiness and stable row-count checks
 pass. The post-start comparison excludes only the documented runtime-owned
-`transfers_backfilled` and `fx_full_history_repair_done` maintenance markers.
+`transfers_backfilled` and `fx_full_history_repair_done` maintenance markers and the
+`daily_job_*` last-run markers that warmup writes after the backend reports ready.
 
 Reset only the isolated Demo data with:
 
@@ -165,7 +166,10 @@ check on the next launch. The `[startup]` log shows `runtime_manifest_full` or
 ## Updates and reports
 
 Native updates create a backup, verify the selected release artifact and checksum, install it, and
-retain rollback state until the updated app opens successfully. Report PDFs print in a hidden,
+retain rollback state until the updated app opens successfully. Independently of how the app was
+updated, a launch whose packaged migrations are ahead of the database first writes a `.visionbak`
+to `~/Library/Application Support/Vision/pre-update-backups` and does not start the backend if
+that backup fails ([[docs/adr/242-backup-before-boot-migrations|ADR-242]]). Report PDFs print in a hidden,
 sandboxed, script-free Electron window with no network access (ADR-234). Ollama remains an
 optional host integration and defaults to its loopback endpoint;
 see [[docs/integrations/ollama|Ollama Integration]].

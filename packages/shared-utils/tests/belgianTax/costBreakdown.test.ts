@@ -60,6 +60,9 @@ describe("buildPortfolioCostBreakdowns", () => {
             labels,
             manualTaxes: 8,
             manualFees: 9,
+            // No TOB part on this sell: all of its taxes are capital-gains tax.
+            sellTransactionTax: () => 0,
+            capitalGainsTaxActive: true,
         });
 
         expect(result.taxBreakdown).toEqual([
@@ -73,6 +76,39 @@ describe("buildPortfolioCostBreakdowns", () => {
             { name: "management fees", value: 14 },
             { name: "other fees", value: 10 },
             { name: "manual fees", value: 9 },
+        ]);
+    });
+
+    const sellYear = (capitalGainsTaxActive: boolean) =>
+        buildPortfolioCostBreakdowns({
+            summaries: [
+                {
+                    transactions: [
+                        { type: "sell", date: "2026-05-02", amount: 12_000, taxes: 50 },
+                    ],
+                },
+            ],
+            year: 2026,
+            convert: (amount) => amount,
+            labels,
+            manualTaxes: 0,
+            manualFees: 0,
+            // 0.35% of 12,000: the TOB part of the sell's recorded taxes.
+            sellTransactionTax: () => 42,
+            capitalGainsTaxActive,
+        }).taxBreakdown;
+
+    it("labels a sell's TOB as transaction tax, and the rest as capital-gains tax", () => {
+        expect(sellYear(true)).toEqual([
+            { name: "capital gains", value: 8 },
+            { name: "transaction tax", value: 42 },
+        ]);
+    });
+
+    it("never labels a sell's taxes as capital-gains tax before that tax applies", () => {
+        expect(sellYear(false)).toEqual([
+            { name: "transaction tax", value: 42 },
+            { name: "other taxes", value: 8 },
         ]);
     });
 });

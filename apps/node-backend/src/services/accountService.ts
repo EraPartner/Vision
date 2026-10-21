@@ -497,12 +497,14 @@ const accountService = {
         : parsed.error.issues.map((issue) => issue.message).join("; ");
       throw new ValidationError(detail);
     }
-    return accountRepository.upsertStatementBalance(
+    const row = await accountRepository.upsertStatementBalance(
       id,
       currency,
       parsed.data.balance,
       parsed.data.date,
     );
+    // NUMERIC arrives as a decimal string; the API sends money as numbers.
+    return { ...row, balance: toNumber(toDecimal(row.balance)) };
   },
 
   /** Remove one currency's statement reading. */

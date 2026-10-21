@@ -28,13 +28,23 @@ interface CostBreakdownEntry {
   value: number;
 }
 
-interface BuildCostBreakdownsOptions {
-  summaries: readonly CostSummary[];
+interface BuildCostBreakdownsOptions<S extends CostSummary> {
+  summaries: readonly S[];
   year: number;
   convert: (amount: number, currency?: string) => number;
   labels: CostLabels;
   manualTaxes: number;
   manualFees: number;
+  /**
+   * The TOB part of a sell's converted taxes (the TOB is due on the sale as on
+   * the purchase). The rest of a sell's taxes is capital-gains tax when
+   * `capitalGainsTaxActive`, otherwise another tax.
+   */
+  sellTransactionTax: (
+    summary: S,
+    transaction: S["transactions"][number],
+  ) => number;
+  capitalGainsTaxActive: boolean;
 }
 
 function yearOf(date?: string): number {
@@ -55,14 +65,16 @@ function nonEmptyEntries(values: Record<string, number>): CostBreakdownEntry[] {
     .filter(({ value }) => value > 0);
 }
 
-export function buildPortfolioCostBreakdowns({
+export function buildPortfolioCostBreakdowns<S extends CostSummary>({
   summaries,
   year,
   convert,
   labels,
   manualTaxes,
   manualFees,
-}: BuildCostBreakdownsOptions): {
+  sellTransactionTax,
+  capitalGainsTaxActive,
+}: BuildCostBreakdownsOptions<S>): {
   taxBreakdown: CostBreakdownEntry[];
   feeBreakdown: CostBreakdownEntry[];
 } {
@@ -89,7 +101,16 @@ export function buildPortfolioCostBreakdowns({
         transaction.currency,
       );
       if (transaction.type === "sell" && convertedTaxes > 0) {
-        addTo(taxes, labels.capitalGainsTax, convertedTaxes);
+        const tob = sellTransactionTax(summary, transaction);
+        if (tob > 0) addTo(taxes, labels.transactionTax, tob);
+        if (convertedTaxes - tob > 0)
+          addTo(
+            taxes,
+            capitalGainsTaxActive
+              ? labels.capitalGainsTax
+              : labels.otherTaxes,
+            convertedTaxes - tob,
+          );
       } else if (transaction.type === "dividend" && convertedTaxes > 0) {
         addTo(taxes, labels.dividendWithholding, convertedTaxes);
       } else if (transaction.type === "buy" && convertedTaxes > 0) {

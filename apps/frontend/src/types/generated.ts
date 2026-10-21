@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * API identity
+         * @description Static service identity (main.ts). Served as plain JSON, not wrapped in the `{ ok, data }` envelope. Also answers `/api/`.
+         */
+        get: operations["getApiRoot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tags": {
         parameters: {
             query?: never;
@@ -6244,19 +6264,19 @@ export interface components {
         ResearchScorecardEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
             data?: components["schemas"]["ResearchScorecardData"];
         };
-        ResearchPortfolioForecastEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+        ResearchPortfolioForecastEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["ResearchPortfolioForecastData"];
         };
-        ResearchMappingsEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+        ResearchMappingsEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["ResearchMappingsData"];
         };
-        ResearchMappingResolveEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+        ResearchMappingResolveEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["ResearchMappingResolveData"];
         };
-        ResearchMappingAuditEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+        ResearchMappingAuditEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["ResearchMappingAuditData"];
         };
-        ResearchProviderKeysEnvelope: components["schemas"]["ResearchEnvelopeBase"] & {
+        ResearchProviderKeysEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["ResearchProviderKeysData"];
         };
         Link: {
@@ -6279,10 +6299,10 @@ export interface components {
             id: number;
             general: string;
             detail: string;
-            description?: string;
+            description?: string | null;
             is_active: boolean;
             /** Format: date-time */
-            created_at: string;
+            created_at: string | null;
             /** Format: date-time */
             updated_at?: string;
             links: components["schemas"]["Link"][];
@@ -6340,16 +6360,16 @@ export interface components {
         Recipient: {
             id: number;
             name: string;
-            primary_bank_account?: string;
-            default_category_id?: number;
-            default_category_name?: string;
+            primary_bank_account?: string | null;
+            default_category_id?: number | null;
+            default_category_name?: string | null;
             primary_recipient_id?: number | null;
             primary_recipient_name?: string | null;
             alias_count?: number;
-            notes?: string;
+            notes?: string | null;
             is_active: boolean;
             /** Format: date-time */
-            created_at: string;
+            created_at: string | null;
             /** Format: date-time */
             updated_at?: string;
             links: components["schemas"]["Link"][];
@@ -6656,8 +6676,8 @@ export interface components {
             /** @description Canonical display name projected from the linked account (null when account_id is); use account_id as the stable identity */
             bank_account: string | null;
             recipient_id?: number;
-            recipient_name?: string;
-            memo?: string;
+            recipient_name?: string | null;
+            memo?: string | null;
             /** Format: double */
             amount: number;
             /** Format: double */
@@ -6669,16 +6689,16 @@ export interface components {
             amount_eur_unconverted?: true;
             currency?: string;
             /** Format: double */
-            balance?: number;
+            balance?: number | null;
             /**
              * Format: double
              * @description Per-account, per-currency running balance over the filtered set before pagination. The latest preceding stored statement balance resets the cumulative amount; later unstamped rows advance it. Present only when include_balance=true. Rows with no currency are treated as EUR.
              */
             running_balance?: number;
-            category_id?: number;
+            category_id?: number | null;
             /** @description Format: GENERAL:DETAIL */
-            category_name?: string;
-            comment?: string;
+            category_name?: string | null;
+            comment?: string | null;
             /** @description False when the transaction is excluded from totals and statistics. */
             is_active?: boolean;
             /** @description Tags attached to this transaction */
@@ -6803,17 +6823,17 @@ export interface components {
             bank_account?: string | null;
             /** @description Stable linked account identity */
             account_id?: number | null;
-            recipient_id?: number;
-            recipient_name?: string;
-            memo?: string;
+            recipient_id?: number | null;
+            recipient_name?: string | null;
+            memo?: string | null;
             amount: number;
-            currency?: string;
-            category_id?: number;
-            category_name?: string;
-            comment?: string;
-            url?: string;
+            currency?: string | null;
+            category_id?: number | null;
+            category_name?: string | null;
+            comment?: string | null;
+            url?: string | null;
             is_recurring: boolean;
-            recurrence_pattern?: string;
+            recurrence_pattern?: string | null;
             /**
              * Format: date
              * @description Recurrence bound — the series completes once the next occurrence would fall past this date.
@@ -6822,7 +6842,7 @@ export interface components {
             /** @description Recurrence bound — the series completes at this execution count. */
             max_occurrences?: number | null;
             is_loan?: boolean;
-            loan_type?: components["schemas"]["PlannedLoanType"];
+            loan_type?: components["schemas"]["PlannedLoanType"] | null;
             loan_principal?: number | null;
             loan_annual_interest_rate?: number | null;
             loan_term_months?: number | null;
@@ -6835,8 +6855,8 @@ export interface components {
             loan_schedule?: components["schemas"]["PlannedLoanScheduleEntry"][];
             is_executed: boolean;
             /** Format: date */
-            last_executed_date?: string;
-            executed_transaction_id?: number;
+            last_executed_date?: string | null;
+            executed_transaction_id?: number | null;
             execution_count: number;
             executions?: components["schemas"]["PlannedTransactionExecution"][];
             /** @description Tags attached to this planned transaction */
@@ -7148,10 +7168,10 @@ export interface components {
             /** Format: date */
             date: string;
             amount: number;
-            units?: number;
-            price_per_unit?: number;
-            fees?: number;
-            taxes?: number;
+            units?: number | null;
+            price_per_unit?: number | null;
+            fees?: number | null;
+            taxes?: number | null;
             /**
              * @description Whether a dividend transaction's amount is before or after withholding tax. Unknown for legacy or unclassified rows and ignored for non-dividend transactions.
              * @enum {string}
@@ -7163,16 +7183,16 @@ export interface components {
              */
             readonly income_recognition_role?: "standard" | "included_in_units";
             currency: string;
-            fx_rate_to_eur?: number;
+            fx_rate_to_eur?: number | null;
             /** @description Owning account for the lot (ADR-091); null = unassigned/global */
             account_id?: number | null;
             /** @description Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by node-postgres as a string; null means the transaction was created manually or predates batch attribution. */
             import_batch_id?: string | null;
-            note?: string;
+            note?: string | null;
             is_recurring: boolean;
-            recurrence_interval?: components["schemas"]["RecurrenceInterval"];
+            recurrence_interval?: components["schemas"]["RecurrenceInterval"] | null;
             /** Format: date */
-            recurrence_end_date?: string;
+            recurrence_end_date?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -7226,6 +7246,32 @@ export interface components {
         UnconvertedAmounts: {
             unconverted_count: number;
             unconverted_currencies: string[];
+        };
+        /** @description Provenance of an aggregation payload (ADR-011): when it was computed and whether it came from a materialized view (`mv`), a live query (`live`) or a forecast cache (`cache`). */
+        AggregationMeta: {
+            /** Format: date-time */
+            computedAt: string;
+            source: string;
+        };
+        AggregationUnconverted: {
+            data: components["schemas"]["UnconvertedAmounts"];
+            meta: components["schemas"]["AggregationMeta"];
+        };
+        AggregationCategoryPivot: {
+            data: components["schemas"]["CategoryPivotData"];
+            meta: components["schemas"]["AggregationMeta"];
+        };
+        AggregationForecast: {
+            data: {
+                methods: Record<string, never>[];
+            };
+            meta: components["schemas"]["AggregationMeta"];
+        };
+        AggregationPeriodPivot: {
+            data: {
+                conversion: components["schemas"]["PeriodPivotConversion"];
+            };
+            meta: components["schemas"]["AggregationMeta"];
         };
         /** @description Conversion contract of a period pivot. `usedHistoricalFallback` and `affectedCurrencies` report rows converted at the latest stored rate because no historical rate exists on or before their date. Additive (ADR-216): rows with no stored rate at all are left out of the pivot; `unconvertedCount` counts their transactions and `unconvertedCurrencies` lists their currencies. */
         PeriodPivotConversion: {
@@ -7540,11 +7586,20 @@ export interface components {
                 /** @enum {string} */
                 adopt_policy: "preserve_existing" | "prefer_source";
             }[];
+            /** @description The owner's answer for staged rows that resemble an existing transaction on the same account (existing_assigned_or_imported_history or ambiguous_history), or a Saxo row without a booking record id (cross_format_identity_missing). keep_both records the row as a new transaction; same_transaction settles it as a duplicate of its single existing candidate or Saxo twin. Each row may occur at most once; a row outside the selected batches rejects with 400. */
+            row_choices?: {
+                /** Format: int64 */
+                batch_id: number;
+                /** Format: int64 */
+                row_id: number;
+                /** @enum {string} */
+                choice: "keep_both" | "same_transaction";
+            }[];
         };
         PortfolioImportReconciliationCounts: {
             /** @description Newly recorded transactions, including in-kind income recorded with the included_in_units role. */
             imported: number;
-            /** @description Settled source rows, including adopted rows. */
+            /** @description Source rows settled as already recorded. Adopted rows are counted only in adopted, so imported, duplicates and adopted are disjoint. */
             duplicates: number;
             adopted: number;
             errors: number;
@@ -7565,8 +7620,17 @@ export interface components {
                 /** @enum {string} */
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
+            /** @description The applied row_choices, sorted by batch and row. */
+            rowChoices: {
+                /** Format: int64 */
+                batchId: number;
+                /** Format: int64 */
+                rowId: number;
+                /** @enum {string} */
+                choice: "keep_both" | "same_transaction";
+            }[];
             ready: boolean;
-            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. A cash row whose identity the cash ledger already holds is a duplicate with cash=true, as commit settles it. */
             actions: ({
                 /** Format: int64 */
                 batchId: number;
@@ -7593,7 +7657,7 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. Nothing in a blocked plan is written. */
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side), cross_format_identity_ambiguous (several such Saxo look-alikes that cannot be matched one to one; clears only on the row_choices answer keep_both). funding_date_mismatch clears only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. cross_format_identity_missing clears on prefer_source (one event) or on row_choices (same_transaction records the pair once, keep_both keeps both); preserve_existing leaves it blocked. existing_assigned_or_imported_history (a same-size trade within seven days that this account already holds, without a differing source id of the same specialized export format) and ambiguous_history clear on row_choices. Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];
@@ -7809,6 +7873,32 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getApiRoot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Service identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version: string;
+                        title: string;
+                        description: string;
+                        runtime: string;
+                        links: components["schemas"]["Link"][];
+                    };
+                };
+            };
+        };
+    };
     getTags: {
         parameters: {
             query?: {
@@ -10229,7 +10319,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @enum {string} */
+                            mode: "accept" | "adjustment";
+                            drift: number;
+                            currency: string;
+                            statement_balance: number;
+                            computed_balance: number;
+                            /** @description The adjustment row (mode `adjustment`), else null. */
+                            transaction: {
+                                id: number;
+                                amount: number;
+                                transfer_source: string;
+                            } | null;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
             /** @description No drift to resolve, no statement balance, or an invalid mode */
@@ -10274,7 +10380,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            account_id: number;
+                            currency: string;
+                            balance: number;
+                            /** Format: date */
+                            balance_date: string;
+                            links: unknown[];
+                        };
+                    };
                 };
             };
             /** @description Invalid balance */
@@ -10680,6 +10795,13 @@ export interface operations {
                     "application/json": components["schemas"]["CategoryNodeEnvelope"];
                 };
             };
+            /** @description NOT_FOUND: no category with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteCategoryNode: {
@@ -10784,6 +10906,13 @@ export interface operations {
                         data?: components["schemas"]["Category"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no category with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10957,6 +11086,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description NOT_FOUND: no recipient with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteRecipient: {
@@ -11118,6 +11254,13 @@ export interface operations {
                         data?: components["schemas"]["Setting"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no setting with this key */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -12217,7 +12360,10 @@ export interface operations {
     };
     getRecipientBankAccounts: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only active bank accounts (default true); `false` includes inactive ones. */
+                active?: boolean;
+            };
             header?: never;
             path: {
                 id: number;
@@ -12226,14 +12372,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bank account list */
+            /** @description Bank account list (canonical `{ items, total }`, unpaginated) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientBankAccount"][];
+                        data?: {
+                            items: components["schemas"]["RecipientBankAccount"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -12560,6 +12709,13 @@ export interface operations {
                         data?: components["schemas"]["PlannedTransaction"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no planned transaction with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13213,7 +13369,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13239,7 +13395,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13267,7 +13423,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13291,7 +13447,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13315,7 +13471,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13337,7 +13493,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13358,7 +13514,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AggregationForecast"];
+                    };
                 };
             };
         };
@@ -13381,7 +13539,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AggregationForecast"];
+                    };
                 };
             };
         };
@@ -13395,13 +13555,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Accuracy metrics */
+            /** @description Accuracy metrics as `{ data, meta }`; built by the route, so `meta` is `{ source: "db", userId }` without `computedAt`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            data: {
+                                methods: Record<string, never>[];
+                                limit_months: number;
+                            };
+                            meta: {
+                                source: string;
+                            };
+                        };
+                    };
                 };
             };
         };
@@ -13427,7 +13597,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13457,7 +13627,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["CategoryPivotData"];
+                        data?: components["schemas"]["AggregationCategoryPivot"];
                     };
                 };
             };
@@ -13487,7 +13657,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["UnconvertedAmounts"];
+                        data?: components["schemas"]["AggregationUnconverted"];
                     };
                 };
             };
@@ -13520,9 +13690,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            conversion: components["schemas"]["PeriodPivotConversion"];
-                        };
+                        data?: components["schemas"]["AggregationPeriodPivot"];
                     };
                 };
             };
@@ -13555,9 +13723,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            conversion: components["schemas"]["PeriodPivotConversion"];
-                        };
+                        data?: components["schemas"]["AggregationPeriodPivot"];
                     };
                 };
             };
@@ -13873,6 +14039,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description NOT_FOUND: no investment with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteInvestment: {
@@ -13968,6 +14141,13 @@ export interface operations {
                         data?: components["schemas"]["InvestmentPriceHistoryData"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no investment with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14116,6 +14296,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description BAD_GATEWAY: the market data provider failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     marketQuote: {
@@ -14195,6 +14382,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description BAD_GATEWAY: the market data provider failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     marketNews: {
@@ -14224,6 +14418,13 @@ export interface operations {
             };
             /** @description VALIDATION_ERROR: `count` sent more than once */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description BAD_GATEWAY: the market data provider failed */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14325,6 +14526,13 @@ export interface operations {
                         data?: components["schemas"]["WatchlistItem"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no watchlist item with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14482,13 +14690,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description CSV file */
+            /** @description CSV file. Columns: Date (`YYYY-MM-DD`), Bank Account, Recipient, Memo, Amount (the remaining owed amount), Currency, Balance, Category, Comment. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/csv": string;
+                };
+            };
+            /** @description NOT_FOUND: the recipient has no unsettled owed transactions */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
                 };
             };
         };
@@ -14856,6 +15073,15 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+            /** @description NOT_FOUND: no attachment with this id, or its stored file is missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
                 };
             };
         };
@@ -15297,6 +15523,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description BAD_GATEWAY: the local Ollama server is not reachable or failed; `error.details.ollamaCode` names the cause */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
         };
     };
     getAiConversations: {
@@ -15382,6 +15617,13 @@ export interface operations {
                         data?: components["schemas"]["AiConversationDetail"];
                     };
                 };
+            };
+            /** @description NOT_FOUND: no conversation with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15908,6 +16150,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description NOT_FOUND: no import batch with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteImportBatch: {
@@ -15967,7 +16216,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Row preview with staged data */
+            /** @description Row preview with staged data. Each row carries already_imported (the ledger already holds its import identity, so commit settles it as a duplicate), and the response's already_imported counts them. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15975,6 +16224,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description NOT_FOUND: no import batch with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -16449,6 +16705,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description NOT_FOUND: no import batch with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deletePortfolioImportBatch: {
@@ -16513,6 +16776,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PortfolioImportPreviewEnvelope"];
                 };
+            };
+            /** @description NOT_FOUND: no import batch with this id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -77,6 +77,50 @@ async function exists(file: string): Promise<boolean> {
   );
 }
 
+const retired = async () => true;
+
+test("leaves everything in place until the database has retired audit history", async (t) => {
+  const userData = await tempUserData(t);
+  const folder = await seedReceiptFolder(userData);
+  const calls: SecurityCall[] = [];
+  const { log, warn } = captureLog();
+  const options = {
+    userDataDir: userData,
+    runtimeName: "vision",
+    execFile: stubExecFile("ok", calls),
+    log,
+    platform: "darwin" as const,
+  };
+
+  assert.equal(
+    await cleanupLegacyAuditArtifacts({
+      ...options,
+      retirementApplied: async () => false,
+    }),
+    "deferred",
+  );
+  assert.equal(
+    await cleanupLegacyAuditArtifacts({
+      ...options,
+      retirementApplied: async () => {
+        throw new Error("Native backend readiness timed out");
+      },
+    }),
+    "incomplete",
+  );
+  assert.equal(await exists(folder), true);
+  assert.deepEqual(calls, []);
+  assert.equal(await exists(path.join(userData, MARKER)), false);
+  assert.equal(warn.length, 1);
+
+  assert.equal(
+    await cleanupLegacyAuditArtifacts({ ...options, retirementApplied: retired }),
+    "completed",
+  );
+  assert.equal(await exists(folder), false);
+  assert.equal(calls.length, 1);
+});
+
 test("removes the receipt folder and deletes the Keychain item with exact arguments", async (t) => {
   const userData = await tempUserData(t);
   const folder = await seedReceiptFolder(userData);
@@ -89,6 +133,7 @@ test("removes the receipt folder and deletes the Keychain item with exact argume
     runtimeName: "vision",
     execFile: stubExecFile("ok", calls),
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -123,6 +168,7 @@ test("uses the demo Keychain service for the demo runtime", async (t) => {
     runtimeName: "vision_demo",
     execFile: stubExecFile("ok", calls),
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -139,6 +185,7 @@ test("treats a missing Keychain item (exit 44) as success and writes the marker"
     runtimeName: "vision",
     execFile: stubExecFile("not-found", calls),
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -160,6 +207,7 @@ test("logs a warning and still writes the marker when security fails otherwise",
     runtimeName: "vision",
     execFile: stubExecFile("failure", calls),
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -181,6 +229,7 @@ test("never throws when execFile itself throws", async (t) => {
       throw new Error("spawn EACCES");
     },
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -203,6 +252,7 @@ test("removes only the link when the receipt folder is a symlink", async (t) => 
     runtimeName: "vision",
     execFile: stubExecFile("not-found", []),
     log,
+    retirementApplied: retired,
     platform: "darwin",
   });
 
@@ -224,6 +274,7 @@ test("a second run is skipped by the marker", async (t) => {
     runtimeName: "vision",
     execFile: stubExecFile("not-found", calls),
     log,
+    retirementApplied: retired,
     platform: "darwin" as const,
   };
 
@@ -250,6 +301,7 @@ test("skips the Keychain step off macOS and for runtimes without a witness", asy
       runtimeName,
       execFile: stubExecFile("ok", calls),
       log,
+      retirementApplied: retired,
       platform,
     });
 
