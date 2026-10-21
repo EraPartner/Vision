@@ -751,33 +751,45 @@ const reconciliationScopeSchema = z.strictObject({
     )
     .max(100)
     .optional(),
+  row_choices: z
+    .array(
+      z.strictObject({
+        batch_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        row_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        choice: z.enum(["keep_both", "same_transaction"]),
+      }),
+    )
+    .max(10000)
+    .optional(),
 });
 const reconciliationScopeInput = bareMessages(reconciliationScopeSchema);
 
-router.post("/reconciliation/preview", async (req, res) => {
-  const input = parseInput(reconciliationScopeInput, req.body);
-  res.ok(
-    await previewPortfolioImportReconciliation({
-      batchIds: input.batch_ids,
-      adoptPolicy: input.adopt_policy,
-      batchPolicies: input.batch_policies?.map((policy) => ({
-        batchId: policy.batch_id,
-        adoptPolicy: policy.adopt_policy,
-      })),
-    }),
-  );
-});
-
-router.post("/reconciliation/commit", async (req, res) => {
-  const input = parseInput(reconciliationScopeInput, req.body);
-  const result = await commitReviewedPortfolioImports({
+function reconciliationScope(input: z.output<typeof reconciliationScopeSchema>) {
+  return {
     batchIds: input.batch_ids,
     adoptPolicy: input.adopt_policy,
     batchPolicies: input.batch_policies?.map((policy) => ({
       batchId: policy.batch_id,
       adoptPolicy: policy.adopt_policy,
     })),
-  });
+    rowChoices: input.row_choices?.map((item) => ({
+      batchId: item.batch_id,
+      rowId: item.row_id,
+      choice: item.choice,
+    })),
+  };
+}
+
+router.post("/reconciliation/preview", async (req, res) => {
+  const input = parseInput(reconciliationScopeInput, req.body);
+  res.ok(await previewPortfolioImportReconciliation(reconciliationScope(input)));
+});
+
+router.post("/reconciliation/commit", async (req, res) => {
+  const input = parseInput(reconciliationScopeInput, req.body);
+  const result = await commitReviewedPortfolioImports(
+    reconciliationScope(input),
+  );
   logger.info("[portfolio-import] reviewed scope committed", {
     batchCount: result.batches.length,
     imported: result.imported,

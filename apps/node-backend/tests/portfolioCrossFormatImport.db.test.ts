@@ -465,7 +465,7 @@ describeDb("one broker history through more than one export", () => {
       const xlsxFile = await saxoXlsx("saxo-all", ALL);
       const workbook = await stage(xlsxFile, "saxo_transaction_history", sleeve);
       const preview = await previewPortfolioImportReconciliation({ batchIds: [workbook] });
-      expect(preview).toMatchObject({ ready: true, summary: { insert: 1, duplicate: 1, cash: 2 } });
+      expect(preview).toMatchObject({ ready: true, summary: { insert: 1, duplicate: 3, cash: 0 } });
       expect(await commit(workbook)).toMatchObject({ imported: 1, duplicates: 3, errors: 0 });
       // The CSV buy stays as recorded; the workbook adds only the dividend.
       expect(await portfolio(exm)).toEqual([
@@ -588,7 +588,7 @@ describeDb("one broker history through more than one export", () => {
       const freshPreview = await previewPortfolioImportReconciliation({
         batchIds: [fresh.csvBatch, fresh.bookBatch],
       });
-      expect(freshPreview).toMatchObject({ ready: true, summary: { insert: 0, duplicate: 12, duplicate_source: 17 } });
+      expect(freshPreview).toMatchObject({ ready: true, summary: { insert: 0, duplicate: 17, cash: 0, duplicate_source: 17 } });
       expect(await commit(fresh.csvBatch, fresh.bookBatch)).toMatchObject({
         imported: 0,
         duplicates: 34,
@@ -737,7 +737,7 @@ describeDb("one broker history through more than one export", () => {
         insert: 0,
         cash: 0,
       });
-      expect(await commit(funding)).toMatchObject({ adopted: 1, imported: 0, duplicates: 1, errors: 0 });
+      expect(await commit(funding)).toMatchObject({ adopted: 1, imported: 0, duplicates: 0, errors: 0 });
       expect(await batchState(funding)).toEqual({
         status: "complete",
         rows_imported: 0,
@@ -1077,6 +1077,89 @@ describeDb("one broker history through more than one export", () => {
         reasons: ["cross_format_identity_missing"],
       });
       expect(await commitChoosing("preserve_existing", workbook)).toMatchObject({ imported: 1 });
+      expect(await portfolio(exm)).toHaveLength(2);
+    });
+  });
+
+  describe("a later trade of the same size", () => {
+    /** The 101 buy again as booking record 201, three days later. */
+    const secondBuy = () =>
+      saxoSheets([101]).map((sheet) => ({
+        ...sheet,
+        records: sheet.records.map((record) => ({
+          ...record,
+          "Bk Record Id": 201,
+          "Transactie-ID": "TX-201",
+          Transactiedatum: new Date("2025-01-13T00:00:00Z"),
+          ...(record["Booking Id"] ? { "Booking Id": `${String(record["Booking Id"])}-201` } : {}),
+        })),
+      }));
+    const SECOND_BUY = { ...XLSX_BUY, date: "2025-01-13" };
+
+    it("imports a regular purchase beside an earlier one of the same size", async () => {
+      const sleeve = await account("Saxo");
+      const exm = await investment("EXM");
+      await commit(await stage(await saxoXlsx("first", [101]), "saxo_transaction_history", sleeve));
+      const second = await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", sleeve);
+      expect(await blockerReasons(second)).toEqual({ ready: true, reasons: [] });
+      expect(await commit(second)).toMatchObject({ imported: 1, duplicates: 0 });
+      expect(await portfolio(exm)).toEqual([XLSX_BUY, SECOND_BUY]);
+      // The same statement again is still recorded once.
+      expect(
+        await commit(await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", sleeve)),
+      ).toMatchObject({ imported: 0, duplicates: 1 });
+      expect(await portfolio(exm)).toHaveLength(2);
+    });
+
+    it("ignores a similar trade recorded on another account", async () => {
+      const first = await account("Saxo");
+      const other = await account("Saxo");
+      const exm = await investment("EXM");
+      await commit(await stage(await saxoXlsx("first", [101]), "saxo_transaction_history", first));
+      const second = await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", other);
+      expect(await blockerReasons(second)).toEqual({ ready: true, reasons: [] });
+      expect(await commit(second)).toMatchObject({ imported: 1 });
+      expect(await portfolio(exm)).toHaveLength(2);
+    });
+
+    it("asks about a similar trade the account already holds and follows the owner's choice", async () => {
+      const sleeve = await account("Saxo");
+      const exm = await investment("EXM");
+      // A trade typed by hand on this account: no source id to tell them apart.
+      await pool.query(
+        `INSERT INTO portfolio_transactions(investment_id,account_id,type,date,units,price_per_unit,amount,fees,taxes,currency)
+         VALUES($1,$2,'buy','2025-01-12',10,18,180,1,0.63,'EUR')`,
+        [exm, sleeve],
+      );
+      const [{ id: manual }] = (
+        await pool.query("SELECT id FROM portfolio_transactions WHERE investment_id=$1", [exm])
+      ).rows;
+      const second = await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", sleeve);
+      const preview = await previewPortfolioImportReconciliation({ batchIds: [second] });
+      expect(preview.blockers).toEqual([
+        expect.objectContaining({
+          reason: "existing_assigned_or_imported_history",
+          candidateTransactionIds: [manual],
+        }),
+      ]);
+      await expect(commit(second)).rejects.toMatchObject({ status: 409 });
+      const rowId = preview.blockers[0]!.rowId;
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [second],
+          rowChoices: [{ batchId: second, rowId, choice: "same_transaction" }],
+        }),
+      ).toMatchObject({ imported: 0, duplicates: 1 });
+      expect(await portfolio(exm)).toHaveLength(1);
+
+      const again = await stage(await saxoXlsx("second", [], secondBuy()), "saxo_transaction_history", sleeve);
+      const [blocker] = (await previewPortfolioImportReconciliation({ batchIds: [again] })).blockers;
+      expect(
+        await commitReviewedPortfolioImports({
+          batchIds: [again],
+          rowChoices: [{ batchId: again, rowId: blocker!.rowId, choice: "keep_both" }],
+        }),
+      ).toMatchObject({ imported: 1, duplicates: 0 });
       expect(await portfolio(exm)).toHaveLength(2);
     });
   });

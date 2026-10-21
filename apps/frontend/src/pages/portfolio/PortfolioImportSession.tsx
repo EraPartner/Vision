@@ -36,6 +36,7 @@ import {
     commitReviewedPortfolioImports,
     type PortfolioReconciliationPlan,
     type PortfolioReconciliationPolicy,
+    type PortfolioRowChoice,
     type ReviewedPortfolioImportResult,
 } from "@/lib/api/portfolioImports";
 import type { Account } from "@/types/api";
@@ -256,6 +257,12 @@ const blockerKeys: Record<string, string> = {
     ambiguous_cash_history: "ambiguousCash",
 };
 
+/** Blockers the owner settles per row: keep both, or (assigned only) the same transaction. */
+const choosableBlockers = [
+    "existing_assigned_or_imported_history",
+    "ambiguous_history",
+];
+
 interface Props {
     accounts: readonly Account[];
 }
@@ -277,6 +284,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         plan: PortfolioReconciliationPlan;
     }>();
     const [result, setResult] = useState<ReviewedPortfolioImportResult>();
+    const [rowChoices, setRowChoices] = useState<PortfolioRowChoice[]>([]);
     const [error, setError] = useState<string>();
     const [stopped, setStopped] = useState(false);
     const [shownActions, setShownActions] = useState(50);
@@ -313,6 +321,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     );
     const invalidate = useCallback(() => {
         revision.current++;
+        setRowChoices([]);
         setReview(undefined);
         setResult(undefined);
         setError(undefined);
@@ -344,7 +353,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         .map((item) => item.batchId!)
         .sort((a, b) => a - b);
     const routingKey = sourceRoutingKey(statements);
-    const scope = {
+    const scopeFor = (choices: PortfolioRowChoice[]) => ({
         batchIds: ids,
         ...(policy === "auto" ? {} : { adoptPolicy: policy }),
         ...(statements.some(
@@ -365,8 +374,18 @@ export function PortfolioImportSession({ accounts }: Props) {
                       .sort((left, right) => left.batchId - right.batchId),
               }
             : {}),
-    };
-    const scopeKey = JSON.stringify({ scope, routingKey });
+        ...(choices.some((item) => ids.includes(item.batchId))
+            ? {
+                  rowChoices: choices.filter((item) =>
+                      ids.includes(item.batchId),
+                  ),
+              }
+            : {}),
+    });
+    const keyFor = (choices: PortfolioRowChoice[]) =>
+        JSON.stringify({ scope: scopeFor(choices), routingKey });
+    const scope = scopeFor(rowChoices);
+    const scopeKey = keyFor(rowChoices);
     useEffect(() => {
         try {
             const checkpointIds = statements
@@ -678,9 +697,10 @@ export function PortfolioImportSession({ accounts }: Props) {
         }
     };
 
-    const preview = async () => {
+    const preview = async (choices: PortfolioRowChoice[] = rowChoices) => {
         if (!allStaged || operation !== "idle") return;
         const currentRevision = ++revision.current;
+        const scope = scopeFor(choices);
         setReview(undefined);
         setError(undefined);
         setOperation("preview");
@@ -696,7 +716,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     JSON.stringify(scope.batchPolicies ?? [])
             )
                 throw new Error(t("portfolioImport.session.previewMismatch"));
-            setReview({ key: scopeKey, plan });
+            setReview({ key: keyFor(choices), plan });
             setShownActions(50);
         } catch (failure) {
             if (mounted.current && revision.current === currentRevision)
@@ -741,6 +761,22 @@ export function PortfolioImportSession({ accounts }: Props) {
         } finally {
             if (mounted.current) setOperation("idle");
         }
+    };
+
+    /** Answer a row that resembles an existing transaction, then review again. */
+    const choose = (
+        batchId: number,
+        rowId: number,
+        choice: PortfolioRowChoice["choice"],
+    ) => {
+        const next = [
+            ...rowChoices.filter(
+                (item) => item.batchId !== batchId || item.rowId !== rowId,
+            ),
+            { batchId, rowId, choice },
+        ];
+        setRowChoices(next);
+        void preview(next);
     };
 
     const statementName = (batchId: number) =>
@@ -1250,6 +1286,56 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 {t(
                                                     `portfolioImport.session.blockers.${blockerKeys[blocker.reason] ?? "other"}`,
                                                 )}
+                                                {blocker.rowId !== undefined &&
+                                                    choosableBlockers.includes(
+                                                        blocker.reason,
+                                                    ) && (
+                                                        <span className="ml-2 inline-flex flex-wrap gap-2 align-middle">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                disabled={
+                                                                    operation !==
+                                                                    "idle"
+                                                                }
+                                                                onClick={() =>
+                                                                    choose(
+                                                                        blocker.batchId,
+                                                                        blocker.rowId!,
+                                                                        "keep_both",
+                                                                    )
+                                                                }
+                                                            >
+                                                                {t(
+                                                                    "portfolioImport.session.choice.keepBoth",
+                                                                )}
+                                                            </Button>
+                                                            {blocker.reason ===
+                                                                "existing_assigned_or_imported_history" && (
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    disabled={
+                                                                        operation !==
+                                                                        "idle"
+                                                                    }
+                                                                    onClick={() =>
+                                                                        choose(
+                                                                            blocker.batchId,
+                                                                            blocker.rowId!,
+                                                                            "same_transaction",
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {t(
+                                                                        "portfolioImport.session.choice.sameTransaction",
+                                                                    )}
+                                                                </Button>
+                                                            )}
+                                                        </span>
+                                                    )}
                                             </li>
                                         ),
                                     )}
@@ -1555,10 +1641,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         {t("portfolioImport.session.success", {
                             imported: result.imported,
                             adopted: result.adopted,
-                            duplicates: Math.max(
-                                0,
-                                result.duplicates - result.adopted,
-                            ),
+                            duplicates: result.duplicates,
                         })}
                     </p>
                 )}

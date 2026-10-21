@@ -41,6 +41,7 @@ import {
   readCashLedgerFingerprints,
   readCrossFormatLedgerSources,
   readCrossFormatSettledIdentities,
+  readHistorySourceIds,
   readManualCashCandidates,
   readReconciliationBatchScope,
   readReconciliationHistory,
@@ -83,6 +84,7 @@ import type { DecimalInput } from "../lib/money.ts";
 import type { PortfolioAssetAdjustmentRow } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 import type { NexoProSpotReconciliationEvidence } from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
 import { firstNonZero } from "../lib/math.ts";
+import { normalizeIdentityText } from "./importIdentity.ts";
 
 /**
  * One reconciliation history event read by column name. Custody events
@@ -197,7 +199,21 @@ export interface ReconciliationPlanInput {
   priorProAccounts?: number[] | undefined;
   /** ledger evidence for rows another export or a manual entry records */
   crossFormat?: CrossFormatContext | undefined;
+  /** `format\0source id` of each imported history transaction that has one */
+  historySourceIds?: ReadonlyMap<number, string> | undefined;
+  /** the owner's answer for rows that resemble an existing transaction */
+  rowChoices?: RowChoice[] | undefined;
 }
+/**
+ * The owner's answer for one staged row that resembles an existing
+ * transaction no import can adopt: `keep_both` records it as a new
+ * transaction, `same_transaction` settles it as a duplicate of that one.
+ */
+export type RowChoice = {
+  batchId: number;
+  rowId: number;
+  choice: "keep_both" | "same_transaction";
+};
 /** A planned cash adoption: a funding correction or a manual cash twin. */
 export interface PlanCashAdoption {
   row: ReconciliationSourceRow;
@@ -214,6 +230,7 @@ export interface ReconciliationPlan {
   batchIds: number[];
   adoptPolicy: string | null;
   batchPolicies: BatchPolicy[];
+  rowChoices: RowChoice[];
   ready: boolean;
   actions: PlanAction[];
   blockers: PlanIssue[];
@@ -222,8 +239,11 @@ export interface ReconciliationPlan {
 export interface ReconciliationPlanResult {
   plan: ReconciliationPlan;
   adoptions: PlanAdoption[];
-  /** rows another export already records; commit settles them as duplicates */
-  crossFormatDuplicates: ReconciliationSourceRow[];
+  /**
+   * Rows another export already records, or that the owner named the same
+   * transaction as an existing one; commit settles them as duplicates.
+   */
+  settledDuplicates: ReconciliationSourceRow[];
   cashAdoptions: PlanCashAdoption[];
 }
 /** The batch selection and policies every locked plan read takes. */
@@ -231,6 +251,7 @@ export interface ReconciliationScopeOptions {
   batchIds: number[];
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[] | undefined;
+  rowChoices?: RowChoice[] | undefined;
 }
 /** A history event or proposed event replayed by the projected-history check. */
 type ProjectedHistoryEvent = NullablePartitionedTxn & {
@@ -566,6 +587,49 @@ function canonicalBatchPolicies(
   return canonical.sort((left, right) => left.batchId - right.batchId);
 }
 
+const ROW_CHOICES = new Set<unknown>(["keep_both", "same_transaction"]);
+
+/** One choice per staged row of the selected batches, sorted. */
+function canonicalRowChoices(
+  rowChoices: RowChoice[],
+  rows: readonly ReconciliationSourceRow[],
+): RowChoice[] {
+  const staged = new Set(
+    rows.map((row) => `${Number(row.batch_id)}:${Number(row.id)}`),
+  );
+  const seen = new Set<string>();
+  if (!Array.isArray(rowChoices))
+    throw new ValidationError("row_choices must be a list");
+  const canonical = rowChoices.map((item) => {
+    const key = `${item?.batchId}:${item?.rowId}`;
+    if (
+      item == null ||
+      !Number.isSafeInteger(item.batchId) ||
+      !Number.isSafeInteger(item.rowId) ||
+      !staged.has(key) ||
+      seen.has(key) ||
+      !ROW_CHOICES.has(item.choice)
+    )
+      throw new ValidationError(
+        "row_choices must name distinct staged rows of the selected batches with a supported choice",
+      );
+    seen.add(key);
+    return { batchId: item.batchId, rowId: item.rowId, choice: item.choice };
+  });
+  return canonical.sort((left, right) =>
+    firstNonZero(left.batchId - right.batchId, left.rowId - right.rowId),
+  );
+}
+
+/** The import format and normalized source id of a staged row, if it has one. */
+function stagedSourceId(row: ReconciliationSourceRow): string | undefined {
+  const format = formatOf(row) ?? row.adapter_name;
+  const id = normalizeIdentityText(row.source_transaction_id);
+  return typeof format === "string" && format && id
+    ? `${format}\u0000${id}`
+    : undefined;
+}
+
 /** Dividend rows that a zero-basis Kinesis yield gift already represents. */
 function inKindIncomeRows(
   rows: readonly ReconciliationSourceRow[],
@@ -591,6 +655,8 @@ export function buildPortfolioImportReconciliationPlan({
   batchPolicies = [],
   priorProAccounts = [],
   crossFormat = undefined,
+  historySourceIds = new Map(),
+  rowChoices = [],
 }: ReconciliationPlanInput): ReconciliationPlanResult {
   if (adoptPolicy !== undefined && !isPolicy(adoptPolicy))
     throw new ValidationError(
@@ -605,10 +671,40 @@ export function buildPortfolioImportReconciliationPlan({
   );
   const policyOf = (row: Pick<ReconciliationSourceRow, "batch_id">) =>
     overrides.get(Number(row.batch_id)) ?? adoptPolicy;
+  const canonicalChoices = canonicalRowChoices(rowChoices, rows);
+  const choices = new Map(
+    canonicalChoices.map((item) => [
+      `${item.batchId}:${item.rowId}`,
+      item.choice,
+    ]),
+  );
+  const choiceOf = (row: Pick<ReconciliationSourceRow, "batch_id" | "id">) =>
+    choices.get(`${Number(row.batch_id)}:${Number(row.id)}`);
+  /**
+   * An existing transaction may record the same event as the staged row only
+   * on the same account (or none yet, for a manual entry an import adopts),
+   * and never when both carry different source ids of the same export.
+   */
+  const mayRecordSameEvent = (
+    row: ReconciliationSourceRow,
+    current: HistoryImage,
+  ) => {
+    if (
+      current.account_id != null &&
+      Number(current.account_id) !== Number(row.account_id)
+    )
+      return false;
+    // Custody events number their own table; the ids name transactions.
+    const recorded = isOneOf(["asset_transfer", "asset_adjustment"], current.type)
+      ? undefined
+      : historySourceIds.get(Number(current.id));
+    const staged = stagedSourceId(row);
+    return !(recorded && staged && recorded !== staged);
+  };
   const actions: PlanAction[] = [];
   const blockers: PlanIssue[] = [];
   const adoptions: PlanAdoption[] = [];
-  const crossFormatDuplicates: ReconciliationSourceRow[] = [];
+  const settledDuplicates: ReconciliationSourceRow[] = [];
   const cashAdoptions: PlanCashAdoption[] = [];
   const prepared: PreparedRow[] = [];
   const crossFormatDecisions = crossFormat
@@ -723,7 +819,7 @@ export function buildPortfolioImportReconciliationPlan({
           // A near match the owner paired by choosing prefer_source.
           ...(decision.policy ? { policy: decision.policy } : {}),
         });
-        crossFormatDuplicates.push(row);
+        settledDuplicates.push(row);
       } else if (decision.kind === "duplicate") {
         actions.push({
           ...base,
@@ -731,7 +827,7 @@ export function buildPortfolioImportReconciliationPlan({
           existingTransactionId: decision.existingTransactionId,
           ...(decision.policy ? { policy: decision.policy } : {}),
         });
-        crossFormatDuplicates.push(row);
+        settledDuplicates.push(row);
       } else {
         const source = {
           date: row.tx_date,
@@ -799,8 +895,18 @@ export function buildPortfolioImportReconciliationPlan({
       continue;
     }
     if (row.route === "cash") {
+      const identity =
+        row.dedup_fingerprint &&
+        `${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`;
       if (row.account_id == null || row.amount == null)
         addBlocker(row, "incomplete_source");
+      // Commit settles a movement the cash ledger already holds as a duplicate.
+      else if (
+        identity &&
+        (crossFormat?.cashFingerprints.has(identity) ||
+          crossFormat?.correctedAliases.has(identity))
+      )
+        actions.push({ ...rowAction(row), action: "duplicate", cash: true });
       else actions.push({ ...rowAction(row), action: "cash" });
       continue;
     }
@@ -944,15 +1050,21 @@ export function buildPortfolioImportReconciliationPlan({
       row,
       source,
       proof,
-      candidates: history.filter((current) => {
-        const keptApart = crossFormatDecisions.get(Number(row.id));
-        return (
-          !(
-            keptApart?.kind === "kept_apart" &&
-            keptApart.transactionIds.includes(Number(current.id))
-          ) && nearbyCandidate(row, source, current, proof)
-        );
-      }),
+      // The owner said this row is a transaction of its own.
+      candidates:
+        choiceOf(row) === "keep_both"
+          ? []
+          : history.filter((current) => {
+              const keptApart = crossFormatDecisions.get(Number(row.id));
+              return (
+                !(
+                  keptApart?.kind === "kept_apart" &&
+                  keptApart.transactionIds.includes(Number(current.id))
+                ) &&
+                mayRecordSameEvent(row, current) &&
+                nearbyCandidate(row, source, current, proof)
+              );
+            }),
       baseAction,
       inKindIncome: income,
     });
@@ -965,10 +1077,12 @@ export function buildPortfolioImportReconciliationPlan({
   for (const { row, source, proof, candidates, baseAction, inKindIncome: income } of prepared) {
     const effectivePolicy = policyOf(row);
     if (candidates.length === 0) {
-      const datedProCandidates = proof
+      const datedProCandidates =
+        proof && choiceOf(row) !== "keep_both"
         ? history.filter(
             (current) =>
               Number(current.investment_id) === Number(row.investment_id) &&
+              mayRecordSameEvent(row, current) &&
               current.type === source.type &&
               dayDistance(current.date, source.date) > NEARBY_DAYS &&
               dayDistance(current.date, source.date) <= NEXO_PRO_DAYS &&
@@ -1010,7 +1124,19 @@ export function buildPortfolioImportReconciliationPlan({
       current.import_batch_id != null ||
       current.dedup_fingerprint != null
     ) {
-      addBlocker(row, "existing_assigned_or_imported_history", candidates);
+      // Another import or an account already owns it, so it cannot be
+      // adopted. Only the owner can say whether the row is that transaction
+      // (settled as its duplicate) or a separate one (`keep_both`, above).
+      if (choiceOf(row) === "same_transaction") {
+        actions.push({
+          ...baseAction,
+          action: "duplicate",
+          existingTransactionId: Number(current.id),
+          existing: publicValues(current),
+        });
+        settledDuplicates.push(row);
+      } else
+        addBlocker(row, "existing_assigned_or_imported_history", candidates);
       continue;
     }
     if (!row.dedup_fingerprint || row.dedup_fingerprint_version == null) {
@@ -1114,6 +1240,7 @@ export function buildPortfolioImportReconciliationPlan({
       batchIds: batches.map((batch) => Number(batch.id)),
       adoptPolicy: adoptPolicy ?? null,
       batchPolicies: canonicalPolicies,
+      rowChoices: canonicalChoices,
       ready: blockers.length === 0,
       actions,
       blockers,
@@ -1125,7 +1252,7 @@ export function buildPortfolioImportReconciliationPlan({
       ),
     },
     adoptions,
-    crossFormatDuplicates,
+    settledDuplicates,
     cashAdoptions,
   };
 }
@@ -1143,11 +1270,12 @@ function scopeIds(batchIds: unknown): number[] {
   return [...new Set(batchIds)].sort((left, right) => left - right);
 }
 
-async function loadPlan(
-  batchIds: number[],
-  adoptPolicy: string | undefined,
-  batchPolicies: BatchPolicy[] = [],
-) {
+async function loadPlan({
+  batchIds,
+  adoptPolicy,
+  batchPolicies = [],
+  rowChoices = [],
+}: ReconciliationScopeOptions) {
   const ids = scopeIds(batchIds);
   const [batches, rows] = await Promise.all([
     readReconciliationBatchScope(ids),
@@ -1175,6 +1303,22 @@ async function loadPlan(
   const history = await readReconciliationHistory([
     ...new Set(rows.map((row) => Number(row.investment_id)).filter(Boolean)),
   ]);
+  const historySourceIds = new Map(
+    (
+      await readHistorySourceIds(
+        history
+          .filter(
+            (current) =>
+              current.dedup_fingerprint != null &&
+              !isOneOf(["asset_transfer", "asset_adjustment"], current.type),
+          )
+          .map((current) => Number(current.id)),
+      )
+    ).map((source) => [
+      Number(source.id),
+      `${source.format}\u0000${normalizeIdentityText(source.source_transaction_id)}`,
+    ]),
+  );
   const accountIds = [
     ...new Set(
       batches.map((batch) => batch.account_id).filter((id) => id != null),
@@ -1222,6 +1366,8 @@ async function loadPlan(
       batchPolicies,
       priorProAccounts,
       crossFormat,
+      historySourceIds,
+      rowChoices,
     }),
     history,
     rows,
@@ -1232,9 +1378,15 @@ export async function previewPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
   batchPolicies = [],
+  rowChoices = [],
 }: ReconciliationScopeOptions): Promise<ReconciliationPlan> {
   return withTransaction(async () => {
-    const loaded = await loadPlan(batchIds, adoptPolicy, batchPolicies);
+    const loaded = await loadPlan({
+      batchIds,
+      adoptPolicy,
+      batchPolicies,
+      rowChoices,
+    });
     if (loaded.plan.ready) {
       try {
         assertProjectedHistory(
@@ -1345,9 +1497,10 @@ export async function applyPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
   batchPolicies = [],
+  rowChoices = [],
 }: ReconciliationScopeOptions) {
-  const { plan, adoptions, crossFormatDuplicates, cashAdoptions, history, rows } =
-    await loadPlan(batchIds, adoptPolicy, batchPolicies);
+  const { plan, adoptions, settledDuplicates, cashAdoptions, history, rows } =
+    await loadPlan({ batchIds, adoptPolicy, batchPolicies, rowChoices });
   if (!plan.ready)
     throw new ConflictError(
       "Import needs reconciliation before any history can be changed",
@@ -1382,19 +1535,22 @@ export async function applyPortfolioImportReconciliation({
       (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
     );
   }
-  const settledByBatch = new Map(adoptedByBatch);
-  const settle = async (row: ReconciliationSourceRow) => {
+  // Duplicates and adoptions are disjoint counts: an adopted row is reported
+  // once, as adopted, although its staging row is settled as a duplicate.
+  const settledByBatch = new Map<number, number>();
+  const settle = async (row: ReconciliationSourceRow, adopted = false) => {
     if (!(await markCrossFormatSourceDuplicate(row)))
       throw new ConflictError(
         "An import row changed during reconciliation",
         { details: { reason: "stale_existing_transaction" } },
       );
-    settledByBatch.set(
-      Number(row.batch_id),
-      (settledByBatch.get(Number(row.batch_id)) ?? 0) + 1,
-    );
+    if (!adopted)
+      settledByBatch.set(
+        Number(row.batch_id),
+        (settledByBatch.get(Number(row.batch_id)) ?? 0) + 1,
+      );
   };
-  for (const row of crossFormatDuplicates) await settle(row);
+  for (const row of settledDuplicates) await settle(row);
   for (const { row, decision } of cashAdoptions) {
     const [before] = await readIbkrCashImagesForUpdate([
       decision.transactionId,
@@ -1445,7 +1601,7 @@ export async function applyPortfolioImportReconciliation({
       },
       proof,
     });
-    await settle(row);
+    await settle(row, true);
     adoptedByBatch.set(
       Number(row.batch_id),
       (adoptedByBatch.get(Number(row.batch_id)) ?? 0) + 1,
@@ -1458,11 +1614,7 @@ export async function applyPortfolioImportReconciliation({
 export async function getPortfolioImportPlanAccountIds(
   options: ReconciliationScopeOptions,
 ): Promise<number[]> {
-  const { plan } = await loadPlan(
-    options.batchIds,
-    options.adoptPolicy,
-    options.batchPolicies,
-  );
+  const { plan } = await loadPlan(options);
   return plan.actions
     .flatMap((action) => [
       action.transfer?.sourceAccountId,

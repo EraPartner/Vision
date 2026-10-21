@@ -499,6 +499,16 @@ const batchPolicySchema = z.object({
     adoptPolicy: z.enum(["preserve_existing", "prefer_source"]),
 });
 export type PortfolioBatchPolicy = z.infer<typeof batchPolicySchema>;
+/**
+ * The owner's answer for a row that resembles a transaction the account
+ * already holds: record it as a new transaction, or settle it as that one.
+ */
+const rowChoiceSchema = z.object({
+    batchId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    rowId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    choice: z.enum(["keep_both", "same_transaction"]),
+});
+export type PortfolioRowChoice = z.infer<typeof rowChoiceSchema>;
 
 const portfolioBatchIdSchema = z
     .union([
@@ -609,6 +619,7 @@ const reconciliationPlanSchema = z.looseObject({
     batchIds: z.array(z.number().int().positive()),
     adoptPolicy: z.enum(["preserve_existing", "prefer_source"]).nullable(),
     batchPolicies: z.array(batchPolicySchema).max(100).default([]),
+    rowChoices: z.array(rowChoiceSchema).default([]),
     ready: z.boolean(),
     actions: z.array(
         z
@@ -709,9 +720,14 @@ export interface PortfolioReconciliationScope {
     batchIds: number[];
     adoptPolicy?: PortfolioReconciliationPolicy | undefined;
     batchPolicies?: PortfolioBatchPolicy[] | undefined;
+    rowChoices?: PortfolioRowChoice[] | undefined;
 }
 
 function reconciliationRequest(scope: PortfolioReconciliationScope) {
+    const rowChoices = z
+        .array(rowChoiceSchema)
+        .max(10000)
+        .parse(scope.rowChoices ?? []);
     const batchIds = z
         .array(positiveId)
         .min(1)
@@ -743,11 +759,29 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
                       })),
               }
             : {}),
+        ...(rowChoices.length > 0
+            ? {
+                  row_choices: rowChoices.map((item) => ({
+                      batch_id: item.batchId,
+                      row_id: item.rowId,
+                      choice: item.choice,
+                  })),
+              }
+            : {}),
     };
 }
 
 const sortedIds = (ids: readonly number[]) =>
     JSON.stringify([...ids].sort((a, b) => a - b));
+/** Row choices in the order the server echoes them. */
+const sortedChoices = (choices: readonly PortfolioRowChoice[]) =>
+    [...choices]
+        .sort((left, right) =>
+            left.batchId === right.batchId
+                ? left.rowId - right.rowId
+                : left.batchId - right.batchId,
+        )
+        .map(({ batchId, rowId, choice }) => ({ batchId, rowId, choice }));
 
 function unverifiedResponse(): Error {
     const error = new Error("Unverified portfolio import response");
@@ -776,6 +810,8 @@ export async function previewPortfolioImportReconciliation(
         ) ||
         JSON.stringify(parsed.data.batchPolicies) !==
             JSON.stringify(overrides) ||
+        JSON.stringify(parsed.data.rowChoices) !==
+            JSON.stringify(sortedChoices(scope.rowChoices ?? [])) ||
         parsed.data.adoptPolicy !== (scope.adoptPolicy ?? null) ||
         sortedIds(parsed.data.batchIds) !== sortedIds(scope.batchIds)
     )
@@ -794,9 +830,7 @@ export async function commitReviewedPortfolioImports(
     if (
         !parsed.success ||
         parsed.data.errors !== 0 ||
-        parsed.data.batches.some(
-            (batch) => batch.errors !== 0 || batch.duplicates < batch.adopted,
-        ) ||
+        parsed.data.batches.some((batch) => batch.errors !== 0) ||
         (["imported", "duplicates", "adopted"] as const).some(
             (field) =>
                 parsed.data[field] !==

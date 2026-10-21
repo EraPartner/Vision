@@ -454,13 +454,37 @@ describe("portfolio history adoption plan", () => {
 
   it("blocks existing assigned or stamped transactions instead of treating them as new", () => {
     expect(
-      plan([source()], [legacy({ account_id: 9 })], "preserve_existing").plan
+      plan([source()], [legacy({ account_id: 7 })], "preserve_existing").plan
         .blockers[0]!.reason,
     ).toBe("existing_assigned_or_imported_history");
     expect(
       plan([source()], [legacy({ import_batch_id: "8" })], "preserve_existing")
         .plan.blockers[0]!.reason,
     ).toBe("existing_assigned_or_imported_history");
+  });
+
+  it("never offers a transaction of another account as the row's copy", () => {
+    const result = plan([source()], [legacy({ account_id: 9 })]);
+    expect(result.plan.ready).toBe(true);
+    expect(result.plan.summary.insert).toBe(1);
+  });
+
+  it("lets the owner keep a similar row apart or name it the same transaction", () => {
+    const build = (choice: "keep_both" | "same_transaction") =>
+      buildPortfolioImportReconciliationPlan({
+        rows: loose<ReconciliationSourceRow[]>([source()]),
+        history: loose<HistoryImage[]>([legacy({ account_id: 7 })]),
+        batches: loose<ReconciliationBatchScopeRow[]>([
+          { id: 1, account_id: 7, status: "awaiting_review" },
+        ]),
+        rowChoices: [{ batchId: 1, rowId: 10, choice }],
+      });
+    const kept = build("keep_both");
+    expect(kept.plan).toMatchObject({ ready: true, summary: { insert: 1 } });
+    const same = build("same_transaction");
+    expect(same.plan).toMatchObject({ ready: true, summary: { insert: 0, duplicate: 1 } });
+    expect(same.settledDuplicates).toHaveLength(1);
+    expect(same.adoptions).toHaveLength(0);
   });
 
   it("recognizes a canonical immutable fingerprint as a no-op first", () => {

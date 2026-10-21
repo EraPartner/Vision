@@ -8,6 +8,7 @@ import {
   batchAccountIdRowSchema,
   bigintIdRowSchema,
   crossFormatLedgerSourceRowSchema,
+  historySourceIdRowSchema,
   ledgerFingerprintRowSchema,
   manualCashCandidateRowSchema,
   reconciliationAdjustmentRowSchema,
@@ -19,6 +20,7 @@ import {
 } from "../database/rows/portfolioImport.ts";
 import type {
   CrossFormatLedgerSourceRow,
+  HistorySourceIdRow,
   ManualCashCandidateRow,
   PortfolioTransactionSnapshot,
   ReconciliationBatchScopeRow,
@@ -348,6 +350,33 @@ export async function readReconciliationHistory(
       taxes: "0",
     })),
   ];
+}
+
+/**
+ * The immutable source id each imported transaction was recorded from: the
+ * settled staging row that carries its identity, with that batch's format.
+ * Transactions recorded without a source id are absent.
+ */
+export async function readHistorySourceIds(
+  transactionIds: readonly number[],
+): Promise<HistorySourceIdRow[]> {
+  if (transactionIds.length === 0) return [];
+  return checkedRows(
+    historySourceIdRowSchema,
+    sql`SELECT DISTINCT ON (pt.id) pt.id, s.source_transaction_id,
+        COALESCE(b.custom_config->>'format', b.adapter_name) AS format
+      FROM portfolio_transactions pt
+      JOIN portfolio_import_staging_rows s
+        ON s.dedup_fingerprint = pt.dedup_fingerprint
+       AND s.dedup_fingerprint_version = pt.dedup_fingerprint_version
+       AND s.status IN ('committed', 'duplicate')
+      JOIN portfolio_import_batches b ON b.id = s.batch_id
+     WHERE pt.id = ANY(${transactionIds}::integer[])
+       AND pt.dedup_fingerprint IS NOT NULL
+       AND NULLIF(btrim(s.source_transaction_id), '') IS NOT NULL
+       AND COALESCE(b.custom_config->>'format', b.adapter_name) IS NOT NULL
+     ORDER BY pt.id, s.id`,
+  );
 }
 
 export async function readReconciliationBatchScope(

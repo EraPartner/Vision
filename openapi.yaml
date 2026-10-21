@@ -7062,6 +7062,36 @@ components:
                 }
               adopt_policy:
                 { type: string, enum: [preserve_existing, prefer_source] }
+        row_choices:
+          type: array
+          maxItems: 10000
+          description: >-
+            The owner's answer for staged rows that resemble an existing
+            transaction on the same account (existing_assigned_or_imported_history
+            or ambiguous_history). keep_both records the row as a new
+            transaction; same_transaction settles it as a duplicate of its single
+            existing candidate. Each row may occur at most once; a row outside
+            the selected batches rejects with 400.
+          items:
+            type: object
+            additionalProperties: false
+            required: [batch_id, row_id, choice]
+            properties:
+              batch_id:
+                {
+                  type: integer,
+                  format: int64,
+                  minimum: 1,
+                  maximum: 9007199254740991,
+                }
+              row_id:
+                {
+                  type: integer,
+                  format: int64,
+                  minimum: 1,
+                  maximum: 9007199254740991,
+                }
+              choice: { type: string, enum: [keep_both, same_transaction] }
 
     PortfolioImportReconciliationCounts:
       type: object
@@ -7074,7 +7104,9 @@ components:
         duplicates:
           type: integer
           minimum: 0
-          description: Settled source rows, including adopted rows.
+          description: >-
+            Source rows settled as already recorded. Adopted rows are counted
+            only in adopted, so imported, duplicates and adopted are disjoint.
         adopted: { type: integer, minimum: 0 }
         errors: { type: integer, minimum: 0 }
 
@@ -7097,7 +7129,16 @@ components:
     PortfolioImportReconciliationPlan:
       type: object
       required:
-        [batchIds, adoptPolicy, batchPolicies, ready, actions, blockers, summary]
+        [
+          batchIds,
+          adoptPolicy,
+          batchPolicies,
+          rowChoices,
+          ready,
+          actions,
+          blockers,
+          summary,
+        ]
       properties:
         batchIds:
           type: array
@@ -7127,6 +7168,16 @@ components:
                 }
               adoptPolicy:
                 { type: string, enum: [preserve_existing, prefer_source] }
+        rowChoices:
+          type: array
+          description: The applied row_choices, sorted by batch and row.
+          items:
+            type: object
+            required: [batchId, rowId, choice]
+            properties:
+              batchId: { type: integer, format: int64, minimum: 1 }
+              rowId: { type: integer, format: int64, minimum: 1 }
+              choice: { type: string, enum: [keep_both, same_transaction] }
         ready: { type: boolean }
         actions:
           type: array
@@ -7143,6 +7194,8 @@ components:
             manual entry with the same signed amount and currency within seven
             days). A near match the owner paired by choosing prefer_source
             carries policy=prefer_source on its duplicate or duplicate_source.
+            A cash row whose identity the cash ledger already holds is a
+            duplicate with cash=true, as commit settles it.
           items:
             type: object
             additionalProperties: true
@@ -7189,7 +7242,10 @@ components:
             Saxo CSV and XLSX row without a booking record id on one side). The
             last two clear only on the selected statements' policy:
             prefer_source records the pair as one event and preserve_existing
-            keeps both. Nothing in a blocked plan is written.
+            keeps both. existing_assigned_or_imported_history (a same-size trade
+            within seven days that this account already holds, without a
+            differing source id of the same export) and ambiguous_history clear
+            on row_choices. Nothing in a blocked plan is written.
           items: { type: object, additionalProperties: true }
         summary:
           type: object

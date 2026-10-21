@@ -758,6 +758,16 @@ export const ledgerFingerprintRowSchema = z
   })
   .describe("ledger fingerprint row");
 
+/** The source id and format of the import that recorded a portfolio transaction. */
+export const historySourceIdRowSchema = z
+  .object({
+    id: pgInt,
+    source_transaction_id: z.string(),
+    format: z.string(),
+  })
+  .describe("history source id row");
+export type HistorySourceIdRow = z.output<typeof historySourceIdRowSchema>;
+
 // ---------------------------------------------------------------------------
 // Duplicate repair
 // ---------------------------------------------------------------------------

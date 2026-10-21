@@ -32,7 +32,10 @@ import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjus
 import { withPortfolioCustodyImportScope } from "./portfolio/portfolioCustodyImportScope.ts";
 import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 import type { PortfolioImportBatchLockRow } from "../repositories/portfolioImportBatchRepository.ts";
-import type { BatchPolicy } from "./portfolioImportReconciliationService.ts";
+import type {
+  BatchPolicy,
+  RowChoice,
+} from "./portfolioImportReconciliationService.ts";
 import type { AssetTransferEvent } from "./portfolio/portfolioAssetTransferService.ts";
 import type { AssetAdjustmentEvent } from "./portfolio/portfolioAssetAdjustmentService.ts";
 import { firstNonZero } from "../lib/math.ts";
@@ -72,6 +75,7 @@ async function commitLockedScope(
   batches: LockedBatch[],
   adoptPolicy: string | undefined,
   batchPolicies: BatchPolicy[] = [],
+  rowChoices: RowChoice[] = [],
 ) {
   const ids = batches.map((batch) => Number(batch.id));
   const sourceRows = await readReconciliationSources(ids);
@@ -79,6 +83,7 @@ async function commitLockedScope(
     batchIds: ids,
     adoptPolicy,
     batchPolicies,
+    rowChoices,
   });
   const accountIds = [
     ...new Set(
@@ -123,6 +128,7 @@ async function commitLockedScope(
       batchIds: ids,
       adoptPolicy,
       batchPolicies,
+      rowChoices,
     });
   } catch (error) {
     // An unready plan writes nothing. Report the source-level reason (an
@@ -229,10 +235,12 @@ export async function commitReviewedPortfolioImports({
   batchIds,
   adoptPolicy,
   batchPolicies = [],
+  rowChoices = [],
 }: {
   batchIds: number[];
   adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[] | undefined;
+  rowChoices?: RowChoice[] | undefined;
 }) {
   if (
     !Array.isArray(batchIds) ||
@@ -251,7 +259,7 @@ export async function commitReviewedPortfolioImports({
       assertReviewable(batch, batchId);
       batches.push({ ...batch, id: batchId });
     }
-    return commitLockedScope(batches, adoptPolicy, batchPolicies);
+    return commitLockedScope(batches, adoptPolicy, batchPolicies, rowChoices);
   }).then((result) => {
     invalidatePortfolioCaches();
     if (result.adopted > 0) {
@@ -291,8 +299,10 @@ export async function commitReviewedPortfolioImport({
         adoptPolicy,
       );
       // commitLockedScope reports one result per locked batch; one was passed.
-      const { imported, duplicates, errors } = result.batches[0]!;
-      return { imported, duplicates, errors };
+      // This response has no adoption count: an adopted row settles a source
+      // row, so it is reported among the duplicates here.
+      const { imported, duplicates, adopted, errors } = result.batches[0]!;
+      return { imported, duplicates: duplicates + adopted, errors };
     }
 
     await assertPortfolioImportReadiness({

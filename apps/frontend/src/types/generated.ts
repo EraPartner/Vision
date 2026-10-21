@@ -7586,11 +7586,20 @@ export interface components {
                 /** @enum {string} */
                 adopt_policy: "preserve_existing" | "prefer_source";
             }[];
+            /** @description The owner's answer for staged rows that resemble an existing transaction on the same account (existing_assigned_or_imported_history or ambiguous_history). keep_both records the row as a new transaction; same_transaction settles it as a duplicate of its single existing candidate. Each row may occur at most once; a row outside the selected batches rejects with 400. */
+            row_choices?: {
+                /** Format: int64 */
+                batch_id: number;
+                /** Format: int64 */
+                row_id: number;
+                /** @enum {string} */
+                choice: "keep_both" | "same_transaction";
+            }[];
         };
         PortfolioImportReconciliationCounts: {
             /** @description Newly recorded transactions, including in-kind income recorded with the included_in_units role. */
             imported: number;
-            /** @description Settled source rows, including adopted rows. */
+            /** @description Source rows settled as already recorded. Adopted rows are counted only in adopted, so imported, duplicates and adopted are disjoint. */
             duplicates: number;
             adopted: number;
             errors: number;
@@ -7611,8 +7620,17 @@ export interface components {
                 /** @enum {string} */
                 adoptPolicy: "preserve_existing" | "prefer_source";
             }[];
+            /** @description The applied row_choices, sorted by batch and row. */
+            rowChoices: {
+                /** Format: int64 */
+                batchId: number;
+                /** Format: int64 */
+                rowId: number;
+                /** @enum {string} */
+                choice: "keep_both" | "same_transaction";
+            }[];
             ready: boolean;
-            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. */
+            /** @description One reviewed outcome per selected staged row: insert, adopt, duplicate, duplicate_source, cash, transfer, adjustment, internal_annotation, settled, blocked or policy_required. In-kind income is an insert whose source carries income_recognition_role=included_in_units. Rows that another export of the same broker history records carry crossFormat=true: duplicate_source names the selected twin row, duplicate names the existing transaction, and an adopt with cash=true corrects or adopts an existing brokerage cash transaction (an IBKR CSV movement to the funding workbook's own currency, or a manual entry with the same signed amount and currency within seven days). A near match the owner paired by choosing prefer_source carries policy=prefer_source on its duplicate or duplicate_source. A cash row whose identity the cash ledger already holds is a duplicate with cash=true, as commit settles it. */
             actions: ({
                 /** Format: int64 */
                 batchId: number;
@@ -7639,7 +7657,7 @@ export interface components {
             } & {
                 [key: string]: unknown;
             })[];
-            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. Nothing in a blocked plan is written. */
+            /** @description Rows that cannot be imported yet, each with a reason. Cross-format reasons are cross_format_source_conflict (the other export or an edited ledger row disagrees), ambiguous_funding_history and ambiguous_cash_history (more than one candidate could be the same movement), funding_date_mismatch (an IBKR CSV deposit or withdrawal matches a funding workbook movement in type, account and value, but its date is up to ten days outside the request and completion window) and cross_format_identity_missing (an otherwise identical Saxo CSV and XLSX row without a booking record id on one side). The last two clear only on the selected statements' policy: prefer_source records the pair as one event and preserve_existing keeps both. existing_assigned_or_imported_history (a same-size trade within seven days that this account already holds, without a differing source id of the same export) and ambiguous_history clear on row_choices. Nothing in a blocked plan is written. */
             blockers: {
                 [key: string]: unknown;
             }[];
