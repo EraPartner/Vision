@@ -458,7 +458,7 @@ The baseline liquid-glass aesthetic (ADR-017) was further tuned in the Tailwind 
 
 **Tailwind v4 Updates (May 2026):**
 
-- **PostCSS Config** — Simplified to `{ '@tailwindcss/postcss': {}, autoprefixer: {} }`
+- **PostCSS Config** — Simplified to `{ '@tailwindcss/postcss': {} }`
 - **CSS Entry Point** — Uses `@import "tailwindcss"` + `@config` directives (replaces v3's `@tailwind base/components/utilities`)
 - **@apply Restrictions** — Custom `.glass*` aliases now declare full CSS rules; v4 restricts @apply to registered utilities only
 - **Font Optimization** — Static weights replace variable fonts for reduced payload

@@ -160,9 +160,9 @@ jobs:
           elif [ -z "$from" ] || [ "$from" = "0000000000000000000000000000000000000000" ] \
              || ! git cat-file -e "$from^{commit}" 2>/dev/null; then
             echo "Commit range base is not resolvable; linting the event head commit without ignore rules."
-            git log -1 --format=%B "$to" | bun x commitlint --config config/commitlint.config.mjs
+            git log -1 --format=%B "$to" | bun scripts/commitlint.ts
           else
-            bun x commitlint --from "$from" --to "$to" --config config/commitlint.config.mjs
+            bun scripts/commitlint.ts --from "$from" --to "$to"
           fi
 
       # Branch protection — auto-merge lands a PR as soon as the *required*

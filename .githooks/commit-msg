@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 #
 # Vision commit-msg -- enforce Conventional Commits. .github/CONTRIBUTING.md documents the
-# policy ("type(scope): subject"); this hook makes it real. Runs commitlint with
-# @commitlint/config-conventional (config: config/commitlint.config.mjs).
+# policy ("type(scope): subject"); this hook makes it real. Runs
+# scripts/commitlint.ts, the in-repo copy of config-conventional's rules (ADR-245).
 #
 # Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.ts)
 # Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
@@ -17,13 +17,12 @@ if [ "${SKIP_HOOKS:-}" = "1" ]; then
 fi
 
 REPO_ROOT=$(git rev-parse --show-toplevel) || exit 0
-CL="$REPO_ROOT/node_modules/.bin/commitlint"
 
-# Skip (don't fail) if deps aren't installed yet -- mirrors how pre-commit treats
-# a missing gitleaks/eslint, so a fresh clone can still commit before 'bun install'.
-if [ ! -x "$CL" ]; then
-  echo "[commit-msg] commitlint not installed (run 'bun install') -- skipping commit-message lint."
+# Skip (don't fail) without Bun -- mirrors how pre-commit treats a missing
+# gitleaks/eslint, so a fresh clone can still commit before installing Bun.
+if ! command -v bun >/dev/null 2>&1; then
+  echo "[commit-msg] bun not found -- skipping commit-message lint."
   exit 0
 fi
 
-"$CL" --config "$REPO_ROOT/config/commitlint.config.mjs" --edit "$1"
+bun "$REPO_ROOT/scripts/commitlint.ts" --edit "$1"

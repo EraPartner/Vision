@@ -622,7 +622,6 @@ Upgraded to Tailwind CSS v4 (4.2.4) with unified build system:
 module.exports = {
   plugins: {
     "@tailwindcss/postcss": {},
-    autoprefixer: {},
   },
 };
 ```

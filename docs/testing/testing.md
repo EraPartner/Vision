@@ -2,8 +2,8 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-22
+updated: 2026-10-22
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -1436,9 +1436,6 @@ bun vitest run --reporter=verbose
 
 # Run only failed tests
 bun vitest run --reporter=basic --only --update
-
-# Debug with browser (if UI tests)
-bun vitest --ui
 ```
 
 ## Non-analysis queue acceptance

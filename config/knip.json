@@ -28,12 +28,7 @@
       ],
       "ignoreDependencies": [
         "prettier"
-      ],
-      "commitlint": {
-        "config": [
-          "config/commitlint.config.mjs"
-        ]
-      }
+      ]
     },
     "apps/frontend": {
       "entry": [
