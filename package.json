@@ -10,7 +10,7 @@
     "packages/*"
   ],
   "scripts": {
-    "prepare": "bun scripts/setup-git-hooks.ts && sh -c 'if [ -n \"$CI\" ]; then echo \"[prepare] CI -- skipping packaging/electron install (workflows install it explicitly).\"; elif [ ! -d packaging/electron ]; then echo \"[prepare] no packaging/electron directory -- skipping (container build context or partial checkout).\"; elif command -v bun >/dev/null 2>&1; then echo \"[prepare] installing packaging/electron deps (needed by the backend backup tests)...\"; bun install --frozen-lockfile --cwd packaging/electron; else echo \"[prepare] bun not found -- skipping. Backend backup tests will fail until you run: bun install --frozen-lockfile --cwd packaging/electron\"; fi'",
+    "prepare": "bun scripts/setup-git-hooks.ts && sh -c 'if [ -n \"$CI\" ]; then echo \"[prepare] CI -- skipping packaging/electron install (workflows install it explicitly).\"; elif [ ! -d packaging/electron ]; then echo \"[prepare] no packaging/electron directory -- skipping (container build context or partial checkout).\"; elif command -v bun >/dev/null 2>&1; then echo \"[prepare] installing packaging/electron deps (needed by the backend backup tests)...\"; bun install --frozen-lockfile --cwd packaging/electron; else echo \"[prepare] bun not found -- skipping. Backend backup tests will fail until you run: bun install --cwd packaging/electron\"; fi'",
     "hooks:setup": "bun scripts/setup-git-hooks.ts",
     "install:electron": "bun install --frozen-lockfile --cwd packaging/electron",
     "dev": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-development.js",

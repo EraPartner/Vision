@@ -2,7 +2,7 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-21
+date: 2026-10-22
 updated: 2026-10-21
 last_modified: 2026-10-21
 tags:
@@ -145,9 +145,11 @@ transaction-history adapters. Raw rows from every path are stored in `portfolio_
 The portfolio upload boundary accepts files up to 50 MiB and inspects their bytes rather than
 Multer's extension-free temporary filename. Detailed Saxo XLSX and the IBKR funding workbook are
 supported only with their maintained formats. Workbook structure and accounting detail are
-checked before creating a batch. The backend keeps two workbook readers: `read-excel-file` for
-Saxo XLSX, whose literal cell envelope is stored in `raw_data`, and SheetJS `xlsx` for the IBKR
-funding workbook, because only SheetJS reads the legacy BIFF `.xls` that IBKR exports.
+checked before creating a batch. The backend keeps two workbook readers: the in-repo
+`@vision/shared-utils/xlsx` reader for Saxo XLSX (ADR-245; it replaced `read-excel-file` with the
+same cell rules and keeps numeric XML text verbatim), whose literal cell envelope is stored in
+`raw_data`, and SheetJS `xlsx` for the IBKR funding workbook, because only SheetJS reads the
+legacy BIFF `.xls` that IBKR exports. The browser's import detection uses the same in-repo reader.
 
 Workbook ZIP input is limited to 1,000 entries, 100 MiB of expanded content, and 500,000 parsed
 cells. Duplicate or encrypted entries, unsupported archive layouts, invalid expansion sizes, and

@@ -5,7 +5,7 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import multer from "multer";
-import readExcelFile from "read-excel-file/node";
+import { readXlsxWorkbook } from "@vision/shared-utils/xlsx";
 import * as XLSX from "xlsx";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { csvUploadErrorTranslator } from "./csvUpload.ts";
@@ -231,7 +231,7 @@ export async function readPortfolioWorkbook(
   assertBoundedWorkbook(bytes);
   let sheets;
   try {
-    sheets = await readExcelFile(bytes, {
+    sheets = await readXlsxWorkbook(bytes, {
       trim: false,
       parseNumber: (raw): WorkbookNumber => ({ type: "number", raw }),
     });
@@ -249,12 +249,7 @@ export async function readPortfolioWorkbook(
   );
   if (cellCount > MAX_WORKBOOK_CELLS)
     throw new ValidationError("XLSX workbook contains too many cells");
-  // read-excel-file types date cells as `typeof Date`; at runtime they are
-  // Date instances, which is what WorkbookCell declares.
-  return sheets.map((sheet) => ({
-    ...sheet,
-    sourceFileHash,
-  })) as PortfolioWorkbookSheet[];
+  return sheets.map((sheet) => ({ ...sheet, sourceFileHash }));
 }
 
 /**

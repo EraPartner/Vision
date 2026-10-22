@@ -90,9 +90,8 @@ export async function detectPortfolioImportFile(
             workbook.SheetNames.some((name) => IBKR_FUNDING_SHEETS.has(name))
         )
             return undefined;
-        const { default: readExcelFile } =
-            await import("read-excel-file/browser");
-        const sheets = await readExcelFile(bytes, {
+        const { readXlsxWorkbook } = await import("@vision/shared-utils/xlsx");
+        const sheets = await readXlsxWorkbook(new Uint8Array(bytes), {
             parseNumber: (value) => value,
         });
         const matches = sheets

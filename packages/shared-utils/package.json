@@ -18,7 +18,8 @@
     "./csv-separator": "./src/csvSeparator.ts",
     "./analysis/*": "./src/analysis/*.ts",
     "./research/*": "./src/research/*.ts",
-    "./ai-chat/*": "./src/ai-chat/*.ts"
+    "./ai-chat/*": "./src/ai-chat/*.ts",
+    "./xlsx": "./src/xlsx/workbook.ts"
   },
   "scripts": {
     "test": "vitest run"
