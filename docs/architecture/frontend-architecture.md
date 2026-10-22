@@ -132,7 +132,7 @@ single subsystem rather than serving as a general application hook.
 - **Design System**: Liquid-glass aesthetic (emerald + champagne-gold palette)
 - **Typography**: Fraunces (display) + Inter (body) via `@fontsource` static weights (400/500/600)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
-- **Charts**: visx + d3 (primary); Recharts 3.8.1 (active — used in AI chat tool result visualizations)
+- **Charts**: visx + d3 primitives in `apps/frontend/src/components/charts/` (AI chat tool results use them too since ADR-245)
 - **Notifications**: Sonner 2.0.7 (improved toast API and accessibility)
 - **State Management**: React Query (server state) + Zustand (client state) + React Context (hydration/persistence)
 - **Routing**: React Router v7

@@ -90,7 +90,7 @@ const sampled = downsampleLTTB(
 - **Time-series charts** with more than ~500 data points
 - **Net Worth daily snapshots** spanning multiple years
 - **Performance charts** with day-level granularity
-- **Any Recharts/Recharts-based visualization** where point count exceeds pixel width
+- **Any chart** where point count exceeds pixel width
 - **Backend responses** to reduce API payload before transmission (e.g., `/api/info/portfolio-performance`)
 
 ## Backend Usage (historical — removed)

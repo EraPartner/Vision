@@ -228,7 +228,7 @@ Frontend Dependencies:
 ├── Radix UI (accessible primitives)
 ├── React Router (navigation)
 ├── React Query (server state)
-├── Recharts (charting)
+├── visx + d3 (charting)
 └── Sonner (notifications)
 
 Backend Dependencies:

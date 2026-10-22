@@ -453,7 +453,7 @@ The baseline liquid-glass aesthetic (ADR-017) was further tuned in the Tailwind 
 - **Typography**: Fraunces (display, serif) + Inter (body, geometric sans-serif) — static weights (400/500/600) via `@fontsource`
 - **Material System**: Five-tier glass hierarchy + premium surface utilities (see ADR-070 for current blur tiers)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
-- **Charts**: visx + d3 primitives (primary); Recharts 3.8.1 (retained for compatibility, inactive)
+- **Charts**: visx + d3 primitives (Recharts removed, ADR-245)
 - **CSS Architecture**: Tailwind CSS v4 (4.2.4) with unified `@tailwindcss/postcss` plugin
 
 **Tailwind v4 Updates (May 2026):**
