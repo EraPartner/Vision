@@ -2,7 +2,7 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-10-19
+date: 2026-10-22
 updated: 2026-10-19
 last_modified: 2026-10-19
 tags:
@@ -508,7 +508,7 @@ are protected by the shared five-minute statistics cache. The current scale boun
 
 ### New Tab: Flow (Sankey Diagram)
 
-A fourth tab showing income allocation flow to spending categories via d3-sankey visualization:
+A fourth tab showing income allocation flow to spending categories via a Sankey visualization:
 
 - **Year selector**: Choose which year to analyze. Defaults to current year via `useMemo(() => new Date().getFullYear(), [])` to handle year-boundary transitions for long-lived sessions without stale-state bugs.
 - **ExclusionToggle**: Per-graph toggle to show/hide category and recipient exclusion filters

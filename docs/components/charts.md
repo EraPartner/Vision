@@ -2,7 +2,7 @@
 title: Chart Primitives
 type: component
 status: active
-date: 2026-10-19
+date: 2026-10-22
 updated: 2026-10-19
 tags: [components, charts, visx, d3, visualization, phase-9, phase-h, accessibility, aria-label, screen-reader, i18n, localization, premium-v3, chart-scrub, chart-sync, chart-skeleton, sweep-reveal, sparkline-scrub, keyboard-navigation, june-2026]
 description: Low-level chart primitives built on visx + d3, replacing Recharts with design-token-aware styling. 2026-05-29: chartAria.ts generators now accept t()/kindKey for fully localized chart screen-reader summaries across all 7 chart types and both supported languages. June 2026 Premium v3 (ADR-071): scrubbable prop + useChartScrub (scrub-to-compare), syncId prop + ChartSyncContext (synced crosshairs), sweep reveal on AreaChart, ChartSkeleton ghost waveform. V9: Sparkline activeIndex prop (hairline + dot indicator for stat-card scrub). 2026-08-27: keyboardNav.ts provides shared keyboard access to per-point values across all interactive visx primitives and the NetSummaryCard sparkline scrub. 2026-08-23: ChartPeriodSelector uses native toggle-button semantics with aria-pressed instead of incomplete ARIA tab semantics.
@@ -56,7 +56,7 @@ See [[docs/adr/018-visx-d3-chart-migration|ADR-018: visx/d3 Chart Migration]] fo
 | `Sparkline`        | Mini inline sparkline with optional hover indicator | Micro-charts in stat cards or tables                             | StatCard, NetSummaryCard scrub surface, performance tables      |
 | `ComposedChart`    | Mixed line/area/bar/candlestick series              | Research chart builder                                           | ChartBuilderPage                                                |
 | `TreemapChart`     | Hierarchical rectangles                             | Category spending breakdown                                      | StatisticsPage                                                  |
-| `SankeyChart`      | Flow diagram with d3-sankey                         | Income-to-category allocation                                    | StatisticsPage Flow tab                                         |
+| `SankeyChart`      | Flow diagram (in-repo Sankey layout)                | Income-to-category allocation                                    | StatisticsPage Flow tab                                         |
 
 ### Shared Components
 
@@ -420,7 +420,7 @@ Mobile breakpoints automatically adjust:
 - **375px–768px**: Standard margins, standard fonts
 - **768px+**: Enhanced margins, larger fonts, multi-column legend
 
-## SankeyChart (d3-sankey)
+## SankeyChart
 
 **Purpose:** Directed flow diagram showing income allocation to spending categories.
 
@@ -428,12 +428,12 @@ Mobile breakpoints automatically adjust:
 
 **Implementation:**
 
-- Uses `d3-sankey` library for layout computation
+- Uses `sankeyLayout.ts`, an in-repo port of d3-sankey 0.12.3 (ADR-245) for layout computation
 - SVG rendering with curved links, rectangular nodes, and text labels
-- Deep-clones input data (d3-sankey mutates nodes/links in-place)
+- The layout copies its input; query data is never mutated
 - Interactive hover with opacity-based highlighting
 
-**Critical Detail:** Node IDs must be **strings** (not integers) for d3-sankey's `nodeId` accessor to resolve link source/target. Passing integers causes silent layout failure (graph = null).
+**Critical Detail:** links reference nodes by string `id`. An unknown id throws `missing: <id>`, which the chart catches (graph = null).
 
 **Example:**
 

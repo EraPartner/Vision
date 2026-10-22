@@ -2,7 +2,7 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 last_modified: 2026-10-20
 recipient_pivot_added: 2026-04-28
@@ -888,7 +888,7 @@ See [[docs/features/cash-flow-forecast|Cash Flow Forecast Feature]] — Phase H 
 
 ### Sankey Flow (Phase 7)
 
-Balanced income/funding-gap-to-spending flow graph for d3-sankey visualization with support for category/recipient exclusions.
+Balanced income/funding-gap-to-spending flow graph for the Sankey visualization with support for category/recipient exclusions.
 
 **Path:** `GET /api/aggregations/sankey`
 

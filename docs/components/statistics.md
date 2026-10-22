@@ -2,7 +2,7 @@
 title: Statistics Components
 type: component
 status: active
-date: 2026-10-06
+date: 2026-10-22
 updated: 2026-10-06
 tags:
   [
@@ -589,14 +589,14 @@ interface SankeyFlowData {
 
 **Implementation:**
 
-- Uses `d3-sankey` library for layout computation
+- Uses `sankeyLayout.ts`, an in-repo port of d3-sankey 0.12.3 (ADR-245) for layout computation
 - SVG-rendered with:
-  - `<path>` elements for curved links (via `sankeyLinkHorizontal`)
+  - `<path>` elements for curved links (via `sankeyLinkPath`)
   - `<rect>` elements for nodes with rounded corners
   - Automatic text label positioning (left/right based on node x-position)
   - Value tooltip on node hover
-- Deep-clones data before layout because d3-sankey mutates node/link objects in-place
-- **Critical:** Node IDs must be **strings** (not integers) for d3-sankey's `nodeId` accessor to properly resolve link source/target references. Integer indices cause silent layout failures.
+- The layout copies its input, so the query data is never mutated
+- **Critical:** links reference nodes by their string `id`. An unknown id throws `missing: <id>`, which the chart catches and renders nothing.
 
 **Features:**
 
