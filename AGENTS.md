@@ -40,7 +40,7 @@ and convention. Treat docs as intent and code as current behavior; resolve confl
 ## Commands
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run dev
 bun run build
 bun run lint                  # frontend ESLint + lint:deps (import boundaries) + lint:dead (knip)

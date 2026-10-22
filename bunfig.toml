@@ -1,0 +1,5 @@
+# Supply-chain policy (ADR-245). Every `bun add` / `bun update` / unlocked
+# `bun install` resolves only versions published at least 7 days ago, matching
+# the Dependabot cooldown. Installs from the committed lockfile are unaffected.
+[install]
+minimumReleaseAge = 604800

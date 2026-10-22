@@ -1,5 +1,10 @@
 #!/usr/bin/env bun
-/** Fail closed on mutable Actions or checkout credentials in trusted workflows. */
+/**
+ * Fail closed on mutable Actions or checkout credentials in trusted workflows,
+ * and on dependency-install policy drift (ADR-245): no dependency lifecycle
+ * scripts, a 7-day minimum release age, and lockfiles that resolve only from
+ * the npm registry or the one pinned SheetJS tarball.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
@@ -91,10 +96,105 @@ export function discoverActions(root: string): string[] {
   return [...listYaml(path.join(root, ".github/workflows")), ...actions].sort();
 }
 
+/** Package roots with their own lockfile; each needs the same install policy. */
+export const PACKAGE_ROOTS = [".", "packaging/electron"] as const;
+export const MIN_RELEASE_AGE_SECONDS = 7 * 24 * 60 * 60;
+/** Non-registry tarballs that may appear in a lockfile (SheetJS is not on npm). */
+export const ALLOWED_TARBALLS = [
+  "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+] as const;
+
+/** bun.lock is JSON with trailing commas. */
+function parseBunLock(text: string): unknown {
+  return JSON.parse(text.replace(/,(\s*[}\]])/g, "$1"));
+}
+
+export function checkLockfile(text: string, name: string): string[] {
+  const errors: string[] = [];
+  let lock: unknown;
+  try {
+    lock = parseBunLock(text);
+  } catch {
+    return [`${name}: lockfile could not be parsed`];
+  }
+  const packages =
+    typeof lock === "object" && lock !== null && "packages" in lock
+      ? (lock as { packages: unknown }).packages
+      : undefined;
+  if (typeof packages !== "object" || packages === null)
+    return [`${name}: lockfile has no packages table`];
+  for (const [key, entry] of Object.entries(packages)) {
+    if (!Array.isArray(entry) || typeof entry[0] !== "string") {
+      errors.push(`${name}: ${key}: unrecognised lockfile entry`);
+      continue;
+    }
+    const id = entry[0];
+    const at = id.indexOf("@", 1);
+    const source = at === -1 ? "" : id.slice(at + 1);
+    if (source.startsWith("workspace:")) continue;
+    if ((ALLOWED_TARBALLS as readonly string[]).includes(source)) continue;
+    // Registry entries are ["name@<semver>", "", meta, integrity]; the empty
+    // second slot means the default npm registry.
+    const registry = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(source);
+    if (!registry || entry[1] !== "" || typeof entry[3] !== "string") {
+      errors.push(
+        `${name}: ${key}: resolves outside the npm registry (${source || "no version"})`,
+      );
+    } else if (!entry[3].startsWith("sha512-")) {
+      errors.push(`${name}: ${key}: missing sha512 integrity`);
+    }
+  }
+  return errors;
+}
+
+export function checkInstallPolicy(
+  manifest: string,
+  bunfig: string | undefined,
+  name: string,
+): string[] {
+  const errors: string[] = [];
+  const parsed = JSON.parse(manifest) as { trustedDependencies?: unknown };
+  if (
+    !Array.isArray(parsed.trustedDependencies) ||
+    parsed.trustedDependencies.length !== 0
+  ) {
+    errors.push(
+      `${name}/package.json: trustedDependencies must be [] so no dependency install script runs`,
+    );
+  }
+  const age = /^\s*minimumReleaseAge\s*=\s*(\d+)\s*(?:#.*)?$/m.exec(
+    bunfig ?? "",
+  )?.[1];
+  if (age === undefined || Number(age) < MIN_RELEASE_AGE_SECONDS) {
+    errors.push(
+      `${name}/bunfig.toml: [install] minimumReleaseAge must be at least ${MIN_RELEASE_AGE_SECONDS}`,
+    );
+  }
+  return errors;
+}
+
+export function checkDependencyPolicy(root: string): string[] {
+  return PACKAGE_ROOTS.flatMap((dir) => {
+    const read = (file: string) => {
+      const target = path.join(root, dir, file);
+      return fs.existsSync(target) ? fs.readFileSync(target, "utf8") : undefined;
+    };
+    const manifest = read("package.json");
+    const lock = read("bun.lock");
+    if (manifest === undefined || lock === undefined)
+      return [`${dir}: package.json and bun.lock are required`];
+    return [
+      ...checkInstallPolicy(manifest, read("bunfig.toml"), dir),
+      ...checkLockfile(lock, path.join(dir, "bun.lock")),
+    ];
+  });
+}
+
 export function checkRepository(root: string): string[] {
   const errors = discoverActions(root).flatMap((file) =>
     checkWorkflow(fs.readFileSync(file, "utf8"), path.relative(root, file)),
   );
+  errors.push(...checkDependencyPolicy(root));
   const setup = fs.readFileSync(
     path.join(root, ".github/actions/setup/action.yml"),
     "utf8",
@@ -122,5 +222,5 @@ if (isEntrypoint(import.meta)) {
     console.error(errors.join("\n"));
     process.exit(1);
   }
-  console.log("Trusted workflow admission OK");
+  console.log("Trusted workflow and dependency install policy OK");
 }

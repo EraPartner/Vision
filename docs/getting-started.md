@@ -122,7 +122,7 @@ When creating new docs, use the templates:
 ### Build Commands
 
 ```bash
-bun install           # Install dependencies
+bun install --frozen-lockfile   # Install dependencies from the lockfile
 bun run native:prepare # Prepare the native runtime payload
 bun run dev           # Start private PostgreSQL, backend and Vite
 bun run build         # Production build

@@ -9,7 +9,7 @@
         "yauzl": "^3.4.0",
       },
       "devDependencies": {
-        "electron": "^44.4.1",
+        "electron": "44.9.0",
         "electron-builder": "^26.0.0",
       },
     },

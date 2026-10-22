@@ -38,7 +38,7 @@ sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 ```bash
 git clone <repository-url>
 cd Vision
-bun install
+bun install --frozen-lockfile
 bun run install:electron
 ```
 
