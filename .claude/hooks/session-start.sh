@@ -15,7 +15,7 @@ cd "$CLAUDE_PROJECT_DIR"
 # Idempotent: a no-op install takes well under a second. The root `prepare`
 # script also installs packaging/electron dependencies. Its output goes to
 # stderr because SessionStart stdout is added to Claude's context.
-bun install 1>&2
+bun install --frozen-lockfile 1>&2
 
 cache=node_modules/.cache/claude-edit-check
 mkdir -p "$cache"

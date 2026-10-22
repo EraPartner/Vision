@@ -17,7 +17,7 @@ import {
     type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@/stores/createStore";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { scheduleTaxPersistence } from "@/stores/taxPersistence";
 import type { BelgianTaxSlice } from "@/stores/belgianTaxStore";

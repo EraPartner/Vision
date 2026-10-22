@@ -2,7 +2,7 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 tags:
   [
@@ -228,7 +228,7 @@ Frontend Dependencies:
 ├── Radix UI (accessible primitives)
 ├── React Router (navigation)
 ├── React Query (server state)
-├── Recharts (charting)
+├── visx + d3 (charting)
 └── Sonner (notifications)
 
 Backend Dependencies:

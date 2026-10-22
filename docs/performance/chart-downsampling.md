@@ -2,7 +2,7 @@
 title: Performance - Chart Data Downsampling
 type: performance
 status: removed
-date: 2026-04-16
+date: 2026-10-22
 tags: [performance, charts, downsampling, lttb, optimization, historical]
 description: LTTB downsampling algorithm for large time-series chart data (removed 2026-07)
 aliases: [lttb, largest-triangle-three-buckets, downsampling, data reduction, chart optimization]
@@ -90,7 +90,7 @@ const sampled = downsampleLTTB(
 - **Time-series charts** with more than ~500 data points
 - **Net Worth daily snapshots** spanning multiple years
 - **Performance charts** with day-level granularity
-- **Any Recharts/Recharts-based visualization** where point count exceeds pixel width
+- **Any chart** where point count exceeds pixel width
 - **Backend responses** to reduce API payload before transmission (e.g., `/api/info/portfolio-performance`)
 
 ## Backend Usage (historical — removed)

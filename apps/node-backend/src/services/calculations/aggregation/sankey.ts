@@ -2,7 +2,7 @@
  * Sankey flow diagram aggregation.
  *
  * Builds a directed graph of money flow from income sources to spending
- * categories for a given year. The frontend (d3-sankey) computes the
+ * categories for a given year. The frontend (sankeyLayout.ts) computes the
  * visual layout client-side — this service returns only the raw graph.
  *
  * Graph shape:
@@ -148,7 +148,7 @@ export async function computeSankeyFlow({
   }
 
   // Reconcile the wire graph in integer cents. Rounding nodes and links
-  // independently can make d3-sankey recompute a different node thickness
+  // independently can make the Sankey layout recompute a different node thickness
   // (for example three 0.335 category totals). One cent representation keeps
   // every internal node exactly flow-conserving.
   const categoriesInCents = sortedCategories

@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, type VariantProps } from "@/lib/classNames";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RollingNumber } from "@/components/shared/RollingNumber";

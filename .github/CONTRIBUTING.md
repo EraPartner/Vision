@@ -7,7 +7,7 @@ in the knowledge base** at [`docs/guides/contributing.md`](docs/guides/contribut
 ## Quick start
 
 ```bash
-bun install            # install workspace dependencies
+bun install --frozen-lockfile   # install workspace dependencies from the lockfile
 bun run dev            # backend + frontend
 bun run test           # backend tests (vitest)
 bun run lint           # ESLint (frontend)

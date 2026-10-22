@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { Link, type LinkProps } from "react-router";
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, type VariantProps } from "@/lib/classNames";
 import { cn } from "@/lib/utils";
 
 const textLinkVariants = cva(

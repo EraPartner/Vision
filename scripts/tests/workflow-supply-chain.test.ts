@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
+  checkInstallPolicy,
+  checkLockfile,
   checkRepository,
   checkWorkflow,
   discoverActions,
@@ -69,5 +71,64 @@ test("the repository's own workflows satisfy the policy", () => {
   assert.deepEqual(
     checkRepository(path.join(import.meta.dirname, "..", "..")),
     [],
+  );
+});
+
+const integrity = `sha512-${"A".repeat(86)}==`;
+const lock = (packages: string) =>
+  `{\n  "lockfileVersion": 1,\n  "packages": {\n${packages}\n  },\n}\n`;
+
+test("registry, workspace and allowlisted tarball entries pass", () => {
+  const text = lock(
+    `    "zod": ["zod@4.6.7", "", {}, "${integrity}"],\n` +
+      `    "@vision/types": ["@vision/types@workspace:packages/types"],\n` +
+      `    "xlsx": ["xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz", {}, "${integrity}"],`,
+  );
+  assert.deepEqual(checkLockfile(text, "bun.lock"), []);
+});
+
+test("git, other tarball and custom-registry entries fail", () => {
+  const text = lock(
+    `    "a": ["a@github:evil/a#abc", {}, "${integrity}"],\n` +
+      `    "b": ["b@https://example.com/b.tgz", {}, "${integrity}"],\n` +
+      `    "c": ["c@1.0.0", "https://registry.example.com/", {}, "${integrity}"],`,
+  );
+  const errors = checkLockfile(text, "bun.lock");
+  assert.equal(errors.length, 3);
+  assert.match(errors.join(" "), /outside the npm registry/);
+});
+
+test("a registry entry without sha512 integrity fails", () => {
+  const text = lock(`    "zod": ["zod@4.6.7", "", {}, "sha1-abc"],`);
+  assert.match(checkLockfile(text, "bun.lock").join(" "), /sha512/);
+});
+
+test("install policy needs empty trustedDependencies and a 7-day release age", () => {
+  const bunfig = "[install]\nminimumReleaseAge = 604800\n";
+  assert.deepEqual(
+    checkInstallPolicy('{"trustedDependencies": []}', bunfig, "."),
+    [],
+  );
+  assert.match(
+    checkInstallPolicy("{}", bunfig, ".").join(" "),
+    /trustedDependencies/,
+  );
+  assert.match(
+    checkInstallPolicy('{"trustedDependencies": ["esbuild"]}', bunfig, ".").join(
+      " ",
+    ),
+    /trustedDependencies/,
+  );
+  assert.match(
+    checkInstallPolicy(
+      '{"trustedDependencies": []}',
+      "[install]\nminimumReleaseAge = 3600\n",
+      ".",
+    ).join(" "),
+    /minimumReleaseAge/,
+  );
+  assert.match(
+    checkInstallPolicy('{"trustedDependencies": []}', undefined, ".").join(" "),
+    /minimumReleaseAge/,
   );
 });

@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-10-19
+date: 2026-10-22
 tags:
   [
     guide,
@@ -224,16 +224,16 @@ export function TransactionList({ filters }) {
 ### Styling
 
 ```tsx
-// Use Tailwind with clsx and tailwind-merge
-import { clsx } from "clsx";
+// Use Tailwind with cx (@/lib/classNames) and tailwind-merge
+import { cx } from "@/lib/classNames";
 import { twMerge } from "tailwind-merge";
 
 function cn(...inputs) {
-  return twMerge(clsx(inputs));
+  return twMerge(cx(inputs));
 }
 
 // Use cva for component variants
-import { cva } from "class-variance-authority";
+import { cva } from "@/lib/classNames";
 
 const buttonVariants = cva("base-styles", {
   variants: {

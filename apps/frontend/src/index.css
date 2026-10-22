@@ -8,6 +8,8 @@
    wins over Tailwind's layers. Inert unless the class is present (lib/skin.ts). */
 @import "./styles/skin-v2.css";
 @config '../tailwind.config.ts';
+/* The animation plugin's own source names every utility it can generate. */
+@source not "../tailwindAnimate.ts";
 
 /* Registered non-inheriting so a composed transition list set on an ancestor
    (see `--press-compose` at `.press-feedback`, in the utilities layer below)

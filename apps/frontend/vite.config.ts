@@ -113,7 +113,6 @@ export default defineConfig(({ mode }) => ({
          *  router         — react-router
          *  query          — TanStack Query
          *  tanstack       — TanStack Table + Virtual
-         *  charts         — recharts (largest single dep)
          *  radix-ui       — Radix primitives used by the shell/default route
          *  date-utils     — date-fns
          *  icons          — lucide-react
@@ -148,10 +147,6 @@ export default defineConfig(({ mode }) => ({
           ) {
             return "tanstack";
           }
-          // Recharts is reachable only through ToolResultCard's nested lazy
-          // ToolResultChart boundary. Leaving it unnamed lets Rollup keep the
-          // renderer out of both the initial graph and the AI chat route chunk;
-          // it loads only when a chart-shaped tool result is actually shown.
           if (
             PRELOADED_RADIX_PACKAGES.some(
               (packageName) =>

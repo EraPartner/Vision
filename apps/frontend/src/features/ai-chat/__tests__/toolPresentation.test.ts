@@ -1,28 +1,59 @@
 import { describe, expect, it } from "vitest";
-import { createRequire } from "node:module";
 import {
     toolResultAxes,
     toolResultColumns,
     toolResultPresentation,
     toolResultRows,
 } from "@vision/shared-utils/ai-chat/toolPresentation";
-const require = createRequire(import.meta.url);
-const { computePieSectors, defaultPieProps } =
-    require("recharts/lib/polar/Pie.js") as {
-        computePieSectors: (
-            input: Record<string, unknown>,
-        ) =>
-            | Array<{
-                  name: string;
-                  value: number;
-                  percent: number;
-                  startAngle: number;
-                  endAngle: number;
-              }>
-            | undefined;
-        defaultPieProps: Record<string, unknown>;
-    };
-describe("Tool result source inference and Recharts composition", () => {
+/**
+ * Sectors recharts 3.10.1 computed for these inputs (computePieSectors with
+ * cx/cy 50%, radii 40/80, 300x224) before recharts was removed (ADR-245). The
+ * server's pie rows keep that contract.
+ */
+const RECHARTS_SECTORS: ReadonlyArray<
+    readonly [
+        number[],
+        Array<{
+            name: string;
+            value: number;
+            percent: number;
+            startAngle: number;
+            endAngle: number;
+        }>,
+    ]
+> = [
+    [
+        [2, 3],
+        [
+            { name: "r0", value: 2, percent: 0.4, startAngle: 0, endAngle: 144 },
+            { name: "r1", value: 3, percent: 0.6, startAngle: 144, endAngle: 360 },
+        ],
+    ],
+    [
+        [4, -1],
+        [
+            { name: "r0", value: 4, percent: 1.3333333333333333, startAngle: 0, endAngle: 480 },
+            { name: "r1", value: -1, percent: -0.3333333333333333, startAngle: 480, endAngle: 360 },
+        ],
+    ],
+    [
+        [0, 4],
+        [
+            { name: "r0", value: 0, percent: 0, startAngle: 0, endAngle: 0 },
+            { name: "r1", value: 4, percent: 1, startAngle: 0, endAngle: 360 },
+        ],
+    ],
+    [[-2, -3], []],
+    [[0, 0], []],
+    [
+        [1e308, 1e308],
+        [
+            { name: "r0", value: 1e308, percent: 0, startAngle: 0, endAngle: 0 },
+            { name: "r1", value: 1e308, percent: 0, startAngle: 0, endAngle: 0 },
+        ],
+    ],
+];
+describe("Tool result source inference and pie composition", () => {
     it("retains first row member order, numeric key order and nested arrays", () => {
         const rows = toolResultRows([
             null,
@@ -58,49 +89,28 @@ describe("Tool result source inference and Recharts composition", () => {
             "a",
         ]);
     });
-    it.each([
-        [2, 3],
-        [4, -1],
-        [0, 4],
-        [-2, -3],
-        [0, 0],
-        [1e308, 1e308],
-    ])(
-        "matches actual installed Recharts sectors for %j",
-        (...values: number[]) => {
+    it.each(RECHARTS_SECTORS)(
+        "matches the recharts sectors recorded for %j",
+        (values, sectors) => {
             const data = values.map((value, index) => ({
                 name: `r${index}`,
                 value,
             }));
-            const actual = computePieSectors({
-                pieSettings: {
-                    ...defaultPieProps,
-                    cx: "50%",
-                    cy: "50%",
-                    innerRadius: 40,
-                    outerRadius: 80,
-                },
-                displayedData: data,
-                cells: [],
-                offset: { top: 0, left: 0, width: 300, height: 224 },
-            });
             const result = toolResultPresentation({
                 ok: true,
                 data,
                 meta: { renderAs: "pie" },
             })!;
-            expect(result.pieRenderable).toBe((actual?.length ?? 0) > 0);
+            expect(result.pieRenderable).toBe(sectors.length > 0);
             expect(result.pieRows).toEqual(
-                (actual ?? []).map(
-                    ({ name, value, percent, startAngle, endAngle }) => ({
-                        name,
-                        value,
-                        percent,
-                        labelPercent: percent * 100,
-                        startAngle,
-                        endAngle,
-                    }),
-                ),
+                sectors.map(({ name, value, percent, startAngle, endAngle }) => ({
+                    name,
+                    value,
+                    percent,
+                    labelPercent: percent * 100,
+                    startAngle,
+                    endAngle,
+                })),
             );
         },
     );

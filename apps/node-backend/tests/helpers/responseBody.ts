@@ -1,5 +1,5 @@
 /**
- * Readers for parsed supertest response bodies, which are typed `unknown`.
+ * Readers for parsed test-agent response bodies, which are typed `unknown`.
  *
  * Each reader walks a key path with plain JavaScript property-access
  * semantics, so a test reads `bodyAt(res, "error", "code")` where it used to

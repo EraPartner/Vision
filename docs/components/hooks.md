@@ -2,7 +2,7 @@
 title: Custom Hooks
 type: component
 status: active
-date: 2026-10-19
+date: 2026-10-22
 updated: 2026-10-19
 last_modified: 2026-10-19
 tags: [components, hooks, react-query, zustand, form-state, data-table, phase-4, phase-13, phase-c, phase-d, i18n, notifications, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, mount-guard, query-key-fix, prefetch, memoization, useCallback, parseLocaleNumber, currency-utilities, exclusion-ids, ssrf-correctness, loading-states, error-states, isError, refetch, recipient-insights-filter, optimistic-updates, optimistic-create, liquid-glass-v2, premium-v3, june-2026, fx-aware-pnl, useFxAwarePnl, useTabParam, useTaxYearParam, url-state]
@@ -1117,4 +1117,3 @@ Code link: [[apps/frontend/src/hooks/useTaxYearParam.ts]]
 - [[docs/features/settings]] - Settings feature architecture
 - [[docs/reference/code-patterns#zustand-store-pattern-phase-4]] - Zustand pattern reference
 - [React Query Docs](https://tanstack.com/query)
-- [Zustand Docs](https://github.com/pmndrs/zustand)

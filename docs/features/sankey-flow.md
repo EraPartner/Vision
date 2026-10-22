@@ -2,7 +2,7 @@
 title: Sankey Flow Diagram
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-22
 tags: [feature, statistics, visualization, d3, sankey, flow, phase-7, analytics]
 description: Interactive Sankey diagram showing income and funding-gap flow through spending categories for a selected year; displays top 12 categories and any savings or funding gap; available as "Flow" tab in Statistics page.
 aliases: [flow diagram, sankey, income flow, spending allocation]
@@ -45,7 +45,7 @@ Located in the Statistics page (`/statistics`) as the fourth tab:
 **Components:**
 
 - **Year Selector**: Dropdown to choose analysis year
-- **Sankey Chart**: Interactive d3-sankey rendering with:
+- **Sankey Chart**: Interactive SVG rendering (in-repo d3-sankey port) with:
   - Nodes: income, an optional funding-gap source, a spending hub, top 12
     categories, and optional savings/unspent
   - Links: balanced weighted flows through the spending hub
@@ -154,7 +154,7 @@ Located in the Statistics page (`/statistics`) as the fourth tab:
 5. Reconcile nodes and links in integer cents before serialization. This makes
    every internal node exactly flow-conserving even when several four-decimal
    source totals round in different directions.
-6. Deep-clone data before layout because d3-sankey mutates nodes and links.
+6. The frontend layout copies the graph; the query data is never mutated.
 
 ## Frontend: SankeyChart Component
 
@@ -171,9 +171,9 @@ interface SankeyChartProps {
 
 **Implementation:**
 
-- Uses `d3-sankey` for layout calculation
+- Uses `sankeyLayout.ts`, an in-repo port of d3-sankey 0.12.3 (ADR-245) for layout calculation
 - SVG rendering with:
-  - `<path>` elements for curved links (via `sankeyLinkHorizontal`)
+  - `<path>` elements for curved links (via `sankeyLinkPath`)
   - `<rect>` elements for nodes
   - Text labels for node names with smart positioning (left/right based on node position)
   - Hover highlights via state-based opacity transitions
@@ -181,20 +181,15 @@ interface SankeyChartProps {
 
 **Important Implementation Details:**
 
-1. **Deep cloning**: Deep-clones data before layout because d3-sankey mutates nodes and links in-place:
+1. **No mutation**: `sankeyLayout()` copies nodes and links, so React Query data stays untouched.
+
+2. **String ID Resolution**: links name nodes by string `id`:
 
    ```typescript
-   const clonedNodes = data.nodes.map((n) => ({ ...n }));
-   const clonedLinks = data.links.map((l) => ({ ...l }));
+   sankeyLayout({ nodes, links: data.links }, { nodeWidth, nodePadding, extent });
    ```
 
-2. **String ID Resolution**: d3-sankey's `nodeId` accessor builds a string-keyed internal map. **Must pass string IDs directly** (not integer indices) so d3-sankey can resolve link source/target via the nodeId function:
-
-   ```typescript
-   const sankeyGen = sankey<NodeExtra, LinkExtra>().nodeId((d) => d.id); // d3-sankey uses this to resolve nodes
-   ```
-
-   Passing integer indices causes a "missing: 0" error that is silently caught, leaving `graph = null` and rendering a blank chart.
+   An unknown id throws `missing: <id>`, which is caught, leaving `graph = null` and rendering a blank chart. The port keeps d3-sankey 0.12.3's positions exactly; `__tests__/sankeyLayout.test.ts` pins its output.
 
 3. **Hover interactions**: Uses React state (`hoveredNodeId`, `hoveredLinkIndex`) to track hover state and adjust opacity accordingly.
 

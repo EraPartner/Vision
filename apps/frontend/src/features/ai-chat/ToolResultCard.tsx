@@ -208,5 +208,5 @@ function Footer({
 
 // Memoized: for completed tool messages the props (toolName/result) are stable
 // across streamed AI-chat token chunks, so the whole card — including its
-// recharts tree — bails out of the per-token reconcile of the message backlog.
+// chart tree — bails out of the per-token reconcile of the message backlog.
 export const ToolResultCard = memo(ToolResultCardInner);

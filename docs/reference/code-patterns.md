@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
@@ -3480,12 +3480,12 @@ Inside each chart, `useChartSync(syncId)` provides the shared hovered x-key and 
 
 **Source:** [[apps/frontend/src/stores/settingsStore.ts|settingsStore.ts]], [[apps/frontend/src/stores/belgianTaxStore.ts|belgianTaxStore.ts]]
 
-Use Zustand for client state that spans multiple pages or contexts. Vision uses Zustand to unify settings state (app settings, dashboard settings, theme, and Belgian-tax settings) behind hydration and persistence bridges.
+Use the in-repo store (`@/stores/createStore`, a zustand-compatible port; ADR-245) for client state that spans multiple pages or contexts. Vision uses it to unify settings state (app settings, dashboard settings, theme, and Belgian-tax settings) behind hydration and persistence bridges.
 
 ### Pattern
 
 ```typescript
-import { create } from "zustand";
+import { create } from "@/stores/createStore";
 
 interface AppState {
   // State slices
@@ -3514,7 +3514,7 @@ export const useAppStore = create<AppState>((set) => ({
 When using multiple slices in a component, use `useShallow()` to prevent re-renders when unrelated slices change:
 
 ```typescript
-import { useShallow } from "zustand/react"; // v4.5+
+import { useShallow } from "@/stores/createStore";
 
 // AVOID: Re-renders if ANY part of state changes
 const settings = useAppStore((s) => s.settings);

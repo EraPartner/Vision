@@ -1,11 +1,13 @@
 /* Self-hosted latin faces. Import the WOFF2 binaries directly so Vite does not
-   emit the legacy WOFF fallback that modern supported browsers never request. */
+   emit the legacy WOFF fallback that modern supported browsers never request.
+   The files are copied from @fontsource/inter and @fontsource/fraunces 5.3.0
+   (SIL Open Font License 1.1, see src/assets/fonts/LICENSE-*.txt; ADR-245). */
 @font-face {
     font-family: "Inter";
     font-style: normal;
     font-display: swap;
     font-weight: 400;
-    src: url("@fontsource/inter/files/inter-latin-400-normal.woff2")
+    src: url("../assets/fonts/inter-latin-400-normal.woff2")
         format("woff2");
 }
 
@@ -14,7 +16,7 @@
     font-style: italic;
     font-display: swap;
     font-weight: 400;
-    src: url("@fontsource/inter/files/inter-latin-400-italic.woff2")
+    src: url("../assets/fonts/inter-latin-400-italic.woff2")
         format("woff2");
 }
 
@@ -23,7 +25,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 500;
-    src: url("@fontsource/inter/files/inter-latin-500-normal.woff2")
+    src: url("../assets/fonts/inter-latin-500-normal.woff2")
         format("woff2");
 }
 
@@ -32,7 +34,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 600;
-    src: url("@fontsource/inter/files/inter-latin-600-normal.woff2")
+    src: url("../assets/fonts/inter-latin-600-normal.woff2")
         format("woff2");
 }
 
@@ -41,7 +43,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 700;
-    src: url("@fontsource/inter/files/inter-latin-700-normal.woff2")
+    src: url("../assets/fonts/inter-latin-700-normal.woff2")
         format("woff2");
 }
 
@@ -50,7 +52,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 400;
-    src: url("@fontsource/fraunces/files/fraunces-latin-400-normal.woff2")
+    src: url("../assets/fonts/fraunces-latin-400-normal.woff2")
         format("woff2");
 }
 
@@ -59,7 +61,7 @@
     font-style: normal;
     font-display: swap;
     font-weight: 600;
-    src: url("@fontsource/fraunces/files/fraunces-latin-600-normal.woff2")
+    src: url("../assets/fonts/fraunces-latin-600-normal.woff2")
         format("woff2");
 }
 
@@ -68,6 +70,6 @@
     font-style: normal;
     font-display: swap;
     font-weight: 700;
-    src: url("@fontsource/fraunces/files/fraunces-latin-700-normal.woff2")
+    src: url("../assets/fonts/fraunces-latin-700-normal.woff2")
         format("woff2");
 }

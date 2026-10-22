@@ -1,19 +1,17 @@
 /**
- * SankeyChart — d3-sankey flow diagram.
+ * SankeyChart — Sankey flow diagram.
  *
  * Renders money flow from income to spending categories for a given year.
- * Deep-clones input data before passing to d3-sankey because the library
- * mutates node/link objects in-place during layout computation.
+ * Layout comes from the in-repo port of d3-sankey (sankeyLayout.ts).
  */
 import { useMemo, useState } from "react";
-import { sankey, sankeyLinkHorizontal } from "d3-sankey";
-import type { SankeyGraph, SankeyNode } from "d3-sankey";
 import { ParentSize } from "@visx/responsive";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
 import { getCategoryChartColor } from "@/utils/categoryColors";
 import type { SankeyFlowData } from "@/lib/api/aggregations";
 import { localizeSankeyLabel, sankeyColorKey } from "./sankeyLabels";
+import { sankeyLayout, sankeyLinkPath, type SankeyLayout } from "./sankeyLayout";
 
 interface SankeyChartProps {
     readonly data: SankeyFlowData;
@@ -21,7 +19,6 @@ interface SankeyChartProps {
 }
 
 type NodeExtra = { id: string; label: string; value: number };
-type LinkExtra = { value: number };
 
 const MARGIN = { top: 16, right: 16, bottom: 16, left: 16 };
 const NODE_WIDTH = 16;
@@ -46,28 +43,26 @@ function SankeyInner({
     const innerWidth = width - MARGIN.left - MARGIN.right;
     const innerHeight = height - MARGIN.top - MARGIN.bottom;
 
-    const graph = useMemo<SankeyGraph<NodeExtra, LinkExtra> | null>(() => {
+    const graph = useMemo<SankeyLayout<NodeExtra> | null>(() => {
         if (data.nodes.length === 0 || data.links.length === 0) return null;
 
-        // Deep clone — d3-sankey mutates node/link objects in-place
-        const clonedNodes = data.nodes.map((n) => ({
+        const nodes = data.nodes.map((n) => ({
             ...n,
             label: localizeSankeyLabel(n.id, n.label, t),
         }));
-        const clonedLinks = data.links.map((l) => ({ ...l }));
-
-        const sankeyGen = sankey<NodeExtra, LinkExtra>()
-            .nodeId((d) => d.id)
-            .nodeWidth(NODE_WIDTH)
-            .nodePadding(NODE_PADDING)
-            .extent([
-                [0, 0],
-                [innerWidth, innerHeight],
-            ]);
 
         try {
-            // Pass string IDs — d3-sankey resolves them via nodeId internally
-            return sankeyGen({ nodes: clonedNodes, links: clonedLinks });
+            return sankeyLayout(
+                { nodes, links: data.links },
+                {
+                    nodeWidth: NODE_WIDTH,
+                    nodePadding: NODE_PADDING,
+                    extent: [
+                        [0, 0],
+                        [innerWidth, innerHeight],
+                    ],
+                },
+            );
         } catch {
             return null;
         }
@@ -84,19 +79,13 @@ function SankeyInner({
 
     if (!graph || width < 2) return null;
 
-    const pathGen = sankeyLinkHorizontal();
-
     return (
         <svg width={width} height={height}>
             <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
                 {/* Links */}
                 {graph.links.map((link, i) => {
-                    const sourceId = (
-                        link.source as SankeyNode<NodeExtra, LinkExtra>
-                    ).id;
-                    const targetId = (
-                        link.target as SankeyNode<NodeExtra, LinkExtra>
-                    ).id;
+                    const sourceId = link.source.id;
+                    const targetId = link.target.id;
                     const color =
                         nodeColorMap.get(targetId) ??
                         "hsl(var(--muted-foreground))";
@@ -104,15 +93,15 @@ function SankeyInner({
                         hoveredLinkIndex === i ||
                         hoveredNodeId === sourceId ||
                         hoveredNodeId === targetId;
-                    const d = pathGen(link);
+                    const d = sankeyLinkPath(link);
 
                     return (
                         <path
                             key={`link-${i}`}
-                            d={d ?? ""}
+                            d={d}
                             fill="none"
                             stroke={color}
-                            strokeWidth={Math.max(1, link.width ?? 1)}
+                            strokeWidth={Math.max(1, link.width)}
                             strokeOpacity={isHovered ? 0.6 : 0.25}
                             style={{
                                 cursor: "default",
@@ -127,10 +116,10 @@ function SankeyInner({
 
                 {/* Nodes */}
                 {graph.nodes.map((node) => {
-                    const x0 = node.x0 ?? 0;
-                    const x1 = node.x1 ?? 0;
-                    const y0 = node.y0 ?? 0;
-                    const y1 = node.y1 ?? 0;
+                    const x0 = node.x0;
+                    const x1 = node.x1;
+                    const y0 = node.y0;
+                    const y1 = node.y1;
                     const nodeHeight = Math.max(1, y1 - y0);
                     const color =
                         nodeColorMap.get(node.id) ??
@@ -186,7 +175,7 @@ function SankeyInner({
                                         userSelect: "none",
                                     }}
                                 >
-                                    {formatCurrency(node.value ?? 0)}
+                                    {formatCurrency(node.value)}
                                 </text>
                             )}
                         </g>

@@ -1,5 +1,5 @@
 /**
- * Real-Express route-test harness (supertest).
+ * Real-Express route-test harness (in-repo HTTP agent, tests/helpers/httpAgent.ts).
  *
  * Replaces the retired `routeHarness.js`, which mocked `express` itself:
  * `Router()` returned a stub that kept only the LAST handler registered per
@@ -10,7 +10,7 @@
  * error handler.
  *
  * This module mounts the REAL router on a throwaway `express()` app wired the
- * way `src/main.ts` wires the data plane, and hands back a supertest agent.
+ * way `src/main.ts` wires the data plane, and hands back an HTTP test agent.
  * Repositories/services are still mocked per suite — only the HTTP edge is real.
  *
  * ── Fidelity map (what is reproduced, and from where) ──────────────────────
@@ -57,8 +57,8 @@
  */
 import express from 'express';
 import type { Express, RequestHandler, Router } from 'express';
-import supertest from 'supertest';
-import type { Test, TestAgent } from 'supertest';
+import { httpAgent } from './httpAgent.ts';
+import type { TestAgent } from './httpAgent.ts';
 import type { ExpressHandler } from '../../src/types/express.ts';
 
 import { requestId } from '../../src/middleware/requestId.ts';
@@ -90,7 +90,7 @@ export interface RouteAppOptions {
   /** Extra middleware mounted after the router but before the 404 handler. */
   after?: RouteMiddleware[];
   /**
-   * Mount the CSRF guard (main.ts:252; default true). supertest sends neither
+   * Mount the CSRF guard (main.ts:252; default true). The test agent sends neither
    * `Origin` nor `Sec-Fetch-Site`, so it is treated as a non-browser client and
    * passes; set false only to prove the guard's effect.
    */
@@ -106,8 +106,8 @@ export interface RouteAppOptions {
   isProduction?: () => boolean;
 }
 
-/** The supertest agent `routeAgent` returns. */
-export type RouteAgent = TestAgent<Test>;
+/** The HTTP test agent `routeAgent` returns. */
+export type RouteAgent = TestAgent;
 
 /**
  * Build a throwaway Express app with `router` mounted the way main.ts mounts
@@ -155,13 +155,13 @@ export function createRouteApp(
 }
 
 /**
- * `createRouteApp` + a supertest agent bound to it.
+ * `createRouteApp` + an HTTP test agent bound to it.
  */
 export function routeAgent(
   router: Router | RequestHandler,
   options: RouteAppOptions = {},
 ): RouteAgent {
-  return supertest(createRouteApp(router, options));
+  return httpAgent(createRouteApp(router, options));
 }
 
 /**

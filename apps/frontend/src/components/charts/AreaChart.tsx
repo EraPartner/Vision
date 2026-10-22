@@ -11,7 +11,6 @@
  */
 import { curveMonotoneX } from "@visx/curve";
 import { summarizeSeriesChart } from "./chartAria";
-import { LinearGradient } from "@visx/gradient";
 import { Group } from "@visx/group";
 import { scaleLinear } from "@visx/scale";
 import { AreaClosed, AreaStack, Line, LinePath } from "@visx/shape";
@@ -498,14 +497,18 @@ function AreaChartInner<Datum>({
                     {series.map((s, i) => {
                         const color = s.color ?? getChartColor(i);
                         return (
-                            <LinearGradient
-                                key={`${gradId}-${s.key}`}
-                                id={`${gradId}-${s.key}`}
-                                from={color}
-                                to={color}
-                                fromOpacity={0.22}
-                                toOpacity={0}
-                            />
+                            <defs key={`${gradId}-${s.key}`}>
+                                <linearGradient
+                                    id={`${gradId}-${s.key}`}
+                                    x1="0"
+                                    y1="0"
+                                    x2="0"
+                                    y2="1"
+                                >
+                                    <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+                                    <stop offset="100%" stopColor={color} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
                         );
                     })}
 

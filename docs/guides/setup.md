@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-10-22
 tags:
   [
     guide,
@@ -38,7 +38,7 @@ sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]].
 ```bash
 git clone <repository-url>
 cd Vision
-bun install
+bun install --frozen-lockfile
 bun run install:electron
 ```
 

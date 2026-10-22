@@ -2,7 +2,7 @@
 title: Agent Sandbox Guide
 type: guide
 status: active
-date: 2026-10-21
+date: 2026-10-22
 updated: 2026-10-21
 tags: [guide, security, claude-code, codex, development]
 description: Use built-in Claude Code and Codex sandboxes with Vision's native development workflow.
@@ -35,7 +35,7 @@ aids ([[docs/adr/227-claude-code-static-analysis-aids|ADR-227]]):
   project, ESLint and dependency-cruiser and wakes Claude only when they report errors. Edits made
   through `Bash` (`sed`, heredocs, scripts) are checked too, by file mtime since the command
   started ([[docs/adr/238-edit-check-hook-for-shell-edits|ADR-238]]).
-- Cloud sessions run `bun install` at start and warm the `tsc` caches.
+- Cloud sessions run `bun install --frozen-lockfile` at start and warm the `tsc` caches.
 - The `vision-typescript` MCP server gives local and cloud sessions TypeScript navigation:
   `find_symbol`, `definition`, `references`, `hover` and `diagnostics`, across the frontend,
   backend and shared packages. It runs the repository's own `tsserver`, so nothing is installed

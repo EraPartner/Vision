@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 tags:
   [
@@ -35,7 +35,7 @@ jobs run only when the diff is classified as code:
 | Job                                     | Runs on             | Evidence                                                                                                                                                                                                                                 |
 | --------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Detect Changes`                        | every diff          | path classification (`code` output; fails safe to `true`)                                                                                                                                                                                |
-| `Repo Checks`                           | every diff          | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy (each with its tests), commitlint, branch-protection verifier                                           |
+| `Repo Checks`                           | every diff          | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy (each with its tests), commit-message check (`scripts/commitlint.ts`), branch-protection verifier                                           |
 | `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint (with type-aware rules), import boundaries (`lint:deps`) and dead code (`lint:dead`) through `bun run lint`, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`, squawk migration lint (`db:lint`)                                                                     |
 | `Type Check`                            | code diffs          | strict TypeScript for frontend, shared packages, backend, backend tests, backend and repository scripts, and the Electron shell; shared package tests; production frontend build and `size:check`                                        |
 | `Test (Frontend 1/2)`, `(Frontend 2/2)` | code PRs            | Vitest split over two runners with `--shard`, without coverage                                                                                                                                                                           |

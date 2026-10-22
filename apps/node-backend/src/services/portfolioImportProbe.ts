@@ -1,7 +1,7 @@
 /** Read-only statement detection and preview. No batches or financial records are created. */
 import fs from "node:fs/promises";
 import { parse } from "csv-parse/sync";
-import readExcelFile from "read-excel-file/node";
+import { readXlsxWorkbook } from "@vision/shared-utils/xlsx";
 import * as XLSX from "xlsx";
 import {
   detectPortfolioImportRecords,
@@ -65,7 +65,7 @@ async function detect(
       )
     )
       return undefined;
-    const sheets = await readExcelFile(bytes, { parseNumber: (raw) => raw });
+    const sheets = await readXlsxWorkbook(bytes, { parseNumber: (raw) => raw });
     const matches = sheets
       .map((sheet) => detectPortfolioImportRecords(sheet.data))
       .filter((match) => match !== undefined);

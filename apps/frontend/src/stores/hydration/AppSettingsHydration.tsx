@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@/stores/createStore";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";

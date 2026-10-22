@@ -9,7 +9,7 @@ and integrations used by the React frontend.
 Start from the repository root:
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run native:prepare
 bun run dev
 ```

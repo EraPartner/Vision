@@ -2,7 +2,7 @@
 title: Getting Started
 type: map-of-content
 status: active
-date: 2026-10-19
+date: 2026-10-22
 tags: [getting-started, onboarding, moc, new-developer]
 description: Map of Content for new developers and AI agents to quickly navigate the Vision knowledge base
 aliases: [start here, onboarding, new dev, beginner]
@@ -122,7 +122,7 @@ When creating new docs, use the templates:
 ### Build Commands
 
 ```bash
-bun install           # Install dependencies
+bun install --frozen-lockfile   # Install dependencies from the lockfile
 bun run native:prepare # Prepare the native runtime payload
 bun run dev           # Start private PostgreSQL, backend and Vite
 bun run build         # Production build

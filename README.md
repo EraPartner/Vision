@@ -128,7 +128,7 @@ repository's `dist` directory.
 ### Development mode
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run native:prepare   # one-time: private PostgreSQL payload
 bun run dev              # private PostgreSQL + watched backend + Vite
 ```

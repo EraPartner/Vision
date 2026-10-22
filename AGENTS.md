@@ -40,7 +40,7 @@ and convention. Treat docs as intent and code as current behavior; resolve confl
 ## Commands
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run dev
 bun run build
 bun run lint                  # frontend ESLint + lint:deps (import boundaries) + lint:dead (knip)
@@ -96,7 +96,7 @@ replace these rules.
   Prefer functions over classes. Add comments only when they explain non-obvious intent.
 - Frontend: strict TypeScript; interfaces for props and state; Zod input validation; `@/*` maps to
   `apps/frontend/src/*`; functional components and hooks; React Query for server state; Tailwind
-  and `class-variance-authority` for variants. Prefix intentionally unused values with `_`.
+  and `cva` from `@/lib/classNames` for variants. Prefix intentionally unused values with `_`.
 - Ids and currency codes are branded (ADR-220, `@vision/types/brands`): type entity ids as
   `AccountId`, `CategoryId` and so on, and currencies as `CurrencyCode`, not `number` or `string`.
   Brand at boundaries (row schemas, route params, contracts) and use the `as*` constructors only

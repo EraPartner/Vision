@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-10-08
+date: 2026-10-22
 last_modified: 2026-09-08
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.
@@ -37,7 +37,7 @@ was dropped inside the rollback-only test transaction. See [[#PostgreSQL measure
 **2026-09-04: WOFF2-only faces and nested AI tool charts** — Vision now declares its eight static
 Inter/Fraunces faces in one WOFF2-only stylesheet, so production builds no longer emit unused
 legacy WOFF copies. The existing build plugin still injects hashed preloads for Inter 400 and
-Fraunces 600. `ToolResultCard` now lazy-loads the Recharts-backed `ToolResultChart` only for
+Fraunces 600. `ToolResultCard` now lazy-loads `ToolResultChart` (in-house visx charts since ADR-245) only for
 line, bar, or pie results; ordinary AI chat, table, JSON, and error messages do not download the
 chart renderer. Runtime Zod validation and the application-wide Belgian tax profile remain in the
 boot graph by explicit product decision.
@@ -164,19 +164,17 @@ semantics until production measurements justify extra complexity:
   trace recorded 20 ms for initialization, 90 ms for window creation, and about
   198 ms from main-process logger startup through splash-load completion. Electron
   framework initialization remains outside the app-owned timing marks.
-- The frontend keeps Recharts behind a nested lazy boundary inside the already-lazy AI chat route,
-  so only chart-shaped tool results download it. The critical Inter and Fraunces fonts are
+- The frontend keeps the AI chat tool chart behind a nested lazy boundary inside the already-lazy
+  AI chat route, so only chart-shaped tool results download it. The critical Inter and Fraunces fonts are
   preloaded by the production build, legacy WOFF copies are not emitted, and
   runtime Zod validation plus the application-wide Belgian tax profile stay in
   the boot graph because they enforce shared contracts and settings. Revisit provider deferral if
   the existing boot-graph budget fails because of either retained dependency.
-- The desktop package retains `archiver` for backup creation. Its former
-  redundant direct transitive dependencies have already been removed; replacing
-  the mature writer solely to reduce an ASAR index of roughly 2,100 files would
-  trade backup compatibility for a measured low-single-digit-millisecond
-  startup concern. Revisit if packaged `node_modules` exceeds 10,000 ASAR
-  entries, ASAR-open profiling exceeds 25 ms p95, or those modules add more than
-  25 MiB to the installed application.
+- Backups are written by the in-repo `packaging/electron/backup/zip-writer.ts`
+  (ADR-245), which replaced `archiver` for supply-chain reasons, not startup
+  speed. It writes the same entry layout and was checked against archiver's
+  output, a 4.6 GB ZIP64 entry and the v1.0.2 fixture. `yauzl` still reads
+  bundles on restore.
 
 ## Cache Layers
 

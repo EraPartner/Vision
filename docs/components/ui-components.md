@@ -2,7 +2,7 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-19
+date: 2026-10-22
 updated: 2026-10-19
 tags:
   [
@@ -52,7 +52,7 @@ related_code: ["apps/frontend/src/components/ui"]
 
 # UI Components
 
-Vision uses a comprehensive set of UI components (45 total, Phase 5 slim-down removed 3 unused wrappers) built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS and design tokens, and using [class-variance-authority](https://cva.style) for variant management.
+Vision uses a comprehensive set of UI components (45 total, Phase 5 slim-down removed 3 unused wrappers) built on [Radix UI](https://radix-ui.com) primitives, styled with Tailwind CSS and design tokens, and using `cva` from `@/lib/classNames` (a class-variance-authority port; ADR-245) for variant management.
 
 ## Overview
 
@@ -291,8 +291,8 @@ Code links: [[apps/frontend/src/components/layout/AppLayout.tsx]], [[apps/fronte
 - **Mono**: SF Mono / JetBrains Mono fallback stack — identifiers and code such as tickers, IBANs, SQL, and API paths; never monetary amounts. `<Money>` owns the canonical Inter/body tabular treatment for currency.
 - **Dense microcopy**: `text-2xs` (11px/14px) is the named minimum for chart labels, compact badges, and developer chrome. Do not mint arbitrary `text-[10px]` or `text-[11px]` utilities.
 - **Eyebrow labels**: `.eyebrow` owns the uppercase 11px/14px, medium-weight, 0.12em-tracking muted label role. Semantic color utilities may override its muted default; do not rebuild the typography recipe per file.
-- **Self-hosted**: WOFF2-only static faces loaded from `@fontsource/fraunces` +
-  `@fontsource/inter`; the build injects hashed preloads for Inter 400 and Fraunces 600
+- **Self-hosted**: WOFF2-only static faces vendored in `apps/frontend/src/assets/fonts/`
+  (from Fontsource 5.3.0, OFL licences alongside; ADR-245); the build injects hashed preloads for Inter 400 and Fraunces 600
 
 Previous: Variable font ranges (`@fontsource-variable/*`) superseded by static weight selection (5kb savings, faster download).
 
@@ -689,7 +689,7 @@ Data table for displaying lists.
 
 ## Badge
 
-Small status/label pill built on `class-variance-authority`.
+Small status/label pill built on `cva` (`@/lib/classNames`).
 
 ### Variants
 
@@ -954,7 +954,7 @@ Dropdown selection component.
 
 ### Variant System
 
-Components use `class-variance-authority` (CVA) for managing multiple variants:
+Components use `cva` from `@/lib/classNames` for managing multiple variants:
 
 ```tsx
 const buttonVariants = cva("base-classes", {
