@@ -283,6 +283,10 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-22: Apple Foundation Models helper (accepted)
+
+[[docs/adr/246-apple-foundation-models-helper|ADR-246]] adds Apple's on-device model next to Ollama through `vision-apple-ai`, a small Swift helper that speaks the Ollama chat format over stdin/stdout, built at release time on the Mac.
+
 ### 2026-10-22: Dependency supply chain (accepted)
 
 [[docs/adr/245-dependency-supply-chain|ADR-245]] makes installs wait 7 days for new releases, run no dependency lifecycle scripts and use the frozen lockfile, and replaces commitlint, concurrently, supertest, recharts in AI chat, clsx, cva, zustand, @visx/gradient, tailwindcss-animate, @fontsource, d3-sankey, archiver and read-excel-file with in-repo code proven equal by differential tests.

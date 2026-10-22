@@ -127,6 +127,31 @@ export function compileBackend(
   }
 }
 
+/**
+ * Build the Apple Foundation Models helper. FoundationModels needs the macOS 26
+ * SDK (Xcode 26); the helper only runs on macOS 26, and the backend treats a
+ * helper that cannot start as "Apple model unavailable".
+ */
+export function compileAppleAiHelper(source: string, outfile: string): void {
+  const compile = spawnSync(
+    "/usr/bin/xcrun",
+    [
+      "swiftc",
+      "-O",
+      "-parse-as-library",
+      "-target",
+      "arm64-apple-macos26.0",
+      source,
+      "-o",
+      outfile,
+    ],
+    { stdio: "inherit" },
+  );
+  if (compile.error) throw compile.error;
+  if (compile.status !== 0)
+    throw new Error(`Apple AI helper compilation exited ${compile.status}`);
+}
+
 function copyTree(source: string, destination: string): void {
   fs.cpSync(source, destination, {
     recursive: true,
@@ -213,6 +238,13 @@ export function run(): void {
     );
     fs.chmodSync(path.join(stagingRoot, "vision-backend"), 0o755);
     signCompiledBackend(path.join(stagingRoot, "vision-backend"));
+    if (process.platform === "darwin") {
+      compileAppleAiHelper(
+        path.join(electronRoot, "apple-ai", "main.swift"),
+        path.join(stagingRoot, "vision-apple-ai"),
+      );
+      signCompiledBackend(path.join(stagingRoot, "vision-apple-ai"));
+    }
 
     copyTree(frontendRoot, path.join(stagingRoot, "dist"));
     // The compiled backend applies db/migrations in-process on boot and reads

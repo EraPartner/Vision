@@ -13,6 +13,7 @@
 
 import { logger } from "../../config/logger.ts";
 import settings from "../../config/config.ts";
+import { withAppleFoundation } from "./appleFoundation.ts";
 import type { OllamaToolCall } from "./prompts.ts";
 
 export interface OllamaErrorOptions {
@@ -71,6 +72,7 @@ export interface OllamaChatResponse {
   eval_count?: number;
   prompt_eval_count?: number;
   total_duration?: number;
+  error?: string;
 }
 
 export interface OllamaClientOptions {
@@ -231,6 +233,23 @@ async function readJson(
   }
 }
 
+/** ": <message>" from an error body shaped `{"error": "..."}`, else "". */
+function upstreamDetail(payload: string): string {
+  try {
+    const parsed: unknown = JSON.parse(payload);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "error" in parsed &&
+      typeof parsed.error === "string"
+    )
+      return `: ${parsed.error}`;
+  } catch {
+    // Not JSON: keep the status-only message.
+  }
+  return "";
+}
+
 /**
  * Map a fetch-layer error to a typed OllamaError (timeout / aborted / network),
  * shared by the request and chatStream paths (SIMP-38). An OllamaError already
@@ -270,7 +289,7 @@ function createOllamaClient({
   requestTimeoutMs = settings.ollama.requestTimeoutMs,
   healthTimeoutMs = settings.ollama.healthTimeoutMs,
   streamIdleTimeoutMs = settings.ollama.streamIdleTimeoutMs,
-  fetchImpl = globalThis.fetch,
+  fetchImpl = withAppleFoundation(globalThis.fetch),
 }: OllamaClientOptions = {}) {
   if (fetchImpl == null) {
     throw new OllamaError("No fetch implementation available");
@@ -308,9 +327,9 @@ function createOllamaClient({
       });
 
       if (!response.ok) {
-        const _payload = await response.text().catch(() => "");
+        const payload = await response.text().catch(() => "");
         throw new OllamaError(
-          `Ollama ${method} ${path} failed with ${response.status}`,
+          `Ollama ${method} ${path} failed with ${response.status}${upstreamDetail(payload)}`,
           { status: response.status, code: "HTTP_ERROR" },
         );
       }
@@ -552,9 +571,9 @@ function createOllamaClient({
 
     if (!response.ok) {
       cancel();
-      await response.text?.().catch(() => "");
+      const payload = (await response.text?.().catch(() => "")) ?? "";
       throw new OllamaError(
-        `Ollama POST /api/chat failed with ${response.status}`,
+        `Ollama POST /api/chat failed with ${response.status}${upstreamDetail(payload)}`,
         {
           status: response.status,
           code: "HTTP_ERROR",
@@ -611,6 +630,9 @@ function createOllamaClient({
         });
       }
 
+      if (typeof parsed.error === "string") {
+        throw new OllamaError(parsed.error, { code: "PROVIDER_ERROR" });
+      }
       if (parsed.model) modelName = parsed.model;
       const msg: OllamaResponseMessage = parsed.message ?? {};
       const deltaContent = typeof msg.content === "string" ? msg.content : "";

@@ -706,6 +706,40 @@ describe("ollama client", () => {
       ).rejects.toMatchObject({ code: "HTTP_ERROR", status: 503 });
     });
 
+    it("keeps the upstream error text in the message", async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(
+          errorResponse(503, JSON.stringify({ error: "model not ready" })),
+        );
+      const client = makeClient(fetchImpl);
+
+      await expect(
+        client.chatStream({ messages: [{ role: "user", content: "x" }] }),
+      ).rejects.toThrow("failed with 503: model not ready");
+    });
+
+    it("throws PROVIDER_ERROR on an error line mid-stream", async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(
+          streamResponse([
+            ndjson(
+              { message: { content: "Hel" }, done: false },
+              { error: "context window exceeded" },
+            ),
+          ]),
+        );
+      const client = makeClient(fetchImpl);
+
+      await expect(
+        client.chatStream({ messages: [{ role: "user", content: "x" }] }),
+      ).rejects.toMatchObject({
+        code: "PROVIDER_ERROR",
+        message: "context window exceeded",
+      });
+    });
+
     it("throws NO_BODY when response has no readable body", async () => {
       const fetchImpl = vi.fn().mockResolvedValue({
         ok: true,
