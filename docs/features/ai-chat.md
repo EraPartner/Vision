@@ -2,7 +2,7 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 last_modified: 2026-10-20
 tags:
@@ -55,6 +55,8 @@ related_code:
 > evidence-backed work on the same Ollama endpoint. Vision has no cloud model route: the OpenAI API
 > route, the Codex experiment and AgentCloak were removed in
 > [[docs/adr/229-remove-cloud-ai-codex-and-agentcloak|ADR-229]].
+> On macOS 26, Apple's on-device model appears in the model list as `apple-foundation`
+> ([[docs/adr/246-apple-foundation-models-helper|ADR-246]]); it also runs on the Mac.
 
 ## Feature Overview
 

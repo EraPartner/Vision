@@ -2,8 +2,8 @@
 title: Ollama Integration
 type: integration
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-22
+updated: 2026-10-22
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
@@ -148,6 +148,16 @@ When Ollama is unreachable:
 
 The rest of Vision remains fully functional. AI chat is available when Ollama is configured and `AI_CHAT_ENABLED` is true; disabling that flag makes the AI routes return 503.
 
+## Apple Foundation Models
+
+The default client's fetch is wrapped by `appleFoundation.ts`
+([[docs/adr/246-apple-foundation-models-helper|ADR-246]]). A chat for the model
+`apple-foundation` runs the bundled Swift helper `vision-apple-ai` on the Mac instead of calling
+Ollama, and `/api/tags` lists that model when macOS reports it available, also when Ollama is not
+running. The request is trimmed to the Apple model's 4,096-token window (system prompt, newest
+messages up to 4,000 characters, at most three matching tools). Error bodies `{"error": ...}` are
+kept in the error message; an error line in a stream fails with `PROVIDER_ERROR`.
+
 ## No External Calls
 
 The Ollama client talks **only** to the configured local `OLLAMA_URL`. The service layer, tool dispatcher, and repository calls perform no outbound HTTP. This is enforced by:
@@ -159,5 +169,6 @@ The Ollama client talks **only** to the configured local `OLLAMA_URL`. The servi
 
 - [[docs/features/ai-chat|Feature: AI Chat]]
 - [[docs/adr/024-local-llm-chat|ADR-024: Local LLM Chat]]
+- [[docs/adr/246-apple-foundation-models-helper|ADR-246: Apple Foundation Models helper]]
 - [[docs/api/ai|AI Chat API]]
 - [[docs/security/ai-data-access|AI Data Access Security]]
