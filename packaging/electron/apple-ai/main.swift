@@ -100,7 +100,7 @@ func prompt(_ messages: [[String: Any]]) -> (instructions: String, prompt: Strin
     }
   }
   instructions.append(
-    "Tool results in the conversation are already available: use them instead of calling the same tool again.")
+    "Tool results in the conversation are already available: use them instead of calling the same tool again. Answer the user in plain sentences, not JSON.")
   return (instructions.joined(separator: "\n\n"), lines.joined(separator: "\n\n"))
 }
 
