@@ -2,7 +2,7 @@
 title: Agent Sandbox Guide
 type: guide
 status: active
-date: 2026-10-21
+date: 2026-10-22
 updated: 2026-10-21
 tags: [guide, security, claude-code, codex, development]
 description: Use built-in Claude Code and Codex sandboxes with Vision's native development workflow.

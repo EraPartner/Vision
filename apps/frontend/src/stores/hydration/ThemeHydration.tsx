@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useShallow } from "@/stores/createStore";
 import { apiClient } from "@/lib/api";
 import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
 import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";

@@ -2,7 +2,7 @@
 title: Performance - Chart Data Downsampling
 type: performance
 status: removed
-date: 2026-04-16
+date: 2026-10-22
 tags: [performance, charts, downsampling, lttb, optimization, historical]
 description: LTTB downsampling algorithm for large time-series chart data (removed 2026-07)
 aliases: [lttb, largest-triangle-three-buckets, downsampling, data reduction, chart optimization]

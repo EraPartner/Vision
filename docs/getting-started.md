@@ -2,7 +2,7 @@
 title: Getting Started
 type: map-of-content
 status: active
-date: 2026-10-19
+date: 2026-10-22
 tags: [getting-started, onboarding, moc, new-developer]
 description: Map of Content for new developers and AI agents to quickly navigate the Vision knowledge base
 aliases: [start here, onboarding, new dev, beginner]

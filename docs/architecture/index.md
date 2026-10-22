@@ -2,7 +2,7 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 tags:
   [
@@ -450,7 +450,7 @@ Documentation:
 The baseline liquid-glass aesthetic (ADR-017) was further tuned in the Tailwind v4 migration (ADR-047). June 2026 ADR-070 is the authoritative current state; the items below document the Tailwind v4 infrastructure that remains in place:
 
 - **Color Palette**: Emerald + champagne-gold with deep charcoal base
-- **Typography**: Fraunces (display, serif) + Inter (body, geometric sans-serif) — static weights (400/500/600) via `@fontsource`
+- **Typography**: Fraunces (display, serif) + Inter (body, geometric sans-serif) — static weights (400/500/600), vendored WOFF2 in `apps/frontend/src/assets/fonts/`
 - **Material System**: Five-tier glass hierarchy + premium surface utilities (see ADR-070 for current blur tiers)
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
 - **Charts**: visx + d3 primitives (Recharts removed, ADR-245)

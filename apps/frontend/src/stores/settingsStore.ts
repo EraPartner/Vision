@@ -16,7 +16,7 @@
  * slice they need, so unrelated slice updates do not trigger re-renders.
  */
 
-import { create } from "zustand";
+import { create } from "@/stores/createStore";
 import { z } from "zod";
 import type { Language } from "@/types/i18n";
 import type { ThemeVariant } from "@/styles/themes";

@@ -268,7 +268,7 @@ export default tseslint.config(
       ecmaVersion: 2020,
       globals: globals.browser,
       parserOptions: {
-        projectService: { allowDefaultProject: ["tailwind.config.ts"] },
+        projectService: { allowDefaultProject: ["tailwind.config.ts", "tailwindAnimate.ts"] },
         tsconfigRootDir: import.meta.dirname,
       },
     },

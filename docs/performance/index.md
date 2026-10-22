@@ -2,7 +2,7 @@
 title: Performance Documentation Index
 type: performance-index
 status: active
-date: 2026-10-08
+date: 2026-10-22
 last_modified: 2026-09-08
 tags: [performance, index, optimization, startup, offline-resilience]
 description: Performance optimization strategies including caching, materialized views, chart downsampling, and offline-aware startup optimization.

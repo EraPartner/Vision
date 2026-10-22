@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useLayoutEffect } from "react";
 import type { ReactNode } from "react";
-import { create } from "zustand";
+import { create } from "@/stores/createStore";
 
 import { setNativeLanguage } from "@/lib/api/electron";
 import logger from "@/lib/logger";

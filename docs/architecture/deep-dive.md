@@ -2,7 +2,7 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-10-20
+date: 2026-10-22
 updated: 2026-10-20
 tags:
   [

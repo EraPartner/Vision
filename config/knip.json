@@ -39,10 +39,7 @@
         "src/**/*.{ts,tsx}",
         "scripts/**/*.ts"
       ],
-      "ignoreDependencies": [
-        "@fontsource/fraunces",
-        "@fontsource/inter"
-      ]
+      "ignoreDependencies": []
     },
     "apps/node-backend": {
       "entry": [

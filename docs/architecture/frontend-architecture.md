@@ -3,7 +3,7 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-21
+date: 2026-10-22
 updated: 2026-10-21
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
@@ -130,7 +130,7 @@ single subsystem rather than serving as a general application hook.
 - **Build Tool**: Vite
 - **Styling**: **Tailwind CSS v4** (4.2.4) with unified `@tailwindcss/postcss` plugin + Radix UI + design tokens
 - **Design System**: Liquid-glass aesthetic (emerald + champagne-gold palette)
-- **Typography**: Fraunces (display) + Inter (body) via `@fontsource` static weights (400/500/600)
+- **Typography**: Fraunces (display) + Inter (body) via vendored static WOFF2 weights (400/500/600) in `src/assets/fonts/`
 - **Motion**: Framer Motion with centralized motion system + reduced-motion compliance
 - **Charts**: visx + d3 primitives in `apps/frontend/src/components/charts/` (AI chat tool results use them too since ADR-245)
 - **Notifications**: Sonner 2.0.7 (improved toast API and accessibility)
@@ -575,7 +575,7 @@ See [[docs/adr/070-liquid-glass-v2-premium-frontend|ADR-070]] for the full mater
 - **Display**: Fraunces (static weights: 400/600/700, latin subset) — headlines, hero text, stats
 - **Body**: Inter (static weights: 400/500/600/700 plus 400 italic, latin subset) — copy,
   labels, form inputs, and monetary values
-- **Self-hosted**: WOFF2-only static faces loaded from `@fontsource/fraunces` + `@fontsource/inter`;
+- **Self-hosted**: WOFF2-only static faces vendored in `src/assets/fonts/` (from Fontsource 5.3.0; ADR-245);
   legacy WOFF fallbacks are not emitted
 - **Cold-load preloads**: the build injects hashed WOFF2 preloads for Inter 400 and Fraunces 600,
   the two weights needed for first body and display text. Other WOFF2 weights remain
@@ -645,7 +645,7 @@ The `@import "tailwindcss"` loads entire Tailwind v4 layer system; explicit `@co
 
 **Typography Optimization**:
 
-- Static font weights (400/500/600) via `@fontsource/*` instead of variable fonts
+- Static font weights (400/500/600), vendored WOFF2 files, instead of variable fonts
 - Reduces payload; no visual regression for current design
 
 See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047: Tailwind v4 Migration]] for full migration details.
