@@ -22,7 +22,7 @@ import {
 } from "../helpers/transactionsRouteMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent } from "../helpers/routeApp.ts";
-import type { Response } from "supertest";
+import type { Response } from "../helpers/httpAgent.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -87,7 +87,7 @@ const bulkUpdate = (body: object) =>
   api.post("/api/transactions/bulk-update").send(body);
 
 /** Assert a 400 VALIDATION_ERROR envelope and return the response. */
-async function expectValidationError(pending: Promise<Response>) {
+async function expectValidationError(pending: PromiseLike<Response>) {
   const res = await pending;
   expect(res.status).toBe(400);
   expect(bodyAt(res, "ok")).toBe(false);

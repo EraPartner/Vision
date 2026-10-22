@@ -9,7 +9,7 @@
 
 import { bodyAt } from './helpers/responseBody.ts';
 import express from 'express';
-import supertest from 'supertest';
+import { httpAgent as supertest } from './helpers/httpAgent.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { ExpressRequest, ExpressResponse } from '../src/types/express.ts';

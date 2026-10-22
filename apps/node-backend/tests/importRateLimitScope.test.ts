@@ -4,7 +4,7 @@
  * and commits, or a quick review session or group assignment fails with 429.
  */
 import express from "express";
-import request from "supertest";
+import { httpAgent as request } from "./helpers/httpAgent.ts";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/config/config.ts", () => ({

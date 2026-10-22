@@ -102,7 +102,7 @@ Every TypeScript project (frontend, backend source, tests and scripts, both shar
 Electron shell and `scripts/`) also turns on `exactOptionalPropertyTypes`: `prop?: T` accepts
 omission only, so an optional property that callers may pass as `undefined` is declared
 `prop?: T | undefined`, and a field is cleared by sending `null` where the API allows it. No
-explicit `any` remains in source or tests; backend tests read supertest bodies (typed `unknown`)
+explicit `any` remains in source or tests; backend tests read HTTP test-agent bodies (`tests/helpers/httpAgent.ts`, typed `unknown`)
 through `tests/helpers/responseBody.ts`, and the backend lint rule
 `@typescript-eslint/no-explicit-any` is an error. See
 [[docs/adr/198-exact-optional-property-types|ADR-198]].
