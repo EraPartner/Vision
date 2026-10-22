@@ -170,13 +170,11 @@ semantics until production measurements justify extra complexity:
   runtime Zod validation plus the application-wide Belgian tax profile stay in
   the boot graph because they enforce shared contracts and settings. Revisit provider deferral if
   the existing boot-graph budget fails because of either retained dependency.
-- The desktop package retains `archiver` for backup creation. Its former
-  redundant direct transitive dependencies have already been removed; replacing
-  the mature writer solely to reduce an ASAR index of roughly 2,100 files would
-  trade backup compatibility for a measured low-single-digit-millisecond
-  startup concern. Revisit if packaged `node_modules` exceeds 10,000 ASAR
-  entries, ASAR-open profiling exceeds 25 ms p95, or those modules add more than
-  25 MiB to the installed application.
+- Backups are written by the in-repo `packaging/electron/backup/zip-writer.ts`
+  (ADR-245), which replaced `archiver` for supply-chain reasons, not startup
+  speed. It writes the same entry layout and was checked against archiver's
+  output, a 4.6 GB ZIP64 entry and the v1.0.2 fixture. `yauzl` still reads
+  bundles on restore.
 
 ## Cache Layers
 

@@ -2,7 +2,7 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-21
+date: 2026-10-22
 updated: 2026-10-21
 tags:
   [
@@ -231,7 +231,8 @@ Electron package scripts (`start`, `prepare:*`, `dist*`), the root `dev`, `elect
 `electron:prod`, `native:*`, `demo:reset-native` and `test:electron` scripts, `install.sh`,
 `install-demo.sh` and the release job. `bun run typecheck:electron` checks both projects without
 emitting. `assets/error.js` is a renderer script loaded by `error.html` and stays JavaScript;
-`archiver` and `yauzl` use the local declarations in `packaging/electron/types/`.
+`yauzl` uses the local declaration in `packaging/electron/types/`; backups are written by the
+in-repo `backup/zip-writer.ts` (ADR-245).
 
 Compiled code runs one level below the package root, so `paths.ts` exports `appRoot`
 (`packaging/electron` in a checkout, the `app.asar` root when packaged). Resources that are not
@@ -566,7 +567,7 @@ bun install --frozen-lockfile --cwd packaging/electron
 
 A normal local install runs `packaging/electron/package.json`'s narrow `postinstall` command, `install-electron`, so the pinned Electron binary exists before any `electron:*` wrapper launches it. CI backend verification and release verification add `--ignore-scripts`; the macOS package job uses the equivalent command from inside `packaging/electron/` and electron-builder fetches its build runtime independently. All three paths therefore resolve the dependency tree from the same lockfile without broadening lifecycle-script execution on release runners. `npm run dist` remains a script invocation in local examples; it does not make npm the dependency resolver.
 
-The package declares its runtime dependencies directly (`archiver` and `yauzl`), and `bun.lock` pins their complete transitive graph. Do not reintroduce a second package lock for this directory.
+The package declares its one runtime dependency directly (`yauzl`, for restore), and `bun.lock` pins its complete transitive graph. Do not reintroduce a second package lock for this directory.
 
 ### Platforms
 
@@ -1323,7 +1324,7 @@ See [[docs/adr/196-electron-shell-typescript|ADR-196]].
 file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 ```
 
-### Cannot find module 'archiver-utils' (or compress-commons, readable-stream, zip-stream)
+### Cannot find module 'yauzl' (or pend)
 
 **Cause:** The Electron dependency tree or packaged asar is incomplete. See [[#package-manager-bun|Package Manager (Bun)]] above.
 

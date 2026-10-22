@@ -14,7 +14,6 @@
     "dist:demo": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --demo"
   },
   "dependencies": {
-    "archiver": "^8.0.0",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {

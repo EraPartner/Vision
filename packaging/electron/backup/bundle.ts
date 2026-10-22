@@ -18,7 +18,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ZipArchive } from "archiver";
 import type * as Yauzl from "yauzl";
 import {
   RETIRED_V1_MESSAGE,
@@ -26,22 +25,13 @@ import {
   encryptFileV2,
   decryptFile,
 } from "./encrypted-file";
+import { createZipWriter } from "./zip-writer";
 
-// archiver (65 transitive modules) and yauzl are only needed by the backup
-// create/restore paths, all of which run well after boot. Lazy-require them via
-// memoized getters so `require('./backup/bundle')` at Electron module-eval time
-// stays cheap — the first backup/restore pays the load cost instead of every launch.
-// A static import would load them eagerly, so these stay plain require() calls
-// typed through the type-only imports above.
-
-let _ZipArchive: typeof ZipArchive | undefined;
-function getZipArchive(): typeof ZipArchive {
-  if (!_ZipArchive) {
-    const archiver: { ZipArchive: typeof ZipArchive } = require("archiver");
-    _ZipArchive = archiver.ZipArchive;
-  }
-  return _ZipArchive;
-}
+// yauzl is only needed by the restore path, which runs well after boot.
+// Lazy-require it via a memoized getter so `require('./backup/bundle')` at
+// Electron module-eval time stays cheap. A static import would load it
+// eagerly, so this stays a plain require() typed through the type-only import
+// above. The zip writer uses only node builtins.
 
 let _yauzl: typeof Yauzl | undefined;
 function getYauzl(): typeof Yauzl {
@@ -151,63 +141,37 @@ export async function createBundle({
   // cleanup deletes — never a truncated file at the final, restorable name.
   const partialPath = `${bundlePath}.partial`;
 
-  await new Promise<void>((resolve, reject) => {
-    const output = fs.createWriteStream(partialPath);
-    const ZipArchiveClass = getZipArchive();
-    const archive = new ZipArchiveClass({ zlib: { level: 6 } });
-
-    let settled = false;
-    const fail = (err: Error) => {
-      if (settled) return;
-      settled = true;
-      archive.abort();
-      output.destroy();
-      fs.unlink(partialPath, () => {});
-      reject(err);
-    };
-
-    archive.on("error", fail);
-    output.on("error", fail);
-    output.on("close", () => {
-      if (settled) return;
-      settled = true;
-      // Promote the completed partial to its canonical name. Only a fully
-      // finalized archive reaches here (archiver emits 'error' → fail otherwise).
-      fs.rename(partialPath, bundlePath, (err) => {
-        if (err) {
-          fs.unlink(partialPath, () => {});
-          reject(err);
-          return;
-        }
-        resolve();
-      });
-    });
-
-    archive.pipe(output);
-
+  const archive = await createZipWriter(partialPath, { level: 6 });
+  try {
     // metadata.json
-    archive.append(JSON.stringify(metadata, null, 2), {
-      name: "metadata.json",
-    });
+    await archive.append("metadata.json", JSON.stringify(metadata, null, 2));
 
     // db.sql
-    archive.file(dbSqlPath, { name: "db.sql" });
+    await archive.file(dbSqlPath, "db.sql");
 
     // attachments/ tree (optional — not every instance has attachments)
     if (attachmentsDir && fs.existsSync(attachmentsDir)) {
-      archive.directory(attachmentsDir, "attachments");
+      await archive.directory(attachmentsDir, "attachments");
     }
 
     // frontend-state.json (optional)
     if (frontendState) {
-      archive.append(JSON.stringify(frontendState, null, 2), {
-        name: "frontend-state.json",
-      });
+      await archive.append(
+        "frontend-state.json",
+        JSON.stringify(frontendState, null, 2),
+      );
     }
 
-    // Failures surface through the 'error' event handled above.
-    void archive.finalize();
-  });
+    // Writes the central directory and fsyncs before closing.
+    await archive.finalize();
+    // Promote the completed partial to its canonical name. Only a fully
+    // finalized archive reaches here.
+    await fs.promises.rename(partialPath, bundlePath);
+  } catch (err) {
+    await archive.abort().catch(() => {});
+    await fs.promises.unlink(partialPath).catch(() => {});
+    throw err;
+  }
 
   return { bundlePath };
 }

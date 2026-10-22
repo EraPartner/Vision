@@ -30,7 +30,9 @@ const {
   BUNDLE_VERSION,
 } = require(join(REPO_ROOT, "packaging/electron/out/backup/bundle.js"));
 
-const { ZipArchive } = require("archiver");
+const { createZipWriter } = require(
+  join(REPO_ROOT, "packaging/electron/out/backup/zip-writer.js"),
+);
 
 describe("backup bundle dependency loading", () => {
   it("keeps archive libraries unloaded until a backup path uses them", () => {
@@ -40,7 +42,7 @@ describe("backup bundle dependency loading", () => {
         "-e",
         `const { createRequire } = require("node:module");
 const req = createRequire(process.argv[1]);
-const dependencies = ["archiver", "yauzl"].map((name) => req.resolve(name));
+const dependencies = ["yauzl"].map((name) => req.resolve(name));
 req(process.argv[2]);
 for (const dependency of dependencies) {
   if (require.cache[dependency]) process.exit(1);
@@ -361,45 +363,29 @@ describe("openBundle error conditions", () => {
 
   it("throws on a zip missing db.sql", async () => {
     // Build a zip with only metadata.json (no db.sql)
-    const { createWriteStream } = require("node:fs");
-
     const noDbPath = join(TEST_TMP, "no_db.visionbak");
-    await new Promise((resolve, reject) => {
-      const output = createWriteStream(noDbPath);
-      const archive = new ZipArchive();
-      archive.on("error", reject);
-      output.on("close", resolve);
-      archive.pipe(output);
-      archive.append(
-        JSON.stringify({
-          bundleVersion: 1,
-          schemaHead: "",
-          appVersion: "1.0.0",
-          deviceId: "dev",
-          createdAt: new Date().toISOString(),
-          encrypted: false,
-        }),
-        { name: "metadata.json" },
-      );
-      archive.finalize();
-    });
+    const archive = await createZipWriter(noDbPath);
+    await archive.append(
+      "metadata.json",
+      JSON.stringify({
+        bundleVersion: 1,
+        schemaHead: "",
+        appVersion: "1.0.0",
+        deviceId: "dev",
+        createdAt: new Date().toISOString(),
+        encrypted: false,
+      }),
+    );
+    await archive.finalize();
 
     await expect(openBundle(noDbPath)).rejects.toThrow(/db\.sql|corrupt/i);
   });
 
   it("throws on a zip missing metadata.json", async () => {
-    const { createWriteStream } = require("node:fs");
-
     const noMetaPath = join(TEST_TMP, "no_meta.visionbak");
-    await new Promise((resolve, reject) => {
-      const output = createWriteStream(noMetaPath);
-      const archive = new ZipArchive();
-      archive.on("error", reject);
-      output.on("close", resolve);
-      archive.pipe(output);
-      archive.append("SELECT 1;", { name: "db.sql" });
-      archive.finalize();
-    });
+    const archive = await createZipWriter(noMetaPath);
+    await archive.append("db.sql", "SELECT 1;");
+    await archive.finalize();
 
     await expect(openBundle(noMetaPath)).rejects.toThrow(
       /metadata\.json|corrupt/i,

@@ -1,6 +1,6 @@
 /** Synthetic Saxo workbook construction. Contains no supplied financial data. */
 import fs from "node:fs/promises";
-import { ZipArchive } from "archiver";
+import { createZipWriter } from "../../../../packaging/electron/backup/zip-writer.ts";
 
 /**
  * A cell value in a synthetic workbook record. Dates become serial-date cells,
@@ -233,46 +233,37 @@ export async function writeSyntheticWorkbook(
   filePath: string,
   sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
 ): Promise<Buffer> {
-  const zip = new ZipArchive({ zlib: { level: 6 } });
-  const chunks: Buffer[] = [];
-  zip.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const complete = new Promise((resolve, reject) => {
-    zip.on("end", resolve);
-    zip.on("error", reject);
-  });
+  const zip = await createZipWriter(filePath);
   const spreadsheetNs =
     "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-  zip.append(
+  await zip.append(
+    "[Content_Types].xml",
     `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`,
-    { name: "[Content_Types].xml" },
   );
-  zip.append(
+  await zip.append(
+    "xl/workbook.xml",
     `<workbook xmlns="${spreadsheetNs}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, index) => `<sheet name="${escape(sheet.sheet)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>`,
-    { name: "xl/workbook.xml" },
   );
-  zip.append(
+  await zip.append(
+    "xl/_rels/workbook.xml.rels",
     `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="styles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    { name: "xl/_rels/workbook.xml.rels" },
   );
-  zip.append(
+  await zip.append(
+    "xl/styles.xml",
     `<styleSheet xmlns="${spreadsheetNs}"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
-    { name: "xl/styles.xml" },
   );
-  sheets.forEach((sheet, index) => {
+  for (const [index, sheet] of sheets.entries()) {
     const rows = [
       sheet.headers,
       ...sheet.records.map((record) =>
         sheet.headers.map((header) => record[normalize(header)] ?? ""),
       ),
     ];
-    zip.append(
+    await zip.append(
+      `xl/worksheets/sheet${index + 1}.xml`,
       `<worksheet xmlns="${spreadsheetNs}"><sheetData>${rows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((value, colIndex) => cellXml(value, `${columnName(colIndex)}${rowIndex + 1}`)).join("")}</row>`).join("")}</sheetData></worksheet>`,
-      { name: `xl/worksheets/sheet${index + 1}.xml` },
     );
-  });
+  }
   await zip.finalize();
-  await complete;
-  const bytes = Buffer.concat(chunks);
-  await fs.writeFile(filePath, bytes);
-  return bytes;
+  return fs.readFile(filePath);
 }

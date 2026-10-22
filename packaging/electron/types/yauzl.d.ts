@@ -1,5 +1,5 @@
 // Minimal ambient declaration for yauzl 3 (no bundled types). Only the
-// lazy-entry read surface that backup/bundle.ts uses is declared.
+// lazy-entry read surface that backup/bundle.ts and its tests use is declared.
 declare module "yauzl" {
   import type { Readable } from "node:stream";
 
@@ -11,6 +11,9 @@ declare module "yauzl" {
   export interface Entry {
     fileName: string;
     uncompressedSize: number;
+    generalPurposeBitFlag: number;
+    compressionMethod: number;
+    externalFileAttributes: number;
   }
 
   export interface ZipFile {

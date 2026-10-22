@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import type { TestContext } from "node:test";
 
-import { ZipArchive } from "archiver";
+import { createZipWriter } from "./zip-writer";
 import { openBundle } from "./bundle";
 import {
   assertBackupSchemaCompatible,
@@ -102,17 +102,10 @@ test("a bundle whose metadata.json is not an object is rejected as corrupt", asy
   );
   t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
   const bundlePath = path.join(workDir, "null-metadata.visionbak");
-  await new Promise<void>((resolve, reject) => {
-    const output = fs.createWriteStream(bundlePath);
-    const archive = new ZipArchive({ zlib: { level: 6 } });
-    archive.on("error", reject);
-    output.on("error", reject);
-    output.on("close", () => resolve());
-    archive.pipe(output);
-    archive.append("null", { name: "metadata.json" });
-    archive.append("SELECT 1;\n", { name: "db.sql" });
-    void archive.finalize();
-  });
+  const archive = await createZipWriter(bundlePath);
+  await archive.append("metadata.json", "null");
+  await archive.append("db.sql", "SELECT 1;\n");
+  await archive.finalize();
 
   await assert.rejects(openBundle(bundlePath), /missing metadata\.json/);
 });
@@ -170,20 +163,13 @@ async function writeBundle(
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "vision-bundle-"));
   t.after(() => fs.rmSync(workDir, { recursive: true, force: true }));
   const bundlePath = path.join(workDir, "backup.visionbak");
-  await new Promise<void>((resolve, reject) => {
-    const output = fs.createWriteStream(bundlePath);
-    const archive = new ZipArchive({ zlib: { level: 6 } });
-    archive.on("error", reject);
-    output.on("error", reject);
-    output.on("close", () => resolve());
-    archive.pipe(output);
-    archive.append(
-      JSON.stringify({ bundleVersion: 1, schemaHead, appVersion: "1.0.2" }),
-      { name: "metadata.json" },
-    );
-    archive.append(sql, { name: "db.sql" });
-    void archive.finalize();
-  });
+  const archive = await createZipWriter(bundlePath);
+  await archive.append(
+    "metadata.json",
+    JSON.stringify({ bundleVersion: 1, schemaHead, appVersion: "1.0.2" }),
+  );
+  await archive.append("db.sql", sql);
+  await archive.finalize();
   return bundlePath;
 }
 
