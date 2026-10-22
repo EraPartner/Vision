@@ -84,15 +84,25 @@ function ascendingBreadth(a: { y0: number }, b: { y0: number }): number {
 }
 
 /** `order || a.index - b.index`, as d3-sankey writes it (0 and NaN tie). */
-function byIndexWhenTied(order: number, a: { index: number }, b: { index: number }): number {
+function byIndexWhenTied(
+    order: number,
+    a: { index: number },
+    b: { index: number },
+): number {
     return order === 0 || Number.isNaN(order) ? a.index - b.index : order;
 }
 
-function ascendingSourceBreadth<N extends SankeyInputNode>(a: LayoutLink<N>, b: LayoutLink<N>) {
+function ascendingSourceBreadth<N extends SankeyInputNode>(
+    a: LayoutLink<N>,
+    b: LayoutLink<N>,
+) {
     return byIndexWhenTied(ascendingBreadth(a.source, b.source), a, b);
 }
 
-function ascendingTargetBreadth<N extends SankeyInputNode>(a: LayoutLink<N>, b: LayoutLink<N>) {
+function ascendingTargetBreadth<N extends SankeyInputNode>(
+    a: LayoutLink<N>,
+    b: LayoutLink<N>,
+) {
     return byIndexWhenTied(ascendingBreadth(a.target, b.target), a, b);
 }
 
@@ -111,23 +121,20 @@ export function sankeyLayout<N extends SankeyInputNode>(
     let py = dy;
 
     // computeNodeLinks
-    const nodes = input.nodes.map(
-        (node, index) =>
-            ({
-                ...node,
-                index,
-                value: 0,
-                depth: 0,
-                height: 0,
-                layer: 0,
-                x0: 0,
-                x1: 0,
-                y0: 0,
-                y1: 0,
-                sourceLinks: [],
-                targetLinks: [],
-            }),
-    );
+    const nodes = input.nodes.map((node, index): LayoutNode<N> => ({
+        ...node,
+        index,
+        value: 0,
+        depth: 0,
+        height: 0,
+        layer: 0,
+        x0: 0,
+        x1: 0,
+        y0: 0,
+        y1: 0,
+        sourceLinks: [],
+        targetLinks: [],
+    }));
     const nodeById = new Map(nodes.map((node) => [node.id, node]));
     const find = (id: string) => {
         const node = nodeById.get(id);
@@ -137,7 +144,15 @@ export function sankeyLayout<N extends SankeyInputNode>(
     const links = input.links.map((link, index): LayoutLink<N> => {
         const source = find(link.source);
         const target = find(link.target);
-        const laid = { index, source, target, value: link.value, width: 0, y0: 0, y1: 0 };
+        const laid = {
+            index,
+            source,
+            target,
+            value: link.value,
+            width: 0,
+            y0: 0,
+            y1: 0,
+        };
         source.sourceLinks.push(laid);
         target.targetLinks.push(laid);
         return laid;
@@ -152,7 +167,10 @@ export function sankeyLayout<N extends SankeyInputNode>(
     }
 
     // computeNodeDepths / computeNodeHeights
-    const walk = (assign: (node: LayoutNode<N>, x: number) => void, next: (node: LayoutNode<N>) => LayoutNode<N>[]) => {
+    const walk = (
+        assign: (node: LayoutNode<N>, x: number) => void,
+        next: (node: LayoutNode<N>) => LayoutNode<N>[],
+    ) => {
         let current = new Set(nodes);
         let x = 0;
         while (current.size > 0) {
@@ -181,7 +199,8 @@ export function sankeyLayout<N extends SankeyInputNode>(
     const kx = (x1 - x0 - dx) / (layerCount - 1);
     const columns: LayoutNode<N>[][] = new Array<LayoutNode<N>[]>(layerCount);
     for (const node of nodes) {
-        const aligned = node.sourceLinks.length > 0 ? node.depth : layerCount - 1;
+        const aligned =
+            node.sourceLinks.length > 0 ? node.depth : layerCount - 1;
         const i = Math.max(0, Math.min(layerCount - 1, Math.floor(aligned)));
         node.layer = i;
         node.x0 = x0 + i * kx;
@@ -210,11 +229,17 @@ export function sankeyLayout<N extends SankeyInputNode>(
     };
 
     // computeNodeBreadths
-    py = Math.min(dy, (y1 - y0) / ((max(columns, (column) => column.length) ?? Number.NaN) - 1));
+    py = Math.min(
+        dy,
+        (y1 - y0) /
+            ((max(columns, (column) => column.length) ?? Number.NaN) - 1),
+    );
     const ky =
         min(
             columns,
-            (column) => (y1 - y0 - (column.length - 1) * py) / sum(column, (node) => node.value),
+            (column) =>
+                (y1 - y0 - (column.length - 1) * py) /
+                sum(column, (node) => node.value),
         ) ?? Number.NaN;
     for (const column of columns) {
         let y = y0;
@@ -258,7 +283,12 @@ export function sankeyLayout<N extends SankeyInputNode>(
         return y;
     };
 
-    const collideDown = (column: LayoutNode<N>[], start: number, from: number, alpha: number) => {
+    const collideDown = (
+        column: LayoutNode<N>[],
+        start: number,
+        from: number,
+        alpha: number,
+    ) => {
         let y = start;
         for (let i = from; i < column.length; ++i) {
             const node = column[i]!;
@@ -270,7 +300,12 @@ export function sankeyLayout<N extends SankeyInputNode>(
             y = node.y1 + py;
         }
     };
-    const collideUp = (column: LayoutNode<N>[], start: number, from: number, alpha: number) => {
+    const collideUp = (
+        column: LayoutNode<N>[],
+        start: number,
+        from: number,
+        alpha: number,
+    ) => {
         let y = start;
         for (let i = from; i >= 0; --i) {
             const node = column[i]!;
@@ -354,7 +389,9 @@ export function sankeyLayout<N extends SankeyInputNode>(
 }
 
 /** SVG path of a link, as d3-shape 1's horizontal link generator draws it. */
-export function sankeyLinkPath<N extends SankeyInputNode>(link: LayoutLink<N>): string {
+export function sankeyLinkPath<N extends SankeyInputNode>(
+    link: LayoutLink<N>,
+): string {
     const sx = link.source.x1;
     const tx = link.target.x0;
     const mx = (sx + tx) / 2;
