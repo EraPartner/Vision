@@ -28,6 +28,7 @@ import {
   isDetailedHealthReady,
   lastStartupError,
   managedPostgresArgs,
+  MANAGED_POSTGRES_TUNING,
   verifyRuntimeManifest,
   directoryFingerprint,
   atomicReplaceDirectory,
@@ -330,6 +331,9 @@ test("managed PostgreSQL initializes a private loopback-only cluster with argume
       configContents,
       /shared_preload_libraries = 'pg_stat_statements'/,
     );
+    for (const line of MANAGED_POSTGRES_TUNING) {
+      assert.ok(configContents.split("\n").includes(line), line);
+    }
   } finally {
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
@@ -411,6 +415,7 @@ test("managed PostgreSQL provisions roles, database and extensions in one sessio
         "password_encryption = 'scram-sha-256'",
         "shared_preload_libraries = 'pg_stat_statements'",
         "logging_collector = off",
+        ...MANAGED_POSTGRES_TUNING,
         "",
       ].join("\n"),
     );
