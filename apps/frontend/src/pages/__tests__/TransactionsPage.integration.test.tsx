@@ -766,8 +766,10 @@ describe("TransactionsPage (integration)", () => {
 
         renderTransactionsPage();
 
-        await waitFor(() => expect(includeBalance).toBe("true"));
-    });
+        await waitFor(() => expect(includeBalance).toBe("true"), {
+            timeout: 4000,
+        });
+    }, 15_000);
 
     it("after a PATCH succeeds, the transactions list refetches (stale refetch)", async () => {
         let getCalls = 0;

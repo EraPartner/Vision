@@ -9,8 +9,15 @@ import {
   summarizePower,
 } from "../lib/mac-baseline/powermetrics.ts";
 import {
+  analyzeLeak,
+  leakCsv,
+  slopePerMinute,
+  type LeakSample,
+} from "../lib/mac-baseline/leak.ts";
+import {
   classifyProcesses,
   parseCpuTime,
+  parseFootprintOutput,
   parsePsOutput,
   parseTopMem,
   summarizeRoles,
@@ -338,4 +345,79 @@ test("spread and off/on comparison only claim differences beyond noise", () => {
   ]);
   assert.equal(variantLabel(tier(true, 2, 0)), "standard full #2");
   assert.equal(variantLabel(tier(false, 1, 0)), "standard");
+});
+
+test("footprint output gives per-process and shared-once totals", () => {
+  const text = `
+======================================================================
+postgres [200]: 64-bit    Footprint: 140 MB (16384 bytes per page)
+======================================================================
+postgres [201]: 64-bit    Footprint: 12.5 MB (16384 bytes per page)
+======================================================================
+Summary Footprint: 145 MB
+`;
+  const report = parseFootprintOutput(text);
+  assert.equal(report.perProcess.get(200), 140 * 1024 ** 2);
+  assert.equal(report.perProcess.get(201), 12.5 * 1024 ** 2);
+  assert.equal(report.totalBytes, 145 * 1024 ** 2);
+  const single = parseFootprintOutput(
+    "vision-backend [300]: 64-bit    Footprint: 512 KB (16384 bytes per page)",
+  );
+  assert.equal(single.totalBytes, 512 * 1024);
+  assert.equal(
+    parseFootprintOutput("footprint: no such process").totalBytes,
+    null,
+  );
+});
+
+function leakSamples(idleMb: (cycle: number) => number): LeakSample[] {
+  const samples: LeakSample[] = [];
+  for (let cycle = 1; cycle <= 5; cycle += 1) {
+    for (const phase of ["active", "idle"] as const) {
+      const base = (cycle - 1) * 600 + (phase === "idle" ? 300 : 0);
+      for (let i = 0; i < 10; i += 1) {
+        samples.push({
+          t: base + i * 30,
+          cycle,
+          phase,
+          // Active windows spike; only idle samples should decide.
+          values: { backend_mb: phase === "active" ? 400 : idleMb(cycle) },
+        });
+      }
+    }
+  }
+  return samples;
+}
+
+test("leak check flags steady idle growth and ignores flat memory", () => {
+  assert.equal(
+    slopePerMinute([
+      [0, 10],
+      [60, 12],
+    ]),
+    2,
+  );
+  const rising = analyzeLeak(
+    leakSamples((c) => 100 + c * 15),
+    "backend_mb",
+    600,
+  );
+  assert.equal(rising.verdict, "rising");
+  assert.deepEqual(rising.idleMediansMb, [130, 145, 160, 175]);
+  const flat = analyzeLeak(
+    leakSamples(() => 100),
+    "backend_mb",
+    600,
+  );
+  assert.equal(flat.verdict, "flat");
+  const short = analyzeLeak(
+    leakSamples(() => 100).slice(0, 20),
+    "backend_mb",
+    600,
+  );
+  assert.equal(short.verdict, "too short");
+  assert.match(
+    leakCsv(leakSamples(() => 100).slice(0, 1), ["backend_mb"]),
+    /^t_s,cycle,phase,backend_mb\n0,1,active,400\.0\n$/,
+  );
 });

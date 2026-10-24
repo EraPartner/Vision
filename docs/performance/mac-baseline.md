@@ -56,7 +56,7 @@ Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summ
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
-`--no-trace`, `--launch-probe`).
+`--no-trace`, `--launch-probe`, `--leak`, `--leak-window`).
 
 ## Launch probe
 
@@ -73,6 +73,28 @@ for before/after runs:
 bun scripts/mac-baseline.ts --app /Applications/Vision.app --tiers reduced,standard \
   --launch-probe 90 --idle 10 --sustained 0 --no-trace
 ```
+
+## Backend and PostgreSQL memory
+
+Footprint per role adds up each process, so memory several PostgreSQL processes map (the shared
+buffers) is counted once per process that touched it. The summary's "Backend and PostgreSQL
+memory" table therefore also runs `footprint <pids…>` over each role's processes together, which
+counts shared memory once ("shared once"), and lists the PostgreSQL process count. The headline
+spread table reports both shared-once values after launch.
+
+## Leak check
+
+```bash
+bun scripts/mac-baseline.ts --leak 45 --app /Applications/Vision.app
+```
+
+One launch of the first app at its current tier (no setting changes, no sudo). It alternates
+`--leak-window` seconds (default 300) of the sustained scroll/switch loop with the same time idle
+on the Dashboard and samples memory every 30 s. After a 10-minute warm-up it judges the idle
+samples only: "rising" needs the idle-window medians to go up across each of the last three
+windows and a least-squares slope above 1 MB/min; otherwise "flat", or "too short" with fewer
+than three idle windows (45 minutes is enough). Output: `leak.md`, `leak.csv` and `leak.json`.
+Backend and PostgreSQL decide the verdict; renderer and GPU process are recorded for later phases.
 
 ## Full effects and repeats
 

@@ -309,7 +309,11 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
      `runtime_manifest_full` or `runtime_manifest_cached` with its duration;
    - create restricted runtime directories and initialize or reuse the private PostgreSQL cluster;
    - require PostgreSQL `listen_addresses` to be loopback-only, disable Unix sockets, and verify its
-     exact data directory;
+     exact data directory. `vision.conf` also sizes the private cluster for one desktop user
+     (`MANAGED_POSTGRES_TUNING` in `packaging/electron/runtime/native.ts`): `max_connections = 40`
+     (the backend uses at most about 20), `io_workers = 1` instead of PostgreSQL 18's 3, and
+     `pg_stat_statements.max = 1000`. These are runtime settings only; the data-directory format
+     is unchanged. A changed `vision.conf` restarts an already running cluster once;
    - create separate cluster-administrator, owner/migration, application, and Analysis executor roles.
      The administrator provisions the executor password and read-only defaults; after migrations,
      the owner validates the executor, revokes any direct grants it holds, and grants only the six

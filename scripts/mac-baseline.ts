@@ -38,7 +38,15 @@ import {
 } from "./lib/mac-baseline/frames.ts";
 import { PowermetricsRecorder } from "./lib/mac-baseline/powermetrics.ts";
 import {
+  analyzeLeak,
+  leakCsv,
+  renderLeakSummary,
+  type LeakPhase,
+  type LeakResult,
+} from "./lib/mac-baseline/leak.ts";
+import {
   classifyProcesses,
+  parseFootprintOutput,
   parsePsOutput,
   parseTopMem,
   summarizeRoles,
@@ -114,6 +122,11 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
                         A diagnostic: it delays the idle window, so leave it off
                         for before/after runs (default 0 = off)
   --quick               Smoke run: idle 10, sustained 30, cooldown 5, scroll 4000
+  --leak <min>          Leak check instead of the tier matrix: one launch of the
+                        first app at its current tier, alternating active and
+                        idle windows for <min> minutes (45 is enough for a
+                        verdict); writes leak.md, leak.csv and leak.json
+  --leak-window <s>     Length of each active and each idle window (default 300)
   --help                This text
 `;
 
@@ -132,6 +145,8 @@ interface Options {
   trace: boolean;
   launchProbeSeconds: number;
   quick: boolean;
+  leakMinutes: number | null;
+  leakWindowSeconds: number;
 }
 
 function parseOptions(argv: string[]): Options | null {
@@ -152,6 +167,8 @@ function parseOptions(argv: string[]): Options | null {
       "no-trace": { type: "boolean" },
       "launch-probe": { type: "string" },
       quick: { type: "boolean" },
+      leak: { type: "string" },
+      "leak-window": { type: "string" },
       help: { type: "boolean" },
     },
   });
@@ -209,6 +226,9 @@ function parseOptions(argv: string[]): Options | null {
     trace: values["no-trace"] !== true,
     launchProbeSeconds: number(values["launch-probe"], 0, "launch-probe"),
     quick,
+    leakMinutes:
+      values.leak === undefined ? null : number(values.leak, 45, "leak"),
+    leakWindowSeconds: number(values["leak-window"], 300, "leak-window"),
   };
 }
 
@@ -854,13 +874,35 @@ async function measureAction<T>(
   };
 }
 
+/** Roles whose processes share memory (PostgreSQL's shared buffers). */
+const SHARED_ONCE_ROLES = ["backend", "postgres"] as const;
+
+/** footprint(1) over several pids: memory they share is counted once. */
+function sharedOnceMb(pids: number[]): number | null {
+  if (pids.length === 0) return null;
+  const text = run("footprint", pids.map(String));
+  if (text === null) return null;
+  const { totalBytes } = parseFootprintOutput(text);
+  return totalBytes === null
+    ? null
+    : Math.round((totalBytes / 1024 ** 2) * 10) / 10;
+}
+
 function memorySnapshot(app: RunningApp): RoleSummary {
   const rows = psSnapshot();
   const roles = classifyProcesses(
     rows,
     runtimeRoots(app.info.userData, app.mainPid),
   );
-  return summarizeRoles(rows, roles, { footprints: footprints() });
+  const summary = summarizeRoles(rows, roles, { footprints: footprints() });
+  for (const role of SHARED_ONCE_ROLES) {
+    const stats = summary[role];
+    if (!stats) continue;
+    stats.sharedOnceMb = sharedOnceMb(
+      [...roles].filter(([, r]) => r === role).map(([pid]) => pid),
+    );
+  }
+  return summary;
 }
 
 async function pageSwitches(
@@ -1252,6 +1294,136 @@ async function measureApp(ctx: Context, appPath: string): Promise<AppResult> {
   return result;
 }
 
+// ── Leak check ───────────────────────────────────────────────────────────────
+
+const LEAK_SAMPLE_SECONDS = 30;
+const LEAK_WARMUP_SECONDS = 600;
+const LEAK_COLUMNS = [
+  "backend_mb",
+  "postgres_mb",
+  "backend_sum_mb",
+  "postgres_sum_mb",
+  "postgres_processes",
+  "app_total_sum_mb",
+  "main_mb",
+  "renderer_mb",
+  "gpu_mb",
+];
+/** Columns the verdict covers; renderer and GPU are recorded for phase E. */
+const LEAK_VERDICT_COLUMNS = [
+  "backend_mb",
+  "postgres_mb",
+  "backend_sum_mb",
+  "postgres_sum_mb",
+  "renderer_mb",
+  "gpu_mb",
+];
+
+function leakValues(app: RunningApp): Record<string, number | null> {
+  const memory = memorySnapshot(app);
+  return {
+    backend_mb: memory.backend?.sharedOnceMb ?? null,
+    postgres_mb: memory.postgres?.sharedOnceMb ?? null,
+    backend_sum_mb: memory.backend?.footprintMb ?? null,
+    postgres_sum_mb: memory.postgres?.footprintMb ?? null,
+    postgres_processes: memory.postgres?.processes ?? null,
+    app_total_sum_mb: memory.appTotal?.footprintMb ?? null,
+    main_mb: memory.main?.footprintMb ?? null,
+    renderer_mb: memory.renderer?.footprintMb ?? null,
+    gpu_mb: memory.gpu?.footprintMb ?? null,
+  };
+}
+
+/** One active step: the sustained run's scroll and page-switch cycle. */
+async function leakActiveStep(ctx: Context, app: RunningApp): Promise<void> {
+  await navigate(app, "/transactions");
+  try {
+    await scrollLedger(app, Math.min(ctx.options.scrollPx, 6000));
+  } catch {
+    await sleep(2000);
+  }
+  for (const target of ctx.options.pages
+    .filter((p) => p !== "/transactions")
+    .slice(0, 3)) {
+    await navigate(app, target);
+  }
+}
+
+async function measureLeak(
+  ctx: Context,
+  appPath: string,
+  minutes: number,
+): Promise<LeakResult> {
+  const info = appInfo(appPath);
+  const windowSeconds = ctx.options.leakWindowSeconds;
+  const result: LeakResult = {
+    app: info.name,
+    version: info.version,
+    minutes,
+    windowSeconds,
+    warmupSeconds: LEAK_WARMUP_SECONDS,
+    sampleSeconds: LEAK_SAMPLE_SECONDS,
+    columns: LEAK_COLUMNS,
+    samples: [],
+    verdicts: [],
+    error: null,
+  };
+  if (psSnapshot().some((row) => row.command.startsWith(info.executable))) {
+    result.error = `${info.name} is already running; quit it and run again`;
+    return result;
+  }
+  const slug = info.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const logPath = path.join(ctx.outDir, "logs", `${slug}.log`);
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  let running: RunningApp | undefined;
+  try {
+    log(`${info.name}: leak check, ${minutes} min`);
+    running = await launchApp(info, logPath);
+    await sleep(10_000);
+    const app = running;
+    const start = Date.now();
+    const end = start + minutes * 60_000;
+    let nextSample = start;
+    const sample = (cycle: number, phase: LeakPhase) => {
+      result.samples.push({
+        t: Math.round((Date.now() - start) / 1000),
+        cycle,
+        phase,
+        values: leakValues(app),
+      });
+      // A slow active step must not queue a burst of catch-up samples.
+      nextSample = Math.max(
+        nextSample + LEAK_SAMPLE_SECONDS * 1000,
+        Date.now() + 1000,
+      );
+    };
+    for (let cycle = 1; Date.now() < end; cycle += 1) {
+      for (const phase of ["active", "idle"] as const) {
+        const windowEnd = Math.min(end, Date.now() + windowSeconds * 1000);
+        log(`  cycle ${cycle} ${phase}`);
+        if (phase === "idle") await navigate(app, "/");
+        while (Date.now() < windowEnd) {
+          checkAborted();
+          if (Date.now() >= nextSample) sample(cycle, phase);
+          if (phase === "active") await leakActiveStep(ctx, app);
+          else
+            await sleep(
+              Math.max(0, Math.min(nextSample, windowEnd) - Date.now()),
+            );
+        }
+      }
+    }
+  } catch (error) {
+    result.error = (error as Error).message;
+  } finally {
+    if (running) await quitApp(running);
+  }
+  result.verdicts = LEAK_VERDICT_COLUMNS.map((column) =>
+    analyzeLeak(result.samples, column, LEAK_WARMUP_SECONDS),
+  );
+  return result;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 function machineInfo(): Record<string, string | number | null> {
@@ -1316,6 +1488,27 @@ async function main(): Promise<number> {
   );
   caffeinate.unref();
 
+  if (options.leakMinutes !== null) {
+    const appPath = options.apps[0] as string;
+    const leak = await measureLeak(
+      { options, powermetrics: null, outDir },
+      appPath,
+      options.leakMinutes,
+    );
+    fs.writeFileSync(
+      path.join(outDir, "leak.json"),
+      `${JSON.stringify({ machine: machineInfo(), ...leak }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(outDir, "leak.csv"),
+      leakCsv(leak.samples, leak.columns),
+    );
+    fs.writeFileSync(path.join(outDir, "leak.md"), renderLeakSummary(leak));
+    caffeinate.kill();
+    log(`Done. Summary: ${path.join(outDir, "leak.md")}`);
+    return leak.error ? 1 : 0;
+  }
+
   const warnings: string[] = [];
   const machine = machineInfo();
   // Background work (Spotlight, Shortcuts, updates) skews whole-machine power.
@@ -1359,7 +1552,7 @@ async function main(): Promise<number> {
   });
 
   const results: BaselineResults = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     startedAt: new Date().toISOString(),
     finishedAt: "",
     options: {

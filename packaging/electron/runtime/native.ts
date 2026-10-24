@@ -197,6 +197,25 @@ export function validateArgs(args: unknown): string[] {
   return args;
 }
 
+/**
+ * Memory-related settings for the private desktop cluster. PostgreSQL's
+ * defaults size shared memory and background processes for a server; Vision
+ * runs one user with at most about 20 connections: the main pool
+ * (max(DB_POOL_SIZE, DB_MAX_OVERFLOW), default 10), the analysis pools (3),
+ * migrations (1), role bootstrap and admin psql (1-2), pg_dump/pg_restore
+ * (1), with room for a backend restart overlapping the old one. Every value
+ * is a runtime setting: the data directory format is unchanged and removing a
+ * line restores the default.
+ */
+export const MANAGED_POSTGRES_TUNING: readonly string[] = [
+  // Default 100. Sizes the per-connection slots and lock table in shared memory.
+  "max_connections = 40",
+  // PostgreSQL 18 starts 3 I/O worker processes; one serves a single user.
+  "io_workers = 1",
+  // Default 5000 tracked statements; nothing in the app reads them.
+  "pg_stat_statements.max = 1000",
+];
+
 export function managedPostgresArgs(
   dataDirectory: string,
   postgresPort: number,
@@ -1401,6 +1420,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       "password_encryption = 'scram-sha-256'",
       "shared_preload_libraries = 'pg_stat_statements'",
       "logging_collector = off",
+      ...MANAGED_POSTGRES_TUNING,
       "",
     ].join("\n");
     const currentConfig = await fs.promises
