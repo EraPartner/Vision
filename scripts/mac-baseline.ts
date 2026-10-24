@@ -1391,7 +1391,11 @@ async function measureLeak(
         phase,
         values: leakValues(app),
       });
-      nextSample += LEAK_SAMPLE_SECONDS * 1000;
+      // A slow active step must not queue a burst of catch-up samples.
+      nextSample = Math.max(
+        nextSample + LEAK_SAMPLE_SECONDS * 1000,
+        Date.now() + 1000,
+      );
     };
     for (let cycle = 1; Date.now() < end; cycle += 1) {
       for (const phase of ["active", "idle"] as const) {
