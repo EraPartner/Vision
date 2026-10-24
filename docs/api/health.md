@@ -2,8 +2,8 @@
 title: Health API
 type: api
 status: active
-date: 2026-10-21
-updated: 2026-10-21
+date: 2026-10-24
+updated: 2026-10-24
 tags:
   [
     api,
@@ -58,7 +58,7 @@ GET /health
 
 ### Usage
 
-- **Electron runtime watchdog** — polls every 10s and skips probes while the Mac sleeps (the failure count resets on wake); 3 consecutive failures trigger the `backend:lost` IPC event, and the next healthy probe sends `backend:restored`. The renderer's `BackendConnectionBanner` shows a reconnecting warning between the two and refetches all queries on restore. See [[docs/architecture/electron#Runtime Watchdog|Electron runtime watchdog]] and [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
+- **Electron runtime watchdog** — polls every 30s while healthy and every 10s after a failed probe ([[docs/adr/247-launch-background-work-bounds|ADR-247]]), and skips probes while the Mac sleeps (the failure count resets on wake); 3 consecutive failures trigger the `backend:lost` IPC event, and the next healthy probe sends `backend:restored`. The renderer's `BackendConnectionBanner` shows a reconnecting warning between the two and refetches all queries on restore. See [[docs/architecture/electron#Runtime Watchdog|Electron runtime watchdog]] and [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].
 - **Electron restart/update/dev-rebuild flows** — uses `pollHealth` (shallow liveness) because these flows only need to know when Express is back up
 - **Load balancer / reverse proxy readiness checks**
 - **Kubernetes liveness probes**

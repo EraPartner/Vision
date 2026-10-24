@@ -51,7 +51,15 @@ function isOutlierDismissal(row: DismissalRow): row is OutlierDismissalRow {
 }
 
 let refreshInFlight: Promise<InsightsDigest | void> | undefined;
+let refreshStartedAt = 0;
 let refreshRetryAfter = 0;
+
+/**
+ * After this long, a running background refresh reports "unavailable" instead
+ * of "pending": the sidebar badge polls every 2 s while pending but every 60 s
+ * while unavailable, and each poll animates the background-query bar.
+ */
+const REFRESH_PENDING_LIMIT_MS = 30_000;
 
 function mapDismissals(rows: DismissalRow[]): {
   subscriptions: SubscriptionDismissRecord[];
@@ -144,7 +152,14 @@ export async function getInsightsCount() {
     };
   }
 
-  refreshInFlight ??= getInsightsDigest()
+  if (refreshInFlight) {
+    if (Date.now() - refreshStartedAt > REFRESH_PENDING_LIMIT_MS) {
+      return { count: null, status: "unavailable", computed_at: null };
+    }
+  } else {
+    const startedAt = Date.now();
+    refreshStartedAt = startedAt;
+    refreshInFlight = getInsightsDigest()
       .catch((error) => {
         refreshRetryAfter = Date.now() + 60_000;
         logger.error("Background insight count refresh failed", {
@@ -152,8 +167,15 @@ export async function getInsightsCount() {
         });
       })
       .finally(() => {
+        const durationMs = Date.now() - startedAt;
+        if (durationMs > REFRESH_PENDING_LIMIT_MS) {
+          logger.warn("Background insight count refresh was slow", {
+            durationMs,
+          });
+        }
         refreshInFlight = undefined;
       });
+  }
   return {
     count: null,
     status: state ? "pending" : "unavailable",

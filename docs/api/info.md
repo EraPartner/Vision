@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-24
+updated: 2026-10-24
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -384,7 +384,9 @@ filtered before this response is shared with the Statistics panel or AI narratio
 
 Read the persisted undismissed count without running the detectors inline. `status: "ready"`
 includes the authoritative count. A dirty, expired, or missing projection returns `count: null`
-with `pending` or `unavailable` and starts one coalesced background refresh.
+with `pending` or `unavailable` and starts one coalesced background refresh. A refresh that runs
+longer than 30 s answers `unavailable` until it ends, so the badge polls every 60 s instead of
+every 2 s ([[docs/adr/247-launch-background-work-bounds|ADR-247]]).
 
 ### GET /api/info/deduction-candidates
 

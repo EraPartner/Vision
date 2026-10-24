@@ -349,7 +349,10 @@ const HEALTH_POLL_INTERVAL_MS =
 // path a larger budget than a warm restart. 600 × 300ms ≈ 3 min.
 const HEALTH_POLL_BUILD_ATTEMPTS =
   Number(process.env.VISION_HEALTH_POLL_BUILD_ATTEMPTS) || 600;
-const HEALTH_WATCHDOG_INTERVAL_MS = 10_000;
+// Probe every 30 s while healthy; after a failed probe, every 10 s until the
+// backend answers again, so a lost backend is still reported within about 50 s.
+const HEALTH_WATCHDOG_INTERVAL_MS = 30_000;
+const HEALTH_WATCHDOG_RETRY_INTERVAL_MS = 10_000;
 const HEALTH_WATCHDOG_FAILURE_THRESHOLD = 3;
 const RENDERER_READY_TIMEOUT_MS =
   Number(process.env.VISION_RENDERER_READY_TIMEOUT_MS) || 12_000;
@@ -849,12 +852,14 @@ async function logStartupDiagnostics(): Promise<void> {
 // Drive health polling → app load with watchdog once healthy. Safe to call
 // more than once (e.g. from the retry button).
 let healthWatchdogTimer: NodeJS.Timeout | null = null;
+let healthWatchdogGeneration = 0;
 let watchdogFailureCount = 0;
 let backendReportedLost = false;
 
 function stopHealthWatchdog() {
+  healthWatchdogGeneration += 1;
   if (healthWatchdogTimer) {
-    clearInterval(healthWatchdogTimer);
+    clearTimeout(healthWatchdogTimer);
     healthWatchdogTimer = null;
   }
   watchdogFailureCount = 0;
@@ -868,30 +873,43 @@ let systemSuspended = false;
 
 function startHealthWatchdog() {
   stopHealthWatchdog();
-  healthWatchdogTimer = setInterval(async () => {
-    if (systemSuspended) return;
-    const healthy = await pingHealth(3000);
-    if (healthy) {
-      if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("backend:restored");
-      }
-      watchdogFailureCount = 0;
-      backendReportedLost = false;
-      return;
+  const generation = healthWatchdogGeneration;
+  const schedule = () => {
+    const delay =
+      watchdogFailureCount > 0
+        ? HEALTH_WATCHDOG_RETRY_INTERVAL_MS
+        : HEALTH_WATCHDOG_INTERVAL_MS;
+    healthWatchdogTimer = setTimeout(async () => {
+      await probeHealthForWatchdog();
+      if (generation === healthWatchdogGeneration) schedule();
+    }, delay);
+  };
+  schedule();
+}
+
+async function probeHealthForWatchdog() {
+  if (systemSuspended) return;
+  const healthy = await pingHealth(3000);
+  if (healthy) {
+    if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("backend:restored");
     }
-    watchdogFailureCount += 1;
-    if (
-      !backendReportedLost &&
-      watchdogFailureCount >= HEALTH_WATCHDOG_FAILURE_THRESHOLD &&
-      mainWindow &&
-      !mainWindow.isDestroyed()
-    ) {
-      backendReportedLost = true;
-      mainWindow.webContents.send("backend:lost", {
-        message: t("app.backendLost"),
-      });
-    }
-  }, HEALTH_WATCHDOG_INTERVAL_MS);
+    watchdogFailureCount = 0;
+    backendReportedLost = false;
+    return;
+  }
+  watchdogFailureCount += 1;
+  if (
+    !backendReportedLost &&
+    watchdogFailureCount >= HEALTH_WATCHDOG_FAILURE_THRESHOLD &&
+    mainWindow &&
+    !mainWindow.isDestroyed()
+  ) {
+    backendReportedLost = true;
+    mainWindow.webContents.send("backend:lost", {
+      message: t("app.backendLost"),
+    });
+  }
 }
 
 // When the initial boot poll times out onto the error page, keep probing in the

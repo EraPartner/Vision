@@ -2,8 +2,8 @@
 title: Mac Performance Baseline
 type: performance
 status: active
-date: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-24
+last_modified: 2026-10-24
 tags: [performance, macos, gpu, energy, measurement, electron]
 description: Repeatable before/after measurement of the installed Vision apps on a Mac (memory, CPU, GPU, power, launch, frames) across the three UI tiers
 aliases: [mac baseline, performance baseline, powermetrics run]
@@ -56,7 +56,23 @@ Results land in `perf-results/<timestamp>/` (git-ignored): `results.json`, `summ
 `powermetrics.jsonl`, `traces/*.json.gz` (open in Perfetto or Chrome DevTools) and app logs.
 `bun scripts/mac-baseline.ts --help` lists the options (`--app`, `--tiers`, `--idle`,
 `--sustained`, `--cooldown`, `--pages`, `--full-effects`, `--repeat`, `--no-powermetrics`,
-`--no-trace`).
+`--no-trace`, `--launch-probe`).
+
+## Launch probe
+
+`--launch-probe <s>` adds a diagnostic step right after each launch, before the 10 s settle. For
+`<s>` seconds, without any input, it records which page animations are running (every 5 s, from
+`document.getAnimations()`), every page request (path, count, failures, still open, longest
+time), and per-process CPU plus powermetrics GPU over the same window. It writes
+`launch-probe/<label>.json` with the last 200 lines of the backend log and prints the top
+animations and requests. It was added to find the post-launch GPU burn on the real app
+([[docs/adr/247-launch-background-work-bounds|ADR-247]]). It delays the idle window, so leave it off
+for before/after runs:
+
+```bash
+bun scripts/mac-baseline.ts --app /Applications/Vision.app --tiers reduced,standard \
+  --launch-probe 90 --idle 10 --sustained 0 --no-trace
+```
 
 ## Full effects and repeats
 
