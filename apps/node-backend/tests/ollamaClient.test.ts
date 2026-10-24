@@ -261,6 +261,9 @@ describe("ollama client", () => {
           eval_count: 42,
           prompt_eval_count: 10,
           total_duration: 1_200_000_000,
+          load_duration: 300_400_000,
+          prompt_eval_duration: 150_600_000,
+          eval_duration: 700_000_000,
         }),
       );
       const client = makeClient(fetchImpl);
@@ -280,6 +283,9 @@ describe("ollama client", () => {
         evalCount: 42,
         promptEvalCount: 10,
         totalDurationMs: 1200,
+        loadDurationMs: 300,
+        promptEvalDurationMs: 151,
+        evalDurationMs: 700,
       });
 
       const [, init] = fetchImpl.mock.calls[0]!;
@@ -406,6 +412,9 @@ describe("ollama client", () => {
           eval_count: 7,
           prompt_eval_count: 3,
           total_duration: 2_500_000_000,
+          load_duration: 400_000_000,
+          prompt_eval_duration: 250_000_000,
+          eval_duration: 1_800_000_000,
         },
       );
       const fetchImpl = vi.fn().mockResolvedValue(streamResponse([body]));
@@ -431,6 +440,9 @@ describe("ollama client", () => {
         evalCount: 7,
         promptEvalCount: 3,
         totalDurationMs: 2500,
+        loadDurationMs: 400,
+        promptEvalDurationMs: 250,
+        evalDurationMs: 1800,
       });
 
       const [, init] = fetchImpl.mock.calls[0]!;

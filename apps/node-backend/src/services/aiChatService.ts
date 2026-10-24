@@ -29,6 +29,12 @@ import settings from "../config/config.ts";
 import { AppError } from "../middleware/errorHandler.ts";
 import { aiChatRepository } from "../repositories/aiChatRepository.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
+import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
+import {
+  ANSWER_RESERVE_TOKENS,
+  charsForTokens,
+  getContextTuner,
+} from "../integrations/ollama/tuning.ts";
 import {
   buildChatMessages,
   serializeToolResultForPrompt,
@@ -42,6 +48,7 @@ import {
   getToolSchemas,
   getToolNames,
 } from "./aiChat/tools/index.ts";
+import { selectToolSchemas, withCalledTools } from "./aiChat/toolSelection.ts";
 
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
 
@@ -476,17 +483,46 @@ async function runChatTurnLocked({
     });
   }
 
-  const toolSchemas = useTools ? getToolSchemas() : [];
+  // Apple's helper picks its own few tools and trims to its 4,096-token
+  // window (appleFoundation.ts), so it keeps the full request as before.
+  const isAppleModel = activeModel === APPLE_FOUNDATION_MODEL;
+  const allToolSchemas = useTools ? getToolSchemas() : [];
+  let toolSchemas = isAppleModel
+    ? allToolSchemas
+    : selectToolSchemas({
+        schemas: allToolSchemas,
+        question: effectiveMessage,
+        usedTools: historyBeforeTurn.flatMap((row) =>
+          row.role === "tool" && row.toolName ? [row.toolName] : [],
+        ),
+        required: preCallTool ? [preCallTool] : [],
+      });
   const toolNames = useTools ? getToolNames() : [];
+  const contextTuner = getContextTuner();
+  // History gets what the largest allowed window leaves after the tools, one
+  // tool result and the answer, so Ollama never has to cut the prompt itself.
+  const contextBudgetChars = isAppleModel
+    ? settings.aiChat.contextBudgetChars
+    : Math.min(
+        settings.aiChat.contextBudgetChars,
+        Math.max(
+          Math.floor(settings.aiChat.contextBudgetChars / 3),
+          charsForTokens(
+            (await contextTuner.ceilingFor(activeModel)) -
+              ANSWER_RESERVE_TOKENS,
+          ) -
+            JSON.stringify(toolSchemas).length -
+            settings.aiChat.maxToolResultChars,
+        ),
+      );
   const baseMessages: OllamaMessage[] = buildChatMessages({
     toolNames,
     history: historyBeforeTurn,
     userInput: effectiveMessage,
     maxHistoryMessages: settings.aiChat.maxHistoryMessages,
-    contextBudgetChars: settings.aiChat.contextBudgetChars,
+    contextBudgetChars,
     maxToolResultChars: settings.aiChat.maxToolResultChars,
   });
-  const ollamaOptions = { num_ctx: settings.ollama.numCtx };
 
   const toolMessages: AiMessageRow[] = [];
   let iterations = 0;
@@ -571,7 +607,23 @@ async function runChatTurnLocked({
       useTools,
       toolCount: toolSchemas.length,
     });
+    const context = await contextTuner.choose(
+      activeModel,
+      baseMessages,
+      toolSchemas,
+    );
+    if (context.overflow) {
+      logger.warn("[aiChat] prompt may exceed the model's context window", {
+        conversationId: conversation.id,
+        iteration: iterations,
+        model: activeModel,
+        numCtx: context.numCtx,
+        estimatedTokens: context.neededTokens,
+      });
+    }
+    const ollamaOptions = { num_ctx: context.numCtx };
     let response;
+    let firstTokenMs: number | null = null;
     try {
       if (streaming && typeof ollamaClient.chatStream === "function") {
         response = await ollamaClient.chatStream({
@@ -582,6 +634,7 @@ async function runChatTurnLocked({
           signal,
           onToken: async (delta: string) => {
             if (delta) {
+              firstTokenMs ??= Date.now() - iterStart;
               await onEvent?.({
                 type: AI_CHAT_STREAM_EVENT.TOKEN,
                 data: delta,
@@ -604,6 +657,12 @@ async function runChatTurnLocked({
         ms: Date.now() - iterStart,
         toolCalls: response.toolCalls?.length ?? 0,
         contentLen: response.content?.length ?? 0,
+        promptEvalCount: response.promptEvalCount,
+        evalCount: response.evalCount,
+        loadDurationMs: response.loadDurationMs,
+        promptEvalDurationMs: response.promptEvalDurationMs,
+        evalDurationMs: response.evalDurationMs,
+        firstTokenMs,
       });
     } catch (err) {
       logger.warn("[aiChat] iteration ollama failed", {
@@ -654,6 +713,11 @@ async function runChatTurnLocked({
       tool_calls: response.toolCalls,
     });
 
+    toolSchemas = withCalledTools(
+      toolSchemas,
+      allToolSchemas,
+      response.toolCalls.flatMap((call) => normalizeToolCall(call).name ?? []),
+    );
     for (const rawCall of response.toolCalls) {
       const { name, rawArgs } = normalizeToolCall(rawCall);
       if (!name) {

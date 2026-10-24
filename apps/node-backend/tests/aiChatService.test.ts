@@ -7,6 +7,8 @@ vi.mock("../src/config/config.ts", () => {
       enabled: true,
       rateLimit: 30,
       maxHistoryMessages: 30,
+      contextBudgetChars: 24000,
+      maxToolResultChars: 6000,
       maxToolRows: 500,
     },
     ollama: {
@@ -14,6 +16,8 @@ vi.mock("../src/config/config.ts", () => {
       defaultModel: "llama3.1:8b",
       requestTimeoutMs: 60000,
       healthTimeoutMs: 3000,
+      // A pinned window keeps the context tuner off the network.
+      numCtx: 8192,
     },
   };
   return { default: settings };

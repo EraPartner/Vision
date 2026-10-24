@@ -15,6 +15,7 @@ import type {
 } from "./savedAnalysisService.ts";
 import type { VisualAnalysisPlan } from "./analysisCatalog.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
+import { getContextTuner } from "../integrations/ollama/tuning.ts";
 import settings from "../config/config.ts";
 import { UpstreamError } from "../middleware/errorHandler.ts";
 
@@ -176,24 +177,27 @@ export async function generateAnalysisProposal({
     throw Object.assign(new Error("Saved analysis not found"), { status: 404 });
   // The local model is an upstream: a failed call or a malformed answer is a
   // 502, not a fault in the caller's request.
+  const messages = [
+    {
+      role: "system",
+      content:
+        "Return only JSON with rationale and operations. Operations are RFC 6902-like add, replace, or remove edits. Allowed paths start with /name, /parameters, /charts, or /querySpec. Preserve fields not named by the user. Never calculate financial values; edit formulas or query scope for Vision to execute.",
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        instruction: text,
+        current: editable(saved),
+      }),
+    },
+  ];
+  const activeModel = model || settings.ollama.defaultModel;
+  const { numCtx } = await getContextTuner().choose(activeModel, messages);
   const chatRequest = {
-    model: model || undefined,
+    model: activeModel,
     format: "json",
-    options: { num_ctx: settings.ollama.numCtx },
-    messages: [
-      {
-        role: "system",
-        content:
-          "Return only JSON with rationale and operations. Operations are RFC 6902-like add, replace, or remove edits. Allowed paths start with /name, /parameters, /charts, or /querySpec. Preserve fields not named by the user. Never calculate financial values; edit formulas or query scope for Vision to execute.",
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          instruction: text,
-          current: editable(saved),
-        }),
-      },
-    ],
+    options: { num_ctx: numCtx },
+    messages,
   };
   let response;
   try {

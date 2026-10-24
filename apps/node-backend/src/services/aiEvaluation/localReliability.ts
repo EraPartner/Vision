@@ -352,7 +352,7 @@ export async function runLocalAiCase({
   testCase: LocalAiCase;
   model: string;
   ollamaClient: LocalAiClient;
-  numCtx?: number;
+  numCtx?: number | undefined;
   maxIterations?: number;
 }): Promise<LocalAiRun> {
   const messages: OllamaMessage[] = buildChatMessages({

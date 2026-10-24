@@ -1,6 +1,7 @@
 import type { AiInvestigationRequest } from "@vision/types/aiResearch";
 import settings from "../config/config.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
+import { getContextTuner } from "../integrations/ollama/tuning.ts";
 
 export interface ProviderGeneration {
   text: string;
@@ -24,10 +25,12 @@ export async function generateLocal({
   messages,
   signal,
 }: ProviderGenerationInput): Promise<ProviderGeneration> {
+  const model = request.model ?? settings.ollama.defaultModel;
+  const { numCtx } = await getContextTuner().choose(model, messages);
   const response = await getOllamaClient().chat({
-    model: request.model ?? undefined,
+    model,
     messages,
-    options: { num_ctx: settings.ollama.numCtx },
+    options: { num_ctx: numCtx },
     signal,
   });
   return {

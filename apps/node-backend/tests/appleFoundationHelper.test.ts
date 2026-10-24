@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { __createOllamaClient as createOllamaClient } from "../src/integrations/ollama/client.ts";
 import {
-  __APPLE_FOUNDATION_MODEL as APPLE_FOUNDATION_MODEL,
+  APPLE_FOUNDATION_MODEL,
   withAppleFoundation,
 } from "../src/integrations/ollama/appleFoundation.ts";
 
