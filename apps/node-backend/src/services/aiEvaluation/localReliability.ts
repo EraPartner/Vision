@@ -2,9 +2,18 @@ import { performance } from "node:perf_hooks";
 
 import { buildChatMessages } from "../../integrations/ollama/prompts.ts";
 import type { OllamaMessage } from "../../integrations/ollama/prompts.ts";
-import type { getOllamaClient } from "../../integrations/ollama/client.ts";
+import type {
+  getOllamaClient,
+  OllamaKeepAlive,
+} from "../../integrations/ollama/client.ts";
 import type { AiMessageRow } from "../../types/rows.ts";
 import { getToolNames, getToolSchemas } from "../aiChat/tools/index.ts";
+import {
+  historyBudgetChars,
+  historyStepFor,
+  planModelCall,
+  toolsForTurn,
+} from "../aiChat/requestPlan.ts";
 
 /** One oracle tool call: the expected name/args and the synthetic result. */
 export interface LocalExpectedCall {
@@ -41,6 +50,16 @@ export type RawToolCall =
   | null
   | undefined;
 
+/** Ollama's own numbers for one model call of a run. */
+export interface LocalAiIteration {
+  numCtx: number | null;
+  toolCount: number;
+  promptEvalCount: number | null;
+  loadDurationMs: number | null;
+  promptEvalDurationMs: number | null;
+  evalDurationMs: number | null;
+}
+
 export interface LocalAiRun {
   completed: boolean;
   answer: string;
@@ -48,6 +67,56 @@ export interface LocalAiRun {
   latencyMs: number;
   firstTokenLatencyMs?: number | null;
   residentMemoryBytes?: number | null;
+  iterations?: LocalAiIteration[];
+}
+
+type ToolSchema = ReturnType<typeof getToolSchemas>[number];
+
+/**
+ * How a run builds its requests, so the same cases can compare request
+ * shapes (e.g. the pre-tuning shape against the chat service's tuned one).
+ */
+export interface LocalAiRequestShape {
+  tools: (question: string) => ToolSchema[];
+  /** System + history + question budget; undefined uses the builder default. */
+  contextBudgetChars?: (tools: ToolSchema[]) => Promise<number | undefined>;
+  historyStep?: number;
+  request: (
+    messages: OllamaMessage[],
+    tools: ToolSchema[],
+  ) => Promise<{
+    options: Record<string, unknown>;
+    keepAlive?: OllamaKeepAlive | undefined;
+  }>;
+}
+
+/** The request Vision sent before per-request tuning: all tools, fixed window. */
+export function fixedWindowRequestShape(numCtx = 8_192): LocalAiRequestShape {
+  return {
+    tools: () => getToolSchemas(),
+    request: () =>
+      Promise.resolve({
+        options: { num_ctx: numCtx, temperature: 0, seed: 1 },
+      }),
+  };
+}
+
+/** The request the chat service sends today (services/aiChat/requestPlan.ts). */
+export function tunedRequestShape(model: string): LocalAiRequestShape {
+  return {
+    tools: (question) =>
+      toolsForTurn(model, { schemas: getToolSchemas(), question }),
+    contextBudgetChars: (tools) => historyBudgetChars(model, tools),
+    historyStep: historyStepFor(model),
+    request: async (messages, tools) => {
+      const { options, keepAlive } = await planModelCall(
+        model,
+        messages,
+        tools,
+      );
+      return { options: { ...options, temperature: 0, seed: 1 }, keepAlive };
+    },
+  };
 }
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
@@ -347,21 +416,29 @@ export async function runLocalAiCase({
   model,
   ollamaClient,
   numCtx = 8_192,
+  shape = fixedWindowRequestShape(numCtx),
   maxIterations = 6,
 }: {
   testCase: LocalAiCase;
   model: string;
   ollamaClient: LocalAiClient;
   numCtx?: number | undefined;
+  shape?: LocalAiRequestShape;
   maxIterations?: number;
 }): Promise<LocalAiRun> {
+  const tools = shape.tools(testCase.question);
+  const contextBudgetChars = await shape.contextBudgetChars?.(tools);
   const messages: OllamaMessage[] = buildChatMessages({
     toolNames: getToolNames(),
     // Synthetic rows carry only the fields toOllamaMessage reads.
     history: (testCase.history ?? []) as AiMessageRow[],
     userInput: testCase.question,
+    ...(contextBudgetChars !== undefined ? { contextBudgetChars } : {}),
+    ...(shape.historyStep !== undefined
+      ? { historyStep: shape.historyStep }
+      : {}),
   });
-  const tools = getToolSchemas();
+  const iterations: LocalAiIteration[] = [];
   const toolCalls: RawToolCall[] = [];
   let answer = "";
   let firstTokenLatencyMs: number | null = null;
@@ -369,17 +446,27 @@ export async function runLocalAiCase({
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     let firstTokenSeen = false;
+    const { options, keepAlive } = await shape.request(messages, tools);
     const response = await ollamaClient.chatStream({
       model,
       messages,
       tools,
-      options: { num_ctx: numCtx, temperature: 0, seed: 1 },
+      options,
+      keepAlive,
       onToken: () => {
         if (!firstTokenSeen && firstTokenLatencyMs == null) {
           firstTokenSeen = true;
           firstTokenLatencyMs = Math.round(performance.now() - startedAt);
         }
       },
+    });
+    iterations.push({
+      numCtx: typeof options.num_ctx === "number" ? options.num_ctx : null,
+      toolCount: tools.length,
+      promptEvalCount: response.promptEvalCount ?? null,
+      loadDurationMs: response.loadDurationMs ?? null,
+      promptEvalDurationMs: response.promptEvalDurationMs ?? null,
+      evalDurationMs: response.evalDurationMs ?? null,
     });
     if (response.toolCalls?.length === 0) {
       answer = response.content || "";
@@ -391,6 +478,7 @@ export async function runLocalAiCase({
         latencyMs,
         firstTokenLatencyMs,
         residentMemoryBytes: await residentMemoryForModel(ollamaClient, model),
+        iterations,
       };
     }
 
@@ -428,5 +516,6 @@ export async function runLocalAiCase({
     latencyMs: Math.round(performance.now() - startedAt),
     firstTokenLatencyMs,
     residentMemoryBytes: await residentMemoryForModel(ollamaClient, model),
+    iterations,
   };
 }

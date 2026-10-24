@@ -3062,6 +3062,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/model/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Memory advisor facts for one model
+         * @description Weights, f16 KV cache cost per context token and the largest window Vision will use for the model on this Mac. Fields Ollama can't report are null; every field but `model` and `totalMemoryBytes` is null for the Apple Foundation model.
+         */
+        get: operations["getAiModelFit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/model/warm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Load the chat model and keep it resident
+         * @description Best-effort hint from the chat page. Loads the model with the window chats will use and keeps it for the active period. Answers 204 also when AI chat is disabled, the model is the Apple Foundation model, or Ollama is unreachable.
+         */
+        post: operations["warmAiModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/model/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let the chat model unload
+         * @description Best-effort hint when the chat page is left. The model lingers briefly, or unloads at once when its weights take over a quarter of the Mac's memory. Answers 204 also when AI chat is disabled, the model is the Apple Foundation model, or Ollama is unreachable.
+         */
+        post: operations["releaseAiModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/conversations": {
         parameters: {
             query?: never;
@@ -7555,6 +7615,17 @@ export interface components {
             parameterSize: string | null;
             quantization: string | null;
             modifiedAt: string | null;
+        };
+        AiModelResidencyRequest: {
+            /** @description Defaults to the configured default model. */
+            model?: string;
+        };
+        AiModelFit: {
+            model: string;
+            totalMemoryBytes: number;
+            weightBytes: number | null;
+            kvBytesPerToken: number | null;
+            maxNumCtx: number | null;
         };
         AiConversationDetail: {
             conversation: components["schemas"]["AiConversation"];
@@ -15531,6 +15602,75 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    getAiModelFit: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the configured default model. */
+                model?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Model fit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AiModelFit"];
+                    };
+                };
+            };
+        };
+    };
+    warmAiModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AiModelResidencyRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releaseAiModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AiModelResidencyRequest"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

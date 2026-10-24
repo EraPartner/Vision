@@ -3359,6 +3359,8 @@
   "settings.aiChat.defaultModel": "Default model",
   "settings.aiChat.defaultModelHint": "Pick a model that fits your hardware. Larger models answer better but need more RAM.",
   "settings.aiChat.loadingModels": "Loading models…",
+  "settings.aiChat.modelFit": "Uses about {weights} GB plus up to {context} GB for conversation context, of {total} GB memory.",
+  "settings.aiChat.modelFitTip": "Tip: setting OLLAMA_FLASH_ATTENTION=1 and OLLAMA_KV_CACHE_TYPE=q8_0 for Ollama roughly halves context memory.",
   "settings.aiChat.noModels": "No models installed",
   "settings.aiChat.section": "AI chat",
   "settings.aiChat.selectModel": "Select a model",

@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { APPLE_FOUNDATION_MODEL as SHARED_APPLE_MODEL } from "@vision/types/aiChat";
 import { APPLE_FOUNDATION_MODEL } from "../src/integrations/ollama/appleFoundation.ts";
 import {
+  ACTIVE_KEEP_ALIVE,
+  RELEASE_KEEP_ALIVE,
   contextCeiling,
   createContextTuner,
   profileFromModelInfo,
+  releaseLoadedModels,
 } from "../src/integrations/ollama/tuning.ts";
 import type { ModelProfile } from "../src/integrations/ollama/tuning.ts";
 
@@ -110,5 +114,128 @@ describe("createContextTuner", () => {
       totalMemoryBytes: 64 * GiB,
     });
     await expect(tuner.ceilingFor("m")).resolves.toBe(8_192);
+  });
+});
+
+describe("model residency", () => {
+  it("shares the Apple model id with the frontend", () => {
+    expect(SHARED_APPLE_MODEL).toBe(APPLE_FOUNDATION_MODEL);
+  });
+
+  const tunerFor = (
+    profile: ModelProfile | null,
+    totalGiB = 16,
+    fixedNumCtx?: number,
+  ) =>
+    createContextTuner({
+      loadProfile: vi.fn().mockResolvedValue(profile),
+      totalMemoryBytes: totalGiB * GiB,
+      fixedNumCtx,
+    });
+
+  it("warms with the default window capped by the ceiling", async () => {
+    await expect(tunerFor(llama8b).warmWindow("m")).resolves.toBe(8_192);
+    await expect(
+      tunerFor({ ...llama8b, contextLength: 4096 }).warmWindow("m"),
+    ).resolves.toBe(4_096);
+  });
+
+  it("warms with the window the model already has, and records its own", async () => {
+    const tuner = tunerFor(llama8b);
+    await tuner.choose("m", messagesOfChars(30_000));
+    await expect(tuner.warmWindow("m")).resolves.toBe(16_384);
+    const fresh = tunerFor(llama8b);
+    await fresh.warmWindow("m");
+    // A later small chat must not pick a smaller window than the preload.
+    await expect(
+      fresh.choose("m", messagesOfChars(100)),
+    ).resolves.toMatchObject({ numCtx: 8_192 });
+  });
+
+  it("warms a pinned OLLAMA_NUM_CTX and the Apple model with their fixed windows", async () => {
+    await expect(tunerFor(llama8b, 16, 16_384).warmWindow("m")).resolves.toBe(
+      16_384,
+    );
+    await expect(
+      tunerFor(llama8b).warmWindow(APPLE_FOUNDATION_MODEL),
+    ).resolves.toBe(8_192);
+  });
+
+  it("releases at once when the weights exceed a quarter of RAM", async () => {
+    // 8B at 4.9 GiB on 16 GiB is 30%.
+    await expect(tunerFor(llama8b, 16).residencyFor("m")).resolves.toEqual({
+      active: ACTIVE_KEEP_ALIVE,
+      release: 0,
+    });
+    await expect(tunerFor(llama8b, 32).residencyFor("m")).resolves.toEqual({
+      active: "10m",
+      release: RELEASE_KEEP_ALIVE,
+    });
+  });
+
+  it("lingers briefly when the model size is unknown", async () => {
+    await expect(tunerFor(null).residencyFor("m")).resolves.toEqual({
+      active: "10m",
+      release: "2m",
+    });
+  });
+
+  it("tracks loaded models until forgotten, never the Apple model", async () => {
+    const tuner = tunerFor(llama8b, 16, 8_192);
+    await tuner.choose("a", messagesOfChars(10));
+    await tuner.warmWindow("b");
+    await tuner.choose(APPLE_FOUNDATION_MODEL, messagesOfChars(10));
+    expect(tuner.loadedModels().sort()).toEqual(["a", "b"]);
+    tuner.forget("a");
+    expect(tuner.loadedModels()).toEqual(["b"]);
+  });
+
+  it("summarises a model's fit, with nulls for Apple", async () => {
+    const tuner = tunerFor(llama8b);
+    await expect(tuner.profileSummary("m")).resolves.toEqual({
+      model: "m",
+      totalMemoryBytes: 16 * GiB,
+      weightBytes: 4.9 * GiB,
+      kvBytesPerToken: 128 * 1024,
+      maxNumCtx: 16_384,
+    });
+    await expect(
+      tuner.profileSummary(APPLE_FOUNDATION_MODEL),
+    ).resolves.toMatchObject({
+      weightBytes: null,
+      kvBytesPerToken: null,
+      maxNumCtx: null,
+    });
+  });
+});
+
+describe("releaseLoadedModels", () => {
+  it("unloads every loaded model with keepAlive 0 and forgets it", async () => {
+    const tuner = createContextTuner({
+      loadProfile: vi.fn().mockResolvedValue(llama8b),
+      totalMemoryBytes: 16 * GiB,
+    });
+    await tuner.warmWindow("a");
+    await tuner.choose("b", messagesOfChars(10));
+    const setModelResidency = vi.fn().mockResolvedValue(undefined);
+    await releaseLoadedModels({ tuner, client: { setModelResidency } });
+    expect(setModelResidency.mock.calls.map(([arg]) => arg)).toEqual([
+      expect.objectContaining({ model: "a", keepAlive: 0 }),
+      expect.objectContaining({ model: "b", keepAlive: 0 }),
+    ]);
+    expect(tuner.loadedModels()).toEqual([]);
+  });
+
+  it("does nothing without loaded models and never throws", async () => {
+    const setModelResidency = vi.fn().mockRejectedValue(new Error("down"));
+    const tuner = createContextTuner({
+      loadProfile: vi.fn().mockResolvedValue(null),
+    });
+    await releaseLoadedModels({ tuner, client: { setModelResidency } });
+    expect(setModelResidency).not.toHaveBeenCalled();
+    await tuner.warmWindow("a");
+    await expect(
+      releaseLoadedModels({ tuner, client: { setModelResidency } }),
+    ).resolves.toBeUndefined();
   });
 });

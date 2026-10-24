@@ -81,6 +81,12 @@ You cannot modify data. You cannot send transactions. You cannot reach the inter
 
 const DEFAULT_CONTEXT_BUDGET_CHARS = 24_000;
 const DEFAULT_TOOL_RESULT_CHARS = 6_000;
+/**
+ * History rows between moves of the replay start. Ollama reuses its KV cache
+ * only for an unchanged prompt prefix, so the first replayed row must stay put
+ * across turns instead of sliding with every new message.
+ */
+export const HISTORY_REPLAY_STEP = 8;
 
 export interface BuildChatMessagesArgs {
   /** Registered tool names (for the system prompt). */
@@ -95,6 +101,12 @@ export interface BuildChatMessagesArgs {
   contextBudgetChars?: number;
   /** Per-tool replay ceiling before data is summarized. */
   maxToolResultChars?: number;
+  /**
+   * Replay starts only at history indexes that are multiples of this, so the
+   * first replayed row (and the cached prompt prefix) holds still between
+   * moves. 1 (default) keeps the newest rows that fit, moving every turn.
+   */
+  historyStep?: number;
 }
 
 function jsonText(value: unknown): string {
@@ -194,14 +206,84 @@ function boundedToolEnvelope(result: Record<string, unknown>, limit: number) {
   return null;
 }
 
+/** Decimal places kept on numbers shown to the model. */
+const PROMPT_NUMBER_DECIMALS = 4;
+/**
+ * `meta` keys that only tell the UI which columns feed a chart; the model
+ * never needs them (`renderAs` stays, the system prompt refers to it).
+ */
+const UI_ONLY_META_KEYS = new Set([
+  "xField",
+  "yField",
+  "yFields",
+  "labelField",
+  "valueField",
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Shrink a tool result for the model: drop object fields that are null,
+ * undefined or "" and round numbers with more than four decimals (four
+ * significant digits below 1). Numbers with four decimals or fewer are
+ * returned as they are, so money stays exact.
+ * Array items keep their positions.
+ */
+function compactForPrompt(value: unknown): unknown {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return value;
+    // Below 1 (crypto quantities, rates) keep significant digits instead, so
+    // 0.00012345 does not collapse to 0.0001.
+    const rounded = Number(
+      Math.abs(value) >= 1
+        ? value.toFixed(PROMPT_NUMBER_DECIMALS)
+        : value.toPrecision(PROMPT_NUMBER_DECIMALS),
+    );
+    return rounded === value ? value : rounded;
+  }
+  if (Array.isArray(value)) return value.map(compactForPrompt);
+  if (!isPlainObject(value)) return value;
+  const compacted: Record<string, unknown> = {};
+  for (const [key, field] of Object.entries(value)) {
+    if (field === null || field === undefined || field === "") continue;
+    compacted[key] = compactForPrompt(field);
+  }
+  return compacted;
+}
+
+/** Compact a whole tool envelope, also dropping its UI-only `meta` keys. */
+function compactToolPayload(payload: unknown): unknown {
+  try {
+    const compacted = compactForPrompt(payload);
+    if (isPlainObject(compacted) && isPlainObject(compacted.meta)) {
+      const meta = Object.fromEntries(
+        Object.entries(compacted.meta).filter(
+          ([key]) => !UI_ONLY_META_KEYS.has(key),
+        ),
+      );
+      return { ...compacted, meta };
+    }
+    return compacted;
+  } catch {
+    // Not plain JSON data (cyclic, say): jsonText reports it as before.
+    return payload;
+  }
+}
+
 /**
  * Serialize a tool envelope for model context with the same cap used for
- * persisted history and same-turn tool-loop replay.
+ * persisted history and same-turn tool-loop replay. The model reads a leaner
+ * copy (see compactForPrompt); persisted rows and the UI keep the original.
  */
 export function serializeToolResultForPrompt(
-  payload: unknown,
+  rawPayload: unknown,
   maxChars: number = DEFAULT_TOOL_RESULT_CHARS,
 ): string {
+  const payload = compactToolPayload(rawPayload);
   const limit = Number.isFinite(maxChars)
     ? Math.max(1, Math.floor(maxChars))
     : DEFAULT_TOOL_RESULT_CHARS;
@@ -325,6 +407,7 @@ export function buildChatMessages({
   maxHistoryMessages = 30,
   contextBudgetChars = DEFAULT_CONTEXT_BUDGET_CHARS,
   maxToolResultChars = DEFAULT_TOOL_RESULT_CHARS,
+  historyStep = 1,
 }: BuildChatMessagesArgs): OllamaMessage[] {
   const systemMessage: OllamaMessage = {
     role: "system",
@@ -334,30 +417,61 @@ export function buildChatMessages({
     userInput && userInput.trim()
       ? { role: "user", content: userInput.trim() }
       : null;
-  const candidates = history
-    .slice(-maxHistoryMessages)
-    .map((row) => toOllamaMessage(row, { maxToolResultChars }))
-    .filter((message): message is OllamaMessage => Boolean(message));
-  let remainingChars = Math.max(
+  // Only the last `maxHistoryMessages` rows can be replayed; indexes stay
+  // absolute so the step grid does not move as the conversation grows.
+  const firstIndex = history.length - history.slice(-maxHistoryMessages).length;
+  const window = history
+    .slice(firstIndex)
+    .map((row) => toOllamaMessage(row, { maxToolResultChars }));
+  const candidates = window.filter((message): message is OllamaMessage =>
+    Boolean(message),
+  );
+  const remainingChars = Math.max(
     0,
     contextBudgetChars -
       approximateMessageChars(systemMessage) -
       (userMessage ? approximateMessageChars(userMessage) : 0),
   );
-  const selectedHistory: OllamaMessage[] = [];
 
-  for (const candidate of candidates.toReversed()) {
-    const chars = approximateMessageChars(candidate);
-    if (chars <= remainingChars) {
-      selectedHistory.unshift(candidate);
-      remainingChars -= chars;
-      continue;
+  // Smallest step-aligned start whose rows fit the budget. Never reaches
+  // beyond the window, so maxHistoryMessages still holds.
+  const step = Math.max(1, Math.min(Math.floor(historyStep), window.length));
+  let selectedHistory: OllamaMessage[] | null = null;
+  let suffixChars = 0;
+  const suffixCharsFrom: number[] = [];
+  for (let i = window.length - 1; i >= 0; i -= 1) {
+    const message = window[i];
+    if (message) suffixChars += approximateMessageChars(message);
+    suffixCharsFrom[i] = suffixChars;
+  }
+  for (let i = 0; i < window.length; i += 1) {
+    if ((firstIndex + i) % step !== 0) continue;
+    if ((suffixCharsFrom[i] ?? 0) <= remainingChars) {
+      selectedHistory = window
+        .slice(i)
+        .filter((message): message is OllamaMessage => Boolean(message));
+      break;
     }
-    if (selectedHistory.length === 0) {
-      const truncated = truncateMessageToBudget(candidate, remainingChars);
-      if (truncated) selectedHistory.unshift(truncated);
+  }
+
+  // No aligned start fits: keep the newest rows that do, and trim the newest
+  // one itself when it alone is over budget.
+  if (selectedHistory === null) {
+    selectedHistory = [];
+    let left = remainingChars;
+    for (const candidate of candidates.toReversed()) {
+      const chars = approximateMessageChars(candidate);
+      if (chars <= left) {
+        selectedHistory.unshift(candidate);
+        left -= chars;
+        continue;
+      }
+      if (selectedHistory.length === 0) {
+        const truncated = truncateMessageToBudget(candidate, left);
+        if (truncated) selectedHistory.unshift(truncated);
+      }
+      break;
     }
-    break;
   }
 
   return [

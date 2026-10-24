@@ -24,6 +24,7 @@ import os from "node:os";
 import settings from "../../config/config.ts";
 import { APPLE_FOUNDATION_MODEL } from "./appleFoundation.ts";
 import { getOllamaClient } from "./client.ts";
+import type { OllamaKeepAlive } from "./client.ts";
 
 const CONTEXT_BUCKETS = [4_096, 8_192, 16_384, 32_768] as const;
 /** The window Vision sent on every request before tuning; the cap's floor. */
@@ -36,6 +37,12 @@ const ESTIMATE_MARGIN = 1.15;
 const RAM_SHARE = 0.75;
 const RAM_HEADROOM_BYTES = 4 * 1024 ** 3;
 const PROFILE_TTL_MS = 10 * 60_000;
+/** How long the chat model stays loaded after a request or a warm-up. */
+export const ACTIVE_KEEP_ALIVE = "10m";
+/** Short linger after the chat page closes, when memory allows. */
+export const RELEASE_KEEP_ALIVE = "2m";
+/** Weights above this share of total RAM make the model unload at once. */
+export const MEMORY_TIGHT_WEIGHT_SHARE = 0.25;
 
 /** What sizing needs to know about one installed model. */
 export interface ModelProfile {
@@ -54,6 +61,22 @@ export interface ContextTunerOptions {
   /** OLLAMA_NUM_CTX: when set, every request uses exactly this window. */
   fixedNumCtx?: number | undefined;
   now?: () => number;
+}
+
+/** How long to keep a model loaded while the chat is in use and after it. */
+export interface ModelResidency {
+  active: OllamaKeepAlive;
+  release: OllamaKeepAlive;
+}
+
+/** What the memory advisor shows for one model. */
+export interface ModelFitSummary {
+  model: string;
+  totalMemoryBytes: number;
+  weightBytes: number | null;
+  kvBytesPerToken: number | null;
+  /** Largest window the tuner may pick; null for the Apple Foundation model. */
+  maxNumCtx: number | null;
 }
 
 export interface ContextChoice {
@@ -161,6 +184,9 @@ export function createContextTuner({
     { at: number; profile: Promise<ModelProfile | null> }
   >();
   const loadedWindows = new Map<string, number>();
+  // Every non-Apple model this process loaded, for the best-effort unload on
+  // shutdown; unlike loadedWindows it also covers a pinned OLLAMA_NUM_CTX.
+  const residentModels = new Set<string>();
 
   function profileFor(model: string): Promise<ModelProfile | null> {
     const cached = profiles.get(model);
@@ -189,6 +215,7 @@ export function createContextTuner({
   ): Promise<ContextChoice> {
     const neededTokens = promptTokens(messages, tools);
     const ceiling = await ceilingFor(model);
+    if (model !== APPLE_FOUNDATION_MODEL) residentModels.add(model);
     if (!isTuned(model)) {
       return {
         numCtx: ceiling,
@@ -206,13 +233,87 @@ export function createContextTuner({
     return { numCtx, neededTokens, overflow: neededTokens > numCtx };
   }
 
-  /** The model left memory: its next request may pick a smaller window. */
-  function forget(model?: string) {
-    if (model === undefined) loadedWindows.clear();
-    else loadedWindows.delete(model);
+  /**
+   * Window to preload a model with: the one it is loaded with now, else the
+   * default capped by the ceiling. Chats send the same window, so Ollama does
+   * not reload the model for them.
+   */
+  async function warmWindow(model: string): Promise<number> {
+    if (fixedNumCtx !== undefined) {
+      if (model !== APPLE_FOUNDATION_MODEL) residentModels.add(model);
+      return fixedNumCtx;
+    }
+    if (!isTuned(model)) return DEFAULT_NUM_CTX;
+    const numCtx =
+      loadedWindows.get(model) ??
+      Math.min(DEFAULT_NUM_CTX, await ceilingFor(model));
+    loadedWindows.set(model, numCtx);
+    residentModels.add(model);
+    return numCtx;
   }
 
-  return { ceilingFor, choose, forget };
+  /**
+   * keep_alive while chatting and after leaving. A model whose weights take
+   * over a quarter of RAM is unloaded at once on release; an unknown size
+   * gets the short linger.
+   */
+  async function residencyFor(model: string): Promise<ModelResidency> {
+    const weightBytes = (await profileFor(model))?.weightBytes ?? null;
+    const memoryTight =
+      weightBytes !== null &&
+      weightBytes > totalMemoryBytes * MEMORY_TIGHT_WEIGHT_SHARE;
+    return {
+      active: ACTIVE_KEEP_ALIVE,
+      release: memoryTight ? 0 : RELEASE_KEEP_ALIVE,
+    };
+  }
+
+  /** Memory advisor facts for one model; nulls when Ollama can't say. */
+  async function profileSummary(model: string): Promise<ModelFitSummary> {
+    if (model === APPLE_FOUNDATION_MODEL) {
+      return {
+        model,
+        totalMemoryBytes,
+        weightBytes: null,
+        kvBytesPerToken: null,
+        maxNumCtx: null,
+      };
+    }
+    const profile = await profileFor(model);
+    return {
+      model,
+      totalMemoryBytes,
+      weightBytes: profile?.weightBytes ?? null,
+      kvBytesPerToken: profile?.kvBytesPerToken ?? null,
+      maxNumCtx: await ceilingFor(model),
+    };
+  }
+
+  /** Models this process loaded and has not seen leave memory. */
+  function loadedModels(): string[] {
+    return [...residentModels];
+  }
+
+  /** The model left memory: its next request may pick a smaller window. */
+  function forget(model?: string) {
+    if (model === undefined) {
+      loadedWindows.clear();
+      residentModels.clear();
+    } else {
+      loadedWindows.delete(model);
+      residentModels.delete(model);
+    }
+  }
+
+  return {
+    ceilingFor,
+    choose,
+    warmWindow,
+    residencyFor,
+    profileSummary,
+    loadedModels,
+    forget,
+  };
 }
 
 export type ContextTuner = ReturnType<typeof createContextTuner>;
@@ -236,4 +337,28 @@ export function getContextTuner(): ContextTuner {
     },
   });
   return defaultTuner;
+}
+
+/**
+ * Best-effort unload of the models this process loaded, for shutdown. Bounded
+ * by `timeoutMs` and never throws, so it cannot hold the exit up.
+ */
+export async function releaseLoadedModels({
+  timeoutMs = 1_000,
+  tuner = getContextTuner(),
+  client = getOllamaClient(),
+}: {
+  timeoutMs?: number;
+  tuner?: Pick<ContextTuner, "loadedModels" | "forget">;
+  client?: Pick<ReturnType<typeof getOllamaClient>, "setModelResidency">;
+} = {}): Promise<void> {
+  const models = tuner.loadedModels();
+  if (models.length === 0) return;
+  const signal = AbortSignal.timeout(timeoutMs);
+  await Promise.allSettled(
+    models.map(async (model) => {
+      await client.setModelResidency({ model, keepAlive: 0, signal });
+      tuner.forget(model);
+    }),
+  );
 }

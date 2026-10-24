@@ -62,6 +62,7 @@ import watchlistRouter from "./routes/watchlist.ts";
 import splitsRouter from "./routes/splits.ts";
 import savedChartsRouter from "./routes/savedCharts.ts";
 import aiRouter from "./routes/ai.ts";
+import { releaseLoadedModels } from "./integrations/ollama/tuning.ts";
 import attachmentsRouter from "./routes/attachments.ts";
 import reportsRouter from "./routes/reports.ts";
 import tagsRouter from "./routes/tags.ts";
@@ -612,6 +613,10 @@ async function shutdown(signal?: string) {
       server.closeIdleConnections?.();
     });
   }
+
+  // Free the chat model's memory now rather than after its keep_alive; capped
+  // at 1 s inside, so an unreachable Ollama cannot hold the exit up.
+  await releaseLoadedModels();
 
   await Promise.allSettled([
     closePool(),

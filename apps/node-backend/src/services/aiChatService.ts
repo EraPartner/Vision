@@ -29,12 +29,6 @@ import settings from "../config/config.ts";
 import { AppError } from "../middleware/errorHandler.ts";
 import { aiChatRepository } from "../repositories/aiChatRepository.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
-import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
-import {
-  ANSWER_RESERVE_TOKENS,
-  charsForTokens,
-  getContextTuner,
-} from "../integrations/ollama/tuning.ts";
 import {
   buildChatMessages,
   serializeToolResultForPrompt,
@@ -48,7 +42,13 @@ import {
   getToolSchemas,
   getToolNames,
 } from "./aiChat/tools/index.ts";
-import { selectToolSchemas, withCalledTools } from "./aiChat/toolSelection.ts";
+import { withCalledTools } from "./aiChat/toolSelection.ts";
+import {
+  historyBudgetChars,
+  historyStepFor,
+  planModelCall,
+  toolsForTurn,
+} from "./aiChat/requestPlan.ts";
 
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
 
@@ -483,45 +483,24 @@ async function runChatTurnLocked({
     });
   }
 
-  // Apple's helper picks its own few tools and trims to its 4,096-token
-  // window (appleFoundation.ts), so it keeps the full request as before.
-  const isAppleModel = activeModel === APPLE_FOUNDATION_MODEL;
   const allToolSchemas = useTools ? getToolSchemas() : [];
-  let toolSchemas = isAppleModel
-    ? allToolSchemas
-    : selectToolSchemas({
-        schemas: allToolSchemas,
-        question: effectiveMessage,
-        usedTools: historyBeforeTurn.flatMap((row) =>
-          row.role === "tool" && row.toolName ? [row.toolName] : [],
-        ),
-        required: preCallTool ? [preCallTool] : [],
-      });
+  let toolSchemas = toolsForTurn(activeModel, {
+    schemas: allToolSchemas,
+    question: effectiveMessage,
+    usedTools: historyBeforeTurn.flatMap((row) =>
+      row.role === "tool" && row.toolName ? [row.toolName] : [],
+    ),
+    required: preCallTool ? [preCallTool] : [],
+  });
   const toolNames = useTools ? getToolNames() : [];
-  const contextTuner = getContextTuner();
-  // History gets what the largest allowed window leaves after the tools, one
-  // tool result and the answer, so Ollama never has to cut the prompt itself.
-  const contextBudgetChars = isAppleModel
-    ? settings.aiChat.contextBudgetChars
-    : Math.min(
-        settings.aiChat.contextBudgetChars,
-        Math.max(
-          Math.floor(settings.aiChat.contextBudgetChars / 3),
-          charsForTokens(
-            (await contextTuner.ceilingFor(activeModel)) -
-              ANSWER_RESERVE_TOKENS,
-          ) -
-            JSON.stringify(toolSchemas).length -
-            settings.aiChat.maxToolResultChars,
-        ),
-      );
   const baseMessages: OllamaMessage[] = buildChatMessages({
     toolNames,
     history: historyBeforeTurn,
     userInput: effectiveMessage,
     maxHistoryMessages: settings.aiChat.maxHistoryMessages,
-    contextBudgetChars,
+    contextBudgetChars: await historyBudgetChars(activeModel, toolSchemas),
     maxToolResultChars: settings.aiChat.maxToolResultChars,
+    historyStep: historyStepFor(activeModel),
   });
 
   const toolMessages: AiMessageRow[] = [];
@@ -607,11 +586,11 @@ async function runChatTurnLocked({
       useTools,
       toolCount: toolSchemas.length,
     });
-    const context = await contextTuner.choose(
-      activeModel,
-      baseMessages,
-      toolSchemas,
-    );
+    const {
+      options: ollamaOptions,
+      keepAlive,
+      context,
+    } = await planModelCall(activeModel, baseMessages, toolSchemas);
     if (context.overflow) {
       logger.warn("[aiChat] prompt may exceed the model's context window", {
         conversationId: conversation.id,
@@ -621,7 +600,6 @@ async function runChatTurnLocked({
         estimatedTokens: context.neededTokens,
       });
     }
-    const ollamaOptions = { num_ctx: context.numCtx };
     let response;
     let firstTokenMs: number | null = null;
     try {
@@ -631,6 +609,7 @@ async function runChatTurnLocked({
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           options: ollamaOptions,
+          keepAlive,
           signal,
           onToken: async (delta: string) => {
             if (delta) {
@@ -648,6 +627,7 @@ async function runChatTurnLocked({
           messages: baseMessages,
           tools: toolSchemas.length > 0 ? toolSchemas : undefined,
           options: ollamaOptions,
+          keepAlive,
           signal,
         });
       }

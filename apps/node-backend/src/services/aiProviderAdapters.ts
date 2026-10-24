@@ -1,5 +1,6 @@
 import type { AiInvestigationRequest } from "@vision/types/aiResearch";
 import settings from "../config/config.ts";
+import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
 import { getContextTuner } from "../integrations/ollama/tuning.ts";
 
@@ -26,11 +27,17 @@ export async function generateLocal({
   signal,
 }: ProviderGenerationInput): Promise<ProviderGeneration> {
   const model = request.model ?? settings.ollama.defaultModel;
-  const { numCtx } = await getContextTuner().choose(model, messages);
+  const tuner = getContextTuner();
+  const { numCtx } = await tuner.choose(model, messages);
+  const keepAlive =
+    model === APPLE_FOUNDATION_MODEL
+      ? undefined
+      : (await tuner.residencyFor(model)).active;
   const response = await getOllamaClient().chat({
     model,
     messages,
     options: { num_ctx: numCtx },
+    keepAlive,
     signal,
   });
   return {

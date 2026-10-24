@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  HISTORY_REPLAY_STEP,
   __buildSystemPrompt as buildSystemPrompt,
   toOllamaMessage,
   buildChatMessages,
@@ -430,5 +431,168 @@ describe("buildChatMessages", () => {
     );
     expect(messages).toHaveLength(1);
     expect(messages[0]!.role).toBe("system");
+  });
+});
+
+describe("serializeToolResultForPrompt leaner output", () => {
+  const serialize = (payload: unknown) =>
+    JSON.parse(serializeToolResultForPrompt(payload));
+
+  it("drops null, undefined and empty-string object fields, at any depth", () => {
+    expect(
+      serialize({
+        ok: true,
+        data: [
+          { category: "Food", note: "", parent: null, extra: undefined, n: 0 },
+          { category: null, flags: [null, "", false] },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      data: [{ category: "Food", n: 0 }, { flags: [null, "", false] }],
+    });
+  });
+
+  it("rounds numbers beyond four decimals and leaves the rest exact", () => {
+    expect(
+      serialize({
+        data: [
+          { a: 12.345678, b: 1234.5, c: 0.1234, d: 7, e: -2.00006, f: 99.99 },
+        ],
+      }).data[0],
+    ).toEqual({ a: 12.3457, b: 1234.5, c: 0.1234, d: 7, e: -2.0001, f: 99.99 });
+  });
+
+  it("keeps four significant digits on numbers below 1", () => {
+    expect(
+      serialize({ data: [{ btc: 0.000123456, rate: 0.0325 }] }).data[0],
+    ).toEqual({ btc: 0.0001235, rate: 0.0325 });
+  });
+
+  it("keeps meta.renderAs and drops chart column bindings", () => {
+    const parsed = serialize({
+      ok: true,
+      data: [],
+      meta: {
+        renderAs: "bar",
+        currency: "EUR",
+        xField: "category",
+        yField: "total",
+        yFields: ["a"],
+        labelField: "name",
+        valueField: "marketValue",
+        from: "2025-01-01",
+      },
+    });
+    expect(parsed.meta).toEqual({
+      renderAs: "bar",
+      currency: "EUR",
+      from: "2025-01-01",
+    });
+  });
+
+  it("does not mutate the persisted payload", () => {
+    const payload = { ok: true, data: { x: null, y: 1.123456 } };
+    serializeToolResultForPrompt(payload);
+    expect(payload).toEqual({ ok: true, data: { x: null, y: 1.123456 } });
+  });
+
+  it("falls back to the raw payload when it cannot be compacted", () => {
+    const cyclic: Record<string, unknown> = { ok: true };
+    cyclic.self = cyclic;
+    expect(JSON.parse(serializeToolResultForPrompt(cyclic))).toMatchObject({
+      ok: false,
+      error: { code: "SERIALIZATION_ERROR" },
+    });
+  });
+});
+
+describe("buildChatMessages stable history start", () => {
+  const ROW = 100;
+  const rows = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      partial<AiMessageRow>({
+        role: index % 2 === 0 ? "user" : "assistant",
+        content: `row-${String(index).padStart(3, "0")}-${"x".repeat(ROW - 8)}`,
+      }),
+    );
+  const replayed = (
+    count: number,
+    extra: Partial<BuildChatMessagesArgs> = {},
+  ) =>
+    buildChatMessages({
+      toolNames: [],
+      history: rows(count),
+      userInput: "q",
+      maxHistoryMessages: 20,
+      historyStep: HISTORY_REPLAY_STEP,
+      ...extra,
+    }).slice(1, -1);
+  const firstIndex = (messages: { content: string }[]) =>
+    Number(messages[0]?.content.slice(4, 7));
+
+  it("keeps the first replayed row until the next step boundary", () => {
+    const starts = Array.from({ length: 40 }, (_, i) => i + 21).map((count) =>
+      firstIndex(replayed(count)),
+    );
+    // 21 rows -> window starts at index 1 -> first multiple of 8 is 8.
+    expect(starts.slice(0, 8)).toEqual(Array(8).fill(8));
+    expect(new Set(starts).size).toBeLessThanOrEqual(6);
+    for (const start of starts) expect(start % HISTORY_REPLAY_STEP).toBe(0);
+    expect(starts).toEqual([...starts].sort((a, b) => a - b));
+  });
+
+  it("never replays more than maxHistoryMessages", () => {
+    for (let count = 1; count < 70; count += 1) {
+      expect(replayed(count).length).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it("never exceeds the budget and moves on in whole steps when it binds", () => {
+    const system = buildSystemPrompt([]).length;
+    const budget = system + 1 + 10 * ROW;
+    const starts: number[] = [];
+    for (let count = 12; count < 60; count += 1) {
+      const messages = replayed(count, {
+        contextBudgetChars: budget,
+        maxHistoryMessages: 30,
+      });
+      const chars = messages.reduce((sum, m) => sum + m.content.length, 0);
+      expect(chars + system + 1).toBeLessThanOrEqual(budget);
+      starts.push(firstIndex(messages));
+    }
+    expect(new Set(starts).size).toBeLessThan(starts.length / 3);
+    for (const start of starts) expect(start % HISTORY_REPLAY_STEP).toBe(0);
+  });
+
+  it("still truncates the newest row when nothing else fits", () => {
+    const messages = buildChatMessages({
+      toolNames: [],
+      history: partial<AiMessageRow[]>([
+        { role: "assistant", content: `prefix-${"z".repeat(500)}` },
+      ]),
+      userInput: "latest",
+      contextBudgetChars: buildSystemPrompt([]).length + 60,
+      historyStep: HISTORY_REPLAY_STEP,
+    });
+    expect(messages[1]?.content).toMatch(/^…/);
+  });
+
+  it("falls back to the newest rows that fit when no aligned start does", () => {
+    const system = buildSystemPrompt([]).length;
+    const messages = replayed(19, {
+      contextBudgetChars: system + 1 + 2 * ROW,
+    });
+    // Aligned starts are 8 and 16 (rows 16..18 = 3 rows) and 17 does not exist.
+    expect(messages.map((m) => firstIndex([m]))).toEqual([17, 18]);
+  });
+
+  it("replays the newest rows that fit with a step of 1", () => {
+    const messages = replayed(25, {
+      historyStep: 1,
+      maxHistoryMessages: 30,
+      contextBudgetChars: buildSystemPrompt([]).length + 1 + 3 * ROW,
+    });
+    expect(messages.map((m) => firstIndex([m]))).toEqual([22, 23, 24]);
   });
 });

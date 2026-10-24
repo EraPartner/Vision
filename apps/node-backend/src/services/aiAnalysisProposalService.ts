@@ -14,6 +14,7 @@ import type {
   SavedAnalysisQuerySpec,
 } from "./savedAnalysisService.ts";
 import type { VisualAnalysisPlan } from "./analysisCatalog.ts";
+import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
 import { getContextTuner } from "../integrations/ollama/tuning.ts";
 import settings from "../config/config.ts";
@@ -192,11 +193,17 @@ export async function generateAnalysisProposal({
     },
   ];
   const activeModel = model || settings.ollama.defaultModel;
-  const { numCtx } = await getContextTuner().choose(activeModel, messages);
+  const tuner = getContextTuner();
+  const { numCtx } = await tuner.choose(activeModel, messages);
+  const keepAlive =
+    activeModel === APPLE_FOUNDATION_MODEL
+      ? undefined
+      : (await tuner.residencyFor(activeModel)).active;
   const chatRequest = {
     model: activeModel,
     format: "json",
     options: { num_ctx: numCtx },
+    keepAlive,
     messages,
   };
   let response;

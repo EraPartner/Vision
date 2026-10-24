@@ -35,6 +35,19 @@ export const OllamaModelSchema = z.looseObject({
 /** `GET /api/ai/models`. */
 export const OllamaModelListSchema = wireListOf(OllamaModelSchema);
 
+/**
+ * `GET /api/ai/model/fit` (routes/ai.ts): what the memory advisor shows for
+ * one model. Fields Ollama can't report are null, as is everything but the
+ * model and total memory for the Apple Foundation model.
+ */
+export const AiModelFitSchema = z.looseObject({
+  model: z.string(),
+  totalMemoryBytes: z.number().int().nonnegative(),
+  weightBytes: z.number().nullable(),
+  kvBytesPerToken: z.number().nullable(),
+  maxNumCtx: z.number().int().positive().nullable(),
+});
+
 /** An `ai_conversations` row (`aiConversationRowSchema`). */
 export const AiConversationSchema = z.looseObject({
   id: z.string(),
