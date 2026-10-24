@@ -2,8 +2,13 @@ import { useId } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { useOllamaStatus, useOllamaModels } from '@/hooks/useOllamaStatus';
+import { useModelFit } from '@/hooks/useModelFit';
 import { cn } from '@/lib/utils';
 import { SettingsGroup, SettingRow } from '@/features/settings/SettingsPrimitives';
+
+const GIB = 1024 ** 3;
+
+const oneDecimal = (bytes: number) => (bytes / GIB).toFixed(1);
 
 interface AIChatSettingsSectionProps {
     value: string | undefined;
@@ -31,6 +36,15 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
     const modelOptions = models ?? [];
     const hasModels = modelOptions.length > 0;
     const selectValue = value ?? status?.defaultModel ?? '';
+    const { data: fit } = useModelFit(status?.ok ? selectValue || undefined : undefined);
+    const fitLine =
+        fit?.weightBytes != null && fit.kvBytesPerToken != null && fit.maxNumCtx != null
+            ? t('settings.aiChat.modelFit', {
+                weights: oneDecimal(fit.weightBytes),
+                context: oneDecimal(fit.kvBytesPerToken * fit.maxNumCtx),
+                total: Math.round(fit.totalMemoryBytes / GIB),
+            })
+            : null;
     const statusDescription = (
         <span className="block space-y-1">
             {(status?.displayUrl || status?.baseUrl) && (
@@ -88,6 +102,12 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
                             ))}
                         </SelectContent>
                     </Select>
+                    {fitLine && (
+                        <div className="space-y-0.5 type-footnote text-label-secondary">
+                            <p>{fitLine}</p>
+                            <p>{t('settings.aiChat.modelFitTip')}</p>
+                        </div>
+                    )}
                 </div>
             </SettingRow>
         </SettingsGroup>

@@ -4,6 +4,7 @@ import { Menu, Sparkles } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useOllamaStatus } from "@/hooks/useOllamaStatus";
+import { useModelResidency } from "@/hooks/useModelResidency";
 import {
     useConversation,
     useCreateConversation,
@@ -120,6 +121,8 @@ export default function AIChatPage() {
         appSettings.aiDefaultModel ??
         status?.defaultModel ??
         null;
+
+    useModelResidency(activeModel, status?.ok === true);
 
     const ensureConversation = async (): Promise<string | null> => {
         if (selectedId) return selectedId;

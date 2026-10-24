@@ -66,6 +66,9 @@ describe("local research documents", () => {
       { ollamaClient: partial<OllamaClient>({ embed }) },
     );
     expect(embed.mock.calls.length).toBeGreaterThan(1);
+    expect(embed).toHaveBeenCalledWith(
+      expect.objectContaining({ keepAlive: "1m" }),
+    );
     // The createDocument mock echoes the stored passages back.
     const stored = result as unknown as {
       passages: Array<{ embedding: { model: string } }>;

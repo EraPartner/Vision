@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  __APPLE_FOUNDATION_MODEL as APPLE_FOUNDATION_MODEL,
+  APPLE_FOUNDATION_MODEL,
   __fitForAppleModel as fitForAppleModel,
   withAppleFoundation,
 } from "../src/integrations/ollama/appleFoundation.ts";

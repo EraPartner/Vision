@@ -45,6 +45,10 @@ const intEnv = (defaultValue: number) =>
       return parsed;
     });
 
+const optionalIntEnv = intEnv(Number.NaN).transform((value) =>
+  Number.isNaN(value) ? undefined : value,
+);
+
 const stringEnv = (defaultValue: string) =>
   z
     .string()
@@ -107,7 +111,8 @@ const envSchema = z
     // long. OLLAMA_REQUEST_TIMEOUT_MS still bounds connect + prompt-eval
     // (time to FIRST chunk); total generation time is unbounded by design.
     OLLAMA_STREAM_IDLE_TIMEOUT_MS: intEnv(120000),
-    OLLAMA_NUM_CTX: intEnv(8192),
+    // Unset: Vision sizes the window per request (integrations/ollama/tuning.ts).
+    OLLAMA_NUM_CTX: optionalIntEnv,
     OLLAMA_EMBEDDING_MODEL: optionalStringEnv,
 
     AI_CHAT_ENABLED: booleanEnv(true),

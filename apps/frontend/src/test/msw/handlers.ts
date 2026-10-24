@@ -1462,6 +1462,17 @@ export const defaultHandlers = [
     ),
     http.delete(`${API_BASE}/api/ai/conversations/:id`, () => noContent()),
     http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [], total: 0 })),
+    http.get(`${API_BASE}/api/ai/model/fit`, ({ request }) =>
+        ok({
+            model: new URL(request.url).searchParams.get("model") ?? "",
+            totalMemoryBytes: 16 * 1024 ** 3,
+            weightBytes: null,
+            kvBytesPerToken: null,
+            maxNumCtx: null,
+        }),
+    ),
+    http.post(`${API_BASE}/api/ai/model/warm`, () => noContent()),
+    http.post(`${API_BASE}/api/ai/model/release`, () => noContent()),
 
     // Attachments
     // `listBody(items, total)` — routes/attachments.ts.

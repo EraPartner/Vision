@@ -58,6 +58,21 @@ vi.mock("../../src/services/aiChatService.ts", async () => {
   };
 });
 
+const residency = vi.hoisted(() => ({
+  setModelResidency: vi.fn(),
+  listRunningModels: vi.fn(),
+  tuner: {
+    residencyFor: vi.fn(),
+    warmWindow: vi.fn(),
+    profileSummary: vi.fn(),
+    forget: vi.fn(),
+  },
+}));
+
+vi.mock("../../src/integrations/ollama/tuning.ts", () => ({
+  getContextTuner: () => residency.tuner,
+}));
+
 vi.mock("../../src/integrations/ollama/client.ts", () => {
   class OllamaError extends Error {
     declare code: string;
@@ -71,6 +86,8 @@ vi.mock("../../src/integrations/ollama/client.ts", () => {
     getOllamaClient: vi.fn(() => ({
       healthCheck: vi.fn(),
       listModels: vi.fn(),
+      setModelResidency: residency.setModelResidency,
+      listRunningModels: residency.listRunningModels,
     })),
   };
 });
@@ -97,6 +114,8 @@ import {
 } from "../../src/services/aiChatService.ts";
 import type { ChatTurnResult } from "../../src/services/aiChatService.ts";
 import settings from "../../src/config/config.ts";
+import { OllamaError } from "../../src/integrations/ollama/client.ts";
+import { APPLE_FOUNDATION_MODEL } from "../../src/integrations/ollama/appleFoundation.ts";
 
 const createEmptyConversation = vi.mocked(rawCreateEmptyConversation);
 const getConversationWithMessages = vi.mocked(rawGetConversationWithMessages);
@@ -836,5 +855,126 @@ describe("AI conversation routes validation", () => {
       expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
       expect(deleteConversation).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("model residency routes", () => {
+  const originalEnabled = settings.aiChat.enabled;
+
+  beforeEach(() => {
+    residency.setModelResidency.mockReset().mockResolvedValue(undefined);
+    residency.listRunningModels
+      .mockReset()
+      .mockResolvedValue([{ name: "m:latest", model: "m:latest" }]);
+    residency.tuner.residencyFor.mockReset().mockResolvedValue({
+      active: "10m",
+      release: "2m",
+    });
+    residency.tuner.warmWindow.mockReset().mockResolvedValue(8192);
+    residency.tuner.forget.mockReset();
+    residency.tuner.profileSummary.mockReset();
+  });
+
+  afterEach(() => {
+    settings.aiChat.enabled = originalEnabled;
+  });
+
+  it("warms the requested model with the window chats will use", async () => {
+    await api
+      .post(`${BASE}/model/warm`)
+      .send({ model: "llama3.1:8b" })
+      .expect(204);
+    expect(residency.tuner.warmWindow).toHaveBeenCalledWith("llama3.1:8b");
+    expect(residency.setModelResidency).toHaveBeenCalledWith({
+      model: "llama3.1:8b",
+      keepAlive: "10m",
+      numCtx: 8192,
+    });
+  });
+
+  it("defaults to the configured model when the body is empty", async () => {
+    await api.post(`${BASE}/model/warm`).expect(204);
+    expect(residency.setModelResidency).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "llama3.2:3b" }),
+    );
+  });
+
+  it("releases with the lingering keep_alive and keeps the loaded window", async () => {
+    await api.post(`${BASE}/model/release`).send({ model: "m" }).expect(204);
+    expect(residency.setModelResidency).toHaveBeenCalledWith({
+      model: "m",
+      keepAlive: "2m",
+    });
+    expect(residency.tuner.forget).not.toHaveBeenCalled();
+  });
+
+  it("unloads at once and forgets the window on a memory-tight Mac", async () => {
+    residency.tuner.residencyFor.mockResolvedValue({
+      active: "10m",
+      release: 0,
+    });
+    await api.post(`${BASE}/model/release`).send({ model: "m" }).expect(204);
+    expect(residency.setModelResidency).toHaveBeenCalledWith({
+      model: "m",
+      keepAlive: 0,
+    });
+    expect(residency.tuner.forget).toHaveBeenCalledWith("m");
+  });
+
+  it("does not release a model that is not loaded, which would load it", async () => {
+    residency.listRunningModels.mockResolvedValue([]);
+    await api.post(`${BASE}/model/release`).send({ model: "m" }).expect(204);
+    expect(residency.setModelResidency).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for the Apple model and when AI chat is disabled", async () => {
+    await api
+      .post(`${BASE}/model/warm`)
+      .send({ model: APPLE_FOUNDATION_MODEL })
+      .expect(204);
+    await api
+      .post(`${BASE}/model/release`)
+      .send({ model: APPLE_FOUNDATION_MODEL })
+      .expect(204);
+    settings.aiChat.enabled = false;
+    await api.post(`${BASE}/model/warm`).send({ model: "m" }).expect(204);
+    expect(residency.setModelResidency).not.toHaveBeenCalled();
+  });
+
+  it("answers 204 when Ollama is unreachable", async () => {
+    residency.setModelResidency.mockRejectedValue(
+      new OllamaError("down", { code: "NETWORK_ERROR" }),
+    );
+    await api.post(`${BASE}/model/warm`).send({ model: "m" }).expect(204);
+    residency.listRunningModels.mockRejectedValue(
+      new OllamaError("down", { code: "NETWORK_ERROR" }),
+    );
+    await api.post(`${BASE}/model/release`).send({ model: "m" }).expect(204);
+  });
+
+  it("rejects a blank model", async () => {
+    const res = await api
+      .post(`${BASE}/model/warm`)
+      .send({ model: "  " })
+      .expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+  });
+
+  it("GET /model/fit returns the tuner's summary", async () => {
+    const summary = {
+      model: "m",
+      totalMemoryBytes: 17179869184,
+      weightBytes: 4900000000,
+      kvBytesPerToken: 131072,
+      maxNumCtx: 16384,
+    };
+    residency.tuner.profileSummary.mockResolvedValue(summary);
+    const res = await api.get(`${BASE}/model/fit?model=m`).expect(200);
+    expect(res.body).toEqual(okEnvelope(summary));
+    expect(residency.tuner.profileSummary).toHaveBeenCalledWith("m");
+    await api.get(`${BASE}/model/fit`).expect(200);
+    expect(residency.tuner.profileSummary).toHaveBeenLastCalledWith(
+      "llama3.2:3b",
+    );
   });
 });

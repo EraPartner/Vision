@@ -302,6 +302,9 @@ export const apiClient = {
     // AI chat
     getOllamaStatus: ai.getOllamaStatus,
     getOllamaModels: ai.getOllamaModels,
+    getModelFit: ai.getModelFit,
+    warmModel: ai.warmModel,
+    releaseModel: ai.releaseModel,
     getConversations: ai.getConversations,
     getConversation: ai.getConversation,
     createConversation: ai.createConversation,

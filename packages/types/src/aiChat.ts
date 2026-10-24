@@ -14,6 +14,12 @@ export type AiChatStreamEventName =
 export const AI_CHAT_STREAM_EVENT_NAMES: readonly AiChatStreamEventName[] =
   Object.freeze(Object.values(AI_CHAT_STREAM_EVENT));
 
+/**
+ * The Apple Foundation model's id. It is not an Ollama model: it has no
+ * residency or memory fit. Mirrors the backend's appleFoundation.ts.
+ */
+export const APPLE_FOUNDATION_MODEL = "apple-foundation";
+
 export type ToolRenderAs = "table" | "line" | "bar" | "pie";
 
 export interface AiChatToolResultMeta {

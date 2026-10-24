@@ -4,6 +4,7 @@ import {
     AiConversationDetailSchema,
     AiConversationPageSchema,
     AiConversationSchema,
+    AiModelFitSchema,
     OllamaModelListSchema,
     OllamaStatusSchema,
 } from "@vision/types/contracts";
@@ -15,6 +16,7 @@ import type {
     ConversationDetail,
     ConversationSummary,
     CreateConversationBody,
+    ModelFit,
     OllamaModel,
     OllamaModelsResponse,
     OllamaStatus,
@@ -74,6 +76,29 @@ export async function getOllamaModels(): Promise<OllamaModel[]> {
         schema: OllamaModelListSchema,
     });
     return response.items;
+}
+
+/** Memory advisor facts for one model (null fields: Ollama can't say). */
+export function getModelFit(model: string): Promise<ModelFit> {
+    return apiRequest(`/api/ai/model/fit?model=${encodeURIComponent(model)}`, {
+        schema: AiModelFitSchema,
+    });
+}
+
+/** Best-effort: load the model and keep it resident (always 204). */
+export async function warmModel(model: string): Promise<void> {
+    await apiRequest("/api/ai/model/warm", {
+        method: "POST",
+        body: JSON.stringify({ model }),
+    });
+}
+
+/** Best-effort: let the model unload (always 204). */
+export async function releaseModel(model: string): Promise<void> {
+    await apiRequest("/api/ai/model/release", {
+        method: "POST",
+        body: JSON.stringify({ model }),
+    });
 }
 
 export interface ConversationPage {

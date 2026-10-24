@@ -72,6 +72,9 @@ export interface OllamaChatResponse {
   eval_count?: number;
   prompt_eval_count?: number;
   total_duration?: number;
+  load_duration?: number;
+  prompt_eval_duration?: number;
+  eval_duration?: number;
   error?: string;
 }
 
@@ -91,11 +94,18 @@ interface OllamaRequestOptions {
   maxResponseBytes?: number | undefined;
 }
 
+/**
+ * How long Ollama keeps the model loaded after a request: a duration such as
+ * "10m", seconds, or 0 to unload at once. Unset uses the server's default.
+ */
+export type OllamaKeepAlive = string | number;
+
 export interface OllamaChatParams {
   model?: string | undefined;
   messages: unknown[];
   tools?: unknown[] | undefined;
   options?: unknown;
+  keepAlive?: OllamaKeepAlive | undefined;
   format?: unknown;
   signal?: AbortSignal | undefined;
 }
@@ -105,6 +115,7 @@ export interface OllamaChatStreamParams {
   messages?: unknown[] | undefined;
   tools?: unknown[] | undefined;
   options?: unknown;
+  keepAlive?: OllamaKeepAlive | undefined;
   signal?: AbortSignal | undefined;
   onToken?: ((chunk: string) => void | Promise<void>) | undefined;
 }
@@ -120,6 +131,14 @@ export interface OllamaChatStreamResult {
   evalCount: number | null;
   promptEvalCount: number | null;
   totalDurationMs: number | null;
+  loadDurationMs: number | null;
+  promptEvalDurationMs: number | null;
+  evalDurationMs: number | null;
+}
+
+/** Ollama reports durations in nanoseconds; absent or zero means unknown. */
+function nsToMs(ns: number | null | undefined): number | null {
+  return typeof ns === "number" && ns !== 0 ? Math.round(ns / 1e6) : null;
 }
 
 export class OllamaError extends Error {
@@ -395,10 +414,12 @@ function createOllamaClient({
   async function embed({
     model = settings.ollama.embeddingModel,
     input,
+    keepAlive,
     signal,
   }: {
     model?: string;
     input?: string | string[];
+    keepAlive?: OllamaKeepAlive | undefined;
     signal?: AbortSignal | undefined;
   } = {}) {
     if (!model) {
@@ -418,7 +439,12 @@ function createOllamaClient({
     }
     const data = await request<OllamaEmbedResponse>("/api/embed", {
       method: "POST",
-      body: { model, input: values, truncate: false },
+      body: {
+        model,
+        input: values,
+        truncate: false,
+        ...(keepAlive !== undefined ? { keep_alive: keepAlive } : {}),
+      },
       signal,
       maxResponseBytes: 4 * 1024 * 1024,
     });
@@ -460,11 +486,52 @@ function createOllamaClient({
     }));
   }
 
+  /** /api/show `model_info` (GGUF metadata) for one installed model. */
+  async function showModel(
+    model: string,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<Record<string, unknown> | null> {
+    const data = await request<{ model_info?: Record<string, unknown> }>(
+      "/api/show",
+      { method: "POST", body: { model }, signal, timeoutMs: healthTimeoutMs },
+    );
+    return data?.model_info ?? null;
+  }
+
+  /**
+   * Load a model (or keep it loaded) without generating, or unload it with
+   * `keepAlive: 0`. Ollama treats a chat with no messages as a load request;
+   * `numCtx` must match what later chats send or Ollama reloads the model.
+   */
+  async function setModelResidency({
+    model,
+    keepAlive,
+    numCtx,
+    signal,
+  }: {
+    model: string;
+    keepAlive: OllamaKeepAlive;
+    numCtx?: number | undefined;
+    signal?: AbortSignal | undefined;
+  }) {
+    await request<OllamaChatResponse>("/api/chat", {
+      method: "POST",
+      body: {
+        model,
+        messages: [],
+        keep_alive: keepAlive,
+        ...(numCtx !== undefined ? { options: { num_ctx: numCtx } } : {}),
+      },
+      signal,
+    });
+  }
+
   async function chat({
     model = settings.ollama.defaultModel,
     messages,
     tools,
     options,
+    keepAlive,
     format,
     signal,
   }: OllamaChatParams) {
@@ -481,6 +548,7 @@ function createOllamaClient({
     };
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
+    if (keepAlive !== undefined) body.keep_alive = keepAlive;
     if (format) body.format = format;
 
     const data = await request<OllamaChatResponse>("/api/chat", {
@@ -503,6 +571,9 @@ function createOllamaClient({
         data?.total_duration !== undefined && data.total_duration !== 0
           ? Math.round(data.total_duration / 1e6)
           : null,
+      loadDurationMs: nsToMs(data?.load_duration),
+      promptEvalDurationMs: nsToMs(data?.prompt_eval_duration),
+      evalDurationMs: nsToMs(data?.eval_duration),
       raw: data,
     };
   }
@@ -512,6 +583,7 @@ function createOllamaClient({
     messages,
     tools,
     options,
+    keepAlive,
     signal,
     onToken,
   }: OllamaChatStreamParams = {}): Promise<OllamaChatStreamResult> {
@@ -528,6 +600,7 @@ function createOllamaClient({
     };
     if (tools && tools.length > 0) body.tools = tools;
     if (options) body.options = options;
+    if (keepAlive !== undefined) body.keep_alive = keepAlive;
 
     // requestTimeoutMs bounds the connect + prompt-eval phase (no chunks flow
     // until the first token, which on a cold model can take minutes). Once
@@ -614,6 +687,9 @@ function createOllamaClient({
     let promptEvalCount: number | null = null;
     // Widened initializer: assigned inside handleLine, which TS cannot see here.
     let totalDurationNs = null as number | null;
+    let loadDurationNs = null as number | null;
+    let promptEvalDurationNs = null as number | null;
+    let evalDurationNs = null as number | null;
     let doneReason: string | null = null;
     let isDone = false;
 
@@ -656,6 +732,10 @@ function createOllamaClient({
         evalCount = parsed.eval_count ?? evalCount;
         promptEvalCount = parsed.prompt_eval_count ?? promptEvalCount;
         totalDurationNs = parsed.total_duration ?? totalDurationNs;
+        loadDurationNs = parsed.load_duration ?? loadDurationNs;
+        promptEvalDurationNs =
+          parsed.prompt_eval_duration ?? promptEvalDurationNs;
+        evalDurationNs = parsed.eval_duration ?? evalDurationNs;
       }
     };
 
@@ -722,6 +802,9 @@ function createOllamaClient({
         totalDurationNs !== null && totalDurationNs !== 0
           ? Math.round(totalDurationNs / 1e6)
           : null,
+      loadDurationMs: nsToMs(loadDurationNs),
+      promptEvalDurationMs: nsToMs(promptEvalDurationNs),
+      evalDurationMs: nsToMs(evalDurationNs),
     };
   }
 
@@ -731,6 +814,8 @@ function createOllamaClient({
     listModels,
     embed,
     listRunningModels,
+    showModel,
+    setModelResidency,
     chat,
     chatStream,
   };

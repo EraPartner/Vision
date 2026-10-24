@@ -135,6 +135,15 @@ export interface OllamaModelsResponse {
     total: number;
 }
 
+/** `data` of GET /api/ai/model/fit; null where Ollama can't report a value. */
+export interface ModelFit {
+    model: string;
+    totalMemoryBytes: number;
+    weightBytes: number | null;
+    kvBytesPerToken: number | null;
+    maxNumCtx: number | null;
+}
+
 export interface CreateConversationBody {
     title?: string;
     model?: string;

@@ -2,8 +2,8 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-10-19
-updated: 2026-10-19
+date: 2026-10-24
+updated: 2026-10-24
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -20,6 +20,9 @@ aliases: [ai api, chat api, ollama api, ai endpoints]
 | ------ | --------------------------- | ----------------------------------- |
 | GET    | `/api/ai/status`            | Ollama reachability + default model |
 | GET    | `/api/ai/models`            | Installed models (pass-through)     |
+| GET    | `/api/ai/model/fit`         | Memory advisor facts for one model  |
+| POST   | `/api/ai/model/warm`        | Preload / keep the chat model (204) |
+| POST   | `/api/ai/model/release`     | Let the chat model unload (204)     |
 | GET    | `/api/ai/conversations`     | List conversations (newest first)   |
 | POST   | `/api/ai/conversations`     | Create empty conversation           |
 | GET    | `/api/ai/conversations/:id` | Conversation + messages             |
@@ -97,6 +100,30 @@ Pass-through of `GET /api/tags` from Ollama, served in the canonical collection 
   }
 }
 ```
+
+## GET /api/ai/model/fit
+
+`?model=` (optional; default `OLLAMA_DEFAULT_MODEL`). What the Settings memory advisor shows, from
+the same profile the context tuner uses (`/api/show` metadata and `/api/tags` size). Fields Ollama
+can't report, and every model field for `apple-foundation`, are `null`.
+
+```json
+{
+  "model": "llama3.1:8b",
+  "totalMemoryBytes": 17179869184,
+  "weightBytes": 4920753328,
+  "kvBytesPerToken": 131072,
+  "maxNumCtx": 16384
+}
+```
+
+## POST /api/ai/model/warm and /api/ai/model/release
+
+Body `{ "model"?: string }`. Best-effort residency hints from the chat page; both always answer
+`204`, also when Ollama is unreachable, the model is `apple-foundation`, or AI chat is disabled.
+Warm loads the model with the window chats will use and `keep_alive: "10m"`. Release only touches
+a model Ollama has loaded: `keep_alive: 0` when the weights exceed a quarter of RAM, else `"2m"`.
+See [[docs/adr/248-ollama-request-tuning|ADR-248]].
 
 ## GET /api/ai/conversations
 
@@ -320,17 +347,17 @@ Chat endpoints are per-IP rate-limited because each request fans out to Ollama +
 
 ## Configuration
 
-| Env                             | Default                  | Purpose                                                                                               |
-| ------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `AI_CHAT_ENABLED`               | `true`                   | Kill switch — disables all endpoints                                                                  |
-| `OLLAMA_URL`                    | `http://localhost:11434` | Base URL for Ollama                                                                                   |
-| `OLLAMA_DEFAULT_MODEL`          | `llama3.1:8b`            | Fallback when the request omits `model`                                                               |
-| `OLLAMA_REQUEST_TIMEOUT_MS`     | `600000`                 | Time-to-first-chunk budget (connect + prompt-eval phase only)                                         |
-| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000`                 | Per-chunk inactivity window for streaming; re-arms on every chunk; total generation time is unbounded |
-| `OLLAMA_NUM_CTX`                | `8192`                   | Ollama context window sent as `options.num_ctx` for streaming and non-streaming calls                 |
-| `AI_CHAT_MAX_HISTORY`           | `30`                     | Hard upper bound on prior messages considered for prompt context                                      |
-| `AI_CHAT_CONTEXT_BUDGET_CHARS`  | `24000`                  | Approximate character budget for prior messages after reserving the system prompt and current request |
-| `AI_CHAT_MAX_TOOL_RESULT_CHARS` | `6000`                   | Per-result prompt cap; keeps outcome metadata and replaces oversized data with a bounded preview      |
+| Env                             | Default                  | Purpose                                                                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_CHAT_ENABLED`               | `true`                   | Kill switch — disables all endpoints                                                                                                                                                                                                                    |
+| `OLLAMA_URL`                    | `http://localhost:11434` | Base URL for Ollama                                                                                                                                                                                                                                     |
+| `OLLAMA_DEFAULT_MODEL`          | `llama3.1:8b`            | Fallback when the request omits `model`                                                                                                                                                                                                                 |
+| `OLLAMA_REQUEST_TIMEOUT_MS`     | `600000`                 | Time-to-first-chunk budget (connect + prompt-eval phase only)                                                                                                                                                                                           |
+| `OLLAMA_STREAM_IDLE_TIMEOUT_MS` | `120000`                 | Per-chunk inactivity window for streaming; re-arms on every chunk; total generation time is unbounded                                                                                                                                                   |
+| `OLLAMA_NUM_CTX`                | unset                    | Unset (default): Vision sizes `num_ctx` per request from the prompt, the model and the Mac's RAM (4k–32k buckets, never below 8192 as a ceiling; see [[docs/adr/248-ollama-request-tuning\|ADR-248]]). Set: every chat request uses exactly this window |
+| `AI_CHAT_MAX_HISTORY`           | `30`                     | Hard upper bound on prior messages considered for prompt context                                                                                                                                                                                        |
+| `AI_CHAT_CONTEXT_BUDGET_CHARS`  | `24000`                  | Approximate character budget for prior messages after reserving the system prompt and current request                                                                                                                                                   |
+| `AI_CHAT_MAX_TOOL_RESULT_CHARS` | `6000`                   | Per-result prompt cap; keeps outcome metadata and replaces oversized data with a bounded preview                                                                                                                                                        |
 
 See [[docs/reference/environment-variables|Environment Variables]].
 

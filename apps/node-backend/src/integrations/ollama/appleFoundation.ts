@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 
-const APPLE_FOUNDATION_MODEL = "apple-foundation";
+export const APPLE_FOUNDATION_MODEL = "apple-foundation";
 
 const CHECK_TTL_MS = 60_000;
 // Budgets in characters (~4 per token) that leave ~1,000 tokens for the answer.
@@ -231,7 +231,4 @@ export function withAppleFoundation(baseFetch: typeof fetch): typeof fetch {
   return appleFetch;
 }
 
-export {
-  APPLE_FOUNDATION_MODEL as __APPLE_FOUNDATION_MODEL,
-  fitForAppleModel as __fitForAppleModel,
-};
+export { fitForAppleModel as __fitForAppleModel };

@@ -5,6 +5,9 @@
  *
  *   GET    /api/ai/status                   — Ollama reachability + baseUrl
  *   GET    /api/ai/models                   — installed models (pass-through)
+ *   GET    /api/ai/model/fit                — memory advisor facts for one model
+ *   POST   /api/ai/model/warm               — load/keep the chat model resident (204)
+ *   POST   /api/ai/model/release            — let the chat model unload (204)
  *   GET    /api/ai/conversations            — list (newest first)
  *   POST   /api/ai/conversations            — create empty (optional title/model)
  *   GET    /api/ai/conversations/:id        — conversation + messages
@@ -44,6 +47,8 @@ import { logger } from "../config/logger.ts";
 import { createSseWriter } from "../lib/sse.ts";
 import settings from "../config/config.ts";
 import { getOllamaClient, OllamaError } from "../integrations/ollama/client.ts";
+import { APPLE_FOUNDATION_MODEL } from "../integrations/ollama/appleFoundation.ts";
+import { getContextTuner } from "../integrations/ollama/tuning.ts";
 import {
   AiChatServiceError,
   createEmptyConversation,
@@ -133,6 +138,15 @@ const renameConversationSchema = z.object({
   ),
 });
 
+// Optional model for the warm/release/fit routes; blank means the default.
+const modelBodySchema = z.object({
+  model: nonBlankString('"model" must be a non-empty string').optional(),
+});
+
+const modelQuerySchema = z.object({
+  model: nonBlankString('"model" must be a non-empty string').optional(),
+});
+
 function requireConversationId(req: ExpressRequest): string {
   return parseInput(conversationIdSchema, req.params.id);
 }
@@ -175,6 +189,68 @@ function rethrowAsAppError(err: unknown, fallbackMessage: string): never {
 }
 
 const router = Router();
+
+/** Ollama lists `name:tag`; a request may omit the implicit `:latest`. */
+function sameModel(listed: string | undefined, requested: string): boolean {
+  const withTag = (name: string) =>
+    name.includes(":") ? name : `${name}:latest`;
+  return listed !== undefined && withTag(listed) === withTag(requested);
+}
+
+// POST /api/ai/model/warm and /release
+//
+// Best-effort residency hints from the chat page: warm loads the model with
+// the window chats will use and keeps it for the active period; release lets
+// it unload (at once on a memory-tight Mac). They answer 204 whenever there is
+// nothing to do or Ollama can't be reached, so the page never sees an error
+// for a hint. Registered before the enabled check so a disabled chat is a
+// no-op rather than a 503.
+function residencyRoute(mode: "warm" | "release") {
+  return async (req: ExpressRequest, res: ExpressResponse) => {
+    const { model: requested } = parseInput(modelBodySchema, req.body ?? {}, {
+      omitPaths: true,
+    });
+    const model = requested ?? settings.ollama.defaultModel;
+    if (!settings.aiChat.enabled || model === APPLE_FOUNDATION_MODEL) {
+      res.status(204).send();
+      return;
+    }
+    try {
+      const tuner = getContextTuner();
+      const { active, release } = await tuner.residencyFor(model);
+      if (mode === "warm") {
+        await getOllamaClient().setModelResidency({
+          model,
+          keepAlive: active,
+          numCtx: await tuner.warmWindow(model),
+        });
+      } else {
+        // An empty chat loads an unloaded model, so only touch a resident one.
+        const running = await getOllamaClient().listRunningModels();
+        if (!running.some((entry) => sameModel(entry.model, model))) {
+          res.status(204).send();
+          return;
+        }
+        await getOllamaClient().setModelResidency({
+          model,
+          keepAlive: release,
+        });
+        if (release === 0) tuner.forget(model);
+      }
+    } catch (err) {
+      logger.debug(`[aiChat] model ${mode} skipped`, {
+        model,
+        code: err instanceof OllamaError ? err.code : undefined,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    res.status(204).send();
+  };
+}
+
+router.post("/model/warm", residencyRoute("warm"));
+router.post("/model/release", residencyRoute("release"));
+
 router.use(enforceAiChatEnabled);
 
 // GET /api/ai/status
@@ -222,6 +298,22 @@ router.get("/models", async (req, res) => {
     }
     throw err;
   }
+});
+
+// GET /api/ai/model/fit?model=
+//
+// Memory advisor facts from the same profile the context tuner sizes windows
+// with. Fields Ollama can't report (and every field for the Apple Foundation
+// model) are null.
+router.get("/model/fit", async (req, res) => {
+  const { model } = parseInput(modelQuerySchema, req.query, {
+    omitPaths: true,
+  });
+  res.ok(
+    await getContextTuner().profileSummary(
+      model ?? settings.ollama.defaultModel,
+    ),
+  );
 });
 
 // GET /api/ai/conversations

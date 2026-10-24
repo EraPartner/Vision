@@ -2,9 +2,9 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-22
-updated: 2026-10-20
-last_modified: 2026-10-20
+date: 2026-10-24
+updated: 2026-10-24
+last_modified: 2026-10-24
 tags:
   [
     feature,
@@ -306,7 +306,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 | --------------------------- | ------ | ------------------------ | -------------------------------------------------------- |
 | `aiDefaultModel`            | string | Operator Ollama default  | Model pre-selected on new local conversations            |
 | `aiChat.ollamaUrl`          | string | `http://localhost:11434` | Ollama host (read from `OLLAMA_URL` env; editable in UI) |
-| `ollama.numCtx`             | number | `8192`                   | Ollama context window passed to every chat request       |
+| `ollama.numCtx`             | number | unset                    | Pins `num_ctx`; unset sizes it per request (ADR-248)     |
 | `aiChat.contextBudgetChars` | number | `24000`                  | Approximate prompt-history character budget              |
 | `aiChat.maxToolResultChars` | number | `6000`                   | Per-tool-result character cap in model context           |
 
@@ -314,7 +314,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 
 - `OLLAMA_URL` — base URL for the Ollama HTTP API
 - `OLLAMA_DEFAULT_MODEL` — fallback model if user hasn't set one
-- `OLLAMA_NUM_CTX` — Ollama context window sent as `options.num_ctx` (default 8192)
+- `OLLAMA_NUM_CTX` — pins `options.num_ctx`; unset (default) sizes it per request from the prompt, model and RAM ([[docs/adr/248-ollama-request-tuning|ADR-248]])
 - `AI_CHAT_RATE_LIMIT` — per-minute cap on `/api/ai/chat` (default 30)
 - `AI_CHAT_MAX_HISTORY` — hard upper bound on prior messages considered (default 30)
 - `AI_CHAT_CONTEXT_BUDGET_CHARS` — approximate character budget for prior messages (default 24000)

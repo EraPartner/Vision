@@ -7,6 +7,8 @@ vi.mock("../src/config/config.ts", () => {
       enabled: true,
       rateLimit: 30,
       maxHistoryMessages: 30,
+      contextBudgetChars: 24000,
+      maxToolResultChars: 6000,
       maxToolRows: 500,
     },
     ollama: {
@@ -14,6 +16,8 @@ vi.mock("../src/config/config.ts", () => {
       defaultModel: "llama3.1:8b",
       requestTimeoutMs: 60000,
       healthTimeoutMs: 3000,
+      // A pinned window keeps the context tuner off the network.
+      numCtx: 8192,
     },
   };
   return { default: settings };
@@ -321,7 +325,8 @@ describe("runChatTurn — conversation lifecycle", () => {
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
     expect(ollamaClient.chat).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: { num_ctx: settings.ollama.numCtx },
+        options: { num_ctx: settings.ollama.numCtx, num_predict: 1024 },
+        keepAlive: "10m",
       }),
     );
   });
@@ -1193,7 +1198,8 @@ describe("runChatTurn — streaming", () => {
     expect(ollamaClient.chatStream).toHaveBeenCalledTimes(1);
     expect(ollamaClient.chatStream).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: { num_ctx: settings.ollama.numCtx },
+        options: { num_ctx: settings.ollama.numCtx, num_predict: 1024 },
+        keepAlive: "10m",
       }),
     );
     expect(ollamaClient.chat).not.toHaveBeenCalled();
@@ -1204,6 +1210,30 @@ describe("runChatTurn — streaming", () => {
     const types = events.map((e) => e.type);
     expect(types).toEqual(["user_message", "token", "token", "token"]);
     expect(result.assistantMessage.content).toBe("Hello world");
+  });
+
+  it("sends the Apple Foundation model no keep_alive or num_predict", async () => {
+    const ollamaClient = {
+      chat: vi.fn(),
+      chatStream: vi.fn(async () => ({
+        content: "ok",
+        toolCalls: [],
+        evalCount: 1,
+        promptEvalCount: 1,
+        totalDurationMs: 1,
+      })),
+    };
+    await runChatTurn({
+      message: "hi",
+      model: "apple-foundation",
+      ollamaClient: loose<AiChatClient>(ollamaClient),
+      streaming: true,
+    });
+    const [request] = ollamaClient.chatStream.mock.calls[0] as unknown as [
+      { options: unknown; keepAlive?: unknown },
+    ];
+    expect(request.options).toEqual({ num_ctx: settings.ollama.numCtx });
+    expect(request.keepAlive).toBeUndefined();
   });
 
   it("skips empty-string delta tokens", async () => {

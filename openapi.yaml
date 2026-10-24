@@ -6963,6 +6963,36 @@ components:
           type: string
           nullable: true
 
+    # Body of POST /api/ai/model/warm and /release.
+    AiModelResidencyRequest:
+      type: object
+      properties:
+        model:
+          type: string
+          description: Defaults to the configured default model.
+
+    # `data` of GET /api/ai/model/fit (routes/ai.ts, tuning.ts profileSummary).
+    AiModelFit:
+      type: object
+      required:
+        [model, totalMemoryBytes, weightBytes, kvBytesPerToken, maxNumCtx]
+      properties:
+        model:
+          type: string
+        totalMemoryBytes:
+          type: integer
+        weightBytes:
+          type: integer
+          nullable: true
+        # f16 KV cache bytes per context token.
+        kvBytesPerToken:
+          type: integer
+          nullable: true
+        # Largest num_ctx the tuner may pick; null for the Apple model.
+        maxNumCtx:
+          type: integer
+          nullable: true
+
     # `data` of GET /api/ai/conversations/{id} and POST /api/ai/conversations
     # (routes/ai.js — getConversationWithMessages / createEmptyConversation):
     # one conversation row plus its full ordered message history (empty on
@@ -14913,6 +14943,72 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+
+  /api/ai/model/fit:
+    get:
+      summary: Memory advisor facts for one model
+      description: Weights, f16 KV cache cost per context token and the largest
+        window Vision will use for the model on this Mac. Fields Ollama can't
+        report are null; every field but `model` and `totalMemoryBytes` is null
+        for the Apple Foundation model.
+      operationId: getAiModelFit
+      tags: [AI]
+      parameters:
+        - in: query
+          name: model
+          description: Defaults to the configured default model.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Model fit
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AiModelFit"
+
+  /api/ai/model/warm:
+    post:
+      summary: Load the chat model and keep it resident
+      description: Best-effort hint from the chat page. Loads the model with the
+        window chats will use and keeps it for the active period. Answers 204
+        also when AI chat is disabled, the model is the Apple Foundation model,
+        or Ollama is unreachable.
+      operationId: warmAiModel
+      tags: [AI]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiModelResidencyRequest"
+      responses:
+        "204":
+          description: No Content
+
+  /api/ai/model/release:
+    post:
+      summary: Let the chat model unload
+      description: Best-effort hint when the chat page is left. The model
+        lingers briefly, or unloads at once when its weights take over a quarter
+        of the Mac's memory. Answers 204 also when AI chat is disabled, the
+        model is the Apple Foundation model, or Ollama is unreachable.
+      operationId: releaseAiModel
+      tags: [AI]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiModelResidencyRequest"
+      responses:
+        "204":
+          description: No Content
 
   /api/ai/conversations:
     get:

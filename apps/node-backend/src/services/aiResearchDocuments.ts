@@ -38,6 +38,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_PASSAGES = 512;
 const TARGET_CHARS = 1800;
 const EMBEDDING_BATCH_SIZE = 16;
+/** Short, so the embedding model doesn't stay resident next to the chat model. */
+const EMBEDDING_KEEP_ALIVE = "1m";
 let embeddingTail: Promise<unknown> = Promise.resolve([]);
 
 // `&amp;` is decoded last, so an escaped entity such as `&amp;lt;` stays the literal `&lt;`.
@@ -142,6 +144,7 @@ async function addEmbeddings(
         const batch = passages.slice(index, index + EMBEDDING_BATCH_SIZE);
         const result = await ollamaClient.embed({
           input: batch.map((item) => item.content),
+          keepAlive: EMBEDDING_KEEP_ALIVE,
         });
         embedded.push(
           ...batch.map((passage, offset) => {
@@ -280,6 +283,7 @@ export async function searchResearchDocuments(
     try {
       const embedded = await ollamaClient.embed({
         input: [normalized],
+        keepAlive: EMBEDDING_KEEP_ALIVE,
         signal,
       });
       const candidates = await repository.semanticCandidates();
