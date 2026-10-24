@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-22
-updated: 2026-10-21
-last_modified: 2026-10-21
+date: 2026-10-24
+updated: 2026-10-24
+last_modified: 2026-10-24
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -702,6 +702,9 @@ share mutation invalidation. This query scope adds no operation. See [[docs/api/
 | ------ | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ |
 | GET    | `/api/ai/status`            | Ollama reachability + default model                                                                         | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/models`            | Installed Ollama models (pass-through)                                                                      | —          | [[docs/api/ai\|AI Chat]] |
+| GET    | `/api/ai/model/fit`         | Memory advisor facts for one model (weights, KV per token, max window, RAM)                                 | —          | [[docs/api/ai\|AI Chat]] |
+| POST   | `/api/ai/model/warm`        | Preload or keep the chat model loaded; always 204 (ADR-248)                                                 | —          | [[docs/api/ai\|AI Chat]] |
+| POST   | `/api/ai/model/release`     | Let the chat model unload; always 204 (ADR-248)                                                             | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/conversations`     | List conversations newest-first; always bounded (`limit=50`, `offset=0` defaults; maximum limit 200)        | —          | [[docs/api/ai\|AI Chat]] |
 | POST   | `/api/ai/conversations`     | Create empty conversation (pre-created before streaming to avoid PENDING bookkeeping)                       | —          | [[docs/api/ai\|AI Chat]] |
 | GET    | `/api/ai/conversations/:id` | Conversation with messages                                                                                  | —          | [[docs/api/ai\|AI Chat]] |
