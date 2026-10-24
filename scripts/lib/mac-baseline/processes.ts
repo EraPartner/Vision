@@ -201,7 +201,10 @@ export function classifyProcesses(
 export interface RoleStats {
   processes: number;
   rssMb: number;
+  /** Sum of each process's footprint: shared memory is counted per process. */
   footprintMb: number | null;
+  /** footprint(1) over the role's processes together: shared memory once. */
+  sharedOnceMb?: number | null;
   cpuPercent: number | null;
 }
 
@@ -264,4 +267,50 @@ export function summarizeRoles(
     if (stats.cpuPercent !== null) stats.cpuPercent = round1(stats.cpuPercent);
   }
   return summary;
+}
+
+export interface FootprintReport {
+  /** Per-process footprint from the `name [pid]: … Footprint: N MB` headers. */
+  perProcess: Map<number, number>;
+  /**
+   * The de-duplicated total for all listed processes: footprint(1) counts
+   * memory that several of them map (PostgreSQL's shared buffers) once.
+   */
+  totalBytes: number | null;
+}
+
+const FOOTPRINT_UNITS: Record<string, number> = {
+  B: 1,
+  KB: 1024,
+  K: 1024,
+  MB: 1024 ** 2,
+  M: 1024 ** 2,
+  GB: 1024 ** 3,
+  G: 1024 ** 3,
+};
+
+/**
+ * `footprint <pid> <pid> …` text → per-process and total footprint. The
+ * total is the line with no `[pid]` (footprint prints it after the per-process
+ * sections when several are given); with a single process it is that
+ * process's own footprint.
+ */
+export function parseFootprintOutput(text: string): FootprintReport {
+  const perProcess = new Map<number, number>();
+  let totalBytes: number | null = null;
+  for (const line of text.split("\n")) {
+    const match = /Footprint:\s*([\d.]+)\s*([KMG]?B?)\b/i.exec(line);
+    if (!match) continue;
+    const scale = FOOTPRINT_UNITS[(match[2] ?? "").toUpperCase() || "B"];
+    if (scale === undefined) continue;
+    const bytes = Number(match[1]) * scale;
+    if (!Number.isFinite(bytes)) continue;
+    const pid = /\[(\d+)\]/.exec(line)?.[1];
+    if (pid !== undefined) perProcess.set(Number(pid), bytes);
+    else totalBytes = bytes;
+  }
+  if (totalBytes === null && perProcess.size === 1) {
+    totalBytes = [...perProcess.values()][0] ?? null;
+  }
+  return { perProcess, totalBytes };
 }

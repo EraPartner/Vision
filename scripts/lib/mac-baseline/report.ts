@@ -96,8 +96,8 @@ export interface AppResult {
 }
 
 export interface BaselineResults {
-  /** 2 adds TierResult.fullEffects and TierResult.run. */
-  schemaVersion: 2;
+  /** 2 adds TierResult.fullEffects and TierResult.run; 3 adds RoleStats.sharedOnceMb. */
+  schemaVersion: 3;
   startedAt: string;
   finishedAt: string;
   options: Record<string, unknown>;
@@ -236,6 +236,18 @@ export const SPREAD_METRICS: readonly {
     label: "App memory after launch MB",
     digits: 0,
     read: (t) => t.memory.afterLaunch.appTotal?.footprintMb,
+  },
+  {
+    key: "backendAfterLaunchMb",
+    label: "Backend memory after launch MB (shared once)",
+    digits: 1,
+    read: (t) => t.memory.afterLaunch.backend?.sharedOnceMb,
+  },
+  {
+    key: "postgresAfterLaunchMb",
+    label: "PostgreSQL memory after launch MB (shared once)",
+    digits: 1,
+    read: (t) => t.memory.afterLaunch.postgres?.sharedOnceMb,
   },
 ];
 
@@ -560,6 +572,44 @@ export function renderSummary(results: BaselineResults): string {
         roles.map(
           (role) =>
             `${mem(tier.memory.afterLaunch, role)} / ${mem(tier.memory.afterSustained, role)}`,
+        ),
+      ),
+    ),
+  );
+  out.push("");
+  out.push("## Backend and PostgreSQL memory (MB)");
+  out.push(
+    "After launch / after the sustained run. Summed adds up each process's footprint, so memory the PostgreSQL processes share is counted once per process; shared once is footprint(1) over the role's processes together.",
+  );
+  out.push("");
+  const backendCell = (
+    summary: RoleSummary | undefined | null,
+    role: "backend" | "postgres",
+    field: "processes" | "footprintMb" | "sharedOnceMb",
+  ) => fmt(summary?.[role]?.[field], field === "processes" ? 0 : 1);
+  out.push(
+    table(
+      [
+        "App",
+        "Tier",
+        "backend summed",
+        "backend shared once",
+        "postgres processes",
+        "postgres summed",
+        "postgres shared once",
+      ],
+      rowsFor(results, (_app, tier) =>
+        (
+          [
+            ["backend", "footprintMb"],
+            ["backend", "sharedOnceMb"],
+            ["postgres", "processes"],
+            ["postgres", "footprintMb"],
+            ["postgres", "sharedOnceMb"],
+          ] as const
+        ).map(
+          ([role, field]) =>
+            `${backendCell(tier.memory.afterLaunch, role, field)} / ${backendCell(tier.memory.afterSustained, role, field)}`,
         ),
       ),
     ),
