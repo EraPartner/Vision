@@ -289,6 +289,8 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 [[docs/adr/248-ollama-request-tuning|ADR-248]] sizes each Ollama request to the prompt, the model and the Mac's RAM: relevant tools only, bucketed `num_ctx`, `keep_alive` tied to the chat page, a steady prompt prefix and leaner tool results.
 
+[[docs/adr/247-launch-background-work-bounds|ADR-247]] bounds and defers background work after launch: a 30 s pending limit for the insights count, a 15 s timeout on every Yahoo request, startup price fetches 20 s after boot, and a 30 s health watchdog while healthy.
+
 ### 2026-10-22: Dependency supply chain (accepted)
 
 [[docs/adr/245-dependency-supply-chain|ADR-245]] makes installs wait 7 days for new releases, run no dependency lifecycle scripts and use the frozen lockfile, and replaces commitlint, concurrently, supertest, recharts in AI chat, clsx, cva, zustand, @visx/gradient, tailwindcss-animate, @fontsource, d3-sankey, archiver and read-excel-file with in-repo code proven equal by differential tests.

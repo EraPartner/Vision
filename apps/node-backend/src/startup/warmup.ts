@@ -73,11 +73,18 @@ export interface WarmupIntervals {
   quotesRefreshInterval: NodeJS.Timeout;
   cashflowForecastRefreshInterval: NodeJS.Timeout;
   holdingGapBackfillInterval: NodeJS.Timeout;
+  startupPriceRefreshTimer: NodeJS.Timeout | null;
 }
 
 const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const DAILY_JOB_POLL_MS = 60 * 1000;
+/**
+ * Outbound quote backfill and live-price refresh wait this long after boot so
+ * they do not compete with the first Dashboard load. The Dashboard reads
+ * stored prices, so nothing waits on them.
+ */
+export const STARTUP_PRICE_REFRESH_DELAY_MS = 20 * 1000;
 
 // Terminal import-batch states safe to prune (no in-flight staging work).
 const IMPORT_RETENTION_DAYS = 30;
@@ -295,7 +302,9 @@ async function refreshInvestmentPricesOnStartup() {
  *     create/index/refresh, inflation, Kinesis sanitize).
  *  3. Chain dependent work: exchange-rate warm + FX backfill → portfolio
  *     snapshots → info caches.
- *  4. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
+ *  4. Start the quote backfill and live-price refresh after
+ *     STARTUP_PRICE_REFRESH_DELAY_MS.
+ *  5. Schedule recurring intervals (12h FX, 1h quotes, 24h cashflow MC).
  */
 export async function runWarmupTasks({
   warmupStatus,
@@ -412,17 +421,6 @@ export async function runWarmupTasks({
     );
   });
 
-  if (online) {
-    backfillHistoricalAssetQuotes().catch((err) => {
-      logger.error("Failed to backfill historical asset quotes on startup", {
-        error: err.message,
-      });
-    });
-  } else {
-    logger.info(
-      "Skipping historical asset quote backfill on startup — offline",
-    );
-  }
 
   sanitizePersistedKinesisHistory().catch((err) => {
     logger.error("Failed to sanitize persisted Kinesis history on startup", {
@@ -457,14 +455,25 @@ export async function runWarmupTasks({
       );
     });
 
+  let startupPriceRefreshTimer: NodeJS.Timeout | null = null;
   if (online) {
-    refreshInvestmentPricesOnStartup().catch((err) => {
-      logger.error("Failed to refresh investment prices on startup", {
-        error: err.message,
+    startupPriceRefreshTimer = setTimeout(() => {
+      startupPriceRefreshTimer = null;
+      backfillHistoricalAssetQuotes().catch((err) => {
+        logger.error("Failed to backfill historical asset quotes on startup", {
+          error: err.message,
+        });
       });
-    });
+      refreshInvestmentPricesOnStartup().catch((err) => {
+        logger.error("Failed to refresh investment prices on startup", {
+          error: err.message,
+        });
+      });
+    }, STARTUP_PRICE_REFRESH_DELAY_MS);
   } else {
-    logger.info("Skipping startup investment price refresh — offline");
+    logger.info(
+      "Skipping startup quote backfill and investment price refresh — offline",
+    );
   }
 
   const exchangeRateRefreshInterval = setInterval(
@@ -544,6 +553,7 @@ export async function runWarmupTasks({
     quotesRefreshInterval,
     cashflowForecastRefreshInterval,
     holdingGapBackfillInterval,
+    startupPriceRefreshTimer,
   };
 }
 

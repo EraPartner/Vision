@@ -301,4 +301,42 @@ describe("getInsightsCount", () => {
     );
     expect(detectSubscriptionCreep).toHaveBeenCalledTimes(1);
   });
+  it("reports unavailable while a refresh runs past the pending limit", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // Step past the 60 s back-off a previous test's failed refresh left behind.
+    vi.setSystemTime(Date.now() + 2 * 60_000);
+    try {
+      repository.getCountState.mockResolvedValue({
+        undismissed_count: 9,
+        dirty_version: 6,
+        computed_version: 4,
+        expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+      });
+      let release!: (digest: SubscriptionCreepDigest) => void;
+      detectSubscriptionCreep.mockImplementation(
+        () =>
+          new Promise<SubscriptionCreepDigest>((resolve) => {
+            release = resolve;
+          }),
+      );
+      detectCategoryOutliers.mockResolvedValue([]);
+      getCashForecastInsight.mockResolvedValue(null);
+
+      expect(await getInsightsCount()).toMatchObject({ status: "pending" });
+      vi.setSystemTime(Date.now() + 31_000);
+      expect(await getInsightsCount()).toMatchObject({
+        count: null,
+        status: "unavailable",
+      });
+      await vi.waitFor(() =>
+        expect(detectSubscriptionCreep).toHaveBeenCalledTimes(1),
+      );
+      release({ new: [], priceChanges: [] });
+      await vi.waitFor(() =>
+        expect(repository.saveCountIfVersion).toHaveBeenCalledWith(0, 6),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

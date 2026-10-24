@@ -373,6 +373,7 @@ let exchangeRateRefreshInterval: NodeJS.Timeout | null = null;
 let quotesRefreshInterval: NodeJS.Timeout | null = null;
 let cashflowForecastRefreshInterval: NodeJS.Timeout | null = null;
 let holdingGapBackfillInterval: NodeJS.Timeout | null = null;
+let startupPriceRefreshTimer: NodeJS.Timeout | null = null;
 let analysisMonitorInterval: NodeJS.Timeout | null = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
@@ -549,6 +550,7 @@ async function start() {
           cashflowForecastRefreshInterval =
             intervals.cashflowForecastRefreshInterval;
           holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
+          startupPriceRefreshTimer = intervals.startupPriceRefreshTimer;
         })
         .catch((err: unknown) => {
           logger.error("Warmup tasks failed", { error: (err as Error).message });
@@ -597,6 +599,7 @@ async function shutdown(signal?: string) {
   if (cashflowForecastRefreshInterval)
     clearInterval(cashflowForecastRefreshInterval);
   if (holdingGapBackfillInterval) clearInterval(holdingGapBackfillInterval);
+  if (startupPriceRefreshTimer) clearTimeout(startupPriceRefreshTimer);
   if (analysisMonitorInterval) clearInterval(analysisMonitorInterval);
   cancelPendingAggregationRefresh();
 

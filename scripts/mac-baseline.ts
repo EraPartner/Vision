@@ -65,6 +65,14 @@ import {
   summarizeTrace,
   type TraceEvent,
 } from "./lib/mac-baseline/trace.ts";
+import {
+  RUNNING_ANIMATIONS,
+  recordRequests,
+  summarizeAnimations,
+  summarizeRequests,
+  type AnimationSample,
+  type AnimationSeen,
+} from "./lib/mac-baseline/launchProbe.ts";
 import { isEntrypoint } from "./lib/isEntrypoint.ts";
 
 const TIERS: readonly Tier[] = ["reduced", "standard", "enhanced"];
@@ -99,6 +107,12 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
   --out <dir>           Results root (default perf-results/ in the checkout)
   --no-powermetrics     Skip sudo powermetrics (no GPU or power numbers)
   --no-trace            Skip the Chromium trace pass
+  --launch-probe <s>    Before the settle, record running page animations (every
+                        5 s), page requests, and per-process CPU/GPU for the first
+                        <s> seconds after launch, without input; writes
+                        launch-probe/<label>.json with the backend log tail.
+                        A diagnostic: it delays the idle window, so leave it off
+                        for before/after runs (default 0 = off)
   --quick               Smoke run: idle 10, sustained 30, cooldown 5, scroll 4000
   --help                This text
 `;
@@ -116,6 +130,7 @@ interface Options {
   outRoot: string;
   powermetrics: boolean;
   trace: boolean;
+  launchProbeSeconds: number;
   quick: boolean;
 }
 
@@ -135,6 +150,7 @@ function parseOptions(argv: string[]): Options | null {
       out: { type: "string" },
       "no-powermetrics": { type: "boolean" },
       "no-trace": { type: "boolean" },
+      "launch-probe": { type: "string" },
       quick: { type: "boolean" },
       help: { type: "boolean" },
     },
@@ -191,6 +207,7 @@ function parseOptions(argv: string[]): Options | null {
     ),
     powermetrics: values["no-powermetrics"] !== true,
     trace: values["no-trace"] !== true,
+    launchProbeSeconds: number(values["launch-probe"], 0, "launch-probe"),
     quick,
   };
 }
@@ -911,6 +928,90 @@ async function tracedPass(
   return { file: path.relative(ctx.outDir, file), segments };
 }
 
+/** Last lines of the newest backend log of the app's native runtime. */
+function backendLogTail(userData: string, lines: number): string[] {
+  const nativeDir = path.join(userData, "native");
+  let newest: { file: string; mtimeMs: number } | null = null;
+  try {
+    for (const runtime of fs.readdirSync(nativeDir)) {
+      const file = path.join(nativeDir, runtime, "logs", "backend.log");
+      try {
+        const { mtimeMs } = fs.statSync(file);
+        if (!newest || mtimeMs > newest.mtimeMs) newest = { file, mtimeMs };
+      } catch {
+        /* no backend log for this runtime */
+      }
+    }
+  } catch {
+    return [];
+  }
+  if (!newest) return [];
+  return fs.readFileSync(newest.file, "utf8").trimEnd().split("\n").slice(-lines);
+}
+
+async function launchProbe(
+  ctx: Context,
+  app: RunningApp,
+  label: string,
+): Promise<void> {
+  const seconds = ctx.options.launchProbeSeconds;
+  log(`  launch probe ${seconds} s (no input)`);
+  const startedAt = Date.now();
+  const requests = recordRequests(app.cdp, app.sessionId, startedAt);
+  await app.cdp.send("Network.enable", {}, app.sessionId);
+  const samples: AnimationSample[] = [];
+  const measured = await measureWindow(ctx, app, async () => {
+    while (Date.now() - startedAt < seconds * 1000) {
+      checkAborted();
+      samples.push({
+        atS: Math.round((Date.now() - startedAt) / 100) / 10,
+        running: await page<AnimationSeen[]>(app, RUNNING_ANIMATIONS),
+      });
+      await sleep(Math.min(5000, Math.max(0, seconds * 1000 - (Date.now() - startedAt))));
+    }
+  });
+  const records = requests.stop();
+  await app.cdp.send("Network.disable", {}, app.sessionId);
+  const animations = summarizeAnimations(samples);
+  const requestSummary = summarizeRequests(records);
+  const file = path.join(ctx.outDir, "launch-probe", `${label}.json`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    JSON.stringify(
+      {
+        label,
+        launch: app.launch,
+        window: measured.window,
+        animations,
+        requests: requestSummary,
+        samples,
+        records,
+        backendLogTail: backendLogTail(app.info.userData, 200),
+      },
+      null,
+      2,
+    ),
+  );
+  const cpu = measured.window.cpu;
+  const pct = (value: number | null | undefined) =>
+    value === null || value === undefined ? "?" : value.toFixed(1);
+  log(
+    `  probe: app CPU ${pct(cpu.appTotal?.cpuPercent)}% (backend ${pct(cpu.backend?.cpuPercent)}%, postgres ${pct(cpu.postgres?.cpuPercent)}%, gpu ${pct(cpu.gpu?.cpuPercent)}%), GPU active ${pct(measured.window.power?.gpuActivePercent)}%`,
+  );
+  for (const animation of animations.slice(0, 5)) {
+    log(
+      `    animation ${animation.name} on ${animation.target}: ${animation.samples}/${samples.length} samples (${animation.firstS}–${animation.lastS} s)`,
+    );
+  }
+  for (const request of requestSummary.slice(0, 5)) {
+    log(
+      `    ${request.path}: ${request.count}× (failed ${request.failed}, open ${request.open}, max ${request.maxMs} ms)`,
+    );
+  }
+  log(`    written to ${path.relative(ctx.outDir, file)}`);
+}
+
 async function measureTier(
   ctx: Context,
   app: RunningApp,
@@ -921,6 +1022,14 @@ async function measureTier(
 ): Promise<TierResult> {
   const warnings: string[] = [];
   const { options } = ctx;
+  if (options.launchProbeSeconds > 0) {
+    try {
+      await launchProbe(ctx, app, label);
+    } catch (error) {
+      if (abort.signal.aborted) throw error;
+      warnings.push(`launch probe failed: ${(error as Error).message}`);
+    }
+  }
   log(`  launched in ${app.launch.spawnToRendererReadyMs} ms; settling 10 s`);
   await sleep(10_000);
   const state = await page<PageState>(app, PAGE_STATE);

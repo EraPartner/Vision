@@ -8,6 +8,8 @@ vi.mock('yahoo-finance2', () => ({ default: ctor }));
 
 import {
   getYahooClient,
+  timedFetch,
+  YAHOO_FETCH_TIMEOUT_MS,
   parseYahooPayload,
   requireYahooPayload,
   yahooChartResultSchema,
@@ -28,7 +30,26 @@ describe('getYahooClient', () => {
     const b = await getYahooClient();
     expect(a).toBe(b);
     expect(ctor).toHaveBeenCalledTimes(1);
-    expect(ctor).toHaveBeenCalledWith({ suppressNotices: ['yahooSurvey'] });
+    expect(ctor).toHaveBeenCalledWith({ suppressNotices: ['yahooSurvey'], fetch: timedFetch });
+  });
+});
+
+describe('timedFetch', () => {
+  it('passes a timeout signal and keeps a caller signal', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'));
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const caller = new AbortController();
+      await timedFetch('https://example.invalid/', { signal: caller.signal });
+      expect(timeoutSpy).toHaveBeenCalledWith(YAHOO_FETCH_TIMEOUT_MS);
+      const signal = fetchSpy.mock.calls[0]?.[1]?.signal;
+      expect(signal?.aborted).toBe(false);
+      caller.abort();
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
+      timeoutSpy.mockRestore();
+    }
   });
 });
 

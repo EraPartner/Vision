@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-22
-updated: 2026-10-21
+date: 2026-10-24
+updated: 2026-10-24
 tags:
   [
     architecture,
@@ -425,7 +425,7 @@ health watchdog pauses for this interval. See
      name, asset basename, and line number. It never records a full URL, error message, credentials,
      application data, or localStorage contents.
 
-9. **Watchdog Loop** starts (10s interval):
+9. **Watchdog Loop** starts (30s interval while healthy, 10s after a failed probe; [[docs/adr/247-launch-background-work-bounds|ADR-247]]):
    - Polls `GET /health` continuously, except while the Mac is suspended
    - 3 consecutive failures → emit `backend:lost` IPC event to renderer
    - Recovery → emit `backend:restored` event

@@ -24,13 +24,31 @@ export type YahooClient = InstanceType<typeof import('yahoo-finance2').default>;
 
 let clientPromise: Promise<YahooClient> | null = null;
 
+/** Per-request limit for every Yahoo HTTP call, including the crumb fetch. */
+export const YAHOO_FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * `fetch` with a per-request timeout. yahoo-finance2 sets no timeout of its own,
+ * so a stalled Yahoo connection used to hold startup price refreshes open
+ * indefinitely.
+ */
+export function timedFetch(
+  input: Parameters<typeof fetch>[0],
+  init?: RequestInit,
+): Promise<Response> {
+  const timeout = AbortSignal.timeout(YAHOO_FETCH_TIMEOUT_MS);
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
+  return fetch(input, { ...init, signal });
+}
+
 /**
  * Resolve the shared yahoo-finance2 client, importing and constructing it on
  * first call and returning the cached instance thereafter.
  */
 export function getYahooClient(): Promise<YahooClient> {
   clientPromise ??= import('yahoo-finance2').then(
-      ({ default: YahooFinance }) => new YahooFinance({ suppressNotices: ['yahooSurvey'] }),
+      ({ default: YahooFinance }) =>
+        new YahooFinance({ suppressNotices: ['yahooSurvey'], fetch: timedFetch }),
     );
   return clientPromise;
 }

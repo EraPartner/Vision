@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-20
-last_modified: 2026-10-20
-updated: 2026-10-20
+date: 2026-10-24
+last_modified: 2026-10-24
+updated: 2026-10-24
 tags:
   [
     integration,
@@ -266,6 +266,12 @@ During server startup, before any price refresh attempts, a network reachability
 - **Faster readiness**: `/health/detailed` ready status reached ~15 seconds sooner when offline
 
 Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves when `isInternetReachable({ force: true })` returns false, avoiding unnecessary timeout delays.
+
+**Startup Delay and Yahoo Timeout (Oct 2026):**
+
+- When online, the startup historical quote backfill and `refreshInvestmentPricesOnStartup()` start 20 s after boot (`STARTUP_PRICE_REFRESH_DELAY_MS`) so they do not compete with the first Dashboard load
+- Every yahoo-finance2 request, including the crumb fetch, has a 15 s timeout (`YAHOO_FETCH_TIMEOUT_MS` in `services/prices/yahooClient.ts`)
+- See [[docs/adr/247-launch-background-work-bounds|ADR-247]]
 
 **Provider Timeout Safety (Apr 2026):**
 
