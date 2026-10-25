@@ -293,3 +293,8 @@ deleteAiResearchDocument
 
 # Sidebar badges (NavItemBadge): persisted undismissed insight count
 getInsightsCount
+
+# Server-owned figures (ADR-216, ADR-217): the totals the React app reads instead of summing in the browser.
+getAccountTotals
+getNetWorthByAccount
+getPlannedTotals

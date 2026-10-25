@@ -220,6 +220,38 @@ extension OpenAPI {
         }
     }
 
+    public struct AccountGroupTotal: Codable, Equatable, Sendable {
+        /// cash + holdings.
+        public let total: Decimal
+        /// Converted ledger balances; crypto_exchange and wallet accounts excluded.
+        public let cash: Decimal
+        /// Portfolio-summary position value of the group's portfolio-type accounts.
+        public let holdings: Decimal
+        /// The portfolio summary could not be computed; holdings is 0.
+        public let holdingsUnavailable: Bool
+        /// Accounts with a balance partition left out for want of a stored rate.
+        public let unconvertedCount: Int
+        public let unconvertedCurrencies: [String]
+
+        public init(total: Decimal, cash: Decimal, holdings: Decimal, holdingsUnavailable: Bool, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+            self.total = total
+            self.cash = cash
+            self.holdings = holdings
+            self.holdingsUnavailable = holdingsUnavailable
+            self.unconvertedCount = unconvertedCount
+            self.unconvertedCurrencies = unconvertedCurrencies
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case cash = "cash"
+            case holdings = "holdings"
+            case holdingsUnavailable = "holdings_unavailable"
+            case unconvertedCount = "unconverted_count"
+            case unconvertedCurrencies = "unconverted_currencies"
+        }
+    }
+
     public struct AccountList: Codable, Equatable, Sendable {
         public let total: Int
         public let limit: Int?
@@ -241,6 +273,89 @@ extension OpenAPI {
             case offset = "offset"
             case items = "items"
             case links = "links"
+        }
+    }
+
+    public struct AccountTotals: Codable, Equatable, Sendable {
+        public let currency: String
+        /// Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet.
+        public let netCash: NetCash
+        public let groups: Groups
+        public let accounts: [AccountsItem]
+
+        public init(currency: String, netCash: NetCash, groups: Groups, accounts: [AccountsItem]) {
+            self.currency = currency
+            self.netCash = netCash
+            self.groups = groups
+            self.accounts = accounts
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case currency = "currency"
+            case netCash = "net_cash"
+            case groups = "groups"
+            case accounts = "accounts"
+        }
+
+        public struct NetCash: Codable, Equatable, Sendable {
+            public let total: Decimal
+            public let unconvertedCount: Int
+            public let unconvertedCurrencies: [String]
+
+            public init(total: Decimal, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+                self.total = total
+                self.unconvertedCount = unconvertedCount
+                self.unconvertedCurrencies = unconvertedCurrencies
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case unconvertedCount = "unconverted_count"
+                case unconvertedCurrencies = "unconverted_currencies"
+            }
+        }
+
+        public struct Groups: Codable, Equatable, Sendable {
+            public let cash: OpenAPI.AccountGroupTotal
+            public let portfolio: OpenAPI.AccountGroupTotal
+            public let liabilities: OpenAPI.AccountGroupTotal
+            public let archived: OpenAPI.AccountGroupTotal
+
+            public init(cash: OpenAPI.AccountGroupTotal, portfolio: OpenAPI.AccountGroupTotal, liabilities: OpenAPI.AccountGroupTotal, archived: OpenAPI.AccountGroupTotal) {
+                self.cash = cash
+                self.portfolio = portfolio
+                self.liabilities = liabilities
+                self.archived = archived
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case cash = "cash"
+                case portfolio = "portfolio"
+                case liabilities = "liabilities"
+                case archived = "archived"
+            }
+        }
+
+        public struct AccountsItem: Codable, Equatable, Sendable {
+            public let id: Int
+            public let group: String
+            /// Sum of the account's convertible balance partitions.
+            public let convertedBalance: Decimal
+            public let unconvertedCurrencies: [String]
+
+            public init(id: Int, group: String, convertedBalance: Decimal, unconvertedCurrencies: [String]) {
+                self.id = id
+                self.group = group
+                self.convertedBalance = convertedBalance
+                self.unconvertedCurrencies = unconvertedCurrencies
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case group = "group"
+                case convertedBalance = "converted_balance"
+                case unconvertedCurrencies = "unconverted_currencies"
+            }
         }
     }
 
@@ -4779,6 +4894,69 @@ extension OpenAPI {
         }
     }
 
+    public struct NetWorthByAccountResponse: Codable, Equatable, Sendable {
+        public let currency: String
+        /// Ordered by account id, the unassigned row last.
+        public let rows: [OpenAPI.NetWorthByAccountRow]
+        /// Σ row totals; null while any cash balance is unconverted.
+        public let total: Decimal?
+        public let unconvertedAccountIds: [Int]
+
+        public init(currency: String, rows: [OpenAPI.NetWorthByAccountRow], total: Decimal? = nil, unconvertedAccountIds: [Int]) {
+            self.currency = currency
+            self.rows = rows
+            self.total = total
+            self.unconvertedAccountIds = unconvertedAccountIds
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case currency = "currency"
+            case rows = "rows"
+            case total = "total"
+            case unconvertedAccountIds = "unconvertedAccountIds"
+        }
+    }
+
+    public struct NetWorthByAccountRow: Codable, Equatable, Sendable {
+        /// null for holdings not assigned to an account.
+        public let accountId: Int?
+        /// Account display_name or name; null for the unassigned row or an unknown account.
+        public let name: String?
+        public let type: String?
+        public let cashCurrency: String?
+        /// Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only
+        /// accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency
+        /// has no rate.
+        public let cash: Decimal?
+        /// Σ live portfolio-summary byAccount currentValue.
+        public let holdings: Decimal
+        /// cash + holdings; null when cash is null.
+        public let total: Decimal?
+        public let unconverted: Bool
+
+        public init(accountId: Int? = nil, name: String? = nil, type: String? = nil, cashCurrency: String? = nil, cash: Decimal? = nil, holdings: Decimal, total: Decimal? = nil, unconverted: Bool) {
+            self.accountId = accountId
+            self.name = name
+            self.type = type
+            self.cashCurrency = cashCurrency
+            self.cash = cash
+            self.holdings = holdings
+            self.total = total
+            self.unconverted = unconverted
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case accountId = "accountId"
+            case name = "name"
+            case type = "type"
+            case cashCurrency = "cashCurrency"
+            case cash = "cash"
+            case holdings = "holdings"
+            case total = "total"
+            case unconverted = "unconverted"
+        }
+    }
+
     public struct NetWorthResponse: Codable, Equatable, Sendable {
         /// Additive (ADR-216). Currencies of account balances left out of `liquid`, `liabilities` and
         /// the snapshots because no stored rate converts them; empty when every balance converted.
@@ -5005,6 +5183,124 @@ extension OpenAPI {
         case amortizing = "amortizing"
         case fixedPrincipal = "fixed_principal"
         case interestOnly = "interest_only"
+    }
+
+    public struct PlannedTotals: Codable, Equatable, Sendable {
+        public let currency: String
+        public let today: String
+        public let monthEnd: String
+        public let restOfMonth: RestOfMonth
+        public let monthlyEquivalent: MonthlyEquivalent
+        /// Today and the seven days after it (eight entries), every recurring occurrence counted on its
+        /// own day. `unconverted_count` counts the occurrences on that day without a stored rate.
+        public let nextDays: [NextDaysItem]
+        /// The `next_days` window summed; `unconverted_count` counts rows without a stored rate, like
+        /// `rest_of_month`.
+        public let nextDaysTotal: NextDaysTotal
+
+        public init(currency: String, today: String, monthEnd: String, restOfMonth: RestOfMonth, monthlyEquivalent: MonthlyEquivalent, nextDays: [NextDaysItem], nextDaysTotal: NextDaysTotal) {
+            self.currency = currency
+            self.today = today
+            self.monthEnd = monthEnd
+            self.restOfMonth = restOfMonth
+            self.monthlyEquivalent = monthlyEquivalent
+            self.nextDays = nextDays
+            self.nextDaysTotal = nextDaysTotal
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case currency = "currency"
+            case today = "today"
+            case monthEnd = "month_end"
+            case restOfMonth = "rest_of_month"
+            case monthlyEquivalent = "monthly_equivalent"
+            case nextDays = "next_days"
+            case nextDaysTotal = "next_days_total"
+        }
+
+        public struct RestOfMonth: Codable, Equatable, Sendable {
+            public let incoming: Decimal
+            /// Negative or zero.
+            public let outgoing: Decimal
+            public let unconvertedCount: Int
+
+            public init(incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
+                self.incoming = incoming
+                self.outgoing = outgoing
+                self.unconvertedCount = unconvertedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case incoming = "incoming"
+                case outgoing = "outgoing"
+                case unconvertedCount = "unconverted_count"
+            }
+        }
+
+        public struct MonthlyEquivalent: Codable, Equatable, Sendable {
+            public let total: Decimal
+            public let unconvertedCount: Int
+
+            public init(total: Decimal, unconvertedCount: Int) {
+                self.total = total
+                self.unconvertedCount = unconvertedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case unconvertedCount = "unconverted_count"
+            }
+        }
+
+        public struct NextDaysItem: Codable, Equatable, Sendable {
+            public let date: String
+            public let incoming: Decimal
+            /// Negative or zero.
+            public let outgoing: Decimal
+            public let unconvertedCount: Int
+
+            public init(date: String, incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
+                self.date = date
+                self.incoming = incoming
+                self.outgoing = outgoing
+                self.unconvertedCount = unconvertedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case date = "date"
+                case incoming = "incoming"
+                case outgoing = "outgoing"
+                case unconvertedCount = "unconverted_count"
+            }
+        }
+
+        public struct NextDaysTotal: Codable, Equatable, Sendable {
+            public let from: String
+            public let to: String
+            public let incoming: Decimal
+            /// Negative or zero.
+            public let outgoing: Decimal
+            public let net: Decimal
+            public let unconvertedCount: Int
+
+            public init(from: String, to: String, incoming: Decimal, outgoing: Decimal, net: Decimal, unconvertedCount: Int) {
+                self.from = from
+                self.to = to
+                self.incoming = incoming
+                self.outgoing = outgoing
+                self.net = net
+                self.unconvertedCount = unconvertedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case from = "from"
+                case to = "to"
+                case incoming = "incoming"
+                case outgoing = "outgoing"
+                case net = "net"
+                case unconvertedCount = "unconverted_count"
+            }
+        }
     }
 
     public struct PlannedTransaction: Codable, Equatable, Sendable {

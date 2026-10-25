@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "getSettings", "researchListProviderKeys", "researchSetProviderKey", "researchClearProviderKey", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "createCategory", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings", "researchPortfolioForecast", "researchMacroSearch", "researchMacroSeries", "createResearchDossier", "getResearchDossier", "updateResearchDossier", "deleteResearchDossier", "listResearchDossierVersions", "restoreResearchDossier", "exportResearchDossiers", "exportResearchDossier", "listAiResearchDocuments", "getAiStatus", "getAiModels", "getAiModelFit", "warmAiModel", "releaseAiModel", "getAiConversations", "createAiConversation", "getAiConversation", "updateAiConversation", "deleteAiConversation", "createAiInvestigation", "getAiInvestigation", "deleteAiInvestigation", "resumeAiInvestigation", "cancelAiInvestigation", "deleteAiResearchDocument", "getInsightsCount"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "getSettings", "researchListProviderKeys", "researchSetProviderKey", "researchClearProviderKey", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "createCategory", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings", "researchPortfolioForecast", "researchMacroSearch", "researchMacroSeries", "createResearchDossier", "getResearchDossier", "updateResearchDossier", "deleteResearchDossier", "listResearchDossierVersions", "restoreResearchDossier", "exportResearchDossiers", "exportResearchDossier", "listAiResearchDocuments", "getAiStatus", "getAiModels", "getAiModelFit", "warmAiModel", "releaseAiModel", "getAiConversations", "createAiConversation", "getAiConversation", "updateAiConversation", "deleteAiConversation", "createAiInvestigation", "getAiInvestigation", "deleteAiInvestigation", "resumeAiInvestigation", "cancelAiInvestigation", "deleteAiResearchDocument", "getInsightsCount", "getAccountTotals", "getNetWorthByAccount", "getPlannedTotals"]
 }
 
 extension OpenAPIOperations {
@@ -7592,5 +7592,73 @@ extension OpenAPIOperations {
         public init() {}
 
         public var path: String { "/api/info/insights-count" }
+    }
+
+    /// GET /api/accounts/totals: Accounts hub totals in one display currency
+    public struct GetAccountTotals: APIOperation {
+        public typealias Response = OpenAPI.AccountTotals
+        public static let operationId = "getAccountTotals"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/accounts/totals"
+
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/accounts/totals" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/info/net-worth/by-account: Get current net worth by account
+    public struct GetNetWorthByAccount: APIOperation {
+        public typealias Response = OpenAPI.NetWorthByAccountResponse
+        public static let operationId = "getNetWorthByAccount"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/net-worth/by-account"
+
+        /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
+        /// to EUR. A repeated key returns 400.
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/info/net-worth/by-account" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/planned-transactions/totals: Planned totals in one display currency
+    public struct GetPlannedTotals: APIOperation {
+        public typealias Response = OpenAPI.PlannedTotals
+        public static let operationId = "getPlannedTotals"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/planned-transactions/totals"
+
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/planned-transactions/totals" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
     }
 }

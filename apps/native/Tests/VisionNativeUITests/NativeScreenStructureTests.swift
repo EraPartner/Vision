@@ -904,8 +904,9 @@ actor StaticAccountsService: AccountsService {
         #expect(model.payments.count == 4)
         #expect(model.tablePayments.count == 4)
         #expect(model.strip.dueCount == 2)
-        #expect(model.strip.windowTotal.unavailableCount == 0)
-        #expect(model.estimatedMonthly.unavailableCount == 0)
+        // The static service has no server totals: the figures stay skeletons.
+        #expect(model.windowTotal == nil)
+        #expect(model.estimatedMonthly == nil)
         #expect(layOutPlanned(shell).fittingSize.height > 0)
         // Sorted and filtered, then filtered to nothing.
         model.table.toggleSort(PlannedColumn.amount.rawValue)
