@@ -37,6 +37,9 @@ struct AuroraCanvas: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
+    /// Key, on screen and the app shown: the aurora pauses on its last frame otherwise, as the
+    /// web pauses when `document.hidden || !document.hasFocus()` (`fx-idle-atmosphere`).
+    @State private var windowLive = true
 
     /// tokens.css `--aurora-*-alpha` and `--grain-alpha` (light, dark): `DesignTokens.Atmosphere`.
     private var alphas: (primary: Double, accent: Double, wash: Double, grain: Double) {
@@ -64,17 +67,19 @@ struct AuroraCanvas: View {
                         // The shader takes over the motion on Enhanced, unless Full effects keep
                         // the blobs drifting under it (index.css "Full effects": "also under the
                         // live WebGL aurora"); static atmosphere and reduced motion hold.
-                        animated: (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion)
+                        animated: (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion,
+                        running: windowLive)
                     if enhanced {
                         AuroraShaderView(
                             primary: theme.palette.primary, accent: theme.palette.accent,
-                            animated: !staticAtmosphere && !reduceMotion
+                            animated: !staticAtmosphere && !reduceMotion, live: windowLive
                         )
                         .opacity(theme.isDark ? 0.5 : 0.6)
                     }
                     AuroraGrain().opacity(alphas.grain)
                 }
             }
+            .background { WindowLivenessProbe { windowLive = $0 } }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
@@ -103,34 +108,52 @@ private struct AuroraBlobs: View {
     let firstAlpha: Double
     let secondAlpha: Double
     let animated: Bool
-    @State private var drifted = false
+    /// The window is live; the drift holds its position while it is not.
+    let running: Bool
+    @State private var clock = AuroraDriftClock()
 
     var body: some View {
-        let a = max(size.width * 0.55, 544)
-        let b = max(size.width * 0.48, 480)
-        ZStack(alignment: .topLeading) {
-            blob(first, alpha: firstAlpha, diameter: a)
-                .scaleEffect(drifted ? 1.18 : 1)
-                .offset(x: drifted ? size.width * 0.14 : 0, y: drifted ? size.height * 0.09 : 0)
-                .position(x: -size.width * 0.12 + a / 2, y: -size.height * 0.18 + a / 2)
-                .animation(animation(64), value: drifted)
-            blob(second, alpha: secondAlpha, diameter: b)
-                .scaleEffect(drifted ? 0.96 : 1.12)
-                .offset(x: drifted ? -size.width * 0.11 : 0, y: drifted ? -size.height * 0.07 : 0)
-                .position(x: size.width * 1.1 - b / 2, y: size.height * 1.22 - b / 2)
-                .animation(animation(76), value: drifted)
+        Group {
+            if animated { driftingBlobs } else { blobs(firstProgress: 0, secondProgress: 0) }
         }
-        .onAppear { if animated { drifted = true } }
-        .onChange(of: animated) { _, live in drifted = live }
+        .onAppear { clock.setRunning(running, now: Date.now.timeIntervalSinceReferenceDate) }
+        .onChange(of: running) { _, live in
+            clock.setRunning(live, now: Date.now.timeIntervalSinceReferenceDate)
+        }
     }
 
-    private func animation(_ seconds: Double) -> Animation? {
-        guard animated else { return nil }
+    private var driftingBlobs: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !running)) { timeline in
+            let now = timeline.date.timeIntervalSinceReferenceDate
+            let elapsed = clock.elapsed(at: now)
+            blobs(firstProgress: progress(elapsed, 64), secondProgress: progress(elapsed, 76))
+        }
+    }
+
+    // The blobs drift at 30 fps: the largest moves well under a pixel per frame, so this is the
+    // same motion as a display-rate animation for half the per-frame work, and a paused
+    // timeline schedules nothing at all.
+
+    private func progress(_ elapsed: Double, _ seconds: Double) -> Double {
         // The smooth path: continuous alternate drift on `--ease-in-out-quart`. Native drawing is
         // GPU-composited, so this is the Full-effects drift whether or not the switch is on; the
         // web's 100 ms stepped default (index.css `aurora-drift-a`) is not modelled.
-        return Animation.visionCurve(DesignTokens.Ease.inOutQuart, duration: seconds)
-            .repeatForever(autoreverses: true)
+        AuroraDriftClock.progress(elapsed: elapsed, duration: seconds, curve: DesignTokens.Ease.inOutQuart)
+    }
+
+    private func blobs(firstProgress: Double, secondProgress: Double) -> some View {
+        let a = max(size.width * 0.55, 544)
+        let b = max(size.width * 0.48, 480)
+        return ZStack(alignment: .topLeading) {
+            blob(first, alpha: firstAlpha, diameter: a)
+                .scaleEffect(1 + 0.18 * firstProgress)
+                .offset(x: size.width * 0.14 * firstProgress, y: size.height * 0.09 * firstProgress)
+                .position(x: -size.width * 0.12 + a / 2, y: -size.height * 0.18 + a / 2)
+            blob(second, alpha: secondAlpha, diameter: b)
+                .scaleEffect(1.12 - 0.16 * secondProgress)
+                .offset(x: -size.width * 0.11 * secondProgress, y: -size.height * 0.07 * secondProgress)
+                .position(x: size.width * 1.1 - b / 2, y: size.height * 1.22 - b / 2)
+        }
     }
 
     /// `radial-gradient(closest-side, colour / alpha, transparent 72%)`.
@@ -206,18 +229,18 @@ private struct AuroraGrain: View {
 /// ShaderAurora: the same fbm fragment shader as the WebGL layer, compiled at runtime,
 /// drawn at a quarter resolution (at most 640 px wide) and about 30 fps; held on its
 /// first frame for reduced motion or a large display, and paused while the window is
-/// not key (`document.hidden || !hasFocus`).
+/// not key, occluded, minimised or its app hidden (`document.hidden || !hasFocus`).
 struct AuroraShaderView: NSViewRepresentable {
     let primary: HSLColor
     let accent: HSLColor
     let animated: Bool
+    /// The window is key, on screen and its app shown; the loop pauses on the last frame otherwise.
+    let live: Bool
 
     func makeCoordinator() -> AuroraRenderer { AuroraRenderer() }
 
     func makeNSView(context: Context) -> NSView {
-        guard let device = MTLCreateSystemDefaultDevice(), context.coordinator.prepare(device: device) else {
-            return NSView()
-        }
+        guard let device = MTLCreateSystemDefaultDevice() else { return NSView() }
         let view = AuroraMTKView(frame: .zero, device: device)
         view.delegate = context.coordinator
         view.colorPixelFormat = .bgra8Unorm
@@ -227,6 +250,14 @@ struct AuroraShaderView: NSViewRepresentable {
         view.preferredFramesPerSecond = 30
         context.coordinator.attach(view)
         update(context.coordinator, view: view)
+        // The runtime shader compile is not on the first frame's path (ADR-247): the CSS
+        // atmosphere shows at once and the shader joins it once compiled.
+        let renderer = context.coordinator
+        Task { @MainActor in
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(400))
+            if renderer.prepare(device: device) { renderer.refreshPlayback() } else { view.isHidden = true }
+        }
         return view
     }
 
@@ -235,9 +266,16 @@ struct AuroraShaderView: NSViewRepresentable {
         update(context.coordinator, view: view)
     }
 
+    static func dismantleNSView(_ view: NSView, coordinator: AuroraRenderer) {
+        guard let view = view as? AuroraMTKView else { return }
+        view.isPaused = true
+        view.delegate = nil
+    }
+
     private func update(_ renderer: AuroraRenderer, view: AuroraMTKView) {
         renderer.colors = (Self.rgb(primary), Self.rgb(accent))
         renderer.animated = animated
+        renderer.live = live
         renderer.refreshPlayback()
     }
 
@@ -272,11 +310,12 @@ final class AuroraMTKView: MTKView {
 
     var colors: (SIMD4<Float>, SIMD4<Float>) = (SIMD4(0.18, 0.65, 0.45, 1), SIMD4(0.85, 0.7, 0.4, 1))
     var animated = true
+    var live = true
+    private var hasDrawn = false
     private var queue: MTLCommandQueue?
     private var pipeline: MTLRenderPipelineState?
     private weak var view: AuroraMTKView?
     private let start = CACurrentMediaTime()
-    private var observers: [NSObjectProtocol] = []
 
     func prepare(device: MTLDevice) -> Bool {
         do {
@@ -296,23 +335,18 @@ final class AuroraMTKView: MTKView {
 
     func attach(_ view: AuroraMTKView) {
         self.view = view
-        let center = NotificationCenter.default
-        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
-            observers.append(
-                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.refreshPlayback() }
-                })
-        }
     }
 
-    /// `shaderAuroraMode`: loop, a held static frame, or stopped on the last frame.
+    /// `shaderAuroraMode`: loop, a held static frame, or paused on the last frame. The window
+    /// state comes from the canvas (`WindowLivenessProbe`), so one observer serves every layer.
     func refreshPlayback() {
         guard let view else { return }
-        let focused = view.window?.isKeyWindow ?? true
-        let loop = animated && focused
+        let mode = AuroraPlayback.resolve(motionAllowed: animated, windowIsLive: live)
+        let loop = mode == .loop
         view.enableSetNeedsDisplay = !loop
         view.isPaused = !loop
-        if !loop { view.needsDisplay = true }
+        // A held frame is drawn once; a paused loop keeps its last frame (or draws its first).
+        if mode == .held || (mode == .paused && !hasDrawn) { view.needsDisplay = true }
     }
 
     nonisolated func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -333,6 +367,7 @@ final class AuroraMTKView: MTKView {
         encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
+        hasDrawn = true
         buffer.present(drawable)
         buffer.commit()
     }

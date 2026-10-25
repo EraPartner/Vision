@@ -307,6 +307,7 @@ struct NativeSidebar: View {
     let model: NativeShellModel
     /// AppLayout's skip link; `nil` while no native screen is shown.
     var skipToContent: (() -> Void)?
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.visionTheme) private var theme
     @FocusState private var skipFocused: Bool
 
@@ -349,7 +350,12 @@ struct NativeSidebar: View {
         .background(SidebarGlassBackground())
         // The counts' own refetch policies run for the sidebar's lifetime; a route change
         // re-reads any count that is no longer fresh.
-        .task { await model.sidebarBadges?.run() }
+        // It idles while the app is inactive or hidden (the web pauses refetch intervals while
+        // the document is hidden) and re-reads whatever went stale when the app returns.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await model.sidebarBadges?.run()
+        }
         .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
     }
 

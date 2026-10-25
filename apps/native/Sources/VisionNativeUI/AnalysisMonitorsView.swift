@@ -5,6 +5,7 @@ public struct AnalysisMonitorsView: View {
     let model: AnalysisMonitorsModel
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
+    @Environment(\.scenePhase) private var scenePhase
     public init(model: AnalysisMonitorsModel, shell: NativeShellModel) {
         self.model = model
         self.shell = shell
@@ -36,8 +37,10 @@ public struct AnalysisMonitorsView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task {
-            await model.load()
+        .task { await model.load() }
+        // The poll idles while the app is inactive or hidden, like the other screens' refetches.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) } catch { break }
                 await model.poll()
