@@ -48,6 +48,7 @@ struct SidebarWidthGuard: NSViewRepresentable {
         /// make the probe fight it forever.
         private var corrections = 0
         private weak var observedSplitView: NSSplitView?
+        private weak var observedSidebar: NSView?
         /// A too-narrow width seen after the first layout, and when it was first seen. A sidebar
         /// that is being shown or hidden passes through every width below `minimum`; moving the
         /// divider then fights the animation (and spends the bounded corrections), so only a width
@@ -88,6 +89,10 @@ struct SidebarWidthGuard: NSViewRepresentable {
         /// later re-apply its own width, so this re-checks after every split resize.
         @objc private func splitViewDidResize(_ note: Notification) { scheduleCorrection() }
 
+        /// On macOS 26 SwiftUI can put its own column width back on the sidebar's item view
+        /// without resizing the probe or posting a split resize, so the column's frame is watched too.
+        @objc private func sidebarFrameDidChange(_ note: Notification) { scheduleCorrection() }
+
         private func scheduleCorrection() {
             guard window != nil, !pending, corrections < 8 else { return }
             pending = true
@@ -113,6 +118,17 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 NotificationCenter.default.addObserver(
                     self, selector: #selector(splitViewDidResize(_:)),
                     name: NSSplitView.didResizeSubviewsNotification, object: splitView)
+            }
+            if observedSidebar !== sidebar {
+                if let previous = observedSidebar {
+                    NotificationCenter.default.removeObserver(
+                        self, name: NSView.frameDidChangeNotification, object: previous)
+                }
+                observedSidebar = sidebar
+                sidebar.postsFrameChangedNotifications = true
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(sidebarFrameDidChange(_:)),
+                    name: NSView.frameDidChangeNotification, object: sidebar)
             }
             // SwiftUI rewrites the item's minimum on its own update passes, so restate it each time.
             if let item = (splitView.delegate as? NSSplitViewController)?.splitViewItems.first,
