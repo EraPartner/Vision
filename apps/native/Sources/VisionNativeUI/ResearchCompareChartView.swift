@@ -8,6 +8,11 @@ struct ResearchCompareChartView: View {
     @State private var selected: Int?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
+    /// The web LineChart's value domain over every rebased value and the dashed 100 line.
+    private var yDomain: ClosedRange<Double> {
+        let values = data.rows.flatMap { row in row.values.values.map { NSDecimalNumber(decimal: $0).doubleValue } }
+        return ChartAxisTicks.fittedDomain(values + [100])
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Chart {
@@ -28,7 +33,7 @@ struct ResearchCompareChartView: View {
                         }
                     }
                 }
-                RuleMark(y: .value("100", 100)).lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4])).foregroundStyle(
+                RuleMark(y: .value("100", 100.0)).lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4])).foregroundStyle(
                     theme.secondaryLabel.opacity(0.5)
                 )
                 .annotation(position: .leading) { Text("100").font(.caption) }
@@ -47,23 +52,17 @@ struct ResearchCompareChartView: View {
             )
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 6)) { value in
-                    AxisGridLine()
+                    AxisTick()
                     AxisValueLabel {
                         if let date = value.as(Date.self) {
                             Text(VisionFormat.appDate(date, format: shell.settings.dateFormat, timeZone: .current))
+                                .font(ChartTickText.font).foregroundStyle(theme.secondaryLabel)
                         }
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let value = value.as(Double.self) {
-                            Text(value.formatted(.number.precision(.fractionLength(0)).grouping(.never)))
-                        }
-                    }
-                }
+            .visionChartYAxis(domain: yDomain) { value in
+                value.formatted(.number.precision(.fractionLength(0)).grouping(.never))
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in

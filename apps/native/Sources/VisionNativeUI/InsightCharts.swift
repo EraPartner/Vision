@@ -2,6 +2,15 @@ import Charts
 import SwiftUI
 import VisionNativeCore
 
+/// How a timeline chart writes its value-axis ticks: `formatAxisCompact` ("6,5k €") or the full
+/// currency format with the app's decimal places (`formatCurrency`).
+enum InsightYAxisFormat { case compact, full }
+
+/// How a timeline chart writes its x-axis ticks: `CHART_DATE_PATTERNS.monthTick` ("Nov 24"),
+/// `formatMonthYearWithAppSettings` ("05/2026"), the day number of a month ("2", "4", ...) or
+/// `CHART_DATE_PATTERNS.dayTick` ("2 Nov").
+enum InsightXLabels { case shortMonth, appMonthYear, dayOfMonth, dayMonth }
+
 /// Shared native chart interaction: hover, drag range comparison, and keyboard month/day
 /// walking. Readouts use the original Decimal values; Double is only a plot coordinate.
 struct InsightTimelineChart: View {
@@ -20,6 +29,17 @@ struct InsightTimelineChart: View {
     var rangePercent = false
     var formatPeriod: ((String) -> String)? = nil
     var formatTick: ((String) -> String)? = nil
+    /// Legend position. `nil` follows the web: above the plot when there is more than one series.
+    var legend: ChartLegendPlacement? = nil
+    /// Series ids in the order the legend lists them; unlisted series follow in series order.
+    var legendOrder: [String] = []
+    var yAxis: InsightYAxisFormat = .compact
+    var xLabels: InsightXLabels = .shortMonth
+    /// The dashed zero reference line (`referenceLines={[{ y: 0, dashed: true }]}`).
+    var zeroLine = false
+    /// A bare `Sparkline`: no axes or legend, a smoothed line over a flat 15 % fill, the value
+    /// range padded by 10 % and not niced.
+    var sparkline = false
     @Binding var selection: String?
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
@@ -100,10 +120,82 @@ struct InsightTimelineChart: View {
         bars ? -0.5...(Double(max(keys.count, 1)) - 0.5) : 0...Double(max(keys.count - 1, 1))
     }
 
+    private var hasNegativeValue: Bool { series.contains { $0.points.contains { $0.value < 0 } } }
+    /// Stacked areas stack only while no value is negative (the web's `stacked={!hasNegative}`).
+    private var stacksAreas: Bool { areas && stackedAreas && !hasNegativeValue }
+    private func drawsArea(_ line: InsightChartSeries) -> Bool {
+        areas && !(bars && !line.dashed) && (areaSeries?.contains(line.id) ?? true)
+    }
+    private func lineColor(_ line: InsightChartSeries) -> Color {
+        seriesColor(at: series.firstIndex { $0.id == line.id } ?? 0)
+    }
+
+    /// The web chart's value domain: bars keep the baseline in view, stacked areas run from the
+    /// lowest total to the highest, everything else is fitted to the data (not zero-based).
+    private var yDomain: ClosedRange<Double> {
+        if sparkline {
+            let values = series.flatMap { $0.points.map { coordinate($0.value) } }
+            let low = values.min() ?? 0
+            let high = values.max() ?? 1
+            let pad = high != low ? (high - low) * 0.1 : 1
+            return (low - pad)...(high + pad)
+        }
+        let rects = barRects
+        if !rects.isEmpty {
+            let overlays = series.filter(\.dashed).flatMap { $0.points.map { coordinate($0.value) } }
+            return ChartAxisTicks.zeroBasedDomain(rects.flatMap { [$0.y0, $0.y1] } + overlays)
+        }
+        if stacksAreas {
+            var totals: [String: Double] = [:]
+            for line in series where drawsArea(line) {
+                for point in line.points { totals[point.key, default: 0] += coordinate(point.value) }
+            }
+            let values = Array(totals.values)
+            return ChartAxisTicks.niceDomain(min(0, values.min() ?? 0), max(values.max() ?? 1, 1e-9))
+        }
+        var values = series.flatMap { $0.points.map { coordinate($0.value) } }
+        if zeroLine { values.append(0) }
+        return ChartAxisTicks.fittedDomain(values)
+    }
+
+    private var legendPlacement: ChartLegendPlacement {
+        sparkline ? .hidden : legend ?? (series.count > 1 ? .top : .hidden)
+    }
+    private func areaStyle(_ line: InsightChartSeries) -> AnyShapeStyle {
+        sparkline
+            ? AnyShapeStyle(lineColor(line).opacity(0.15)) : AnyShapeStyle(ChartFill.areaGradient(lineColor(line)))
+    }
+    private var legendItems: [ChartLegendItem] {
+        let items = series.indices.map { position in
+            ChartLegendItem(
+                id: series[position].id, label: series[position].label, color: seriesColor(at: position),
+                dashed: series[position].dashed)
+        }
+        guard !legendOrder.isEmpty else { return items }
+        let rank = Dictionary(uniqueKeysWithValues: legendOrder.enumerated().map { ($1, $0) })
+        return items.enumerated()
+            .sorted { (rank[$0.element.id] ?? Int.max, $0.offset) < (rank[$1.element.id] ?? Int.max, $1.offset) }
+            .map(\.element)
+    }
+
+    /// Where the x axis draws its labels: day numbers every other day for a month's forecast,
+    /// otherwise evenly spread (every month of a short bar chart, six to eight on a long line).
+    private var xTickPositions: [Double] {
+        if xLabels == .dayOfMonth {
+            let days = keys.compactMap { $0.split(separator: "-").last.flatMap { Int($0) } }
+            if days.count == keys.count, let positions = ChartAxisTicks.dayOfMonthPositions(days, count: 10) {
+                return positions.map(Double.init)
+            }
+        }
+        return ChartAxisTicks.evenlySpaced(Array(keys.indices), count: bars ? 12 : 8).map(Double.init)
+    }
+
     var body: some View {
-        let keys = self.keys
         let index = keyIndex
+        let domain = yDomain
+        let placement = legendPlacement
         VStack(alignment: .leading, spacing: 8) {
+            if placement == .top { ChartLegendRow(items: legendItems) }
             Chart {
                 ForEach(barRects) { bar in
                     RectangleMark(
@@ -117,24 +209,25 @@ struct InsightTimelineChart: View {
                     ForEach(line.points) { point in
                         // Bars are drawn above as BarRects.
                         if !(bars && !line.dashed), let x = index[point.key].map(Double.init) {
-                            if areas && (areaSeries?.contains(line.id) ?? true)
-                                && (!stackedAreas || !series.contains(where: { $0.points.contains { $0.value < 0 } }))
-                            {
+                            if drawsArea(line) && stacksAreas {
                                 AreaMark(
                                     x: .value(title, x), y: .value(line.label, coordinate(point.value)),
-                                    stacking: stackedAreas ? .standard : .unstacked
+                                    stacking: .standard
                                 )
                                 .foregroundStyle(by: .value(title, line.label))
-                                .opacity(areaSeries == nil ? 1 : 0.12)
-                                if areaSeries != nil {
-                                    LineMark(
-                                        x: .value(title, x), y: .value(line.label, coordinate(point.value)),
+                                .opacity(ChartFill.stackedOpacity)
+                                .interpolationMethod(.monotone)
+                            } else {
+                                if drawsArea(line) {
+                                    AreaMark(
+                                        x: .value(title, x), yStart: .value(line.label, domain.lowerBound),
+                                        yEnd: .value(line.label, coordinate(point.value)),
                                         series: .value(title, line.id)
                                     )
-                                    .foregroundStyle(by: .value(title, line.label))
-                                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                    .foregroundStyle(areaStyle(line))
+                                    .interpolationMethod(.monotone)
+                                    .accessibilityHidden(true)
                                 }
-                            } else {
                                 LineMark(
                                     x: .value(title, x), y: .value(line.label, coordinate(point.value)),
                                     series: .value(title, line.id)
@@ -142,11 +235,18 @@ struct InsightTimelineChart: View {
                                 .foregroundStyle(by: .value(title, line.label))
                                 .lineStyle(
                                     StrokeStyle(
-                                        lineWidth: line.id == "actual" ? 2.5 : 1.5,
+                                        lineWidth: line.id == "actual" ? 2.5 : (drawsArea(line) ? 2 : 1.5),
                                         dash: line.dashed ? [5, 4] : []))
+                                .interpolationMethod(.monotone)
                             }
                         }
                     }
+                }
+                if zeroLine {
+                    RuleMark(y: .value(title, 0.0))
+                        .foregroundStyle(theme.secondaryLabel)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        .accessibilityHidden(true)
                 }
                 if let selection, let x = index[selection] {
                     RuleMark(x: .value(title, Double(x))).foregroundStyle(
@@ -163,31 +263,21 @@ struct InsightTimelineChart: View {
             .chartForegroundStyleScale(
                 domain: series.map(\.label), range: series.indices.map { seriesColor(at: $0) }
             )
+            .chartLegend(.hidden)
             .chartXScale(domain: xDomain)
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys.indices.map(Double.init), count: 6)) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let position = value.as(Double.self), keys.indices.contains(Int(position.rounded())) {
-                            let key = keys[Int(position.rounded())]
-                            Text(formatTick?(key) ?? periodLabel(key))
+                if !sparkline {
+                    AxisMarks(values: xTickPositions) { value in
+                        AxisTick()
+                        AxisValueLabel {
+                            if let position = value.as(Double.self), let key = keyAt(position) {
+                                Text(tickLabel(key)).font(ChartTickText.font).foregroundStyle(theme.secondaryLabel)
+                            }
                         }
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let number = value.as(Double.self) {
-                            Text(
-                                VisionFormat.currency(
-                                    Decimal(number), code: currency,
-                                    locale: settings.numberFormat.locale, fractionDigits: 0))
-                        }
-                    }
-                }
-            }
+            .visionChartYAxis(domain: domain, hidden: sparkline, label: yLabel)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle().fill(.clear).contentShape(Rectangle())
@@ -224,6 +314,8 @@ struct InsightTimelineChart: View {
                 }
             }
             .accessibilityLabel(title)
+            if placement == .bottomLeading { ChartLegendRow(items: legendItems) }
+            if placement == .bottomCenter { ChartLegendRow(items: legendItems, centered: true) }
             if let selection {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(rangeStart.map { "\(periodLabel($0)) – \(periodLabel(selection))" } ?? periodLabel(selection))
@@ -267,9 +359,73 @@ struct InsightTimelineChart: View {
         }
     }
 
+    /// The key under an x position of the quantitative axis.
+    private func keyAt(_ position: Double) -> String? {
+        let rounded = Int(position.rounded())
+        return keys.indices.contains(rounded) ? keys[rounded] : nil
+    }
+
+    /// An x-axis tick: `formatTick` when the caller has its own, otherwise the web's month tick
+    /// ("Nov 24"), the app-format month ("05/2026") or the day number.
+    private func tickLabel(_ key: String) -> String {
+        if let formatTick { return formatTick(key) }
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        switch xLabels {
+        case .dayOfMonth:
+            if parts.count == 3 { return String(parts[2]) }
+        case .dayMonth:
+            if parts.count == 3,
+                let date = Calendar.current.date(
+                    from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+            {
+                let formatter = FormatterCache.shared("insight.dayTick|\(locale.identifier)") {
+                    () -> DateFormatter in
+                    let made = DateFormatter()
+                    made.locale = locale
+                    made.dateFormat = "d MMM"
+                    return made
+                }
+                return formatter.string(from: date)
+            }
+        case .appMonthYear:
+            if parts.count >= 2 {
+                return VisionFormat.monthYear(year: parts[0], month: parts[1], format: settings.dateFormat)
+            }
+        case .shortMonth:
+            if parts.count >= 2,
+                let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: 1))
+            {
+                // Built once per locale: axis ticks format on every layout pass.
+                let formatter = FormatterCache.shared("insight.tick|\(locale.identifier)") {
+                    () -> DateFormatter in
+                    let made = DateFormatter()
+                    made.locale = locale
+                    made.dateFormat = "MMM yy"
+                    return made
+                }
+                return formatter.string(from: date)
+            }
+        }
+        return periodLabel(key)
+    }
+
+    /// A value-axis tick: `formatAxisCompact` or the full currency format.
+    private func yLabel(_ number: Double) -> String {
+        switch yAxis {
+        case .compact:
+            return VisionFormat.currencyAxisCompact(
+                Decimal(number), code: currency, locale: settings.numberFormat.locale)
+        case .full:
+            return VisionFormat.currency(
+                Decimal(number), code: currency, locale: settings.numberFormat.locale,
+                fractionDigits: settings.showDecimalPlaces)
+        }
+    }
+
     private func periodLabel(_ key: String) -> String {
         if let formatPeriod { return formatPeriod(key) }
         let parts = key.split(separator: "-")
+        if parts.count == 3 { return VisionFormat.appDate(key, format: settings.dateFormat) }
         guard parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]),
             let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1))
         else { return key }
@@ -293,7 +449,8 @@ struct InsightTimelineChart: View {
         if id == "actual" { return theme.primary }
         if id == "income" { return theme.gain }
         if id == "spending" { return theme.loss }
-        if id == "net" { return (line.points.last?.value ?? 0) < 0 ? theme.loss : theme.gain }
+        // `NetTrendChart` draws its single series in `--primary` (green), never gain/loss.
+        if id == "net" { return theme.primary }
         let methods = [
             "simple_avg": 0, "weighted_avg": 1, "ewma": 2, "holt_winters": 3,
             "prophet_lite": 4, "monte_carlo_parametric": 5, "monte_carlo_block_bootstrap": 6, "ensemble_imse": 7,
@@ -348,6 +505,17 @@ struct HomeCategoryChart: View {
     @Environment(\.visionTheme) private var theme
 
     private var selected: HomeCategorySlice? { slices.first { $0.id == selectedId } }
+
+    /// A category's colour follows its root name (`getCategoryChartColor`), never its rank.
+    private func sliceColor(_ slice: HomeCategorySlice) -> Color {
+        let root =
+            slice.name.split(separator: ":").first.map(String.init)?.trimmingCharacters(in: .whitespaces)
+            .uppercased() ?? ""
+        var hash: Int32 = 0
+        for scalar in root.utf16 { hash = hash &* 31 &+ Int32(scalar) }
+        return theme.chartColors[Int(abs(Int64(hash)) % 8)]
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             if slices.isEmpty {
@@ -363,31 +531,16 @@ struct HomeCategoryChart: View {
                     .accessibilityLabel(slice.name).accessibilityValue(String(slice.count))
                 }
                 .chartAngleSelection(value: $selectedCount)
-                .chartForegroundStyleScale(
-                    domain: slices.map(\.name),
-                    range: slices.map { slice in
-                        let palette = theme.palette
-                        let colors = [
-                            palette.chart1, palette.chart2, palette.chart3, palette.chart4,
-                            palette.chart5, palette.chart6, palette.chart7, palette.chart8,
-                        ]
-                        let root =
-                            slice.name.split(separator: ":").first.map(String.init)?.trimmingCharacters(
-                                in: .whitespaces
-                            ).uppercased() ?? ""
-                        var hash: Int32 = 0
-                        for scalar in root.utf16 { hash = hash &* 31 &+ Int32(scalar) }
-                        return Color(token: colors[Int(abs(Int64(hash)) % 8)])
-                    }
-                )
-                .chartLegend(position: .bottom)
+                .chartForegroundStyleScale(domain: slices.map(\.name), range: slices.map(sliceColor))
+                .chartLegend(.hidden)
                 .chartBackground { _ in
-                    VStack(spacing: 4) {
-                        Text(selected?.name ?? strings.t("categoryPie.title")).font(.caption)
-                            .multilineTextAlignment(.center)
-                        Text(String(selected?.count ?? slices.reduce(0) { $0 + $1.count })).font(
-                            .title2.monospacedDigit())
-                    }.frame(maxWidth: 120)
+                    // The hollow stays empty until a slice is hovered, as the web `DonutChart` does.
+                    if let selected {
+                        VStack(spacing: 4) {
+                            Text(selected.name).font(.caption).multilineTextAlignment(.center)
+                            Text(String(selected.count)).font(.title2.monospacedDigit())
+                        }.frame(maxWidth: 120)
+                    }
                 }
                 .frame(height: 232)
                 .chartOverlay { proxy in
@@ -428,6 +581,9 @@ struct HomeCategoryChart: View {
                         Button(slice.name) { navigate(slice.route.string) }
                     }
                 }
+                ChartLegendRow(
+                    items: slices.map { ChartLegendItem(id: $0.id, label: $0.name, color: sliceColor($0)) },
+                    centered: true)
             }
         }
     }

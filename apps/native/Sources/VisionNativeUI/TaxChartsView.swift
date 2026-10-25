@@ -46,7 +46,7 @@ struct TaxMonthlyIncomeView: View {
                         ], currency: data.currency, settings: shell.settings,
                         title: shell.strings.t("tax.incomeBreakdown.title"), bars: true, height: 280,
                         customColors: ["income": theme.primary, "pitReserve": Color(token: theme.palette.chart5)],
-                        selection: $selection, rangeStart: $rangeStart
+                        legend: .hidden, yAxis: .full, selection: $selection, rangeStart: $rangeStart
                     )
                     .environment(\.locale, shell.settings.numberFormat.locale)
                 }
@@ -104,7 +104,7 @@ struct TaxYearlyOverviewView: View {
                         ], currency: data.currency, settings: shell.settings,
                         title: shell.strings.t("tax.yearly.title"), bars: true, height: 300,
                         customColors: ["net": theme.primary, "pit": Color(token: theme.palette.chart5)],
-                        selection: $selection, rangeStart: $rangeStart
+                        legend: .hidden, yAxis: .full, selection: $selection, rangeStart: $rangeStart
                     )
                     .environment(\.locale, shell.settings.numberFormat.locale)
                     if data.yearlyIncome.contains(where: \.isApproximated) {

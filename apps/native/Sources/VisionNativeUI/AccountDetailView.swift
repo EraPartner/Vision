@@ -232,7 +232,7 @@ struct AccountDetailContent: View {
                     let points = model.sparkPoints(account)
                     if points.count >= 2 {
                         AccountSparkline(points: points, trend: AccountsModel.trend(points))
-                            .frame(width: 220, height: 56)
+                            .frame(width: 256, height: 64)
                             .accessibilityElement()
                             .accessibilityLabel(strings.t("accounts.detail.sparklineAria"))
                     }
@@ -540,25 +540,31 @@ struct AccountSparkline: View {
         }
     }
 
+    /// `Sparkline`'s coordinates: the value range padded by 10 % (1 when flat) mapped onto
+    /// `height - 2 ... 2`, spread evenly over the width.
+    private func plotted(_ size: CGSize) -> [CGPoint] {
+        let values = points.map { NSDecimalNumber(decimal: $0).doubleValue }
+        let low = values.min() ?? 0
+        let high = values.max() ?? 0
+        let pad = high != low ? (high - low) * 0.1 : 1
+        let bottom = low - pad
+        let span = (high + pad) - bottom
+        return values.enumerated().map { index, value in
+            let x = values.count > 1 ? size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
+            let ratio = span > 0 ? (value - bottom) / span : 0.5
+            return CGPoint(x: x, y: (size.height - 2) - CGFloat(ratio) * (size.height - 4))
+        }
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            let values = points.map { NSDecimalNumber(decimal: $0).doubleValue }
-            let low = values.min() ?? 0
-            let high = values.max() ?? 0
-            let span = high - low
-            Path { path in
-                for (index, value) in values.enumerated() {
-                    let x = values.count > 1 ? proxy.size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
-                    let ratio = span > 0 ? (value - low) / span : 0.5
-                    let y = proxy.size.height * (1 - CGFloat(ratio))
-                    if index == 0 {
-                        path.move(to: CGPoint(x: x, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: x, y: y))
-                    }
-                }
+            let plot = plotted(proxy.size)
+            ZStack {
+                // `fillArea`: the series colour at 15 % under the smoothed line.
+                ChartCurve.area(plot, baseline: proxy.size.height).fill(color.opacity(0.15))
+                ChartCurve.line(plot)
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
             }
-            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
         }
     }
 }

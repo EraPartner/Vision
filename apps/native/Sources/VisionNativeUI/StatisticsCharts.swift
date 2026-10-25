@@ -125,7 +125,7 @@ struct StatisticsCategoryDonut: View {
         self.onSelectionChange = onSelectionChange
     }
     var body: some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 12) {
             Chart(rows) { row in
                 SectorMark(
                     angle: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), innerRadius: .ratio(0.6),
@@ -137,7 +137,7 @@ struct StatisticsCategoryDonut: View {
             }
             .chartAngleSelection(value: $angle)
             .chartForegroundStyleScale(domain: rows.map(\.name), range: rows.map { color($0.path.first ?? $0.name) })
-            .chartLegend(position: .bottom)
+            .chartLegend(.hidden)
             .chartBackground { _ in
                 if let row = rows.first(where: { $0.id == selected }) {
                     VStack(spacing: 4) {
@@ -204,7 +204,13 @@ struct StatisticsCategoryDonut: View {
                         return value < total
                     }?.id
             }
+            // `ChartLegend` under the donut, each entry carrying its amount ("HOUSING: MORTGAGE · 22.380,00 €").
+            ChartLegendRow(items: rows.map(legendItem))
         }
+    }
+    private func legendItem(_ row: StatisticsCategory) -> ChartLegendItem {
+        let amount = MoneyText.text(row.total, currency: currency, settings: settings, signed: false)
+        return ChartLegendItem(id: row.id, label: row.name + " · " + amount, color: color(row.path.first ?? row.name))
     }
     private func color(_ root: String) -> Color {
         var hash: Int32 = 0

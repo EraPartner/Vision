@@ -35,25 +35,28 @@ struct ResearchForecastChart: View {
             .init(id: "netInvested", value: \.netInvested, color: theme.secondaryLabel, width: 1.5, dashed: true),
         ]
     }
+    /// The web LineChart's value domain: the data range plus 8 %, niced, never zero-based, so the
+    /// fan of percentiles fills the plot.
+    private var yDomain: ClosedRange<Double> {
+        ChartAxisTicks.fittedDomain(
+            series.flatMap { line in points.map { coordinate($0[keyPath: line.value]) } })
+    }
+
+    /// Month step of the x-axis ticks: the smallest of 1, 3, 6, 12, 24 or 60 months that keeps
+    /// the span to eight ticks or fewer (a four-year fan is labelled every half year).
+    private var tickMonths: Int {
+        guard let first = points.first.flatMap({ date($0.date) }), let last = points.last.flatMap({ date($0.date) })
+        else { return 6 }
+        let span = Calendar.current.dateComponents([.month], from: first, to: last).month ?? 0
+        return [1, 3, 6, 12, 24, 60].first { span / $0 <= 8 } ?? 60
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], alignment: .leading, spacing: 8) {
-                ForEach(series) { line in
-                    HStack(spacing: 6) {
-                        if line.dashed {
-                            Path { path in
-                                path.move(to: .zero)
-                                path.addLine(to: CGPoint(x: 22, y: 0))
-                            }
-                            .stroke(line.color, style: StrokeStyle(lineWidth: line.width, dash: [4, 3]))
-                            .frame(width: 22, height: 2).accessibilityHidden(true)
-                        } else {
-                            Rectangle().fill(line.color).frame(width: 22, height: line.width).accessibilityHidden(true)
-                        }
-                        Text(label(line)).font(.caption).foregroundStyle(theme.secondaryLabel)
-                    }
-                }
-            }
+            ChartLegendRow(
+                items: series.map {
+                    ChartLegendItem(id: $0.id, label: label($0), color: $0.color, dashed: $0.dashed)
+                })
             Text(shell.strings.t("research.forecast.intervalHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
             if isLoading {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.muted).frame(height: 360)
@@ -88,27 +91,21 @@ struct ResearchForecastChart: View {
                 }
                 .chartLegend(.hidden)
                 .chartXAxis {
-                    AxisMarks { value in
-                        AxisGridLine()
+                    AxisMarks(values: .stride(by: .month, count: tickMonths)) { value in
                         AxisTick()
                         if let date = value.as(Date.self) {
                             AxisValueLabel {
                                 Text(
                                     date.formatted(
                                         Date.FormatStyle(locale: LanguageLocale.locale(shell.strings.language))
-                                            .month(.abbreviated).year()))
+                                            .month(.abbreviated).year())
+                                )
+                                .font(ChartTickText.font).foregroundStyle(theme.secondaryLabel)
                             }
                         }
                     }
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let value = value.as(Double.self) { Text(money(Decimal(value))) }
-                        }
-                    }
-                }
+                .visionChartYAxis(domain: yDomain) { money(Decimal($0)) }
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
                         Rectangle().fill(.clear).contentShape(Rectangle())

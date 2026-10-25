@@ -120,7 +120,7 @@ struct HomeForecastDiagnostics: View {
                                 points: history.map { InsightChartPoint(key: $0.month, value: $0.mae) })
                         ],
                         currency: model.forecast?.currency ?? LedgerCurrency.display(settings), settings: settings,
-                        title: strings.t("cashflow.diagnostics.maeTrend"), height: 70,
+                        title: strings.t("cashflow.diagnostics.maeTrend"), height: 70, sparkline: true,
                         selection: Binding(get: { selected[method.id] }, set: { selected[method.id] = $0 }),
                         rangeStart: Binding(get: { range[method.id] }, set: { range[method.id] = $0 }))
                 }

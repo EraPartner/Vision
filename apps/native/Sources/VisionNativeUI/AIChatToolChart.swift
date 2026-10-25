@@ -28,14 +28,10 @@ struct AIChatToolChart: View {
             } else {
                 cartesian
                 if presentation.yKeys.count > 1 {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], alignment: .leading, spacing: 6) {
-                        ForEach(Array(presentation.yKeys.enumerated()), id: \.offset) { index, key in
-                            HStack(spacing: 5) {
-                                Rectangle().fill(color(index)).frame(width: 14, height: 3)
-                                Text(verbatim: key).font(.caption)
-                            }
-                        }
-                    }
+                    ChartLegendRow(
+                        items: presentation.yKeys.enumerated().map { index, key in
+                            ChartLegendItem(id: String(index) + key, label: key, color: color(index))
+                        }, centered: true)
                 }
             }
             if let selected {

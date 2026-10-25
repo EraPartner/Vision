@@ -856,6 +856,17 @@ summary amount and returns to the latest month after release. Category slices na
 `category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`
 inspector parameter.
 
+Every native chart follows the web chart primitives through the shared helpers in
+[[apps/native/Sources/VisionNativeUI/Components/ChartSupport.swift|ChartSupport]] and
+[[apps/native/Sources/VisionNativeUI/Components/ChartAxisTicks.swift|ChartAxisTicks]]: the legend is a
+`ChartLegendRow` above the plot (below it for the bank history, Net worth and custom charts, absent for
+single-series and Tax charts); lines and areas are monotone-smoothed; line and area charts fit the value
+axis to the data (range plus 8 %, niced with d3's rules, never zero-based) while bar charts keep the zero
+baseline; the value axis shows about five ticks over a dashed 35 % grid, compact (`6,5k €`, from
+`VisionFormat.currencyAxisCompact`) unless the web uses the full currency format; x labels are `MMM yy`
+months, the app-format month (`05/2026`) on Home, or day numbers for a month forecast. Unstacked areas
+fade from 22 % of the series colour, stacked areas fill at 55 %.
+
 Forecast mode and rolling-day controls preserve the URL and call the existing forecast services;
 Swift does not calculate forecasts. Scheduled ledger transactions and planned payments are already
 included in the server series and are not added again. Cumulative uncertainty bands use only the

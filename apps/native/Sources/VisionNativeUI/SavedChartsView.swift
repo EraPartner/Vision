@@ -149,7 +149,8 @@ struct CustomChartPlot: View {
                     series: series, currency: LedgerCurrency.display(settings), settings: settings,
                     title: strings.t("customChart.builder.preview"), bars: kind.chartType == .bar,
                     areas: kind.chartType == .area,
-                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, selection: selection,
+                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, legend: .bottomCenter,
+                    selection: selection,
                     rangeStart: range)
             }
         }

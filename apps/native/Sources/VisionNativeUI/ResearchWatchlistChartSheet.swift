@@ -156,26 +156,19 @@ private struct ResearchWatchlistPriceChart: View {
             plot
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { value in
-                        AxisGridLine()
+                        AxisTick()
                         AxisValueLabel {
                             if let date = value.as(Date.self) {
                                 Text(VisionFormat.appDate(date, format: shell.settings.dateFormat, timeZone: .current))
+                                    .font(ChartTickText.font).foregroundStyle(theme.secondaryLabel)
                             }
                         }
                     }
                 }
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let value = value.as(Double.self) {
-                                Text(
-                                    VisionFormat.currency(
-                                        Decimal(value), code: item.currency, locale: shell.settings.numberFormat.locale,
-                                        fractionDigits: shell.settings.showDecimalPlaces))
-                            }
-                        }
-                    }
+                .visionChartYAxis(domain: yDomain) { value in
+                    VisionFormat.currency(
+                        Decimal(value), code: item.currency, locale: shell.settings.numberFormat.locale,
+                        fractionDigits: shell.settings.showDecimalPlaces)
                 }
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
@@ -214,27 +207,35 @@ private struct ResearchWatchlistPriceChart: View {
             }
         }
     }
-    @ViewBuilder private var plot: some View {
+    /// The web AreaChart's `yDomain={[minPrice, maxPrice]}`, niced; without metrics the closes and the
+    /// target price, padded by 8 %.
+    private var yDomain: ClosedRange<Double> {
         if let domain = metrics?.domain, domain.count == 2 {
-            marks.chartYScale(domain: coordinate(domain[0])...coordinate(domain[1]))
-        } else {
-            marks
+            return ChartAxisTicks.niceDomain(coordinate(domain[0]), coordinate(domain[1]))
         }
+        var values = visible.compactMap { $0.close.map(coordinate) }
+        if metrics?.hasValidTarget == true { values.append(coordinate(item.targetPrice)) }
+        return ChartAxisTicks.fittedDomain(values)
     }
-    private var marks: some View {
+    private var plot: some View { marks }
+    @ViewBuilder private var marks: some View {
+        let baseline = yDomain.lowerBound
         Chart {
             ForEach(Array(visible.enumerated()), id: \.offset) { _, point in
                 if let close = point.close {
                     AreaMark(
                         x: .value(shell.strings.t("networth.date"), instant(point)),
-                        y: .value(shell.strings.t("watchlistChart.priceLabel"), coordinate(close))
+                        yStart: .value(shell.strings.t("watchlistChart.priceLabel"), baseline),
+                        yEnd: .value(shell.strings.t("watchlistChart.priceLabel"), coordinate(close))
                     )
-                    .foregroundStyle(theme.primary.opacity(0.12)).accessibilityHidden(true)
+                    .foregroundStyle(ChartFill.areaGradient(theme.primary)).interpolationMethod(.monotone)
+                    .accessibilityHidden(true)
                     LineMark(
                         x: .value(shell.strings.t("networth.date"), instant(point)),
                         y: .value(shell.strings.t("watchlistChart.priceLabel"), coordinate(close))
                     )
                     .foregroundStyle(theme.primary).lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.monotone)
                     .accessibilityLabel(
                         VisionFormat.appDate(instant(point), format: shell.settings.dateFormat, timeZone: .current)
                     )

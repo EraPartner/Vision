@@ -323,6 +323,8 @@ public struct NetWorthView: View {
                 ],
                 areaSeries: ["netWorth"], rangePercent: true,
                 formatPeriod: { VisionFormat.appDate($0, format: settings.dateFormat) }, formatTick: tick,
+                legend: .bottomLeading, legendOrder: ["netWorth", "liquid", "investments", "liabilities"],
+                yAxis: .full,
                 selection: Binding(get: { model.selection }, set: { model.selection = $0 }),
                 rangeStart: Binding(get: { model.rangeStart }, set: { model.rangeStart = $0 }))
         }

@@ -429,7 +429,9 @@ public struct HomeView: View {
                 ],
                 currency: currency, settings: settings,
                 title: strings.t("dashboard.stat.netTrend", ["n": String(months.count)]),
-                rangeComparison: false, height: 80, selection: $netSelection, rangeStart: $netRange)
+                areas: true, stackedAreas: false, rangeComparison: false, height: 80,
+                customColors: ["net": net >= 0 ? theme.gain : theme.loss], sparkline: true,
+                selection: $netSelection, rangeStart: $netRange)
             routeRow(
                 strings.t("dashboard.stat.lastMonthIncome"),
                 route: InsightsRoutes.drill(
@@ -487,7 +489,7 @@ public struct HomeView: View {
                                 InsightChartPoint(key: $0.date, value: values[$0.date] ?? 0)
                             })
                     }, currency: currency, settings: settings, title: strings.t("bankWidget.balanceHistory"),
-                    areas: true,
+                    areas: true, legend: .bottomCenter, yAxis: .full,
                     selection: Binding(get: { model.chartSelection }, set: { model.chartSelection = $0 }),
                     rangeStart: Binding(get: { model.chartRangeStart }, set: { model.chartRangeStart = $0 }))
             } else {
@@ -507,7 +509,7 @@ public struct HomeView: View {
                         id: "spending", label: strings.t("monthlyTrends.spending"),
                         points: months.map { InsightChartPoint(key: $0.id, value: abs($0.total_spending)) }),
                 ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
-                bars: true,
+                bars: true, xLabels: .appMonthYear,
                 selection: $monthSelection, rangeStart: $monthRange)
             HStack {
                 LabeledContent(
@@ -591,6 +593,8 @@ public struct HomeView: View {
                         actualLabel: strings.t("cashflow.actualThisMonth")),
                     currency: forecast.currency, settings: settings,
                     title: strings.t("dashboard.cashFlowComparison"),
+                    legend: .hidden, yAxis: .full,
+                    xLabels: model.forecastOptions.mode == .rolling ? .dayMonth : .dayOfMonth, zeroLine: true,
                     selection: Binding(get: { model.chartSelection }, set: { model.chartSelection = $0 }),
                     rangeStart: Binding(get: { model.chartRangeStart }, set: { model.chartRangeStart = $0 }))
                 DisclosureGroup(strings.t("cashflow.compareMethods")) {

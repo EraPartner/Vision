@@ -165,11 +165,11 @@ public struct StatisticsView: View {
     }
     private func chart(
         _ series: [InsightChartSeries], key: String, bars: Bool = false, areas: Bool = false,
-        rangeComparison: Bool = true
+        rangeComparison: Bool = true, legend: ChartLegendPlacement? = nil
     ) -> some View {
         InsightTimelineChart(
             series: series, currency: currency, settings: settings, title: strings.t("statsPage.title"),
-            bars: bars, areas: areas, stackedAreas: false, rangeComparison: rangeComparison,
+            bars: bars, areas: areas, stackedAreas: false, rangeComparison: rangeComparison, legend: legend,
             selection: isPrinting
                 ? .constant(model.printLocalState.selection[key])
                 : Binding(
@@ -286,7 +286,7 @@ public struct StatisticsView: View {
                                 points: (snapshot?.periods ?? []).map {
                                     InsightChartPoint(key: $0, value: row.values[$0] ?? 0)
                                 })
-                        }, key: "categoryTrend")
+                        }, key: "categoryTrend", legend: .hidden)
                 }
             }
             if includesPivot, model.isVisible("pivotTable") { pivot }
