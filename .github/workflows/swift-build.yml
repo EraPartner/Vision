@@ -66,6 +66,18 @@ jobs:
         if: github.event_name == 'push' || inputs.tests
         run: |
           # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
-          swift test --package-path apps/native --skip VisionNativeUITests
+          # Print only errors and failed tests; the full log is mostly deprecation warnings.
+          summarize() {
+            grep -E '(error|fatal error): |✘|failed|Fatal error' "$1" | grep -v 'warning: ' \
+              | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
+          }
+          swift test --package-path apps/native --skip VisionNativeUITests > "$RUNNER_TEMP/test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/test.log"; tail -20 "$RUNNER_TEMP/test.log"; exit 1
+          }
+          tail -5 "$RUNNER_TEMP/test.log"
           # AppKit activation, key windows and display transactions are process-global.
-          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests \
+            > "$RUNNER_TEMP/ui-test.log" 2>&1 || {
+            summarize "$RUNNER_TEMP/ui-test.log"; tail -20 "$RUNNER_TEMP/ui-test.log"; exit 1
+          }
+          tail -5 "$RUNNER_TEMP/ui-test.log"
