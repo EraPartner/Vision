@@ -155,7 +155,7 @@ public struct PortfolioOverviewView: View {
                     get: { model.period },
                     set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) }),
                 values: PortfolioPeriod.allCases, title: { strings.t("portfolio.period." + $0.rawValue) },
-                size: .sm
+                size: .sm, compact: true
             )
             .fixedSize()
             .accessibilityElement(children: .contain)
