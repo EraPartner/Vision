@@ -7,7 +7,8 @@ import { repoPath } from "./lib/nativeCodegen.ts";
 /**
  * Ban-list lint for hand-written Swift in apps/native/Sources (Generated
  * directories excluded). It runs inside `bun run native:test-generators`
- * through scripts/native-tests/native-lint.test.ts; there is no separate CI job.
+ * through scripts/native-tests/native-lint.test.ts and in the pre-commit hook when Swift
+ * sources are staged; there is no separate CI job.
  *
  *   bun scripts/native-lint.ts                   check against the baseline
  *   bun scripts/native-lint.ts --update-baseline lower baseline counts, never raise
