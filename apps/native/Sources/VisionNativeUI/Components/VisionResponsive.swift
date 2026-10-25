@@ -1,15 +1,7 @@
 import SwiftUI
 import VisionNativeCore
 
-/// Tailwind's window-width breakpoints (`sm` 640, `md` 768, `lg` 1024, `xl` 1280 px). They are
-/// viewport based, so a native page compares them with the window's width (sidebar included), not
-/// with its own content column.
-enum VisionBreakpoint {
-    static let sm: CGFloat = 640
-    static let md: CGFloat = 768
-    static let lg: CGFloat = 1024
-    static let xl: CGFloat = 1280
-}
+// `VisionBreakpoint` lives in VisionResponsiveColumns.swift.
 
 /// `grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2`: the
 /// children share the width in `columns` equal columns, top aligned, and a row is as tall as its
