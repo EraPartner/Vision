@@ -5,7 +5,7 @@ import Testing
 
 private actor FakeSidebarBadgeService: NativeSidebarBadgeService {
     var needsCategory: Result<Int, APIError> = .success(3)
-    var insights: Result<OpenAPI.InsightsCountData, APIError> = .success(.init(count: 4, status: "ready"))
+    var insights: Result<OpenAPI.InsightsCountData, APIError> = .success(.init(count: 4, status: .ready))
     var monitors: Result<Int, APIError> = .success(2)
     private(set) var reads: [String] = []
 
@@ -73,16 +73,16 @@ private final class BadgesTestClock: @unchecked Sendable {
 
     @Test func aPendingProjectionShowsNoCountAndIsPolledEveryTwoSeconds() async {
         let service = FakeSidebarBadgeService()
-        await service.set(insights: .success(.init(count: 9, status: "pending")))
+        await service.set(insights: .success(.init(count: 9, status: .pending)))
         let clock = BadgesTestClock()
         let model = NativeSidebarBadgesModel(service: service, now: { clock.now })
         await model.refresh()
         #expect(model.insights == 0)
         clock.advance(2)
-        await service.set(insights: .success(.init(count: 5, status: "ready")))
+        await service.set(insights: .success(.init(count: 5, status: .ready)))
         await model.refresh()
         #expect(model.insights == 5)
-        await service.set(insights: .success(.init(count: 6, status: "unavailable")))
+        await service.set(insights: .success(.init(count: 6, status: .unavailable)))
         await model.refresh(force: true)
         #expect(model.insights == 0)
     }

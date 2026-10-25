@@ -7,7 +7,7 @@ public protocol PickerDataService: Sendable {
     /// `useRecipients({ limit, active: false, search })`: the include-inactive page.
     func recipients(search: String?, limit: Int) async throws -> [OpenAPI.Recipient]
     /// `useRecipient(id)` / `getRecipient(id)`.
-    func recipient(id: Int) async throws -> OpenAPI.Recipient
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient
     /// `useAccounts({ active: "true" })`.
     func accounts() async throws -> [OpenAPI.Account]
     /// `useCategoryTree()`: every node, assignable ancestors included.
@@ -23,7 +23,7 @@ extension APIClient: PickerDataService {
         try await send(OpenAPIOperations.GetRecipients(limit: limit, search: search, active: false)).items
     }
 
-    public func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    public func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         try await send(OpenAPIOperations.GetRecipient(id: id))
     }
 
@@ -84,7 +84,7 @@ public final class PickerDataModel {
     /// Server answers per trimmed search text.
     public private(set) var searchedRecipients: [String: [OpenAPI.Recipient]] = [:]
     /// `useRecipient(id)` answers, for the closed combobox's label.
-    public private(set) var recipientsByID: [Int: OpenAPI.Recipient] = [:]
+    public private(set) var recipientsByID: [RecipientID: OpenAPI.Recipient] = [:]
     public private(set) var isLoaded = false
 
     @ObservationIgnored private let service: any PickerDataService
@@ -146,7 +146,7 @@ public final class PickerDataModel {
     }
 
     /// `useRecipient(value)`: fetches the selected recipient for its label.
-    public func resolveRecipient(_ id: Int?) async {
+    public func resolveRecipient(_ id: RecipientID?) async {
         guard let id, recipientsByID[id] == nil else { return }
         if let found = try? await service.recipient(id: id) {
             recipientsByID[id] = found
@@ -154,13 +154,13 @@ public final class PickerDataModel {
     }
 
     /// The closed combobox's label: the selected recipient, else `nil` for the placeholder.
-    public func recipientName(_ id: Int?) -> String? {
+    public func recipientName(_ id: RecipientID?) -> String? {
         guard let id else { return nil }
         return knownRecipient(id)?.name
     }
 
     /// The recipient with this id from any loaded list.
-    public func knownRecipient(_ id: Int) -> OpenAPI.Recipient? {
+    public func knownRecipient(_ id: RecipientID) -> OpenAPI.Recipient? {
         if let known = recipientsByID[id] { return known }
         if let listed = baseRecipients.first(where: { $0.id == id }) { return listed }
         for page in searchedRecipients.values {
@@ -204,13 +204,13 @@ public final class PickerDataModel {
     }
 
     /// `path.join(" / ")` of an active category, the combobox's label.
-    public func categoryLabel(_ id: Int?) -> String? {
+    public func categoryLabel(_ id: CategoryID?) -> String? {
         guard let id, let node = activeCategories.first(where: { $0.id == id }) else { return nil }
         return Self.label(node)
     }
 
     /// The tree's own name for a category id (any node).
-    public func categoryName(_ id: Int?) -> String? {
+    public func categoryName(_ id: CategoryID?) -> String? {
         guard let id else { return nil }
         return categories.first(where: { $0.id == id })?.name
     }

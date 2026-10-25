@@ -39,10 +39,10 @@ public enum VisionFormat {
     /// zero). A fraction-digit count outside 0...20 falls back to the bare number, as `Intl`
     /// throws.
     public static func currency(
-        _ value: Decimal, code: String, locale: Locale, fractionDigits: Int, signed: Bool = false
+        _ value: Decimal, code: CurrencyCode, locale: Locale, fractionDigits: Int, signed: Bool = false
     ) -> String {
         guard (0...20).contains(fractionDigits), !value.isNaN else { return "\(value)" }
-        let style = Decimal.FormatStyle.Currency(code: code, locale: locale)
+        let style = Decimal.FormatStyle.Currency(code: code.rawValue, locale: locale)
             .precision(.fractionLength(fractionDigits))
             .rounded(rule: .toNearestOrAwayFromZero)
         if signed {

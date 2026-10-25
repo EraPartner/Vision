@@ -80,7 +80,7 @@ struct NativeNavigationParameterTests {
             let account = try #require(NativeNavigationLocation("/accounts/\(value)?q=a+b&flag"))
             let imported = try #require(NativeNavigationLocation("/import/\(value)/review?flag"))
             let portfolio = try #require(NativeNavigationLocation("/portfolio/import/\(value)/review?flag"))
-            #expect(account.match?.screen == .accountDetail(id: expected))
+            #expect(account.match?.screen == .accountDetail(id: AccountID(rawValue: expected)))
             #expect(imported.match?.screen == .importReview(batchId: expected))
             #expect(imported.match?.supportedBatchId == expected)
             #expect(portfolio.match?.supportedBatchId == expected)

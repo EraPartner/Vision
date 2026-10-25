@@ -6,7 +6,7 @@ import VisionNativeCore
 /// above, the label colour below zero).
 struct MoneyText: View {
     let amount: Decimal
-    let currency: String
+    let currency: CurrencyCode
     let settings: NativeAppSettings
     var signed = true
     /// The web colours positive amounts `text-gain`; a total may opt out.
@@ -55,9 +55,9 @@ struct MoneyText: View {
     }
 
     /// The formatted amount, for labels and tests.
-    static func text(_ amount: Decimal, currency: String, settings: NativeAppSettings, signed: Bool = true) -> String {
+    static func text(_ amount: Decimal, currency: CurrencyCode, settings: NativeAppSettings, signed: Bool = true) -> String {
         VisionFormat.currency(
-            amount, code: currency.uppercased(), locale: settings.numberFormat.locale,
+            amount, code: currency, locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces, signed: signed)
     }
 }

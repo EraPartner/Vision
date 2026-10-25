@@ -5,12 +5,12 @@ import VisionNativeCore
 @testable import VisionNativeUI
 
 @Suite struct NativeSettingsInsightsQueryTests {
-    private func category(_ id: Int, _ path: [String], active: Bool = true) -> OpenAPI.CategoryNode {
+    private func category(_ id: CategoryID, _ path: [String], active: Bool = true) -> OpenAPI.CategoryNode {
         .init(
             id: id, name: path.last ?? "Unnamed", pathIds: [id], path: path, categoryName: path.joined(separator: ":"),
             depth: max(0, path.count - 1), isActive: active, hierarchyOnly: false, legacyCompatible: true)
     }
-    private func recipient(_ id: Int, _ name: String, active: Bool = true) -> OpenAPI.Recipient {
+    private func recipient(_ id: RecipientID, _ name: String, active: Bool = true) -> OpenAPI.Recipient {
         .init(id: id, name: name, isActive: active, createdAt: "2026-01-01", links: [])
     }
 
@@ -49,7 +49,7 @@ import VisionNativeCore
         #expect(NativeSettingsInsightsQuery.recipients(recipients, search: " Zebra", excluded: [2]).isEmpty)
     }
     @Test func recipientContractKeepsOnlyTheFirstThousandAndStableTies() {
-        var recipients = (1...1001).map { recipient($0, "Same") }
+        var recipients = (1...1001).map { recipient(RecipientID(rawValue: $0), "Same") }
         recipients[1000] = recipient(1001, "First", active: false)
         let visible = NativeSettingsInsightsQuery.recipients(
             recipients, search: "", excluded: [1001], locale: Locale(identifier: "nl_BE"))

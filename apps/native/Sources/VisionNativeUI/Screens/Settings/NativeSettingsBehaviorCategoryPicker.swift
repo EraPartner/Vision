@@ -3,11 +3,11 @@ import VisionNativeCore
 
 struct NativeSettingsBehaviorCategoryPicker: View {
     let categories: [OpenAPI.CategoryNode]
-    let value: Int?
+    let value: CategoryID?
     let disabled: Bool
     let label: String
     let strings: any Localizing
-    let select: (Int?) -> Void
+    let select: (CategoryID?) -> Void
     @State private var isOpen = false
     @State private var search = ""
     @State private var activeIndex = 0
@@ -15,7 +15,7 @@ struct NativeSettingsBehaviorCategoryPicker: View {
     @Environment(\.visionTheme) private var theme
     private struct Choice: Identifiable {
         let id: String
-        let categoryID: Int?
+        let categoryID: CategoryID?
         let title: String
     }
     private var choices: [Choice] {
@@ -24,7 +24,7 @@ struct NativeSettingsBehaviorCategoryPicker: View {
             items.append(.init(id: "none", categoryID: nil, title: strings.t("combobox.category.none")))
         }
         items += NativeSettingsBehaviorCategoryQuery.matching(categories, search: search).map {
-            .init(id: String($0.id), categoryID: $0.id, title: $0.path.joined(separator: " / "))
+            .init(id: String($0.id.rawValue), categoryID: $0.id, title: $0.path.joined(separator: " / "))
         }
         return items
     }

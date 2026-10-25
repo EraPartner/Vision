@@ -150,7 +150,9 @@ public struct NativeCommandPaletteView: View {
         }.monospacedDigit()
     }
     private func quotePrice(_ price: Decimal, currency: String) -> String {
-        guard currency.range(of: "^[A-Za-z]{3}$", options: .regularExpression) != nil else {
+        guard currency.range(of: "^[A-Za-z]{3}$", options: .regularExpression) != nil,
+            let code = CurrencyCode(rawValue: currency.uppercased())
+        else {
             // CommandPalette's fmtSafeCurrency keeps a code-bearing, ungrouped
             // toFixed(2) fallback when the shared Intl currency guard rejects it.
             let fixed = price.formatted(
@@ -159,7 +161,7 @@ public struct NativeCommandPaletteView: View {
             return "\(fixed) \(currency)"
         }
         return VisionFormat.currency(
-            price, code: currency, locale: shell.settings.numberFormat.locale, fractionDigits: 2)
+            price, code: code, locale: shell.settings.numberFormat.locale, fractionDigits: 2)
     }
     private func move(_ delta: Int, modifiers: EventModifiers = []) -> KeyPress.Result {
         let ids = entries.map(\.id)

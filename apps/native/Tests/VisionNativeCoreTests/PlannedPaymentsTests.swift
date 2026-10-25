@@ -975,7 +975,7 @@ enum PlannedFixture {
     @Test func theDefaultCurrencyIsReadWhenItIsAThreeLetterCode() {
         #expect(NativeAppSettings.defaults.defaultCurrency == "EUR")
         #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .string("USD")])).defaultCurrency == "USD")
-        #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .string("chf")])).defaultCurrency == "chf")
+        #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .string("chf")])).defaultCurrency == "CHF")
         #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .string("EURO")])).defaultCurrency == "EUR")
         #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .string("U5D")])).defaultCurrency == "EUR")
         #expect(NativeAppSettings.migrate(.object(["defaultCurrency": .int(1)])).defaultCurrency == "EUR")

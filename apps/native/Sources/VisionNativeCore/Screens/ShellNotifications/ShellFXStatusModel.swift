@@ -19,7 +19,7 @@ import Observation
     }
     @ObservationIgnored public var didRefreshRates: (@MainActor () async -> Void)?
     public var shouldShow: Bool {
-        isStorageLoaded && !dismissed && (data?.isStale == true || data?.source == "fallback")
+        isStorageLoaded && !dismissed && (data?.isStale == true || data?.source == .fallback)
     }
     public var isBusy: Bool { isFetching || isRefreshing }
 

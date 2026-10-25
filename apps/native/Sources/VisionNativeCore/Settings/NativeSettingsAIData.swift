@@ -6,7 +6,7 @@ public struct NativeSettingsAIProviderStatus: Codable, Equatable, Sendable, Iden
     public let label: String
     public let envVar: String
     public let configured: Bool
-    public let source: String
+    public let source: OpenAPI.ResearchProviderKeyStatus.Source
     public let masked: String?
     public var id: String { provider }
     public init(raw: TaxValue) throws {
@@ -16,8 +16,8 @@ public struct NativeSettingsAIProviderStatus: Codable, Equatable, Sendable, Iden
         label = try ResearchDecode.string(raw["label"])
         envVar = try ResearchDecode.string(raw["envVar"])
         configured = try ResearchDecode.bool(raw["configured"])
-        source = try ResearchDecode.string(raw["source"])
-        guard ["settings", "env", "none"].contains(source) else {
+        source = try .init(rawValue: ResearchDecode.string(raw["source"]))
+        guard OpenAPI.ResearchProviderKeyStatus.Source.allKnownCases.contains(source) else {
             throw ResearchDecode.failure("Invalid provider key source")
         }
         masked = try ResearchDecode.optionalString(raw["masked"])

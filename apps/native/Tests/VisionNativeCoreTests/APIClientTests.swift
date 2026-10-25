@@ -57,7 +57,7 @@ actor SleepRecorder {
         #expect(rates.totalRates == 2)
         #expect(rates.rates.first?.currency == "USD")
         #expect(rates.rates.first?.rateToEur == Decimal(string: "0.92"))
-        #expect(rates.source == "database")
+        #expect(rates.source == .database)
         #expect(rates.lastFetchedAt == "2026-10-09T15:05:00.000Z")
         let request = try #require(await transport.requests.first)
         #expect(request.method == .get)

@@ -8,17 +8,17 @@ public protocol NativeCommandPaletteService: Sendable {
 /// The fixed shared-TypeScript callback returns already formatted results. Native
 /// code never evaluates an expression or derives a converted monetary amount.
 public protocol NativeCommandPaletteAnswers: Sendable {
-    func paletteAnswer(query: String, numberFormat: NumberFormat, currency: String, decimals: Int) async throws
+    func paletteAnswer(query: String, numberFormat: NumberFormat, currency: CurrencyCode, decimals: Int) async throws
         -> NativeCommandPaletteAnswer?
 }
 
 public struct NativeCommandPaletteAnswerProvider: NativeCommandPaletteAnswers {
-    private let evaluate: @Sendable (String, NumberFormat, String, Int) async throws -> NativeCommandPaletteAnswer?
+    private let evaluate: @Sendable (String, NumberFormat, CurrencyCode, Int) async throws -> NativeCommandPaletteAnswer?
     public init(
-        _ evaluate: @escaping @Sendable (String, NumberFormat, String, Int) async throws -> NativeCommandPaletteAnswer?
+        _ evaluate: @escaping @Sendable (String, NumberFormat, CurrencyCode, Int) async throws -> NativeCommandPaletteAnswer?
     ) { self.evaluate = evaluate }
 
-    public func paletteAnswer(query: String, numberFormat: NumberFormat, currency: String, decimals: Int) async throws
+    public func paletteAnswer(query: String, numberFormat: NumberFormat, currency: CurrencyCode, decimals: Int) async throws
         -> NativeCommandPaletteAnswer?
     { try await evaluate(query, numberFormat, currency, decimals) }
 }

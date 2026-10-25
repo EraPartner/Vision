@@ -8,8 +8,8 @@ import Foundation
 public enum NativePaletteCalculator {
     public struct FXQuery: Equatable, Sendable {
         public let amount: Double
-        public let from: String
-        public let to: String?
+        public let from: CurrencyCode
+        public let to: CurrencyCode?
     }
 
     // `FX_QUERY`; JavaScript's `\d` is ASCII only.
@@ -25,10 +25,12 @@ public enum NativePaletteCalculator {
         guard let match = fxPattern.firstMatch(in: query, range: range),
             let amountRange = Range(match.range(at: 1), in: query),
             let fromRange = Range(match.range(at: 2), in: query),
-            let amount = number(String(query[amountRange]), format: format)
+            let amount = number(String(query[amountRange]), format: format),
+            let from = CurrencyCode(rawValue: query[fromRange].uppercased())
         else { return nil }
-        let to = Range(match.range(at: 3), in: query).map { query[$0].uppercased() }
-        return FXQuery(amount: amount, from: query[fromRange].uppercased(), to: to)
+        // The pattern admits only ASCII letters, so an upper-cased group is always a code.
+        let to = Range(match.range(at: 3), in: query).flatMap { CurrencyCode(rawValue: query[$0].uppercased()) }
+        return FXQuery(amount: amount, from: from, to: to)
     }
 
     /// `evaluateArithmetic`: a finite result or `nil`.
@@ -47,7 +49,7 @@ public enum NativePaletteCalculator {
     /// `nativePaletteAnswer`: arithmetic first unless the query is a conversion; a missing
     /// rate keeps the source amount, as `useCurrencyConverter` does. Only stored rates convert.
     public static func answer(
-        query: String, format: NumberFormat, currency: String, decimals: Int,
+        query: String, format: NumberFormat, currency: CurrencyCode, decimals: Int,
         readRates: @Sendable () async -> OpenAPI.ExchangeRates?
     ) async -> NativeCommandPaletteAnswer? {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -58,11 +60,11 @@ public enum NativePaletteCalculator {
         let target = fx.to ?? currency
         if fx.from == target { return nil }
         let data = await readRates()
-        var rates: [String: Double] = [:]
-        rates["EUR"] = 1
+        var rates: [CurrencyCode: Double] = [:]
+        rates[.eur] = 1
         for row in data?.rates ?? [] { rates[row.currency] = double(row.rateToEur) }
-        let fromRate = rates[fx.from.uppercased()] ?? 0
-        let toRate = rates[target.uppercased()] ?? 0
+        let fromRate = rates[fx.from] ?? 0
+        let toRate = rates[target] ?? 0
         let usable = { (rate: Double) in rate != 0 && !rate.isNaN }
         let value = usable(fromRate) && usable(toRate) ? fx.amount * fromRate / toRate : fx.amount
         guard value.isFinite else { return nil }
@@ -81,14 +83,14 @@ public enum NativePaletteCalculator {
         return value.sign == .minus ? "-" + text : text
     }
 
-    /// `formatCurrency`, whose `Intl` constructor throws for a malformed code or digit
-    /// count; the source then shows the amount with two decimals and the code.
-    static func formatCurrency(_ value: Double, code: String, locale: Locale, decimals: Int) -> String {
-        let wellFormed = code.count == 3 && code.allSatisfy { $0.isASCII && $0.isLetter }
-        guard wellFormed, (0...20).contains(decimals), let amount = Decimal(string: jsString(value)) else {
-            return String(format: "%.2f", value) + " " + code
+    /// `formatCurrency`, whose `Intl` constructor throws for a malformed digit count (a
+    /// malformed code cannot reach here: `CurrencyCode` is validated); the source then shows
+    /// the amount with two decimals and the code.
+    static func formatCurrency(_ value: Double, code: CurrencyCode, locale: Locale, decimals: Int) -> String {
+        guard (0...20).contains(decimals), let amount = Decimal(string: jsString(value)) else {
+            return String(format: "%.2f", value) + " " + code.rawValue
         }
-        return VisionFormat.currency(amount, code: code.uppercased(), locale: locale, fractionDigits: decimals)
+        return VisionFormat.currency(amount, code: code, locale: locale, fractionDigits: decimals)
     }
 
     /// `String(number)` for the finite values the evaluator produces.

@@ -174,7 +174,7 @@ final class ShellController: NSObject, NSWindowDelegate {
                 preferences: { [weak nativeSettings] in
                     guard let nativeSettings else { return .init() }
                     return .init(
-                        currency: nativeSettings.appString("defaultCurrency", fallback: "EUR"),
+                        currency: nativeSettings.defaultCurrencyCode,
                         exclusionScope: nativeSettings.dashboardString("exclusionScope", fallback: "everywhere"),
                         excludedCategoryIds: nativeSettings.excludedCategoryIds,
                         excludedRecipientIds: nativeSettings.excludedRecipientIds)
@@ -615,7 +615,7 @@ final class ShellController: NSObject, NSWindowDelegate {
     /// The palette's inline answers, computed natively (ADR-211); rates come from the
     /// graph's shared 10-minute cache.
     private func nativePaletteAnswer(
-        query: String, format: NumberFormat, currency: String, decimals: Int, rates: NativePaletteRates,
+        query: String, format: NumberFormat, currency: CurrencyCode, decimals: Int, rates: NativePaletteRates,
         generation: UUID
     ) async throws -> NativeCommandPaletteAnswer? {
         try requireNativeGeneration(generation)

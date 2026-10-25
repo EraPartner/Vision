@@ -34,6 +34,13 @@ public struct CurrencyCode: RawRepresentable, Hashable, Comparable, Sendable, Co
         try container.encode(rawValue)
     }
 
+    /// The app's fallback currency, the web settings default (`DEFAULT_APP_SETTINGS.defaultCurrency`).
+    public static let eur = CurrencyCode(uncheckedValid: "EUR")
+
+    private init(uncheckedValid rawValue: String) {
+        self.rawValue = rawValue
+    }
+
     /// Whether `text` is exactly three ASCII capital letters.
     public static func isValid(_ text: String) -> Bool {
         let bytes = text.utf8

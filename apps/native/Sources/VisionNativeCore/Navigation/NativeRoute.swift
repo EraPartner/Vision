@@ -143,7 +143,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     /// `/accounts`, the accounts hub (phase 3f).
     case accounts
     /// `/accounts/:id`, one account's ledger; `0` for an id that is not a positive whole number.
-    case accountDetail(id: Int)
+    case accountDetail(id: AccountID)
     /// `/categories`, the category tree (phase 3f part B).
     case categories
     /// `/recipients`, the payees table (phase 3f part B).

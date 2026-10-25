@@ -116,10 +116,12 @@ struct NativeSettingsAIView: View {
         }
     }
     private func provider(_ status: NativeSettingsAIProviderStatus) -> some View {
-        let sourceKey =
-            status.source == "settings"
-            ? "settings.research.sourceSettings"
-            : status.source == "env" ? "settings.research.sourceEnv" : "settings.research.sourceNone"
+        let sourceKey: String
+        switch status.source {
+        case .settings: sourceKey = "settings.research.sourceSettings"
+        case .env: sourceKey = "settings.research.sourceEnv"
+        case .none, .unknown: sourceKey = "settings.research.sourceNone"
+        }
         return NativeSettingsRow(title: status.label, stacked: true) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -140,7 +142,7 @@ struct NativeSettingsAIView: View {
                     Button(strings.t("settings.research.save")) {
                         Task { await model.saveProviderKey(status.provider) }
                     }.buttonStyle(.visionOutline).disabled(!model.canSaveKey(status.provider))
-                    if status.source == "settings" {
+                    if status.source == .settings {
                         Button(strings.t("settings.research.clear")) {
                             Task { await model.clearProviderKey(status.provider) }
                         }.buttonStyle(NativeSettingsGhostButtonStyle()).disabled(!model.canClearKey(status.provider))

@@ -104,15 +104,26 @@ public final class NativeSettingsModel {
     public func themeScheduleString(_ key: String, fallback: String) -> String {
         themeRaw?["schedule"]?[key]?.stringValue ?? fallback
     }
-    public var excludedCategoryIds: [Int] { ids(dashboardRaw?["excludedCategoryIds"]) }
-    public var excludedRecipientIds: [Int] { ids(dashboardRaw?["excludedRecipientIds"]) }
-    public var cashCategoryIds: [String: Int] {
+    /// `defaultCurrency` of the stored (validated) `app_settings`, upper-cased as a typed code; `EUR`
+    /// when it is not stored.
+    public var defaultCurrencyCode: CurrencyCode {
+        CurrencyCode(rawValue: appString("defaultCurrency", fallback: "EUR").uppercased()) ?? .eur
+    }
+    public var excludedCategoryIds: [CategoryID] {
+        ids(dashboardRaw?["excludedCategoryIds"]).map(CategoryID.init(rawValue:))
+    }
+    public var excludedRecipientIds: [RecipientID] {
+        ids(dashboardRaw?["excludedRecipientIds"]).map(RecipientID.init(rawValue:))
+    }
+    public var cashCategoryIds: [String: CategoryID] {
         Dictionary(
             uniqueKeysWithValues: ["dividend", "interest", "fee", "tax"].compactMap { key in
                 cashCategoryId(key).map { (key, $0) }
             })
     }
-    public func cashCategoryId(_ key: String) -> Int? { NativeSettingsDefaults.integer(cashRaw?[key]) }
+    public func cashCategoryId(_ key: String) -> CategoryID? {
+        NativeSettingsDefaults.integer(cashRaw?[key]).map(CategoryID.init(rawValue:))
+    }
     public var supportsServices: Bool { loadKeepServices != nil && saveKeepServices != nil }
     public var effectiveVisualEffects: String {
         appBool("autoAdaptDisplay", fallback: true) && isLargeDisplay
@@ -166,11 +177,11 @@ public final class NativeSettingsModel {
         changed("dashboard_settings", dashboardRaw!)
         didChangeDashboard?(dashboardRaw!)
     }
-    public func setExcludedCategoryIds(_ ids: [Int]) {
-        updateDashboard(["excludedCategoryIds": .array(ids.map { .number(Decimal($0)) })])
+    public func setExcludedCategoryIds(_ ids: [CategoryID]) {
+        updateDashboard(["excludedCategoryIds": .array(ids.map { .number(Decimal($0.rawValue)) })])
     }
-    public func setExcludedRecipientIds(_ ids: [Int]) {
-        updateDashboard(["excludedRecipientIds": .array(ids.map { .number(Decimal($0)) })])
+    public func setExcludedRecipientIds(_ ids: [RecipientID]) {
+        updateDashboard(["excludedRecipientIds": .array(ids.map { .number(Decimal($0.rawValue)) })])
     }
     public func updateTheme(_ fields: [String: TaxValue]) {
         guard !retired, !isSuspendedForRestore else { return }
@@ -281,12 +292,12 @@ public final class NativeSettingsModel {
             // The source optimistically keeps the toggle and intentionally ignores this failure.
         }
     }
-    public func setCashCategory(_ kind: String, _ id: Int?) async {
+    public func setCashCategory(_ kind: String, _ id: CategoryID?) async {
         guard !retired, !isSuspendedForRestore else { return }
         guard ["dividend", "interest", "fee", "tax"].contains(kind), !cashLoading, !cashSaving else { return }
         var next = object(cashRaw)
         for key in ["dividend", "interest", "fee", "tax"] where next[key] == nil { next[key] = .null }
-        next[kind] = id.map { .number(Decimal($0)) } ?? .null
+        next[kind] = id.map { .number(Decimal($0.rawValue)) } ?? .null
         cashRaw = .object(next)
         editRevision["brokerage_cash_category_ids", default: 0] += 1
         cashSaving = true

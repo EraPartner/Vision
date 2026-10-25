@@ -8,7 +8,7 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
 
     /// The `X-Request-Id`, shared by every attempt of one request.
     public let requestId: String
-    public let method: String
+    public let method: HTTPMethod
     public let endpoint: String
     public let startedAt: Date
     public let attempt: Int
@@ -21,7 +21,7 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
     public var id: String { "\(requestId)#\(attempt)" }
 
     public init(
-        requestId: String, method: String, endpoint: String, startedAt: Date, attempt: Int, phase: Phase,
+        requestId: String, method: HTTPMethod, endpoint: String, startedAt: Date, attempt: Int, phase: Phase,
         durationMs: Double? = nil, status: Int? = nil, errorCode: String? = nil, errorMessage: String? = nil
     ) {
         self.requestId = requestId
@@ -92,11 +92,11 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
             if log.count > Self.ringCapacity { log.removeLast(log.count - Self.ringCapacity) }
             completed.insert(event, at: 0)
             if completed.count > Self.ringCapacity { completed.removeLast(completed.count - Self.ringCapacity) }
-            if event.method != "GET" {
+            if event.method != .get {
                 if event.phase == .success { mutationSuccess += 1 } else { mutationError += 1 }
             }
         }
-        if event.method == "GET" { recordQuery(event) }
+        if event.method == .get { recordQuery(event) }
         if selectedID != nil, log.isEmpty, inFlight.isEmpty { selectedID = nil }
     }
 
@@ -151,7 +151,7 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
         return (inFlight + log).filter { event in
             guard seen.insert(event.id).inserted else { return false }
             guard !needle.isEmpty else { return true }
-            return event.endpoint.lowercased().contains(needle) || event.method.lowercased().contains(needle)
+            return event.endpoint.lowercased().contains(needle) || event.method.rawValue.lowercased().contains(needle)
         }
     }
 
@@ -174,7 +174,7 @@ public struct APIInspectorEvent: Equatable, Sendable, Identifiable {
         var errors: [String: Int] = [:]
         var order: [String] = []
         for event in completed {
-            let key = "\(event.method) \(event.endpoint)"
+            let key = "\(event.method.rawValue) \(event.endpoint)"
             if event.phase == .error { errors[key, default: 0] += 1 }
             guard let duration = event.durationMs else { continue }
             if durations[key] == nil { order.append(key) }
@@ -216,7 +216,7 @@ public struct NativeAPIInspectorTransport: APITransport {
 
     public func send(_ request: APIRequest) async throws -> APIResponse {
         let requestId = request.headers["X-Request-Id"] ?? UUID().uuidString.lowercased()
-        let method = request.method.rawValue
+        let method = request.method
         let endpoint = Self.endpoint(request.url)
         let startedAt = now()
         let inspector = inspector

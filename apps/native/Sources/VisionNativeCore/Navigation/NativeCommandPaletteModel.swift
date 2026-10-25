@@ -168,12 +168,12 @@ import Observation
             "recipients", "nav.recipients",
             recipients.map {
                 .init(
-                    id: "recipient-\($0.id)", title: $0.name, symbol: "person.2", hint: nil,
+                    id: "recipient-\($0.id.rawValue)", title: $0.name, symbol: "person.2", hint: nil,
                     action: .navigate(
                         .init(
                             path: "/transactions",
                             query: [
-                                .init(name: "recipient_id", value: String($0.id)),
+                                .init(name: "recipient_id", value: String($0.id.rawValue)),
                                 .init(name: "filter_label", value: $0.name),
                             ])))
             })

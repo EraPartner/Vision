@@ -69,10 +69,11 @@ public struct ServerColumnFilters: Equatable, Sendable {
     }
 }
 
-/// The checkbox selection of a server-paged table: ids of loaded rows, extended with Shift
+/// The checkbox selection of a server-paged table (generic over the row id type, for example
+/// `TransactionID`): ids of loaded rows, extended with Shift
 /// (a range from the last clicked row) and Command (one row), or every row matching the
 /// filter ("select all matching", which the bulk bar sends as a filter with its count).
-public struct ServerTableSelection: Equatable, Sendable {
+public struct ServerTableSelection<ID: Hashable & Sendable>: Equatable, Sendable {
     public enum Mode: Equatable, Sendable {
         /// The checked ids.
         case ids
@@ -80,22 +81,22 @@ public struct ServerTableSelection: Equatable, Sendable {
         case filter
     }
 
-    public private(set) var ids: Set<Int> = []
+    public private(set) var ids: Set<ID> = []
     public private(set) var mode: Mode = .ids
     /// The row a Shift range starts from: the last row toggled on its own.
-    public private(set) var anchor: Int?
+    public private(set) var anchor: ID?
 
     public init() {}
 
     /// Nothing is selected: the bulk bar hides.
     public var isEmpty: Bool { ids.isEmpty && mode == .ids }
 
-    public func contains(_ id: Int) -> Bool {
+    public func contains(_ id: ID) -> Bool {
         mode == .filter || ids.contains(id)
     }
 
     /// The row checkbox or Command-click: toggles one row and anchors a later Shift range.
-    public mutating func toggle(_ id: Int) {
+    public mutating func toggle(_ id: ID) {
         mode = .ids
         if ids.contains(id) {
             ids.remove(id)
@@ -107,7 +108,7 @@ public struct ServerTableSelection: Equatable, Sendable {
 
     /// Shift-click: every row from the anchor to `id` (in the shown order) joins the
     /// selection; without an anchor it toggles the row.
-    public mutating func extend(to id: Int, in order: [Int]) {
+    public mutating func extend(to id: ID, in order: [ID]) {
         guard let anchor, let start = order.firstIndex(of: anchor), let end = order.firstIndex(of: id) else {
             toggle(id)
             return
@@ -118,17 +119,17 @@ public struct ServerTableSelection: Equatable, Sendable {
     }
 
     /// Every loaded row is checked.
-    public func allSelected(_ order: [Int]) -> Bool {
+    public func allSelected(_ order: [ID]) -> Bool {
         mode == .filter || (!order.isEmpty && order.allSatisfy { ids.contains($0) })
     }
 
     /// Some, but not all, loaded rows are checked (the tri-state header box).
-    public func someSelected(_ order: [Int]) -> Bool {
+    public func someSelected(_ order: [ID]) -> Bool {
         !ids.isEmpty && !allSelected(order)
     }
 
     /// `toggleSelectAll`: every loaded row, or none when all are checked.
-    public mutating func toggleAll(_ order: [Int]) {
+    public mutating func toggleAll(_ order: [ID]) {
         if allSelected(order) {
             clear()
         } else {
@@ -143,7 +144,7 @@ public struct ServerTableSelection: Equatable, Sendable {
     }
 
     /// The selection of rows no longer loaded is dropped (a filter change clears it all).
-    public mutating func keep(only loaded: Set<Int>) {
+    public mutating func keep(only loaded: Set<ID>) {
         ids = ids.intersection(loaded)
         if let anchor, !loaded.contains(anchor) { self.anchor = nil }
     }

@@ -3,6 +3,18 @@ import Darwin
 import Foundation
 @testable import VisionNativeCore
 
+/// Test-only string literals for currency codes (`"EUR"`), so fixtures read like the wire. Production
+/// code has no such conformance: it takes codes from decoded models or `CurrencyCode(rawValue:)`.
+/// Traps on a malformed literal, which a fixture typo should be.
+extension CurrencyCode: @retroactive ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        guard let code = CurrencyCode(rawValue: value) else {
+            preconditionFailure("\"\(value)\" is not a currency code (^[A-Z]{3}$)")
+        }
+        self = code
+    }
+}
+
 /// An in-memory file system with POSIX-like semantics for the calls the runtime makes.
 final class FakeFileSystem: RuntimeFileSystem, @unchecked Sendable {
     enum Node: Equatable {

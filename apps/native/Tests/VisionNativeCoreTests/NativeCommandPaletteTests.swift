@@ -97,7 +97,7 @@ private actor PaletteTestService: NativeCommandPaletteService, NativeCommandPale
         if emptyQuotes { return nil }
         return try .init(raw: .object(["symbol": .string(symbol), "currency": .string("EUR"), "price": .number(12.5)]))
     }
-    func paletteAnswer(query: String, numberFormat: NumberFormat, currency: String, decimals: Int) async throws
+    func paletteAnswer(query: String, numberFormat: NumberFormat, currency: CurrencyCode, decimals: Int) async throws
         -> NativeCommandPaletteAnswer?
     {
         answerQueries.append(query)

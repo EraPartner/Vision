@@ -31,9 +31,9 @@ public enum NumberFormat: String, CaseIterable, Sendable {
 public struct NativeAppSettings: Equatable, Sendable {
     public static let settingsKey = "app_settings"
 
-    /// `defaultCurrency`: a three-letter ISO 4217 code, as stored (the page does not
-    /// change its case).
-    public var defaultCurrency: String
+    /// `defaultCurrency`: a three-letter ISO 4217 code. `storedAppSettingsSchema` accepts either
+    /// case and upper-cases it (`asCurrencyCode(code.toUpperCase())`), as `migrate` does.
+    public var defaultCurrency: CurrencyCode
     public var dateFormat: AppDateFormat
     public var numberFormat: NumberFormat
     /// 0 to 20 fraction digits for money.
@@ -58,7 +58,7 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var fullEffects: Bool
 
     public init(
-        defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
+        defaultCurrency: CurrencyCode = .eur, dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
         colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
         analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
@@ -95,8 +95,10 @@ public struct NativeAppSettings: Equatable, Sendable {
     public static func migrate(_ raw: JSONValue?) -> NativeAppSettings {
         guard let fields = raw?.objectValue else { return defaults }
         var settings = defaults
-        if let value = fields["defaultCurrency"]?.stringValue, isCurrencyCode(value) {
-            settings.defaultCurrency = value
+        if let value = fields["defaultCurrency"]?.stringValue, isCurrencyCode(value),
+            let code = CurrencyCode(rawValue: value.uppercased())
+        {
+            settings.defaultCurrency = code
         }
         if let value = fields["dateFormat"]?.stringValue.flatMap(AppDateFormat.init(rawValue:)) {
             settings.dateFormat = value

@@ -234,7 +234,7 @@ import Observation
         !isSavingKey && !NativeSettingsAIText.trim(keyInput(provider)).isEmpty
     }
     public func canClearKey(_ provider: String) -> Bool {
-        !isClearingKey && providerStatuses?.items.first { $0.provider == provider }?.source == "settings"
+        !isClearingKey && providerStatuses?.items.first { $0.provider == provider }?.source == .settings
     }
     public func saveProviderKey(_ provider: String) async {
         guard active, canSaveKey(provider) else { return }

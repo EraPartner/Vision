@@ -26,8 +26,8 @@ struct AnalysisSettingsTests {
         #expect(settings.analysisBenchmark == nil)
         #expect(settings.aiAnswerDepth == "quick")
         #expect(settings.language == "en")
-        // The stored currency remains case-preserving; Analysis resolves its stricter preference layer.
-        #expect(settings.defaultCurrency == "eur")
+        // `storedAppSettingsSchema` upper-cases a stored three-letter currency, so the typed code is `EUR`.
+        #expect(settings.defaultCurrency == "EUR")
         #expect(settings.defaultPageSize == 100)
     }
 }

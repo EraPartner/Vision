@@ -137,7 +137,7 @@ private struct NativeAPIRequestRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(event.method).font(.caption.monospaced()).frame(width: 56, alignment: .leading)
+            Text(event.method.rawValue).font(.caption.monospaced()).frame(width: 56, alignment: .leading)
                 .foregroundStyle(methodColor)
             Text(event.endpoint).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
                 .foregroundStyle(event.phase == .error ? theme.loss : Color.primary)
@@ -161,11 +161,11 @@ private struct NativeAPIRequestRow: View {
 
     private var methodColor: Color {
         switch event.method {
-        case "GET": return .blue
-        case "POST": return theme.gain
-        case "PUT", "PATCH": return theme.warning
-        case "DELETE": return theme.loss
-        default: return .secondary
+        case .get: return .blue
+        case .post: return theme.gain
+        case .put, .patch: return theme.warning
+        case .delete: return theme.loss
+        case .head, .options: return .secondary
         }
     }
 }
@@ -186,7 +186,7 @@ private struct NativeAPIRequestDetail: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    row("Method", event.method)
+                    row("Method", event.method.rawValue)
                     row("Endpoint", event.endpoint)
                     row("Request ID", event.requestId, color: .secondary)
                     row("Status", event.status.map(String.init) ?? "—", color: statusColor)
@@ -241,7 +241,7 @@ private struct NativeAPIMetricsView: View {
                 section("Slow requests (>1 s) — \(model.slowRequests.count)") {
                     ForEach(model.slowRequests.prefix(10)) { event in
                         HStack {
-                            Text(event.method).font(.caption.monospaced()).frame(width: 56, alignment: .leading)
+                            Text(event.method.rawValue).font(.caption.monospaced()).frame(width: 56, alignment: .leading)
                             Text(event.endpoint).font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
                             Spacer()
                             Text(String(format: "%.2fs", (event.durationMs ?? 0) / 1000)).font(.caption.monospacedDigit())
