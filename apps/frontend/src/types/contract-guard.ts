@@ -131,6 +131,70 @@ import type {
     setResearchProviderKey,
 } from "@/lib/api/research";
 
+import type {
+    PortfolioTransactionCreate,
+    PortfolioTransactionUpdate,
+    PortfolioTxnType,
+    InvestmentCreate,
+    InvestmentUpdate,
+    RecurrenceInterval,
+} from "./api";
+import type {
+    WatchlistCreate,
+    WatchlistUpdate,
+} from "./watchlist";
+import type {
+    CashForecast,
+    ExchangeRatesData,
+    InsightDismissalRequest,
+    InsightsCountResponse,
+    PortfolioAssetGroupTotals,
+    PortfolioSummaryAccountTotals,
+    PortfolioSummaryByAccountItem,
+} from "@/lib/api/info";
+import type { RebalanceRequest } from "@/lib/api/crossWorkspace";
+import type { PortfolioExposureResponse } from "@/lib/api/portfolioExposure";
+import type { MarketChartInterval, MarketQuoteDetail } from "@/lib/api/market";
+import type { ResearchRange } from "./research";
+import type { ChartPeriod } from "@/components/charts/chartPeriods";
+import type { AccountCreate, AccountUpdate, BulkExportRequest, BulkTransactionFilter } from "./api";
+import type {
+    AccountCloseBalanceHandling,
+    ReconcileMode,
+    ReconcileResult,
+} from "@/lib/api/accounts";
+import type { BelgianTaxOverview } from "@/lib/api/belgianTax";
+import type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate } from "@/lib/api/recipients";
+import type { ReportThemeTokens } from "@/lib/themeTokens";
+import type { ReportPeriod, TaxReportHousehold, TaxReportProfile } from "@/lib/api/reports";
+import type { BulkSplitRequest } from "@/lib/api/splits";
+import type { getAccounts } from "@/lib/api/accounts";
+import type { getTransactions } from "@/lib/api/transactions";
+import type { getRecipients } from "@/lib/api/recipients";
+import type {
+    getAggregationRecipientPivot,
+    getAggregationTagPivot,
+} from "@/lib/api/aggregations";
+import type { SavedChart, SavedChartCreate } from "./apiClient";
+import type {
+    BelgianTaxHouseholdV2,
+    HouseholdCsssResult,
+    HouseholdTaxIssue,
+    HouseholdTaxResult,
+    MaritalQuotientResult,
+    PartnerTaxResult,
+    ActivityTaxResult,
+    CategoryTaxResult,
+    AssessmentDecision,
+    HouseholdPartner,
+    IncomeActivity,
+    RelationshipEvent,
+    HouseholdRelationship,
+    HouseholdDependents,
+    HouseholdHomeInputs,
+    HouseholdMigrationRecord,
+} from "@/lib/belgianTax/householdTypes";
+
 type Schemas = components["schemas"];
 
 type Json200<Operation> = Operation extends {
@@ -203,6 +267,32 @@ type IsNumeric<T> = [NonNullable<T>] extends [number]
         ? true
         : false
     : false;
+
+type JsonRequestBody<Operation> = Operation extends {
+    requestBody?: { content: { "application/json": infer Body } };
+}
+    ? Body
+    : never;
+
+type QueryOf<Operation> = Operation extends {
+    parameters: { query?: infer Query };
+}
+    ? NonNullable<Query>
+    : never;
+
+/** Drops the index signature `z.looseObject` adds, keeping the declared keys. */
+type DeclaredKeys<T> = {
+    [K in keyof T as string extends K ? never : K]: T[K];
+};
+
+type PathOf<Operation> = Operation extends {
+    parameters: { path: infer Path };
+}
+    ? Path
+    : never;
+
+type ArgOf<F extends (...args: never[]) => unknown, N extends number> =
+    Parameters<F>[N];
 
 // ── Key and enum coverage: every field the consumed type reads must exist in
 //    the contract, and every contract enum must stay a literal union.
@@ -510,44 +600,6 @@ export type _NumOwedDetailRemaining = Expect<
 //    contract enum cannot decay to `string` in the code that consumes it.
 
 // ── Enums: dashboard, info, aggregations, portfolio, watchlist, market.
-import type {
-    AssetClass,
-    PortfolioTransactionCreate,
-    PortfolioTransactionUpdate,
-    PortfolioTxnType,
-    InvestmentCreate,
-    InvestmentUpdate,
-    RecurrenceInterval,
-} from "./api";
-import type {
-    WatchlistCreate,
-    WatchlistUpdate,
-} from "./watchlist";
-import type {
-    CashForecast,
-    ExchangeRatesData,
-    InsightDismissalRequest,
-    InsightsCountResponse,
-    PortfolioAssetGroupTotals,
-    PortfolioSummaryAccountTotals,
-    PortfolioSummaryByAccountItem,
-} from "@/lib/api/info";
-import type { RebalanceRequest } from "@/lib/api/crossWorkspace";
-import type { PortfolioExposureResponse } from "@/lib/api/portfolioExposure";
-import type { MarketChartInterval, MarketQuoteDetail } from "@/lib/api/market";
-import type { ResearchRange } from "./research";
-import type { ChartPeriod } from "@/components/charts/chartPeriods";
-
-type JsonRequestBody<Operation> = Operation extends {
-    requestBody?: { content: { "application/json": infer Body } };
-}
-    ? Body
-    : never;
-type QueryOf<Operation> = Operation extends {
-    parameters: { query?: infer Query };
-}
-    ? NonNullable<Query>
-    : never;
 
 export type _EnumsCashForecast = Expect<
     Matches<CashForecast, Schemas["CashForecastInsight"]>
@@ -653,10 +705,6 @@ export type _EnumsMarketQuoteQuery = Expect<
 
 // ── Enums: transaction and portfolio imports, admin, database editor.
 
-/** Drops the index signature `z.looseObject` adds, keeping the declared keys. */
-type DeclaredKeys<T> = {
-    [K in keyof T as string extends K ? never : K]: T[K];
-};
 export type _EnumsImportBatch = Expect<
     Matches<ImportBatch, Schemas["ImportBatch"]>
 >;
@@ -742,24 +790,6 @@ export type _EnumsDbEditorChange = Expect<
 
 // ── Enums: research, monitors, dossiers, analysis, AI.
 
-type JsonBody<Operation> = Operation extends {
-    requestBody: { content: { "application/json": infer Body } };
-}
-    ? Body
-    : never;
-type QueryOf<Operation> = Operation extends {
-    parameters: { query?: infer Query };
-}
-    ? NonNullable<Query>
-    : never;
-type PathOf<Operation> = Operation extends {
-    parameters: { path: infer Path };
-}
-    ? Path
-    : never;
-type ArgOf<F extends (...args: never[]) => unknown, N extends number> =
-    Parameters<F>[N];
-
 export type _EnumsResearchMappingsQuery = Expect<
     Matches<
         { key_type: ArgOf<typeof getResearchMappings, 1> },
@@ -769,19 +799,19 @@ export type _EnumsResearchMappingsQuery = Expect<
 export type _EnumsResearchMappingResolveInput = Expect<
     Matches<
         ArgOf<typeof resolveResearchMappings, 0>,
-        JsonBody<operations["researchResolveMappings"]>
+        JsonRequestBody<operations["researchResolveMappings"]>
     >
 >;
 export type _EnumsResearchMappingSaveInput = Expect<
     Matches<
         ArgOf<typeof saveResearchMappings, 0>,
-        JsonBody<operations["researchSaveMappings"]>
+        JsonRequestBody<operations["researchSaveMappings"]>
     >
 >;
 export type _EnumsResearchMappingAuditInput = Expect<
     Matches<
         ArgOf<typeof auditResearchMappings, 0>,
-        JsonBody<operations["researchAuditMappings"]>
+        JsonRequestBody<operations["researchAuditMappings"]>
     >
 >;
 export type _EnumsResearchMacroSeriesQuery = Expect<
@@ -793,7 +823,7 @@ export type _EnumsResearchMacroSeriesQuery = Expect<
 export type _EnumsResearchPortfolioForecastInput = Expect<
     Matches<
         Pick<PortfolioForecastInput, "method">,
-        JsonBody<operations["researchPortfolioForecast"]>
+        JsonRequestBody<operations["researchPortfolioForecast"]>
     >
 >;
 export type _EnumsResearchProviderKeyPath = Expect<
@@ -872,7 +902,7 @@ export type _EnumsAnalysisExecuteMode = Expect<
 export type _EnumsAnalysisExtensionInput = Expect<
     Matches<
         Pick<AnalysisExtensionInput, "operation">,
-        JsonBody<operations["evaluateAnalysisExtension"]>
+        JsonRequestBody<operations["evaluateAnalysisExtension"]>
     >
 >;
 export type _EnumsAnalysisSavedFields = Expect<
@@ -915,44 +945,6 @@ export type _EnumsAiMessage = Expect<
 
 // ── Enums: Belgian tax, reports, accounts, transactions, recipients, splits,
 //    saved charts, settings.
-
-import type { AccountCreate, AccountUpdate, BulkExportRequest, BulkTransactionFilter } from "./api";
-import type {
-    AccountCloseBalanceHandling,
-    ReconcileMode,
-    ReconcileResult,
-} from "@/lib/api/accounts";
-import type { BelgianTaxOverview } from "@/lib/api/belgianTax";
-import type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate } from "@/lib/api/recipients";
-import type { ReportThemeTokens } from "@/lib/themeTokens";
-import type { ReportPeriod, TaxReportHousehold, TaxReportProfile } from "@/lib/api/reports";
-import type { BulkSplitRequest } from "@/lib/api/splits";
-import type { getAccounts } from "@/lib/api/accounts";
-import type { getTransactions } from "@/lib/api/transactions";
-import type { getRecipients } from "@/lib/api/recipients";
-import type {
-    getAggregationRecipientPivot,
-    getAggregationTagPivot,
-} from "@/lib/api/aggregations";
-import type { SavedChart, SavedChartCreate } from "./apiClient";
-import type {
-    BelgianTaxHouseholdV2,
-    HouseholdCsssResult,
-    HouseholdTaxIssue,
-    HouseholdTaxResult,
-    MaritalQuotientResult,
-    PartnerTaxResult,
-    ActivityTaxResult,
-    CategoryTaxResult,
-    AssessmentDecision,
-    HouseholdPartner,
-    IncomeActivity,
-    RelationshipEvent,
-    HouseholdRelationship,
-    HouseholdDependents,
-    HouseholdHomeInputs,
-    HouseholdMigrationRecord,
-} from "@/lib/belgianTax/householdTypes";
 
 export type _EnumsAccountCreate = Expect<
     Matches<AccountCreate, Schemas["AccountCreate"]>
