@@ -6,8 +6,8 @@ import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector
 import { renderWithApp } from "@/test/renderWithApp";
 
 const OPTIONS = [
-    { label: "1M", range: "1mo" as const, interval: "1d" },
-    { label: "1Y", range: "1y" as const, interval: "1wk" },
+    { label: "1M", range: "1mo" as const, interval: "1d" as const },
+    { label: "1Y", range: "1y" as const, interval: "1wk" as const },
 ];
 
 describe("ResearchRangeSelector", () => {

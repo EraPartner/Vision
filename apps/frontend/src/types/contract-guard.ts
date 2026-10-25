@@ -510,6 +510,146 @@ export type _NumOwedDetailRemaining = Expect<
 //    contract enum cannot decay to `string` in the code that consumes it.
 
 // ── Enums: dashboard, info, aggregations, portfolio, watchlist, market.
+import type {
+    AssetClass,
+    PortfolioTransactionCreate,
+    PortfolioTransactionUpdate,
+    PortfolioTxnType,
+    InvestmentCreate,
+    InvestmentUpdate,
+    RecurrenceInterval,
+} from "./api";
+import type {
+    WatchlistCreate,
+    WatchlistUpdate,
+} from "./watchlist";
+import type {
+    CashForecast,
+    ExchangeRatesData,
+    InsightDismissalRequest,
+    InsightsCountResponse,
+    PortfolioAssetGroupTotals,
+    PortfolioSummaryAccountTotals,
+    PortfolioSummaryByAccountItem,
+} from "@/lib/api/info";
+import type { RebalanceRequest } from "@/lib/api/crossWorkspace";
+import type { PortfolioExposureResponse } from "@/lib/api/portfolioExposure";
+import type { MarketChartInterval, MarketQuoteDetail } from "@/lib/api/market";
+import type { ResearchRange } from "./research";
+import type { ChartPeriod } from "@/components/charts/chartPeriods";
+
+type JsonRequestBody<Operation> = Operation extends {
+    requestBody?: { content: { "application/json": infer Body } };
+}
+    ? Body
+    : never;
+type QueryOf<Operation> = Operation extends {
+    parameters: { query?: infer Query };
+}
+    ? NonNullable<Query>
+    : never;
+
+export type _EnumsCashForecast = Expect<
+    Matches<CashForecast, Schemas["CashForecastInsight"]>
+>;
+export type _EnumsInsightsCount = Expect<
+    Matches<InsightsCountResponse, Schemas["InsightsCountData"]>
+>;
+export type _EnumsInsightDismissal = Expect<
+    Matches<InsightDismissalRequest, Schemas["InsightDismissalRequest"]>
+>;
+export type _EnumsPortfolioSummaryByAccount = Expect<
+    Matches<
+        PortfolioSummaryByAccountItem,
+        Schemas["PortfolioSummaryByAccountItem"]
+    >
+>;
+export type _EnumsPortfolioSummaryAccountTotals = Expect<
+    Matches<
+        PortfolioSummaryAccountTotals,
+        Schemas["PortfolioSummaryAccountTotals"]
+    >
+>;
+export type _EnumsPortfolioAssetGroupTotals = Expect<
+    Matches<PortfolioAssetGroupTotals, Schemas["PortfolioAssetGroupTotals"]>
+>;
+export type _EnumsExchangeRates = Expect<
+    Matches<ExchangeRatesData, Schemas["ExchangeRates"]>
+>;
+export type _EnumsPortfolioExposureContribution = Expect<
+    Matches<
+        PortfolioExposureResponse["issuer"]["rows"][number]["contributions"][number],
+        Schemas["PortfolioExposureContribution"]
+    >
+>;
+export type _EnumsPortfolioExposureFundSource = Expect<
+    Matches<
+        PortfolioExposureResponse["fundSources"][number],
+        Schemas["PortfolioExposureFundSource"]
+    >
+>;
+export type _EnumsAssetClass = Expect<
+    Matches<{ value: AssetClass }, { value: Schemas["AssetClass"] }>
+>;
+export type _EnumsPortfolioTxnType = Expect<
+    Matches<{ value: PortfolioTxnType }, { value: Schemas["PortfolioTxnType"] }>
+>;
+export type _EnumsRecurrenceInterval = Expect<
+    Matches<
+        { value: RecurrenceInterval },
+        { value: Schemas["RecurrenceInterval"] }
+    >
+>;
+export type _EnumsInvestmentCreate = Expect<
+    Matches<InvestmentCreate, Schemas["InvestmentCreateRequest"]>
+>;
+export type _EnumsInvestmentUpdate = Expect<
+    Matches<InvestmentUpdate, Schemas["InvestmentUpdateRequest"]>
+>;
+// `cash_account_id` is declared on the frontend type (ADR-090) but absent from
+// the contract and the backend; excluded here until that drift is resolved.
+export type _EnumsPortfolioTransactionCreate = Expect<
+    Matches<
+        Omit<PortfolioTransactionCreate, "cash_account_id">,
+        JsonRequestBody<operations["createInvestmentTransaction"]>
+    >
+>;
+export type _EnumsPortfolioTransactionUpdate = Expect<
+    Matches<
+        PortfolioTransactionUpdate,
+        JsonRequestBody<operations["updatePortfolioTransaction"]>
+    >
+>;
+export type _EnumsWatchlistCreate = Expect<
+    Matches<WatchlistCreate, JsonRequestBody<operations["addToWatchlist"]>>
+>;
+export type _EnumsWatchlistUpdate = Expect<
+    Matches<WatchlistUpdate, JsonRequestBody<operations["updateWatchlistItem"]>>
+>;
+export type _EnumsRebalanceRequest = Expect<
+    Matches<RebalanceRequest, JsonRequestBody<operations["computeRebalance"]>>
+>;
+export type _EnumsInvestmentsQuery = Expect<
+    Matches<
+        { asset_class: AssetClass },
+        Pick<QueryOf<operations["getInvestments"]>, "asset_class">
+    >
+>;
+export type _EnumsPortfolioPerformanceQuery = Expect<
+    Matches<
+        { period: ChartPeriod },
+        Pick<QueryOf<operations["getPortfolioPerformance"]>, "period">
+    >
+>;
+export type _EnumsMarketChartQuery = Expect<
+    Matches<
+        { range: ResearchRange; interval: MarketChartInterval },
+        QueryOf<operations["marketChart"]>
+    >
+>;
+export type _EnumsMarketQuoteQuery = Expect<
+    Matches<{ detail: MarketQuoteDetail }, QueryOf<operations["marketQuote"]>>
+>;
 
 // ── Enums: transaction and portfolio imports, admin, database editor.
 

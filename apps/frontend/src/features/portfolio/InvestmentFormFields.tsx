@@ -21,9 +21,10 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { ReactNode } from "react";
 import { asCurrencyCode } from "@vision/types/brands";
 import type { CurrencyCode } from "@vision/types/brands";
+import type { AssetClass } from "@/types/portfolio";
 
 export interface InvestmentForm {
-    assetClass: string;
+    assetClass: AssetClass | "";
     name: string;
     symbol: string;
     currency: CurrencyCode;

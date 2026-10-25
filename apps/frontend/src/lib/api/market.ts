@@ -5,6 +5,7 @@ import type {
     WatchlistListResponse,
 } from "@/types/watchlist";
 import { apiRequest } from "@/lib/api/client";
+import type { operations } from "@/types/generated";
 import { requestWithQuery } from "@/lib/api/helpers";
 import {
     MarketChartSchema,
@@ -19,6 +20,7 @@ import type {
     MarketChartPoint,
     MarketChartResponse,
     MarketQuote,
+    ResearchRange,
     ResearchSearchItem,
 } from "@/types/research";
 
@@ -29,6 +31,13 @@ export type {
     MarketQuote,
     ResearchSearchItem,
 };
+
+export type MarketChartInterval = NonNullable<
+    operations["marketChart"]["parameters"]["query"]["interval"]
+>;
+export type MarketQuoteDetail = NonNullable<
+    operations["marketQuote"]["parameters"]["query"]["detail"]
+>;
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getMarketNews(
@@ -58,7 +67,7 @@ export async function getMarketNews(
  */
 export async function getMarketQuotes<Q = MarketQuote>(
     symbols: string,
-    opts?: { detail?: "basic" | "full" },
+    opts?: { detail?: MarketQuoteDetail },
 ): Promise<Q[]> {
     const detail = opts?.detail === "basic" ? "&detail=basic" : "";
     // Canonical `{items, total}` collection body — callers only need the rows.
@@ -76,8 +85,8 @@ export async function getMarketQuotes<Q = MarketQuote>(
  */
 export async function getMarketChart<P = MarketChartPoint>(
     symbol: string,
-    range: string,
-    interval: string,
+    range: ResearchRange,
+    interval: MarketChartInterval,
 ): Promise<MarketChartResponse<P>> {
     const { items, ...rest } = await requestWithQuery<{
         symbol?: string;

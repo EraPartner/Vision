@@ -56,8 +56,10 @@ import {
     AreaChart,
     ChartCard,
     CHART_NEUTRAL,
+    CHART_PERIODS,
     filterByPeriod,
     getChartColor,
+    isChartPeriod,
     type ChartPeriod,
 } from "@/components/charts";
 import {
@@ -118,18 +120,8 @@ import { DEFAULT_CURRENCY, currencyOr } from "@/utils/currency";
 import type { AccountId } from "@vision/types/brands";
 
 /** `?period=` keeps deep links from the former Performance page working. */
-const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
-    ["1m", "3m", "6m", "1y", "3y", "all"],
-    "all",
-);
-const PERIODS: ReadonlyArray<ChartPeriod> = [
-    "1m",
-    "3m",
-    "6m",
-    "1y",
-    "3y",
-    "all",
-];
+const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(CHART_PERIODS, "all");
+const PERIODS: ReadonlyArray<ChartPeriod> = CHART_PERIODS;
 
 type HoldingsSort = "value" | "return";
 
@@ -920,9 +912,9 @@ export default function PortfolioPage() {
                                 <SegmentedControl
                                     size="sm"
                                     value={period}
-                                    onValueChange={(next) =>
-                                        setPeriod(next as ChartPeriod)
-                                    }
+                                    onValueChange={(next) => {
+                                        if (isChartPeriod(next)) setPeriod(next);
+                                    }}
                                     aria-label={t("portfolio.period.label")}
                                     className="w-fit"
                                 >

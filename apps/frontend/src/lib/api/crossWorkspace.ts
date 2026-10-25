@@ -7,10 +7,12 @@ import {
     RebalanceResponseSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
+import type { operations } from "@/types/generated";
 import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
-export type ModelPortfolio =
-    "sixty_forty" | "all_weather" | "three_fund" | "awesome";
+export type ModelPortfolio = NonNullable<
+    operations["computeRebalance"]["requestBody"]["content"]["application/json"]["model"]
+>;
 
 /**
  * A user-defined custom rebalancing target, persisted under the `rebalance_plans`

@@ -1,9 +1,17 @@
 import { apiRequest } from "@/lib/api/client";
 import { PortfolioExposureSchema } from "@vision/types/contracts";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
+import type { components } from "@/types/generated";
+
+type Schemas = components["schemas"];
+
+export type PortfolioExposureSourceType =
+    Schemas["PortfolioExposureContribution"]["sourceType"];
+export type PortfolioExposureCoverageStatus =
+    Schemas["PortfolioExposureFundSource"]["coverageStatus"];
 
 export interface PortfolioExposureContribution {
-    sourceType: "direct" | "fund";
+    sourceType: PortfolioExposureSourceType;
     investmentId: InvestmentId;
     investmentName: string;
     sourceFundName: string | null;
@@ -40,7 +48,7 @@ export interface PortfolioExposureResponse {
         ageDays: number;
         maximumAgeDays: number;
         stale: boolean;
-        coverageStatus: "complete" | "partial";
+        coverageStatus: PortfolioExposureCoverageStatus;
     }>;
     issuer: PortfolioExposureDimension;
     sector: PortfolioExposureDimension;

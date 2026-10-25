@@ -60,6 +60,9 @@ import type {
 import { PageShell } from "@/components/shared/PageShell";
 import { useSearchParams } from "react-router";
 import {
+    REBALANCE_MODELS,
+    isModelPortfolio,
+    modelFromSource,
     parseRebalanceUrl,
     writeRebalanceUrl,
     type RebalanceUrlDraft,
@@ -74,13 +77,6 @@ import {
     DEFAULT_CURRENCY,
     currencyOr,
 } from "@/utils/currency";
-
-const MODELS: ModelPortfolio[] = [
-    "sixty_forty",
-    "all_weather",
-    "three_fund",
-    "awesome",
-];
 
 // Allocation sleeves offered in the custom editor. Mirrors the rolled-up sleeve
 // vocabulary the server reports actuals in (crossWorkspaceDataService SLEEVE_ROLLUP)
@@ -201,9 +197,7 @@ export default function RebalancePage() {
     // Source select value: `model:<preset>` | `plan:<id>` | `custom`.
     const source = draft.source;
     const isPreset = source.startsWith("model:");
-    const presetModel = isPreset
-        ? (source.slice(6) as ModelPortfolio)
-        : undefined;
+    const presetModel = isPreset ? modelFromSource(source) : undefined;
     const editingPlanId = source.startsWith("plan:")
         ? source.slice(5)
         : undefined;
@@ -362,11 +356,12 @@ export default function RebalancePage() {
 
     function handleSourceChange(value: string) {
         compute.reset();
-        if (value.startsWith("model:")) {
+        const model = modelFromSource(value);
+        if (model !== undefined) {
             updateDraft({
                 source: value,
                 rows: weightsToRows(
-                    PRESET_WEIGHTS[value.slice(6) as ModelPortfolio],
+                    PRESET_WEIGHTS[model],
                     appSettings.numberFormat,
                 ),
                 name: "",
@@ -534,7 +529,7 @@ export default function RebalancePage() {
                                     <SelectLabel>
                                         {t("rebalance.presets")}
                                     </SelectLabel>
-                                    {MODELS.map((m) => (
+                                    {REBALANCE_MODELS.map((m) => (
                                         <SelectItem
                                             key={m}
                                             value={`model:${m}`}
@@ -698,9 +693,9 @@ export default function RebalancePage() {
                                 {t("rebalance.editor.loadCurrent")}
                             </Button>
                             <Select
-                                onValueChange={(v) =>
-                                    seedFromPreset(v as ModelPortfolio)
-                                }
+                                onValueChange={(v) => {
+                                    if (isModelPortfolio(v)) seedFromPreset(v);
+                                }}
                             >
                                 <SelectTrigger className="w-48">
                                     <SelectValue
@@ -710,7 +705,7 @@ export default function RebalancePage() {
                                     />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {MODELS.map((m) => (
+                                    {REBALANCE_MODELS.map((m) => (
                                         <SelectItem key={m} value={m}>
                                             {t(`rebalance.model.${m}`)}
                                         </SelectItem>

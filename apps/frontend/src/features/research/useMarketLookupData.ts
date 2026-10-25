@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiClient } from "@/lib/api";
+import type { MarketChartInterval } from "@/lib/api/market";
 import { getInvestmentPriceHistory } from "@/lib/api/portfolio";
 import { marketKeys } from "@/lib/queryKeys";
-import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import type { ResearchRange } from "@/types/research";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -59,7 +60,7 @@ export function useMarketLookupData<Quote>({
 }: {
     symbol: string | null;
     range: ResearchRange;
-    interval: string;
+    interval: MarketChartInterval;
     providerInvestment: ProviderInvestment | undefined;
     isProviderAsset: boolean;
     useYahoo: boolean;

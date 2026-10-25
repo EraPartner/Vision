@@ -23,7 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import type { PriceProvider } from "@/types/api";
+import { isPriceProvider, type PriceProvider } from "@/types/api";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatNumberPlaceholder } from "@/utils/currency";
 import { usePriceProviderCatalog } from "./usePriceProviderCatalog";
@@ -77,13 +77,14 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
             </Label>
             <Select
                 value={form.priceProvider}
-                onValueChange={(v) =>
+                onValueChange={(v) => {
+                    if (!isPriceProvider(v)) return;
                     setForm((f) => ({
                         ...f,
-                        priceProvider: v as PriceProvider,
+                        priceProvider: v,
                         priceProviderId: "",
-                    }))
-                }
+                    }));
+                }}
             >
                 <SelectTrigger id={`${idPrefix}-price-provider`}>
                     <SelectValue />

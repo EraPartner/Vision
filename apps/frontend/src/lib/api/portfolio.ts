@@ -3,6 +3,7 @@ import type {
     InvestmentCreate,
     InvestmentUpdate,
     InvestmentsListResponse,
+    AssetClass,
     PortfolioTransaction,
     PortfolioTransactionCreate,
     PortfolioTransactionUpdate,
@@ -64,7 +65,7 @@ export function getInvestments(
     params?: {
         limit?: number | undefined;
         offset?: number | undefined;
-        asset_class?: string | undefined;
+        asset_class?: AssetClass | undefined;
         active?: boolean | undefined;
     },
     signal?: AbortSignal,

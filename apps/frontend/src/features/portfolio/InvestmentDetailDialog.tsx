@@ -53,7 +53,11 @@ import {
 } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
-import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
+import {
+    getAssetClassLabel,
+    getTxnTypeLabel,
+    isPortfolioTxnType,
+} from "@/types/portfolio";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useControlledOpen } from "@/hooks/useDialogFormState";
@@ -170,7 +174,9 @@ const TransactionRow = memo(function TransactionRow({
                         variant="outline"
                         size="sm"
                         className={
-                            TXN_TYPE_COLORS[txn.type as PortfolioTxnType]
+                            isPortfolioTxnType(txn.type)
+                                ? TXN_TYPE_COLORS[txn.type]
+                                : undefined
                         }
                     >
                         {getTxnTypeLabel(t, txn.type)}

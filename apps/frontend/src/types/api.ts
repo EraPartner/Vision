@@ -17,7 +17,8 @@ import type {
     PortfolioIncomeRecognitionRole,
 } from "@vision/types/portfolioTxnTypes";
 import type { RecurrenceInterval } from "@vision/types/recurrence";
-import type { operations } from "./generated";
+import type { components, operations } from "./generated";
+import { enumGuard } from "@/lib/enumGuard";
 import type {
     AccountId,
     CategoryId,
@@ -345,8 +346,7 @@ export interface PlannedTransactionExecution {
     created_at: string;
 }
 
-export type PlannedLoanType =
-    "amortizing" | "fixed_principal" | "interest_only";
+export type PlannedLoanType = components["schemas"]["PlannedLoanType"];
 
 export interface PlannedLoanScheduleEntry {
     installment_number: number;
@@ -469,8 +469,15 @@ export interface PlannedTransactionExecuteRequest {
 // runtime arrays in @vision/types; re-exported here so existing '@/types/api'
 // imports keep working. Portfolio and planned transactions share `biweekly`.
 export type { AssetClass, PortfolioTxnType, RecurrenceInterval };
-export type PriceProvider =
-    "manual" | "binance" | "yahoo" | "custom" | "kinesis";
+export type PriceProvider = components["schemas"]["PriceProvider"];
+
+export const isPriceProvider = enumGuard<PriceProvider>({
+    manual: true,
+    binance: true,
+    yahoo: true,
+    custom: true,
+    kinesis: true,
+});
 
 export interface Investment {
     id: InvestmentId;
@@ -635,7 +642,14 @@ export interface PortfolioTransactionCreate {
     recurrence_end_date?: string | undefined;
 }
 
-export type DividendAmountConvention = "gross" | "net" | "unknown";
+export type DividendAmountConvention =
+    components["schemas"]["PortfolioTransaction"]["dividend_amount_convention"];
+
+export const isDividendAmountConvention = enumGuard<DividendAmountConvention>({
+    gross: true,
+    net: true,
+    unknown: true,
+});
 
 export type PortfolioTransactionUpdate =
     operations["updatePortfolioTransaction"]["requestBody"]["content"]["application/json"];
