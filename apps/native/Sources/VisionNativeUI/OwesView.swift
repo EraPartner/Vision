@@ -60,7 +60,7 @@ public struct OwesView: View {
             if model.summaryError != nil {
                 OwesErrorCard(strings: strings) { Task { await model.loadSummary(force: true) } }
             }
-            if model.totalOutstanding > 0 {
+            if model.showsTotalCard {
                 AdminCard(padding: VisionPageLayout.padding) {
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -70,6 +70,11 @@ public struct OwesView: View {
                             Text(model.peopleLabel())
                                 .font(.callout)
                                 .foregroundStyle(theme.secondaryLabel)
+                            if model.unconvertedCount > 0 {
+                                Text(strings.tc("owesPage.fxUnavailable", model.unconvertedCount))
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.warning)
+                            }
                         }
                         Spacer()
                         MoneyText(
@@ -297,13 +302,16 @@ struct OwesPersonDetail: View {
                     ProgressView(value: OwesModel.progress(paid: split.amountPaid, of: split.amount))
                         .frame(maxWidth: 200)
                         .accessibilityLabel(strings.t("owesPage.repaymentProgress", ["recipient": person.name]))
-                    Text(verbatim: "\(model.money(split.amountPaid)) / \(model.money(split.amount))")
+                    Text(
+                        verbatim:
+                            "\(model.money(split.amountPaid, currency: model.currency(of: split))) / \(model.money(split.amount, currency: model.currency(of: split)))"
+                    )
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(theme.secondaryLabel)
                 }
             }
             Spacer(minLength: 8)
-            MoneyText(amount: split.remaining, currency: model.defaultCurrency, settings: settings, signed: false)
+            MoneyText(amount: split.remaining, currency: model.currency(of: split), settings: settings, signed: false)
                 .font(.body.weight(.semibold))
             Button {
                 model.openPayment(split)
@@ -467,7 +475,7 @@ struct OwesPaymentSheet: View {
                         .foregroundStyle(theme.destructive)
                 }
                 if let payment = model.payment {
-                    Text(strings.t("owesPage.recordDialog.remaining", ["amount": model.money(payment.remaining)]))
+                    Text(strings.t("owesPage.recordDialog.remaining", ["amount": model.money(payment.remaining, currency: payment.currency)]))
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
                 }

@@ -118,24 +118,37 @@ actor FakeSplitsService: SplitsService {
         return bulkResult
     }
 
-    func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed] {
+    /// The server's `OwedTotals` for the open splits (`unconverted` counts the rows left out).
+    private func totals(_ open: [OpenAPI.SplitOwedDetail], currency: String) -> OpenAPI.OwedTotals {
+        OpenAPI.OwedTotals(
+            currency: currency, remaining: open.reduce(Decimal(0)) { $0 + $1.remaining },
+            unconvertedCount: unconvertedCount, unconvertedCurrencies: unconvertedCount > 0 ? ["CHF"] : [])
+    }
+
+    private var unconvertedCount = 0
+    func setUnconvertedCount(_ count: Int) { unconvertedCount = count }
+
+    func owedSummary(currency: String) async throws -> OwedSummaryPage {
         summaryLoads += 1
         try check()
         let open = owedSplits.filter { !$0.isSettled }
-        guard !open.isEmpty else { return [] }
+        let totals = totals(open, currency: currency)
+        guard !open.isEmpty else { return OwedSummaryPage(items: [], summary: totals) }
         let total = open.reduce(Decimal(0)) { $0 + $1.amount }
         let paid = open.reduce(Decimal(0)) { $0 + $1.amountPaid }
-        return [
-            OpenAPI.SplitOwed(
-                recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: open.count, unconvertedCount: 0, unconvertedCurrencies: [])
-        ]
+        return OwedSummaryPage(
+            items: [
+                OpenAPI.SplitOwed(
+                    recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
+                    splitCount: open.count, unconvertedCount: 0, unconvertedCurrencies: [])
+            ], summary: totals)
     }
 
-    func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail] {
+    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
         detailLoads.append(recipientId)
         try check()
-        return owedSplits.filter { !$0.isSettled }
+        let open = owedSplits.filter { !$0.isSettled }
+        return OwedDetailPage(items: open, summary: totals(open, currency: currency))
     }
 
     func exportOwedCsv(recipientId: Int) async throws -> Data {
@@ -205,6 +218,9 @@ enum SplitFixture {
             "txPage.bulk.confirmDeleteTitle.one": "Delete {count} transaction?",
             "txPage.bulk.confirmDeleteTitle.other": "Delete {count} transactions?",
             "txPage.bulk.transferSelectionChanged": "The selected records changed.",
+            "owesPage.fxUnavailable.one": "{count} split left out: exchange rate unavailable",
+            "owesPage.fxUnavailable.other": "{count} splits left out: exchange rates unavailable",
+            "owesPage.settleAll.confirmDescription": "Settle {count} for {amount}.",
         ])
 
     static func decimal(_ text: String) -> Decimal { Decimal(string: text)! }
@@ -510,6 +526,24 @@ enum SplitFixture {
         #expect(await splits.summaryLoads == 2)
     }
 
+    @Test func splitsLeftOutForWantOfARateShowInTheTotalAndTheSettleAllAlert() async throws {
+        let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20, paid: 5)])
+        await splits.setUnconvertedCount(2)
+        let (model, shell) = Self.shell(splits)
+        defer { withExtendedLifetime(shell) {} }
+        await model.appear()
+        #expect(model.unconvertedCount == 2)
+        #expect(model.showsTotalCard)
+        await model.open(try #require(model.summary?.first))
+        #expect(model.personOutstanding == 15)
+        model.requestSettleAll()
+        let alert = try #require(model.confirmationText())
+        #expect(alert.message.hasSuffix("2 splits left out: exchange rates unavailable"))
+        #expect(model.payment == nil)
+        model.openPayment(try #require(model.splits?.first))
+        #expect(model.payment?.currency == "EUR")
+    }
+
     @Test func aFailedSummaryRetries() async throws {
         let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20)])
         await splits.fail(true)
@@ -574,7 +608,7 @@ enum SplitFixture {
         await model.appear()
         await model.open(try #require(model.summary?.first))
         model.requestSettleAll()
-        #expect(model.confirmation == .settleAll(count: 2, amount: 30))
+        #expect(model.confirmation == .settleAll(count: 2, amount: 30, unconvertedCount: 0))
         await model.confirm()
         #expect(await splits.settledAll == [4])
         #expect(model.notice?.key == "splits.allSettled")

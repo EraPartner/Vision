@@ -16,6 +16,8 @@ public struct OwesPerson: Equatable, Sendable {
 public struct OwesPaymentDraft: Equatable, Sendable {
     public let splitId: Int
     public let remaining: Decimal
+    /// The split's own currency (the transaction's), `splitCurrency` of the web dialog.
+    public let currency: String
     public var amountText: String
     /// `owesPage.recordDialog.invalidAmount` shows.
     public var invalid = false
@@ -24,7 +26,7 @@ public struct OwesPaymentDraft: Equatable, Sendable {
 /// What an `/owes` alert asks.
 public enum OwesConfirmation: Equatable, Sendable {
     /// Settle all outstanding splits of the person.
-    case settleAll(count: Int, amount: Decimal)
+    case settleAll(count: Int, amount: Decimal, unconvertedCount: Int)
     /// Delete this split.
     case deleteSplit(Int)
 }
@@ -72,11 +74,15 @@ public final class OwesModel {
 
     /// `useOwedSummary`; `nil` until the first answer.
     public private(set) var summary: [OpenAPI.SplitOwed]?
+    /// `summary` of the owed read: the total outstanding in the default currency, computed on
+    /// the server, and the open splits left out for want of a stored rate.
+    public private(set) var summaryTotals: OpenAPI.OwedTotals?
     public private(set) var summaryError: APIError?
     /// The person detail, while one is open.
     public private(set) var person: OwesPerson?
     /// `useOwedByRecipient`; `nil` until the first answer for the person.
     public private(set) var splits: [OpenAPI.SplitOwedDetail]?
+    public private(set) var splitsTotals: OpenAPI.OwedTotals?
     public private(set) var splitsError: APIError?
     /// `useRecentRecipientTransactions`.
     public private(set) var recent: [OpenAPI.Transaction] = []
@@ -184,8 +190,9 @@ public final class OwesModel {
         let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
-                let items = try await service.owedSummary(currency: currency)
-                self?.summary = items
+                let page = try await service.owedSummary(currency: currency)
+                self?.summary = page.items
+                self?.summaryTotals = page.summary
                 self?.summaryError = nil
                 self?.summaryFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
             } catch is CancellationError {
@@ -200,10 +207,14 @@ public final class OwesModel {
         if summaryInFlight == task { summaryInFlight = nil }
     }
 
-    /// `totalOwed`: the remaining amounts together; the card shows only above zero.
-    public var totalOutstanding: Decimal {
-        (summary ?? []).reduce(Decimal(0)) { $0 + $1.remaining }
-    }
+    /// `totalOwed`: `summary.remaining`, converted on the server; the card shows above zero.
+    public var totalOutstanding: Decimal { summaryTotals?.remaining ?? 0 }
+
+    /// `unconvertedCount`: open splits left out of the total, shown with `owesPage.fxUnavailable`.
+    public var unconvertedCount: Int { summaryTotals?.unconvertedCount ?? 0 }
+
+    /// The total card shows while there is an amount or a split left out.
+    public var showsTotalCard: Bool { totalOutstanding > 0 || unconvertedCount > 0 }
 
     /// `owesPage.fromPerson` / `owesPage.fromPeople`.
     public func peopleLabel() -> String {
@@ -279,9 +290,10 @@ public final class OwesModel {
         let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
-                let items = try await service.owed(recipientId: id, currency: currency)
+                let page = try await service.owed(recipientId: id, currency: currency)
                 guard self?.person?.id == id else { return }
-                self?.splits = items
+                self?.splits = page.items
+                self?.splitsTotals = page.summary
                 self?.splitsError = nil
                 self?.splitsFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
             } catch is CancellationError {
@@ -297,9 +309,12 @@ public final class OwesModel {
         if splitsInFlight?.task == task { splitsInFlight = nil }
     }
 
-    /// The open splits' remaining amounts together.
-    public var personOutstanding: Decimal {
-        (splits ?? []).reduce(Decimal(0)) { $0 + $1.remaining }
+    /// The person's total outstanding: `summary.remaining` of the detail read.
+    public var personOutstanding: Decimal { splitsTotals?.remaining ?? 0 }
+
+    /// The split's own currency: its transaction's, else the default currency.
+    public func currency(of split: OpenAPI.SplitOwedDetail) -> String {
+        split.transactionCurrency.isEmpty ? defaultCurrency : split.transactionCurrency
     }
 
     /// The split row's title: "payee - memo", else `owesPage.transaction`.
@@ -318,8 +333,7 @@ public final class OwesModel {
     /// `owesPage.original` with the note.
     public func originalText(_ split: OpenAPI.SplitOwedDetail) -> String {
         let absolute = split.transactionAmount < 0 ? -split.transactionAmount : split.transactionAmount
-        let currency = split.transactionCurrency.isEmpty ? defaultCurrency : split.transactionCurrency
-        var text = strings.t("owesPage.original", ["amount": money(absolute, currency: currency)])
+        var text = strings.t("owesPage.original", ["amount": money(absolute, currency: currency(of: split))])
         if let note = split.note, !note.isEmpty { text += " · \(note)" }
         return text
     }
@@ -346,7 +360,7 @@ public final class OwesModel {
     /// Record payment: prefilled with the remaining amount.
     public func openPayment(_ split: OpenAPI.SplitOwedDetail) {
         payment = OwesPaymentDraft(
-            splitId: split.id, remaining: split.remaining,
+            splitId: split.id, remaining: split.remaining, currency: currency(of: split),
             amountText: LocaleNumber.editable(split.remaining, format: settings.numberFormat))
     }
 
@@ -399,7 +413,8 @@ public final class OwesModel {
     /// Settle all: asks first.
     public func requestSettleAll() {
         guard let splits, !splits.isEmpty else { return }
-        confirmation = .settleAll(count: splits.count, amount: personOutstanding)
+        confirmation = .settleAll(
+            count: splits.count, amount: personOutstanding, unconvertedCount: splitsTotals?.unconvertedCount ?? 0)
     }
 
     /// Delete split: asks first.
@@ -414,10 +429,13 @@ public final class OwesModel {
     /// The alert's title and message.
     public func confirmationText() -> (title: String, message: String, action: String)? {
         switch confirmation {
-        case .settleAll(let count, let amount):
+        case .settleAll(let count, let amount, let unconvertedCount):
+            let description = strings.t(
+                "owesPage.settleAll.confirmDescription", ["count": String(count), "amount": money(amount)])
             return (
                 strings.t("owesPage.settleAll.confirmTitle"),
-                strings.t("owesPage.settleAll.confirmDescription", ["count": String(count), "amount": money(amount)]),
+                unconvertedCount > 0
+                    ? "\(description) \(strings.tc("owesPage.fxUnavailable", unconvertedCount))" : description,
                 strings.t("owesPage.settleAll.confirmAction")
             )
         case .deleteSplit:

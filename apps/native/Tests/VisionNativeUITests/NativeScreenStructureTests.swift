@@ -620,19 +620,29 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             skippedMissing: 0, items: [])
     }
 
-    func owedSummary(currency: String) async throws -> [OpenAPI.SplitOwed] {
+    func owedSummary(currency: String) async throws -> OwedSummaryPage {
         if failing { throw APIError.network("The network connection was lost.") }
-        guard !owedSplits.isEmpty else { return [] }
+        let totals = OpenAPI.OwedTotals(
+            currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
+            unconvertedCount: 0, unconvertedCurrencies: [])
+        guard !owedSplits.isEmpty else { return OwedSummaryPage(items: [], summary: totals) }
         let total = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amount }
         let paid = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amountPaid }
-        return [
-            OpenAPI.SplitOwed(
-                recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
-                splitCount: owedSplits.count, unconvertedCount: 0, unconvertedCurrencies: [])
-        ]
+        return OwedSummaryPage(
+            items: [
+                OpenAPI.SplitOwed(
+                    recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
+                    splitCount: owedSplits.count, unconvertedCount: 0, unconvertedCurrencies: [])
+            ], summary: totals)
     }
 
-    func owed(recipientId: Int, currency: String) async throws -> [OpenAPI.SplitOwedDetail] { owedSplits }
+    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+        OwedDetailPage(
+            items: owedSplits,
+            summary: OpenAPI.OwedTotals(
+                currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
+                unconvertedCount: 0, unconvertedCurrencies: []))
+    }
 
     func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
 
