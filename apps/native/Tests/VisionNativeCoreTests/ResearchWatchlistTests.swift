@@ -17,7 +17,7 @@ import Testing
         #expect(model.page?.items.first?.raw["future"] == .string("retained"))
         let requests = await transport.requests
         #expect(requests.first?.url.query == nil)
-        #expect(requests.filter { $0.url.path == "/api/research/presentation" }.count == 1)
+        #expect(await transport.presentationCalls == 1)
         let quote = try #require(requests.first { $0.url.path == "/api/market/quote" })
         #expect(
             URLComponents(url: quote.url, resolvingAgainstBaseURL: false)?.queryItems?.contains(
@@ -318,8 +318,10 @@ import Testing
         #expect(model.selectedItemID == nil && model.page?.items.map(\.id) == [1] && count == 1)
     }
 
-    private func client(_ transport: WatchlistTransport) -> APIClient {
-        APIClient(baseURL: { URL(string: "http://fixture.test") }, transport: transport, maxRetries: 0)
+    private func client(_ transport: WatchlistTransport) -> PresentationStubService {
+        PresentationStubService(
+            base: APIClient(baseURL: { URL(string: "http://fixture.test") }, transport: transport, maxRetries: 0),
+            presentation: { try await transport.presentation($0) })
     }
     private func eventually(_ predicate: () -> Bool) async {
         for _ in 0..<10_000 {
@@ -356,6 +358,7 @@ private func watchlistItem(_ id: Int, _ symbol: String, target: Decimal) -> TaxV
 
 private actor WatchlistTransport: APITransport {
     private(set) var requests: [APIRequest] = []
+    private(set) var presentationCalls = 0
     private(set) var patchBody: TaxValue?
     private(set) var createBody: TaxValue?
     private var items = [watchlistItem(2, "BBB", target: 90), watchlistItem(1, "AAA", target: 100)]
@@ -455,38 +458,37 @@ private actor WatchlistTransport: APITransport {
             items.removeAll { $0["id"]?.decimalValue == Decimal(id) }
             return .init(status: 204, body: Data())
         }
-        if path == "/api/research/presentation" {
-            let body = try requestBody(request)
-            func list(_ target: Decimal?) -> TaxValue {
-                .object([
-                    "distancePercent": .number(target == 100 ? 50 : target == 200 ? -25 : 77),
-                    "absoluteDistancePercent": .number(target == 200 ? 25 : 77),
-                    "isAtOrBelowTarget": .bool(target == 200),
-                    "sinceAddedPercent": .number(Decimal(string: "0.1234567890123456789")!),
-                ])
-            }
-            if body["kind"] == .string("watchlistBatch") {
-                let values = (body["entries"]?.arrayValue ?? []).map {
-                    .object(["id": $0["id"]!, "list": list($0["targetPrice"]?.decimalValue)]) as TaxValue
-                }
-                return try response(
-                    .object(["kind": .string("watchlistBatch"), "result": .object(["entries": .array(values)])]))
-            }
-            let target = body["targetPrice"]?.decimalValue
-            var chart = list(target)
-            chart["sinceAddedPercent"] = nil
-            chart["hasValidTarget"] = .bool(true)
-            chart["domain"] = .array([.number(10), .number(400)])
-            return try response(
-                .object([
-                    "kind": .string("watchlist"),
-                    "result": .object([
-                        "list": list(target), "chart": chart,
-                        "preview": .object(["absolutePercent": .number(12), "direction": .string("below")]),
-                    ]),
-                ]))
-        }
         throw APIError.invalidRequest("unexpected fixture path " + path)
+    }
+    /// The research presentation runs in the app: the transport only scripts and counts it.
+    func presentation(_ body: TaxValue) async throws -> TaxValue {
+        presentationCalls += 1
+        func list(_ target: Decimal?) -> TaxValue {
+            .object([
+                "distancePercent": .number(target == 100 ? 50 : target == 200 ? -25 : 77),
+                "absoluteDistancePercent": .number(target == 200 ? 25 : 77),
+                "isAtOrBelowTarget": .bool(target == 200),
+                "sinceAddedPercent": .number(Decimal(string: "0.1234567890123456789")!),
+            ])
+        }
+        if body["kind"] == .string("watchlistBatch") {
+            let values = (body["entries"]?.arrayValue ?? []).map {
+                .object(["id": $0["id"]!, "list": list($0["targetPrice"]?.decimalValue)]) as TaxValue
+            }
+            return .object(["kind": .string("watchlistBatch"), "result": .object(["entries": .array(values)])])
+        }
+        let target = body["targetPrice"]?.decimalValue
+        var chart = list(target)
+        chart["sinceAddedPercent"] = nil
+        chart["hasValidTarget"] = .bool(true)
+        chart["domain"] = .array([.number(10), .number(400)])
+        return .object([
+            "kind": .string("watchlist"),
+            "result": .object([
+                "list": list(target), "chart": chart,
+                "preview": .object(["absolutePercent": .number(12), "direction": .string("below")]),
+            ]),
+        ])
     }
     private func response(_ value: TaxValue, status: Int = 200) throws -> APIResponse {
         .init(
@@ -496,14 +498,6 @@ private actor WatchlistTransport: APITransport {
         )
     }
     private func requestBody(_ request: APIRequest) throws -> TaxValue {
-        let data = request.body ?? Data()
-        if request.headers["Content-Type"]?.hasPrefix("multipart/") == true {
-            let raw = String(decoding: data, as: UTF8.self)
-            guard let start = raw.range(of: "\r\n\r\n"),
-                let end = raw.range(of: "\r\n--", range: start.upperBound..<raw.endIndex)
-            else { throw APIError.invalidRequest("bad multipart fixture") }
-            return try JSONDecoder().decode(TaxValue.self, from: Data(raw[start.upperBound..<end.lowerBound].utf8))
-        }
-        return try JSONDecoder().decode(TaxValue.self, from: data)
+        try JSONDecoder().decode(TaxValue.self, from: request.body ?? Data())
     }
 }

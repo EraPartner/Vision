@@ -143,22 +143,24 @@ struct AnalysisPresentationTests {
             #expect(throws: APIError.self) { try AnalysisAttachment(raw: raw) }
         }
     }
-    @Test func interchangeMultipartCapturesOriginalResultAndContext() throws {
-        let result: TaxValue = .object([
-            "rows": .array([.object(["amount": .string("1234567890123456789012345678901234567890.0010")])]),
-            "unknown": .bool(true),
-        ])
-        let context: TaxValue = .object(["name": .string("Household"), "formulas": .array([])])
-        let request = try AnalysisInterchangeExportRequest(result: result, context: context, format: "csv")
-        let file = try #require(request.multipart.parts.first)
-        #expect(file.name == "file")
-        #expect(
-            try JSONDecoder().decode(TaxValue.self, from: file.data) == .object(["result": result, "context": context]))
-        #expect(request.multipart.parts.last?.data == Data("csv".utf8))
-        #expect(throws: APIError.self) {
-            try AnalysisInterchangeImportRequest(
+    @Test func interchangeRunsLocallyAndEnforcesTheImportLimits() throws {
+        #expect(throws: AnalysisInterchangeError.self) {
+            try AnalysisInterchange.importAttachment(
                 file: .init(name: "huge.csv", data: Data(count: 1_000_001)), format: "csv")
         }
+        #expect(throws: AnalysisInterchangeError.self) {
+            try AnalysisInterchange.importAttachment(
+                file: .init(name: "huge.xlsx", data: Data(count: 10_000_001)), format: "xlsx")
+        }
+        #expect(throws: AnalysisInterchangeError.self) {
+            try AnalysisInterchange.importAttachment(file: .init(name: "a.ods", data: Data()), format: "ods")
+        }
+        let attachment = try AnalysisInterchange.importAttachment(
+            file: .init(name: "inputs.csv", data: Data("Month,Cost\nJan,40.5\n".utf8)), format: "csv",
+            now: Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(attachment.columns.map(\.id) == ["month", "cost"])
+        #expect(attachment.importedAt == "2027-01-15T08:00:00.000Z")
+        #expect(attachment.rows[0]["cost"] == .string("40.5"))
     }
 }
 private func attachmentFixture() -> TaxValue {

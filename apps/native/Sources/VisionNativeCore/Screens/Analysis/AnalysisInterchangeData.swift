@@ -69,6 +69,6 @@ public struct AnalysisAttachment: Codable, Equatable, Sendable, Identifiable {
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
     static func invalid() -> APIError {
-        .contract(.init(endpoint: "/api/analysis/interchange/import", issues: ["Unverified scenario attachment"]))
+        .contract(.init(endpoint: "analysis-interchange", issues: ["Unverified scenario attachment"]))
     }
 }

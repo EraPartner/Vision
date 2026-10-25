@@ -240,9 +240,6 @@ listAnalysisMonitorNotifications
 readAnalysisMonitorNotification
 listResearchDossiers
 
-# Analysis CSV/XLSX import/export use handwritten multipart and binary operations:
-# importAnalysisInterchange, exportAnalysisInterchange.
-
 # Research home, Markets, Market lookup, Watchlist and Compare (phase 3l).
 researchSearch
 researchChart
@@ -259,7 +256,6 @@ researchResolveMappings
 researchSaveMappings
 researchDeleteMapping
 researchAuditMappings
-# computeResearchPresentation uses a handwritten submitted-data multipart operation.
 
 # Research Forecast and Chart Builder (phase 3m). Calculations remain TypeScript-owned.
 researchPortfolioForecast

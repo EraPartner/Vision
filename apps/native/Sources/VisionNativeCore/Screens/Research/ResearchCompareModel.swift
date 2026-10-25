@@ -57,7 +57,7 @@ public struct ResearchComparePresentation: Equatable, Sendable {
         return number
     }
     private static func invalid() -> APIError {
-        .contract(.init(endpoint: "/api/research/presentation", issues: ["Invalid submitted-data Compare result"]))
+        .contract(.init(endpoint: "research-presentation", issues: ["Invalid submitted-data Compare result"]))
     }
 }
 

@@ -147,7 +147,9 @@ struct ResearchCompareTests {
     }
     private func compareModel(_ transport: CompareTransport) -> ResearchCompareModel {
         ResearchCompareModel(
-            service: APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0))
+            service: PresentationStubService(
+                base: APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0),
+                presentation: { try await transport.presentation($0) }))
     }
 }
 
@@ -205,6 +207,20 @@ private actor CompareTransport: APITransport {
         paused?.resume()
         paused = nil
     }
+    /// The research presentation runs in the app: the transport only scripts and records its inputs.
+    func presentation(_ submitted: TaxValue) async throws -> TaxValue {
+        presentations.append(submitted)
+        let symbols = (submitted["series"]?.arrayValue ?? []).compactMap { $0["symbol"]?.stringValue }
+        if pause {
+            pause = false
+            await withCheckedContinuation {
+                paused = $0
+                entered?.resume()
+                entered = nil
+            }
+        }
+        return compareReply(symbols: symbols)
+    }
     func send(_ request: APIRequest) async throws -> APIResponse {
         let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let symbol = query.first { $0.name == "symbol" }?.value ?? "AAPL"
@@ -242,24 +258,6 @@ private actor CompareTransport: APITransport {
                         "flags": .array([]),
                     ]),
                 ])
-        case "/api/research/presentation":
-            let body = String(decoding: request.body ?? Data(), as: UTF8.self)
-            guard let from = body.range(of: "\r\n\r\n"),
-                let to = body.range(of: "\r\n--", range: from.upperBound..<body.endIndex)
-            else { throw APIError.invalidRequest("Malformed synthetic multipart") }
-            let submitted = try JSONDecoder().decode(
-                TaxValue.self, from: Data(body[from.upperBound..<to.lowerBound].utf8))
-            presentations.append(submitted)
-            let symbols = (submitted["series"]?.arrayValue ?? []).compactMap { $0["symbol"]?.stringValue }
-            if pause {
-                pause = false
-                await withCheckedContinuation {
-                    paused = $0
-                    entered?.resume()
-                    entered = nil
-                }
-            }
-            data = compareReply(symbols: symbols)
         default: throw APIError.invalidRequest("Unexpected synthetic Research route")
         }
         return APIResponse(

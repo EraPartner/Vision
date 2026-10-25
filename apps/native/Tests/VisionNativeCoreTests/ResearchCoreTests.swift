@@ -55,22 +55,21 @@ struct ResearchCoreTests {
         #expect(requests[2].queryItems.first { $0.name == "from_ms" }?.value == "1234567890123")
         #expect(requests[2].queryItems.first { $0.name == "db_only" }?.value == "false")
     }
-    @Test func multipartPresentationContainsCapturedRawInputsOnly() async throws {
+    @Test func presentationRunsInTheAppWithoutAnyRequest() async throws {
         let transport = ResearchCoreTransport()
         let input: TaxValue = .object([
             "kind": .string("watchlist"), "targetPrice": .number(Decimal(string: "123.456789012345678901")!),
-            "currentPrice": .null, "future": .string("retain"),
+            "currentPrice": .null, "addedPrice": .null, "future": .string("ignored"),
         ])
         let result = try await researchCoreClient(transport).researchPresentation(input)
         #expect(result["kind"] == .string("watchlist"))
-        let request = try #require(await transport.requests.last)
-        #expect(request.contentType.hasPrefix("multipart/form-data; boundary="))
-        let body = String(decoding: try #require(request.body), as: UTF8.self)
-        #expect(body.contains("name=\"file\"; filename=\"research.json\""))
-        #expect(body.contains("123.456789012345678901"))
-        #expect(body.contains("\"currentPrice\":null"))
-        #expect(!body.contains("name=\"kind\""))
-        #expect(await transport.requests.count == 1)
+        #expect(result["result"]?["chart"]?["hasValidTarget"] == .bool(true))
+        #expect(result["result"]?["list"]?["distancePercent"] == .null)
+        #expect(result["result"]?["preview"] == .null)
+        #expect(await transport.requests.isEmpty)
+        await #expect(throws: ResearchPresentationError.self) {
+            try await researchCoreClient(transport).researchPresentation(.object(["kind": .string("watchlist")]))
+        }
     }
     @Test func readCacheCoalescesSameScopeAndInvalidatedLateReadCannotPopulateFreshCache() async throws {
         let transport = ResearchCoreTransport()
@@ -270,7 +269,6 @@ struct ResearchCoreTests {
         #expect(
             afterChange.filter { $0.path == "/api/market/quote" }.count
                 == beforeChange.filter { $0.path == "/api/market/quote" }.count)
-        #expect(!afterChange.contains { $0.path == "/api/research/presentation" })
         screens.didDisappear(route: markets)
         screens.markets.region = .europe
         await Task.yield()
@@ -413,7 +411,6 @@ private actor ResearchCoreTransport: APITransport {
             payload = .object([
                 "investment_id": .number(7), "provider": .string("future-provider"), "points": .array([]),
             ])
-        case "/api/research/presentation": payload = .object(["kind": .string("watchlist"), "result": .object([:])])
         default: throw APIError.invalidRequest("Unexpected synthetic endpoint " + request.path)
         }
         var body: TaxValue = .object(["ok": .bool(true), "data": payload])
