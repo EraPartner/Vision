@@ -264,7 +264,7 @@
             let visible = limit.map { Array(rows.reversed().dropFirst(offset ?? 0).prefix($0)) } ?? rows
             return .init(
                 unconvertedCurrencies: [],
-                current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: CurrencyCode(rawValue: currency) ?? ReportingFallbackCurrency.euro),
+                current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: currency),
                 monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
                 snapshotsTotal: limit == nil ? nil : 36, snapshotsLimit: limit, snapshotsOffset: offset)
         }
@@ -286,7 +286,7 @@
             }
             rows.append(.init(accountId: nil, holdings: 50, total: 50, unconverted: false))
             total += 50
-            return .init(currency: CurrencyCode(rawValue: currency) ?? ReportingFallbackCurrency.euro, rows: rows, total: total, unconvertedAccountIds: [])
+            return .init(currency: currency, rows: rows, total: total, unconvertedAccountIds: [])
         }
         func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
             calls.append("prices")

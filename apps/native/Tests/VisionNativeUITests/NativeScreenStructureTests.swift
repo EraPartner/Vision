@@ -356,7 +356,7 @@ extension StaticPlannedService: PlannedEditingService {
 
     func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction {
         OpenAPI.PlannedTransaction(
-            id: 51, plannedDate: body.plannedDate, memo: body.memo, amount: body.amount, currency: body.currency,
+            id: 51, plannedDate: fixtureDay(body.plannedDate), memo: body.memo, amount: body.amount, currency: body.currency,
             isRecurring: true, isExecuted: false, executionCount: 0, isActive: true, links: [])
     }
 
@@ -739,7 +739,7 @@ actor StaticAccountsService: AccountsService {
             total: 1)
     }
 
-    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int { 9 }
+    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> AccountID { 9 }
     func updateAccount(id: AccountID, patch: AccountPatch) async throws {}
     func deleteAccount(id: AccountID) async throws {}
     func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? { nil }
