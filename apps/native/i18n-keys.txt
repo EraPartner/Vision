@@ -4651,4 +4651,3 @@ common.fxUnavailableTransactions.one
 common.fxUnavailableTransactions.other
 owesPage.fxUnavailable.one
 owesPage.fxUnavailable.other
-tax.fxUnavailable
