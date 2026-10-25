@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { CANDIDATE_SEPARATORS } from "./csvSeparator";
-import type { CsvNumberFormat } from "@/lib/api/imports";
+import { isCsvNumberFormat, type CsvNumberFormat } from "@/lib/api/imports";
 
 interface FormatSelectProps {
     id: string;
@@ -133,7 +133,9 @@ export function NumberFormatSelect({
             <Label htmlFor={id}>{t("importPage.numberFormat.label")}</Label>
             <Select
                 value={value}
-                onValueChange={(next) => onChange(next as CsvNumberFormat)}
+                onValueChange={(next) => {
+                    if (isCsvNumberFormat(next)) onChange(next);
+                }}
             >
                 <SelectTrigger id={id} aria-describedby={`${id}-hint`}>
                     <SelectValue />

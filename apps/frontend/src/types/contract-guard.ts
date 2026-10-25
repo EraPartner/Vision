@@ -82,6 +82,22 @@ import type {
     ScorecardFlag,
 } from "./research";
 import type { UpdateCheckStatus } from "@/lib/api/electron";
+import type {
+    CSV_NUMBER_FORMATS,
+    CsvNumberFormat,
+    ImportCsvResult,
+} from "@/lib/api/imports";
+import type {
+    PortfolioBatchPolicy,
+    PortfolioCustomConfig,
+    PortfolioImportBatchPage,
+    PortfolioReconciliationPlan,
+    PortfolioReconciliationPolicy,
+    PortfolioRowChoice,
+} from "@/lib/api/portfolioImports";
+import type { ReadParams, DbChange } from "@/lib/api/dbEditor";
+import type { AssetClass } from "@vision/types/assetClasses";
+import type { ImportBatch } from "./apiClient";
 
 type Schemas = components["schemas"];
 
@@ -464,6 +480,93 @@ export type _NumOwedDetailRemaining = Expect<
 // ── Enums: dashboard, info, aggregations, portfolio, watchlist, market.
 
 // ── Enums: transaction and portfolio imports, admin, database editor.
+
+/** Drops the index signature `z.looseObject` adds, keeping the declared keys. */
+type DeclaredKeys<T> = {
+    [K in keyof T as string extends K ? never : K]: T[K];
+};
+export type _EnumsImportBatch = Expect<
+    Matches<ImportBatch, Schemas["ImportBatch"]>
+>;
+export type _EnumsImportCsvResult = Expect<
+    Matches<ImportCsvResult, Schemas["ImportCsvResult"]>
+>;
+export type _EnumsCsvNumberFormat = Expect<
+    Matches<
+        { number_format: CsvNumberFormat },
+        { number_format: Schemas["CsvNumberFormat"] }
+    >
+>;
+// The runtime list behind `isCsvNumberFormat` must name every contract value.
+export type _EnumsCsvNumberFormatList = Expect<
+    [Schemas["CsvNumberFormat"]] extends [(typeof CSV_NUMBER_FORMATS)[number]]
+        ? true
+        : false
+>;
+// Status only: the batch-list parser also reads `account_id`, which the
+// contract's PortfolioImportBatch does not declare (key drift, reported).
+export type _EnumsPortfolioImportBatch = Expect<
+    Matches<
+        Pick<PortfolioImportBatchPage["items"][number], "status">,
+        Schemas["PortfolioImportBatch"]
+    >
+>;
+// The upload form fields the parser config flattens into (camelCase in the
+// config, snake_case on the wire). `default_type` is deliberately absent: the
+// contract lists six values, the backend accepts all of PORTFOLIO_TXN_TYPES
+// and the column mapper offers nine (see the report on the import enums).
+export type _EnumsPortfolioImportUpload = Expect<
+    Matches<
+        {
+            portfolio_format: PortfolioCustomConfig["format"];
+            yield_basis_policy: PortfolioCustomConfig["yieldBasisPolicy"];
+            default_asset_class: AssetClass;
+        },
+        Schemas["PortfolioImportUpload"]
+    >
+>;
+export type _EnumsPortfolioParserConfig = Expect<
+    Matches<
+        { yieldBasisPolicy: PortfolioCustomConfig["yieldBasisPolicy"] },
+        Schemas["PortfolioParserConfig"]["config"]
+    >
+>;
+export type _EnumsPortfolioReconciliationRequest = Expect<
+    Matches<
+        { adopt_policy: PortfolioReconciliationPolicy },
+        Schemas["PortfolioImportReconciliationRequest"]
+    >
+>;
+export type _EnumsPortfolioReconciliationBatchPolicy = Expect<
+    Matches<
+        PortfolioBatchPolicy,
+        Schemas["PortfolioImportReconciliationPlan"]["batchPolicies"][number]
+    >
+>;
+export type _EnumsPortfolioReconciliationRowChoice = Expect<
+    Matches<
+        PortfolioRowChoice,
+        Schemas["PortfolioImportReconciliationPlan"]["rowChoices"][number]
+    >
+>;
+export type _EnumsPortfolioReconciliationPlan = Expect<
+    Matches<
+        DeclaredKeys<PortfolioReconciliationPlan>,
+        Schemas["PortfolioImportReconciliationPlan"]
+    >
+>;
+export type _EnumsDbEditorReadParams = Expect<
+    Matches<
+        ReadParams,
+        NonNullable<operations["adminGetTableRows"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsDbEditorChange = Expect<
+    Matches<
+        DbChange,
+        operations["adminMutateTableRows"]["requestBody"]["content"]["application/json"]["changes"][number]
+    >
+>;
 
 // ── Enums: research, monitors, dossiers, analysis, AI.
 

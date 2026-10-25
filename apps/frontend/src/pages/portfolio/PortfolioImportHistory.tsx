@@ -129,10 +129,8 @@ export function PortfolioImportHistory({
                                             )}
                                         </span>
                                     </span>
-                                    {[
-                                        "complete",
-                                        "complete_with_errors",
-                                    ].includes(batch.status) && (
+                                    {(batch.status === "complete" ||
+                                        batch.status === "complete_with_errors") && (
                                         <Button
                                             variant="outline"
                                             size="sm"

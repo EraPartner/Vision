@@ -254,7 +254,17 @@ export async function importCSVCustom(
     );
 }
 
-export type CsvNumberFormat = "auto" | "decimal_dot" | "decimal_comma";
+export type CsvNumberFormat = components["schemas"]["CsvNumberFormat"];
+
+export const CSV_NUMBER_FORMATS = [
+    "auto",
+    "decimal_dot",
+    "decimal_comma",
+] as const satisfies readonly CsvNumberFormat[];
+
+export function isCsvNumberFormat(value: string): value is CsvNumberFormat {
+    return CSV_NUMBER_FORMATS.some((format) => format === value);
+}
 
 export interface CustomParserConfigPayload {
     dateColumn: string;
