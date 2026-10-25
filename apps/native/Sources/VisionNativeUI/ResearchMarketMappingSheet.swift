@@ -36,7 +36,7 @@ struct ResearchMarketMappingSheet: View {
                                         isOn: Binding(
                                             get: { model.selected[proposal.provider] == true },
                                             set: { model.selected[proposal.provider] = $0 })
-                                    ).labelsHidden().toggleStyle(.visionCheckbox).accessibilityLabel(proposal.provider)
+                                    ).labelsHidden().toggleStyle(.visionCheckboxLabelless).accessibilityLabel(proposal.provider)
                                 } else if proposal.fromHolding == true {
                                     Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.success)
                                         .accessibilityLabel(strings.t("research.mapping.fromHolding"))

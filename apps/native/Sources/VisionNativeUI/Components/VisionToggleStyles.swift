@@ -43,7 +43,7 @@ private struct VisionToggleRow<Control: View>: View {
     let control: Control
     var isRadio = false
     /// `false` draws the control alone; the label stays the accessibility name. A custom style does
-    /// not inherit `.labelsHidden()`, so hidden-label call sites use `.visionSwitchLabelless`.
+    /// not inherit `.labelsHidden()`, so hidden-label call sites use the `…Labelless` styles.
     var showsLabel = true
     @Environment(\.isEnabled) private var isEnabled
 
@@ -125,8 +125,11 @@ private struct VisionSwitchControl: View {
 /// bg-background/40`, `hover:border-primary/60`, checked `border-primary bg-primary` with a 14 pt
 /// check (stroke 3) and the glow `0 2px 8px -2px primary/0.35`. Use as `.toggleStyle(.visionCheckbox)`.
 struct VisionCheckboxToggleStyle: ToggleStyle {
+    var showsLabel = true
     func makeBody(configuration: Configuration) -> some View {
-        VisionToggleRow(configuration: configuration, control: VisionCheckboxControl(isOn: configuration.isOn))
+        VisionToggleRow(
+            configuration: configuration, control: VisionCheckboxControl(isOn: configuration.isOn),
+            showsLabel: showsLabel)
     }
 }
 
@@ -224,6 +227,11 @@ extension ToggleStyle where Self == VisionSwitchToggleStyle {
 extension ToggleStyle where Self == VisionCheckboxToggleStyle {
     /// Replaces `.toggleStyle(.checkbox)`.
     static var visionCheckbox: VisionCheckboxToggleStyle { VisionCheckboxToggleStyle() }
+}
+
+extension ToggleStyle where Self == VisionCheckboxToggleStyle {
+    /// `.visionCheckbox` without the visible label; the label stays the VoiceOver name.
+    static var visionCheckboxLabelless: VisionCheckboxToggleStyle { VisionCheckboxToggleStyle(showsLabel: false) }
 }
 
 extension ToggleStyle where Self == VisionRadioToggleStyle {

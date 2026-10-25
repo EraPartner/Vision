@@ -91,7 +91,7 @@ struct TaxWidgetsSheet: View {
                                 get: { model.isVisible(widget.id) },
                                 set: { value in Task { await model.setVisible(widget.id, value) } })
                         )
-                        .labelsHidden().toggleStyle(.visionSwitch)
+                        .labelsHidden().toggleStyle(.visionSwitchLabelless)
                         .disabled(model.isSaving || !model.isLoaded)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)

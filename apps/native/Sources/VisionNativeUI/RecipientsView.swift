@@ -855,7 +855,7 @@ struct MatchRulesSheet: View {
                 strings.t("recipientPatterns.activeFor", ["pattern": rule.pattern]),
                 isOn: Binding(get: { rule.isActive }, set: { _ in Task { await model.toggleRule(rule) } })
             )
-            .toggleStyle(.visionSwitch)
+            .toggleStyle(.visionSwitchLabelless)
             .labelsHidden()
             .disabled(state.isSaving)
             .accessibilityLabel(strings.t("recipientPatterns.activeFor", ["pattern": rule.pattern]))

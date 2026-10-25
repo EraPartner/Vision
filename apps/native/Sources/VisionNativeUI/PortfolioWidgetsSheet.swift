@@ -61,7 +61,7 @@ struct PortfolioWidgetsSheet: View {
                                 isOn: Binding(
                                     get: { visible(widget.id) },
                                     set: { value in Task { await setVisible(widget.id, value) } })
-                            ).labelsHidden().toggleStyle(.visionSwitch)
+                            ).labelsHidden().toggleStyle(.visionSwitchLabelless)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         if widget.id != definitions.last?.id { Divider().padding(.leading, 16) }

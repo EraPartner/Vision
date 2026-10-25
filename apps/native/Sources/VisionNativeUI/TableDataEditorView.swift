@@ -425,7 +425,7 @@ public struct TableDataEditorView: View {
             ) {
                 Text(label)
             }
-            .toggleStyle(.visionCheckbox)
+            .toggleStyle(.visionCheckboxLabelless)
             .labelsHidden()
             .disabled(!editable)
             .accessibilityLabel(label)
