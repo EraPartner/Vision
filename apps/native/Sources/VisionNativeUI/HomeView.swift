@@ -390,7 +390,7 @@ public struct HomeView: View {
                 routeRow(
                     account.displayName ?? account.name, route: "/accounts/\(account.id.rawValue)",
                     subtitle: [
-                        strings.t("accounts.type.\(account.type)"),
+                        strings.t(HomeModel.accountTypeKey(account)),
                         AccountProvenance.text(account, settings: settings, strings: strings),
                     ]
                     .compactMap { $0 }.joined(separator: " · "),

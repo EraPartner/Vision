@@ -212,6 +212,7 @@ private struct VisionModalTraits: ViewModifier {
 
     func body(content: Content) -> some View {
         let base = content
+            .environment(\.visionContainerOwnsFocus, panelFocused.wrappedValue)
             .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isModal)
             // Focus stays in the panel: it is the landing for Escape when no control inside has

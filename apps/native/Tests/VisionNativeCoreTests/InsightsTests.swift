@@ -46,6 +46,22 @@ struct InsightsTests {
         #expect(pace.income == 100)
     }
 
+    /// Regression: the web CashFlowForecastChart starts with the "With planned" switch off.
+    @Test func forecastOptionsStartWithoutPlanned() {
+        #expect(!InsightForecastOptions().includePlanned)
+        #expect(InsightForecastOptions().queryItems.contains(URLQueryItem(name: "include_planned", value: "false")))
+    }
+
+    /// Regression: the Statistics "Exclusions on" toggle follows the scope (web `exclusionsApply`),
+    /// not whether anything is currently excluded.
+    @Test func exclusionToggleFollowsScopeEvenWithNothingExcluded() {
+        let empty: JSONValue = .object(["exclusionScope": .string("everywhere")])
+        let everywhere = InsightExclusions.resolve(settings: empty, scope: "statistics", hiddenIds: [])
+        #expect(everywhere.isEmpty && everywhere.applies)
+        let other: JSONValue = .object(["exclusionScope": .string("dashboard")])
+        #expect(!InsightExclusions.resolve(settings: other, scope: "statistics", hiddenIds: []).applies)
+    }
+
     @Test func exclusionsRespectScopeAndResolveHiddenHierarchyNodes() {
         let settings: JSONValue = .object([
             "exclusionScope": .string("statistics"),

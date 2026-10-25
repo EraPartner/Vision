@@ -38,17 +38,20 @@ public struct AIChatView: View {
                 .visionAccessibilityLabel(strings.t("aiChat.mode.label")).fixedSize()
             }
             HStack(alignment: .top, spacing: isChat && width >= 768 ? 16 : 0) {
-                AIChatConversationRail(model: model, shell: shell)
-                    .frame(width: isChat && width >= 768 ? 272 : 0)
-                    .opacity(isChat && width >= 768 ? 1 : 0).clipped()
-                    .disabled(!isChat || width < 768).allowsHitTesting(isChat && width >= 768)
-                    .accessibilityHidden(!isChat || width < 768)
+                // Only the active tab is mounted: a hidden Investigation (or Chat) view must not
+                // stay in the accessibility tree.
+                if isChat && width >= 768 {
+                    AIChatConversationRail(model: model, shell: shell)
+                        .frame(width: 272)
+                }
                 ZStack {
-                    chatRegion
-                        .opacity(isChat ? 1 : 0).disabled(!isChat).allowsHitTesting(isChat).accessibilityHidden(!isChat)
-                    ScrollView {
-                        AIInvestigationView(model: investigation, shell: shell)
-                    }.opacity(isChat ? 0 : 1).disabled(isChat).allowsHitTesting(!isChat).accessibilityHidden(isChat)
+                    if isChat {
+                        chatRegion
+                    } else {
+                        ScrollView {
+                            AIInvestigationView(model: investigation, shell: shell)
+                        }
+                    }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                     .visionCardBackground()

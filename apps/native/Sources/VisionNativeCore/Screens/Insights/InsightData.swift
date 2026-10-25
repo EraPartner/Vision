@@ -125,9 +125,14 @@ public struct HomeNetWorth: Decodable, Equatable, Sendable {
 public struct InsightExclusions: Equatable, Sendable {
     public var categoryIds: [CategoryID]
     public var recipientIds: [RecipientID]
-    public init(categoryIds: [CategoryID] = [], recipientIds: [RecipientID] = []) {
+    /// Whether the configured exclusion scope covers the surface that resolved this value
+    /// (`useExcludedIds().exclusionsApply`). The Statistics toggles show whenever it is true,
+    /// even with nothing excluded; the ids alone only say what to filter.
+    public var applies: Bool
+    public init(categoryIds: [CategoryID] = [], recipientIds: [RecipientID] = [], applies: Bool = true) {
         self.categoryIds = Array(Set(categoryIds)).sorted()
         self.recipientIds = Array(Set(recipientIds)).sorted()
+        self.applies = applies
     }
     public var isEmpty: Bool { categoryIds.isEmpty && recipientIds.isEmpty }
     public var queryItems: [URLQueryItem] {
@@ -143,7 +148,7 @@ public struct InsightExclusions: Equatable, Sendable {
     {
         let configuredScope = normalizedScope(settings)
         guard configuredScope == "everywhere" || configuredScope == scope else {
-            return InsightExclusions()
+            return InsightExclusions(applies: false)
         }
         let ids: (String) -> [Int] = { key in
             guard let values = settings?[key]?.arrayValue,

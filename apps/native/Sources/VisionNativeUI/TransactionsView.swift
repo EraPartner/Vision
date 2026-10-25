@@ -125,11 +125,17 @@ public struct TransactionsView: View {
                 TransactionFilterBanner(model: model, strings: strings)
             }
             HStack(alignment: .top, spacing: 16) {
+                // `minWidth: 0` lets the docked inspector take its share first: the card's rows have
+                // a wide intrinsic width, so without it the HStack kept that width, pushed the
+                // inspector off the window and the table never measured a width small enough to
+                // switch to the stacked layout.
                 TransactionsTableCard(model: model, shell: shell)
-                    .frame(maxWidth: .infinity)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .layoutPriority(0)
                 if isDocked, let row = model.selectedRow, let inspector = model.inspector {
                     TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: true)
                         .frame(width: TransactionsModel.inspectorWidth)
+                        .layoutPriority(1)
                 }
             }
         }

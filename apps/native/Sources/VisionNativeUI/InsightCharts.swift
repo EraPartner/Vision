@@ -24,7 +24,11 @@ struct InsightTimelineChart: View {
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
-    @Environment(\.locale) private var locale
+    /// Month names follow the app language (web `appLanguageToLocale`), never the environment
+    /// locale, which several hosts set to the number-format locale for digits.
+    private var locale: Locale {
+        LanguageLocale.locale(NativeLanguage(rawValue: settings.language.rawValue) ?? .en)
+    }
 
     private var keys: [String] { Array(Set(series.flatMap { $0.points.map(\.key) })).sorted() }
     private var colors: [Color] {

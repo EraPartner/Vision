@@ -91,6 +91,8 @@ public final class StatisticsModel {
     public var isLoading: Bool { filtered == nil && error == nil }
     public var hasData: Bool { !(filtered?.monthly.months.isEmpty ?? true) }
     public var hasExclusions: Bool { !exclusions.isEmpty }
+    /// The web `ExclusionToggle` gate on Statistics: the scope applies, whether or not anything is excluded.
+    public var showsExclusionToggle: Bool { exclusions.applies }
     public var currentPeriod: String {
         frozenPeriod ?? String(StatisticsWindow.day(now(), calendar: calendar).prefix(7))
     }

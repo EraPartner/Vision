@@ -349,6 +349,10 @@ public final class HomeModel {
     public var plannedIncoming: Decimal { plannedTotals?.restOfMonth.incoming ?? 0 }
     /// The hero's Planned out: `rest_of_month.outgoing` (negative or zero).
     public var plannedOutgoing: Decimal { plannedTotals?.restOfMonth.outgoing ?? 0 }
+    /// Catalog key of an account's type subtitle (`accounts.type.crypto_exchange`, never the Swift case name).
+    public nonisolated static func accountTypeKey(_ account: OpenAPI.Account) -> String {
+        "accounts.type.\(account.type.rawValue)"
+    }
     /// `AccountsList`: the active accounts with the largest server-converted balance first. An
     /// account whose balance has an unconverted partition, or no balance, follows in list order.
     public var sortedAccounts: [OpenAPI.Account] {

@@ -503,6 +503,8 @@ public struct StatisticsView: View {
     private var recipients: some View {
         VStack(alignment: .leading, spacing: 20) {
             recipientOverview
+            // Web order: the month-over-month card sits above the (long) details table.
+            recipientMonthChanges
             if let data = model.filtered?.recipients {
                 if isPrinting {
                     recipientPrintTable
@@ -530,7 +532,6 @@ public struct StatisticsView: View {
                     }
                 }
             }
-            recipientMonthChanges
         }
     }
     private var recipientOverview: some View {
@@ -857,7 +858,7 @@ public struct StatisticsView: View {
                 }
             }
             var headings = [strings.t("statsPage.pivotTitle")]
-            if model.hasExclusions {
+            if model.showsExclusionToggle {
                 headings.append(
                     strings.t(
                         model.graphExclusions["pivotTable"] != false
@@ -977,14 +978,14 @@ public struct StatisticsView: View {
                 HStack {
                     Text(strings.t(title)).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     Spacer()
-                    if let graph, model.hasExclusions, isPrinting {
+                    if let graph, model.showsExclusionToggle, isPrinting {
                         Text(
                             strings.t(
                                 model.graphExclusions[graph] != false
                                     ? "exclusion.filtersActive" : "exclusion.filtersIgnored")
                         ).font(.caption)
                     }
-                    if let graph, model.hasExclusions, !isPrinting {
+                    if let graph, model.showsExclusionToggle, !isPrinting {
                         InsightToggleButton(
                             strings.t(
                                 model.graphExclusions[graph] != false

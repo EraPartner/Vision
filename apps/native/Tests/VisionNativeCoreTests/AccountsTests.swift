@@ -1123,3 +1123,11 @@ enum AccountsFixture {
         #expect(entries.last?.value == "Yes")
     }
 }
+
+@Suite struct HomeAccountTypeKeyTests {
+    /// Regression: the Home accounts card interpolated the Swift case name ("cryptoExchange").
+    @Test func homeAccountTypeKeyUsesTheWireValue() {
+        let account = AccountsFixture.account(1, "Bitvavo", type: "crypto_exchange")
+        #expect(HomeModel.accountTypeKey(account) == "accounts.type.crypto_exchange")
+    }
+}
