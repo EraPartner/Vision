@@ -51,6 +51,7 @@ struct NativeOverlayFocusReturnBridge: NSViewRepresentable {
     private var isPresented = false
     private var lastFocus: NativeOverlayFocusSnapshot?
     private var opener: NativeOverlayFocusSnapshot?
+    // lint:allow explicit-any opaque AppKit event monitor token
     private var monitor: Any?
     private var revision = 0
     private var restoration: Task<Void, Never>?

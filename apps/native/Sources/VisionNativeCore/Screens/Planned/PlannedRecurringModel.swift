@@ -31,6 +31,7 @@ public struct PlannedDismissalStore: Sendable {
         return PlannedDismissalStore(read: { box.get() }, write: { box.set($0) })
     }
 
+    // lint:allow unchecked-sendable value guarded by an NSLock
     private final class MemoryBox: @unchecked Sendable {
         private let lock = NSLock()
         private var value: String?

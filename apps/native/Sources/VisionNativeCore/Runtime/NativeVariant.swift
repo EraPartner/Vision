@@ -18,6 +18,7 @@ public enum NativeVariant: String, Sendable, CaseIterable {
 
     /// An unknown or missing value is the standard variant: a build without the key
     /// predates phase 1e and owns the "Vision Native" directory.
+    // lint:allow explicit-any Info.plist values are untyped
     public static func fromInfoPlist(_ value: Any?) -> NativeVariant {
         (value as? String).flatMap(NativeVariant.init(rawValue:)) ?? .standard
     }

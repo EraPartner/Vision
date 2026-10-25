@@ -104,17 +104,20 @@ public final class NativeReportHTMLPrinter: NSObject, WKNavigationDelegate {
 
     // MARK: WKNavigationDelegate
 
+    // lint:allow implicit-unwrap WKNavigationDelegate signature fixed by WebKit
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded?.resume()
         loaded = nil
     }
 
+    // lint:allow implicit-unwrap WKNavigationDelegate signature fixed by WebKit
     public func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
         loaded?.resume(throwing: Failure.loadFailed(error.localizedDescription))
         loaded = nil
     }
 
     public func webView(
+        // lint:allow implicit-unwrap WKNavigationDelegate signature fixed by WebKit
         _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error
     ) {
         loaded?.resume(throwing: Failure.loadFailed(error.localizedDescription))

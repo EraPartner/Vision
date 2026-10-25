@@ -138,6 +138,7 @@ public enum VisionFormat {
     /// Formatters are costly to create and table rows parse a timestamp per cell, so the
     /// parsers are built once. They are never mutated after creation, and Foundation's date
     /// formatters are thread-safe for parsing.
+    // lint:allow nonisolated-unsafe immutable after creation, formatters are thread-safe for parsing
     private nonisolated(unsafe) static let isoTimestampParsers: [ISO8601DateFormatter] = {
         let variants: [ISO8601DateFormatter.Options] = [
             [.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime],
@@ -152,6 +153,7 @@ public enum VisionFormat {
     private static let localTimestampParsers = LocalTimestampParsers()
 
     /// The zone-less timestamp parsers, one set per time zone.
+    // lint:allow unchecked-sendable cache guarded by an NSLock
     private final class LocalTimestampParsers: @unchecked Sendable {
         private let lock = NSLock()
         private var byZone: [TimeZone: [DateFormatter]] = [:]

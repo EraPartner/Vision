@@ -172,6 +172,7 @@ struct NativeOverlayFocusBridge: NSViewRepresentable {
         private var kind: NativeShellOverlayKind?
         private var context: NativeOverlayFocusContext
         private var snapshots: [String: NativeOverlayFocusSnapshot] = [:]
+        // lint:allow explicit-any opaque AppKit event monitor token
         private var monitor: Any?
         private var restoring: Task<Void, Never>?
         init(kind: NativeShellOverlayKind?, context: NativeOverlayFocusContext) {

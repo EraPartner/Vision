@@ -133,6 +133,7 @@ enum ResearchCompareStyle {
     }
     /// Table cells format one value each; the common digit counts reuse prebuilt formatters,
     /// which are never mutated after creation (NumberFormatter is thread-safe for formatting).
+    // lint:allow nonisolated-unsafe immutable after creation, only read on the main actor
     private nonisolated(unsafe) static let fixedFormatters: [NumberFormatter] = (0...4).map {
         ResearchCompareStyle.fixedFormatter($0)
     }

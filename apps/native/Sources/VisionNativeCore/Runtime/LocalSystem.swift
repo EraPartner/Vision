@@ -4,6 +4,7 @@ import Foundation
 import Security
 
 /// A value guarded by a lock, for state shared with Foundation callbacks.
+// lint:allow unchecked-sendable state guarded by an NSLock or confined to one callback
 final class LockedValue<Value>: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Value
@@ -21,6 +22,7 @@ final class LockedValue<Value>: @unchecked Sendable {
 
 /// Carries a non-Sendable Foundation object across a concurrency boundary. Every use
 /// is confined to one callback at a time.
+// lint:allow unchecked-sendable state guarded by an NSLock or confined to one callback
 final class UncheckedBox<Value>: @unchecked Sendable {
     let value: Value
 
@@ -30,6 +32,7 @@ final class UncheckedBox<Value>: @unchecked Sendable {
 }
 
 /// Waits for a `Process` termination without racing the termination handler.
+// lint:allow unchecked-sendable state guarded by an NSLock or confined to one callback
 private final class ExitWaiter: @unchecked Sendable {
     private let lock = NSLock()
     private var status: Int32?
@@ -59,6 +62,7 @@ private final class ExitWaiter: @unchecked Sendable {
 
 /// Collects one pipe's output through `readabilityHandler`, so waiting for EOF can be
 /// bounded: a grandchild that inherited the pipe may keep it open after the child exits.
+// lint:allow unchecked-sendable state guarded by an NSLock or confined to one callback
 private final class PipeCollector: @unchecked Sendable {
     private let lock = NSLock()
     private let handle: FileHandle

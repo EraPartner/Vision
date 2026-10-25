@@ -13,6 +13,7 @@ public enum NativePaletteCalculator {
     }
 
     // `FX_QUERY`; JavaScript's `\d` is ASCII only.
+    // lint:allow force-try static literal pattern, validated by tests
     private static let fxPattern = try! NSRegularExpression(
         pattern: #"^([0-9.,'’]+)\s*([a-zA-Z]{3})(?:\s+(?:in|to|naar)\s+([a-zA-Z]{3}))?$"#)
     // `CALC_QUERY`.

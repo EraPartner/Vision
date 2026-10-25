@@ -21,7 +21,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | -------------------------------------- | ------------------------------------------------------------------------------ |
 | `project.yml`                          | XcodeGen spec for the "Vision Native" app target                               |
 | `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                                      |
-| `VisionNative/`                        | AppKit app, window, menus and the native shell host                           |
+| `VisionNative/`                        | AppKit app, window, menus and the native shell host                            |
 | `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`                          |
 | `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
 | `Sources/VisionNativeCore/Shell/`      | Shell state store, menus, appearance, CSV handoff                              |
@@ -50,6 +50,9 @@ xcodegen generate --spec apps/native/project.yml
 xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
 swift test --package-path apps/native
 ```
+
+`bun run native:test-generators` also runs the Swift ban-list lint (`scripts/native-lint.ts`, ratchet in
+`apps/native/lint-baseline.txt`); annotate a justified exception with `// lint:allow <rule> <reason>`.
 
 ## Install
 
@@ -321,8 +324,8 @@ these steps touches Electron Vision or its data.
    Cut, Copy and Paste. Note whether spelling guesses, Learn Spelling and Select All appear; this
    settles rows #203 to #205 of the exit checklist.
 9. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services
-    running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
-    is in the backup folder, and port 54332 is no longer listening.
+   running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
+   is in the backup folder, and port 54332 is no longer listening.
 10. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
     canonical Demo data is back.
 11. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF

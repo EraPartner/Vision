@@ -203,9 +203,9 @@ public final class TaxProfileModel {
                             return OpenAPI.Setting(
                                 key: key, value: json, expected: .object(["exists": .bool(true), "value": json]))
                         }
-                        live = patch.settings[TaxYearMutation.householdKey]!
-                        snapshots = patch.settings[TaxYearMutation.snapshotsKey]!
-                        metadata = patch.settings[TaxYearMutation.metadataKey]!
+                        live = patch.settings[TaxYearMutation.householdKey] ?? live
+                        snapshots = patch.settings[TaxYearMutation.snapshotsKey] ?? snapshots
+                        metadata = patch.settings[TaxYearMutation.metadataKey] ?? metadata
                         committed = writing
                         hasPendingChanges = draft.value != writing
                         error = nil

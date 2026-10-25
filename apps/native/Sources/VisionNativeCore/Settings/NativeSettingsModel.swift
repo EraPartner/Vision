@@ -432,9 +432,10 @@ public final class NativeSettingsModel {
     }
     private func changed(_ key: String, _ value: TaxValue) {
         guard !retired else { return }
-        editRevision[key, default: 0] += 1
+        let revision = editRevision[key, default: 0] + 1
+        editRevision[key] = revision
         pendingDrafts[key] = value
-        if !isSuspendedForRestore { schedule(key, value: value, revision: editRevision[key]!) }
+        if !isSuspendedForRestore { schedule(key, value: value, revision: revision) }
     }
     private func schedule(_ key: String, value: TaxValue, revision: Int) {
         timers[key]?.cancel()
