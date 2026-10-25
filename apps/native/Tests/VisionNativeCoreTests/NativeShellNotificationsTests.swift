@@ -277,7 +277,7 @@ struct NativeShellNotificationsTests {
         -> OpenAPI.PlannedTransaction
     {
         .init(
-            id: PlannedTransactionID(rawValue: id), plannedDate: date, amount: Decimal(string: "-12.34")!, isRecurring: recurring,
+            id: PlannedTransactionID(rawValue: id), plannedDate: CalendarDay(stringLiteral: date), amount: Decimal(string: "-12.34")!, isRecurring: recurring,
             isExecuted: executed, executionCount: executed ? 1 : 0, isActive: true, links: [])
     }
 }

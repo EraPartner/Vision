@@ -18,7 +18,7 @@ extension CurrencyCode: ExpressibleByStringLiteral {
 /// Test-only string literals for calendar days (`"2026-10-09"`) and timestamps
 /// (`"2026-10-09T08:05:00.000Z"`), like the currency code literals above. Production code reads
 /// them from decoded models or `CalendarDay(_:)` / `Instant(_:)`. Trap on a malformed literal.
-extension CalendarDay: @retroactive ExpressibleByStringLiteral {
+extension CalendarDay: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
         guard let day = CalendarDay(value) else {
             preconditionFailure("\"\(value)\" is not a calendar day (YYYY-MM-DD)")
@@ -27,7 +27,7 @@ extension CalendarDay: @retroactive ExpressibleByStringLiteral {
     }
 }
 
-extension Instant: @retroactive ExpressibleByStringLiteral {
+extension Instant: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
         guard let instant = Instant(value) else {
             preconditionFailure("\"\(value)\" is not an ISO 8601 timestamp with a zone")

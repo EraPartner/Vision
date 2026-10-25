@@ -200,14 +200,14 @@ actor SleepRecorder {
         #expect(await transport.requests.count == 3)
     }
 
-    @Test func explicitZeroRetryDoesNotReplayAConditionalSettingsPut() async {
+    @Test func explicitZeroRetryDoesNotReplayAConditionalSettingsPut() async throws {
         let transport = FakeTransport([
             .response(503, ""),
             .response(200, #"{"ok":true,"data":{"key":"app_settings","value":{"language":"nl"}}}"#),
         ])
         let operation = OpenAPIOperations.SaveSetting(
             key: "app_settings",
-            body: .init(value: .object(["language": .string("nl")]), expected: .object(["exists": .bool(false)])))
+            body: .init(value: .object(["language": .string("nl")]), expected: try .init(json: .object(["exists": .bool(false)]))))
         await #expect(
             throws: APIError.client(
                 APIClientError(status: 503, code: .serviceUnavailable, message: "Request failed (status 503)"))

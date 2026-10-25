@@ -42,7 +42,7 @@ actor FakePlannedEditingService: PlannedEditingService {
         created.append(body)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
-            id: PlannedTransactionID(rawValue: 100 + created.count), plannedDate: body.plannedDate, accountId: body.accountId,
+            id: PlannedTransactionID(rawValue: 100 + created.count), plannedDate: CalendarDay(stringLiteral: body.plannedDate), accountId: body.accountId,
             recipientId: body.recipientId, memo: body.memo, amount: body.amount, currency: body.currency,
             categoryId: body.categoryId, isRecurring: body.isRecurring ?? false,
             recurrencePattern: body.recurrencePattern, isLoan: body.isLoan, isExecuted: false, executionCount: 0,
@@ -53,7 +53,7 @@ actor FakePlannedEditingService: PlannedEditingService {
         tracked.append(body)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
-            id: PlannedTransactionID(rawValue: 200 + tracked.count), plannedDate: body.plannedDate, accountId: body.accountId,
+            id: PlannedTransactionID(rawValue: 200 + tracked.count), plannedDate: CalendarDay(stringLiteral: body.plannedDate), accountId: body.accountId,
             recipientId: body.recipientId, memo: body.memo, amount: body.amount, currency: body.currency,
             categoryId: body.categoryId, isRecurring: true, recurrencePattern: body.recurrencePattern, isExecuted: false,
             executionCount: 0, isActive: true, links: [])

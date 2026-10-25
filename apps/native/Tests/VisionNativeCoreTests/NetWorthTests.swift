@@ -216,7 +216,7 @@ struct NativeNetWorthPrintTests {
 }
 
 private func snapshot(_ date: String, _ value: Decimal) -> OpenAPI.NetWorthSnapshot {
-    .init(date: date, liquid: 0, liabilities: 0, investments: value, netWorth: value)
+    .init(date: CalendarDay(stringLiteral: date), liquid: 0, liabilities: 0, investments: value, netWorth: value)
 }
 private actor NetWorthFake: NetWorthService {
     struct Call: Sendable {

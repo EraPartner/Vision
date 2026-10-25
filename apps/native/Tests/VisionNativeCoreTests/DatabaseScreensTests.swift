@@ -341,7 +341,7 @@ enum DatabaseFixture {
         #expect(update.op == .update)
         #expect(update.pk == JSONValue.object(["id": .int(1)]))
         #expect(update.set == JSONValue.object(["name": .null]))
-        #expect(update.xmin == JSONValue.string("100"))
+        #expect(update.xmin == .string("100"))
         let delete = TableChange.delete(pk: ["id": .int(2)], xmin: nil).item
         #expect(delete.op == .delete)
         #expect(delete.xmin == nil && delete.values == nil)
