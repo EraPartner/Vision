@@ -2,7 +2,7 @@
 title: Observability Layer (API Inspector)
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-25
 tags:
   [
     feature,
@@ -51,6 +51,10 @@ The observability layer provides developers with granular visibility into:
 Exports a module-scoped event emitter that:
 
 - Emits `ApiRequestEvent` on every request lifecycle phase (start, success, error)
+- Pairs every `start` with exactly one `success` or `error` per attempt, including an attempt that
+  gets a retryable status (logged as `error` with that status) and one cancelled during the retry
+  back-off. An unpaired `start` keeps the inspector icon pulsing until reload; the pulsing
+  icon was running during the post-launch GPU burn measured on 2026-10-25.
 - Maintains zero-cost operation when no subscribers attached (no event loop pollution)
 - Carries complete request metadata including requestId, endpoint, method, duration, status, and error context
 
