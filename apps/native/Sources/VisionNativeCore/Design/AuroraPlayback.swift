@@ -79,3 +79,42 @@ public struct AuroraDriftClock: Sendable, Equatable {
         return coordinate((low + high) / 2, curve.y1, curve.y2)
     }
 }
+
+/// One aurora blob (`::before` / `::after` of `.liquid-canvas`) for a canvas size: where it sits,
+/// and the scale and offset its drift moves between (`aurora-drift-a-smooth` /
+/// `aurora-drift-b-smooth`). Core Animation plays the drift, as the browser compositor plays the
+/// CSS keyframes, so the app does no per-frame work for it.
+public struct AuroraBlobDrift: Sendable, Equatable {
+    public let diameter: Double
+    /// The blob's centre at rest, in canvas points from the top-left corner.
+    public let centerX: Double
+    public let centerY: Double
+    public let startScale: Double
+    public let endScale: Double
+    /// The offset at the far end of a leg; the drift scales it by the eased progress.
+    public let offsetX: Double
+    public let offsetY: Double
+    /// Seconds per leg; the way back plays the same leg in reverse (CSS `alternate`).
+    public let duration: Double
+
+    /// The primary blob: 55 % of the width (at least 544 pt) from the top-left corner.
+    public static func first(width: Double, height: Double) -> AuroraBlobDrift {
+        let diameter = max(width * 0.55, 544)
+        return AuroraBlobDrift(
+            diameter: diameter, centerX: -width * 0.12 + diameter / 2, centerY: -height * 0.18 + diameter / 2,
+            startScale: 1, endScale: 1.18, offsetX: width * 0.14, offsetY: height * 0.09, duration: 64)
+    }
+
+    /// The accent blob: 48 % of the width (at least 480 pt) from the bottom-right corner.
+    public static func second(width: Double, height: Double) -> AuroraBlobDrift {
+        let diameter = max(width * 0.48, 480)
+        return AuroraBlobDrift(
+            diameter: diameter, centerX: width * 1.1 - diameter / 2, centerY: height * 1.22 - diameter / 2,
+            startScale: 1.12, endScale: 0.96, offsetX: -width * 0.11, offsetY: -height * 0.07, duration: 76)
+    }
+
+    /// Scale and offset at eased progress `progress` (0 at rest, 1 at the end of a leg).
+    public func pose(at progress: Double) -> (scale: Double, x: Double, y: Double) {
+        (startScale + (endScale - startScale) * progress, offsetX * progress, offsetY * progress)
+    }
+}

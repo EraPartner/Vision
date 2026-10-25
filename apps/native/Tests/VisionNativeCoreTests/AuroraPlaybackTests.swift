@@ -54,4 +54,23 @@ import Testing
         // The way back mirrors the way out in time.
         #expect(abs(progress(64 + 16) - progress(64 - 16)) < 1e-9)
     }
+
+    @Test func theBlobsKeepTheirCSSPlacementAndDriftEnds() {
+        func close(_ value: Double, _ expected: Double) -> Bool { abs(value - expected) < 1e-9 }
+        let first = AuroraBlobDrift.first(width: 1000, height: 800)
+        #expect(close(first.diameter, 550))
+        #expect(close(first.centerX, 155) && close(first.centerY, 131))
+        #expect(first.duration == 64)
+        let firstEnd = first.pose(at: 1)
+        #expect(close(firstEnd.scale, 1.18) && close(firstEnd.x, 140) && close(firstEnd.y, 72))
+        let second = AuroraBlobDrift.second(width: 1000, height: 800)
+        #expect(close(second.diameter, 480))
+        #expect(close(second.centerX, 860) && close(second.centerY, 736))
+        #expect(second.duration == 76)
+        let rest = second.pose(at: 0)
+        #expect(close(rest.scale, 1.12) && close(rest.x, 0) && close(rest.y, 0))
+        // A narrow window keeps the minimum diameters.
+        #expect(close(AuroraBlobDrift.first(width: 600, height: 400).diameter, 544))
+        #expect(close(AuroraBlobDrift.second(width: 600, height: 400).diameter, 480))
+    }
 }

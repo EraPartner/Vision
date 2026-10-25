@@ -68,7 +68,9 @@ struct AuroraCanvas: View {
                         // the blobs drifting under it (index.css "Full effects": "also under the
                         // live WebGL aurora"); static atmosphere and reduced motion hold.
                         animated: (!enhanced || fullEffects) && !staticAtmosphere && !reduceMotion,
-                        running: windowLive)
+                        running: windowLive
+                    )
+                    .frame(width: proxy.size.width, height: proxy.size.height)
                     if enhanced {
                         AuroraShaderView(
                             primary: theme.palette.primary, accent: theme.palette.accent,
@@ -100,8 +102,10 @@ struct AuroraCanvas: View {
 /// `aurora-drift-b-smooth` (76 s), infinite alternate on `--ease-in-out-quart`: the
 /// `:root.fx-full:not(.fx-static-atmosphere) .liquid-canvas` path (index.css "Full effects").
 /// The caller turns `animated` off for static atmosphere, Reduce Motion and the Enhanced
-/// shader, which are the cases where the web rule does not apply.
-private struct AuroraBlobs: View {
+/// shader, which are the cases where the web rule does not apply. Core Animation plays the
+/// drift in the render server, as the browser compositor plays the CSS keyframes, so the app
+/// does no per-frame work for it.
+private struct AuroraBlobs: NSViewRepresentable {
     let size: CGSize
     let first: Color
     let second: Color
@@ -110,61 +114,113 @@ private struct AuroraBlobs: View {
     let animated: Bool
     /// The window is live; the drift holds its position while it is not.
     let running: Bool
-    @State private var clock = AuroraDriftClock()
 
-    var body: some View {
-        Group {
-            if animated { driftingBlobs } else { blobs(firstProgress: 0, secondProgress: 0) }
-        }
-        .onAppear { clock.setRunning(running, now: Date.now.timeIntervalSinceReferenceDate) }
-        .onChange(of: running) { _, live in
-            clock.setRunning(live, now: Date.now.timeIntervalSinceReferenceDate)
-        }
+    func makeNSView(context: Context) -> AuroraBlobLayerView { AuroraBlobLayerView() }
+
+    func updateNSView(_ view: AuroraBlobLayerView, context: Context) {
+        view.apply(
+            AuroraBlobLayerView.State(
+                size: size, first: NSColor(first.opacity(firstAlpha)).cgColor,
+                second: NSColor(second.opacity(secondAlpha)).cgColor, animated: animated, running: running))
+    }
+}
+
+/// Two radial gradient layers and their drift animations. The drift clock counts only the time
+/// the drift ran, so a pause holds the blobs where they are and a resume, or a new canvas size,
+/// continues from there (`animation-play-state: paused`).
+@MainActor final class AuroraBlobLayerView: NSView {
+    struct State: Equatable {
+        let size: CGSize
+        let first: CGColor
+        let second: CGColor
+        let animated: Bool
+        let running: Bool
     }
 
-    private var driftingBlobs: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !running)) { timeline in
-            let now = timeline.date.timeIntervalSinceReferenceDate
-            let elapsed = clock.elapsed(at: now)
-            blobs(firstProgress: progress(elapsed, 64), secondProgress: progress(elapsed, 76))
+    private static let driftKey = "aurora-drift"
+    private let host = CALayer()
+    private let firstBlob = CAGradientLayer()
+    private let secondBlob = CAGradientLayer()
+    private var clock = AuroraDriftClock()
+    private var state: State?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        for blob in [firstBlob, secondBlob] {
+            // `radial-gradient(closest-side, colour / alpha, transparent 72%)`; a soft gradient
+            // gains nothing from a Retina backing store.
+            blob.type = .radial
+            blob.startPoint = CGPoint(x: 0.5, y: 0.5)
+            blob.endPoint = CGPoint(x: 1, y: 1)
+            blob.locations = [0, 0.72]
+            blob.contentsScale = 1
+            host.addSublayer(blob)
         }
+        // Layer-hosting: the host layer's sublayers use bottom-left coordinates.
+        layer = host
+        wantsLayer = true
     }
 
-    // The blobs drift at 30 fps: the largest moves well under a pixel per frame, so this is the
-    // same motion as a display-rate animation for half the per-frame work, and a paused
-    // timeline schedules nothing at all.
+    required init?(coder: NSCoder) { nil }
 
-    private func progress(_ elapsed: Double, _ seconds: Double) -> Double {
-        // The smooth path: continuous alternate drift on `--ease-in-out-quart`. Native drawing is
-        // GPU-composited, so this is the Full-effects drift whether or not the switch is on; the
-        // web's 100 ms stepped default (index.css `aurora-drift-a`) is not modelled.
-        AuroraDriftClock.progress(elapsed: elapsed, duration: seconds, curve: DesignTokens.Ease.inOutQuart)
-    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    private func blobs(firstProgress: Double, secondProgress: Double) -> some View {
-        let a = max(size.width * 0.55, 544)
-        let b = max(size.width * 0.48, 480)
-        return ZStack(alignment: .topLeading) {
-            blob(first, alpha: firstAlpha, diameter: a)
-                .scaleEffect(1 + 0.18 * firstProgress)
-                .offset(x: size.width * 0.14 * firstProgress, y: size.height * 0.09 * firstProgress)
-                .position(x: -size.width * 0.12 + a / 2, y: -size.height * 0.18 + a / 2)
-            blob(second, alpha: secondAlpha, diameter: b)
-                .scaleEffect(1.12 - 0.16 * secondProgress)
-                .offset(x: -size.width * 0.11 * secondProgress, y: -size.height * 0.07 * secondProgress)
-                .position(x: size.width * 1.1 - b / 2, y: size.height * 1.22 - b / 2)
+    func apply(_ next: State) {
+        guard next != state else { return }
+        let previous = state
+        state = next
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        // A gradient that ends in the same colour at alpha 0 matches the premultiplied CSS
+        // interpolation towards `transparent`.
+        firstBlob.colors = [next.first, next.first.copy(alpha: 0) ?? next.first]
+        secondBlob.colors = [next.second, next.second.copy(alpha: 0) ?? next.second]
+        if let previous, previous.size == next.size, previous.animated == next.animated,
+            previous.running == next.running
+        {
+            return
         }
+        let now = CACurrentMediaTime()
+        let moving = next.animated && next.running
+        clock.setRunning(moving, now: now)
+        let elapsed = next.animated ? clock.elapsed(at: now) : 0
+        let width = Double(next.size.width)
+        let height = Double(next.size.height)
+        install(firstBlob, AuroraBlobDrift.first(width: width, height: height), height, elapsed, moving, now)
+        install(secondBlob, AuroraBlobDrift.second(width: width, height: height), height, elapsed, moving, now)
     }
 
-    /// `radial-gradient(closest-side, colour / alpha, transparent 72%)`.
-    private func blob(_ color: Color, alpha: Double, diameter: CGFloat) -> some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [color.opacity(alpha), .clear], center: .center, startRadius: 0,
-                    endRadius: diameter / 2 * 0.72)
-            )
-            .frame(width: diameter, height: diameter)
+    private func install(
+        _ blob: CAGradientLayer, _ drift: AuroraBlobDrift, _ height: Double, _ elapsed: Double, _ moving: Bool,
+        _ now: CFTimeInterval
+    ) {
+        let curve = DesignTokens.Ease.inOutQuart
+        blob.removeAnimation(forKey: Self.driftKey)
+        blob.bounds = CGRect(x: 0, y: 0, width: drift.diameter, height: drift.diameter)
+        // Canvas positions run top-down; the host layer's run bottom-up.
+        blob.position = CGPoint(x: drift.centerX, y: height - drift.centerY)
+        let progress = AuroraDriftClock.progress(elapsed: elapsed, duration: drift.duration, curve: curve)
+        blob.transform = Self.transform(drift.pose(at: progress))
+        guard moving else { return }
+        let animation = CABasicAnimation(keyPath: "transform")
+        animation.fromValue = NSValue(caTransform3D: Self.transform(drift.pose(at: 0)))
+        animation.toValue = NSValue(caTransform3D: Self.transform(drift.pose(at: 1)))
+        animation.duration = drift.duration
+        animation.autoreverses = true
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(
+            controlPoints: Float(curve.x1), Float(curve.y1), Float(curve.x2), Float(curve.y2))
+        // Started `elapsed` seconds ago, so the drift continues where the clock stands.
+        animation.beginTime = blob.convertTime(now, from: nil) - elapsed
+        animation.isRemovedOnCompletion = false
+        blob.add(animation, forKey: Self.driftKey)
+    }
+
+    /// Scaled about the blob's centre, then offset (SwiftUI `scaleEffect` then `offset`); the
+    /// offset's y is flipped for the bottom-up host layer.
+    private static func transform(_ pose: (scale: Double, x: Double, y: Double)) -> CATransform3D {
+        CATransform3DScale(CATransform3DMakeTranslation(pose.x, -pose.y, 0), pose.scale, pose.scale, 1)
     }
 }
 
