@@ -69031,6 +69031,24 @@
         }
       }
     },
+    "tax.fxUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete: no exchange rate is stored for {currencies}; those amounts are left out of the affected figures."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onvolledig: er is geen wisselkoers opgeslagen voor {currencies}; die bedragen zijn niet meegerekend in de betrokken cijfers."
+          }
+        }
+      }
+    },
     "tax.gainsContext": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -78297,6 +78315,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uit geregistreerde belastingen op dividendtransacties"
+          }
+        }
+      }
+    },
+    "tax.yearActions.computeFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't calculate the figures for {year}. Try again."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon de cijfers voor {year} niet berekenen. Probeer het opnieuw."
           }
         }
       }

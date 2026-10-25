@@ -33,8 +33,14 @@ public enum TaxYearCSV {
             row([.string("Generated at"), .string(generatedAt)]), "",
             row([.string("# Profile inputs")]), row([.string("Field"), .string("Value")]),
         ]
+        // A year frozen before its household result was stored has none to read the assessment from.
+        let assessed = frozen && householdResultSource != "frozen" ? nil : householdResult
         for (label, key) in profileRows {
-            lines.append(row([.string(label), coalesce(profile[key], profileDefaults[key])]))
+            if key == "filingStatus" {
+                lines.append(row([.string(label), filingStatus(profile, assessed)]))
+            } else {
+                lines.append(row([.string(label), coalesce(profile[key], profileDefaults[key])]))
+            }
         }
         lines += ["", row([.string("# Calculation")]), row([.string("Component"), .string("Amount (\(currency))")])]
         for (label, key) in calculationRows {
@@ -86,10 +92,17 @@ public enum TaxYearCSV {
                 "domesticHelpCosts",
                 "serviceVoucherCount", "annualDividendIncome", "annualSavingsInterest",
             ].map { ($0, TaxValue.number(0)) })
-        values["filingStatus"] = .string("single")
         values["isIsolatedParent"] = .bool(false)
         return values
     }()
+    /// The export's filing status: the server's assessment of the year when its household result
+    /// is known, else the profile's own value (empty for a year without one), as the browser does
+    /// not decide the assessment (ADR-217; `filingStatus` in exportTaxYearCsv.ts).
+    private static func filingStatus(_ profile: TaxValue, _ result: TaxValue?) -> TaxValue {
+        if let mode = result?["assessment"]?["mode"]?.stringValue { return .string(mode == "joint" ? "married_joint" : "single") }
+        if let status = profile["filingStatus"]?.stringValue { return .string(status) }
+        return .string("")
+    }
     private static let calculationRows: [(String, String)] = [
         ("Gross income", "grossIncome"), ("Employee social security", "employeeSocialSecurity"),
         ("Special social security contribution", "specialSocialSecurityContribution"),

@@ -1764,6 +1764,7 @@ tax.flow.op.netOut
 tax.flow.opGroup.alsoOwed
 tax.flow.opGroup.deductions
 tax.flow.title
+tax.fxUnavailable
 tax.fromDividendTransactions
 tax.gainsContext
 tax.historical.banner.createCta
@@ -2280,6 +2281,7 @@ tax.widget.yearlyOverview
 tax.widget.yearlyTaxFeeTrend
 tax.witheldAtSource
 tax.yearActions.exportCsv
+tax.yearActions.computeFailed
 tax.yearActions.freeze
 tax.yearActions.markFiled
 tax.yearActions.menuLabel

@@ -73,10 +73,33 @@ struct TaxYearCSVTests {
             generatedAt: "stamp", household: household, householdResult: try value(partnerResult))
         let csv = String(decoding: file.data, as: UTF8.self)
         #expect(csv.contains("Dependent children under 3,0\n"))
-        #expect(csv.contains("Filing status,single\n"))
+        // The assessed household decides (partnerResult is a joint assessment).
+        #expect(csv.contains("Filing status,married_joint\n"))
         #expect(csv.contains("Isolated parent,false\n"))
         #expect(csv.contains("Gross activity income,10000,20000,30000\n"))
         #expect(csv.contains("Pension reduction,\n"))
+    }
+
+    @Test func filingStatusFollowsTheServersAssessmentOfTheYear() throws {
+        func status(_ result: TaxValue?, source: String = "computed", frozen: Bool = false) throws -> String {
+            var profile = try value(profileFixture)
+            profile["filingStatus"] = nil
+            let file = TaxYearCSV.build(
+                year: 2025, profile: profile, calculation: .object(["totalPIT": .number(5)]), currency: "EUR",
+                isFiled: false, calculationSource: frozen ? "frozen" : "computed", householdResultSource: source,
+                generatedAt: "stamp", household: try value(partnerHousehold), householdResult: result)
+            let csv = String(decoding: file.data, as: UTF8.self)
+            return try #require(csv.split(separator: "\n", omittingEmptySubsequences: false)
+                .first { $0.hasPrefix("Filing status,") }.map { String($0) })
+        }
+        #expect(try status(try value(partnerResult)) == "Filing status,married_joint")
+        var separated = try value(partnerResult)
+        separated["assessment"] = .object(["mode": .string("separate")])
+        #expect(try status(separated) == "Filing status,single")
+        // No household result, or a year frozen before it was stored: the browser does not decide.
+        #expect(try status(nil) == "Filing status,")
+        #expect(try status(try value(partnerResult), source: "computed", frozen: true) == "Filing status,")
+        #expect(try status(try value(partnerResult), source: "frozen", frozen: true) == "Filing status,married_joint")
     }
 
     @Test func stringsHaveTheSameFormulaGuardAndQuotingAsFrontendCsv() {
@@ -146,7 +169,7 @@ private let singlePartnerGolden = """
     Actual professional expenses,0
     Communal surcharge %,7
     Region,flanders
-    Filing status,single
+    Filing status,
     Dependent children,1
     Dependent children under 3,0
     Dependent children disabled,0

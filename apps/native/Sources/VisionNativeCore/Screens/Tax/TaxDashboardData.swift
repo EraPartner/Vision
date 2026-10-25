@@ -20,6 +20,11 @@ public struct TaxDashboardData: Decodable, Sendable {
     public let suggestions: [TaxDeductionSuggestion]
     public let householdBreakdownRows: [TaxDashboardHouseholdRow]
     public let rules: [TaxDashboardRuleSection]
+    /// Currencies of amounts left out because no stored rate converts them (#308); empty or
+    /// absent when everything converted.
+    public let unconvertedCurrencies: [String]?
+    /// Response fields that miss such an amount.
+    public let incompleteFigures: [String]?
 }
 public struct TaxYearlyIncomeDatum: Decodable, Sendable, Identifiable {
     public let year: String
