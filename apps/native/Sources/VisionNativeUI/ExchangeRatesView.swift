@@ -212,7 +212,7 @@ public struct ExchangeRatesView: View {
                     ForEach(table.rows) { row in
                         Divider().gridCellUnsizedAxes(.horizontal)
                         GridRow {
-                            cell(row.currency, font: .body.monospaced().weight(.medium))
+                            cell(row.currency.rawValue, font: .body.monospaced().weight(.medium))
                             cell(row.rate, font: .body.monospaced())
                             cell(row.inverse, font: .body.monospaced())
                             cell(row.hundredInEuro, font: .body)
@@ -252,7 +252,7 @@ public struct ExchangeRatesView: View {
             )
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: Capsule())
+            .background { ToastSurface() }
             .foregroundStyle(notice.kind == .success ? theme.foreground : theme.destructive)
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))

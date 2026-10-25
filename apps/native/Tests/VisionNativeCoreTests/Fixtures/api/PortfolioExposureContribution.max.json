@@ -1,0 +1,9 @@
+{
+  "sourceType": "direct",
+  "investmentId": 1,
+  "investmentName": "string",
+  "sourceFundName": "string",
+  "amount": 1.5,
+  "sourceAsOfDate": "2024-01-15",
+  "stale": true
+}

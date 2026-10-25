@@ -10,12 +10,12 @@ struct PortfolioTickerView: View {
     @State private var visible = false
     @State private var elapsed: TimeInterval = 0
     @State private var startedAt: Date?
-    @State private var overrides: [Int: Bool] = [:]
+    @State private var overrides: [InvestmentID: Bool] = [:]
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
     @Environment(\.visionTheme) private var theme
     private var quotable: [PortfolioInvestment] {
-        model.investments.filter { $0.isActive && $0.priceProvider == "yahoo" && !symbol($0).isEmpty }
+        model.investments.filter { $0.isActive && $0.priceProvider == .yahoo && !symbol($0).isEmpty }
     }
     private var included: [PortfolioInvestment] { quotable.filter { overrides[$0.id] ?? ($0.showInTicker != false) } }
     private var active: Bool { visible && scenePhase == .active && model.isOnline }
@@ -60,7 +60,7 @@ struct PortfolioTickerView: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .buttonStyle(.plain).padding(16)
+                .buttonStyle(.vision(.ghost, size: .iconSm)).padding(16)
                 .accessibilityLabel(shell.strings.t("portfolio.ticker.manage"))
                 .popover(isPresented: $manager) { management }
             }
@@ -94,7 +94,10 @@ struct PortfolioTickerView: View {
                     PortfolioInlineDisclosure(label: investment.symbol ?? quote.symbol, explanation: investment.name)
                         .font(.callout.monospaced().weight(.medium))
                     if let price = quote.price {
-                        Text(MoneyText.text(price, currency: quote.currency, settings: shell.settings, signed: false))
+                        Text(
+                            ResearchMoney.text(
+                                price, currency: quote.currency, locale: shell.settings.numberFormat.locale,
+                                fractionDigits: shell.settings.showDecimalPlaces))
                             .font(.callout).monospacedDigit().foregroundStyle(theme.secondaryLabel)
                     }
                     if let change = quote.changePercent {
@@ -135,7 +138,7 @@ struct PortfolioTickerView: View {
                             .lineLimit(1).truncationMode(.tail)
                     }
                 }
-                .toggleStyle(.switch)
+                .toggleStyle(.visionSwitch)
                 .accessibilityLabel(investment.name)
                 .disabled(editing.isMutating)
             }

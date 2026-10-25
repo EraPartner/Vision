@@ -64,13 +64,13 @@ public enum NativeReportPeriod: Equatable, Sendable {
 }
 
 public struct NativeReportPreferences: Equatable, Sendable {
-    public var currency: String
+    public var currency: CurrencyCode
     public var exclusionScope: String
-    public var excludedCategoryIds: [Int]
-    public var excludedRecipientIds: [Int]
+    public var excludedCategoryIds: [CategoryID]
+    public var excludedRecipientIds: [RecipientID]
     public init(
-        currency: String = "EUR", exclusionScope: String = "everywhere", excludedCategoryIds: [Int] = [],
-        excludedRecipientIds: [Int] = []
+        currency: CurrencyCode = ReportingFallbackCurrency.euro, exclusionScope: String = "everywhere",
+        excludedCategoryIds: [CategoryID] = [], excludedRecipientIds: [RecipientID] = []
     ) {
         self.currency = currency
         self.exclusionScope = exclusionScope
@@ -83,7 +83,9 @@ public struct NativeReportPreferences: Equatable, Sendable {
 }
 
 public enum NativeReportForm {
-    public static let currencies = ["EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "PLN", "CZK"]
+    public static let currencies: [CurrencyCode] = [
+        "EUR", "USD", "GBP", "CHF", "JPY", "CAD", "AUD", "SEK", "NOK", "DKK", "PLN", "CZK",
+    ].compactMap { CurrencyCode(rawValue: $0) }
     public static func isValidYear(_ text: String, currentYear: Int) -> Bool {
         text.range(of: "^[0-9]{4}$", options: .regularExpression) != nil
             && Int(text).map { $0 >= 2000 && $0 <= currentYear + 1 } == true

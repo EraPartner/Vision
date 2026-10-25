@@ -1,0 +1,26 @@
+{
+  "table": "string",
+  "columns": [
+    {
+      "name": "string",
+      "dataType": "string",
+      "udtName": "string",
+      "nullable": true,
+      "hasDefault": true,
+      "generated": true,
+      "writable": true
+    }
+  ],
+  "primaryKey": [
+    "string"
+  ],
+  "rows": [
+    {
+      "key": "value"
+    }
+  ],
+  "total": 1,
+  "limit": 1,
+  "hasMore": true,
+  "nextCursor": "string"
+}

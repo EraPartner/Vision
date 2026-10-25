@@ -48,22 +48,21 @@ public struct ImportReviewView: View {
             ImportToastStack(center: toasts, strings: strings) { route in shell.navigate(to: route) }
         }
         // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-        .alert(
-            strings.t("importReview.discard.title"),
+        .visionAlert(
+            title: strings.t("importReview.discard.title"),
+            message: strings.t("importReview.discard.desc", ["n": String(model.totalRows)]),
             isPresented: Binding(get: { model.isDiscardConfirmationPresented }, set: { _ in })
         ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelDiscard() }
-            Button(strings.t("importReview.discard.confirm"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDiscard() }
+            VisionDialogAction(strings.t("importReview.discard.confirm"), role: .destructive) {
                 Task { await model.confirmDiscard(strings: strings) }
             }
-        } message: {
-            Text(strings.t("importReview.discard.desc", ["n": String(model.totalRows)]))
         }
     }
 
     @ViewBuilder
     private var content: some View {
-        if model.batchId != batchId || model.isLoading {
+        if model.batchId != ImportBatchID(numeric: batchId) || model.isLoading {
             ProgressView()
                 .controlSize(.regular)
                 .frame(maxWidth: .infinity, minHeight: 240)
@@ -81,8 +80,7 @@ public struct ImportReviewView: View {
         } label: {
             Label(strings.t("importReview.back"), systemImage: "chevron.left")
         }
-        .buttonStyle(.borderless)
-        .controlSize(.small)
+        .buttonStyle(.vision(.ghost, size: .sm))
     }
 
     /// `PageError`: `common.error`, the message and Retry.
@@ -424,7 +422,7 @@ struct ImportReviewGroupView: View {
                             get: { model.state(for: group).persistAsDefault },
                             set: { model.setPersistDefault($0, for: group) })
                     )
-                    .toggleStyle(.checkbox)
+                    .toggleStyle(.visionCheckbox)
                     .font(.footnote)
                     .disabled(model.isBusy || state.categorySaving)
                 }
@@ -483,13 +481,13 @@ struct ImportReviewGroupView: View {
 /// opens again; this picker never creates a payee.
 struct ImportReviewPayeePicker: View {
     let pickers: PickerDataModel
-    let value: Int?
+    let value: RecipientID?
     /// The group's payee name while the lists do not have it.
     let fallbackLabel: String?
     let accessibilityName: String
     var disabled = false
     let strings: any Localizing
-    let onSelect: (Int?, String?) -> Void
+    let onSelect: (RecipientID?, String?) -> Void
     @State private var isOpen = false
     @State private var search = ""
 
@@ -520,14 +518,14 @@ struct ImportReviewPayeePicker: View {
         ]
         for recipient in pickers.recipients(matching: search) {
             options.append(
-                PickerOption(id: String(recipient.id), title: recipient.name, isSelected: recipient.id == value) {
+                PickerOption(id: String(recipient.id.rawValue), title: recipient.name, isSelected: recipient.id == value) {
                     pick(recipient.id, recipient.name)
                 })
         }
         return options
     }
 
-    private func pick(_ id: Int?, _ name: String?) {
+    private func pick(_ id: RecipientID?, _ name: String?) {
         onSelect(id, name)
         isOpen = false
     }

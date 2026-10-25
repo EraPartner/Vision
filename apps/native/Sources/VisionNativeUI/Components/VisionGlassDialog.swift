@@ -127,21 +127,44 @@ public struct VisionDialogMetrics: Equatable, Sendable {
     public var height: Height
     public var padding: CGFloat
     public var spacing: CGFloat
+    /// Side sheets only: the share of the window width the drawer takes before `maxWidth` caps it
+    /// (`w-3/4` is 0.75, `w-full` is 1).
+    public var sideWidthFraction: CGFloat
+    /// Side sheets only: the window edge the drawer slides from (`side="right"` is `.trailing`).
+    public var sideEdge: HorizontalEdge
 
     public init(
         maxWidth: CGFloat? = CGFloat(DesignTokens.Overlay.dialogMaxWidth),
         height: Height = .fitContent,
         padding: CGFloat = CGFloat(DesignTokens.Overlay.dialogPadding),
-        spacing: CGFloat = CGFloat(DesignTokens.Overlay.dialogGap)
+        spacing: CGFloat = CGFloat(DesignTokens.Overlay.dialogGap),
+        sideWidthFraction: CGFloat = 1, sideEdge: HorizontalEdge = .trailing
     ) {
         self.maxWidth = maxWidth
         self.height = height
         self.padding = padding
         self.spacing = spacing
+        self.sideWidthFraction = sideWidthFraction
+        self.sideEdge = sideEdge
     }
 
     /// `DialogContent` and `AlertDialogContent` defaults.
     public static let standard = VisionDialogMetrics()
+
+    /// `SheetContent side="right"` defaults (sheet.tsx): `w-3/4 sm:max-w-sm`, `p-6 gap-4`.
+    public static let sideSheet = VisionDialogMetrics(
+        maxWidth: VisionSideSheet<EmptyView>.defaultMaxWidth, padding: CGFloat(DesignTokens.Overlay.dialogPadding),
+        spacing: VisionSideSheet<EmptyView>.gap, sideWidthFraction: VisionSideSheet<EmptyView>.widthFraction)
+
+    /// A right sheet that overrides the width the way the web call sites do, with
+    /// `className="w-full sm:max-w-[470px] p-0 gap-0"`: the full window width up to `maxWidth`, and
+    /// no padding or gap unless given (the form lays out its own header, scroll area and footer).
+    public static func sideSheet(
+        maxWidth: CGFloat, padding: CGFloat = 0, spacing: CGFloat = 0, edge: HorizontalEdge = .trailing
+    ) -> VisionDialogMetrics {
+        VisionDialogMetrics(
+            maxWidth: maxWidth, padding: padding, spacing: spacing, sideWidthFraction: 1, sideEdge: edge)
+    }
 }
 
 // MARK: - Panels
@@ -212,35 +235,45 @@ public struct VisionGlassDialog<Content: View>: View {
 /// drawn past the window edge, so only the leading corners show rounded.
 public struct VisionSideSheet<Content: View>: View {
     /// `w-3/4` (sheet.tsx side right).
-    private static var widthFraction: CGFloat { 0.75 }
+    nonisolated static var widthFraction: CGFloat { 0.75 }
     /// `sm:max-w-sm` (sheet.tsx side right), 24rem.
-    private static var maxWidth: CGFloat { 384 }
+    nonisolated static var defaultMaxWidth: CGFloat { 384 }
     /// `gap-4` (sheet.tsx variants base).
-    private static var gap: CGFloat { 16 }
+    nonisolated static var gap: CGFloat { 16 }
 
     private let available: CGSize
+    private let metrics: VisionDialogMetrics
     private let content: Content
 
-    public init(available: CGSize, @ViewBuilder content: () -> Content) {
+    /// - Parameter metrics: The width, padding and gap; `.sideSheet` is `SheetContent`'s own, and
+    ///   `.sideSheet(maxWidth:)` the `w-full sm:max-w-[…] p-0 gap-0` the web call sites pass.
+    public init(
+        available: CGSize, metrics: VisionDialogMetrics = .sideSheet, @ViewBuilder content: () -> Content
+    ) {
         self.available = available
+        self.metrics = metrics
         self.content = content()
     }
 
     private var radius: CGFloat { CGFloat(DesignTokens.Overlay.dialogRadius) }
 
+    /// `rounded-r-sheet` on the left edge, `rounded-l-sheet` on the right.
+    private var leading: Bool { metrics.sideEdge == .leading }
+
     public var body: some View {
-        let width = min(available.width * Self.widthFraction, Self.maxWidth)
-        VStack(alignment: .leading, spacing: Self.gap) { content }
-            .padding(CGFloat(DesignTokens.Overlay.dialogPadding))
+        let width = min(available.width * metrics.sideWidthFraction, metrics.maxWidth ?? .infinity)
+        VStack(alignment: .leading, spacing: metrics.spacing) { content }
+            .padding(metrics.padding)
             .frame(width: width, height: available.height, alignment: .topLeading)
             .clipShape(
                 UnevenRoundedRectangle(
-                    topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: 0,
-                    topTrailingRadius: 0, style: .continuous)
+                    topLeadingRadius: leading ? 0 : radius, bottomLeadingRadius: leading ? 0 : radius,
+                    bottomTrailingRadius: leading ? radius : 0, topTrailingRadius: leading ? radius : 0,
+                    style: .continuous)
             )
             .background(
                 VisionGlassSurface(material: .thick, cornerRadius: radius)
-                    .padding(.trailing, -radius)
+                    .padding(leading ? .leading : .trailing, -radius)
             )
     }
 }
@@ -388,13 +421,30 @@ extension View {
     /// in over `Duration.slow` and out over `Duration.normal` on `Ease.outExpo`). macOS `.sheet`
     /// is always centred, so this has no SwiftUI signature to replace; it is for the web
     /// `Sheet` call sites.
+    ///
+    /// `metrics` is `.sideSheet` (`w-3/4 sm:max-w-sm p-6 gap-4`) unless the call site overrides the
+    /// width as the web does: `.sideSheet(maxWidth: 470)` for `w-full sm:max-w-[470px] p-0 gap-0`.
     public func visionSideSheet<Content: View>(
-        isPresented: Binding<Bool>, dismissDisabled: Bool = false, accessibilityTitle: String? = nil,
-        onDismiss: (() -> Void)? = nil, @ViewBuilder content: @escaping () -> Content
+        isPresented: Binding<Bool>, metrics: VisionDialogMetrics = .sideSheet, dismissDisabled: Bool = false,
+        accessibilityTitle: String? = nil, onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         modifier(
             VisionModalPresenter(
-                kind: .sideSheet, isPresented: isPresented, metrics: .standard, dismissDisabled: dismissDisabled,
+                kind: .sideSheet, isPresented: isPresented, metrics: metrics, dismissDisabled: dismissDisabled,
                 accessibilityTitle: accessibilityTitle, onDismiss: onDismiss, panel: content))
+    }
+
+    /// `visionSideSheet(isPresented:)` driven by an optional item, like `visionDialog(item:)`: the
+    /// item is kept until the slide-out ends so the content does not blank while it leaves.
+    public func visionSideSheet<Item: Identifiable, Content: View>(
+        item: Binding<Item?>, metrics: VisionDialogMetrics = .sideSheet, dismissDisabled: Bool = false,
+        accessibilityTitle: String? = nil, onDismiss: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping (Item) -> Content
+    ) -> some View {
+        modifier(
+            VisionItemModal(
+                kind: .sideSheet, item: item, metrics: metrics, dismissDisabled: dismissDisabled,
+                accessibilityTitle: accessibilityTitle, onDismiss: onDismiss, build: content))
     }
 }

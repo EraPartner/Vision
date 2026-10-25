@@ -36,7 +36,7 @@ public final class StatisticsModel {
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var frozenPeriod: String?
-    @ObservationIgnored private var currency = "EUR"
+    @ObservationIgnored private var currency = LedgerCurrency.eur
     @ObservationIgnored private var day = ""
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -70,7 +70,7 @@ public final class StatisticsModel {
         widgetsLoaded = true
         printLocalState = value.localState
         frozenPeriod = value.currentPeriod
-        currency = value.settings.defaultCurrency
+        currency = LedgerCurrency.display(value.settings)
         recipientQuery = value.recipientQuery
         recipientVisibleCount = value.recipientVisibleCount
         categoryMetric = value.categoryMetric
@@ -83,7 +83,7 @@ public final class StatisticsModel {
         flow = value.flow
         flowError = value.flowError
     }
-    func matchesPrintRoute(_ route: NativeRoute, currency: String) -> Bool {
+    func matchesPrintRoute(_ route: NativeRoute, currency: CurrencyCode) -> Bool {
         self.currency == currency
             && window == (route.value("window") == "all" ? .all : .rolling24)
             && tab == (StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview)
@@ -91,6 +91,8 @@ public final class StatisticsModel {
     public var isLoading: Bool { filtered == nil && error == nil }
     public var hasData: Bool { !(filtered?.monthly.months.isEmpty ?? true) }
     public var hasExclusions: Bool { !exclusions.isEmpty }
+    /// The web `ExclusionToggle` gate on Statistics: the scope applies, whether or not anything is excluded.
+    public var showsExclusionToggle: Bool { exclusions.applies }
     public var currentPeriod: String {
         frozenPeriod ?? String(StatisticsWindow.day(now(), calendar: calendar).prefix(7))
     }
@@ -104,7 +106,7 @@ public final class StatisticsModel {
         let nextWindow: StatisticsWindow = route.value("window") == "all" ? .all : .rolling24
         tab = StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview
         let nextDay = StatisticsWindow.day(now(), calendar: calendar)
-        let changed = currency != settings.defaultCurrency || window != nextWindow || day != nextDay
+        let changed = currency != LedgerCurrency.display(settings) || window != nextWindow || day != nextDay
         if changed {
             task?.cancel()
             revision = UUID()
@@ -120,7 +122,7 @@ public final class StatisticsModel {
             pivotPage = 0
             recipientVisibleCount = settings.defaultPageSize
         }
-        currency = settings.defaultCurrency
+        currency = LedgerCurrency.display(settings)
         window = nextWindow
         day = nextDay
         if !force, let fetchedAt, now().timeIntervalSince(fetchedAt) < 30 {
@@ -170,7 +172,7 @@ public final class StatisticsModel {
                 let raw = try await visibility
                 guard token == revision, !Task.isCancelled else { return }
                 if !widgetSavePending, widgetToken == widgetRevision {
-                    widgetBaseline = raw.expected
+                    widgetBaseline = raw.expected.json
                     widgets = InsightWidgetVisibility(raw.value)
                     widgetsLoaded = true
                     widgetError = nil
@@ -235,7 +237,7 @@ public final class StatisticsModel {
     public func toggleGroup(_ id: String) {
         if collapsedGroups.contains(id) { collapsedGroups.remove(id) } else { collapsedGroups.insert(id) }
     }
-    public func pivotDrill(categoryIds: [Int], period: String?, label: String, uncategorised: Bool = false)
+    public func pivotDrill(categoryIds: [CategoryID], period: String?, label: String, uncategorised: Bool = false)
         -> NativeRoute
     {
         let month = period.flatMap { target in filtered?.monthly.months.first { $0.id == target } }
@@ -289,7 +291,7 @@ public final class StatisticsModel {
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
-            widgetBaseline = saved.expected
+            widgetBaseline = saved.expected.json
             widgets = InsightWidgetVisibility(saved.value)
         } catch {
             widgets = old

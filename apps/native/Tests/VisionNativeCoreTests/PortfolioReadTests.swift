@@ -25,14 +25,14 @@ struct PortfolioReadTests {
         row["income_recognition_role"] = nil
         let decoded = try row.decode(PortfolioTransaction.self)
         #expect(decoded.amount == Decimal(string: "123.456789012345678901"))
-        #expect(decoded.incomeRecognitionRole == "standard")
+        #expect(decoded.incomeRecognitionRole == .standard)
         row["amount"] = .string("123 USD")
         #expect(throws: DecodingError.self) { try row.decode(PortfolioTransaction.self) }
         row["amount"] = .number(1)
         row["income_recognition_role"] = .string("included_in_units")
         #expect(throws: DecodingError.self) { try row.decode(PortfolioTransaction.self) }
         row["type"] = .string("dividend")
-        #expect(try row.decode(PortfolioTransaction.self).incomeRecognitionRole == "included_in_units")
+        #expect(try row.decode(PortfolioTransaction.self).incomeRecognitionRole == .includedInUnits)
         row["income_recognition_role"] = .null
         #expect(throws: DecodingError.self) { try row.decode(PortfolioTransaction.self) }
     }
@@ -66,11 +66,11 @@ struct PortfolioReadTests {
     @Test func assetPageTotalsAreTheServerGroupOrSingleClassEntries() async throws {
         let model = PortfolioModel(service: portfolioReadClient(PortfolioReadTransport()))
         await model.load(currency: "EUR")
-        #expect(model.holdingTotals(assetClasses: ["stock", "etf"]).totalPortfolioValue == 321)
-        #expect(model.holdingTotals(assetClasses: ["etf", "stock"]).netReturnWithDividends == 17)
-        #expect(model.holdingTotals(assetClasses: ["crypto"]).totalPortfolioValue == 12)
-        #expect(model.holdingTotals(assetClasses: ["metals"]) == .empty)
-        #expect(model.holdingTotals(assetClasses: ["real_estate"]).monthlyRentRateMissing)
+        #expect(model.holdingTotals(assetClasses: [.stock, .etf]).totalPortfolioValue == 321)
+        #expect(model.holdingTotals(assetClasses: [.etf, .stock]).netReturnWithDividends == 17)
+        #expect(model.holdingTotals(assetClasses: [.crypto]).totalPortfolioValue == 12)
+        #expect(model.holdingTotals(assetClasses: [.metals]) == .empty)
+        #expect(model.holdingTotals(assetClasses: [.realEstate]).monthlyRentRateMissing)
     }
 
     @Test func rentAndFeeFiguresAreReadFromTheServerSummary() throws {
@@ -145,17 +145,17 @@ struct PortfolioReadTests {
         let holding = try #require(model.active.first)
         #expect(model.metrics(for: holding).returnPercent == Decimal(string: "56.001"))
         #expect(model.brokerSubtotal.currentValue == 100)
-        model.brokerFilter = "42"
+        model.brokerFilter = .account(42)
         #expect(model.filteredHoldings.count == 1)
         #expect(model.brokerSubtotal.currentValue == 100)
         #expect(model.brokerSubtotal.gainLoss == 25)
-        #expect(model.brokerOptions.map(\.id) == ["42", "unassigned"])
+        #expect(model.brokerOptions.map(\.id) == [.account(42), .unassigned])
         #expect(model.metrics(for: holding).returnPercent == 50)
-        model.brokerFilter = "unassigned"
+        model.brokerFilter = .unassigned
         #expect(model.filteredHoldings.count == 1)
         #expect(model.brokerSubtotal.gainLoss == 3)
         #expect(model.metrics(for: holding).returnPercent == 0)
-        model.brokerFilter = "invalid"
+        model.brokerFilter = .account(999)
         #expect(model.filteredHoldings.isEmpty)
     }
 
@@ -504,7 +504,7 @@ private actor PortfolioReadTransport: APITransport {
     func send(_ request: APIRequest) async throws -> APIResponse {
         requests.append(request)
         let requestedCurrency = portfolioQuery(request, "currency") ?? "EUR"
-        let currency = wrongCurrency ? "WRONG" : requestedCurrency
+        let currency = wrongCurrency ? "GBP" : requestedCurrency
         let data: TaxValue
         switch request.url.path {
         case "/api/info/net-worth":

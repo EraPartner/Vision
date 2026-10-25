@@ -1,18 +1,18 @@
 import Foundation
 
 public protocol NetWorthService: Sendable {
-    func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse
+    func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse
     /// `useNetWorthByAccount(currency)`: the per-account breakdown, converted on the server.
-    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse
+    func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice]
     func refreshNetWorthPrices() async throws -> PortfolioPriceRefresh
 }
 
 extension APIClient: NetWorthService {
-    public func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+    public func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         try await send(OpenAPIOperations.GetNetWorth(currency: currency, limit: limit, offset: offset))
     }
-    public func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+    public func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
         try await send(OpenAPIOperations.GetNetWorthByAccount(currency: currency))
     }
     public func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {

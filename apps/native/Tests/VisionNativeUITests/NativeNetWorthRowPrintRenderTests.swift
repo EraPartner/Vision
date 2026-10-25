@@ -97,7 +97,7 @@
             #expect(footers.count == 1)
             let documents = try render(pages)
             for account in accounts where account.accountId != nil {
-                let identifier = String(format: "%03d", account.accountId!)
+                let identifier = String(format: "%03d", account.accountId!.rawValue)
                 let containing = documents.filter { $0.string?.contains("StartAccount" + identifier) == true }
                 #expect(containing.count == 1)
                 #expect(containing.first?.string?.contains("EndAccount" + identifier) == true)
@@ -185,7 +185,7 @@
 
         private func loaded(_ service: NetWorthRowPrintService) async -> NetWorthModel {
             let model = NetWorthModel(service: service, now: { Date(timeIntervalSince1970: 1_791_936_000) })
-            await model.load(currency: "EUR", pageSize: 18, route: NativeRoute("/portfolio/net-worth?period=all")!)
+            await model.load(currency: fixtureCurrency("EUR"), pageSize: 18, route: NativeRoute("/portfolio/net-worth?period=all")!)
             return model
         }
         private func normalized(_ value: String) -> String { value.filter { !$0.isWhitespace } }
@@ -248,7 +248,7 @@
             self.unavailablePrices = unavailablePrices
         }
         func rejectFurtherHistory() { rejectMore = true }
-        func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+        func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
             calls.append("history:\(limit ?? -1):\(offset ?? 0)")
             if rejectMore, limit != nil, (offset ?? 0) > 0 {
                 throw NSError(
@@ -257,7 +257,7 @@
             }
             let rows: [OpenAPI.NetWorthSnapshot] = (0..<36).map { index in
                 .init(
-                    date: String(format: "2026-%02d-%02d", index < 20 ? 8 : 9, index % 20 + 1),
+                    date: fixtureDay(String(format: "2026-%02d-%02d", index < 20 ? 8 : 9, index % 20 + 1)),
                     liquid: Decimal(string: "\(100 + index)123456789012.123456789012")!, liabilities: 10,
                     investments: 947, netWorth: Decimal(1000 + index))
             }
@@ -268,7 +268,7 @@
                 monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
                 snapshotsTotal: limit == nil ? nil : 36, snapshotsLimit: limit, snapshotsOffset: offset)
         }
-        func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+        func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
             calls.append("accounts")
             if unavailableAccounts { throw APIError.backendUnavailable }
             var total: Decimal = 0
@@ -281,8 +281,8 @@
                 let cash = Decimal(1000 + id)
                 total += cash + 200
                 return .init(
-                    accountId: id, name: "StartAccount\(token) \(details) EndAccount\(token)", type: "checking",
-                    cashCurrency: "EUR", cash: cash, holdings: 200, total: cash + 200, unconverted: false)
+                    accountId: AccountID(id), name: "StartAccount\(token) \(details) EndAccount\(token)", type: "checking",
+                    cashCurrency: ReportingFallbackCurrency.euro, cash: cash, holdings: 200, total: cash + 200, unconverted: false)
             }
             rows.append(.init(accountId: nil, holdings: 50, total: 50, unconverted: false))
             total += 50

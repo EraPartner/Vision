@@ -105,7 +105,7 @@ struct TaxProfileModelTests {
         #expect(
             patch.settings[TaxYearMutation.householdKey]?["partners"]?.arrayValue?.first?["unionDues"]
                 == .number(precise))
-        #expect(patch.expected[TaxYearMutation.householdKey] == source.records.first?.expected)
+        #expect(patch.expected[TaxYearMutation.householdKey] == source.records.first?.expected.json)
         #expect(patch.settings[TaxYearMutation.householdKey]?["profileConfigured"] == .bool(false))
     }
     @Test func failedWriteKeepsDraftOpenAndDoesNotRebaseOntoNewerValues() async throws {
@@ -218,7 +218,7 @@ struct TaxProfileModelTests {
         let patch = try #require(await service.writes.first)
         #expect(
             patch.expected[TaxYearMutation.metadataKey]
-                == refreshed.records.first { $0.key == TaxYearMutation.metadataKey }?.expected)
+                == refreshed.records.first { $0.key == TaxYearMutation.metadataKey }?.expected.json)
         #expect(patch.settings[TaxYearMutation.metadataKey]?["2024"]?["filing"] == nil)
         #expect(patch.settings[TaxYearMutation.metadataKey]?["2024"]?["frozenCalculation"]?["totalPIT"] == .number(123))
         #expect(main.overview?.year == 2023)
@@ -274,7 +274,7 @@ private func profileOverview(year: Int = 2025, filed: Bool = false, invalidLive:
     ]
     let records = try settings.keys.sorted().map { key -> OpenAPI.Setting in
         let value = try JSONDecoder().decode(JSONValue.self, from: APIBody.encode(settings[key]!))
-        return .init(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        return .init(key: key, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }.sorted { $0.key == TaxYearMutation.householdKey && $1.key != TaxYearMutation.householdKey }
     let totals = try JSONDecoder().decode(
         OpenAPI.BelgianTaxHouseholdTotals.self,
@@ -287,9 +287,9 @@ private func profileOverview(year: Int = 2025, filed: Bool = false, invalidLive:
             """.utf8))
     let result = OpenAPI.BelgianTaxHouseholdTaxResult(
         engineVersion: 2, incomeYear: year,
-        assessment: .init(mode: "single", reason: "single", legalBasis: "fixture", partnerIds: ["A"]), partners: [],
+        assessment: .init(mode: .single, reason: .onePartner, legalBasis: "fixture", partnerIds: [.a]), partners: [],
         quotient: .init(applied: false, transfer: 0, target: 0, cap: 0, benefit: 0),
-        csss: .init(scale: "single", base: 0, total: 0),
+        csss: .init(scale: .single, base: 0, total: 0),
         propertyTaxEstimate: 0, totals: totals, issues: [])
     return .init(
         year: year, liveYear: 2025, isHistorical: historical, hasSnapshot: historical, hasProfile: true,
@@ -299,10 +299,10 @@ private func profileOverview(year: Int = 2025, filed: Bool = false, invalidLive:
         householdSnapshots: historical
             ? [String(year): try selected.decode(OpenAPI.BelgianTaxHouseholdInput.self)] : [:], snapshotMetas: [:],
         metadata: .object([:]),
-        calculation: .init(totalPIT: 123), result: result, calculationSource: filed ? "frozen" : "computed",
-        householdResultSource: "computed",
+        calculation: .init(totalPIT: 123), result: result, calculationSource: filed ? .frozen : .computed,
+        householdResultSource: .computed,
         warnings: invalidLive
-            ? [.init(key: TaxYearMutation.householdKey, kind: "invalid_stored", issues: ["invalid fixture"])] : [],
+            ? [.init(key: TaxYearMutation.householdKey, kind: .invalidStored, issues: ["invalid fixture"])] : [],
         records: records)
 }
 private actor ProfileFixtureService: TaxComputationService, TaxSettingsService {

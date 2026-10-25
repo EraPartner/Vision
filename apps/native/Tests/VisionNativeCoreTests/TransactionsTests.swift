@@ -10,7 +10,7 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     private(set) var offsets: [Int] = []
     private(set) var patches: [TransactionPatch] = []
     private(set) var created: [OpenAPI.TransactionCreate] = []
-    private(set) var deleted: [Int] = []
+    private(set) var deleted: [TransactionID] = []
     /// `"recipient:category:expected"` per Use for all.
     private(set) var bulkUpdates: [String] = []
     /// `"recipient:category"` per Always use.
@@ -19,10 +19,10 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     private(set) var baselines: [JSONValue] = []
     private(set) var exports: [TransactionExportQuery] = []
     private(set) var uploads: [String] = []
-    private(set) var attachmentDeletes: [Int] = []
+    private(set) var attachmentDeletes: [AttachmentID] = []
     private var attachmentList: [OpenAPI.Attachment] = []
-    private var recipients: [Int: OpenAPI.Recipient] = [:]
-    private var categoryNames: [Int: String] = [:]
+    private var recipients: [RecipientID: OpenAPI.Recipient] = [:]
+    private var categoryNames: [CategoryID: String] = [:]
     private var pageFailures: Set<Int> = []
     private var updateFails = false
     private var deleteFails = false
@@ -48,7 +48,7 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     func setRecipients(_ list: [OpenAPI.Recipient]) {
         recipients = Dictionary(uniqueKeysWithValues: list.map { recipient in (recipient.id, recipient) })
     }
-    func setCategoryNames(_ names: [Int: String]) { categoryNames = names }
+    func setCategoryNames(_ names: [CategoryID: String]) { categoryNames = names }
     func setStoredSetting(_ setting: OpenAPI.Setting?) { stored = setting }
     func setAttachments(_ list: [OpenAPI.Attachment]) { attachmentList = list }
 
@@ -75,13 +75,13 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         return TransactionPage(items: items, total: all.count)
     }
 
-    func uncategorisedCount(recipientId: Int?) async throws -> Int {
+    func uncategorisedCount(recipientId: RecipientID?) async throws -> Int {
         rows.filter { row in
             row.categoryId == nil && row.isActive != false && (recipientId == nil || row.recipientId == recipientId)
         }.count
     }
 
-    func updateTransaction(id: Int, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
+    func updateTransaction(id: TransactionID, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
         patches.append(patch)
         if let updateGate { await updateGate.wait() }
         if updateFails { throw APIError.network("offline") }
@@ -96,12 +96,12 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         var comment = row.comment
         if let change = patch.comment { comment = change }
         let updated = TxFixture.wire(
-            id: id, date: patch.transactionDate ?? row.transactionDate, recipientId: recipientId,
+            id: id, date: patch.transactionDate.flatMap { CalendarDay($0) } ?? row.transactionDate, recipientId: recipientId,
             recipient: recipientId.flatMap { recipients[$0]?.name } ?? (recipientId == row.recipientId ? row.recipientName : nil),
             categoryId: categoryId, category: categoryId.flatMap { categoryNames[$0] }, accountId: row.accountId,
             bank: row.bankAccount, amount: patch.amount ?? row.amount, currency: patch.currency ?? row.currency,
             memo: memo, comment: comment, isActive: patch.isActive ?? row.isActive ?? true,
-            tags: patch.tags.map { slugs in slugs.enumerated().map { TxFixture.tag($0.offset + 1, $0.element) } } ?? row.tags ?? [])
+            tags: patch.tags.map { slugs in slugs.enumerated().map { TxFixture.tag(TagID(rawValue: $0.offset + 1), $0.element) } } ?? row.tags ?? [])
         rows[index] = updated
         return updated
     }
@@ -114,20 +114,20 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         }
         nextId += 1
         let row = TxFixture.wire(
-            id: nextId, date: body.transactionDate, recipientId: body.recipientId,
+            id: TransactionID(rawValue: nextId), date: body.transactionDate, recipientId: body.recipientId,
             recipient: recipients[body.recipientId]?.name, categoryId: body.categoryId, accountId: body.accountId,
             amount: body.amount, currency: body.currency, memo: body.memo, comment: body.comment)
         rows.insert(row, at: 0)
         return row
     }
 
-    func deleteTransaction(id: Int) async throws {
+    func deleteTransaction(id: TransactionID) async throws {
         deleted.append(id)
         if deleteFails { throw APIError.network("offline") }
         rows.removeAll { row in row.id == id }
     }
 
-    func categorizeUncategorised(recipientId: Int, categoryId: Int, expectedCount: Int) async throws -> BulkUpdateResult {
+    func categorizeUncategorised(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) async throws -> BulkUpdateResult {
         bulkUpdates.append("\(recipientId):\(categoryId):\(expectedCount)")
         var updated = 0
         for (index, row) in rows.enumerated()
@@ -141,14 +141,14 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         return BulkUpdateResult(updated: updated, requested: expectedCount, matched: updated)
     }
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {
         defaults.append("\(recipientId):\(categoryId)")
         if let recipient = recipients[recipientId] {
             recipients[recipientId] = TxFixture.recipient(recipient.id, recipient.name, defaultCategory: categoryId)
         }
     }
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         guard let found = recipients[id] else {
             throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Recipient not found"))
         }
@@ -164,40 +164,40 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         return Data("id,amount\n".utf8)
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         guard let stored else {
             throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
         }
         return stored
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         savedSettings.append(value)
         baselines.append(expected)
-        let saved = OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        let saved = OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
         stored = saved
         return saved
     }
 
-    func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment] {
+    func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment] {
         attachmentList.filter { item in item.transactionId == transactionId }
     }
 
-    func uploadAttachment(transactionId: Int, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
+    func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
         uploads.append(file.name)
-        let item = TxFixture.attachment(String(500 + uploads.count), transactionId: transactionId, name: file.name)
+        let item = TxFixture.attachment(AttachmentID(rawValue: String(500 + uploads.count)), transactionId: transactionId, name: file.name)
         attachmentList.append(item)
         return item
     }
 
-    func downloadAttachment(id: Int) async throws -> Data {
+    func downloadAttachment(id: AttachmentID) async throws -> Data {
         Data("%PDF-1.7".utf8)
     }
 
-    func deleteAttachment(id: Int) async throws {
+    func deleteAttachment(id: AttachmentID) async throws {
         attachmentDeletes.append(id)
         if deleteAttachmentFails { throw APIError.network("offline") }
-        attachmentList.removeAll { item in item.id == String(id) }
+        attachmentList.removeAll { item in item.id == id }
     }
 }
 
@@ -213,14 +213,15 @@ enum TxFixture {
         ])
 
     static let archivedAccount = OpenAPI.Account(
-        id: 8, name: "Old savings", currency: "EUR", type: "savings", liquidityClass: "cash", spendable: false,
-        inNetWorth: true, taxWrapper: "none", owner: "self", multiCurrencyCash: false, hasCashSleeve: false,
-        isActive: false, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        id: 8, name: "Old savings", currency: "EUR", type: .savings, liquidityClass: .init(rawValue: "cash"),
+        spendable: false, inNetWorth: true, taxWrapper: .none, owner: .init(rawValue: "self"),
+        multiCurrencyCash: false, hasCashSleeve: false,
+        isActive: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 
     static func wire(
-        id: Int, date: String = "2026-10-01", recipientId: Int? = 1, recipient: String? = "Bakery",
-        categoryId: Int? = nil, category: String? = nil, accountId: Int? = 7, bank: String? = "BE00 1234",
-        amount: Decimal = Decimal(string: "-4.5")!, currency: String? = "EUR", memo: String? = nil,
+        id: TransactionID, date: CalendarDay = "2026-10-01", recipientId: RecipientID? = 1, recipient: String? = "Bakery",
+        categoryId: CategoryID? = nil, category: String? = nil, accountId: AccountID? = 7, bank: String? = "BE00 1234",
+        amount: Decimal = Decimal(string: "-4.5")!, currency: CurrencyCode? = "EUR", memo: String? = nil,
         comment: String? = nil, isActive: Bool = true, tags: [OpenAPI.TransactionTagRef] = []
     ) -> OpenAPI.Transaction {
         OpenAPI.Transaction(
@@ -229,16 +230,16 @@ enum TxFixture {
             categoryName: category, comment: comment, isActive: isActive, tags: tags, links: [])
     }
 
-    static func tag(_ id: Int, _ slug: String) -> OpenAPI.TransactionTagRef {
+    static func tag(_ id: TagID, _ slug: String) -> OpenAPI.TransactionTagRef {
         OpenAPI.TransactionTagRef(id: id, slug: slug, isActive: true)
     }
 
-    static func recipient(_ id: Int, _ name: String, defaultCategory: Int? = nil) -> OpenAPI.Recipient {
+    static func recipient(_ id: RecipientID, _ name: String, defaultCategory: CategoryID? = nil) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
-            id: id, name: name, defaultCategoryId: defaultCategory, isActive: true, createdAt: "2026-01-01", links: [])
+            id: id, name: name, defaultCategoryId: defaultCategory, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", links: [])
     }
 
-    static func attachment(_ id: String, transactionId: Int, name: String, mime: String = "application/pdf")
+    static func attachment(_ id: AttachmentID, transactionId: TransactionID, name: String, mime: String = "application/pdf")
         -> OpenAPI.Attachment
     {
         OpenAPI.Attachment(
@@ -250,7 +251,7 @@ enum TxFixture {
     static func rows(_ count: Int) -> [OpenAPI.Transaction] {
         (1...max(1, count)).prefix(count).map { index in
             wire(
-                id: index, recipientId: index % 2 == 0 ? 2 : 1, recipient: index % 2 == 0 ? "Garage" : "Bakery",
+                id: TransactionID(rawValue: index), recipientId: index % 2 == 0 ? 2 : 1, recipient: index % 2 == 0 ? "Garage" : "Bakery",
                 categoryId: index % 3 == 0 ? nil : 5, category: index % 3 == 0 ? nil : "Food")
         }
     }
@@ -321,8 +322,8 @@ enum TransactionsFixture {
         #expect(filters.transactionType == nil)
         #expect(filters.filterLabel == nil)
         #expect(filters.hasMainFilter)
-        #expect(TransactionFilters.parseId("0") == nil)
-        #expect(TransactionFilters.parseId("7") == 7)
+        #expect((TransactionFilters.parseId("0") as TransactionID?) == nil)
+        #expect((TransactionFilters.parseId("7") as TransactionID?) == 7)
         #expect(TransactionFilters(route: NativeRoute(path: "/transactions")).showsBanner == false)
     }
 
@@ -469,7 +470,7 @@ enum TransactionsFixture {
     @Test func rowsMapTheWireAndTheColumns() {
         let labels = TransactionLabels(strings: TxFixture.strings)
         let wire = TxFixture.wire(
-            id: 3, date: "2026-10-01T00:00:00Z", recipient: nil, categoryId: nil, currency: nil, memo: "Bread",
+            id: 3, date: "2026-10-01", recipient: nil, categoryId: nil, currency: nil, memo: "Bread",
             tags: [TxFixture.tag(1, "food")])
         let row = TransactionRow(wire)
         #expect(row.day == "2026-10-01")
@@ -519,7 +520,7 @@ enum TransactionsFixture {
         #expect(!ServerTablePaging.shouldLoadMore(rowIndex: 10, shownCount: 50, threshold: 15, hasMore: true))
         #expect(ServerTablePaging.shouldLoadMore(rowIndex: 35, shownCount: 50, threshold: 15, hasMore: true))
         #expect(!ServerTablePaging.shouldLoadMore(rowIndex: 49, shownCount: 50, threshold: 15, hasMore: false))
-        var selection = ServerTableSelection()
+        var selection = ServerTableSelection<TransactionID>()
         selection.toggle(2)
         selection.extend(to: 5, in: [1, 2, 3, 4, 5, 6])
         #expect(selection.ids == [2, 3, 4, 5])
@@ -933,7 +934,7 @@ extension TransactionPatch {
         await service.failAttachmentDeletes(false)
         attachments.requestDelete(receipt)
         await attachments.confirmDelete()
-        #expect(await service.attachmentDeletes == [41, 41])
+        #expect(await service.attachmentDeletes == ["41", "41"])
         #expect(attachments.items?.map(\.filename) == ["photo.png"])
         #expect(TransactionAttachmentsModel.size(2048) == "2.0 KB")
         #expect(TransactionAttachmentsModel.safeName("a/b:c") == "a_b_c")

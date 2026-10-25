@@ -101,9 +101,9 @@ struct ResearchChartBuilderSearchView: View {
             .onChange(of: selected) { _, value in
                 if value >= 0 { withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(value, anchor: .center) } }
             }
-        }.background(theme.card, in: RoundedRectangle(cornerRadius: 8)).overlay(
-            RoundedRectangle(cornerRadius: 8).stroke(theme.border)
-        ).shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        }.background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)).overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border)
+        ).visionElevation(DesignTokens.Elevation.level3)
     }
     private func group(_ key: String) -> some View {
         Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel).padding(.horizontal, 12).padding(

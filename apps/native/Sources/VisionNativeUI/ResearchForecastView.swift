@@ -12,12 +12,12 @@ public struct ResearchForecastView: View {
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
-    private var currency: String { shell.settings.defaultCurrency.isEmpty ? "EUR" : shell.settings.defaultCurrency }
+    private var currency: CurrencyCode { ReportingFallbackCurrency.resolve(shell.settings.defaultCurrency) }
     private var forecast: ResearchForecastData? {
-        guard model.currency.caseInsensitiveCompare(currency) == .orderedSame,
+        guard model.currency == currency,
             model.settings.numberFormat == shell.settings.numberFormat,
             let data = model.visibleForecast,
-            data.currency == nil || data.currency?.caseInsensitiveCompare(currency) == .orderedSame
+            data.currency == nil || data.currency?.caseInsensitiveCompare(currency.rawValue) == .orderedSame
         else { return nil }
         return data
     }
@@ -83,7 +83,7 @@ public struct ResearchForecastView: View {
                                             .monospacedDigit().foregroundStyle(
                                                 holding.expectedAnnual >= 0 ? theme.gain : theme.loss)
                                         }.font(.caption).padding(8).background(
-                                            theme.muted, in: RoundedRectangle(cornerRadius: 8))
+                                            theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                                     }
                                 }
                             }
@@ -111,11 +111,12 @@ public struct ResearchForecastView: View {
             }
             DisclosureGroup(isExpanded: $assumptionsOpen) {
                 VStack(alignment: .leading, spacing: 18) {
-                    Picker(strings.t("research.forecast.returnSource"), selection: binding(\.returnSource)) {
-                        Text(strings.t("research.forecast.sourceHistorical")).tag("historical")
-                        Text(strings.t("research.forecast.sourceBlended")).tag("blended")
-                    }.pickerStyle(.segmented)
-                    if model.returnSource == "blended" {
+                    VisionSegmentedControl(
+                        selection: binding(\.returnSource),
+                        values: [ResearchForecastReturnSource.historical, .blended],
+                        title: { strings.t("research.forecast.source" + ($0 == .historical ? "Historical" : "Blended")) },
+                        label: strings.t("research.forecast.returnSource"))
+                    if model.returnSource == .blended {
                         VStack(spacing: 8) {
                             HStack {
                                 Text(
@@ -132,15 +133,20 @@ public struct ResearchForecastView: View {
                             .accessibilityValue(blendLabel)
                         }
                     }
-                    Picker(strings.t("research.forecast.method"), selection: binding(\.method)) {
-                        Text(strings.t("research.forecast.methodParametric")).tag("parametric")
-                        Text(strings.t("research.forecast.methodBootstrap")).tag("block_bootstrap")
-                    }.pickerStyle(.segmented)
-                    Picker(strings.t("research.forecast.paths"), selection: binding(\.paths)) {
-                        ForEach([500, 1000, 2000], id: \.self) { value in
-                            Text(VisionFormat.integer(value, locale: shell.settings.numberFormat.locale)).tag(value)
-                        }
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: binding(\.method),
+                        options: [
+                            VisionSegmentOption(
+                                value: ResearchForecastMethod.parametric,
+                                title: strings.t("research.forecast.methodParametric")),
+                            VisionSegmentOption(
+                                value: ResearchForecastMethod.blockBootstrap,
+                                title: strings.t("research.forecast.methodBootstrap")),
+                        ], label: strings.t("research.forecast.method"))
+                    VisionSegmentedControl(
+                        selection: binding(\.paths), values: [500, 1000, 2000],
+                        title: { VisionFormat.integer($0, locale: shell.settings.numberFormat.locale) },
+                        label: strings.t("research.forecast.paths"))
                 }.padding(.top, 14)
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
@@ -153,11 +159,10 @@ public struct ResearchForecastView: View {
     private var horizon: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(strings.t("research.forecast.horizon")).font(.callout.weight(.medium))
-            Picker(strings.t("research.forecast.horizon"), selection: binding(\.horizonMonths)) {
-                ForEach([12, 36, 60, 120], id: \.self) { months in
-                    Text(strings.t("research.forecast.h" + String(months / 12) + "y")).tag(months)
-                }
-            }.pickerStyle(.segmented).labelsHidden()
+            VisionSegmentedControl(
+                selection: binding(\.horizonMonths), values: [12, 36, 60, 120],
+                title: { strings.t("research.forecast.h" + String($0 / 12) + "y") }
+            ).accessibilityLabel(strings.t("research.forecast.horizon"))
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private var contribution: some View {
@@ -175,9 +180,9 @@ public struct ResearchForecastView: View {
         _ key: String, text: Binding<String>, placeholder: String, invalid: Bool, errorKey: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(strings.t(key) + " (" + currency + ")").font(.callout.weight(.medium))
+            Text(strings.t(key) + " (" + currency.rawValue + ")").font(.callout.weight(.medium))
             TextField(placeholder, text: text).textFieldStyle(.vision).accessibilityLabel(
-                strings.t(key) + " (" + currency + ")"
+                strings.t(key) + " (" + currency.rawValue + ")"
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(invalid ? theme.destructive : .clear)
@@ -193,11 +198,11 @@ public struct ResearchForecastView: View {
     private var assumptionSummary: String {
         [
             strings.t(
-                model.returnSource == "historical"
+                model.returnSource == .historical
                     ? "research.forecast.sourceHistorical" : "research.forecast.sourceBlended")
-                + (model.returnSource == "blended" ? " (" + blendLabel + ")" : ""),
+                + (model.returnSource == .blended ? " (" + blendLabel + ")" : ""),
             strings.t(
-                model.method == "parametric"
+                model.method == .parametric
                     ? "research.forecast.methodParametric" : "research.forecast.methodBootstrap"),
             strings.t("research.forecast.paths") + ": "
                 + VisionFormat.integer(model.paths, locale: shell.settings.numberFormat.locale),
@@ -282,7 +287,7 @@ struct ResearchForecastStat: View {
 }
 
 @MainActor enum ResearchForecastDisplay {
-    static func money(_ value: Decimal?, currency: String, shell: NativeShellModel) -> String {
+    static func money(_ value: Decimal?, currency: CurrencyCode, shell: NativeShellModel) -> String {
         guard let value, !value.isNaN else { return "—" }
         return VisionFormat.currency(
             value, code: currency, locale: shell.settings.numberFormat.locale, fractionDigits: 0)

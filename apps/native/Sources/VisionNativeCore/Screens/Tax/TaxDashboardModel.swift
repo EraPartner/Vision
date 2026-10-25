@@ -28,7 +28,7 @@ public final class TaxDashboardModel {
         if clearData { data = nil }
     }
     public func load(
-        year: Int? = nil, currency: String, now: Date? = nil, calendar: Calendar = .current, force: Bool = false
+        year: Int? = nil, currency: CurrencyCode, now: Date? = nil, calendar: Calendar = .current, force: Bool = false
     ) async {
         let today = now ?? clock()
         let key = "\(year.map(String.init) ?? "live")|\(currency)|\(StatisticsWindow.day(today, calendar: calendar))"

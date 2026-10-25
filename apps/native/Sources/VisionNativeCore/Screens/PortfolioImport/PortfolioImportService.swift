@@ -3,8 +3,9 @@ import Foundation
 public protocol PortfolioImportService: Sendable {
     func importProbe(file: PortfolioImportFile, config: PortfolioImportConfig) async throws -> PortfolioImportProbe
     func importParsers() async throws -> [PortfolioImportParser]
-    func importSaveParser(id: Int?, name: String, config: PortfolioImportConfig) async throws -> PortfolioImportParser
-    func importDeleteParser(id: Int) async throws
+    func importSaveParser(id: PortfolioParserConfigID?, name: String, config: PortfolioImportConfig) async throws
+        -> PortfolioImportParser
+    func importDeleteParser(id: PortfolioParserConfigID) async throws
     func importAccounts() async throws -> [OpenAPI.Account]
     func importInvestments() async throws -> [PortfolioInvestment]
     func importStream(
@@ -12,10 +13,13 @@ public protocol PortfolioImportService: Sendable {
         onProgress: @escaping @Sendable (ImportProgress) async -> Void
     ) async throws -> PortfolioImportOutcome
     func importBatches(limit: Int, offset: Int) async throws -> PortfolioImportBatchPage
-    func importPreview(batchId: Int) async throws -> PortfolioImportPreview
-    func importOverride(batchId: Int, rowIds: [String], investmentId: Int?, createNew: Bool) async throws
-    func importCommit(batchId: Int, accountId: Int?) async throws -> PortfolioImportCommitResult
-    func importRollback(batchId: Int) async throws -> Int
+    func importPreview(batchId: PortfolioImportBatchNumericID) async throws -> PortfolioImportPreview
+    func importOverride(
+        batchId: PortfolioImportBatchNumericID, rowIds: [String], investmentId: InvestmentID?, createNew: Bool
+    ) async throws
+    func importCommit(batchId: PortfolioImportBatchNumericID, accountId: AccountID?) async throws
+        -> PortfolioImportCommitResult
+    func importRollback(batchId: PortfolioImportBatchNumericID) async throws -> Int
     func importReconciliationPreview(scope: PortfolioImportReconciliationScope) async throws
         -> PortfolioImportReconciliationPlan
     func importReconciliationCommit(scope: PortfolioImportReconciliationScope) async throws
@@ -33,7 +37,7 @@ extension APIClient: PortfolioImportService {
             InsightRequest(OpenAPIOperations.GetPortfolioParsers(), query: []))
         return page.items
     }
-    public func importSaveParser(id: Int?, name: String, config: PortfolioImportConfig) async throws
+    public func importSaveParser(id: PortfolioParserConfigID?, name: String, config: PortfolioImportConfig) async throws
         -> PortfolioImportParser
     {
         let body = try JSONEncoder().encode(TaxValue.object(["name": .string(name), "config": config.payload]))
@@ -47,7 +51,7 @@ extension APIClient: PortfolioImportService {
                 OpenAPIOperations.CreatePortfolioParser(body: .init(name: name, config: .init())), query: [],
                 bodyOverride: body))
     }
-    public func importDeleteParser(id: Int) async throws {
+    public func importDeleteParser(id: PortfolioParserConfigID) async throws {
         _ = try await send(OpenAPIOperations.DeletePortfolioParser(id: id))
     }
     public func importAccounts() async throws -> [OpenAPI.Account] {
@@ -108,30 +112,32 @@ extension APIClient: PortfolioImportService {
         try page.validate(limit: limit, offset: offset)
         return page
     }
-    public func importPreview(batchId: Int) async throws -> PortfolioImportPreview {
+    public func importPreview(batchId: PortfolioImportBatchNumericID) async throws -> PortfolioImportPreview {
         let preview: PortfolioImportPreview = try await send(
-            InsightRequest(OpenAPIOperations.PreviewPortfolioImportBatch(id: batchId), query: []))
+            InsightRequest(OpenAPIOperations.PreviewPortfolioImportBatch(id: batchId.pathID), query: []))
         try preview.validate(batchId: batchId)
         return preview
     }
-    public func importOverride(batchId: Int, rowIds: [String], investmentId: Int?, createNew: Bool) async throws {
+    public func importOverride(
+        batchId: PortfolioImportBatchNumericID, rowIds: [String], investmentId: InvestmentID?, createNew: Bool
+    ) async throws {
         guard !rowIds.isEmpty, Set(rowIds).count == rowIds.count,
             rowIds.allSatisfy({ $0.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil }),
-            createNew || (investmentId ?? 0) > 0
+            createNew || (investmentId?.rawValue ?? 0) > 0
         else { throw PortfolioImportFailure.unverified("Invalid investment resolution request") }
         var body: TaxValue = .object(["row_ids": .array(rowIds.map(TaxValue.string))])
         if createNew {
             body["create_new"] = .bool(true)
         } else {
-            body["investment_id"] = .number(Decimal(investmentId!))
+            body["investment_id"] = .number(Decimal(investmentId?.rawValue ?? 0))
         }
         let result: TaxValue = try await send(
             InsightRequest(
-                OpenAPIOperations.PortfolioImportRowsInvestmentOverride(id: batchId, body: .null), query: [],
+                OpenAPIOperations.PortfolioImportRowsInvestmentOverride(id: batchId.pathID, body: .null), query: [],
                 bodyOverride: try JSONEncoder().encode(body)))
         guard let resolved = result["resolved"]?.importIntValue, resolved == rowIds.count,
             let returned = result["investment_id"]?.importIntValue, returned > 0,
-            result["created"]?.boolValue == createNew, createNew || returned == investmentId
+            result["created"]?.boolValue == createNew, createNew || returned == investmentId?.rawValue
         else { throw PortfolioImportFailure.unverified("Unverified investment resolution response") }
         if createNew {
             _ =
@@ -139,19 +145,22 @@ extension APIClient: PortfolioImportService {
                 ?? { throw PortfolioImportFailure.unverified("Missing created investment") }()
         }
     }
-    public func importCommit(batchId: Int, accountId: Int?) async throws -> PortfolioImportCommitResult {
+    public func importCommit(batchId: PortfolioImportBatchNumericID, accountId: AccountID?) async throws
+        -> PortfolioImportCommitResult
+    {
         let result: PortfolioImportCommitResult = try await send(
             InsightRequest(
-                OpenAPIOperations.CommitPortfolioImportBatch(id: batchId, body: .init(accountId: accountId)), query: [])
+                OpenAPIOperations.CommitPortfolioImportBatch(id: batchId.pathID, body: .init(accountId: accountId)),
+                query: [])
         )
         guard result.batchId == batchId,
             [result.total, result.imported, result.duplicates, result.errors].allSatisfy({ $0 >= 0 })
         else { throw PortfolioImportFailure.unverified("Unverified portfolio commit response") }
         return result
     }
-    public func importRollback(batchId: Int) async throws -> Int {
+    public func importRollback(batchId: PortfolioImportBatchNumericID) async throws -> Int {
         let result: TaxValue = try await send(
-            InsightRequest(OpenAPIOperations.DeletePortfolioImportBatch(id: batchId), query: []))
+            InsightRequest(OpenAPIOperations.DeletePortfolioImportBatch(id: batchId.pathID), query: []))
         guard let deleted = result["deleted"]?.importIntValue else {
             throw PortfolioImportFailure.unverified("Unverified portfolio rollback response")
         }

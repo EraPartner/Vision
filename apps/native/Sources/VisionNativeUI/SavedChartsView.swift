@@ -1,79 +1,129 @@
 import SwiftUI
 import VisionNativeCore
 
+extension SavedChartsModel {
+    /// `max-w-4xl` form plus preview, padded and fitted by the sheet itself.
+    static var builderMetrics: VisionDialogMetrics { VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0) }
+}
+
 struct SavedChartsView: View {
     let model: SavedChartsModel
     let snapshot: StatisticsSnapshot
     let settings: NativeAppSettings
     let strings: any Localizing
+    /// `lg:grid-cols-2`: two chart cards per row on a wide window.
+    var isLarge = true
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text(strings.t("customChart.tab")).font(Font.visionTitle3)
-                if !model.charts.isEmpty {
-                    Text(strings.tc("customChart.savedCount", model.charts.count)).foregroundStyle(theme.secondaryLabel)
-                }
-                Spacer()
-                Button(strings.t("customChart.newChart")) { model.begin() }.buttonStyle(.visionPrimary)
-            }
+        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            header
             if model.isLoading {
-                ProgressView().padding()
+                ProgressView().frame(maxWidth: .infinity).padding()
             } else if model.charts.isEmpty {
-                Button(strings.t("customChart.createFirst")) { model.begin() }.buttonStyle(.visionOutline)
-            }
-            ForEach(model.charts, id: \.id) { chart in
-                AdminCard(padding: VisionPageLayout.padding) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            Text(chart.name).font(Font.visionTitle3).lineLimit(1)
-                            Spacer()
-                            Menu {
-                                Button(strings.t("common.edit")) { model.begin(chart: chart) }
-                                Button(strings.t("common.delete"), role: .destructive) { model.pendingDelete = chart }
-                            } label: {
-                                Image(systemName: "ellipsis")
-                            }
-                            .menuIndicator(.hidden)
-                            .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
-                        }
-                        if let dataset = model.datasets[chart.id] {
-                            CustomChartPlot(
-                                dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
-                                strings: strings,
-                                selection: Binding(
-                                    get: { model.printLocalState.selection[String(chart.id)] },
-                                    set: { model.printLocalState.selection[String(chart.id)] = $0 }),
-                                range: Binding(
-                                    get: { model.printLocalState.rangeStart[String(chart.id)] },
-                                    set: { model.printLocalState.rangeStart[String(chart.id)] = $0 }))
-                        } else if let error = model.errors[chart.id] {
-                            Text(error).foregroundStyle(theme.destructive)
-                        } else {
-                            ProgressView()
-                        }
-                    }
-                }
+                emptyState
+            } else {
+                chartGrid
             }
             if let error = model.error { Text(error).foregroundStyle(theme.destructive) }
         }
         .task(id: snapshot) {
-            await model.appear(snapshot: snapshot, currency: settings.defaultCurrency, strings: strings)
+            await model.appear(snapshot: snapshot, currency: LedgerCurrency.display(settings), strings: strings)
         }
-        .sheet(isPresented: Binding(get: { model.draft != nil }, set: { if !$0 { model.close() } })) {
-            CustomChartBuilderSheet(model: model, snapshot: snapshot, settings: settings, strings: strings)
-        }
-        .alert(
-            strings.t("customChart.deleteTitle"),
-            isPresented: Binding(get: { model.pendingDelete != nil }, set: { if !$0 { model.pendingDelete = nil } })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.pendingDelete = nil }
-            Button(strings.t("common.delete"), role: .destructive) { Task { await model.confirmDelete() } }
-        } message: {
-            Text(strings.t("customChart.deleteDesc", ["name": model.pendingDelete?.name ?? ""]))
+        // The buttons decide: `confirmDelete()` reads `pendingDelete`, so a dismissal must not
+        // clear it before the confirming task runs.
+        .visionAlert(
+            title: strings.t("customChart.deleteTitle"),
+            message: { pending in strings.t("customChart.deleteDesc", ["name": pending.chart.name]) },
+            item: Binding(get: { model.pendingDelete.map(PendingChartDeletion.init) }, set: { _ in })
+        ) { _ in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.pendingDelete = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                Task { await model.confirmDelete() }
+            }
         }
     }
+
+    /// The section heading (`customChart.tab` over the saved count) and the "New chart" button.
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(strings.t("customChart.tab")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
+                if !model.charts.isEmpty {
+                    Text(strings.tc("customChart.savedCount", model.charts.count))
+                        .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                }
+            }
+            Spacer()
+            Button { model.begin() } label: {
+                Label(strings.t("customChart.newChart"), systemImage: "plus")
+            }
+            .buttonStyle(.visionPrimary).controlSize(.small)
+        }
+    }
+    /// The empty card: icon, title, description and a primary "create your first chart" button.
+    private var emptyState: some View {
+        AdminCard(padding: VisionPageLayout.padding) {
+            VisionEmptyState(
+                symbol: "chart.line.uptrend.xyaxis", title: strings.t("customChart.emptyTitle"),
+                description: strings.t("customChart.emptyDesc")
+            ) {
+                Button { model.begin() } label: {
+                    Label(strings.t("customChart.createFirst"), systemImage: "plus")
+                }
+                .buttonStyle(.visionPrimary)
+            }
+        }
+    }
+    private var chartGrid: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: VisionPageLayout.spacing, alignment: .top),
+                count: isLarge ? 2 : 1),
+            alignment: .leading, spacing: VisionPageLayout.spacing
+        ) {
+            ForEach(model.charts, id: \.id) { chart in chartCard(chart) }
+        }
+    }
+    private func chartCard(_ chart: OpenAPI.SavedChart) -> some View {
+        AdminCard(padding: VisionPageLayout.padding) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(chart.name).font(Font.visionTitle3).lineLimit(1)
+                    Spacer()
+                    Menu {
+                        Button(strings.t("common.edit")) { model.begin(chart: chart) }
+                        Button(strings.t("common.delete"), role: .destructive) { model.pendingDelete = chart }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .menuIndicator(.hidden)
+                    .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
+                }
+                if let dataset = model.datasets[chart.id] {
+                    CustomChartPlot(
+                        dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
+                        strings: strings,
+                        selection: Binding(
+                            get: { model.printLocalState.selection[String(chart.id.rawValue)] },
+                            set: { model.printLocalState.selection[String(chart.id.rawValue)] = $0 }),
+                        range: Binding(
+                            get: { model.printLocalState.rangeStart[String(chart.id.rawValue)] },
+                            set: { model.printLocalState.rangeStart[String(chart.id.rawValue)] = $0 }))
+                } else if let error = model.errors[chart.id] {
+                    Text(error).foregroundStyle(theme.destructive)
+                } else {
+                    ProgressView()
+                }
+            }
+        }
+    }
+}
+
+/// A saved chart awaiting delete confirmation; `SavedChart` has no `Identifiable` conformance.
+private struct PendingChartDeletion: Identifiable {
+    let chart: OpenAPI.SavedChart
+    var id: SavedChartID { chart.id }
 }
 
 struct CustomChartPlot: View {
@@ -118,7 +168,7 @@ struct CustomChartPlot: View {
                 Text(
                     strings.t(
                         "customChart.historicalFxFallback",
-                        ["currencies": dataset.fallbackCurrencies.isEmpty ? "—" : dataset.fallbackCurrencies.joined(separator: ", ")]
+                        ["currencies": dataset.fallbackCurrencies.isEmpty ? "—" : dataset.fallbackCurrencies.map(\.rawValue).joined(separator: ", ")]
                     )
                 ).font(.caption).foregroundStyle(theme.warning)
             }
@@ -131,21 +181,25 @@ struct CustomChartPlot: View {
                 Text(strings.t("customChart.noSeries"))
             } else if kind == .rankedBar {
                 InsightRankedChart(
-                    rows: entities, settings: settings, currency: settings.defaultCurrency, strings: strings,
+                    rows: entities, settings: settings, currency: LedgerCurrency.display(settings), strings: strings,
                     initialSelection: selection.wrappedValue, onSelectionChange: { selection.wrappedValue = $0 })
             } else {
                 InsightTimelineChart(
-                    series: series, currency: settings.defaultCurrency, settings: settings,
-                    title: strings.t("customChart.builder.preview"), bars: kind.chartType == "bar",
-                    areas: kind.chartType == "area",
-                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, selection: selection,
+                    series: series, currency: LedgerCurrency.display(settings), settings: settings,
+                    title: strings.t("customChart.builder.preview"), bars: kind.chartType == .bar,
+                    areas: kind.chartType == .area,
+                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, legend: .bottomCenter,
+                    selection: selection,
                     rangeStart: range)
             }
         }
     }
 }
 
-private struct CustomChartBuilderSheet: View {
+/// The chart editor dialog. `StatisticsView` presents it (`StatisticsView.presentsChartBuilder`),
+/// because a presenter sizes its overlay to the view it modifies and this view is only as tall as
+/// its content: attached here, the dialog was clipped to the height of the empty "Saved charts" tab.
+struct CustomChartBuilderSheet: View {
     let model: SavedChartsModel
     let snapshot: StatisticsSnapshot
     let settings: NativeAppSettings
@@ -180,16 +234,25 @@ private struct CustomChartBuilderSheet: View {
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             fieldLabel("customChart.chartType")
-                            Picker(strings.t("customChart.chartType"), selection: binding(\.kind)) {
-                                ForEach(CustomChartKind.allCases, id: \.self) { Text(strings.t($0.labelKey)).tag($0) }
-                            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                            VisionSelect(
+                                selection: binding(\.kind),
+                                options: CustomChartKind.allCases.map {
+                                    VisionSelectOption(value: $0, title: strings.t($0.labelKey))
+                                }, accessibilityLabel: strings.t("customChart.chartType"), expands: true)
                         }
                         VStack(alignment: .leading, spacing: 6) {
                             fieldLabel("customChart.timeBucket")
-                            Picker(strings.t("customChart.timeBucket"), selection: binding(\.timeBucket)) {
-                                Text(strings.t("customChart.monthly")).tag("monthly")
-                                Text(strings.t("customChart.yearly")).tag("yearly")
-                            }.pickerStyle(.segmented).labelsHidden()
+                            VisionSegmentedControl(
+                                selection: binding(\.timeBucket),
+                                options: [
+                                    VisionSegmentOption(
+                                        value: OpenAPI.SavedChart.TimeBucket.monthly,
+                                        title: strings.t("customChart.monthly")),
+                                    VisionSegmentOption(
+                                        value: OpenAPI.SavedChart.TimeBucket.yearly,
+                                        title: strings.t("customChart.yearly")),
+                                ]
+                            ).accessibilityLabel(strings.t("customChart.timeBucket"))
                         }
                         HStack(alignment: .top, spacing: 8) {
                             VStack(alignment: .leading, spacing: 6) {
@@ -239,14 +302,14 @@ private struct CustomChartBuilderSheet: View {
                 .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(
                     !draft.canSave || model.isSaving)
             }
-        }.visionDialogPadding().frame(width: 896, height: 680).interactiveDismissDisabled(model.isSaving)
+        }.visionDialogPadding().frame(width: 896, height: 680).visionInteractiveDismissDisabled(model.isSaving)
             .task(id: model.draft) { await model.refreshPreview() }
     }
     /// The web `Label`: `type-body font-medium text-label-primary` above its control.
     private func fieldLabel(_ key: String) -> some View {
         Text(strings.t(key)).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
     }
-    private var categoryOptions: [ChartPickerOption] {
+    private var categoryOptions: [ChartPickerOption<CategoryID>] {
         snapshot.categories(metric: .absolute).compactMap { row in
             row.categoryIds.first.map { ChartPickerOption(id: $0, name: row.name) }
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
@@ -264,19 +327,16 @@ private struct CustomChartBuilderSheet: View {
         guard parts.count == 3 else { return nil }
         return PlannedDay(year: parts[0], month: parts[1], day: parts[2])
     }
-    private func entitySection(
-        title: String, allKey: String, addKey: String, all: Binding<Bool>, selected: Binding<[Int]>,
-        options: [ChartPickerOption]
+    private func entitySection<ID: Hashable>(
+        title: String, allKey: String, addKey: String, all: Binding<Bool>, selected: Binding<[ID]>,
+        options: [ChartPickerOption<ID>]
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(strings.t(title)).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                 Spacer()
-                HStack(spacing: 8) {
-                    Toggle(strings.t(allKey), isOn: all).toggleStyle(.switch).controlSize(.mini).labelsHidden()
-                    Text(strings.t(allKey)).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                        .accessibilityHidden(true)
-                }
+                Toggle(strings.t(allKey), isOn: all).toggleStyle(.visionSwitch)
+                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
             if all.wrappedValue {
                 Text(strings.t("customChart.allHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -285,7 +345,7 @@ private struct CustomChartBuilderSheet: View {
                 ScrollView(.horizontal) {
                     HStack {
                         ForEach(selected.wrappedValue, id: \.self) { id in
-                            let name = options.first { $0.id == id }?.name ?? String(id)
+                            let name = options.first { $0.id == id }?.name ?? String(describing: id)
                             Button {
                                 selected.wrappedValue.removeAll { $0 == id }
                             } label: {
@@ -301,14 +361,14 @@ private struct CustomChartBuilderSheet: View {
     }
 }
 
-private struct ChartPickerOption: Identifiable {
-    let id: Int
+private struct ChartPickerOption<ID: Hashable>: Identifiable {
+    let id: ID
     let name: String
 }
-private struct ChartEntityPicker: View {
+private struct ChartEntityPicker<ID: Hashable>: View {
     let title: String
-    let options: [ChartPickerOption]
-    @Binding var selection: [Int]
+    let options: [ChartPickerOption<ID>]
+    @Binding var selection: [ID]
     let strings: any Localizing
     @State private var isOpen = false
     @State private var search = ""

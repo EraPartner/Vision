@@ -2,7 +2,7 @@ import Foundation
 
 public protocol RebalanceService: Sendable {
     func rebalance(_ request: RebalanceRequest) async throws -> RebalanceResult
-    func rebalanceCash(currency: String, reserveFloor: Decimal) async throws -> RebalanceCashProjection
+    func rebalanceCash(currency: CurrencyCode, reserveFloor: Decimal) async throws -> RebalanceCashProjection
     func rebalancePlans() async throws -> OpenAPI.Setting
     func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting
 }
@@ -10,10 +10,8 @@ public protocol RebalanceService: Sendable {
 extension APIClient: RebalanceService {
     public func rebalance(_ request: RebalanceRequest) async throws -> RebalanceResult {
         let result = try await send(RebalanceComputeOperation(request: request))
-        guard result.currency.uppercased() == request.currency.uppercased(),
-            result.cashAccounts.allSatisfy({
-                $0.id > 0 && $0.balanceCurrency.uppercased() == result.currency.uppercased()
-            })
+        guard result.currency == request.currency,
+            result.cashAccounts.allSatisfy({ $0.id.rawValue > 0 && $0.balanceCurrency == result.currency })
         else {
             throw APIError.contract(
                 APIContractError(
@@ -24,9 +22,11 @@ extension APIClient: RebalanceService {
         }
         return result
     }
-    public func rebalanceCash(currency: String, reserveFloor: Decimal) async throws -> RebalanceCashProjection {
+    public func rebalanceCash(currency: CurrencyCode, reserveFloor: Decimal) async throws
+        -> RebalanceCashProjection
+    {
         let result = try await send(RebalanceCashOperation(currency: currency, reserveFloor: reserveFloor))
-        guard result.currency.uppercased() == currency.uppercased(), result.horizonDays > 0,
+        guard result.currency == currency, result.horizonDays > 0,
             result.occurrenceCount >= 0, result.candidateCashCap >= 0, result.reserveFloor == reserveFloor
         else {
             throw APIError.contract(
@@ -36,7 +36,7 @@ extension APIClient: RebalanceService {
         }
         return result
     }
-    public func rebalancePlans() async throws -> OpenAPI.Setting { try await setting(key: "rebalance_plans") }
+    public func rebalancePlans() async throws -> OpenAPI.Setting { try await setting(key: .rebalancePlans) }
     public func saveRebalancePlans(_ plans: [RebalancePlan], expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(RebalancePlansWrite(plans: plans, expected: expected))
     }
@@ -57,7 +57,7 @@ private struct RebalanceCashOperation: APIOperation, Encodable {
     static let method = OpenAPIOperations.ComputeCommitmentAwareCash.method
     static let pathTemplate = OpenAPIOperations.ComputeCommitmentAwareCash.pathTemplate
     var path: String { Self.pathTemplate }
-    let currency: String
+    let currency: CurrencyCode
     let reserveFloor: Decimal
     func encodedBody() throws -> Data? { try APIBody.encode(self) }
 }

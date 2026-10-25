@@ -8,21 +8,21 @@ public protocol PlannedPaymentsService: Sendable {
     func plannedPayments(includePaused: Bool) async throws -> [OpenAPI.PlannedTransaction]
     /// `getPlannedTotals(currency)`: rest-of-month, Estimated monthly and the next-days window,
     /// computed and converted on the server (ADR-216). `nil` when a service has no totals.
-    func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals?
+    func plannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals?
     /// `updatePlannedTransaction(id, { is_active })`: Pause, Resume and their Undo.
-    func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction
+    func setPlannedPaymentActive(id: PlannedTransactionID, isActive: Bool) async throws -> OpenAPI.PlannedTransaction
     /// `deletePlannedTransaction(id)`.
-    func deletePlannedPayment(id: Int) async throws
+    func deletePlannedPayment(id: PlannedTransactionID) async throws
     /// `getTransactions({ transaction_id, limit: 1 })`: the transaction, if it exists.
-    func transaction(id: Int) async throws -> OpenAPI.Transaction?
+    func transaction(id: TransactionID) async throws -> OpenAPI.Transaction?
 }
 
 extension PlannedPaymentsService {
-    public func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? { nil }
+    public func plannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? { nil }
 }
 
 extension APIClient: PlannedPaymentsService {
-    public func plannedTotals(currency: String) async throws -> OpenAPI.PlannedTotals? {
+    public func plannedTotals(currency: CurrencyCode) async throws -> OpenAPI.PlannedTotals? {
         try await send(OpenAPIOperations.GetPlannedTotals(currency: currency))
     }
 
@@ -30,17 +30,17 @@ extension APIClient: PlannedPaymentsService {
         try await send(OpenAPIOperations.GetPlannedTransactions(limit: 1000, active: !includePaused)).items
     }
 
-    public func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
+    public func setPlannedPaymentActive(id: PlannedTransactionID, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
         try await send(
             OpenAPIOperations.UpdatePlannedTransaction(
                 id: id, body: OpenAPIOperations.UpdatePlannedTransaction.Body(isActive: isActive)))
     }
 
-    public func deletePlannedPayment(id: Int) async throws {
+    public func deletePlannedPayment(id: PlannedTransactionID) async throws {
         _ = try await send(OpenAPIOperations.DeletePlannedTransaction(id: id))
     }
 
-    public func transaction(id: Int) async throws -> OpenAPI.Transaction? {
+    public func transaction(id: TransactionID) async throws -> OpenAPI.Transaction? {
         try await send(OpenAPIOperations.GetTransactions(limit: 1, transactionId: id)).items.first
     }
 }
@@ -49,7 +49,7 @@ extension APIClient: PlannedPaymentsService {
 public struct PlannedUndo: Equatable, Sendable {
     /// The toast it belongs to.
     public let noticeID: Int
-    public let paymentID: Int
+    public let paymentID: PlannedTransactionID
     public let restoreActive: Bool
 }
 
@@ -141,7 +141,7 @@ public final class PlannedPaymentsModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let retryDelay: Duration
     @ObservationIgnored public let calendar: Calendar
-    @ObservationIgnored private var defaultCurrency = NativeAppSettings.defaults.defaultCurrency
+    @ObservationIgnored private var defaultCurrency = LedgerCurrency.display(.defaults)
     @ObservationIgnored private var inFlight: [Bool: Task<Void, Never>] = [:]
     @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var editorCount = 0
@@ -179,7 +179,7 @@ public final class PlannedPaymentsModel {
 
     /// The page appeared or the route's `show_all` changed: fetch unless a fresh answer for
     /// that view is cached. The server totals load alongside.
-    public func appear(showAll: Bool, defaultCurrency: String) async {
+    public func appear(showAll: Bool, defaultCurrency: CurrencyCode) async {
         setDefaultCurrency(defaultCurrency)
         self.showAll = showAll
         let totalsTask = Task { [weak self] in await self?.loadTotals() }
@@ -195,7 +195,7 @@ public final class PlannedPaymentsModel {
     /// `usePlannedTotals`: keyed by the default currency and today, 5 minute stale time. A
     /// failed fetch keeps the last answer.
     func loadTotals() async {
-        let key = "\(defaultCurrency)|\(Self.dayKey(now(), calendar: calendar))"
+        let key = "\(defaultCurrency.rawValue)|\(Self.dayKey(now(), calendar: calendar))"
         if key == totalsKey, let fetched = totalsFetchedAt,
             now().timeIntervalSince(fetched) < Self.totalsStaleAfter
         {
@@ -241,7 +241,7 @@ public final class PlannedPaymentsModel {
     }
 
     /// `queryKey` holds the default currency: a change maps the cached rows again.
-    private func setDefaultCurrency(_ code: String) {
+    private func setDefaultCurrency(_ code: CurrencyCode) {
         guard code != defaultCurrency else { return }
         defaultCurrency = code
         for (key, state) in lists {
@@ -304,7 +304,7 @@ public final class PlannedPaymentsModel {
         invalidateTotals()
     }
 
-    private func remove(id: Int, in key: Bool) {
+    private func remove(id: PlannedTransactionID, in key: Bool) {
         lists[key]?.payments?.removeAll { $0.id == id }
         invalidateTotals()
     }
@@ -556,7 +556,7 @@ public final class PlannedPaymentsModel {
         await restoreStatus(id: undo.paymentID, active: undo.restoreActive)
     }
 
-    private func restoreStatus(id: Int, active: Bool) async {
+    private func restoreStatus(id: PlannedTransactionID, active: Bool) async {
         let key = showAll
         do {
             let updated = try await service.setPlannedPaymentActive(id: id, isActive: active)
@@ -572,7 +572,7 @@ public final class PlannedPaymentsModel {
 
     /// `toggleMutation`: the cached row's `is_active` flipped; a row no longer cached is left
     /// alone.
-    private func flipActive(id: Int) async throws {
+    private func flipActive(id: PlannedTransactionID) async throws {
         let key = showAll
         guard let cached = payments.first(where: { $0.id == id }) else { return }
         let updated = try await service.setPlannedPaymentActive(id: id, isActive: !cached.isActive)
@@ -655,24 +655,24 @@ public final class PlannedPaymentsModel {
 @Observable
 public final class PlannedHistoryModel {
     public struct Entry: Equatable, Sendable, Identifiable {
-        public let plannedPaymentId: Int
+        public let plannedPaymentId: PlannedTransactionID
         public let plannedPaymentName: String
         public let executionDate: String
-        public let transactionId: Int
+        public let transactionId: TransactionID
         public let transactionDate: String
         public let recipientName: String?
         public let categoryName: String?
         public let amount: Decimal
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let memo: String?
 
-        public var id: String { "\(plannedPaymentId)-\(transactionId)-\(executionDate)" }
+        public var id: String { "\(plannedPaymentId.rawValue)-\(transactionId.rawValue)-\(executionDate)" }
 
         /// The Linked transaction's first line: memo, payee or `plannedPage.link.txFallback`.
         public func title(_ strings: any Localizing) -> String {
             if let memo, !memo.isEmpty { return memo }
             if let recipientName, !recipientName.isEmpty { return recipientName }
-            return strings.t("plannedPage.link.txFallback", ["id": String(transactionId)])
+            return strings.t("plannedPage.link.txFallback", ["id": String(transactionId.rawValue)])
         }
 
         /// "payee · category · date" of the non-empty parts.
@@ -689,10 +689,10 @@ public final class PlannedHistoryModel {
 
     /// One execution to look up.
     struct Link: Equatable, Sendable {
-        let plannedPaymentId: Int
+        let plannedPaymentId: PlannedTransactionID
         let plannedPaymentName: String
         let executionDate: String
-        let transactionId: Int
+        let transactionId: TransactionID
     }
 
     public private(set) var entries: [Entry] = []
@@ -719,7 +719,7 @@ public final class PlannedHistoryModel {
                 return payment.executions.map { execution in
                     Link(
                         plannedPaymentId: payment.id, plannedPaymentName: payment.name,
-                        executionDate: execution.executionDate, transactionId: execution.executedTransactionId)
+                        executionDate: execution.executionDate.description, transactionId: execution.executedTransactionId)
                 }
             }
             if let transactionId = payment.executedTransactionId, transactionId != 0 {
@@ -789,7 +789,7 @@ public final class PlannedHistoryModel {
                         Entry(
                             plannedPaymentId: link.plannedPaymentId, plannedPaymentName: link.plannedPaymentName,
                             executionDate: link.executionDate, transactionId: link.transactionId,
-                            transactionDate: transaction.transactionDate, recipientName: transaction.recipientName,
+                            transactionDate: transaction.transactionDate.description, recipientName: transaction.recipientName,
                             categoryName: transaction.categoryName, amount: transaction.amount,
                             currency: transaction.currency, memo: transaction.memo)
                     ))

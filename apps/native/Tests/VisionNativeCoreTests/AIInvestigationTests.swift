@@ -20,12 +20,12 @@ struct AIInvestigationTests {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service)
         let settings = NativeAppSettings(
-            defaultCurrency: "usd", analysisBenchmark: " \u{FEFF}acwi\u{FEFF} ", aiAnswerDepth: "invalid",
-            language: "nl")
+            defaultCurrency: "USD", analysisBenchmark: " \u{FEFF}acwi\u{FEFF} ", aiAnswerDepth: .unknown("invalid"),
+            language: .nl)
         model.configure(settings: settings)
         await model.load()
-        #expect(model.resolvedCurrency == "EUR" && model.resolvedBenchmark == "ACWI")
-        #expect(model.depth == "quick" && model.language == "nl")
+        #expect(model.resolvedCurrency == CurrencyCode(rawValue: "USD") && model.resolvedBenchmark == "ACWI")
+        #expect(model.depth == .quick && model.language == .nl)
         model.question = " \u{FEFF}question\u{FEFF} "
         #expect(model.input()["question"] == .string("question"))
         model.clarification = "\u{FEFF}"
@@ -39,10 +39,10 @@ struct AIInvestigationTests {
         let model = AIInvestigationModel(service: service, pollDelay: .seconds(60))
         model.configure(
             settings: .init(
-                defaultCurrency: "USD", analysisBenchmark: "ACWI", aiAnswerDepth: "detailed", language: "nl"))
+                defaultCurrency: "USD", analysisBenchmark: "ACWI", aiAnswerDepth: .detailed, language: .nl))
         await model.load()
         model.question = " Question "
-        model.researchMode = "public-providers"
+        model.researchMode = .publicProviders
         model.publicSymbols = " aapl, ,msft,aapl,extra "
         model.dateFrom = "2026-01-01"
         await model.run()
@@ -69,9 +69,9 @@ struct AIInvestigationTests {
         await model.run()
         await service.waitForPause()
         await model.cancel()
-        #expect(model.job?.state == "running")
+        #expect(model.job?.state == .running)
         await service.release()
-        try await waitForPublishedState(model, "waiting")
+        try await waitForPublishedState(model, .waiting)
         #expect(await service.getReads >= 1)
         model.clarification = " clarify "
         await model.resume()
@@ -159,11 +159,11 @@ struct AIInvestigationTests {
         #expect(model.runDisabled)
         model.question = "q"
         #expect(!model.runDisabled)
-        model.researchMode = "public-web"
+        model.researchMode = .publicWeb
         #expect(model.runDisabled)
         model.publicWebQuery = " allowed "
         #expect(!model.runDisabled && model.input()["publicWebQuery"] == .string("allowed"))
-        model.researchMode = "public-providers"
+        model.researchMode = .publicProviders
         #expect(model.runDisabled && model.input()["publicWebQuery"] == .null)
         model.publicSymbols = "aapl"
         #expect(!model.runDisabled && model.input()["publicSymbols"] == .array([.string("AAPL")]))
@@ -182,7 +182,7 @@ struct AIInvestigationTests {
         #expect(await service.documentReads == 2)
         model.didDisappear()
     }
-    private func waitForPublishedState(_ model: AIInvestigationModel, _ state: String) async throws {
+    private func waitForPublishedState(_ model: AIInvestigationModel, _ state: AIInvestigationState) async throws {
         guard model.job?.state != state else { return }
         let publication = AsyncStream<Void>.makeStream()
         defer { publication.continuation.finish() }
@@ -250,7 +250,7 @@ private actor InvestigationFixtureService: AIInvestigationService {
     var creates: [TaxValue] = []
     var resumes: [TaxValue] = []
     var uploads: [AIResearchDocumentFile] = []
-    var deletedDocuments: [String] = []
+    var deletedDocuments: [ResearchDocumentID] = []
     var getReads = 0
     var documentReads = 0
     private var failingDocument = false
@@ -321,16 +321,16 @@ private actor InvestigationFixtureService: AIInvestigationService {
         if failCreate { throw APIError.network("lost receipt") }
         return try .init(raw: investigationJobFixture())
     }
-    func investigationGet(id: String) async throws -> AIInvestigation {
+    func investigationGet(id: AiInvestigationID) async throws -> AIInvestigation {
         getReads += 1
         await gate("get")
         return try .init(raw: investigationJobFixture(state: "waiting"))
     }
-    func investigationDelete(id: String) {}
-    func investigationCancel(id: String) throws -> AIInvestigation {
+    func investigationDelete(id: AiInvestigationID) {}
+    func investigationCancel(id: AiInvestigationID) throws -> AIInvestigation {
         try .init(raw: investigationJobFixture(state: "cancelled"))
     }
-    func investigationResume(id: String, clarification: String, scope: TaxValue) throws -> AIInvestigation {
+    func investigationResume(id: AiInvestigationID, clarification: String, scope: TaxValue) throws -> AIInvestigation {
         resumes.append(.object(["clarification": .string(clarification), "scope": scope]))
         return try .init(raw: investigationJobFixture(state: "completed"))
     }
@@ -338,7 +338,7 @@ private actor InvestigationFixtureService: AIInvestigationService {
         uploads.append(file)
         return try .init(raw: investigationDocumentFixture())
     }
-    func investigationDeleteDocument(id: String) { deletedDocuments.append(id) }
+    func investigationDeleteDocument(id: ResearchDocumentID) { deletedDocuments.append(id) }
 }
 private actor InvestigationHTTPFixture: APITransport {
     var requests: [APIRequest] = []

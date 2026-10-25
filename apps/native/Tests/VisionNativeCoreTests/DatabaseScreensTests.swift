@@ -334,16 +334,16 @@ enum DatabaseFixture {
 
     @Test func changesBecomeTheRequestItems() {
         let insert = TableChange.insert(values: ["name": .string("x")]).item
-        #expect(insert.op == "insert")
+        #expect(insert.op == .insert)
         #expect(insert.values == JSONValue.object(["name": .string("x")]))
         #expect(insert.pk == nil && insert.set == nil && insert.xmin == nil)
         let update = TableChange.update(pk: ["id": .int(1)], xmin: .string("100"), set: ["name": .null]).item
-        #expect(update.op == "update")
+        #expect(update.op == .update)
         #expect(update.pk == JSONValue.object(["id": .int(1)]))
         #expect(update.set == JSONValue.object(["name": .null]))
-        #expect(update.xmin == JSONValue.string("100"))
+        #expect(update.xmin == .string("100"))
         let delete = TableChange.delete(pk: ["id": .int(2)], xmin: nil).item
-        #expect(delete.op == "delete")
+        #expect(delete.op == .delete)
         #expect(delete.xmin == nil && delete.values == nil)
     }
 }

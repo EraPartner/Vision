@@ -23,15 +23,15 @@ public struct PlannedPaymentsView: View {
     /// What the list depends on: the `show_all` view and the default currency.
     private struct LoadKey: Equatable {
         let showAll: Bool
-        let currency: String
+        let currency: CurrencyCode
     }
 
     public var body: some View {
         AdminPage {
             content
         }
-        .task(id: LoadKey(showAll: showAll, currency: settings.defaultCurrency)) {
-            await model.appear(showAll: showAll, defaultCurrency: settings.defaultCurrency)
+        .task(id: LoadKey(showAll: showAll, currency: LedgerCurrency.display(settings))) {
+            await model.appear(showAll: showAll, defaultCurrency: LedgerCurrency.display(settings))
         }
         .task { await model.loadSuggestions() }
         .task { await model.recurring.load() }
@@ -51,46 +51,51 @@ public struct PlannedPaymentsView: View {
                 clear: { model.clearNotice($0) })
         }
         // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-        .alert(
-            strings.t("plannedPage.delete.title"),
+        .visionAlert(
+            title: strings.t("plannedPage.delete.title"),
+            message: strings.t("plannedPage.delete.desc"),
             isPresented: Binding(get: { model.pendingDelete != nil }, set: { _ in })
         ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-            Button(strings.t("plannedPage.delete.confirm"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+            VisionDialogAction(strings.t("plannedPage.delete.confirm"), role: .destructive) {
                 Task { await model.confirmDelete() }
             }
-        } message: {
-            Text(strings.t("plannedPage.delete.desc"))
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { model.isHistoryPresented },
                 set: { presented in
                     if !presented { model.closeHistory() }
-                })
+                }),
+            metrics: .init(maxWidth: nil, padding: 0, spacing: 0)
         ) {
             PlannedHistorySheet(model: model, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
-        // The planned-payment sheet: Escape and the close button leave without saving.
-        .sheet(
+        // The planned-payment sheet (`SheetContent sm:max-w-[470px]`, `p-0`): Escape and the close
+        // button leave without saving.
+        .visionSideSheet(
             item: Binding(
                 get: { model.editor },
                 set: { form in
                     if form == nil { model.dismissEditor() }
-                })
+                }),
+            metrics: .sideSheet(maxWidth: 470)
         ) { form in
             PlannedPaymentFormSheet(model: model, form: form, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
-        .sheet(
+        .visionDialog(
             item: Binding(
                 get: { model.link },
                 set: { link in
                     if link == nil { model.dismissLinkDialog() }
-                })
+                }),
+            metrics: .init(
+                maxWidth: 672, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
+                spacing: 0)
         ) { link in
             PlannedLinkSheet(model: model, link: link, shell: shell)
                 .environment(\.visionTheme, theme)
@@ -144,7 +149,7 @@ public struct PlannedPaymentsView: View {
         } label: {
             Label(strings.t("txPage.view.menu"), systemImage: "slider.horizontal.3")
         }
-        .fixedSize()
+        .visionViewMenu()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
 
@@ -159,10 +164,9 @@ public struct PlannedPaymentsView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .visionMoreActionsMenu()
         .accessibilityLabel(strings.t("plannedPage.menu"))
-        .help(strings.t("plannedPage.menu"))
+        .visionTooltip(strings.t("plannedPage.menu"))
     }
 
     private var addButton: some View {
@@ -274,7 +278,7 @@ public struct PlannedPaymentsView: View {
                                 Text(verbatim: "·").foregroundStyle(theme.tertiaryLabel)
                                 if let windowTotal {
                                     MoneyText(
-                                        amount: windowTotal.net, currency: settings.defaultCurrency,
+                                        amount: windowTotal.net, currency: LedgerCurrency.display(settings),
                                         settings: settings
                                     )
                                     .font(.headline)
@@ -298,7 +302,7 @@ public struct PlannedPaymentsView: View {
                             .tracking(1.3)
                             .foregroundStyle(theme.secondaryLabel)
                         if let monthly {
-                            MoneyText(amount: monthly.total, currency: settings.defaultCurrency, settings: settings)
+                            MoneyText(amount: monthly.total, currency: LedgerCurrency.display(settings), settings: settings)
                                 .font(.visionCardTitle)
                         } else {
                             SkeletonBar(width: 96, height: 28)
@@ -423,7 +427,7 @@ public struct PlannedPaymentsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(strings.t("plannedPage.next7.itemTitle", ["name": payment.name]))
+        .visionTooltip(strings.t("plannedPage.next7.itemTitle", ["name": payment.name]))
         .accessibilityLabel(strings.t("plannedPage.next7.itemTitle", ["name": payment.name]))
     }
 
@@ -536,9 +540,9 @@ public struct PlannedPaymentsView: View {
                         Image(systemName: "arrow.up.right.square")
                             .imageScale(.small)
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.vision(.ghost, size: .iconXs))
                     .foregroundStyle(theme.secondaryLabel)
-                    .help(label)
+                    .visionTooltip(label)
                     .accessibilityLabel(label)
                 }
             }
@@ -587,7 +591,7 @@ public struct PlannedPaymentsView: View {
     /// Mark as paid, or the Paid badge that links to the transaction.
     @ViewBuilder
     private func statusCell(_ payment: PlannedPayment) -> some View {
-        let linked = strings.t("plannedPage.execute.linked", ["n": String(payment.executedTransactionId ?? 0)])
+        let linked = strings.t("plannedPage.execute.linked", ["n": String(payment.executedTransactionId?.rawValue ?? 0)])
         if payment.isExecuted {
             if let route = payment.linkedTransactionRoute {
                 Button {
@@ -637,12 +641,12 @@ public struct PlannedPaymentsView: View {
             Image(systemName: "ellipsis")
         }
         .menuStyle(.button)
-        .buttonStyle(.borderless)
+        .buttonStyle(.vision(.ghost, size: .iconXs))
         .menuIndicator(.hidden)
         .fixedSize()
         .disabled(model.actionLoading)
         .accessibilityLabel(label)
-        .help(label)
+        .visionTooltip(label)
     }
 }
 
@@ -764,7 +768,7 @@ struct PlannedHistorySheet: View {
             }
             HStack(spacing: 8) {
                 MoneyText(
-                    amount: entry.amount, currency: entry.currency ?? shell.settings.defaultCurrency,
+                    amount: entry.amount, currency: entry.currency ?? LedgerCurrency.display(shell.settings),
                     settings: shell.settings
                 )
                 .fontWeight(.semibold)
@@ -774,8 +778,8 @@ struct PlannedHistorySheet: View {
                 } label: {
                     Image(systemName: "arrow.up.right.square")
                 }
-                .buttonStyle(.borderless)
-                .help(strings.t("plannedPage.history.openTransaction"))
+                .buttonStyle(.vision(.ghost, size: .iconSm))
+                .visionTooltip(strings.t("plannedPage.history.openTransaction"))
                 .accessibilityLabel(strings.t("plannedPage.history.openTransaction"))
             }
             .gridColumnAlignment(.trailing)

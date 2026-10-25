@@ -7,41 +7,41 @@ public protocol TransactionsService: Sendable {
     func transactionPage(_ query: TransactionListQuery, offset: Int) async throws -> TransactionPage
     /// `getTransactions({ uncategorised: true, active: true, limit: 1, recipient_id? })`: the
     /// `total` the Needs category chip and the inspector's tip show.
-    func uncategorisedCount(recipientId: Int?) async throws -> Int
+    func uncategorisedCount(recipientId: RecipientID?) async throws -> Int
     /// `updateTransaction(id, data)` with explicit nulls.
-    func updateTransaction(id: Int, patch: TransactionPatch) async throws -> OpenAPI.Transaction
+    func updateTransaction(id: TransactionID, patch: TransactionPatch) async throws -> OpenAPI.Transaction
     /// `createTransaction(data)`: Duplicate and the delete Undo.
     func createTransaction(_ body: OpenAPI.TransactionCreate) async throws -> OpenAPI.Transaction
     /// `deleteTransaction(id)`.
-    func deleteTransaction(id: Int) async throws
+    func deleteTransaction(id: TransactionID) async throws
     /// `bulkUpdateTransactions({ filter: { recipient_id, uncategorised, active }, expected_count,
     /// fields: { category_id } })`: the inspector's Use for all.
-    func categorizeUncategorised(recipientId: Int, categoryId: Int, expectedCount: Int) async throws
+    func categorizeUncategorised(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) async throws
         -> BulkUpdateResult
     /// `updateRecipient(id, { default_category_id })`: Always use.
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws
     /// `getRecipient(id)`: the banner's payee name and the inspector's rule tips.
-    func recipient(id: Int) async throws -> OpenAPI.Recipient
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient
     /// `useAccounts({ active: "all" })`: the Account filter lists archived accounts too.
     func allAccounts() async throws -> [OpenAPI.Account]
     /// `requestBlob("/api/transactions/export/{csv|json}?…")`.
     func exportFilteredTransactions(_ format: ExportFormat, query: TransactionExportQuery) async throws -> Data
     /// `getSetting(key)`.
-    func setting(key: String) async throws -> OpenAPI.Setting
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting
     /// `saveSetting(key, value)` against the baseline of the last read.
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
 }
 
 /// The Attachments panel's calls (apps/frontend/src/lib/api/attachments.ts).
 public protocol TransactionAttachmentsService: Sendable {
     /// `getAttachments(transactionId)`.
-    func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment]
+    func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment]
     /// `uploadAttachment(transactionId, file)`: one multipart `file` part.
-    func uploadAttachment(transactionId: Int, file: AttachmentUpload) async throws -> OpenAPI.Attachment
+    func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment
     /// `GET /api/attachments/:id/download`: the file's bytes.
-    func downloadAttachment(id: Int) async throws -> Data
+    func downloadAttachment(id: AttachmentID) async throws -> Data
     /// `deleteAttachment(id)`.
-    func deleteAttachment(id: Int) async throws
+    func deleteAttachment(id: AttachmentID) async throws
 }
 
 /// One page of `GET /api/transactions`.
@@ -64,13 +64,13 @@ extension APIClient: TransactionsService {
         return TransactionPage(items: list.items, total: list.total)
     }
 
-    public func uncategorisedCount(recipientId: Int?) async throws -> Int {
+    public func uncategorisedCount(recipientId: RecipientID?) async throws -> Int {
         try await send(
             OpenAPIOperations.GetTransactions(limit: 1, recipientId: recipientId, active: true, uncategorised: true)
         ).total
     }
 
-    public func updateTransaction(id: Int, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
+    public func updateTransaction(id: TransactionID, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
         try await send(TransactionPatchRequest(id: id, patch: patch))
     }
 
@@ -78,11 +78,11 @@ extension APIClient: TransactionsService {
         try await send(OpenAPIOperations.CreateTransaction(body: body))
     }
 
-    public func deleteTransaction(id: Int) async throws {
+    public func deleteTransaction(id: TransactionID) async throws {
         _ = try await send(OpenAPIOperations.DeleteTransaction(id: id))
     }
 
-    public func categorizeUncategorised(recipientId: Int, categoryId: Int, expectedCount: Int) async throws
+    public func categorizeUncategorised(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) async throws
         -> BulkUpdateResult
     {
         try await send(
@@ -98,19 +98,19 @@ extension APIClient: TransactionsService {
 }
 
 extension APIClient: TransactionAttachmentsService {
-    public func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment] {
+    public func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment] {
         try await send(OpenAPIOperations.GetTransactionAttachments(id: transactionId)).items
     }
 
-    public func uploadAttachment(transactionId: Int, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
+    public func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
         try await send(AttachmentUploadRequest(transactionId: transactionId, file: file))
     }
 
-    public func downloadAttachment(id: Int) async throws -> Data {
+    public func downloadAttachment(id: AttachmentID) async throws -> Data {
         try await download(OpenAPIOperations.DownloadAttachment(id: id), fallbackMessage: "Download failed")
     }
 
-    public func deleteAttachment(id: Int) async throws {
+    public func deleteAttachment(id: AttachmentID) async throws {
         _ = try await send(OpenAPIOperations.DeleteAttachment(id: id))
     }
 }
@@ -122,15 +122,15 @@ extension APIClient: TransactionAttachmentsService {
 public struct TransactionPatch: Equatable, Sendable, Encodable {
     public var transactionDate: String?
     /// `.some(nil)` sends `null` (no account).
-    public var accountId: Int??
+    public var accountId: AccountID??
     /// `.some(nil)` sends `null` (No payee).
-    public var recipientId: Int??
+    public var recipientId: RecipientID??
     /// `.some(nil)` sends `null` (a cleared description).
     public var memo: String??
     public var amount: Decimal?
-    public var currency: String?
+    public var currency: CurrencyCode?
     /// `.some(nil)` sends `null` (No category).
-    public var categoryId: Int??
+    public var categoryId: CategoryID??
     /// `.some(nil)` sends `null` (a cleared comment).
     public var comment: String??
     public var isActive: Bool?
@@ -185,10 +185,10 @@ public struct TransactionPatchRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateTransaction.method
     public static let pathTemplate = OpenAPIOperations.UpdateTransaction.pathTemplate
 
-    public var id: Int
+    public var id: TransactionID
     public var patch: TransactionPatch
 
-    public init(id: Int, patch: TransactionPatch) {
+    public init(id: TransactionID, patch: TransactionPatch) {
         self.id = id
         self.patch = patch
     }
@@ -209,11 +209,11 @@ public struct TransactionBulkCategoryRequest: APIOperation {
     public static let method = OpenAPIOperations.BulkUpdateTransactions.method
     public static let pathTemplate = OpenAPIOperations.BulkUpdateTransactions.pathTemplate
 
-    public let recipientId: Int
-    public let categoryId: Int
+    public let recipientId: RecipientID
+    public let categoryId: CategoryID
     public let expectedCount: Int
 
-    public init(recipientId: Int, categoryId: Int, expectedCount: Int) {
+    public init(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) {
         self.recipientId = recipientId
         self.categoryId = categoryId
         self.expectedCount = expectedCount
@@ -223,7 +223,7 @@ public struct TransactionBulkCategoryRequest: APIOperation {
 
     struct Body: Encodable {
         struct Filter: Encodable {
-            let recipientId: Int
+            let recipientId: RecipientID
             let uncategorised = true
             let active = true
 
@@ -235,7 +235,7 @@ public struct TransactionBulkCategoryRequest: APIOperation {
         }
 
         struct Fields: Encodable {
-            let categoryId: Int
+            let categoryId: CategoryID
 
             enum CodingKeys: String, CodingKey {
                 case categoryId = "category_id"
@@ -282,10 +282,10 @@ public struct AttachmentUploadRequest: APIOperation {
     public static let method = HTTPMethod.post
     public static let pathTemplate = "/api/attachments/transaction/{id}"
 
-    public let transactionId: Int
+    public let transactionId: TransactionID
     public let form: MultipartFormData
 
-    public init(transactionId: Int, file: AttachmentUpload, boundary: String? = nil) {
+    public init(transactionId: TransactionID, file: AttachmentUpload, boundary: String? = nil) {
         self.transactionId = transactionId
         var form = boundary.map { MultipartFormData(boundary: $0) } ?? MultipartFormData()
         form.append(file: "file", filename: file.name, contentType: file.contentType, data: file.data)

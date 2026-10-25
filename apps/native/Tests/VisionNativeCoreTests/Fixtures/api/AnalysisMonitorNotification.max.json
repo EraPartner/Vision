@@ -1,0 +1,13 @@
+{
+  "id": "00000000-0000-4000-8000-000000000001",
+  "monitorId": "00000000-0000-4000-8000-000000000001",
+  "observationId": "00000000-0000-4000-8000-000000000001",
+  "kind": "analysis-threshold",
+  "title": "string",
+  "reasonCode": "string",
+  "reason": "string",
+  "previousValue": "string",
+  "currentValue": "string",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "readAt": "2024-01-15T10:30:00.000Z"
+}

@@ -2,26 +2,27 @@ import Foundation
 
 public struct AIResearchDocument: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: String
+    public let id: ResearchDocumentID
     public let title: String
     public let sourceName: String
     public let mediaType: String
     public let version: Int
-    public let extractionStatus: String
+    public let extractionStatus: AIDocumentExtractionStatus
     public let extractionError: String?
     public let createdAt: String
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = try ResearchDecode.string(raw["id"])
+        id = ResearchDocumentID(try ResearchDecode.string(raw["id"]))
         title = try ResearchDecode.string(raw["title"])
         sourceName = try ResearchDecode.string(raw["sourceName"])
         mediaType = try ResearchDecode.string(raw["mediaType"])
         version = try ResearchDecode.count(raw["version"])
-        extractionStatus = try ResearchDecode.string(raw["extractionStatus"])
-        guard version > 0, ["ready", "failed", "unsupported"].contains(extractionStatus) else {
+        let status = try ResearchDecode.string(raw["extractionStatus"])
+        guard version > 0, let parsedStatus = AIDocumentExtractionStatus(rawValue: status) else {
             throw ResearchDecode.failure("Invalid research document")
         }
+        extractionStatus = parsedStatus
         extractionError = try ResearchDecode.optionalString(raw["extractionError"])
         createdAt = try ResearchDecode.string(raw["createdAt"])
     }
@@ -41,7 +42,7 @@ public struct AIResearchDocumentFile: Equatable, Sendable {
 public struct AIEvidence: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
     public let id: String
-    public let kind: String
+    public let kind: AIEvidenceKind
     public let label: String
     public let sourceDate: String?
     public let locator: String
@@ -51,7 +52,7 @@ public struct AIEvidence: Codable, Equatable, Sendable, Identifiable {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
         id = try ResearchDecode.string(raw["id"])
-        kind = try ResearchDecode.string(raw["kind"])
+        kind = AIEvidenceKind(rawValue: try ResearchDecode.string(raw["kind"]))
         label = try ResearchDecode.string(raw["label"])
         sourceDate = try ResearchDecode.optionalString(raw["sourceDate"])
         locator = try ResearchDecode.string(raw["locator"])
@@ -71,9 +72,9 @@ public struct AIAnswerStatement: Equatable, Sendable {
 }
 public struct AIAnswer: Codable, Equatable, Sendable {
     public let raw: TaxValue
-    public let status: String
-    public let depth: String
-    public let language: String
+    public let status: AIAnswerStatus
+    public let depth: AIInvestigationDepth
+    public let language: AIInvestigationLanguage
     public let summary: String
     public let facts: [AIAnswerStatement]
     public let calculations: [AIAnswerStatement]
@@ -85,9 +86,9 @@ public struct AIAnswer: Codable, Equatable, Sendable {
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        status = try ResearchDecode.string(raw["status"])
-        depth = try ResearchDecode.string(raw["depth"])
-        language = try ResearchDecode.string(raw["language"])
+        status = AIAnswerStatus(rawValue: try ResearchDecode.string(raw["status"]))
+        depth = AIInvestigationDepth(rawValue: try ResearchDecode.string(raw["depth"]))
+        language = AIInvestigationLanguage(rawValue: try ResearchDecode.string(raw["language"]))
         summary = try ResearchDecode.string(raw["summary"])
         facts = try AIInvestigationDecode.array(raw["facts"]).map { try .init(raw: $0) }
         calculations = try AIInvestigationDecode.array(raw["calculations"]).map { try .init(raw: $0) }
@@ -104,12 +105,12 @@ public struct AIAnswer: Codable, Equatable, Sendable {
 }
 public struct AIInvestigation: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: String
+    public let id: AiInvestigationID
     public let question: String
-    public let route: String
-    public let depth: String
-    public let language: String
-    public let state: String
+    public let route: AIInvestigationRoute
+    public let depth: AIInvestigationDepth
+    public let language: AIInvestigationLanguage
+    public let state: AIInvestigationState
     public let plan: TaxValue?
     public let result: AIAnswer?
     public let error: TaxValue?
@@ -117,12 +118,12 @@ public struct AIInvestigation: Codable, Equatable, Sendable, Identifiable {
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = try ResearchDecode.string(raw["id"])
+        id = AiInvestigationID(try ResearchDecode.string(raw["id"]))
         question = try ResearchDecode.string(raw["question"])
-        route = try ResearchDecode.string(raw["route"])
-        depth = try ResearchDecode.string(raw["depth"])
-        language = try ResearchDecode.string(raw["language"])
-        state = try ResearchDecode.string(raw["state"])
+        route = AIInvestigationRoute(rawValue: try ResearchDecode.string(raw["route"]))
+        depth = AIInvestigationDepth(rawValue: try ResearchDecode.string(raw["depth"]))
+        language = AIInvestigationLanguage(rawValue: try ResearchDecode.string(raw["language"]))
+        state = AIInvestigationState(rawValue: try ResearchDecode.string(raw["state"]))
         plan = raw["plan"] == .null ? nil : raw["plan"]
         error = raw["error"] == .null ? nil : raw["error"]
         result = try raw["result"].flatMap { $0 == .null ? nil : try .init(raw: $0) }

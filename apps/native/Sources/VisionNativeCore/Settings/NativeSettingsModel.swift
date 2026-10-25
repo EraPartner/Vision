@@ -31,12 +31,12 @@ public final class NativeSettingsModel {
     public private(set) var servicesSaving = false
     public private(set) var notice: ScreenNotice?
     public var isLargeDisplay = false
-    public private(set) var sessionTierOverride: String?
+    public private(set) var sessionTierOverride: VisualEffects?
     public var didNotice: (@MainActor (ScreenNotice) -> Void)?
     public var didChangeApp: (@MainActor (TaxValue) -> Void)?
     public var didChangeDashboard: (@MainActor (TaxValue) -> Void)?
     public var didChangeTheme: (@MainActor (TaxValue) -> Void)?
-    public var didAcknowledge: (@MainActor (String, TaxValue) -> Void)?
+    public var didAcknowledge: (@MainActor (SettingKey, TaxValue) -> Void)?
     public var didChangeCostBasis: (@MainActor () async -> Void)?
     public var didChangeIncludeTransfers: (@MainActor () async -> Void)?
     public var didResetPreferences: (@MainActor () async -> Void)?
@@ -50,15 +50,15 @@ public final class NativeSettingsModel {
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private var categoriesFetchedAt: Date?
     @ObservationIgnored private var recipientsFetchedAt: Date?
-    @ObservationIgnored private var timers: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var pendingDrafts: [String: TaxValue] = [:]
+    @ObservationIgnored private var timers: [SettingKey: Task<Void, Never>] = [:]
+    @ObservationIgnored private var pendingDrafts: [SettingKey: TaxValue] = [:]
     @ObservationIgnored private var acceptedWrites: [UUID: Task<NativeSettingsRecord, Error>] = [:]
     @ObservationIgnored private var restoreDrain: Task<Void, Never>?
     @ObservationIgnored private var restoreResume: Task<Void, Never>?
     @ObservationIgnored private var retired = false
     @ObservationIgnored private var lifecycleRevision = 0
     @ObservationIgnored private var writes: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var editRevision: [String: Int] = [:]
+    @ObservationIgnored private var editRevision: [SettingKey: Int] = [:]
     private var pendingWrites = 0
     private var pendingDebounces = 0
     @ObservationIgnored private var loadingRevision = 0
@@ -85,6 +85,12 @@ public final class NativeSettingsModel {
     public func appInt(_ key: String, fallback: Int) -> Int {
         NativeSettingsDefaults.integer(NativeSettingsDefaults.appValue(key, raw: appRaw)) ?? fallback
     }
+    public var costBasisMethod: CostBasisMethod {
+        CostBasisMethod(rawValue: appString("costBasisMethod", fallback: CostBasisMethod.weightedAvg.rawValue))
+    }
+    public var startupSection: StartupSection {
+        StartupSection(rawValue: appString("startupSection", fallback: StartupSection.budgeting.rawValue))
+    }
     public func dashboardString(_ key: String, fallback: String) -> String {
         let raw = dashboardRaw?[key]?.stringValue
         if key == "exclusionScope", let raw, !["everywhere", "dashboard", "statistics"].contains(raw) {
@@ -104,27 +110,41 @@ public final class NativeSettingsModel {
     public func themeScheduleString(_ key: String, fallback: String) -> String {
         themeRaw?["schedule"]?[key]?.stringValue ?? fallback
     }
-    public var excludedCategoryIds: [Int] { ids(dashboardRaw?["excludedCategoryIds"]) }
-    public var excludedRecipientIds: [Int] { ids(dashboardRaw?["excludedRecipientIds"]) }
-    public var cashCategoryIds: [String: Int] {
+    /// `defaultCurrency` of the stored (validated) `app_settings`, upper-cased as a typed code; `EUR`
+    /// when it is not stored.
+    public var defaultCurrencyCode: CurrencyCode {
+        CurrencyCode(rawValue: appString("defaultCurrency", fallback: "EUR").uppercased()) ?? .eur
+    }
+    public var excludedCategoryIds: [CategoryID] {
+        ids(dashboardRaw?["excludedCategoryIds"]).map(CategoryID.init(rawValue:))
+    }
+    public var excludedRecipientIds: [RecipientID] {
+        ids(dashboardRaw?["excludedRecipientIds"]).map(RecipientID.init(rawValue:))
+    }
+    public var cashCategoryIds: [String: CategoryID] {
         Dictionary(
             uniqueKeysWithValues: ["dividend", "interest", "fee", "tax"].compactMap { key in
                 cashCategoryId(key).map { (key, $0) }
             })
     }
-    public func cashCategoryId(_ key: String) -> Int? { NativeSettingsDefaults.integer(cashRaw?[key]) }
-    public var supportsServices: Bool { loadKeepServices != nil && saveKeepServices != nil }
-    public var effectiveVisualEffects: String {
-        appBool("autoAdaptDisplay", fallback: true) && isLargeDisplay
-            ? sessionTierOverride ?? "reduced" : appString("visualEffects", fallback: "standard")
+    public func cashCategoryId(_ key: String) -> CategoryID? {
+        NativeSettingsDefaults.integer(cashRaw?[key]).map(CategoryID.init(rawValue:))
     }
-    public func selectVisualEffects(_ tier: String) {
+    public var supportsServices: Bool { loadKeepServices != nil && saveKeepServices != nil }
+    /// The stored `visualEffects` tier (a value outside the web app's union reads as `standard`).
+    public var visualEffects: VisualEffects {
+        VisualEffects(rawValue: appString("visualEffects", fallback: VisualEffects.standard.rawValue))
+    }
+    public var effectiveVisualEffects: VisualEffects {
+        appBool("autoAdaptDisplay", fallback: true) && isLargeDisplay ? sessionTierOverride ?? .reduced : visualEffects
+    }
+    public func selectVisualEffects(_ tier: VisualEffects) {
         guard !retired, !isSuspendedForRestore else { return }
-        guard ["reduced", "standard", "enhanced"].contains(tier) else { return }
+        guard VisualEffects.allCases.contains(tier) else { return }
         if appBool("autoAdaptDisplay", fallback: true) && isLargeDisplay {
-            sessionTierOverride = tier == "reduced" ? nil : tier
+            sessionTierOverride = tier == .reduced ? nil : tier
         } else {
-            updateApp(["visualEffects": .string(tier)])
+            updateApp(["visualEffects": .string(tier.rawValue)])
             sessionTierOverride = nil
         }
     }
@@ -145,7 +165,7 @@ public final class NativeSettingsModel {
         var next = object(appRaw)
         next[key] = value.flatMap { NativeSettingsDefaults.appValue(key, raw: .object([key: $0])) }
         appRaw = .object(next)
-        changed("app_settings", appRaw!)
+        changed(.appSettings, appRaw!)
         didChangeApp?(appRaw!)
     }
     public func updateApp(_ fields: [String: TaxValue]) {
@@ -155,7 +175,7 @@ public final class NativeSettingsModel {
             next[key] = value == .null ? nil : NativeSettingsDefaults.appValue(key, raw: .object([key: value]))
         }
         appRaw = .object(next)
-        changed("app_settings", appRaw!)
+        changed(.appSettings, appRaw!)
         didChangeApp?(appRaw!)
     }
     public func updateDashboard(_ fields: [String: TaxValue]) {
@@ -163,14 +183,14 @@ public final class NativeSettingsModel {
         var next = object(dashboardRaw)
         next.merge(fields) { _, new in new }
         dashboardRaw = .object(next)
-        changed("dashboard_settings", dashboardRaw!)
+        changed(.dashboardSettings, dashboardRaw!)
         didChangeDashboard?(dashboardRaw!)
     }
-    public func setExcludedCategoryIds(_ ids: [Int]) {
-        updateDashboard(["excludedCategoryIds": .array(ids.map { .number(Decimal($0)) })])
+    public func setExcludedCategoryIds(_ ids: [CategoryID]) {
+        updateDashboard(["excludedCategoryIds": .array(ids.map { .number(Decimal($0.rawValue)) })])
     }
-    public func setExcludedRecipientIds(_ ids: [Int]) {
-        updateDashboard(["excludedRecipientIds": .array(ids.map { .number(Decimal($0)) })])
+    public func setExcludedRecipientIds(_ ids: [RecipientID]) {
+        updateDashboard(["excludedRecipientIds": .array(ids.map { .number(Decimal($0.rawValue)) })])
     }
     public func updateTheme(_ fields: [String: TaxValue]) {
         guard !retired, !isSuspendedForRestore else { return }
@@ -184,7 +204,7 @@ public final class NativeSettingsModel {
             "variant": .string(themeString("variant", fallback: "default")),
             "systemAccent": .bool(themeBool("systemAccent", fallback: false)),
         ])
-        changed("theme_settings", known)
+        changed(.themeSettings, known)
         didChangeTheme?(known)
     }
     public func updateThemeSchedule(_ fields: [String: TaxValue]) {
@@ -209,26 +229,26 @@ public final class NativeSettingsModel {
         do {
             let snapshot = try await persistence.readAll()
             guard token == loadingRevision else { return }
-            if editRevision["app_settings"] == edits["app_settings"] && (editRevision["app_settings"] ?? 0) == 0 {
-                appRaw = NativeSettingsDefaults.migrateApp(snapshot.settings["app_settings"])
+            if editRevision[.appSettings] == edits[.appSettings] && (editRevision[.appSettings] ?? 0) == 0 {
+                appRaw = NativeSettingsDefaults.migrateApp(snapshot.settings[SettingKey.appSettings.rawValue])
                 didChangeApp?(appRaw ?? .object([:]))
             }
-            if editRevision["dashboard_settings"] == edits["dashboard_settings"]
-                && (editRevision["dashboard_settings"] ?? 0) == 0
+            if editRevision[.dashboardSettings] == edits[.dashboardSettings]
+                && (editRevision[.dashboardSettings] ?? 0) == 0
             {
-                dashboardRaw = NativeSettingsDefaults.migrateDashboard(snapshot.settings["dashboard_settings"])
+                dashboardRaw = NativeSettingsDefaults.migrateDashboard(snapshot.settings[SettingKey.dashboardSettings.rawValue])
                 didChangeDashboard?(dashboardRaw ?? .object([:]))
             }
-            if editRevision["theme_settings"] == edits["theme_settings"] && (editRevision["theme_settings"] ?? 0) == 0 {
-                let stored = snapshot.settings["theme_settings"]
+            if editRevision[.themeSettings] == edits[.themeSettings] && (editRevision[.themeSettings] ?? 0) == 0 {
+                let stored = snapshot.settings[SettingKey.themeSettings.rawValue]
                 themeRaw = Self.isTruthy(stored) ? stored : legacyTheme
                 didChangeTheme?(themeRaw ?? NativeSettingsDefaults.theme)
             }
-            if (editRevision["includeTransfers"] ?? 0) == 0 {
-                includeTransfers = snapshot.settings["includeTransfers"] == .bool(true)
+            if (editRevision[.includeTransfers] ?? 0) == 0 {
+                includeTransfers = snapshot.settings[SettingKey.includeTransfers.rawValue] == .bool(true)
             }
-            if !cashSaving && editRevision["brokerage_cash_category_ids"] == edits["brokerage_cash_category_ids"] {
-                cashRaw = snapshot.settings["brokerage_cash_category_ids"]
+            if !cashSaving && editRevision[.brokerageCashCategoryIds] == edits[.brokerageCashCategoryIds] {
+                cashRaw = snapshot.settings[SettingKey.brokerageCashCategoryIds.rawValue]
                 cashAcknowledged = cashRaw
             }
             isLoaded = true
@@ -273,26 +293,26 @@ public final class NativeSettingsModel {
     public func setIncludeTransfers(_ value: Bool) async {
         guard !retired, !isSuspendedForRestore else { return }
         includeTransfers = value
-        editRevision["includeTransfers", default: 0] += 1
+        editRevision[.includeTransfers, default: 0] += 1
         do {
-            _ = try await saveNow("includeTransfers", value: .bool(value))
+            _ = try await saveNow(.includeTransfers, value: .bool(value))
             await didChangeIncludeTransfers?()
         } catch {
             // The source optimistically keeps the toggle and intentionally ignores this failure.
         }
     }
-    public func setCashCategory(_ kind: String, _ id: Int?) async {
+    public func setCashCategory(_ kind: String, _ id: CategoryID?) async {
         guard !retired, !isSuspendedForRestore else { return }
         guard ["dividend", "interest", "fee", "tax"].contains(kind), !cashLoading, !cashSaving else { return }
         var next = object(cashRaw)
         for key in ["dividend", "interest", "fee", "tax"] where next[key] == nil { next[key] = .null }
-        next[kind] = id.map { .number(Decimal($0)) } ?? .null
+        next[kind] = id.map { .number(Decimal($0.rawValue)) } ?? .null
         cashRaw = .object(next)
-        editRevision["brokerage_cash_category_ids", default: 0] += 1
+        editRevision[.brokerageCashCategoryIds, default: 0] += 1
         cashSaving = true
         defer { cashSaving = false }
         do {
-            let result = try await saveNow("brokerage_cash_category_ids", value: cashRaw!)
+            let result = try await saveNow(.brokerageCashCategoryIds, value: cashRaw!)
             cashRaw = result.value
             cashAcknowledged = result.value
         } catch {
@@ -300,12 +320,12 @@ public final class NativeSettingsModel {
             show(.error, "settings.saveFailed")
         }
     }
-    public func setCostBasisMethod(_ method: String) async {
+    public func setCostBasisMethod(_ method: CostBasisMethod) async {
         guard !retired, !isSuspendedForRestore else { return }
-        guard ["weighted_avg", "fifo", "lifo"].contains(method) else { return }
-        updateApp(["costBasisMethod": .string(method)])
+        guard CostBasisMethod.allCases.contains(method) else { return }
+        updateApp(["costBasisMethod": .string(method.rawValue)])
         do {
-            _ = try await saveNow("cost_basis_method", value: .string(method))
+            _ = try await saveNow(.costBasisMethod, value: .string(method.rawValue))
             await didChangeCostBasis?()
         } catch { show(.error, "settings.saveFailed") }
     }
@@ -313,7 +333,7 @@ public final class NativeSettingsModel {
         guard !retired, !isSuspendedForRestore else { return }
         await clearRecurringLocalState?()
         do {
-            _ = try await saveNow("dismissed_recurring_patterns", value: .array([]))
+            _ = try await saveNow(.dismissedRecurringPatterns, value: .array([]))
             show(.success, "settings.app.recurringDismissalsResetSuccess")
         } catch { show(.error, "settings.app.recurringDismissalsResetFailed") }
     }
@@ -322,15 +342,15 @@ public final class NativeSettingsModel {
         appRaw = NativeSettingsDefaults.app
         dashboardRaw = NativeSettingsDefaults.dashboard
         sessionTierOverride = nil
-        changed("app_settings", appRaw!)
-        changed("dashboard_settings", dashboardRaw!)
+        changed(.appSettings, appRaw!)
+        changed(.dashboardSettings, dashboardRaw!)
         didChangeApp?(appRaw!)
         didChangeDashboard?(dashboardRaw!)
         includeTransfers = false
-        editRevision["includeTransfers", default: 0] += 1
+        editRevision[.includeTransfers, default: 0] += 1
         show(.info, "settings.resetToDefaults")
         do {
-            _ = try await saveNow("includeTransfers", value: .bool(false))
+            _ = try await saveNow(.includeTransfers, value: .bool(false))
             await didResetPreferences?()
         } catch {
             // Source reset's server-only write is deliberately non-fatal.
@@ -430,13 +450,14 @@ public final class NativeSettingsModel {
         let writer = persistence
         Task { await writer.retireForReload() }
     }
-    private func changed(_ key: String, _ value: TaxValue) {
+    private func changed(_ key: SettingKey, _ value: TaxValue) {
         guard !retired else { return }
-        editRevision[key, default: 0] += 1
+        let revision = editRevision[key, default: 0] + 1
+        editRevision[key] = revision
         pendingDrafts[key] = value
-        if !isSuspendedForRestore { schedule(key, value: value, revision: editRevision[key]!) }
+        if !isSuspendedForRestore { schedule(key, value: value, revision: revision) }
     }
-    private func schedule(_ key: String, value: TaxValue, revision: Int) {
+    private func schedule(_ key: SettingKey, value: TaxValue, revision: Int) {
         timers[key]?.cancel()
         timers[key] = Task { [weak self] in
             guard let self else { return }
@@ -450,7 +471,7 @@ public final class NativeSettingsModel {
                 defer { self.writes[id] = nil }
                 guard !self.retired, !self.isSuspendedForRestore else { return }
                 do { _ = try await self.saveNow(key, value: value, draftRevision: revision) } catch {
-                    if !self.retired, key != "theme_settings" {
+                    if !self.retired, key != .themeSettings {
                         self.saveError = "settings.saveFailed"
                         self.saveErrorNonce += 1
                         self.show(.error, "settings.saveFailed")
@@ -461,7 +482,7 @@ public final class NativeSettingsModel {
         }
         pendingDebounces = timers.count
     }
-    private func saveNow(_ key: String, value: TaxValue, draftRevision: Int? = nil) async throws -> NativeSettingsRecord
+    private func saveNow(_ key: SettingKey, value: TaxValue, draftRevision: Int? = nil) async throws -> NativeSettingsRecord
     {
         await restoreResume?.value
         guard !retired, !isSuspendedForRestore else { throw CancellationError() }

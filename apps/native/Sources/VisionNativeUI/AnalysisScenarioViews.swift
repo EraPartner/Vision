@@ -56,7 +56,8 @@ struct AnalysisAssumptionsView: View {
                             key: "percentageBasis", value: unit(index, "percentageBasis", fallback: "ratio"),
                             choices: ["ratio", "percent"], shell: shell, clearable: false, segmented: true)
                     }
-                    Button(t("remove")) { model.draft.assumptions.remove(at: index) }
+                    Button(t("remove"), role: .destructive) { model.draft.assumptions.remove(at: index) }
+                        .buttonStyle(.visionOutline).controlSize(.small)
                 }.padding(12)
                 .background(
                     theme.background.opacity(0.4),
@@ -66,7 +67,7 @@ struct AnalysisAssumptionsView: View {
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         .strokeBorder(theme.border.opacity(0.6)))
             }
-            Button(t("addAssumption")) { model.draft.addAssumption() }
+            Button(t("addAssumption")) { model.draft.addAssumption() }.buttonStyle(.visionOutline)
         }
     }
 }
@@ -94,7 +95,7 @@ struct AnalysisScenariosView: View {
                 model.draft.copyScenario(
                     name: model.scenarioName, id: "scenario_\(Int(Date().timeIntervalSince1970 * 1000))")
                 model.scenarioName = ""
-            }.disabled(
+            }.buttonStyle(.visionOutline).disabled(
                 model.scenarioName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || model.draft.assumptions.isEmpty)
             ForEach(model.draft.scenarios.indices, id: \.self) { index in
@@ -109,7 +110,8 @@ struct AnalysisScenariosView: View {
                                 .vision)
                         }
                     }
-                    Button(t("remove")) { model.draft.scenarios.remove(at: index) }
+                    Button(t("remove"), role: .destructive) { model.draft.scenarios.remove(at: index) }
+                        .buttonStyle(.visionOutline).controlSize(.small)
                 }.padding(12)
                 .background(
                     theme.background.opacity(0.4),

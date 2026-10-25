@@ -29,7 +29,7 @@ public struct ResearchWatchlistView: View {
                             Text(strings.t("common.loadFailedRetry")).foregroundStyle(theme.destructive)
                             Spacer()
                             Button(strings.t("common.retry")) { Task { await model.load(force: true) } }
-                                .disabled(model.isLoading)
+                                .buttonStyle(.vision(.outline, size: .sm)).disabled(model.isLoading)
                         }
                     }
                 }
@@ -56,21 +56,32 @@ public struct ResearchWatchlistView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .sheet(isPresented: Binding(get: { model.add.isPresented }, set: { if !$0 { model.add.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { model.add.isPresented }, set: { if !$0 { model.add.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("addWatchlist.title")
+        ) {
             ResearchWatchlistAddSheet(model: model.add, shell: shell)
         }
-        .sheet(isPresented: Binding(get: { model.selectedItem != nil }, set: { if !$0 { model.closeChart() } })) {
-            ResearchWatchlistChartSheet(model: model, shell: shell)
+        .visionDialog(
+            item: Binding(get: { model.selectedItem }, set: { if $0 == nil { model.closeChart() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) { item in
+            ResearchWatchlistChartSheet(model: model, item: item, shell: shell)
         }
-        .confirmationDialog(
-            strings.t("watchlist.removeTitle"),
-            isPresented: Binding(get: { model.deletingItem != nil }, set: { if !$0 { model.deletingItem = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button(strings.t("watchlist.removeConfirm"), role: .destructive) { Task { await model.deleteConfirmed() } }
-            Button(strings.t("common.cancel"), role: .cancel) { model.deletingItem = nil }
-        } message: {
-            Text(strings.t("watchlist.removeDesc", ["name": model.deletingItem.map(ResearchWatchlistUI.name) ?? ""]))
+        // The buttons decide: `deleteConfirmed()` reads `deletingItem`, so a dismissal must not
+        // clear it before the confirming task runs.
+        .visionConfirmationDialog(
+            title: strings.t("watchlist.removeTitle"),
+            message: { item in
+                strings.t("watchlist.removeDesc", ["name": ResearchWatchlistUI.name(item)])
+            },
+            item: Binding(get: { model.deletingItem }, set: { _ in })
+        ) { _ in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.deletingItem = nil }
+            VisionDialogAction(strings.t("watchlist.removeConfirm"), role: .destructive) {
+                Task { await model.deleteConfirmed() }
+            }
         }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: model.add.notice ?? model.notice, strings: strings) { id in
@@ -99,7 +110,7 @@ private struct ResearchWatchlistRow: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var metric: ResearchWatchlistMetrics? { model.metrics[item.id] }
+    private var metric: ResearchWatchlistMetrics? { model.metrics[item.id.rawValue] }
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(
@@ -123,10 +134,10 @@ private struct ResearchWatchlistRow: View {
                 } label: {
                     Image(systemName: "chart.xyaxis.line")
                 }
-                .buttonStyle(.borderless).accessibilityLabel(
+                .buttonStyle(.vision(.ghost, size: .iconSm)).accessibilityLabel(
                     strings.t("watchlist.openChart") + ": " + ResearchWatchlistUI.name(item)
                 )
-                .help(strings.t("watchlist.openChart"))
+                .visionTooltip(strings.t("watchlist.openChart"))
                 Menu {
                     Button(strings.t("watchlist.openChart"), systemImage: "chart.xyaxis.line") {
                         Task { await model.openChart(id: item.id) }
@@ -153,9 +164,7 @@ private struct ResearchWatchlistRow: View {
                 if let symbol = item.symbol, !symbol.isEmpty {
                     Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.visionLink).font(.headline)
                         .multilineTextAlignment(.leading)
-                    Text(symbol).font(.caption2.monospaced().weight(.medium))
-                        .foregroundStyle(theme.foreground.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 1)
-                        .overlay(Capsule().strokeBorder(theme.border.opacity(0.7), lineWidth: 1))
+                    VisionBadge(text: symbol, tone: .outline, small: true, monospaced: true)
                 } else {
                     Text(ResearchWatchlistUI.name(item)).font(.headline)
                 }
@@ -194,7 +203,7 @@ private struct ResearchWatchlistRow: View {
                     .foregroundStyle(theme.success).padding(.horizontal, 6).padding(.vertical, 1)
                     .background(Capsule().fill(theme.success.opacity(0.15)))
                     .overlay(Capsule().strokeBorder(theme.success.opacity(0.3), lineWidth: 1))
-                    .help(strings.t("watchlist.atTarget"))
+                    .visionTooltip(strings.t("watchlist.atTarget"))
             } else if let percent = metric?.absoluteDistancePercent, let signed = metric?.distancePercent, signed > 0 {
                 DeltaPill(
                     signed,
@@ -221,7 +230,7 @@ private struct ResearchWatchlistRow: View {
 
 enum ResearchWatchlistUI {
     static func name(_ item: ResearchWatchlistItem) -> String { item.name.isEmpty ? item.symbol ?? "" : item.name }
-    @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel) -> String {
+    @MainActor static func money(_ value: Decimal, currency: CurrencyCode, shell: NativeShellModel) -> String {
         VisionFormat.currency(
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: shell.settings.showDecimalPlaces)

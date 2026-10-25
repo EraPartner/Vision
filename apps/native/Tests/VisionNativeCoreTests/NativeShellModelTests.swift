@@ -306,10 +306,10 @@ final class ShellRecorder {
         let model = makeModel(recorder: ShellRecorder(), loadSettings: { await gate.read() })
         model.reloadSettings()
         await gate.waitForRead()
-        model.apply(settings: NativeAppSettings(language: "nl"))
+        model.apply(settings: NativeAppSettings(language: .nl))
         await gate.release(.defaults)
         await model.settingsSettled()
-        #expect(model.settings.language == "nl")
+        #expect(model.settings.language == .nl)
     }
 
     @Test func theTaxReportOpensOnTheSameRouteAndKeepsTheYear() throws {

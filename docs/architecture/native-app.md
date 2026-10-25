@@ -503,15 +503,20 @@ states); no route shows the web app.
 
 ### Generated sources
 
-`bun run native:generate` runs the four generators; CI's Verify Generated Artifacts job reruns it
+`bun run native:generate` runs the five generators; CI's Verify Generated Artifacts job reruns it
 and fails when `apps/native/` changes. The outputs are committed.
 
 | Script                            | Inputs                                                                                                                                  | Output                                                         |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
+| `scripts/native-fixtures.ts`      | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Tests/VisionNativeCoreTests/Fixtures/api/`, `Contract/GeneratedModelDecodeTests.swift` |
 | `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
 | `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
 | `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`               |
+
+The fixture generator writes a minimal and a maximal JSON sample for every emitted model; the generated
+Swift test decodes, re-encodes and compares each one, and `bun run native:test-generators` fails when the
+fixtures or the test list lag `openapi.yaml`.
 
 The OpenAPI generator emits one `APIOperation` struct per allow-listed operationId and the
 component schemas they reach, plus the ADR-026 `Envelope` and `ErrorPayload`. Numbers become
@@ -850,6 +855,17 @@ The bank history and forecast share the selected date and range. The net sparkli
 summary amount and returns to the latest month after release. Category slices navigate with
 `category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`
 inspector parameter.
+
+Every native chart follows the web chart primitives through the shared helpers in
+[[apps/native/Sources/VisionNativeUI/Components/ChartSupport.swift|ChartSupport]] and
+[[apps/native/Sources/VisionNativeUI/Components/ChartAxisTicks.swift|ChartAxisTicks]]: the legend is a
+`ChartLegendRow` above the plot (below it for the bank history, Net worth and custom charts, absent for
+single-series and Tax charts); lines and areas are monotone-smoothed; line and area charts fit the value
+axis to the data (range plus 8 %, niced with d3's rules, never zero-based) while bar charts keep the zero
+baseline; the value axis shows about five ticks over a dashed 35 % grid, compact (`6,5k €`, from
+`VisionFormat.currencyAxisCompact`) unless the web uses the full currency format; x labels are `MMM yy`
+months, the app-format month (`05/2026`) on Home, or day numbers for a month forecast. Unstacked areas
+fade from 22 % of the series colour, stacked areas fill at 55 %.
 
 Forecast mode and rolling-day controls preserve the URL and call the existing forecast services;
 Swift does not calculate forecasts. Scheduled ledger transactions and planned payments are already

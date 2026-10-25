@@ -23,19 +23,15 @@ struct AIChatToolChart: View {
         VStack(alignment: .leading, spacing: 8) {
             if noData {
                 Text(strings.t("aiChat.noChartData")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            } else if presentation.renderAs == "pie" {
+            } else if presentation.renderAs == .pie {
                 pie
             } else {
                 cartesian
                 if presentation.yKeys.count > 1 {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], alignment: .leading, spacing: 6) {
-                        ForEach(Array(presentation.yKeys.enumerated()), id: \.offset) { index, key in
-                            HStack(spacing: 5) {
-                                Rectangle().fill(color(index)).frame(width: 14, height: 3)
-                                Text(verbatim: key).font(.caption)
-                            }
-                        }
-                    }
+                    ChartLegendRow(
+                        items: presentation.yKeys.enumerated().map { index, key in
+                            ChartLegendItem(id: String(index) + key, label: key, color: color(index))
+                        }, centered: true)
                 }
             }
             if let selected {
@@ -95,7 +91,7 @@ struct AIChatToolChart: View {
     }
     @ChartContentBuilder private func cartesianMark(index: Int, key: String, series: Int) -> some ChartContent {
         if let value = coordinate(AIChatToolPresentation.value(presentation.rows[index], key: key)) {
-            if presentation.renderAs == "bar" {
+            if presentation.renderAs == .bar {
                 barMark(index: index, key: key, series: series, value: value)
             } else {
                 lineMark(index: index, key: key, series: series, value: value)
@@ -154,7 +150,7 @@ struct AIChatToolChart: View {
     }
     @ViewBuilder private func readout(_ index: Int) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if presentation.renderAs == "pie" {
+            if presentation.renderAs == .pie {
                 if let row = presentation.pieRows.first(where: { $0.id == index }) {
                     Text(verbatim: row.name).font(.caption.weight(.medium))
                     Text(verbatim: VisionFormat.plain(row.value)).font(.caption).monospacedDigit()
@@ -171,7 +167,7 @@ struct AIChatToolChart: View {
                 }
             }
         }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(
-            theme.muted, in: RoundedRectangle(cornerRadius: 8))
+            theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     private func axisLabel(_ index: Int) -> String {
         AIChatToolDisplay.axis(AIChatToolPresentation.value(presentation.rows[index], key: presentation.xKey))
@@ -198,7 +194,7 @@ struct AIChatToolChart: View {
         return presentation.rows.indices.contains(index) ? index : nil
     }
     private func move(_ press: KeyPress) -> KeyPress.Result {
-        let count = presentation.renderAs == "pie" ? presentation.pieRows.count : presentation.rows.count
+        let count = presentation.renderAs == .pie ? presentation.pieRows.count : presentation.rows.count
         guard count > 0 else { return .ignored }
         switch press.key {
         case .leftArrow, .upArrow: selected = max(0, (selected ?? count) - 1)

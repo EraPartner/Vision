@@ -2,22 +2,22 @@ import SwiftUI
 import VisionNativeCore
 
 struct AIInvestigationPrivacyView: View {
-    let researchMode: String
-    let depth: String
+    let researchMode: AIResearchMode
+    let depth: AIInvestigationDepth
     let shell: NativeShellModel
     @State private var isExpanded = false
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var researchCopy: [String] {
         switch researchMode {
-        case "public-providers":
+        case .publicProviders:
             return [
                 "aiResearch.publicProviders", "aiResearch.summary.researchProviders",
                 "aiResearch.researchProvidersProfile",
             ]
-        case "public-web":
+        case .publicWeb:
             return ["aiResearch.publicWeb", "aiResearch.summary.researchWeb", "aiResearch.researchWebProfile"]
-        default:
+        case .localOnly, .unknown:
             return ["aiResearch.localOnly", "aiResearch.summary.researchLocal", "aiResearch.researchLocalProfile"]
         }
     }
@@ -34,7 +34,7 @@ struct AIInvestigationPrivacyView: View {
                     profile("aiResearch.researchProfilesTitle", body: researchCopy[2])
                     profile(
                         "aiResearch.depthProfilesTitle",
-                        body: depth == "quick" ? "aiResearch.quickProfile" : "aiResearch.detailedProfile")
+                        body: depth == .quick ? "aiResearch.quickProfile" : "aiResearch.detailedProfile")
                 }.padding(.top, 10)
             }.font(.callout)
         }.accessibilityLabel(strings.t("aiResearch.summary.title"))

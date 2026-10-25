@@ -1,0 +1,9 @@
+{
+  "applied": true,
+  "transfer": 1.5,
+  "fromPartnerId": "A",
+  "toPartnerId": "A",
+  "target": 1.5,
+  "cap": 1.5,
+  "benefit": 1.5
+}

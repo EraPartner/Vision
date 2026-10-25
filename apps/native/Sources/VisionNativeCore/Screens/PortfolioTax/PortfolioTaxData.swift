@@ -6,9 +6,9 @@ public struct PortfolioTaxDashboard: Codable, Equatable, Sendable {
     /// Currencies of amounts left out because no stored rate converts them; empty when everything
     /// converted (ADR-216). The affected figures (`incompleteFigures`) are lower bounds, so the page
     /// says so instead of presenting them as complete.
-    public let unconvertedCurrencies: [String]
+    public let unconvertedCurrencies: [CurrencyCode]
     public let year: Int
-    public let currency: String
+    public let currency: CurrencyCode
     public let isEmpty: Bool
     public let hasProfile: Bool
     public let hasInKindIncomeUnclassified: Bool
@@ -24,11 +24,11 @@ public struct PortfolioTaxDashboard: Codable, Equatable, Sendable {
     public let summaries: [PortfolioTaxInvestment]
     public let records: [PortfolioTaxSetting]
 
-    public func validate(year: Int, currency: String) throws {
-        guard self.year == year, self.currency.uppercased() == currency.uppercased(),
+    public func validate(year: Int, currency: CurrencyCode) throws {
+        guard self.year == year, self.currency == currency,
             Set(summaries.map(\.id)).count == summaries.count,
-            summaries.allSatisfy({ $0.id > 0 }),
-            investmentBreakdown.allSatisfy({ $0.id > 0 && $0.currency.uppercased() == currency.uppercased() }),
+            summaries.allSatisfy({ $0.id.rawValue > 0 }),
+            investmentBreakdown.allSatisfy({ $0.id.rawValue > 0 && $0.currency == currency }),
             dividend.unknownDividendConventionCount >= 0,
             dividend.unknownDividendConventionCount == 0
                 || (dividend.dividendWhtReclaim == nil && dividend.dividendWhtNetCost == nil)
@@ -61,7 +61,7 @@ public struct PortfolioTaxCostBreakdown: Codable, Equatable, Sendable {
     public let value: Decimal
 }
 public struct PortfolioTaxAssetClassCost: Codable, Equatable, Sendable {
-    public let assetClass: String
+    public let assetClass: OpenAPI.AssetClass
     public let taxes: Decimal
     public let fees: Decimal
     public let total: Decimal
@@ -72,10 +72,10 @@ public struct PortfolioTaxMonthlyCost: Codable, Equatable, Sendable {
     public let fees: Decimal
 }
 public struct PortfolioTaxInvestmentCost: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
+    public let assetClass: OpenAPI.AssetClass
     public let recordedTaxes: Decimal
     public let recordedFees: Decimal
     public let manualTaxes: Decimal
@@ -85,7 +85,7 @@ public struct PortfolioTaxInvestmentCost: Codable, Equatable, Sendable, Identifi
     public let total: Decimal
     /// Already converted by the backend, like the other monetary values in this row.
     public let realizedGain: Decimal
-    public let currency: String
+    public let currency: CurrencyCode
 }
 public struct PortfolioTaxDividend: Codable, Equatable, Sendable {
     public let totalDividendIncome: Decimal
@@ -117,11 +117,11 @@ public struct PortfolioTaxBadgePercent: Codable, Equatable, Sendable {
     public let dividendWHTRate: Decimal
 }
 public struct PortfolioTaxInvestment: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
-    public let currency: String
+    public let assetClass: OpenAPI.AssetClass
+    public let currency: CurrencyCode
 }
 
 public struct PortfolioTaxSetting: Codable, Equatable, Sendable {

@@ -52,7 +52,7 @@ public struct AnalysisInterchangeView: View {
                     selected($0, format: "csv")
                 }
                 if model.isInterchangeBusy { ProgressView().controlSize(.small) }
-            }.disabled(model.isInterchangeBusy)
+            }.buttonStyle(.visionOutline).controlSize(.small).disabled(model.isInterchangeBusy)
             Text(strings.t("analysis.ext.workbook.scope")).font(.caption).foregroundStyle(theme.secondaryLabel)
             Text(strings.t("analysis.csvSafety")).font(.caption).foregroundStyle(theme.secondaryLabel)
             if let error = localError ?? model.interchangeError {
@@ -101,6 +101,7 @@ public struct AnalysisInterchangeView: View {
                 } label: {
                     Image(systemName: "trash")
                 }
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .accessibilityLabel(strings.t("analysis.removeScenario"))
             }
             DisclosureGroup(
@@ -124,20 +125,14 @@ public struct AnalysisInterchangeView: View {
                     }.font(.caption).monospacedDigit().textSelection(.enabled).padding(.top, 8)
                 }
             }
-            HStack {
-                Picker(
-                    strings.t("analysis.interchange.resultField"),
-                    selection: Binding(get: { resultColumn }, set: { joinColumns[attachment.id + ":result"] = $0 })
-                ) {
-                    if columns.isEmpty { Text("—").tag("") }
-                    ForEach(columns) { Text($0.label ?? $0.id).tag($0.id) }
-                }
-                Picker(
-                    strings.t("analysis.interchange.importedField"),
-                    selection: Binding(get: { inputColumn }, set: { joinColumns[attachment.id + ":input"] = $0 })
-                ) {
-                    ForEach(attachment.columns) { Text(verbatim: $0.label).tag($0.id) }
-                }
+            HStack(alignment: .top, spacing: 12) {
+                joinSelect(
+                    "analysis.interchange.resultField", selection: resultColumn, options: resultOptions,
+                    set: { joinColumns[attachment.id + ":result"] = $0 })
+                joinSelect(
+                    "analysis.interchange.importedField", selection: inputColumn,
+                    options: attachment.columns.map { VisionSelectOption(value: $0.id, title: $0.label) },
+                    set: { joinColumns[attachment.id + ":input"] = $0 })
             }
             Text(strings.t("analysis.interchange.matchHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
             Button(strings.t(joined != nil ? "analysis.updateScenarioJoin" : "analysis.addScenarioJoin")) {
@@ -149,7 +144,23 @@ public struct AnalysisInterchangeView: View {
                         "inputColumn": .string(inputColumn),
                     ]))
                 model.scenarioModel["joins"] = .array(joins)
-            }.disabled(resultColumn.isEmpty || inputColumn.isEmpty)
+            }.buttonStyle(.visionOutline).disabled(resultColumn.isEmpty || inputColumn.isEmpty)
         }
+    }
+    private var resultOptions: [VisionSelectOption<String>] {
+        var options: [VisionSelectOption<String>] = []
+        if columns.isEmpty { options.append(VisionSelectOption(value: "", title: "—")) }
+        for column in columns { options.append(VisionSelectOption(value: column.id, title: column.label ?? column.id)) }
+        return options
+    }
+    private func joinSelect(
+        _ key: String, selection: String, options: [VisionSelectOption<String>], set: @escaping (String) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(strings.t(key)).font(.callout)
+            VisionSelect(
+                selection: Binding(get: { selection }, set: set), options: options,
+                accessibilityLabel: strings.t(key), expands: true)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }

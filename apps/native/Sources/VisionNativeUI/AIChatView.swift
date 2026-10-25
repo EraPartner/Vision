@@ -30,26 +30,28 @@ public struct AIChatView: View {
                 symbol: "bubble.left.and.bubble.right"
             ) {
                 // The web header's trailing Chat / Investigation toggle; the label stays for VoiceOver.
-                Picker(
-                    strings.t("aiChat.mode.label"),
-                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
-                ) {
-                    Text(strings.t("aiChat.mode.chat")).tag(AIChatMode.chat)
-                    Text(strings.t("aiChat.mode.investigation")).tag(AIChatMode.investigation)
-                }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                VisionSegmentedControl(
+                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) }),
+                    values: [AIChatMode.chat, AIChatMode.investigation],
+                    title: { strings.t($0 == .chat ? "aiChat.mode.chat" : "aiChat.mode.investigation") }
+                )
+                .visionAccessibilityLabel(strings.t("aiChat.mode.label")).fixedSize()
             }
             HStack(alignment: .top, spacing: isChat && width >= 768 ? 16 : 0) {
-                AIChatConversationRail(model: model, shell: shell)
-                    .frame(width: isChat && width >= 768 ? 272 : 0)
-                    .opacity(isChat && width >= 768 ? 1 : 0).clipped()
-                    .disabled(!isChat || width < 768).allowsHitTesting(isChat && width >= 768)
-                    .accessibilityHidden(!isChat || width < 768)
+                // Only the active tab is mounted: a hidden Investigation (or Chat) view must not
+                // stay in the accessibility tree.
+                if isChat && width >= 768 {
+                    AIChatConversationRail(model: model, shell: shell)
+                        .frame(width: 272)
+                }
                 ZStack {
-                    chatRegion
-                        .opacity(isChat ? 1 : 0).disabled(!isChat).allowsHitTesting(isChat).accessibilityHidden(!isChat)
-                    ScrollView {
-                        AIInvestigationView(model: investigation, shell: shell)
-                    }.opacity(isChat ? 0 : 1).disabled(isChat).allowsHitTesting(!isChat).accessibilityHidden(isChat)
+                    if isChat {
+                        chatRegion
+                    } else {
+                        ScrollView {
+                            AIInvestigationView(model: investigation, shell: shell)
+                        }
+                    }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                     .visionCardBackground()
@@ -60,14 +62,13 @@ public struct AIChatView: View {
             } action: {
                 width = $0
             }
-            .sheet(isPresented: $conversationsOpen) {
-                VStack(alignment: .leading, spacing: 16) {
-                    VisionDialogHeader(
-                        title: strings.t("aiChat.conversations"), closeLabel: strings.t("common.close"),
-                        onClose: { conversationsOpen = false }
-                    ).keyboardShortcut(.cancelAction)
-                    AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
-                }.visionDialogPadding().frame(minWidth: 320, idealWidth: 380, minHeight: 450, idealHeight: 620)
+            // `SheetContent side="left" className="w-72 p-0"` with an sr-only header; Escape and the scrim close it (the web X would sit over the new-chat button).
+            .visionSideSheet(
+                isPresented: $conversationsOpen, metrics: .sideSheet(maxWidth: 288, edge: .leading),
+                accessibilityTitle: strings.t("aiChat.conversations")
+            ) {
+                AIChatConversationRail(model: model, shell: shell, didSelect: { conversationsOpen = false })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .overlay(alignment: .bottom) {
                 NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)
@@ -83,7 +84,7 @@ public struct AIChatView: View {
                     } label: {
                         Image(systemName: "sidebar.left")
                     }
-                    .buttonStyle(.borderless).accessibilityLabel(strings.t("aiChat.conversations"))
+                    .buttonStyle(.vision(.ghost, size: .icon)).accessibilityLabel(strings.t("aiChat.conversations"))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversationTitle)
@@ -149,6 +150,6 @@ struct AIChatStatusBanner: View {
                 }
             }.font(.callout)
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.muted, in: RoundedRectangle(cornerRadius: 10))
+            .background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
     }
 }

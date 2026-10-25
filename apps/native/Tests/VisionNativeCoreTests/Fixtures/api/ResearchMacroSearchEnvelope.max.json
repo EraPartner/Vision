@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "meta": {
+    "provider": "string",
+    "source": "cache",
+    "requestId": "id-1"
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  },
+  "data": {
+    "items": [
+      {
+        "provider": "fred",
+        "seriesId": "id-1",
+        "title": "string",
+        "region": "string",
+        "units": "string",
+        "frequency": "string",
+        "source": "string"
+      }
+    ]
+  }
+}

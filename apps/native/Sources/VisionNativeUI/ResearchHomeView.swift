@@ -19,7 +19,7 @@ public struct ResearchHomeView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     VisionPageHeader(
                         title: shell.strings.t("research.title"), subtitle: shell.strings.t("research.subtitle"),
-                        symbol: "magnifyingglass")
+                        symbol: "binoculars")
                     ResearchSymbolSearchView(
                         text: Binding(get: { model.search.searchText }, set: { model.search.searchText = $0 }),
                         items: model.search.items, isOpen: model.search.isOpen,
@@ -32,17 +32,12 @@ public struct ResearchHomeView: View {
                         }
                     ).frame(maxWidth: 760).zIndex(10)
                     snapshot(width: geometry.size.width)
-                    let wide = geometry.size.width >= 1040
-                    let layout =
-                        wide
-                        ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
-                        : AnyLayout(VStackLayout(alignment: .leading, spacing: 24))
-                    layout {
-                        watchlist.frame(maxWidth: .infinity)
+                    // `grid grid-cols-1 gap-6 lg:grid-cols-3`: the watchlist spans two columns.
+                    VisionResponsiveColumns(weights: [2, 1]) {
+                        watchlist
                         ResearchNewsCard(
                             articles: model.news, isLoading: model.isNewsLoading, error: model.errors["news"],
-                            isOnline: model.isOnline, shell: shell
-                        ).frame(width: wide ? 380 : nil)
+                            isOnline: model.isOnline, shell: shell)
                     }
                 }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -120,8 +115,7 @@ public struct ResearchHomeView: View {
                             Text(shell.strings.t("research.viewAll"))
                             Image(systemName: "arrow.right").imageScale(.small).accessibilityHidden(true)
                         }
-                        .font(.callout.weight(.medium))
-                    }.buttonStyle(.visionLink)
+                    }.buttonStyle(.vision(.ghost, size: .sm))
                 }
             }
             if model.watchlist.isEmpty {

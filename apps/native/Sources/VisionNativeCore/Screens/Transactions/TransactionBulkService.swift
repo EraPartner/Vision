@@ -10,9 +10,9 @@ public protocol TransactionBulkService: Sendable {
     /// `bulkExportTransactions({ ...selector, format })`: the file and `X-Exported-Count`.
     func bulkExport(_ selector: BulkSelector, format: ExportFormat) async throws -> BulkExportFile
     /// `bulkTagTransactions({ transaction_ids, add_slugs, remove_slugs })`.
-    func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult
+    func bulkTag(ids: [TransactionID], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult
     /// `markTransfer(aId, bId)`: `POST /api/transactions/transfers`.
-    func markTransfer(_ first: Int, _ second: Int) async throws
+    func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws
     /// `createRecipient({ name })`: the existing payee when the name is taken.
     func createRecipient(name: String) async throws -> CreatedRecipient
 }
@@ -49,13 +49,13 @@ extension APIClient: TransactionBulkService {
         return BulkExportFile(data: response.body, exportedCount: count.flatMap { $0 >= 0 ? $0 : nil })
     }
 
-    public func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
+    public func bulkTag(ids: [TransactionID], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
         try await send(
             OpenAPIOperations.BulkTagTransactions(
                 body: OpenAPI.BulkTagRequest(transactionIds: ids, addSlugs: add, removeSlugs: remove)))
     }
 
-    public func markTransfer(_ first: Int, _ second: Int) async throws {
+    public func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {
         _ = try await send(OpenAPIOperations.MarkTransfer(body: .init(aId: first, bId: second)))
     }
 
@@ -121,7 +121,7 @@ public struct BulkFilterSelection: Equatable, Sendable {
 /// `BulkSelectionRequest`: the checked ids, or the filter with the count the user saw
 /// (`expected_count`) once "Select all matching" promoted the selection.
 public enum BulkSelector: Equatable, Sendable {
-    case ids([Int])
+    case ids([TransactionID])
     case filter(BulkFilterSelection, expectedCount: Int)
 
     /// How many rows the action names (`effectiveCount`).
@@ -158,11 +158,11 @@ extension BulkSelector {
 /// The `fields` of a bulk update: one change per action. `categoryId` `.some(nil)` sends
 /// `null` (No category).
 public struct BulkUpdateFields: Equatable, Sendable {
-    public var categoryId: Int??
-    public var recipientId: Int?
+    public var categoryId: CategoryID??
+    public var recipientId: RecipientID?
     public var isActive: Bool?
 
-    public init(categoryId: Int?? = nil, recipientId: Int? = nil, isActive: Bool? = nil) {
+    public init(categoryId: CategoryID?? = nil, recipientId: RecipientID? = nil, isActive: Bool? = nil) {
         self.categoryId = categoryId
         self.recipientId = recipientId
         self.isActive = isActive

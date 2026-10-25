@@ -12,8 +12,8 @@ struct AnalysisSettingsTests {
                 "language": .string("nl"), "defaultCurrency": .string("CHF"),
             ]))
         #expect(settings.analysisBenchmark == "VWCE.DE")
-        #expect(settings.aiAnswerDepth == "detailed")
-        #expect(settings.language == "nl")
+        #expect(settings.aiAnswerDepth == .detailed)
+        #expect(settings.language == .nl)
         #expect(settings.defaultCurrency == "CHF")
     }
 
@@ -24,10 +24,10 @@ struct AnalysisSettingsTests {
                 "language": .string("de"), "defaultCurrency": .string("eur"), "defaultPageSize": .int(100),
             ]))
         #expect(settings.analysisBenchmark == nil)
-        #expect(settings.aiAnswerDepth == "quick")
-        #expect(settings.language == "en")
-        // The stored currency remains case-preserving; Analysis resolves its stricter preference layer.
-        #expect(settings.defaultCurrency == "eur")
+        #expect(settings.aiAnswerDepth == .quick)
+        #expect(settings.language == .en)
+        // `storedAppSettingsSchema` upper-cases a stored three-letter currency, so the typed code is `EUR`.
+        #expect(settings.defaultCurrency == "EUR")
         #expect(settings.defaultPageSize == 100)
     }
 }

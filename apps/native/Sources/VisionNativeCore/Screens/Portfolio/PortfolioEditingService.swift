@@ -1,33 +1,35 @@
 import Foundation
 
 public struct PortfolioPriceProvider: Decodable, Equatable, Sendable, Identifiable {
-    public var id: String { key }
-    public let key: String
+    public var id: OpenAPI.PriceProvider { key }
+    public let key: OpenAPI.PriceProvider
     public let name: String
     public let description: String
-    public init(key: String, name: String, description: String) {
+    public init(key: OpenAPI.PriceProvider, name: String, description: String) {
         self.key = key
         self.name = name
         self.description = description
     }
     public static let fallback: [Self] = [
-        .init(key: "manual", name: "Manual", description: ""), .init(key: "binance", name: "Binance", description: ""),
-        .init(key: "yahoo", name: "Yahoo Finance", description: ""),
-        .init(key: "custom", name: "Custom JSON", description: ""),
-        .init(key: "kinesis", name: "Kinesis", description: ""),
+        .init(key: .manual, name: "Manual", description: ""), .init(key: .binance, name: "Binance", description: ""),
+        .init(key: .yahoo, name: "Yahoo Finance", description: ""),
+        .init(key: .custom, name: "Custom JSON", description: ""),
+        .init(key: .kinesis, name: "Kinesis", description: ""),
     ]
 }
 
 public protocol PortfolioEditingService: Sendable {
     func portfolioCreateInvestment(_ payload: PortfolioEditingPayload) async throws -> PortfolioInvestment
-    func portfolioUpdateInvestment(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioInvestment
-    func portfolioDeleteInvestment(id: Int) async throws
-    func portfolioCreateTransaction(investmentId: Int, payload: PortfolioEditingPayload) async throws
+    func portfolioUpdateInvestment(id: InvestmentID, payload: PortfolioEditingPayload) async throws
+        -> PortfolioInvestment
+    func portfolioDeleteInvestment(id: InvestmentID) async throws
+    func portfolioCreateTransaction(investmentId: InvestmentID, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
-    func portfolioUpdateTransaction(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioTransaction
-    func portfolioDeleteTransaction(id: Int) async throws
+    func portfolioUpdateTransaction(id: PortfolioTransactionID, payload: PortfolioEditingPayload) async throws
+        -> PortfolioTransaction
+    func portfolioDeleteTransaction(id: PortfolioTransactionID) async throws
     func portfolioPriceProviders() async throws -> [PortfolioPriceProvider]
-    func portfolioEditingTransactions(investmentIds: [Int]) async throws -> [PortfolioTransaction]
+    func portfolioEditingTransactions(investmentIds: [InvestmentID]) async throws -> [PortfolioTransaction]
     func portfolioEditingAccounts() async throws -> [OpenAPI.Account]
     func portfolioRetagLots(_ payload: PortfolioEditingPayload) async throws -> OpenAPI.PortfolioBrokerRetagReceipt
     func portfolioImportExposure(_ data: Data) async throws
@@ -39,34 +41,36 @@ extension APIClient: PortfolioEditingService {
             PortfolioEditingRequest<OpenAPIOperations.CreateInvestment, PortfolioInvestment>(
                 path: "/api/investments", payload: payload))
     }
-    public func portfolioUpdateInvestment(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioInvestment
+    public func portfolioUpdateInvestment(id: InvestmentID, payload: PortfolioEditingPayload) async throws
+        -> PortfolioInvestment
     {
         try await send(
             PortfolioEditingRequest<OpenAPIOperations.UpdateInvestment, PortfolioInvestment>(
-                path: "/api/investments/\(id)", payload: payload))
+                path: "/api/investments/\(id.rawValue)", payload: payload))
     }
-    public func portfolioDeleteInvestment(id: Int) async throws {
+    public func portfolioDeleteInvestment(id: InvestmentID) async throws {
         _ = try await send(
-            PortfolioEditingRequest<OpenAPIOperations.DeleteInvestment, APIEmpty>(path: "/api/investments/\(id)"))
+            PortfolioEditingRequest<OpenAPIOperations.DeleteInvestment, APIEmpty>(
+                path: "/api/investments/\(id.rawValue)"))
     }
-    public func portfolioCreateTransaction(investmentId: Int, payload: PortfolioEditingPayload) async throws
+    public func portfolioCreateTransaction(investmentId: InvestmentID, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
     {
         try await send(
             PortfolioEditingRequest<OpenAPIOperations.CreateInvestmentTransaction, PortfolioTransaction>(
-                path: "/api/investments/\(investmentId)/transactions", payload: payload))
+                path: "/api/investments/\(investmentId.rawValue)/transactions", payload: payload))
     }
-    public func portfolioUpdateTransaction(id: Int, payload: PortfolioEditingPayload) async throws
+    public func portfolioUpdateTransaction(id: PortfolioTransactionID, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
     {
         try await send(
             PortfolioEditingRequest<OpenAPIOperations.UpdatePortfolioTransaction, PortfolioTransaction>(
-                path: "/api/investments/transactions/\(id)", payload: payload))
+                path: "/api/investments/transactions/\(id.rawValue)", payload: payload))
     }
-    public func portfolioDeleteTransaction(id: Int) async throws {
+    public func portfolioDeleteTransaction(id: PortfolioTransactionID) async throws {
         _ = try await send(
             PortfolioEditingRequest<OpenAPIOperations.DeletePortfolioTransaction, APIEmpty>(
-                path: "/api/investments/transactions/\(id)"))
+                path: "/api/investments/transactions/\(id.rawValue)"))
     }
     public func portfolioPriceProviders() async throws -> [PortfolioPriceProvider] {
         try await send(
@@ -74,7 +78,7 @@ extension APIClient: PortfolioEditingService {
                 path: "/api/investments/providers")
         ).providers
     }
-    public func portfolioEditingTransactions(investmentIds: [Int]) async throws -> [PortfolioTransaction] {
+    public func portfolioEditingTransactions(investmentIds: [InvestmentID]) async throws -> [PortfolioTransaction] {
         guard !investmentIds.isEmpty else { return [] }
         do {
             return try await send(
@@ -83,7 +87,7 @@ extension APIClient: PortfolioEditingService {
                 >(
                     path: "/api/investments/transactions",
                     queryItems: [
-                        .init(name: "investment_ids", value: investmentIds.map(String.init).joined(separator: ",")),
+                        .init(name: "investment_ids", value: investmentIds.map { String($0.rawValue) }.joined(separator: ",")),
                         .init(name: "per_investment_limit", value: "1000"),
                     ])
             ).items
@@ -96,7 +100,7 @@ extension APIClient: PortfolioEditingService {
                             PortfolioEditingRequest<
                                 OpenAPIOperations.GetInvestmentTransactions, PortfolioPage<PortfolioTransaction>
                             >(
-                                path: "/api/investments/\(id)/transactions",
+                                path: "/api/investments/\(id.rawValue)/transactions",
                                 queryItems: [.init(name: "limit", value: "1000")])
                         ).items
                     }

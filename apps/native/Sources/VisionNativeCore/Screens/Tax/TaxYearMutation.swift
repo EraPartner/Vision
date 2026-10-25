@@ -10,7 +10,7 @@ public enum TaxYearAction: Equatable, Sendable {
     public func needsComputation(_ overview: OpenAPI.BelgianTaxOverview) -> Bool {
         switch self {
         case .freeze: return true
-        case .file: return overview.calculationSource != "frozen"
+        case .file: return overview.calculationSource != .frozen
         default: return false
         }
     }
@@ -31,7 +31,7 @@ public struct TaxSettingsPatch: Encodable, Equatable, Sendable {
         var baselines: [String: JSONValue] = [:]
         for key in settings.keys {
             let matches = records.filter { $0.key == key }
-            guard matches.count == 1, let baseline = matches.first?.expected,
+            guard matches.count == 1, let baseline = matches.first?.expected.json,
                 let fields = baseline.objectValue, let exists = fields["exists"]?.boolValue,
                 Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
             else {
@@ -51,12 +51,12 @@ public enum TaxYearMutation {
     /// with its own household snapshot, or one with a frozen calculation), not filed yet.
     public static func canFile(_ overview: OpenAPI.BelgianTaxOverview) -> Bool {
         let filed = (try? TaxValue(encoding: overview.metadata))?["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return overview.hasProfile && !filed && (!overview.isHistorical || overview.hasSnapshot || frozen)
     }
-    public static let householdKey = "belgian_tax_household_v2"
-    public static let snapshotsKey = "belgian_tax_household_snapshots_v2"
-    public static let metadataKey = "belgian_tax_profile_snapshot_meta_v1"
+    public static let householdKey = SettingKey.belgianTaxHouseholdV2.rawValue
+    public static let snapshotsKey = SettingKey.belgianTaxHouseholdSnapshotsV2.rawValue
+    public static let metadataKey = SettingKey.belgianTaxProfileSnapshotMetaV1.rawValue
 
     public static func patch(
         action: TaxYearAction, overview: OpenAPI.BelgianTaxOverview,

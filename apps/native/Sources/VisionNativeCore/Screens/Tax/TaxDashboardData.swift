@@ -3,7 +3,7 @@ import Foundation
 /// Server-owned monetary data: never reconstruct tax estimates from input fields in Swift.
 public struct TaxDashboardData: Decodable, Sendable {
     public let year: Int
-    public let currency: String
+    public let currency: CurrencyCode
     public let isHistorical: Bool
     public let hasIncomeSources: Bool
     public let hasStatsData: Bool
@@ -22,7 +22,7 @@ public struct TaxDashboardData: Decodable, Sendable {
     public let rules: [TaxDashboardRuleSection]
     /// Currencies of amounts left out because no stored rate converts them (#308); empty or
     /// absent when everything converted.
-    public let unconvertedCurrencies: [String]?
+    public let unconvertedCurrencies: [CurrencyCode]?
     /// Response fields that miss such an amount.
     public let incompleteFigures: [String]?
 }

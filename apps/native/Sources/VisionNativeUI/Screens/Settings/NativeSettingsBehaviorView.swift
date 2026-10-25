@@ -16,27 +16,29 @@ public struct NativeSettingsBehaviorView: View {
                     title: strings.t("settings.general.startupSection"),
                     description: strings.t("settings.general.startupSectionHint"),
                     value: Binding(
-                        get: { model.appString("startupSection", fallback: "budgeting") },
+                        get: { model.startupSection.rawValue },
                         set: { model.updateApp(["startupSection": .string($0)]) }),
                     options: [
-                        .init(value: "budgeting", label: strings.t("nav.home")),
-                        .init(value: "portfolio", label: strings.t("nav.portfolio")),
-                        .init(value: "research", label: strings.t("nav.research")),
-                        .init(value: "ai-chat", label: strings.t("nav.aiChat")),
-                        .init(value: "last", label: strings.t("settings.general.startupSection.last")),
+                        .init(value: StartupSection.budgeting.rawValue, label: strings.t("nav.home")),
+                        .init(value: StartupSection.portfolio.rawValue, label: strings.t("nav.portfolio")),
+                        .init(value: StartupSection.research.rawValue, label: strings.t("nav.research")),
+                        .init(value: StartupSection.aiChat.rawValue, label: strings.t("nav.aiChat")),
+                        .init(
+                            value: StartupSection.last.rawValue,
+                            label: strings.t("settings.general.startupSection.last")),
                     ])
                 Divider()
                 NativeSettingsSelectRow(
                     title: strings.t("settings.general.costBasisMethod"),
                     description: strings.t("settings.general.costBasisMethodHint"),
                     value: Binding(
-                        get: { model.appString("costBasisMethod", fallback: "weighted_avg") },
-                        set: { value in Task { await model.setCostBasisMethod(value) } }),
-                    options: [
-                        .init(value: "weighted_avg", label: strings.t("settings.general.costBasisMethod.weighted_avg")),
-                        .init(value: "fifo", label: strings.t("settings.general.costBasisMethod.fifo")),
-                        .init(value: "lifo", label: strings.t("settings.general.costBasisMethod.lifo")),
-                    ])
+                        get: { model.costBasisMethod.rawValue },
+                        set: { value in Task { await model.setCostBasisMethod(CostBasisMethod(rawValue: value)) } }),
+                    options: CostBasisMethod.allCases.map {
+                        .init(
+                            value: $0.rawValue,
+                            label: strings.t("settings.general.costBasisMethod." + $0.rawValue))
+                    })
                 Divider()
                 NativeSettingsRow(
                     title: strings.t("settings.general.autoClearPlanned"),
@@ -48,7 +50,7 @@ public struct NativeSettingsBehaviorView: View {
                             get: { model.appBool("autoClearPlannedOnMatch", fallback: true) },
                             set: { model.updateApp(["autoClearPlannedOnMatch": .bool($0)]) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
                 if model.supportsServices {
                     Divider()
@@ -62,7 +64,7 @@ public struct NativeSettingsBehaviorView: View {
                                 get: { model.keepServicesOnQuit },
                                 set: { value in Task { await model.setKeepServicesOnQuit(value) } })
                         )
-                        .labelsHidden().toggleStyle(.switch).disabled(model.servicesLoading || model.servicesSaving)
+                        .labelsHidden().toggleStyle(.visionSwitchLabelless).disabled(model.servicesLoading || model.servicesSaving)
                     }
                 }
             }

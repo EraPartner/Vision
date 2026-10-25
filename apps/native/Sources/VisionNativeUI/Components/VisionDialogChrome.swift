@@ -188,7 +188,6 @@ struct VisionDialogFooter<Content: View>: View {
             Spacer(minLength: 0)
             content
         }
-        .controlSize(.large)
     }
 }
 

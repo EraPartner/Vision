@@ -52,7 +52,7 @@ private actor NativeTaxPrintTransport: APITransport {
             ])
         #expect(value.year == 2025 && value.overview.calculation.totalPIT == Decimal(string: "123.4567"))
         #expect(value.dashboard.yearlyIncome.first?.income == Decimal(string: "0.1234567890123456789"))
-        #expect(value.overview.calculation.grossIncome == nil && value.overview.calculationSource == "frozen")
+        #expect(value.overview.calculation.grossIncome == nil && value.overview.calculationSource == .frozen)
     }
     @Test func viewComparisonAndRulesExpansionAreImmutableSnapshotValues() throws {
         var local = NativeTaxPrintLocalState(

@@ -231,6 +231,7 @@ public final class ShellHostingView: NSHostingView<ShellRootView> {
     }
 
     @available(*, unavailable)
+    // lint:allow fatal-error required init(coder:) is never used, no storyboard decoding
     public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     public override func viewDidMoveToWindow() {

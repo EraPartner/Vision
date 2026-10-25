@@ -66,7 +66,8 @@ public struct NativeTaxPrintSnapshot: Sendable {
         deductionGroups: [TaxDeductionGroup] = [], appliedDeductionTypes: Set<String> = [],
         deductionError: String? = nil, deductionApplyError: String? = nil
     ) throws {
-        guard dashboard.year == overview.year, dashboard.currency == settings.defaultCurrency else {
+        guard dashboard.year == overview.year, NativeReportCurrency.matches(dashboard.currency, settings.defaultCurrency)
+        else {
             throw APIError.invalidRequest("Tax print year/currency does not match the displayed page")
         }
         self.overview = overview

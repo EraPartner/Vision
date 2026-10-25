@@ -61,7 +61,7 @@ struct AnalysisCodeText: View {
             Text(text).font(.caption.monospaced()).textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
         }.frame(maxHeight: 260)
-            .background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border.opacity(0.6)))
+            .background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border.opacity(0.6)))
     }
 }

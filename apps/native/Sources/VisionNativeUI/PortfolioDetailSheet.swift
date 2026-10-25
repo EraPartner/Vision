@@ -2,6 +2,8 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioDetailSheet: View {
+    /// `InvestmentDetailDialog`'s `max-w-2xl` panel.
+    static let metrics = VisionDialogMetrics(maxWidth: 672)
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
@@ -13,7 +15,7 @@ struct PortfolioDetailSheet: View {
             if let error = model.error {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) {
-                    Task { await model.load(currency: shell.settings.defaultCurrency, force: true) }
+                    Task { await model.load(currency: shell.settings.portfolioCurrency, force: true) }
                 }.buttonStyle(.visionOutline)
             }
             if let holding = model.selectedInvestment {
@@ -26,11 +28,17 @@ struct PortfolioDetailSheet: View {
                             theme.foreground.opacity(0.04),
                             in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 }
-                Picker(strings.t("invDetail.breakdown"), selection: $tab) {
-                    Text(strings.t("invDetail.tab.performance")).tag("performance")
-                    Text(strings.t("invDetail.tab.transactions", ["n": String(model.transactions.count)])).tag(
-                        "transactions")
-                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                VisionSegmentedControl(
+                    selection: $tab,
+                    options: [
+                        VisionSegmentOption(value: "performance", title: strings.t("invDetail.tab.performance")),
+                        VisionSegmentOption(
+                            value: "transactions",
+                            title: strings.t("invDetail.tab.transactions", ["n": String(model.transactions.count)])),
+                    ]
+                )
+                .accessibilityElement(children: .contain).accessibilityLabel(strings.t("invDetail.breakdown"))
+                .frame(maxWidth: .infinity)
                 if tab == "performance" {
                     ScrollView { performance(holding) }.frame(maxHeight: 620)
                 } else {
@@ -56,14 +64,13 @@ struct PortfolioDetailSheet: View {
                     Text(strings.t("apiError.notFound"))
                         .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity).padding(50)
                     Button(strings.t("common.retry")) {
-                        Task { await model.load(currency: shell.settings.defaultCurrency, force: true) }
+                        Task { await model.load(currency: shell.settings.portfolioCurrency, force: true) }
                     }.buttonStyle(.visionOutline)
                 }
                 Button(strings.t("common.close")) { model.closeDetail() }
                     .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
             }
-        }.visionDialogPadding().frame(minWidth: 640, idealWidth: 672)
-            .portfolioEditingPresentation(model: editing, shell: shell)
+        }
             .onChange(of: model.selectedInvestment?.isActive) { previous, current in
                 if previous == true && current != true && model.error == nil { model.closeDetail() }
             }
@@ -81,11 +88,11 @@ struct PortfolioDetailSheet: View {
                     Text(holding.name).font(.visionCardTitle).foregroundStyle(theme.foreground).lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
                 }
-                VisionBadge(text: assetClassLabel(holding.assetClass), small: true)
+                VisionBadge(text: assetClassLabel(holding.assetClass.rawValue), small: true)
                 if !holding.isActive { VisionBadge(text: strings.t("portfolio.archived"), tone: .outline, small: true) }
                 if holding.oversold {
                     VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
-                        .help(strings.t("portfolio.oversold.description"))
+                        .visionTooltip(strings.t("portfolio.oversold.description"))
                 }
                 Spacer(minLength: 0)
                 VisionDialogCloseButton(label: strings.t("common.close")) { model.closeDetail() }
@@ -121,7 +128,7 @@ struct PortfolioDetailSheet: View {
                 path: "/research/market",
                 query: [
                     URLQueryItem(name: "symbol", value: symbol),
-                    URLQueryItem(name: "investmentId", value: String(holding.id)),
+                    URLQueryItem(name: "investmentId", value: String(holding.id.rawValue)),
                 ]
             ).string)
     }
@@ -149,7 +156,7 @@ struct PortfolioDetailSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(strings.t("invDetail.breakdown")).font(.headline)
                     row("invDetail.totalCost", holding.totalBuyCost, currency: holding.currency)
-                    if ["stock", "etf", "crypto", "metals"].contains(holding.assetClass) {
+                    if [.stock, .etf, .crypto, .metals].contains(holding.assetClass) {
                         LabeledContent(
                             strings.t("invDetail.unitsHeld"),
                             value: VisionFormat.decimal(
@@ -159,13 +166,13 @@ struct PortfolioDetailSheet: View {
                             row("invDetail.currentPrice", holding.currentPrice, currency: holding.currency)
                         }
                     }
-                    if ["savings", "bond"].contains(holding.assetClass), holding.interestRate != 0 {
+                    if [.savings, .bond].contains(holding.assetClass), holding.interestRate != 0 {
                         LabeledContent(
                             strings.t("invDetail.interestRate"),
                             value: VisionFormat.percent(
                                 holding.interestRate, digits: 2, locale: shell.settings.numberFormat.locale))
                     }
-                    if holding.assetClass == "real_estate" {
+                    if holding.assetClass == .realEstate {
                         if let place = holding.municipality {
                             LabeledContent(strings.t("invDetail.municipality"), value: place)
                         }
@@ -199,10 +206,10 @@ struct PortfolioDetailSheet: View {
                         Text(strings.t("invDetail.fxAttribution")).font(.headline)
                         row(
                             "portfolio.nativeValue", holding.nativeCurrentValue, currency: holding.originalCurrency,
-                            params: ["currency": holding.originalCurrency])
+                            params: ["currency": holding.originalCurrency.rawValue])
                         row(
                             "invDetail.investedAtHistoricalRates", holding.totalInvested, currency: holding.currency,
-                            params: ["currency": holding.currency])
+                            params: ["currency": holding.currency.rawValue])
                         row("portfolio.assetGain", holding.assetGain, currency: holding.currency, signed: true)
                         row("portfolio.fxEffect", holding.fxGain, currency: holding.currency, signed: true)
                         if holding.usedFallbackRate == true {
@@ -211,7 +218,7 @@ struct PortfolioDetailSheet: View {
                     }
                 }
             }
-            if ["savings", "bond"].contains(holding.assetClass), holding.interestRate != 0 {
+            if [.savings, .bond].contains(holding.assetClass), holding.interestRate != 0 {
                 AdminCard {
                     row(
                         "portfolio.projectedAnnualInterest", holding.projectedAnnualInterest, currency: holding.currency
@@ -221,7 +228,7 @@ struct PortfolioDetailSheet: View {
                     }
                 }
             }
-            if holding.assetClass == "real_estate" {
+            if holding.assetClass == .realEstate {
                 AdminCard {
                     row(
                         "invDetail.totalAppreciation", holding.totalAppreciation, currency: holding.currency,
@@ -237,7 +244,7 @@ struct PortfolioDetailSheet: View {
         }.padding(.trailing, 4)
     }
     private func row(
-        _ key: String, _ amount: Decimal?, currency: String, signed: Bool = false, params: [String: String] = [:]
+        _ key: String, _ amount: Decimal?, currency: CurrencyCode, signed: Bool = false, params: [String: String] = [:]
     ) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(strings.t(key, params))
@@ -246,7 +253,7 @@ struct PortfolioDetailSheet: View {
                 .foregroundStyle(signed ? ((amount ?? 0) >= 0 ? theme.gain : theme.loss) : theme.foreground)
         }.accessibilityElement(children: .combine)
     }
-    private func money(_ amount: Decimal, currency: String, signed: Bool = false) -> String {
+    private func money(_ amount: Decimal, currency: CurrencyCode, signed: Bool = false) -> String {
         MoneyText.text(amount, currency: currency, settings: shell.settings, signed: signed)
     }
 }

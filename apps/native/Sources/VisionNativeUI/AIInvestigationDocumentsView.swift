@@ -37,7 +37,7 @@ struct AIInvestigationDocumentsView: View {
                     strings.t(
                         "aiResearch.effectivePreferences",
                         [
-                            "currency": model.resolvedCurrency,
+                            "currency": model.resolvedCurrency.rawValue,
                             "benchmark": model.resolvedBenchmark ?? strings.t("aiResearch.noBenchmark"),
                         ])
                 )
@@ -55,18 +55,16 @@ struct AIInvestigationDocumentsView: View {
             }
         }
         .padding(.vertical, 10)
-        .alert(
-            strings.t("aiResearch.deleteDocument"),
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
-            presenting: pendingDelete
+        .visionAlert(
+            title: strings.t("aiResearch.deleteDocument"),
+            message: { strings.t("aiResearch.deleteDocumentConfirm", ["name": $0.title]) },
+            item: $pendingDelete
         ) { document in
-            Button(strings.t("common.cancel"), role: .cancel) { pendingDelete = nil }
-            Button(strings.t("common.delete"), role: .destructive) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { pendingDelete = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
                 pendingDelete = nil
                 Task { await model.deleteDocumentConfirmed(document.id) }
             }
-        } message: { document in
-            Text(strings.t("aiResearch.deleteDocumentConfirm", ["name": document.title]))
         }
     }
     private func documentRow(_ document: AIResearchDocument) -> some View {
@@ -74,7 +72,7 @@ struct AIInvestigationDocumentsView: View {
             Image(systemName: "doc.text").foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(document.title).font(.callout)
-                Text(document.extractionStatus).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Text(document.extractionStatus.rawValue).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             Spacer(minLength: 12)
             Button {
@@ -82,7 +80,7 @@ struct AIInvestigationDocumentsView: View {
             } label: {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless).foregroundStyle(theme.destructive)
+            .buttonStyle(.vision(.ghost, size: .iconSm)).foregroundStyle(theme.destructive)
             .accessibilityLabel(strings.t("aiResearch.deleteDocument") + ": " + document.title)
         }.padding(.vertical, 10)
     }

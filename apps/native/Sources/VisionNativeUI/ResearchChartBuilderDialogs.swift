@@ -33,7 +33,7 @@ struct ResearchChartBuilderSaveSheet: View {
                     model.layoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isStorageAction
                         || !model.isStorageLoaded)
             }
-        }.visionDialogPadding().frame(width: 512).interactiveDismissDisabled(model.isStorageAction).onAppear { focused = true }
+        }.visionDialogPadding().frame(width: 512).visionInteractiveDismissDisabled(model.isStorageAction).onAppear { focused = true }
             .overlay(alignment: .bottom) {
                 if model.notice?.kind == .error {
                     NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice)

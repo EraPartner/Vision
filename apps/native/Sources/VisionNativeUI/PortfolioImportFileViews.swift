@@ -31,22 +31,26 @@ struct PortfolioImportFileDropzone: View {
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
                 if let remove {
                     Button(strings.t("importPage.remove"), systemImage: "trash", role: .destructive, action: remove)
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.vision(.ghost, size: .sm))
                 }
             } else {
                 Text(strings.t(multiple ? "portfolioImport.session.files" : "portfolioImport.dropzone"))
                     .font(.body.weight(.medium))
-                Text(strings.t("importPage.dropzoneOr")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                // The session dropzone shows only its label; the single-file one adds the hint.
+                if !multiple {
+                    Text(strings.t("importPage.dropzoneOr")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                }
             }
             if reading { ProgressView().controlSize(.small) }
-        }.frame(maxWidth: .infinity).padding(32)
+        }.frame(maxWidth: .infinity).padding(multiple ? 40 : 32)
             .background(
                 targeted ? theme.primary.opacity(0.05) : .clear,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card).strokeBorder(
-                    targeted ? theme.primary : theme.border, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    targeted ? theme.primary : theme.border.opacity(multiple ? 0.6 : 1),
+                    style: StrokeStyle(lineWidth: multiple ? 1 : 2, dash: [6, 4]))
             )
             .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
             .onTapGesture { if !isDisabled && !reading { picker = true } }

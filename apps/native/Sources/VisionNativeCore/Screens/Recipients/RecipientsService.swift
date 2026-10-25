@@ -10,24 +10,24 @@ public protocol RecipientsService: Sendable {
     /// with that name already existed (`wasCreated`).
     func createPayee(name: String, notes: String?) async throws -> Bool
     /// `updateRecipient(id, data)`.
-    func updatePayee(id: Int, patch: PayeePatch) async throws
+    func updatePayee(id: RecipientID, patch: PayeePatch) async throws
     /// `deleteRecipient(id)`.
-    func deletePayee(id: Int) async throws
+    func deletePayee(id: RecipientID) async throws
     /// `mergeRecipients(primaryId, aliasIds)`.
-    func mergePayees(primaryId: Int, aliasIds: [Int]) async throws -> PayeeMergeResult
+    func mergePayees(primaryId: RecipientID, aliasIds: [RecipientID]) async throws -> PayeeMergeResult
     /// `unmergeRecipient(id)`.
-    func unmergePayee(id: Int) async throws
+    func unmergePayee(id: RecipientID) async throws
     /// `listRecipientPatterns(recipientId)`.
-    func matchRules(recipientId: Int) async throws -> [OpenAPI.RecipientPattern]
+    func matchRules(recipientId: RecipientID) async throws -> [OpenAPI.RecipientPattern]
     /// `createRecipientPattern(recipientId, data)`.
-    func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws
+    func createMatchRule(recipientId: RecipientID, body: MatchRuleBody) async throws
     /// `updateRecipientPattern(recipientId, patternId, data)`.
-    func updateMatchRule(recipientId: Int, patternId: Int, patch: MatchRulePatch) async throws
+    func updateMatchRule(recipientId: RecipientID, patternId: RecipientPatternID, patch: MatchRulePatch) async throws
     /// `deleteRecipientPattern(recipientId, patternId)`.
-    func deleteMatchRule(recipientId: Int, patternId: Int) async throws
+    func deleteMatchRule(recipientId: RecipientID, patternId: RecipientPatternID) async throws
     /// `previewRecipientPattern(recipientId, { pattern, pattern_kind, case_sensitive })`:
     /// `matchCount`.
-    func previewMatchRule(recipientId: Int, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
+    func previewMatchRule(recipientId: RecipientID, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
         async throws -> Int
 }
 
@@ -72,9 +72,9 @@ public struct PayeePatch: Equatable, Sendable, Encodable {
     public var notes: String?
     public var isActive: Bool?
     /// `.some(nil)` sends `null`.
-    public var defaultCategoryId: Int??
+    public var defaultCategoryId: CategoryID??
 
-    public init(name: String? = nil, notes: String? = nil, isActive: Bool? = nil, defaultCategoryId: Int?? = nil) {
+    public init(name: String? = nil, notes: String? = nil, isActive: Bool? = nil, defaultCategoryId: CategoryID?? = nil) {
         self.name = name
         self.notes = notes
         self.isActive = isActive
@@ -107,10 +107,10 @@ public struct PayeePatch: Equatable, Sendable, Encodable {
 /// rule suggestion, if any.
 public struct PayeeMergeResult: Equatable, Sendable, Decodable {
     public struct Primary: Equatable, Sendable, Decodable {
-        public let id: Int
+        public let id: RecipientID
         public let name: String
 
-        public init(id: Int, name: String) {
+        public init(id: RecipientID, name: String) {
             self.id = id
             self.name = name
         }
@@ -130,10 +130,10 @@ public struct PayeeMergeResult: Equatable, Sendable, Decodable {
     }
 
     public let primary: Primary
-    public let mergedIds: [Int]
+    public let mergedIds: [RecipientID]
     public let suggestion: Suggestion?
 
-    public init(primary: Primary, mergedIds: [Int], suggestion: Suggestion? = nil) {
+    public init(primary: Primary, mergedIds: [RecipientID], suggestion: Suggestion? = nil) {
         self.primary = primary
         self.mergedIds = mergedIds
         self.suggestion = suggestion
@@ -148,7 +148,7 @@ public struct PayeeMergeResult: Equatable, Sendable, Decodable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         primary = try container.decode(Primary.self, forKey: .primary)
-        mergedIds = try container.decodeIfPresent([Int].self, forKey: .mergedIds) ?? []
+        mergedIds = try container.decodeIfPresent([RecipientID].self, forKey: .mergedIds) ?? []
         suggestion = try container.decodeIfPresent(Suggestion.self, forKey: .suggestion)
     }
 }
@@ -158,6 +158,11 @@ public enum MatchRuleKind: String, CaseIterable, Sendable {
     case literalPrefix = "literal_prefix"
     case glob
     case regex
+
+    /// The form's kind for a stored rule's kind; `nil` for a kind this client does not know.
+    public init?(_ kind: OpenAPI.RecipientPattern.PatternKind) {
+        self.init(rawValue: kind.rawValue)
+    }
 
     /// `recipientPatterns.kindLiteralPrefix`, `kindGlob` or `kindRegex`.
     public var labelKey: String {
@@ -275,45 +280,45 @@ extension APIClient: RecipientsService {
         try await send(OpenAPIOperations.CreateRecipient(body: OpenAPI.RecipientCreate(name: name, notes: notes))).created
     }
 
-    public func updatePayee(id: Int, patch: PayeePatch) async throws {
+    public func updatePayee(id: RecipientID, patch: PayeePatch) async throws {
         _ = try await send(PayeePatchRequest(id: id, patch: patch))
     }
 
-    public func deletePayee(id: Int) async throws {
+    public func deletePayee(id: RecipientID) async throws {
         _ = try await send(OpenAPIOperations.DeleteRecipient(id: id))
     }
 
-    public func mergePayees(primaryId: Int, aliasIds: [Int]) async throws -> PayeeMergeResult {
+    public func mergePayees(primaryId: RecipientID, aliasIds: [RecipientID]) async throws -> PayeeMergeResult {
         try await send(PayeeMergeRequest(primaryId: primaryId, aliasIds: aliasIds))
     }
 
-    public func unmergePayee(id: Int) async throws {
+    public func unmergePayee(id: RecipientID) async throws {
         _ = try await send(OpenAPIOperations.UnmergeRecipient(id: id))
     }
 
-    public func matchRules(recipientId: Int) async throws -> [OpenAPI.RecipientPattern] {
+    public func matchRules(recipientId: RecipientID) async throws -> [OpenAPI.RecipientPattern] {
         try await send(OpenAPIOperations.GetRecipientPatterns(id: recipientId)).items
     }
 
-    public func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws {
+    public func createMatchRule(recipientId: RecipientID, body: MatchRuleBody) async throws {
         _ = try await send(MatchRuleCreateRequest(recipientId: recipientId, body: body))
     }
 
-    public func updateMatchRule(recipientId: Int, patternId: Int, patch: MatchRulePatch) async throws {
+    public func updateMatchRule(recipientId: RecipientID, patternId: RecipientPatternID, patch: MatchRulePatch) async throws {
         _ = try await send(MatchRulePatchRequest(recipientId: recipientId, patternId: patternId, patch: patch))
     }
 
-    public func deleteMatchRule(recipientId: Int, patternId: Int) async throws {
+    public func deleteMatchRule(recipientId: RecipientID, patternId: RecipientPatternID) async throws {
         _ = try await send(OpenAPIOperations.DeleteRecipientPattern(id: recipientId, patternId: patternId))
     }
 
-    public func previewMatchRule(recipientId: Int, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
+    public func previewMatchRule(recipientId: RecipientID, pattern: String, kind: MatchRuleKind, caseSensitive: Bool)
         async throws -> Int
     {
         try await send(
             OpenAPIOperations.PreviewRecipientPattern(
                 id: recipientId,
-                body: .init(pattern: pattern, patternKind: kind.rawValue, caseSensitive: caseSensitive))
+                body: .init(pattern: pattern, patternKind: .init(rawValue: kind.rawValue), caseSensitive: caseSensitive))
         ).matchCount
     }
 }
@@ -328,10 +333,10 @@ public struct PayeePatchRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateRecipient.method
     public static let pathTemplate = OpenAPIOperations.UpdateRecipient.pathTemplate
 
-    public let id: Int
+    public let id: RecipientID
     public let patch: PayeePatch
 
-    public init(id: Int, patch: PayeePatch) {
+    public init(id: RecipientID, patch: PayeePatch) {
         self.id = id
         self.patch = patch
     }
@@ -351,10 +356,10 @@ public struct PayeeMergeRequest: APIOperation {
     public static let method = OpenAPIOperations.MergeRecipient.method
     public static let pathTemplate = OpenAPIOperations.MergeRecipient.pathTemplate
 
-    public let primaryId: Int
-    public let aliasIds: [Int]
+    public let primaryId: RecipientID
+    public let aliasIds: [RecipientID]
 
-    public init(primaryId: Int, aliasIds: [Int]) {
+    public init(primaryId: RecipientID, aliasIds: [RecipientID]) {
         self.primaryId = primaryId
         self.aliasIds = aliasIds
     }
@@ -376,10 +381,10 @@ public struct MatchRuleCreateRequest: APIOperation {
     public static let method = OpenAPIOperations.CreateRecipientPattern.method
     public static let pathTemplate = OpenAPIOperations.CreateRecipientPattern.pathTemplate
 
-    public let recipientId: Int
+    public let recipientId: RecipientID
     public let body: MatchRuleBody
 
-    public init(recipientId: Int, body: MatchRuleBody) {
+    public init(recipientId: RecipientID, body: MatchRuleBody) {
         self.recipientId = recipientId
         self.body = body
     }
@@ -401,11 +406,11 @@ public struct MatchRulePatchRequest: APIOperation {
     public static let method = OpenAPIOperations.UpdateRecipientPattern.method
     public static let pathTemplate = OpenAPIOperations.UpdateRecipientPattern.pathTemplate
 
-    public let recipientId: Int
-    public let patternId: Int
+    public let recipientId: RecipientID
+    public let patternId: RecipientPatternID
     public let patch: MatchRulePatch
 
-    public init(recipientId: Int, patternId: Int, patch: MatchRulePatch) {
+    public init(recipientId: RecipientID, patternId: RecipientPatternID, patch: MatchRulePatch) {
         self.recipientId = recipientId
         self.patternId = patternId
         self.patch = patch

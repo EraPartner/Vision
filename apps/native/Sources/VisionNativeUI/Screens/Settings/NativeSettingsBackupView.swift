@@ -95,7 +95,7 @@ struct NativeSettingsBackupView: View {
                     strings.t("settings.backup.backupOnQuit"),
                     isOn: Binding(get: { model.backupOnQuit }, set: { value in model.setBackupOnQuit(value) })
                 )
-                .labelsHidden().toggleStyle(.switch).disabled(model.backupDir.isEmpty)
+                .labelsHidden().toggleStyle(.visionSwitchLabelless).disabled(model.backupDir.isEmpty)
             }
             Divider()
             NativeSettingsRow(

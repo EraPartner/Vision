@@ -6,6 +6,8 @@ struct VisionSelectOption<Value: Hashable>: Identifiable {
     let value: Value
     let title: String
     var isDisabled = false
+    /// A 12 pt dot before the title, in the trigger and the list (`h-3 w-3 rounded-full`).
+    var swatch: Color?
     var id: Value { value }
 }
 
@@ -66,6 +68,13 @@ struct VisionSelect<Value: Hashable>: View {
             accessibilityLabel: accessibilityLabel, expands: expands)
     }
 
+    private var selectedSwatch: Color? {
+        for case .option(let option) in entries where option.value == selection.wrappedValue {
+            return option.swatch
+        }
+        return nil
+    }
+
     private var selectedTitle: String? {
         for case .option(let option) in entries where option.value == selection.wrappedValue {
             return option.title
@@ -93,6 +102,9 @@ struct VisionSelect<Value: Hashable>: View {
     private var trigger: some View {
         VisionFieldChrome {
             HStack(spacing: 8) {
+                if let swatch = selectedSwatch {
+                    Circle().fill(swatch).frame(width: 12, height: 12).accessibilityHidden(true)
+                }
                 Text(selectedTitle ?? placeholder)
                     .font(VisionControlMetrics.fieldFont)
                     .foregroundStyle(selectedTitle == nil ? theme.tertiaryLabel : theme.foreground)
@@ -199,10 +211,15 @@ private struct VisionSelectList<Value: Hashable>: View {
                     .padding(.leading, 8)
                     .opacity(isChosen ? 1 : 0)
                     .accessibilityHidden(true)
-                Text(option.title)
-                    .font(VisionControlMetrics.fieldFont)
-                    .foregroundStyle(theme.foreground)
-                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    if let swatch = option.swatch {
+                        Circle().fill(swatch).frame(width: 12, height: 12).accessibilityHidden(true)
+                    }
+                    Text(option.title)
+                        .font(VisionControlMetrics.fieldFont)
+                        .foregroundStyle(theme.foreground)
+                        .lineLimit(1)
+                }
                     .padding(.leading, 32)
                     .padding(.trailing, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)

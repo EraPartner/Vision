@@ -216,11 +216,11 @@ struct NativeNetWorthPrintTests {
 }
 
 private func snapshot(_ date: String, _ value: Decimal) -> OpenAPI.NetWorthSnapshot {
-    .init(date: date, liquid: 0, liabilities: 0, investments: value, netWorth: value)
+    .init(date: CalendarDay(stringLiteral: date), liquid: 0, liabilities: 0, investments: value, netWorth: value)
 }
 private actor NetWorthFake: NetWorthService {
     struct Call: Sendable {
-        let currency: String
+        let currency: CurrencyCode
         let limit: Int?
         let offset: Int?
     }
@@ -228,7 +228,7 @@ private actor NetWorthFake: NetWorthService {
     private(set) var refreshes = 0
     private var emptyPage = false
     private var failingBreakdown = false
-    private(set) var byAccountCurrencies: [String] = []
+    private(set) var byAccountCurrencies: [CurrencyCode] = []
     private var pauseEuro = false
     private var releaseWaiter: CheckedContinuation<Void, Never>?
     private var pauseWaiter: CheckedContinuation<Void, Never>?
@@ -240,7 +240,7 @@ private actor NetWorthFake: NetWorthService {
         releaseWaiter?.resume()
         releaseWaiter = nil
     }
-    func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+    func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         calls.append(Call(currency: currency, limit: limit, offset: offset))
         if currency == "EUR", limit == nil, pauseEuro {
             pauseEuro = false
@@ -270,7 +270,7 @@ private actor NetWorthFake: NetWorthService {
                 netWorth: currency == "EUR" ? 100 : 200, currency: currency), monthlyChange: 0, monthlyChangePercent: 0,
             snapshots: rows, snapshotsTotal: limit == nil ? nil : 4, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+    func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
         byAccountCurrencies.append(currency)
         if failingBreakdown { throw APIError.network("synthetic breakdown failure") }
         return .init(

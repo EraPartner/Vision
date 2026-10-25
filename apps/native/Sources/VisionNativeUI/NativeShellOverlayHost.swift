@@ -25,6 +25,9 @@ struct NativeShellOverlayHost: View {
             return VisionDialogMetrics(
                 maxWidth: NativeSettingsWindow.Layout.maxWidth,
                 height: .fraction(NativeSettingsWindow.Layout.heightFraction), padding: 0, spacing: 0)
+        case .some(.palette):
+            // `CommandDialog`: the default `max-w-lg` panel with `p-0`, sized to its content.
+            return VisionDialogMetrics(padding: 0, spacing: 0)
         default:
             return VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
         }
@@ -172,6 +175,7 @@ struct NativeOverlayFocusBridge: NSViewRepresentable {
         private var kind: NativeShellOverlayKind?
         private var context: NativeOverlayFocusContext
         private var snapshots: [String: NativeOverlayFocusSnapshot] = [:]
+        // lint:allow explicit-any opaque AppKit event monitor token
         private var monitor: Any?
         private var restoring: Task<Void, Never>?
         init(kind: NativeShellOverlayKind?, context: NativeOverlayFocusContext) {

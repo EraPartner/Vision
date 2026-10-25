@@ -12,11 +12,11 @@ public struct EndpointRow: Equatable, Sendable, Identifiable {
         case neutral
 
         public init(method: String) {
-            switch method {
-            case "GET": self = .info
-            case "POST": self = .success
-            case "PATCH", "PUT": self = .warning
-            case "DELETE": self = .destructive
+            switch HTTPMethod(rawValue: method) {
+            case .get?: self = .info
+            case .post?: self = .success
+            case .patch?, .put?: self = .warning
+            case .delete?: self = .destructive
             default: self = .neutral
             }
         }

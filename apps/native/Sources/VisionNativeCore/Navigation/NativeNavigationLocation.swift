@@ -52,7 +52,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
         func parameter(_ index: Int) -> String { parts[index].replacingOccurrences(of: "%2F", with: "/") }
         if parts.count == 3, normalized[1] == "accounts", !parts[2].isEmpty {
             let value = parameter(2)
-            let id = NativeNavigationIdentifier(value).positiveInteger(upTo: Int(Int32.max)) ?? 0
+            let id = AccountID(
+                rawValue: NativeNavigationIdentifier(value).positiveInteger(upTo: Int(Int32.max)) ?? 0)
             return Match(screen: .accountDetail(id: id), parameters: ["id": value])
         }
         if parts.count == 4, normalized[1] == "admin", normalized[2] == "db", !parts[3].isEmpty {
@@ -71,7 +72,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
             !parts[3].isEmpty
         {
             let value = parameter(3)
-            return Match(screen: .portfolioImportReview(batchId: value), parameters: ["batchId": value])
+            return Match(
+                screen: .portfolioImportReview(batchId: PortfolioImportBatchID(value)), parameters: ["batchId": value])
         }
         return nil
     }

@@ -169,7 +169,7 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
         readCount += 1
         return .init(
             key: "widget_visibility", value: visibility,
-            expected: .object(["exists": .bool(true), "value": visibility]))
+            expected: .wire(.object(["exists": .bool(true), "value": visibility])))
     }
     func statisticsMonthly(_ query: StatisticsQuery) async throws -> InsightMonthlySummary {
         readCount += 1
@@ -199,7 +199,7 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
         readCount += 1
         return try statisticsPrintDecode(StatisticsRecipientYears.self, #"{"recipientsByYear":{}}"#)
     }
-    func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
+    func statisticsFlow(currency: CurrencyCode, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
         readCount += 1
         return try statisticsPrintDecode(StatisticsFlow.self, "{\"nodes\":[],\"links\":[],\"year\":\(year)}")
     }
@@ -212,9 +212,9 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
         readCount += 1
         return [
             .init(
-                id: 7, name: "Synthetic Chart", chartType: "line", chartVariant: "grouped", timeBucket: "monthly",
+                id: 7, name: "Synthetic Chart", chartType: .line, chartVariant: .grouped, timeBucket: .monthly,
                 categoryIds: [3], recipientIds: [], tagIds: [], allCategories: false, allRecipients: false,
-                allTags: false, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+                allTags: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
         ]
     }
     func customChartRecipients() async throws -> [OpenAPI.Recipient] {
@@ -225,27 +225,27 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
         readCount += 1
         return []
     }
-    func customRecipientPivot(currency: String, draft: CustomChartDraft) async throws -> CustomRecipientPivot {
+    func customRecipientPivot(currency: CurrencyCode, draft: CustomChartDraft) async throws -> CustomRecipientPivot {
         throw APIError.backendUnavailable
     }
-    func customTagPivot(currency: String, draft: CustomChartDraft) async throws -> CustomTagPivot {
+    func customTagPivot(currency: CurrencyCode, draft: CustomChartDraft) async throws -> CustomTagPivot {
         throw APIError.backendUnavailable
     }
-    func saveChart(id: Int?, draft: CustomChartDraft) async throws -> OpenAPI.SavedChart {
+    func saveChart(id: SavedChartID?, draft: CustomChartDraft) async throws -> OpenAPI.SavedChart {
         throw APIError.backendUnavailable
     }
-    func deleteSavedChart(id: Int) async throws { throw APIError.backendUnavailable }
+    func deleteSavedChart(id: SavedChartID) async throws { throw APIError.backendUnavailable }
     func dismissStatisticsInsight(_ body: JSONValue) async throws { throw APIError.backendUnavailable }
     func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         throw APIError.backendUnavailable
     }
-    func homeMonthly(currency: String, exclusions: InsightExclusions) async throws -> InsightMonthlySummary {
+    func homeMonthly(currency: CurrencyCode, exclusions: InsightExclusions) async throws -> InsightMonthlySummary {
         throw APIError.backendUnavailable
     }
-    func homePace(currency: String) async throws -> HomeSpendingPace { throw APIError.backendUnavailable }
-    func homeBalances(currency: String) async throws -> HomeBankBalances { throw APIError.backendUnavailable }
-    func homeNetWorth(currency: String) async throws -> HomeNetWorth { throw APIError.backendUnavailable }
-    func homeForecast(currency: String, exclusions: InsightExclusions, options: InsightForecastOptions) async throws
+    func homePace(currency: CurrencyCode) async throws -> HomeSpendingPace { throw APIError.backendUnavailable }
+    func homeBalances(currency: CurrencyCode) async throws -> HomeBankBalances { throw APIError.backendUnavailable }
+    func homeNetWorth(currency: CurrencyCode) async throws -> HomeNetWorth { throw APIError.backendUnavailable }
+    func homeForecast(currency: CurrencyCode, exclusions: InsightExclusions, options: InsightForecastOptions) async throws
         -> InsightForecast
     { throw APIError.backendUnavailable }
     func homeForecastAccuracy() async throws -> InsightForecastAccuracy { throw APIError.backendUnavailable }

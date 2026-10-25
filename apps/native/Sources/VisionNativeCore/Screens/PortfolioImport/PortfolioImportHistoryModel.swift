@@ -13,7 +13,7 @@ public final class PortfolioImportHistoryModel {
     public var pendingRollback: PortfolioImportBatch?
     public var disabled = false
     public var beginRollback: (@MainActor () -> Bool)?
-    public var didRollback: (@MainActor (Int, Bool) -> Void)?
+    public var didRollback: (@MainActor (PortfolioImportBatchNumericID, Bool) -> Void)?
     public var didMutate: (@MainActor () async -> Void)?
     @ObservationIgnored private let service: any PortfolioImportService
     @ObservationIgnored private var revision = UUID()
@@ -42,7 +42,7 @@ public final class PortfolioImportHistoryModel {
             loadedAt = Date()
         } catch { if generation == revision { self.error = error.localizedDescription } }
     }
-    public func rollback(batchId: Int) async {
+    public func rollback(batchId: PortfolioImportBatchNumericID) async {
         guard !disabled, !isBusy, let batch = page?.items.first(where: { $0.id == batchId }), batch.canRollback,
             beginRollback?() != false
         else { return }
@@ -59,7 +59,7 @@ public final class PortfolioImportHistoryModel {
         } catch {
             let failure = error.localizedDescription
             await load(offset: offset, force: true)
-            let confirmedAborted = page?.items.first(where: { $0.id == batchId })?.status == "aborted"
+            let confirmedAborted = page?.items.first(where: { $0.id == batchId })?.status == .aborted
             didRollback?(batchId, !confirmedAborted)
             self.error = failure
         }

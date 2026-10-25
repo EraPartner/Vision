@@ -38,6 +38,7 @@ public struct KeychainPassphraseStore: PassphraseStore {
         self.service = service
     }
 
+    // lint:allow string-any-dict Security framework query dictionary
     private var query: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,

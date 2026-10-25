@@ -17,24 +17,25 @@ struct PortfolioProviderFields: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker(
-                strings.t("addInv.label.priceProvider"),
-                selection: Binding(get: { draft.provider }, set: { model.investmentDraft?.provider.select($0) })
-            ) {
-                ForEach(model.providers) { provider in
-                    Text(provider.key == "manual" ? strings.t("addInv.provider.manual") : provider.name).tag(
-                        provider.key)
-                }
+            VStack(alignment: .leading, spacing: 5) {
+                Text(strings.t("addInv.label.priceProvider")).font(.callout)
+                VisionSelect(
+                    selection: Binding(get: { draft.provider }, set: { model.investmentDraft?.provider.select($0) }),
+                    options: model.providers.map { provider in
+                        VisionSelectOption(
+                            value: provider.key,
+                            title: provider.key == .manual ? strings.t("addInv.provider.manual") : provider.name)
+                    }, accessibilityLabel: strings.t("addInv.label.priceProvider"), expands: true)
             }
             if let selected = model.providers.first(where: { $0.key == draft.provider }) {
-                let known = ["manual", "binance", "yahoo", "custom", "kinesis"].contains(selected.key)
-                Text(known ? strings.t("addInv.provider.hint." + selected.key) : selected.description)
+                let known = [.manual, .binance, .yahoo, .custom, .kinesis].contains(selected.key)
+                Text(known ? strings.t("addInv.provider.hint." + selected.key.rawValue) : selected.description)
                     .font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
-            if draft.provider != "manual" && draft.provider != "custom" {
+            if draft.provider != .manual && draft.provider != .custom {
                 input("addInv.label.providerId", \.id)
             }
-            if draft.provider == "custom" {
+            if draft.provider == .custom {
                 input("addInv.label.latestJsonEndpoint", \.latestUrl)
                 input("addInv.label.latestJsonPath", \.latestPath)
                 input("addInv.label.historyJsonEndpoint", \.historyUrl)
@@ -56,14 +57,14 @@ struct PortfolioProviderFields: View {
 struct PortfolioBrokerField: View {
     let model: PortfolioEditingModel
     let shell: NativeShellModel
-    let selected: Int?
+    let selected: AccountID?
     let wasChosen: Bool
-    let onChoose: (Int?) -> Void
+    let onChoose: (AccountID?) -> Void
     var compact = false
     @State private var expanded = false
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var effective: Int? { wasChosen ? selected : model.defaultBrokerId }
+    private var effective: AccountID? { wasChosen ? selected : model.defaultBrokerId }
     private var label: String {
         model.brokers.first { $0.id == effective }.map(AccountKinds.label)
             ?? strings.t("addPortTxn.broker.unassigned")
@@ -78,14 +79,15 @@ struct PortfolioBrokerField: View {
                     Button(strings.t("addPortTxn.broker.change")) { expanded = true }.buttonStyle(.visionLink)
                 }.font(.footnote).foregroundStyle(theme.secondaryLabel)
             } else {
-                Picker(
-                    strings.t("addPortTxn.broker"),
-                    selection: Binding(get: { effective ?? -1 }, set: { onChoose($0 == -1 ? nil : $0) })
-                ) {
-                    Text(strings.t("addPortTxn.broker.unassigned")).tag(-1)
-                    ForEach(model.brokers, id: \.id) { broker in Text(AccountKinds.label(broker)).tag(broker.id)
-                    }
-                }.disabled(model.brokersLoading)
+                Text(strings.t("addPortTxn.broker")).font(.callout)
+                VisionSelect(
+                    selection: Binding(get: { effective }, set: { onChoose($0) }),
+                    options: [VisionSelectOption<AccountID?>(value: nil, title: strings.t("addPortTxn.broker.unassigned"))]
+                        + model.brokers.map {
+                            VisionSelectOption<AccountID?>(value: $0.id, title: AccountKinds.label($0))
+                        },
+                    accessibilityLabel: strings.t("addPortTxn.broker"), expands: true
+                ).disabled(model.brokersLoading)
             }
             if let error = model.brokersError ?? model.brokerHistoryError {
                 HStack {

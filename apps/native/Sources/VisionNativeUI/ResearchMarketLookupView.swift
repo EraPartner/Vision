@@ -19,7 +19,6 @@ public struct ResearchMarketLookupView: View {
                 // The web PageHeader: the sidebar icon tile and the title, without a subtitle.
                 VisionPageHeader(title: strings.t("marketLookup.title"), subtitle: "", symbol: "chart.xyaxis.line") {
                     if let quote = model.quote, !model.isProviderAsset {
-                        addPortfolioButton
                         Menu {
                             Button(strings.t("addWatchlist.title")) {
                                 watchlistAdd.begin(
@@ -32,7 +31,8 @@ public struct ResearchMarketLookupView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("marketLookup.menu"))
+                        .visionMoreActionsMenu().accessibilityLabel(strings.t("marketLookup.menu"))
+                        addPortfolioButton
                     }
                 }
                 ResearchSymbolSearchView(
@@ -58,16 +58,13 @@ public struct ResearchMarketLookupView: View {
                         HStack {
                             Text(strings.t("market.priceChart")).font(.researchCardTitle)
                             Spacer()
-                            Picker(
-                                strings.t("market.priceChart"),
+                            VisionSegmentedControl(
                                 selection: Binding(
                                     get: { model.state.range.range },
-                                    set: { shell.replace(with: model.selectRange($0).string) })
-                            ) {
-                                ForEach(ResearchRangeOption.lookup) {
-                                    Text(strings.t("research.range." + $0.range)).tag($0.range)
-                                }
-                            }.pickerStyle(.segmented).frame(maxWidth: 510)
+                                    set: { shell.replace(with: model.selectRange($0).string) }),
+                                values: ResearchRangeOption.lookup.map(\.range),
+                                title: { strings.t("research.range." + $0) }
+                            ).accessibilityLabel(strings.t("market.priceChart")).frame(maxWidth: 510)
                         }
                         if model.isChartFetching || model.isResolvingProvider {
                             ProgressView().frame(maxWidth: .infinity).frame(height: 320)
@@ -85,15 +82,15 @@ public struct ResearchMarketLookupView: View {
                         if let quote = model.quote { tradingInfo(quote) }
                         ResearchCard {
                             Text(strings.t("research.details")).font(.researchCardTitle)
-                            Picker(
-                                strings.t("research.details"),
+                            VisionSegmentedControl(
                                 selection: Binding(
-                                    get: { model.state.tab }, set: { shell.replace(with: model.selectTab($0).string) })
-                            ) {
-                                Text(strings.t("market.fundamentals")).tag("fundamentals")
-                                Text(strings.t("market.analystRatings")).tag("analyst")
-                                Text(strings.t("market.latestNews")).tag("news")
-                            }.pickerStyle(.segmented).frame(maxWidth: 500)
+                                    get: { model.state.tab }, set: { shell.replace(with: model.selectTab($0).string) }),
+                                options: [
+                                    VisionSegmentOption(value: "fundamentals", title: strings.t("market.fundamentals")),
+                                    VisionSegmentOption(value: "analyst", title: strings.t("market.analystRatings")),
+                                    VisionSegmentOption(value: "news", title: strings.t("market.latestNews")),
+                                ]
+                            ).accessibilityLabel(strings.t("research.details")).frame(maxWidth: 500)
                             if model.isDetailFetching
                                 && (model.state.tab == "analyst"
                                     ? model.analyst == nil
@@ -133,13 +130,39 @@ public struct ResearchMarketLookupView: View {
                 await model.refreshQuotes()
             }
         }
-        .sheet(isPresented: Binding(get: { model.mapping.isPresented }, set: { if !$0 { model.mapping.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { model.mapping.isPresented }, set: { if !$0 { model.mapping.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("research.mapping.title")
+        ) {
             ResearchMarketMappingSheet(model: model.mapping, shell: shell)
         }
-        .sheet(isPresented: Binding(get: { model.action.isPresented }, set: { if !$0 { model.action.close() } })) {
+        // Presented from the screen, above the mapping dialog, as the web `AlertDialog` is. The
+        // buttons decide: `remove()` reads `pendingRemoval`, so a dismissal must not clear it first.
+        .visionConfirmationDialog(
+            title: strings.t("research.mapping.remove"),
+            message: { mapping in
+                strings.t(
+                    "research.mapping.removeDesc",
+                    ["provider": mapping.provider, "symbol": mapping.providerSymbol ?? "—"])
+            },
+            item: Binding(get: { model.mapping.pendingRemoval }, set: { _ in })
+        ) { _ in
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.mapping.pendingRemoval = nil }
+            VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                Task { await model.mapping.remove() }
+            }
+        }
+        .visionDialog(
+            isPresented: Binding(get: { model.action.isPresented }, set: { if !$0 { model.action.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             ResearchMarketActionSheet(model: model.action, shell: shell)
         }
-        .sheet(isPresented: Binding(get: { watchlistAdd.isPresented }, set: { if !$0 { watchlistAdd.close() } })) {
+        .visionDialog(
+            isPresented: Binding(get: { watchlistAdd.isPresented }, set: { if !$0 { watchlistAdd.close() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
             ResearchWatchlistAddSheet(model: watchlistAdd, shell: shell)
         }
     }
@@ -151,7 +174,10 @@ public struct ResearchMarketLookupView: View {
         return .init(id: notice.id, kind: notice.kind, key: notice.key, variables: variables, detail: notice.detail)
     }
     private var addPortfolioButton: some View {
-        Button(strings.t(model.existingHolding == nil ? "portfolio.addInvestment" : "form.addTransaction.title")) {
+        Button(
+            strings.t(model.existingHolding == nil ? "portfolio.addInvestment" : "form.addTransaction.title"),
+            systemImage: "plus"
+        ) {
             let date = VisionFormat.appDate(Date(), format: shell.settings.dateFormat, timeZone: .current)
             Task { await model.action.begin(notes: strings.t("addInvFromMarket.notesDefault", ["date": date])) }
         }.buttonStyle(.visionPrimary)
@@ -203,8 +229,9 @@ public struct ResearchMarketLookupView: View {
     }
     private func tradingInfo(_ quote: ResearchQuote) -> some View {
         ResearchCard(title: strings.t("market.tradingInfo")) {
-            HStack(alignment: .top, spacing: 32) {
-                VStack(spacing: 10) {
+            // `grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3`: two bordered lists.
+            VisionResponsiveColumns(weights: [1, 1], minimumPageWidth: 700, spacing: 12) {
+                VStack(spacing: 0) {
                     metric(
                         "market.open",
                         quote.open.map {
@@ -224,9 +251,9 @@ public struct ResearchMarketLookupView: View {
                         "market.prevClose",
                         quote.prevClose.map {
                             ResearchMarketDisplay.money($0, currency: quote.currency, shell: shell, digits: 2)
-                        })
-                }.frame(maxWidth: .infinity)
-                VStack(spacing: 10) {
+                        }, last: true)
+                }.visionListSurface()
+                VStack(spacing: 0) {
                     metric("market.volume", quote.volume.map { ResearchMarketDisplay.compact($0, shell: shell) })
                     metric("market.avgVolume", quote.avgVolume.map { ResearchMarketDisplay.compact($0, shell: shell) })
                     metric(
@@ -237,16 +264,22 @@ public struct ResearchMarketLookupView: View {
                                     + " – "
                                     + ResearchMarketDisplay.money($0, currency: quote.currency, shell: shell, digits: 2)
                             }
-                        })
-                }.frame(maxWidth: .infinity)
+                        }, last: true)
+                }.visionListSurface()
             }
         }
     }
-    private func metric(_ key: String, _ value: String?) -> some View {
-        HStack {
-            Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
-            Spacer()
-            Text(value ?? "—").monospacedDigit()
+    /// A `ListRow` (`min-h-10`): the label on the left, the value on the right, a hairline below
+    /// every row but the last of its list.
+    private func metric(_ key: String, _ value: String?, last: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
+                Spacer()
+                Text(value ?? "—").monospacedDigit().foregroundStyle(theme.foreground)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 40)
+            if !last { VisionListDivider() }
         }
     }
 }
@@ -255,8 +288,8 @@ enum ResearchMarketDisplay {
     @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel, digits: Int? = nil)
         -> String
     {
-        VisionFormat.currency(
-            value, code: currency, locale: shell.settings.numberFormat.locale,
+        ResearchMoney.text(
+            value, currency: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: digits ?? shell.settings.showDecimalPlaces)
     }
     @MainActor static func number(_ value: Decimal, shell: NativeShellModel, digits: Int? = nil) -> String {

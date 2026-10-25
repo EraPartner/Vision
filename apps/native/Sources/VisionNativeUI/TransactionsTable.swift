@@ -16,7 +16,7 @@ struct TransactionsTableCard: View {
     @State private var suggestionsOpen = false
     @State private var suggestions = TransactionSearchSuggestions(thisYear: 2026)
     @FocusState private var searchFocused: Bool
-    @FocusState private var focusedRow: Int?
+    @FocusState private var focusedRow: TransactionID?
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
@@ -103,7 +103,7 @@ struct TransactionsTableCard: View {
                     }
                     .buttonStyle(.borderless)
                     .foregroundStyle(theme.tertiaryLabel)
-                    .help(strings.t("aria.clearSearch"))
+                    .visionTooltip(strings.t("aria.clearSearch"))
                     .accessibilityLabel(strings.t("aria.clearSearch"))
                 }
             }
@@ -142,7 +142,7 @@ struct TransactionsTableCard: View {
                         }
                     }
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .sm))
             }
             Spacer(minLength: 0)
             if model.showsBulkBar {
@@ -183,7 +183,7 @@ struct TransactionsTableCard: View {
                             .imageScale(.small)
                     }
                     .buttonStyle(.borderless)
-                    .help(strings.t("aria.clearNamedFilter", ["name": name]))
+                    .visionTooltip(strings.t("aria.clearNamedFilter", ["name": name]))
                     .accessibilityLabel(strings.t("aria.clearNamedFilter", ["name": name]))
                 }
                 .font(.footnote.weight(.medium))
@@ -233,7 +233,8 @@ struct TransactionsTableCard: View {
 
     static let selectWidth: CGFloat = 32
     static let editWidth: CGFloat = 64
-    static let summaryWidth: CGFloat = 280
+    /// The stacked summary column's `min-w-48` (192 pt); it takes the remaining width.
+    static let summaryWidth: CGFloat = 192
 
     // MARK: Header
 
@@ -343,7 +344,7 @@ struct TransactionsTableCard: View {
         .buttonStyle(.borderless)
         .foregroundStyle(hasFilter ? theme.primary : theme.tertiaryLabel)
         .opacity(hasFilter || hoveredHeader == key || openFilter == key ? 1 : 0)
-        .help(label)
+        .visionTooltip(label)
         .accessibilityLabel(label)
         .popover(
             isPresented: Binding(
@@ -426,7 +427,7 @@ struct TransactionRowView: View {
     let columns: [TransactionColumn]
     let compact: Bool
     let widths: [String: CGFloat]
-    var focusedRow: FocusState<Int?>.Binding
+    var focusedRow: FocusState<TransactionID?>.Binding
     @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
@@ -545,7 +546,7 @@ struct TransactionRowView: View {
                 .strikethrough(!row.isActive)
         case .tags: tagsCell
         case .currency:
-            Text(row.displayCurrency)
+            Text(row.displayCurrency.rawValue)
                 .foregroundStyle(theme.secondaryLabel)
         case .amount: amountCell
         case .runningBalance:
@@ -641,7 +642,7 @@ struct TransactionRowView: View {
             .textFieldStyle(.vision)
             .multilineTextAlignment(.trailing)
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm)
                     .strokeBorder(invalid ? theme.destructive : Color.clear, lineWidth: 1))
             .accessibilityLabel(strings.t("txPage.col.amount"))
             .accessibilityValue(Text(verbatim: invalid ? strings.t("addTxn.invalidAmount") : ""))
@@ -722,19 +723,19 @@ struct TransactionRowView: View {
                 } label: {
                     Image(systemName: "checkmark")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.primary)
                 .disabled(model.rowEditor?.amountInvalid(format: settings.numberFormat) ?? false)
-                .help("\(strings.t("aria.save")): \(label)")
+                .visionTooltip("\(strings.t("aria.save")): \(label)")
                 .accessibilityLabel("\(strings.t("aria.save")): \(label)")
                 Button {
                     model.cancelEditing()
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.secondaryLabel)
-                .help("\(strings.t("aria.cancel")): \(label)")
+                .visionTooltip("\(strings.t("aria.cancel")): \(label)")
                 .accessibilityLabel("\(strings.t("aria.cancel")): \(label)")
             }
         } else {
@@ -743,9 +744,9 @@ struct TransactionRowView: View {
             } label: {
                 Image(systemName: "pencil")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .iconXs))
             .foregroundStyle(theme.tertiaryLabel)
-            .help("\(strings.t("aria.edit")): \(label)")
+            .visionTooltip("\(strings.t("aria.edit")): \(label)")
             .accessibilityLabel("\(strings.t("aria.edit")): \(label)")
         }
     }

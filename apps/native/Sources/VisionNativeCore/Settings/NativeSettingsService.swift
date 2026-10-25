@@ -42,8 +42,8 @@ public struct NativeSettingsSnapshot: Codable, Equatable, Sendable {
 }
 public protocol NativeSettingsService: Sendable {
     func readNativeSettings() async throws -> NativeSettingsSnapshot
-    func readNativeSetting(_ key: String) async throws -> NativeSettingsRecord
-    func saveNativeSetting(_ key: String, value: TaxValue, expected: TaxValue) async throws -> NativeSettingsRecord
+    func readNativeSetting(_ key: SettingKey) async throws -> NativeSettingsRecord
+    func saveNativeSetting(_ key: SettingKey, value: TaxValue, expected: TaxValue) async throws -> NativeSettingsRecord
     func nativeSettingsCategories() async throws -> [OpenAPI.CategoryNode]
     func nativeSettingsRecipients() async throws -> [OpenAPI.Recipient]
 }
@@ -53,17 +53,17 @@ extension APIClient: NativeSettingsService {
             ResearchRequest<OpenAPIOperations.GetSettings, NativeSettingsSnapshot>(
                 OpenAPIOperations.GetSettings.self, query: [.init(name: "withBaselines", value: "true")]))
     }
-    public func readNativeSetting(_ key: String) async throws -> NativeSettingsRecord {
+    public func readNativeSetting(_ key: SettingKey) async throws -> NativeSettingsRecord {
         try await send(
             ResearchRequest<OpenAPIOperations.GetSetting, NativeSettingsRecord>(
-                OpenAPIOperations.GetSetting.self, parameters: ["key": key]))
+                OpenAPIOperations.GetSetting.self, parameters: ["key": key.rawValue]))
     }
-    public func saveNativeSetting(_ key: String, value: TaxValue, expected: TaxValue) async throws
+    public func saveNativeSetting(_ key: SettingKey, value: TaxValue, expected: TaxValue) async throws
         -> NativeSettingsRecord
     {
         try await send(
             ResearchRequest<OpenAPIOperations.SaveSetting, NativeSettingsRecord>(
-                OpenAPIOperations.SaveSetting.self, parameters: ["key": key],
+                OpenAPIOperations.SaveSetting.self, parameters: ["key": key.rawValue],
                 body: .object(["value": value, "expected": expected])), retries: 0)
     }
     public func nativeSettingsCategories() async throws -> [OpenAPI.CategoryNode] {
@@ -93,24 +93,24 @@ public actor NativeSettingsPersistence {
         }
         return snapshot
     }
-    public func read(_ key: String) async throws -> NativeSettingsRecord {
+    public func read(_ key: SettingKey) async throws -> NativeSettingsRecord {
         guard !retired, !suspended else { throw CancellationError() }
         let record = try await service.readNativeSetting(key)
         guard !retired else { throw CancellationError() }
-        if baselines[key] == nil { baselines[key] = record.expected }
+        if baselines[key.rawValue] == nil { baselines[key.rawValue] = record.expected }
         return record
     }
-    public func baseline(_ key: String) -> TaxValue? {
-        baselines[key] ?? (allRead ? .object(["exists": .bool(false)]) : nil)
+    public func baseline(_ key: SettingKey) -> TaxValue? {
+        baselines[key.rawValue] ?? (allRead ? .object(["exists": .bool(false)]) : nil)
     }
-    public func save(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+    public func save(_ key: SettingKey, value: TaxValue) async throws -> NativeSettingsRecord {
         guard !suspended, !retired else { throw CancellationError() }
-        let previous = tails[key]
+        let previous = tails[key.rawValue]
         let task = Task {
             _ = try await previous?.value
             return try await self.write(key, value: value)
         }
-        tails[key] = task
+        tails[key.rawValue] = task
         return try await task.value
     }
     /// Stop accepting writes, then settle every already accepted per-key queue before a database switch.
@@ -123,14 +123,14 @@ public actor NativeSettingsPersistence {
         retired = true
         suspended = true
     }
-    private func write(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+    private func write(_ key: SettingKey, value: TaxValue) async throws -> NativeSettingsRecord {
         guard !retired else { throw CancellationError() }
         guard let expected = baseline(key) else {
             throw SettingsWriteError("Settings were not loaded. Reload before saving.")
         }
         let result = try await service.saveNativeSetting(key, value: value, expected: expected)
         guard !retired else { throw CancellationError() }
-        baselines[key] = .object(["exists": .bool(true), "value": result.value])
+        baselines[key.rawValue] = .object(["exists": .bool(true), "value": result.value])
         return result
     }
 }

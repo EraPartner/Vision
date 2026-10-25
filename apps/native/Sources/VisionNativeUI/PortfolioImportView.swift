@@ -18,11 +18,8 @@ public struct PortfolioImportView: View {
                 VisionPageHeader(
                     title: strings.t("portfolioImport.title"), subtitle: strings.t("portfolioImport.desc"),
                     symbol: "tray.and.arrow.down")
-                PortfolioImportHistoryView(
-                    model: screens.history, shell: shell, expanded: $historyOpen,
-                    isLocked: screens.session.locked || screens.advanced.isBusy)
                 PortfolioImportSessionView(
-                    model: screens.session, shell: shell,
+                    model: screens.session, shell: shell, history: screens.history, historyExpanded: $historyOpen,
                     isLocked: screens.advanced.isBusy || screens.history.isBusy,
                     onReviewHistory: {
                         historyOpen = true

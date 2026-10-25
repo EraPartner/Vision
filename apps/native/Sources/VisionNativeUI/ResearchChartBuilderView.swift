@@ -44,24 +44,25 @@ public struct ResearchChartBuilderView: View {
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(alignment: .bottom) { ResearchChartBuilderNoticeView(model: model, shell: shell) }
-        .sheet(isPresented: $model.isSaveDialogPresented) { ResearchChartBuilderSaveSheet(model: model, shell: shell) }
-        .confirmationDialog(
-            strings.t(
+        .visionDialog(
+            isPresented: $model.isSaveDialogPresented,
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0),
+            accessibilityTitle: strings.t("research.builder.saveAsTitle")
+        ) { ResearchChartBuilderSaveSheet(model: model, shell: shell) }
+        .visionConfirmationDialog(
+            title: strings.t(
                 model.pendingConfirmation == .share ? "research.builder.shareReplaceTitle" : "research.builder.newTitle"
             ),
-            isPresented: Binding(get: { model.pendingConfirmation != nil }, set: { if !$0 { model.cancelPending() } }),
-            titleVisibility: .visible
+            message: strings.t(
+                model.pendingConfirmation == .share
+                    ? "research.builder.shareReplaceDescription" : "research.builder.newDescription"),
+            isPresented: Binding(get: { model.pendingConfirmation != nil }, set: { if !$0 { model.cancelPending() } })
         ) {
-            Button(
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelPending() }
+            VisionDialogAction(
                 strings.t(
                     model.pendingConfirmation == .share ? "research.builder.openShared" : "research.builder.newChart")
             ) { model.confirmPending() }
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelPending() }
-        } message: {
-            Text(
-                strings.t(
-                    model.pendingConfirmation == .share
-                        ? "research.builder.shareReplaceDescription" : "research.builder.newDescription"))
         }
     }
     private var header: some View {
@@ -79,61 +80,31 @@ public struct ResearchChartBuilderView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
-            .menuIndicator(.hidden).accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
+            .visionMoreActionsMenu().accessibilityLabel(strings.t("research.builder.menu")).disabled(!controlsEnabled)
             Button {
                 model.isSaveDialogPresented = true
             } label: {
                 Label(strings.t("research.builder.saveAs"), systemImage: "square.and.arrow.down")
-            }.disabled(!controlsEnabled)
+            }.buttonStyle(.visionPrimary).disabled(!controlsEnabled)
         }
     }
     private var layoutControls: some View {
         ResearchCard {
             HStack(alignment: .bottom, spacing: 20) {
-                Picker(
-                    strings.t("research.builder.layout"),
-                    selection: Binding(
-                        get: { model.library.activeLayoutId ?? "" },
-                        set: { model.selectLayout(id: $0.isEmpty ? nil : $0) })
-                ) {
-                    Text(strings.t("research.builder.unnamedDraft")).tag("")
-                    ForEach(model.library.layouts) { Text($0.name).tag($0.id) }
-                }.frame(maxWidth: 320)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(strings.t("research.builder.range")).font(.caption)
-                    HStack(spacing: 6) {
-                        ForEach(ResearchRangeOption.research) { option in
-                            Button {
-                                var candidate = model.state
-                                candidate.range = option.range
-                                model.state = candidate
-                            } label: {
-                                Text(strings.t("research.range." + option.range)).font(.callout).padding(
-                                    .horizontal, 10
-                                ).padding(.vertical, 6)
-                                    .background(
-                                        model.state.range == option.range
-                                            ? theme.primary.opacity(0.12) : theme.foreground.opacity(0.035),
-                                        in: RoundedRectangle(cornerRadius: 6)
-                                    )
-                                    .foregroundStyle(
-                                        model.state.range == option.range ? theme.primary : theme.secondaryLabel)
-                            }.buttonStyle(.plain).accessibilityAddTraits(
-                                model.state.range == option.range ? .isSelected : [])
-                        }
-                    }.accessibilityElement(children: .contain).accessibilityLabel(strings.t("research.builder.range"))
-                }
+                layoutPicker
+                rangePicker
                 Spacer()
                 Text(strings.t(storageKey)).font(.caption).foregroundStyle(
                     model.storageStatus == .failed ? theme.destructive : theme.secondaryLabel)
             }.disabled(!controlsEnabled)
             if !model.isStorageLoaded && model.storageStatus == .failed {
                 Button(strings.t("common.retry")) { Task { await model.retryStorageLoad() } }
+                    .buttonStyle(.visionOutline)
             }
             DisclosureGroup(isExpanded: $showsOptions) {
                 VStack(alignment: .leading, spacing: 16) {
-                    Toggle(strings.t("research.builder.logScale"), isOn: state(\.logLeft))
-                    Toggle(strings.t("research.builder.rebase"), isOn: state(\.rebase))
+                    Toggle(strings.t("research.builder.logScale"), isOn: state(\.logLeft)).toggleStyle(.visionSwitch)
+                    Toggle(strings.t("research.builder.rebase"), isOn: state(\.rebase)).toggleStyle(.visionSwitch)
                     Text(strings.t("research.builder.presets")).font(.caption).foregroundStyle(theme.secondaryLabel)
                     ViewThatFits(in: .horizontal) {
                         HStack { presets }
@@ -157,10 +128,39 @@ public struct ResearchChartBuilderView: View {
             }
         }
     }
+    private var layoutPicker: some View {
+        var options = [VisionSelectOption(value: "", title: strings.t("research.builder.unnamedDraft"))]
+        options += model.library.layouts.map { VisionSelectOption(value: $0.id, title: $0.name) }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t("research.builder.layout")).font(.callout.weight(.medium)).foregroundStyle(theme.foreground)
+            VisionSelect(
+                selection: Binding(
+                    get: { model.library.activeLayoutId ?? "" },
+                    set: { model.selectLayout(id: $0.isEmpty ? nil : $0) }),
+                options: options, accessibilityLabel: strings.t("research.builder.layout"), expands: true)
+        }.frame(maxWidth: 320)
+    }
+    private var rangePicker: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(strings.t("research.builder.range")).font(.callout.weight(.medium)).foregroundStyle(theme.foreground)
+            VisionSegmentedControl(
+                selection: Binding(
+                    get: { model.state.range },
+                    set: { range in
+                        var candidate = model.state
+                        candidate.range = range
+                        model.state = candidate
+                    }),
+                values: ResearchRangeOption.research.map(\.range),
+                title: { strings.t("research.range." + $0) }, size: .sm, compact: true
+            ).fixedSize().accessibilityLabel(strings.t("research.builder.range"))
+        }
+    }
     private var presets: some View {
-        ForEach(["priceVolume", "sma", "bollinger", "rsi", "macd", "rebased"], id: \.self) { name in
-            Button(strings.t("research.builder.preset." + name)) { model.preset(name) }.disabled(
-                !model.state.series.contains { $0.field == "price" })
+        ForEach(ResearchChartBuilderPreset.allCases, id: \.self) { name in
+            Button(strings.t("research.builder.preset." + name.rawValue)) { model.preset(name) }
+                .buttonStyle(.vision(.outline, size: .sm))
+                .disabled(!model.state.series.contains { $0.field == "price" })
         }
     }
     private var storageKey: String {
@@ -175,11 +175,14 @@ public struct ResearchChartBuilderView: View {
             HStack {
                 Text(strings.t("research.builder.oscillator")).font(.researchCardTitle)
                 Spacer()
-                Picker(strings.t("research.builder.oscillator"), selection: state(\.oscillator)) {
-                    Text(strings.t("research.builder.oscNone")).tag("none")
-                    Text("RSI").tag("rsi")
-                    Text("MACD").tag("macd")
-                }.labelsHidden().frame(width: 135).disabled(!controlsEnabled)
+                VisionSelect(
+                    selection: state(\.oscillator),
+                    options: [
+                        VisionSelectOption(value: "none", title: strings.t("research.builder.oscNone")),
+                        VisionSelectOption(value: "rsi", title: "RSI"),
+                        VisionSelectOption(value: "macd", title: "MACD"),
+                    ], accessibilityLabel: strings.t("research.builder.oscillator")
+                ).frame(width: 135).disabled(!controlsEnabled)
             }
             if model.state.oscillator != "none" {
                 if model.isLoading || model.isPreparing && model.presentation == nil {

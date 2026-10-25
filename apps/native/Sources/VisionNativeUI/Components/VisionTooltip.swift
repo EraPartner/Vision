@@ -78,6 +78,7 @@ final class VisionTooltipPresenter {
     private var owner: ObjectIdentifier?
     private var openTask: Task<Void, Never>?
     private var panel: NSPanel?
+    // lint:allow explicit-any opaque AppKit event monitor token
     private var monitor: Any?
     private var lastClosed: ContinuousClock.Instant?
 

@@ -3,7 +3,7 @@ import Testing
 @testable import VisionNativeCore
 
 enum RatesFixture {
-    static func rates(_ rows: [(String, String)] = [("USD", "1.0842"), ("CHF", "0.94")], total: Int = 1234)
+    static func rates(_ rows: [(CurrencyCode, String)] = [("USD", "1.0842"), ("CHF", "0.94")], total: Int = 1234)
         -> OpenAPI.ExchangeRates
     {
         OpenAPI.ExchangeRates(
@@ -13,11 +13,11 @@ enum RatesFixture {
                     currency: currency, rateToEur: Decimal(string: rate)!, rateDate: "2026-10-09",
                     fetchedAt: "2026-10-09T15:05:00.000Z")
             },
-            source: "database", isStale: false, lastFetchedAt: "2026-10-09T15:05:00.000Z")
+            source: .database, isStale: false, lastFetchedAt: "2026-10-09T15:05:00.000Z")
     }
 
     static let empty = OpenAPI.ExchangeRates(
-        totalRates: 0, rates: [], source: "fallback", isStale: true, lastFetchedAt: nil)
+        totalRates: 0, rates: [], source: .fallback, isStale: true, lastFetchedAt: nil)
 }
 
 /// A clock the test moves by hand.

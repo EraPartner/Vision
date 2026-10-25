@@ -2,11 +2,11 @@ import SwiftUI
 import VisionNativeCore
 
 /// `BulkActionsBar`: "{n} selected", Select all {n} matching filter, the Actions menu (Bulk
-/// actions) and Clear selection, with the bulk dialogs as sheets and the confirms as alerts.
+/// actions) and Clear selection. The bulk dialogs and the confirms present from the page
+/// (`TransactionBulkPresentations`), because an in-window dialog covers the view it modifies.
 struct TransactionBulkBar: View {
     let model: TransactionsModel
     let shell: NativeShellModel
-    @Environment(\.visionTheme) private var theme
 
     private var strings: any Localizing { shell.strings }
 
@@ -27,43 +27,11 @@ struct TransactionBulkBar: View {
             Button(strings.t("common.clearSelection")) {
                 model.clearBulkSelection()
             }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
+            .buttonStyle(.vision(.ghost, size: .sm))
             .disabled(model.bulkBusy)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(strings.t("txPage.bulk.menuLabel"))
-        .sheet(
-            isPresented: Binding(
-                get: { model.bulkDialog != nil },
-                set: { presented in
-                    if !presented { model.closeBulkDialog() }
-                })
-        ) {
-            if let dialog = model.bulkDialog {
-                TransactionBulkDialogView(model: model, dialog: dialog, shell: shell)
-                    .environment(\.visionTheme, theme)
-                    .environment(\.colorScheme, theme.colorScheme)
-            }
-        }
-        // `useConfirmDialog`. The buttons decide; the binding only reads.
-        .alert(
-            model.bulkConfirmationText()?.title ?? "",
-            isPresented: Binding(get: { model.bulkConfirmation != nil }, set: { _ in })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelBulkConfirmation() }
-            Button(model.bulkConfirmationText()?.action ?? "", role: confirmRole) {
-                Task { await model.confirmBulk() }
-            }
-        } message: {
-            Text(model.bulkConfirmationText()?.message ?? "")
-        }
-    }
-
-    /// Delete is destructive; the other confirms are not.
-    private var confirmRole: ButtonRole? {
-        if case .delete? = model.bulkConfirmation { return .destructive }
-        return nil
     }
 
     private var actionsMenu: some View {
@@ -140,6 +108,51 @@ struct TransactionBulkBar: View {
     }
 }
 
+/// The bulk dialog and the bulk confirm of the page: an in-window `visionDialog` and
+/// `visionAlert`, hosted on the whole page so the panel is centred over it rather than over the
+/// bar that opens it.
+struct TransactionBulkPresentations: ViewModifier {
+    let model: TransactionsModel
+    let shell: NativeShellModel
+    let theme: VisionTheme
+
+    private var strings: any Localizing { shell.strings }
+
+    /// Delete is destructive; the other confirms are not.
+    private var confirmRole: VisionDialogActionRole? {
+        if case .delete? = model.bulkConfirmation { return .destructive }
+        return nil
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .visionDialog(
+                isPresented: Binding(
+                    get: { model.bulkDialog != nil },
+                    set: { presented in
+                        if !presented { model.closeBulkDialog() }
+                    })
+            ) {
+                if let dialog = model.bulkDialog {
+                    TransactionBulkDialogView(model: model, dialog: dialog, shell: shell)
+                        .environment(\.visionTheme, theme)
+                        .environment(\.colorScheme, theme.colorScheme)
+                }
+            }
+            // `useConfirmDialog`. The buttons decide; the binding only reads.
+            .visionAlert(
+                title: model.bulkConfirmationText()?.title ?? "",
+                message: model.bulkConfirmationText()?.message,
+                isPresented: Binding(get: { model.bulkConfirmation != nil }, set: { _ in })
+            ) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelBulkConfirmation() }
+                VisionDialogAction(model.bulkConfirmationText()?.action ?? "", role: confirmRole) {
+                    Task { await model.confirmBulk() }
+                }
+            }
+    }
+}
+
 /// The five bulk dialogs (`BulkRecategorizeDialog`, `BulkRecipientDialog`,
 /// `BulkExportDialog`, `BulkTagDialog`, `BulkSplitDialog`): a title with the count, a
 /// description, the form, Cancel and the submit (Applying… while it runs). Return submits.
@@ -172,8 +185,6 @@ struct TransactionBulkDialogView: View {
                 .disabled(!canSubmit)
             }
         }
-        .visionDialogPadding()
-        .frame(minWidth: 448, idealWidth: 512)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
     }
@@ -239,15 +250,14 @@ struct TransactionBulkDialogView: View {
                 }
             }
         case .export:
-            Picker(
-                strings.t("txPage.bulk.exportFormat"),
-                selection: Binding(get: { drafts.exportFormat }, set: { model.setBulkExportFormat($0) })
-            ) {
-                Text(strings.t("txPage.bulk.exportFormatCsv")).tag(ExportFormat.csv)
-                Text(strings.t("txPage.bulk.exportFormatJson")).tag(ExportFormat.json)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            VisionSegmentedControl(
+                selection: Binding(get: { drafts.exportFormat }, set: { model.setBulkExportFormat($0) }),
+                options: [
+                    VisionSegmentOption(value: ExportFormat.csv, title: strings.t("txPage.bulk.exportFormatCsv")),
+                    VisionSegmentOption(value: ExportFormat.json, title: strings.t("txPage.bulk.exportFormatJson")),
+                ]
+            )
+            .accessibilityLabel(strings.t("txPage.bulk.exportFormat"))
         case .tag:
             labeled("txPage.bulk.tagAdd") {
                 TagMultiSelect(pickers: model.pickers, selected: drafts.tagsToAdd, strings: strings) { slugs in
@@ -266,16 +276,13 @@ struct TransactionBulkDialogView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 6) {
-                Picker(
-                    strings.t("splitDialog.splitType"),
-                    selection: Binding(get: { drafts.splitMode }, set: { model.setBulkSplitMode($0) })
-                ) {
-                    ForEach(BulkSplitMode.allCases, id: \.self) { mode in
-                        Text(strings.t(mode.labelKey)).tag(mode)
+                VisionSegmentedControl(
+                    selection: Binding(get: { drafts.splitMode }, set: { model.setBulkSplitMode($0) }),
+                    options: BulkSplitMode.allCases.map { mode in
+                        VisionSegmentOption(value: mode, title: strings.t(mode.labelKey))
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                )
+                .accessibilityLabel(strings.t("splitDialog.splitType"))
                 Text(strings.t(drafts.splitMode.hintKey))
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)

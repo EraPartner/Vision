@@ -8,27 +8,27 @@ public enum AIChatStreamStatus: String, Sendable {
 
 public struct AIChatMessage: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: String
-    public let role: String
+    public let id: AiMessageID
+    public let role: OpenAPI.AiMessage.Role
     public let content: String?
     public let toolName: String?
     public let toolArgs: TaxValue?
     public let toolResult: TaxValue?
     public let toolPresentation: TaxValue?
-    public let status: String?
+    public let status: OpenAPI.AiMessage.Status?
     public let createdAt: String?
-    public var isOptimistic: Bool { id.hasPrefix("__optimistic_user__") }
+    public var isOptimistic: Bool { id.rawValue.hasPrefix("__optimistic_user__") }
     public init(raw: TaxValue, sparse: Bool = false) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = sparse ? (raw["id"]?.stringValue ?? "") : try ResearchDecode.string(raw["id"])
-        role = try ResearchDecode.string(raw["role"])
+        id = sparse ? AiMessageID(raw["id"]?.stringValue ?? "") : AiMessageID(try ResearchDecode.string(raw["id"]))
+        role = OpenAPI.AiMessage.Role(rawValue: try ResearchDecode.string(raw["role"]))
         content = try ResearchDecode.optionalString(raw["content"])
         toolName = try ResearchDecode.optionalString(raw["toolName"])
         toolArgs = raw["toolArgs"]
         toolResult = raw["toolResult"]
         toolPresentation = raw["toolPresentation"]
-        status = try ResearchDecode.optionalString(raw["status"])
+        status = try ResearchDecode.optionalString(raw["status"]).map { OpenAPI.AiMessage.Status(rawValue: $0) }
         createdAt = try ResearchDecode.optionalString(raw["createdAt"])
     }
     public init(from decoder: any Decoder) throws { try self.init(raw: TaxValue(from: decoder)) }
@@ -36,7 +36,7 @@ public struct AIChatMessage: Codable, Equatable, Sendable, Identifiable {
 }
 public struct AIChatConversation: Codable, Equatable, Sendable, Identifiable {
     public let raw: TaxValue
-    public let id: String
+    public let id: AiConversationID
     public let title: String
     public let model: String
     public let createdAt: String?
@@ -44,7 +44,7 @@ public struct AIChatConversation: Codable, Equatable, Sendable, Identifiable {
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw
-        id = try ResearchDecode.string(raw["id"])
+        id = AiConversationID(try ResearchDecode.string(raw["id"]))
         title = try ResearchDecode.string(raw["title"])
         model = try ResearchDecode.string(raw["model"])
         createdAt = try ResearchDecode.optionalString(raw["createdAt"])
@@ -123,14 +123,14 @@ public struct AIChatOllamaModel: Codable, Equatable, Sendable, Identifiable {
     public func encode(to encoder: any Encoder) throws { try raw.encode(to: encoder) }
 }
 public struct AIChatSendRequest: Equatable, Sendable {
-    public let conversationID: String
+    public let conversationID: AiConversationID
     public let message: String
     public var model: String?
     public var useTools: Bool
     public var insightsPreCall: Bool
     public var retryLastTurn: Bool
     public init(
-        conversationID: String, message: String, model: String? = nil, useTools: Bool = true,
+        conversationID: AiConversationID, message: String, model: String? = nil, useTools: Bool = true,
         insightsPreCall: Bool = false, retryLastTurn: Bool = false
     ) {
         self.conversationID = conversationID
@@ -142,7 +142,7 @@ public struct AIChatSendRequest: Equatable, Sendable {
     }
     public var raw: TaxValue {
         var fields: [String: TaxValue] = [
-            "conversationId": .string(conversationID), "message": .string(message), "useTools": .bool(useTools),
+            "conversationId": .string(conversationID.rawValue), "message": .string(message), "useTools": .bool(useTools),
         ]
         if let model { fields["model"] = .string(model) }
         if insightsPreCall { fields["insightsPreCall"] = .bool(true) }

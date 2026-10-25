@@ -1,5 +1,15 @@
 import Foundation
 
+/// The specialised statement formats the server's portfolio parser knows (`portfolio_format`).
+public enum PortfolioImportFormat: String, Codable, CaseIterable, Sendable {
+    case ibkrTransactionHistory = "ibkr_transaction_history"
+    case ibkrFundingHistory = "ibkr_funding_history"
+    case kinesisTransactionHistory = "kinesis_transaction_history"
+    case nexoTransactionHistory = "nexo_transaction_history"
+    case nexoProSpotHistory = "nexo_pro_spot_history"
+    case saxoTransactionHistory = "saxo_transaction_history"
+}
+
 /// Parser values retain unknown stored keys while the native editor changes known fields.
 public struct PortfolioImportConfig: Codable, Equatable, Sendable {
     public private(set) var payload: TaxValue
@@ -104,9 +114,11 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
         get { payload["defaultType"]?.stringValue ?? "" }
         set { payload["defaultType"] = .string(newValue) }
     }
-    public var format: String? {
-        get { payload["format"]?.stringValue }
-        set { payload["format"] = newValue.map(TaxValue.string) }
+    /// The specialised format; `nil` for a generic parser (a stored format this app does not know
+    /// stays in `payload` and is still sent by `multipartFields`).
+    public var format: PortfolioImportFormat? {
+        get { payload["format"]?.stringValue.flatMap(PortfolioImportFormat.init(rawValue:)) }
+        set { payload["format"] = newValue.map { TaxValue.string($0.rawValue) } }
     }
     public var sourceIdColumn: String? {
         get { payload["sourceIdColumn"]?.stringValue }
@@ -124,17 +136,17 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
         get { payload["includedSymbols"]?.stringValue }
         set { payload["includedSymbols"] = newValue.map(TaxValue.string) }
     }
-    public var accountId: Int? {
-        get { payload["accountId"]?.importIntValue }
-        set { payload["accountId"] = newValue.map { .number(Decimal($0)) } }
+    public var accountId: AccountID? {
+        get { payload["accountId"]?.importIntValue.map { AccountID($0) } }
+        set { payload["accountId"] = newValue.map { .number(Decimal($0.rawValue)) } }
     }
-    public var transferDestinationAccountId: Int? {
-        get { payload["transferDestinationAccountId"]?.importIntValue }
-        set { payload["transferDestinationAccountId"] = newValue.map { .number(Decimal($0)) } }
+    public var transferDestinationAccountId: AccountID? {
+        get { payload["transferDestinationAccountId"]?.importIntValue.map { AccountID($0) } }
+        set { payload["transferDestinationAccountId"] = newValue.map { .number(Decimal($0.rawValue)) } }
     }
-    public var transferOriginAccountId: Int? {
-        get { payload["transferOriginAccountId"]?.importIntValue }
-        set { payload["transferOriginAccountId"] = newValue.map { .number(Decimal($0)) } }
+    public var transferOriginAccountId: AccountID? {
+        get { payload["transferOriginAccountId"]?.importIntValue.map { AccountID($0) } }
+        set { payload["transferOriginAccountId"] = newValue.map { .number(Decimal($0.rawValue)) } }
     }
     public var skipRows: Int {
         get { payload["skipRows"]?.importIntValue ?? 0 }
@@ -153,13 +165,13 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
     }
     public var specializedHintKey: String? {
         switch format {
-        case "ibkr_transaction_history": "portfolioImport.ibkrParserHint"
-        case "ibkr_funding_history": "portfolioImport.ibkrFundingParserHint"
-        case "kinesis_transaction_history": "portfolioImport.kinesisParserHint"
-        case "nexo_transaction_history": "portfolioImport.nexoParserHint"
-        case "nexo_pro_spot_history": "portfolioImport.nexoProParserHint"
-        case "saxo_transaction_history": "portfolioImport.saxoParserHint"
-        default: nil
+        case .ibkrTransactionHistory: "portfolioImport.ibkrParserHint"
+        case .ibkrFundingHistory: "portfolioImport.ibkrFundingParserHint"
+        case .kinesisTransactionHistory: "portfolioImport.kinesisParserHint"
+        case .nexoTransactionHistory: "portfolioImport.nexoParserHint"
+        case .nexoProSpotHistory: "portfolioImport.nexoProParserHint"
+        case .saxoTransactionHistory: "portfolioImport.saxoParserHint"
+        case nil: nil
         }
     }
     public var isSpecialized: Bool { specializedHintKey != nil }
@@ -167,7 +179,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
         var value = Self()
         switch source {
         case "ibkr":
-            value.format = "ibkr_transaction_history"
+            value.format = .ibkrTransactionHistory
             value.dateColumn = "Date"
             value.typeColumn = "Transaction Type"
             value.symbolColumn = "Symbol"
@@ -180,7 +192,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             value.noteColumn = "Description"
             value.typeMapping = ["Foreign Tax Withholding": "tax"]
         case "ibkr_funding_history":
-            value.format = "ibkr_funding_history"
+            value.format = .ibkrFundingHistory
             value.dateColumn = "Request Date"
             value.typeColumn = "Method"
             value.symbolColumn = "Reference Number"
@@ -190,7 +202,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             value.noteColumn = "Method"
             value.numberFormat = "decimal_dot"
         case "kinesis":
-            value.format = "kinesis_transaction_history"
+            value.format = .kinesisTransactionHistory
             value.dateColumn = "DateTime"
             value.typeColumn = "Transaction_Type"
             value.symbolColumn = "Currency_Code"
@@ -201,7 +213,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             value.currencyColumn = "Trade_Value_Currency"
             value.defaultAssetClass = "crypto"
         case "nexo":
-            value.format = "nexo_transaction_history"
+            value.format = .nexoTransactionHistory
             value.dateColumn = "Date / Time (UTC)"
             value.typeColumn = "Type"
             value.symbolColumn = "Output Currency"
@@ -213,7 +225,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             value.dateFormat = "%Y-%m-%d %H:%M:%S"
             value.defaultAssetClass = "crypto"
         case "nexo_pro":
-            value.format = "nexo_pro_spot_history"
+            value.format = .nexoProSpotHistory
             value.dateColumn = "timestamp"
             value.typeColumn = "side"
             value.symbolColumn = "pair"
@@ -224,7 +236,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             value.dateFormat = "%Y-%m-%d %H:%M:%S"
             value.defaultAssetClass = "crypto"
         case "saxo":
-            value.format = "saxo_transaction_history"
+            value.format = .saxoTransactionHistory
             value.dateColumn = "Transactiedatum"
             value.typeColumn = "Acties"
             value.symbolColumn = "Instrumentsymbool"
@@ -242,12 +254,12 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
     }
     public func multipartFields(adapterName: String) throws -> [(String, String)] {
         var fields: [(String, String)] = [("adapter_name", adapterName)]
-        if let format { fields.append(("portfolio_format", format)) }
+        if let format = payload["format"]?.stringValue { fields.append(("portfolio_format", format)) }
         if let transferDestinationAccountId {
-            fields.append(("transfer_destination_account_id", String(transferDestinationAccountId)))
+            fields.append(("transfer_destination_account_id", String(transferDestinationAccountId.rawValue)))
         }
         if let transferOriginAccountId {
-            fields.append(("transfer_origin_account_id", String(transferOriginAccountId)))
+            fields.append(("transfer_origin_account_id", String(transferOriginAccountId.rawValue)))
         }
         if let includedSymbols, !includedSymbols.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             fields.append(("included_symbols", includedSymbols))
@@ -267,7 +279,7 @@ public struct PortfolioImportConfig: Codable, Equatable, Sendable {
             ("fx_rate_column", fxRateColumn), ("note_column", noteColumn), ("source_id_column", sourceIdColumn ?? ""),
             ("source_account_column", sourceAccountColumn ?? ""),
         ] where !value.isEmpty { fields.append((wire, value)) }
-        if let accountId { fields += [("is_brokerage", "true"), ("account_id", String(accountId))] }
+        if let accountId { fields += [("is_brokerage", "true"), ("account_id", String(accountId.rawValue))] }
         return fields
     }
 }

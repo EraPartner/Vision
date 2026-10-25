@@ -35,17 +35,7 @@ struct PortfolioImportAdvancedView: View {
                             config: model.config, strings: strings, isLoading: model.isDetecting,
                             error: model.probe?.previewError)
                     }
-                    Picker(
-                        strings.t("portfolioImport.parserSource"),
-                        selection: Binding(
-                            get: { model.source },
-                            set: { value in
-                                Task { await model.selectSource(value) }
-                            })
-                    ) {
-                        ForEach(sources, id: \.0) { source, key in Text(strings.t(key)).tag(source) }
-                        ForEach(model.savedParsers) { parser in Text(verbatim: parser.name).tag("saved:\(parser.id)") }
-                    }.frame(maxWidth: 420).disabled(model.isBusy || isLocked)
+                    parserSource
                     if model.isDetecting {
                         HStack {
                             ProgressView().controlSize(.small)
@@ -77,7 +67,8 @@ struct PortfolioImportAdvancedView: View {
                                 TextField(
                                     strings.t("importPage.customParser.name"),
                                     text: Binding(get: { model.parserName }, set: { model.parserName = $0 }),
-                                    prompt: Text(strings.t("portfolioImport.parserNamePlaceholder")))
+                                    prompt: Text(strings.t("portfolioImport.parserNamePlaceholder"))
+                                ).textFieldStyle(.vision)
                             }
                             Button(
                                 strings.t(
@@ -86,13 +77,13 @@ struct PortfolioImportAdvancedView: View {
                                 systemImage: "square.and.arrow.down"
                             ) {
                                 Task { await model.saveParser() }
-                            }.disabled(!model.canSave || isLocked)
+                            }.buttonStyle(.visionOutline).disabled(!model.canSave || isLocked)
                             if model.selectedParser != nil {
                                 Button(
                                     strings.t("importPage.customParser.delete"), systemImage: "trash",
                                     role: .destructive
                                 ) { deleting = true }
-                                .disabled(model.isBusy || isLocked)
+                                .buttonStyle(.visionOutline).disabled(model.isBusy || isLocked)
                             }
                         }.padding(.top, 12).disabled(model.isBusy || isLocked)
                     }
@@ -129,15 +120,18 @@ struct PortfolioImportAdvancedView: View {
                     if model.outcomeUncertain {
                         Text(strings.t("portfolioImport.session.responseUnverified")).foregroundStyle(theme.warning)
                         Button(strings.t("portfolioImport.session.history.title"), action: onReviewHistory)
+                            .buttonStyle(.visionOutline)
                         Button(strings.t("common.retry")) {
                             Task {
                                 await model.recoverUncertainOutcome()
                             }
-                        }.disabled(model.isBusy || isLocked)
+                        }.buttonStyle(.visionOutline).disabled(model.isBusy || isLocked)
                     }
                     HStack {
                         Spacer()
-                        if model.isBusy { Button(strings.t("importPage.cancelBtn")) { model.cancel() } }
+                        if model.isBusy {
+                            Button(strings.t("importPage.cancelBtn")) { model.cancel() }.buttonStyle(.visionOutline)
+                        }
                         Button(
                             strings.t(model.isBusy ? "importPage.importingBtn" : "importPage.importBtn"),
                             systemImage: "arrow.up.doc"
@@ -147,21 +141,42 @@ struct PortfolioImportAdvancedView: View {
                     }
                 }.padding(.top, 16)
             }
-        }.alert(strings.t("importPage.customParser.deleteTitle"), isPresented: $deleting) {
-            Button(strings.t("common.cancel"), role: .cancel) {}
-            Button(strings.t("common.confirm"), role: .destructive) { Task { await model.deleteParser() } }
-        } message: {
-            Text(strings.t("importPage.customParser.deleteConfirm", ["name": model.selectedParser?.name ?? ""]))
+        }.visionAlert(
+            title: strings.t("importPage.customParser.deleteTitle"),
+            message: strings.t("importPage.customParser.deleteConfirm", ["name": model.selectedParser?.name ?? ""]),
+            isPresented: $deleting
+        ) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel)
+            VisionDialogAction(strings.t("common.confirm"), role: .destructive) {
+                Task { await model.deleteParser() }
+            }
+        }
+    }
+    private var parserSource: some View {
+        let pairs: [(String, String)] =
+            sources.map { ($0.0, strings.t($0.1)) } + model.savedParsers.map { ("saved:\($0.id.rawValue)", $0.name) }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t("portfolioImport.parserSource")).font(.callout.weight(.medium))
+            VisionSelect(
+                selection: Binding(
+                    get: { model.source },
+                    set: { value in
+                        Task { await model.selectSource(value) }
+                    }),
+                options: VisionSelectOption<String>.pairs(pairs),
+                accessibilityLabel: strings.t("portfolioImport.parserSource"), expands: true
+            ).frame(maxWidth: 420).disabled(model.isBusy || isLocked)
         }
     }
     private var broker: some View {
-        Picker(
-            strings.t("addPortTxn.broker"),
-            selection: Binding(get: { model.config.accountId }, set: { model.setAccount($0) })
-        ) {
-            Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
-            ForEach(model.brokerAccounts, id: \.id) { account in Text(verbatim: account.name).tag(Optional(account.id))
-            }
-        }.frame(maxWidth: 420).disabled(model.isBusy || isLocked)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t("addPortTxn.broker")).font(.callout.weight(.medium))
+            VisionSelect(
+                selection: Binding(get: { model.config.accountId }, set: { model.setAccount($0) }),
+                options: [VisionSelectOption<AccountID?>(value: nil, title: strings.t("addPortTxn.broker.unassigned"))]
+                    + model.brokerAccounts.map { VisionSelectOption<AccountID?>(value: $0.id, title: $0.name) },
+                accessibilityLabel: strings.t("addPortTxn.broker"), expands: true
+            ).frame(maxWidth: 420).disabled(model.isBusy || isLocked)
+        }
     }
 }

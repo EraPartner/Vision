@@ -148,8 +148,8 @@ struct TaxWidgetsTests {
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
         let read = try await client.readTaxWidgets()
         let value: JSONValue = .object(["budgetTax": .object(["trendStrip": .bool(false)])])
-        let saved = try await client.saveTaxWidgets(value: value, expected: read.expected)
-        #expect(saved.expected == .object(["exists": .bool(true), "value": value]))
+        let saved = try await client.saveTaxWidgets(value: value, expected: read.expected.json)
+        #expect(saved.expected.json == .object(["exists": .bool(true), "value": value]))
         let requests = await transport.requests
         #expect(requests.map(\.method) == [.get, .put])
         #expect(requests.allSatisfy { $0.url.path == "/api/settings/widget_visibility" })
@@ -179,8 +179,9 @@ private actor TaxWidgetFixtureService: TaxWidgetSettingsService {
     init(value: JSONValue? = nil, expected: JSONValue? = nil) {
         record = OpenAPI.Setting(
             key: "widget_visibility", value: value ?? .object([:]),
-            expected: expected ?? value.map { .object(["exists": .bool(true), "value": $0]) }
-                ?? .object(["exists": .bool(false)]))
+            expected: .wire(
+                expected ?? value.map { .object(["exists": .bool(true), "value": $0]) }
+                    ?? .object(["exists": .bool(false)])))
     }
     func failReads() { readsFail = true }
     func failNextSave() { nextSaveFails = true }
@@ -225,7 +226,7 @@ private actor TaxWidgetFixtureService: TaxWidgetSettingsService {
         }
         record = OpenAPI.Setting(
             key: "widget_visibility", value: value,
-            expected: .object(["exists": .bool(true), "value": value]))
+            expected: .wire(.object(["exists": .bool(true), "value": value])))
         return record
     }
     func waitForBlockedSave() async {
@@ -246,13 +247,13 @@ private actor TaxWidgetTransport: APITransport {
         if request.method == .get {
             record = OpenAPI.Setting(
                 key: "widget_visibility", value: .object([:]),
-                expected: .object(["exists": .bool(false)]))
+                expected: .wire(.object(["exists": .bool(false)])))
         } else {
             let body = try JSONDecoder().decode(JSONValue.self, from: request.body ?? Data())
             let value = body["value"] ?? .null
             record = OpenAPI.Setting(
                 key: "widget_visibility", value: value,
-                expected: .object(["exists": .bool(true), "value": value]))
+                expected: .wire(.object(["exists": .bool(true), "value": value])))
         }
         let json = String(decoding: try APIBody.encode(record), as: UTF8.self)
         return APIResponse(status: 200, body: Data("{\"ok\":true,\"data\":\(json)}".utf8))

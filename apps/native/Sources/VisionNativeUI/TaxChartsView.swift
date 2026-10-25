@@ -15,7 +15,7 @@ struct TaxMonthlyIncomeView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -46,7 +46,7 @@ struct TaxMonthlyIncomeView: View {
                         ], currency: data.currency, settings: shell.settings,
                         title: shell.strings.t("tax.incomeBreakdown.title"), bars: true, height: 280,
                         customColors: ["income": theme.primary, "pitReserve": Color(token: theme.palette.chart5)],
-                        selection: $selection, rangeStart: $rangeStart
+                        legend: .hidden, yAxis: .full, selection: $selection, rangeStart: $rangeStart
                     )
                     .environment(\.locale, shell.settings.numberFormat.locale)
                 }
@@ -74,7 +74,7 @@ struct TaxYearlyOverviewView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -104,7 +104,7 @@ struct TaxYearlyOverviewView: View {
                         ], currency: data.currency, settings: shell.settings,
                         title: shell.strings.t("tax.yearly.title"), bars: true, height: 300,
                         customColors: ["net": theme.primary, "pit": Color(token: theme.palette.chart5)],
-                        selection: $selection, rangeStart: $rangeStart
+                        legend: .hidden, yAxis: .full, selection: $selection, rangeStart: $rangeStart
                     )
                     .environment(\.locale, shell.settings.numberFormat.locale)
                     if data.yearlyIncome.contains(where: \.isApproximated) {
@@ -133,7 +133,7 @@ struct TaxTrendStripView: View {
 
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -182,10 +182,10 @@ struct TaxTrendStripView: View {
                             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 theme.primary.opacity(year.year == overview.year ? 0.08 : 0.02),
-                                in: RoundedRectangle(cornerRadius: 10)
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.lg)
                                     .strokeBorder(year.year == overview.year ? theme.primary.opacity(0.45) : .clear))
                         }
                         .buttonStyle(.plain)
@@ -198,7 +198,7 @@ struct TaxTrendStripView: View {
 
     private func currency(_ value: Decimal) -> String {
         VisionFormat.currency(
-            value, code: shell.settings.defaultCurrency,
+            value, code: shell.settings.portfolioCurrency,
             locale: shell.settings.numberFormat.locale, fractionDigits: 0)
     }
     private func widthRatio(_ value: Decimal, max maximum: Decimal) -> CGFloat {
@@ -229,7 +229,7 @@ struct TaxYearComparisonView: View {
     }
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -241,31 +241,31 @@ struct TaxYearComparisonView: View {
         available.first(where: { $0.year == compareYear }) ?? available.first(where: { $0.year == defaultYear })
     }
 
+    /// The year, with its filed or frozen status in words where the system picker showed an icon.
+    private func yearTitle(_ year: TaxDashboardYearCalculation) -> String {
+        if year.isFiled { return String(year.year) + " · " + shell.strings.t("tax.yearSwitcher.filedAria") }
+        if year.hasFrozenCalculation { return String(year.year) + " · " + shell.strings.t("tax.yearSwitcher.frozenAria") }
+        return String(year.year)
+    }
+
     var body: some View {
         if let data, data.yearCalculations.count > 1, let selected {
             TaxChartCard(
                 title: shell.strings.t("tax.comparison.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.comparison.description"), small: true
             ) {
-                Picker(
-                    shell.strings.t("tax.comparison.versus"),
+                VisionSelect(
                     selection: Binding(
                         get: { selected.year },
                         set: { value in
                             compareYear = value
                             onComparisonChange?(value)
-                        })
-                ) {
-                    ForEach(available, id: \.year) { year in
-                        HStack {
-                            Text(String(year.year))
-                            TaxChartYearStatusView(
-                                isFiled: year.isFiled,
-                                hasFrozenCalculation: year.hasFrozenCalculation, strings: shell.strings)
-                        }.tag(year.year)
-                    }
-                }
-                .accessibilityLabel(shell.strings.t("tax.comparison.selectYear"))
+                        }),
+                    options: available.map { year in
+                        VisionSelectOption(value: year.year, title: yearTitle(year))
+                    },
+                    accessibilityLabel: shell.strings.t("tax.comparison.selectYear"), expands: true
+                )
                 .frame(maxWidth: 240, alignment: .leading)
                 TaxTableViewport(isPrinting: printLayout) {
                     Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 12) {
@@ -337,7 +337,7 @@ struct TaxYearComparisonView: View {
         let locale = shell.settings.numberFormat.locale
         if percent { return VisionFormat.percent(value, locale: locale) }
         return VisionFormat.currency(
-            value, code: shell.settings.defaultCurrency,
+            value, code: shell.settings.portfolioCurrency,
             locale: locale, fractionDigits: 0, signed: signed)
     }
     private func deltaLabel(_ delta: Decimal, baseline: Decimal, percent: Bool, zero: Bool) -> String {

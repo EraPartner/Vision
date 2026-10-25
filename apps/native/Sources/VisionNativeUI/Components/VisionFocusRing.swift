@@ -12,18 +12,34 @@ import VisionNativeCore
 /// inside a `Button` label or a `ButtonStyle`/`ToggleStyle` body. Controls that own a
 /// `@FocusState` pass it explicitly. The modifier also turns the system focus effect off, so the
 /// web ring replaces the stock macOS one instead of doubling it.
+/// True while a page or panel container holds focus itself. SwiftUI's `isFocused` is inherited
+/// by every descendant of the nearest focusable ancestor, and a mouse click leaves focus on that
+/// container (buttons are not focus targets without Full Keyboard Access), so without this every
+/// button and menu in the container would draw its ring at once.
+private struct VisionContainerOwnsFocusKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var visionContainerOwnsFocus: Bool {
+        get { self[VisionContainerOwnsFocusKey.self] }
+        set { self[VisionContainerOwnsFocusKey.self] = newValue }
+    }
+}
+
 struct VisionFocusRingModifier<RingShape: InsettableShape>: ViewModifier {
     let isActive: Bool?
     let shape: RingShape
     @Environment(\.visionTheme) private var theme
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.visionContainerOwnsFocus) private var containerOwnsFocus
     @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
         content
             .focusEffectDisabled()
             .overlay {
-                if (isActive ?? isFocused) && !theme.isPrintReport {
+                if (isActive ?? (isFocused && !containerOwnsFocus)) && !theme.isPrintReport {
                     shape
                         .inset(by: -CGFloat(DesignTokens.FocusRing.offset + DesignTokens.FocusRing.width / 2))
                         .stroke(ringColor, lineWidth: CGFloat(DesignTokens.FocusRing.width))

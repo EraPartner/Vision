@@ -75,24 +75,22 @@ public struct ResearchMarketsView: View {
         }
     }
     private var region: some View {
-        Picker(
-            shell.strings.t("research.markets.regions"),
-            selection: Binding(get: { model.region }, set: { model.region = $0 })
-        ) {
-            ForEach(ResearchMarketCatalog.regionOptions, id: \.id) { option in
-                Text(shell.strings.t(option.labelKey)).tag(ResearchMarketRegion(rawValue: option.id) ?? .worldwide)
+        VisionSegmentedControl(
+            selection: Binding(get: { model.region }, set: { model.region = $0 }),
+            options: ResearchMarketCatalog.regionOptions.map { option in
+                VisionSegmentOption(
+                    value: ResearchMarketRegion(rawValue: option.id) ?? .worldwide,
+                    title: shell.strings.t(option.labelKey))
             }
-        }.pickerStyle(.segmented).labelsHidden().accessibilityLabel(shell.strings.t("research.markets.regions"))
+        ).accessibilityLabel(shell.strings.t("research.markets.regions"))
     }
     private var sector: some View {
-        Picker(
-            shell.strings.t("research.markets.sectors"),
-            selection: Binding(get: { model.sector }, set: { model.sector = $0 })
-        ) {
-            ForEach(ResearchMarketCatalog.sectorOptions, id: \.id) { option in
-                Text(shell.strings.t(option.labelKey)).tag(option.id)
-            }
-        }.labelsHidden().frame(width: 220).accessibilityLabel(shell.strings.t("research.markets.sectors"))
+        VisionSelect(
+            selection: Binding(get: { model.sector }, set: { model.sector = $0 }),
+            options: ResearchMarketCatalog.sectorOptions.map {
+                VisionSelectOption(value: $0.id, title: shell.strings.t($0.labelKey))
+            }, accessibilityLabel: shell.strings.t("research.markets.sectors"), expands: true
+        ).frame(width: 220)
     }
     private func tile(_ entry: ResearchMarketEntry) -> some View {
         let percent = model.quotes.first { $0.symbol == entry.symbol }?.changePercent

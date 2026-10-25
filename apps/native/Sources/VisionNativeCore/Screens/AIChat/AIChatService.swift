@@ -11,10 +11,10 @@ public protocol AIChatService: Sendable {
     /// `POST /api/ai/model/release`: best-effort, always 204 (`apiClient.releaseModel`).
     func chatRelease(model: String) async throws
     func chatConversations(offset: Int) async throws -> AIChatConversationPage
-    func chatConversation(id: String) async throws -> AIChatConversationDetail
+    func chatConversation(id: AiConversationID) async throws -> AIChatConversationDetail
     func chatCreate(model: String?) async throws -> AIChatConversationDetail
-    func chatRename(id: String, title: String) async throws -> AIChatConversation
-    func chatDelete(id: String) async throws
+    func chatRename(id: AiConversationID, title: String) async throws -> AIChatConversation
+    func chatDelete(id: AiConversationID) async throws
     func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void) async throws
         -> AIChatComplete
 }
@@ -61,10 +61,10 @@ extension APIClient: AIChatService {
                 OpenAPIOperations.GetAiConversations.self,
                 query: [.init(name: "limit", value: "50"), .init(name: "offset", value: String(offset))]))
     }
-    public func chatConversation(id: String) async throws -> AIChatConversationDetail {
+    public func chatConversation(id: AiConversationID) async throws -> AIChatConversationDetail {
         try await send(
             ResearchRequest<OpenAPIOperations.GetAiConversation, AIChatConversationDetail>(
-                OpenAPIOperations.GetAiConversation.self, parameters: ["id": id]))
+                OpenAPIOperations.GetAiConversation.self, parameters: ["id": id.rawValue]))
     }
     public func chatCreate(model: String?) async throws -> AIChatConversationDetail {
         try await send(
@@ -72,16 +72,16 @@ extension APIClient: AIChatService {
                 OpenAPIOperations.CreateAiConversation.self, body: .object(model.map { ["model": .string($0)] } ?? [:]))
         )
     }
-    public func chatRename(id: String, title: String) async throws -> AIChatConversation {
+    public func chatRename(id: AiConversationID, title: String) async throws -> AIChatConversation {
         try await send(
             ResearchRequest<OpenAPIOperations.UpdateAiConversation, AIChatConversation>(
-                OpenAPIOperations.UpdateAiConversation.self, parameters: ["id": id],
+                OpenAPIOperations.UpdateAiConversation.self, parameters: ["id": id.rawValue],
                 body: .object(["title": .string(title)])))
     }
-    public func chatDelete(id: String) async throws {
+    public func chatDelete(id: AiConversationID) async throws {
         let _: APIEmpty = try await send(
             ResearchRequest<OpenAPIOperations.DeleteAiConversation, APIEmpty>(
-                OpenAPIOperations.DeleteAiConversation.self, parameters: ["id": id]))
+                OpenAPIOperations.DeleteAiConversation.self, parameters: ["id": id.rawValue]))
     }
     public func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void)
         async throws -> AIChatComplete

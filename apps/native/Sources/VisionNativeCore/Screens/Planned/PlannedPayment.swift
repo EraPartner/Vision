@@ -35,13 +35,13 @@ public enum PlannedFrequency: String, CaseIterable, Sendable {
 /// `PlannedPayment` of apps/frontend/src/lib/plannedPaymentMapper.ts (`mapFromAPI`): the row
 /// the Planned page shows, with the wire row kept for the planned-payment sheet.
 public struct PlannedPayment: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: PlannedTransactionID
     /// `memo || recipient_name || "Unnamed payment"`.
     public let name: String
     /// Signed: money out is negative.
     public let amount: Decimal
     /// `currency || defaultCurrency`.
-    public let currency: String
+    public let currency: CurrencyCode
     /// `planned_date` without a time part.
     public let dueDate: String
     public let isRecurring: Bool
@@ -55,20 +55,19 @@ public struct PlannedPayment: Equatable, Sendable, Identifiable {
     public let url: String?
     public let isExecuted: Bool
     public let lastExecutedDate: String?
-    public let executedTransactionId: Int?
+    public let executedTransactionId: TransactionID?
     public let executionCount: Int
     public let executions: [OpenAPI.PlannedTransactionExecution]
     public let isActive: Bool
     public let wire: OpenAPI.PlannedTransaction
 
-    public init(_ wire: OpenAPI.PlannedTransaction, defaultCurrency: String) {
+    public init(_ wire: OpenAPI.PlannedTransaction, defaultCurrency: CurrencyCode) {
         self.wire = wire
         id = wire.id
         name = Self.nonEmpty(wire.memo) ?? Self.nonEmpty(wire.recipientName) ?? "Unnamed payment"
         amount = wire.amount
-        currency = Self.nonEmpty(wire.currency) ?? defaultCurrency
-        let date = wire.plannedDate
-        dueDate = date.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? date
+        currency = wire.currency ?? defaultCurrency
+        dueDate = wire.plannedDate.description
         isRecurring = wire.isRecurring
         let recurrence = Self.recurrence(wire.recurrencePattern)
         frequency = wire.isRecurring ? recurrence.frequency : nil
@@ -79,7 +78,7 @@ public struct PlannedPayment: Equatable, Sendable, Identifiable {
         category = wire.categoryName
         url = wire.url
         isExecuted = wire.isExecuted
-        lastExecutedDate = wire.lastExecutedDate
+        lastExecutedDate = wire.lastExecutedDate?.description
         executedTransactionId = wire.executedTransactionId
         executionCount = wire.executionCount
         executions = wire.executions ?? []
@@ -201,8 +200,8 @@ public enum PlannedLinks {
     }
 
     /// The transactions page filtered to one transaction.
-    public static func transactionRoute(_ id: Int) -> String {
-        "/transactions?transaction_id=\(id)"
+    public static func transactionRoute(_ id: TransactionID) -> String {
+        "/transactions?transaction_id=\(id.rawValue)"
     }
 }
 

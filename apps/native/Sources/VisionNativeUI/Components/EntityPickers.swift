@@ -143,13 +143,13 @@ struct PickerList: View {
 /// `onCreate` (`allowCreate`), a typed name no listed payee has offers "Add {name}" first.
 struct RecipientPicker: View {
     let pickers: PickerDataModel
-    let value: Int?
+    let value: RecipientID?
     var disabled = false
     var invalid = false
     /// `active`: only the active payees.
     var activeOnly = false
     let strings: any Localizing
-    let onSelect: (Int?) -> Void
+    let onSelect: (RecipientID?) -> Void
     /// The create row's action, with the trimmed name.
     var onCreate: ((String) -> Void)?
     @State var isOpen = false
@@ -198,14 +198,16 @@ struct RecipientPicker: View {
             })
         for recipient in shown {
             options.append(
-                PickerOption(id: String(recipient.id), title: recipient.name, isSelected: recipient.id == value) {
+                PickerOption(
+                    id: String(recipient.id.rawValue), title: recipient.name, isSelected: recipient.id == value
+                ) {
                     pick(recipient.id)
                 })
         }
         return options
     }
 
-    private func pick(_ id: Int?) {
+    private func pick(_ id: RecipientID?) {
         onSelect(id)
         isOpen = false
     }
@@ -215,10 +217,10 @@ struct RecipientPicker: View {
 /// locally while typing.
 struct CategoryPicker: View {
     let pickers: PickerDataModel
-    let value: Int?
+    let value: CategoryID?
     var disabled = false
     let strings: any Localizing
-    let onSelect: (Int?) -> Void
+    let onSelect: (CategoryID?) -> Void
     @State var isOpen = false
     @State var search = ""
 
@@ -247,13 +249,16 @@ struct CategoryPicker: View {
         }
         for node in pickers.activeCategories {
             let label = PickerDataModel.label(node)
-            guard query.isEmpty || "\(label) \(node.id)".lowercased().contains(query) else { continue }
-            options.append(PickerOption(id: String(node.id), title: label, isSelected: node.id == value) { pick(node.id) })
+            guard query.isEmpty || "\(label) \(node.id.rawValue)".lowercased().contains(query) else { continue }
+            options.append(
+                PickerOption(id: String(node.id.rawValue), title: label, isSelected: node.id == value) {
+                    pick(node.id)
+                })
         }
         return options
     }
 
-    private func pick(_ id: Int?) {
+    private func pick(_ id: CategoryID?) {
         onSelect(id)
         isOpen = false
     }
@@ -269,7 +274,7 @@ struct AccountPicker: View {
     var invalid = false
     var disabled = false
     let strings: any Localizing
-    let onPick: (String, Int) -> Void
+    let onPick: (String, AccountID) -> Void
     @State var isOpen = false
     @State var search = ""
 
@@ -292,10 +297,10 @@ struct AccountPicker: View {
         let selected = value.trimmingCharacters(in: .whitespaces).lowercased()
         return pickers.accounts.compactMap { account in
             let display = account.displayName.flatMap { $0.isEmpty ? nil : $0 }
-            let haystack = "\(display ?? "") \(account.name) \(account.id)".lowercased()
+            let haystack = "\(display ?? "") \(account.name) \(account.id.rawValue)".lowercased()
             guard query.isEmpty || haystack.contains(query) else { return nil }
             return PickerOption(
-                id: String(account.id), title: display ?? account.name,
+                id: String(account.id.rawValue), title: display ?? account.name,
                 detail: display != nil && display != account.name ? account.name : nil,
                 isSelected: account.name.trimmingCharacters(in: .whitespaces).lowercased() == selected
             ) {

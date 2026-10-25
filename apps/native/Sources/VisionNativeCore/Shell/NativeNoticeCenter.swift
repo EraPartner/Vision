@@ -8,7 +8,7 @@ import Observation
         public let id: UUID
         public let notice: ScreenNotice
         public let expiresAt: Date
-        public let actionTitleKey: String?
+        public let actionTitleKey: LocalizedKey?
         public let isUndo: Bool
         public let revision: UUID
     }
@@ -38,11 +38,11 @@ import Observation
     /// after a plain publication updates that entry rather than showing a second toast.
     @discardableResult public func publish(
         _ notice: ScreenNotice, source: UUID, lifetime: TimeInterval = 4,
-        replacementKey: String? = nil,
-        actionTitleKey: String? = nil, isUndo: Bool = false,
+        replacementKey: NoticeKey? = nil,
+        actionTitleKey: LocalizedKey? = nil, isUndo: Bool = false,
         action: (@MainActor () async -> Void)? = nil, clear: @escaping @MainActor () -> Void = {}
     ) -> UUID {
-        let identity = replacementKey.map { "replacement:\($0)" } ?? "\(source.uuidString):\(notice.id)"
+        let identity = replacementKey.map { "replacement:\($0.rawValue)" } ?? "\(source.uuidString):\(notice.id)"
         let id = identities[identity] ?? UUID()
         identities[identity] = id
         let entry = Entry(

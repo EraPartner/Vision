@@ -5,8 +5,8 @@ import Observation
 /// no cloud model, disclosure preview, grant or record state.
 @MainActor @Observable public final class AIInvestigationModel {
     public var question = ""
-    public var depthOverride: String?
-    public var researchMode = "local-only"
+    public var depthOverride: AIInvestigationDepth?
+    public var researchMode: AIResearchMode = .localOnly
     public var publicWebQuery = ""
     public var publicSymbols = ""
     public var dateFrom = ""
@@ -32,13 +32,11 @@ import Observation
         self.service = service
         self.pollDelay = pollDelay
     }
-    public var depth: String {
-        depthOverride
-            ?? (["quick", "detailed"].contains(settings.aiAnswerDepth) ? settings.aiAnswerDepth : "quick")
+    public var depth: AIInvestigationDepth {
+        depthOverride ?? (AIInvestigationDepth.allCases.contains(settings.aiAnswerDepth) ? settings.aiAnswerDepth : .quick)
     }
-    public var resolvedCurrency: String {
-        settings.defaultCurrency.range(of: #"^[A-Z]{3}$"#, options: .regularExpression) != nil
-            ? settings.defaultCurrency : "EUR"
+    public var resolvedCurrency: CurrencyCode {
+        ReportingFallbackCurrency.resolve(settings.defaultCurrency)
     }
     public var resolvedBenchmark: String? {
         guard let raw = settings.analysisBenchmark else { return nil }
@@ -46,24 +44,26 @@ import Observation
         return value.range(of: #"^[A-Z0-9][A-Z0-9._:-]{0,31}$"#, options: .regularExpression) != nil
             ? value : nil
     }
-    public var language: String { settings.language == "nl" ? "nl" : "en" }
+    public var language: AIInvestigationLanguage {
+        settings.language == .nl ? .nl : .en
+    }
     public var runDisabled: Bool {
         busy || trim(question).isEmpty
-            || (researchMode == "public-web" && trim(publicWebQuery).isEmpty)
-            || (researchMode == "public-providers" && trim(publicSymbols).isEmpty)
+            || (researchMode == .publicWeb && trim(publicWebQuery).isEmpty)
+            || (researchMode == .publicProviders && trim(publicSymbols).isEmpty)
     }
     public var canClarify: Bool { !trim(clarification).isEmpty }
     public var canCancel: Bool {
-        job.map { !["completed", "failed", "cancelled", "partial"].contains($0.state) } ?? false
+        job.map { ![.completed, .failed, .cancelled, .partial].contains($0.state) } ?? false
     }
-    public var canResume: Bool { job.map { ["partial", "failed"].contains($0.state) } ?? false }
+    public var canResume: Bool { job.map { [.partial, .failed].contains($0.state) } ?? false }
     public var settingsSummary: [String] {
         [
             "aiResearch.localModel",
-            depth == "quick" ? "aiResearch.quick" : "aiResearch.detailed",
-            researchMode == "local-only"
+            depth == .quick ? "aiResearch.quick" : "aiResearch.detailed",
+            researchMode == .localOnly
                 ? "aiResearch.localOnly"
-                : researchMode == "public-web" ? "aiResearch.publicWeb" : "aiResearch.publicProviders",
+                : researchMode == .publicWeb ? "aiResearch.publicWeb" : "aiResearch.publicProviders",
         ]
     }
     public func configure(settings: NativeAppSettings) {
@@ -103,7 +103,7 @@ import Observation
         loadTask = nil
         question = ""
         depthOverride = nil
-        researchMode = "local-only"
+        researchMode = .localOnly
         publicWebQuery = ""
         publicSymbols = ""
         dateFrom = ""
@@ -118,26 +118,27 @@ import Observation
     /// Identical source scope fields; the route is always the local Ollama endpoint.
     public func input() -> TaxValue {
         .object([
-            "question": .string(trim(question)), "route": .string("local"),
-            "researchMode": .string(researchMode),
-            "publicWebQuery": optional(researchMode == "public-web" ? trim(publicWebQuery) : nil),
+            "question": .string(trim(question)), "route": .string(AIInvestigationRoute.local.rawValue),
+            "researchMode": .string(researchMode.rawValue),
+            "publicWebQuery": optional(researchMode == .publicWeb ? trim(publicWebQuery) : nil),
             "publicSymbols": .array(
-                researchMode == "public-providers"
+                researchMode == .publicProviders
                     ? publicSymbols.split(separator: ",", omittingEmptySubsequences: false).map {
                         trim(String($0)).uppercased()
                     }.filter { !$0.isEmpty }.prefix(3).map { .string($0) } : []),
             "publicMacroQueries": .array([]), "clarification": .null, "model": .null,
-            "depth": .string(depth), "language": .string(language), "scope": scope(),
+            "depth": .string(depth.rawValue), "language": .string(language.rawValue), "scope": scope(),
             "savedAnalysisId": .null,
         ])
     }
     public func scope() -> TaxValue {
         .object([
-            "workspaces": .array([.string("cross-workspace")]), "accountIds": .array([]),
+            "workspaces": .array([.string(OpenAPI.AiInvestigationRequest.Scope.WorkspacesItem.crossWorkspace.rawValue)]),
+            "accountIds": .array([]),
             "investmentIds": .array([]),
             "dateFrom": optional(dateFrom.isEmpty ? nil : dateFrom),
             "dateTo": optional(dateTo.isEmpty ? nil : dateTo),
-            "currency": .string(resolvedCurrency),
+            "currency": .string(resolvedCurrency.rawValue),
             "constraints": .array(resolvedBenchmark.map { [.string("benchmark:" + $0)] } ?? []),
         ])
     }
@@ -176,7 +177,7 @@ import Observation
             documents.insert(document, at: 0)
         } catch { if active, visit == scope { self.error = error.localizedDescription } }
     }
-    public func deleteDocumentConfirmed(_ id: String) async {
+    public func deleteDocumentConfirmed(_ id: ResearchDocumentID) async {
         guard active else { return }
         let scope = visit
         documentRevision = UUID()
@@ -195,7 +196,7 @@ import Observation
     }
     public func resume(clarification supplied: String? = nil) async {
         guard active, let job else { return }
-        let text = supplied ?? (job.state == "waiting" ? trim(clarification) : "Refresh local evidence")
+        let text = supplied ?? (job.state == .waiting ? trim(clarification) : "Refresh local evidence")
         guard !text.isEmpty else { return }
         let scope = visit
         let id = job.id
@@ -244,7 +245,7 @@ import Observation
         pollTask?.cancel()
         pollTask = nil
         guard active, let job,
-            !["completed", "failed", "cancelled", "partial", "waiting"].contains(job.state)
+            ![.completed, .failed, .cancelled, .partial, .waiting].contains(job.state)
         else { return }
         let scope = visit
         let revision = jobRevision
@@ -258,7 +259,7 @@ import Observation
             }
         }
     }
-    private func pollJob(visit scope: UUID, revision: UUID, id: String) async {
+    private func pollJob(visit scope: UUID, revision: UUID, id: AiInvestigationID) async {
         guard active, visit == scope, jobRevision == revision, job?.id == id, !Task.isCancelled else { return }
         do {
             let value = try await service.investigationGet(id: id)

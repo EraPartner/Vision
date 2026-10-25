@@ -6,14 +6,14 @@ import Testing
 @MainActor @Suite("Research Dossiers version authority, drafts and captures")
 struct ResearchDossiersTests {
     @Test func rawExportsAndEvidenceMetadataRoundTripWithoutDroppingUnknowns() throws {
-        var raw = dossierFixture(id: dossierA)
+        var raw = dossierFixture(id: dossierARaw)
         var content = try ResearchDossierContent(raw: raw)
         var evidence = ResearchDossierEvidence(id: evidenceA)
         evidence.claim = "Claim"
         evidence.source.title = "Source"
         evidence.source.reference = "Local note"
         var source = evidence.source.payload
-        source["documentId"] = .string(documentA)
+        source["documentId"] = .string(documentARaw)
         source["documentVersion"] = .number(3)
         source["passageOrdinal"] = .number(0)
         source["contentSha256"] = .string(String(repeating: "a", count: 64))
@@ -94,7 +94,7 @@ struct ResearchDossiersTests {
         let transport = DossiersTransport()
         let model = dossierModel(transport)
         await model.load()
-        await transport.pause(path: "/api/research-dossiers/" + dossierA)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw)
         let old = Task { await model.select(dossierA) }
         await transport.waitForPause()
         await model.select(dossierB)
@@ -108,7 +108,7 @@ struct ResearchDossiersTests {
         await model.load()
         await model.select(dossierA)
         model.draft?.title = "Local edit"
-        await transport.externalVersion(id: dossierA, title: "External edit", version: 2)
+        await transport.externalVersion(id: dossierARaw, title: "External edit", version: 2)
         await model.load(force: true)
         #expect(model.detail?.version == 1 && model.draft?.title == "Local edit")
         await model.save()
@@ -131,7 +131,7 @@ struct ResearchDossiersTests {
         model.draft?.evidence[0].claim = "Submitted claim"
         model.draft?.evidence[0].source.reference = "Local reference"
         model.updateSourceDocument(evidenceId: id, documentId: documentA)
-        await transport.pause(path: "/api/research-dossiers/" + dossierA, method: .put)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw, method: .put)
         let save = Task { await model.save() }
         await transport.waitForPause()
         model.draft?.question = "Typed during save"
@@ -149,7 +149,7 @@ struct ResearchDossiersTests {
         await model.load()
         await model.select(dossierA)
         model.draft?.title = "Submitted"
-        await transport.pause(path: "/api/research-dossiers/" + dossierA, method: .put)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw, method: .put)
         let save = Task { await model.save() }
         await transport.waitForPause()
         await model.select(dossierB)
@@ -168,20 +168,20 @@ struct ResearchDossiersTests {
         model.requestDelete()
         model.cancelPendingReview()
         #expect(await transport.deletions.isEmpty)
-        await transport.pause(path: "/api/research-dossiers/" + dossierA, method: .delete)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw, method: .delete)
         model.requestDelete()
         let remove = Task { await model.confirmPendingReview() }
         await transport.waitForPause()
         await model.select(dossierB)
         await transport.release()
         await remove.value
-        #expect(await transport.deletions == [dossierA])
+        #expect(await transport.deletions == [dossierARaw])
         #expect(model.selectedId == dossierB && model.draft?.title == "Beta")
     }
     @Test func restoreUsesCapturedVersionCASAndServerReturnedContent() async throws {
         let transport = DossiersTransport()
         let model = dossierModel(transport)
-        await transport.externalVersion(id: dossierA, title: "Current", version: 3)
+        await transport.externalVersion(id: dossierARaw, title: "Current", version: 3)
         await model.load()
         await model.select(dossierA)
         model.requestRestore(1)
@@ -199,10 +199,10 @@ struct ResearchDossiersTests {
         let model = dossierModel(transport)
         await model.load()
         await model.select(dossierA)
-        await transport.pause(path: "/api/research-dossiers/" + dossierA, method: .put)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw, method: .put)
         let save = Task { await model.save() }
         await transport.waitForPause()
-        await transport.externalVersion(id: dossierA, title: "Newer acknowledged source", version: 3)
+        await transport.externalVersion(id: dossierARaw, title: "Newer acknowledged source", version: 3)
         await model.load(force: true)
         #expect(model.detail?.version == 3 && model.draft?.title == "Newer acknowledged source")
         await transport.release()
@@ -259,10 +259,10 @@ struct ResearchDossiersTests {
         model.requestNew()
         model.setLines(.assumptions, raw: " first \n\nsecond\n  ")
         #expect(model.draft?.assumptions == [" first ", "second"])
-        model.toggleLink(.categoryIds, id: "7")
-        model.toggleLink(.categoryIds, id: "7")
-        model.toggleLink(.investmentIds, id: "2")
-        model.toggleLink(.savedAnalysisIds, id: "analysis-string")
+        model.toggleLink(category: 7)
+        model.toggleLink(category: 7)
+        model.toggleLink(investment: 2)
+        model.toggleLink(analysis: "analysis-string")
         #expect(model.draft?.links.categoryIds == [] && model.draft?.links.investmentIds == [2])
         #expect(model.draft?.links.savedAnalysisIds == ["analysis-string"])
         for _ in 0..<31 { model.addEvidence() }
@@ -283,7 +283,7 @@ struct ResearchDossiersTests {
         }
         await model.exportOne()
         let value = try #require(captured)
-        #expect(value.1 == "vision-dossier-" + dossierA + ".json")
+        #expect(value.1 == "vision-dossier-" + dossierARaw + ".json")
         let raw = try JSONDecoder().decode(TaxValue.self, from: value.0)
         #expect(
             raw["schemaVersion"] == .number(1)
@@ -297,7 +297,7 @@ struct ResearchDossiersTests {
         let transport = DossiersTransport()
         let model = dossierModel(transport)
         await model.load()
-        await transport.pause(path: "/api/research-dossiers/" + dossierA)
+        await transport.pause(path: "/api/research-dossiers/" + dossierARaw)
         let old = Task { await model.select(dossierA) }
         await transport.waitForPause()
         model.didDisappear()
@@ -315,14 +315,19 @@ struct ResearchDossiersTests {
     }
 }
 
-private let dossierA = "00000000-0000-4000-8000-000000000001"
-private let dossierB = "00000000-0000-4000-8000-000000000002"
-private let dossierCreated = "00000000-0000-4000-8000-000000000003"
-private let documentA = "00000000-0000-4000-8000-000000000004"
-private let evidenceA = "00000000-0000-4000-8000-000000000005"
+private let dossierARaw = "00000000-0000-4000-8000-000000000001"
+private let dossierA = ResearchDossierID(dossierARaw)
+private let dossierBRaw = "00000000-0000-4000-8000-000000000002"
+private let dossierB = ResearchDossierID(dossierBRaw)
+private let dossierCreatedRaw = "00000000-0000-4000-8000-000000000003"
+private let dossierCreated = ResearchDossierID(dossierCreatedRaw)
+private let documentARaw = "00000000-0000-4000-8000-000000000004"
+private let documentA = ResearchDocumentID(documentARaw)
+private let evidenceARaw = "00000000-0000-4000-8000-000000000005"
+private let evidenceA = ResearchDossierEvidenceID(evidenceARaw)
 private func dossierFixture(id: String, title: String? = nil, version: Int = 1, content: TaxValue? = nil) -> TaxValue {
     var raw = content ?? ResearchDossierContent().payload
-    raw["title"] = .string(title ?? (id == dossierA ? "Alpha" : "Beta"))
+    raw["title"] = .string(title ?? (id == dossierARaw ? "Alpha" : "Beta"))
     raw["question"] = raw["question"] == .string("") ? .string("Question") : raw["question"]
     raw["id"] = .string(id)
     raw["version"] = .number(Decimal(version))
@@ -358,7 +363,7 @@ private actor DossiersTransport: APITransport {
     private(set) var writes: [TaxValue] = []
     private(set) var restores: [TaxValue] = []
     private(set) var deletions: [String] = []
-    private var records = [dossierA: dossierFixture(id: dossierA), dossierB: dossierFixture(id: dossierB)]
+    private var records = [dossierARaw: dossierFixture(id: dossierARaw), dossierBRaw: dossierFixture(id: dossierBRaw)]
     private var large = false
     private var pausedPath: String?
     private var pausedMethod = HTTPMethod.get
@@ -389,18 +394,18 @@ private actor DossiersTransport: APITransport {
             let offset = Int(query.first { $0.name == "offset" }?.value ?? "0") ?? 0
             let selected =
                 offset == 500
-                ? records[dossierB].map { [$0] } ?? []
-                : [dossierA, dossierB, dossierCreated].compactMap { records[$0] }
+                ? records[dossierBRaw].map { [$0] } ?? []
+                : [dossierARaw, dossierBRaw, dossierCreatedRaw].compactMap { records[$0] }
             output = .object([
                 "items": .array(selected), "total": .number(Decimal(large ? 501 : records.count)),
                 "limit": .number(500), "offset": .number(Decimal(offset)),
             ])
         case "/api/research-dossiers" where request.method == .post:
             writes.append(body ?? .null)
-            output = dossierFixture(id: dossierCreated, title: body?["title"]?.stringValue, content: body)
-            records[dossierCreated] = output
+            output = dossierFixture(id: dossierCreatedRaw, title: body?["title"]?.stringValue, content: body)
+            records[dossierCreatedRaw] = output
             status = 201
-        case "/api/research-dossiers/export": output = exportFixture([dossierA, dossierB].compactMap { records[$0] })
+        case "/api/research-dossiers/export": output = exportFixture([dossierARaw, dossierBRaw].compactMap { records[$0] })
         case "/api/categories/tree":
             output = .object([
                 "items": .array([
@@ -417,7 +422,7 @@ private actor DossiersTransport: APITransport {
             output = .object([
                 "items": .array([
                     .object([
-                        "id": .string(documentA), "title": .string("Ready document"), "version": .number(3),
+                        "id": .string(documentARaw), "title": .string("Ready document"), "version": .number(3),
                         "extractionStatus": .string("ready"),
                         "sourceName": .string("synthetic.txt"), "mediaType": .string("text/plain"),
                         "contentSha256": .string(String(repeating: "a", count: 64)), "extractionError": .null,

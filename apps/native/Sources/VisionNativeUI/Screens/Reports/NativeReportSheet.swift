@@ -37,7 +37,7 @@ public struct NativeReportSheet: View {
                         Spacer(minLength: 0)
                         Picker(strings.t("export.currency"), selection: $model.currency) {
                             ForEach(NativeReportForm.currencies, id: \.self) { currency in
-                                Text(currency).tag(currency)
+                                Text(currency.rawValue).tag(currency)
                             }
                         }.labelsHidden().frame(width: 128)
                     }

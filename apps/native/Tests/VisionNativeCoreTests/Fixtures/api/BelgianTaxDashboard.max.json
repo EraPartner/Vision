@@ -1,0 +1,128 @@
+{
+  "unconvertedCurrencies": [
+    "EUR"
+  ],
+  "incompleteFigures": [
+    "string"
+  ],
+  "year": 1,
+  "currency": "EUR",
+  "isHistorical": true,
+  "hasIncomeSources": true,
+  "hasStatsData": true,
+  "isEmpty": true,
+  "portfolioTaxesForYear": 1.5,
+  "totalTaxIncludingPortfolio": 1.5,
+  "totalTaxIncludingPropertyEstimate": 1.5,
+  "yearlyIncome": [
+    {
+      "year": "string",
+      "income": 1.5,
+      "estimatedTax": 1.5,
+      "netAfterTax": 1.5,
+      "isApproximated": true
+    }
+  ],
+  "monthlyIncomeTax": [
+    {
+      "period": "string",
+      "income": 1.5,
+      "estimatedTax": 1.5
+    }
+  ],
+  "recordedIncomeByPartner": {
+    "A": 1.5,
+    "B": 1.5
+  },
+  "yearCalculations": [
+    {
+      "year": 1,
+      "calculation": {
+        "grossIncome": 1.5,
+        "spouseProfessionalIncome": 1.5,
+        "householdGrossIncome": 1.5,
+        "employeeSocialSecurity": 1.5,
+        "specialSocialSecurityContribution": 1.5,
+        "personalExemptionAmount": 1.5,
+        "netIncomeAfterSS": 1.5,
+        "professionalExpenses": 1.5,
+        "otherDeductionsTotal": 1.5,
+        "deductions": {
+          "key": 1.5
+        },
+        "taxableIncome": 1.5,
+        "federalPITBracket1": 1.5,
+        "federalPITBracket2": 1.5,
+        "federalPITBracket3": 1.5,
+        "federalPITBracket4": 1.5,
+        "federalPITBeforeExemption": 1.5,
+        "personalExemptionBenefit": 1.5,
+        "federalTaxCredits": 1.5,
+        "ownHomeCreditRegime": "none",
+        "ownHomeCredit": 1.5,
+        "taxReductions": 1.5,
+        "pensionReduction": 1.5,
+        "federalPITAfterReductions": 1.5,
+        "communalSurcharge": 1.5,
+        "totalPIT": 1.5,
+        "totalTaxBurden": 1.5,
+        "effectiveRate": 1.5,
+        "marginalRate": 1.5,
+        "netTakeHome": 1.5,
+        "monthlyTaxReserve": 1.5,
+        "propertyTaxEstimate": 1.5,
+        "dividendWhtReclaim": 1.5,
+        "savingsInterestTax": 1.5,
+        "maritalQuotientTransfer": 1.5,
+        "maritalQuotientBenefit": 1.5,
+        "serviceVoucherCredit": 1.5,
+        "breakdown": [
+          {
+            "label": "string",
+            "amount": 1.5,
+            "rate": 1.5,
+            "bracket": "string",
+            "bracketNumber": 1.5
+          }
+        ]
+      },
+      "isFiled": true,
+      "hasFrozenCalculation": true,
+      "isCurrent": true,
+      "hasSnapshot": true,
+      "hasTransactions": true
+    }
+  ],
+  "currentInputs": "value",
+  "exportProfile": "value",
+  "suggestions": [
+    {
+      "id": "id-1",
+      "titleKey": "string",
+      "descriptionKey": "string",
+      "descriptionParams": {
+        "key": 1.5
+      },
+      "estimate": 1.5,
+      "noteKey": "string"
+    }
+  ],
+  "householdBreakdownRows": [
+    {
+      "key": "string",
+      "tone": "base",
+      "partnerAmounts": {
+        "key": 1.5
+      },
+      "household": 1.5
+    }
+  ],
+  "rules": [
+    {
+      "titleKey": "string",
+      "itemKeys": [
+        "string"
+      ]
+    }
+  ]
+}

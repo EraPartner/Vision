@@ -38,15 +38,15 @@ struct PresentationStubService: ResearchService {
     func researchCreateWatchlist(_ input: TaxValue) async throws -> ResearchWatchlistItem {
         try await base.researchCreateWatchlist(input)
     }
-    func researchUpdateWatchlist(id: Int, input: TaxValue) async throws -> ResearchWatchlistItem {
+    func researchUpdateWatchlist(id: WatchlistItemID, input: TaxValue) async throws -> ResearchWatchlistItem {
         try await base.researchUpdateWatchlist(id: id, input: input)
     }
-    func researchDeleteWatchlist(id: Int) async throws { try await base.researchDeleteWatchlist(id: id) }
+    func researchDeleteWatchlist(id: WatchlistItemID) async throws { try await base.researchDeleteWatchlist(id: id) }
     func researchInvestments() async throws -> [PortfolioInvestment] { try await base.researchInvestments() }
-    func researchPortfolioSummary(currency: String) async throws -> PortfolioSummaryData {
+    func researchPortfolioSummary(currency: CurrencyCode) async throws -> PortfolioSummaryData {
         try await base.researchPortfolioSummary(currency: currency)
     }
-    func researchPriceHistory(id: Int, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData {
+    func researchPriceHistory(id: InvestmentID, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData {
         try await base.researchPriceHistory(id: id, fromMs: fromMs, dbOnly: dbOnly)
     }
     func researchMappings(instrumentKey: String, keyType: String) async throws -> ResearchSnapshot<ResearchMappingsData> {
@@ -58,14 +58,14 @@ struct PresentationStubService: ResearchService {
     func researchSaveMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingsData> {
         try await base.researchSaveMappings(input)
     }
-    func researchDeleteMapping(id: Int) async throws { try await base.researchDeleteMapping(id: id) }
+    func researchDeleteMapping(id: InstrumentProviderMappingID) async throws { try await base.researchDeleteMapping(id: id) }
     func researchAuditMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingAuditData> {
         try await base.researchAuditMappings(input)
     }
     func researchCreateInvestment(_ input: TaxValue) async throws -> PortfolioInvestment {
         try await base.researchCreateInvestment(input)
     }
-    func researchCreateTransaction(investmentId: Int, input: TaxValue) async throws -> PortfolioTransaction {
+    func researchCreateTransaction(investmentId: InvestmentID, input: TaxValue) async throws -> PortfolioTransaction {
         try await base.researchCreateTransaction(investmentId: investmentId, input: input)
     }
     func researchPresentation(_ input: TaxValue) async throws -> TaxValue { try await presentation(input) }

@@ -44,7 +44,7 @@ struct PlannedLinkSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 600, idealWidth: 672, minHeight: 520, idealHeight: 680)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .task { await link.resolveCluster() }
         .task(id: link.filters.requestKey) {
@@ -149,7 +149,7 @@ struct PlannedLinkSheet: View {
                         .foregroundStyle(theme.secondaryLabel)
                 }
             }
-            .toggleStyle(.checkbox)
+            .toggleStyle(.visionCheckbox)
         }
         .padding(12)
         .background(
@@ -212,7 +212,7 @@ struct PlannedLinkSheet: View {
             }
             Spacer(minLength: 8)
             MoneyText(
-                amount: transaction.amount, currency: transaction.currency ?? settings.defaultCurrency,
+                amount: transaction.amount, currency: transaction.currency ?? LedgerCurrency.display(settings),
                 settings: settings
             )
             .fontWeight(.semibold)
@@ -234,8 +234,7 @@ struct PlannedLinkSheet: View {
     }
 
     private func recordedDate(_ transaction: OpenAPI.Transaction) -> String {
-        transaction.transactionDate.isEmpty
-            ? "—" : VisionFormat.appDate(transaction.transactionDate, format: settings.dateFormat)
+        VisionFormat.appDate(transaction.transactionDate, format: settings.dateFormat)
     }
 
     // MARK: Footer

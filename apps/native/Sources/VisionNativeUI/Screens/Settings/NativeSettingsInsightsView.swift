@@ -44,7 +44,7 @@ public struct NativeSettingsInsightsView: View {
                             get: { model.dashboardBool("excludeHiddenCategories", fallback: true) },
                             set: { model.updateDashboard(["excludeHiddenCategories": .bool($0)]) })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
                 Divider()
                 NativeSettingsRow(
@@ -57,7 +57,7 @@ public struct NativeSettingsInsightsView: View {
                             get: { model.includeTransfers },
                             set: { value in Task { await model.setIncludeTransfers(value) } })
                     )
-                    .labelsHidden().toggleStyle(.switch)
+                    .labelsHidden().toggleStyle(.visionSwitchLabelless)
                 }
             }
             if model.optionsLoading && model.categories.isEmpty && model.recipients.isEmpty {
@@ -112,7 +112,7 @@ public struct NativeSettingsInsightsView: View {
                                     ) {
                                         Text(verbatim: category.path.joined(separator: " / ")).frame(
                                             maxWidth: .infinity, alignment: .leading)
-                                    }.toggleStyle(.checkbox)
+                                    }.toggleStyle(.visionCheckbox)
                                     if !category.isActive { hiddenBadge }
                                 }.font(.callout).padding(.leading, 26).padding(.horizontal, 8).padding(.vertical, 5)
                             }
@@ -149,7 +149,7 @@ public struct NativeSettingsInsightsView: View {
                                     })
                             ) {
                                 Text(verbatim: recipient.name).frame(maxWidth: .infinity, alignment: .leading)
-                            }.toggleStyle(.checkbox)
+                            }.toggleStyle(.visionCheckbox)
                             if !recipient.isActive { hiddenBadge }
                         }.font(.callout).padding(.horizontal, 8).padding(.vertical, 6)
                     }

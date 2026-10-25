@@ -8,10 +8,10 @@ import VisionNativeCore
 public struct AccountDetailView: View {
     private let model: AccountsModel
     private let shell: NativeShellModel
-    private let accountId: Int
+    private let accountId: AccountID
     @Environment(\.visionTheme) private var theme
 
-    public init(model: AccountsModel, shell: NativeShellModel, accountId: Int) {
+    public init(model: AccountsModel, shell: NativeShellModel, accountId: AccountID) {
         self.model = model
         self.shell = shell
         self.accountId = accountId
@@ -69,7 +69,7 @@ public struct AccountDetailView: View {
         } label: {
             Label(strings.t("accounts.detail.back"), systemImage: "chevron.left")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.vision(.ghost, size: .sm))
     }
 }
 
@@ -114,12 +114,11 @@ struct AccountDetailContent: View {
                 menuRow(item)
             }
         } label: {
-            Label(strings.t("accounts.actionsMenu"), systemImage: "ellipsis.circle")
+            Label(strings.t("accounts.actionsMenu"), systemImage: "ellipsis")
                 .labelStyle(.iconOnly)
         }
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(strings.t("accounts.actionsMenu"))
+        .visionMoreActionsMenu()
+        .visionTooltip(strings.t("accounts.actionsMenu"))
         .accessibilityLabel(strings.t("accounts.actionsMenu"))
     }
 
@@ -203,9 +202,11 @@ struct AccountDetailContent: View {
                                 .font(Font.visionTitle3)
                                 .foregroundStyle(theme.secondaryLabel)
                         } else if let balance = account.computedBalance {
-                            MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
-                                .font(.visionLargeTitle)
-                                .help(strings.t("accounts.balanceTooltip"))
+                            MoneyText(
+                                amount: balance, currency: account.currency, settings: settings, signed: false,
+                                colored: false, display: .largeTitle
+                            )
+                            .visionTooltip(strings.t("accounts.balanceTooltip"))
                             if let provenance = model.provenance(account) {
                                 Text(provenance)
                                     .font(.footnote)
@@ -232,7 +233,7 @@ struct AccountDetailContent: View {
                     let points = model.sparkPoints(account)
                     if points.count >= 2 {
                         AccountSparkline(points: points, trend: AccountsModel.trend(points))
-                            .frame(width: 220, height: 56)
+                            .frame(width: 256, height: 64)
                             .accessibilityElement()
                             .accessibilityLabel(strings.t("accounts.detail.sparklineAria"))
                     }
@@ -253,7 +254,7 @@ struct AccountDetailContent: View {
                         .accessibilityAddTraits(.isHeader)
                     if metrics?.oversold == true {
                         VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
-                            .help(strings.t("portfolio.oversold.description"))
+                            .visionTooltip(strings.t("portfolio.oversold.description"))
                             .accessibilityLabel(
                                 "\(strings.t("portfolio.oversold.label")). \(strings.t("portfolio.oversold.description"))")
                     }
@@ -278,9 +279,8 @@ struct AccountDetailContent: View {
                                 .foregroundStyle(theme.secondaryLabel)
                             MoneyText(
                                 amount: metrics.holdingsValue, currency: model.displayCurrency, settings: settings,
-                                signed: false, colored: false
+                                signed: false, colored: false, display: .title1
                             )
-                            .font(Font.visionTitle1)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(strings.t("accounts.portfolio.pnl"))
@@ -290,7 +290,7 @@ struct AccountDetailContent: View {
                                 MoneyText.text(
                                     metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true),
                                 decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first,
-                                color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme)
+                                color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme), display: .title1
                             )
                                 .monospacedDigit()
                                 .font(Font.visionTitle1)
@@ -350,7 +350,7 @@ struct AccountDetailContent: View {
                                     .lineLimit(1)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 MoneyText(
-                                    amount: row.amount, currency: row.currency ?? account.currency, settings: settings,
+                                    amount: row.amount, currency: (row.currency ?? account.currency), settings: settings,
                                     signed: true)
                             }
                         }
@@ -407,12 +407,13 @@ struct AccountLedgerCard: View {
                     Text(strings.t("accounts.detail.ledgerTitle"))
                         .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
+                    // `justify-between`: the count sits at the trailing edge of the card header.
+                    Spacer()
                     if canView && model.ledgerTotal > 0 {
                         Text(strings.tc("accounts.detail.ledgerCount", model.ledgerTotal))
                             .font(.footnote)
                             .foregroundStyle(theme.secondaryLabel)
                     }
-                    Spacer()
                 }
                 if let since = model.since {
                     HStack(spacing: 8) {
@@ -426,8 +427,8 @@ struct AccountLedgerCard: View {
                             Image(systemName: "xmark")
                                 .imageScale(.small)
                         }
-                        .buttonStyle(.borderless)
-                        .help(strings.t("aria.clearFilter"))
+                        .buttonStyle(.vision(.ghost, size: .iconXs))
+                        .visionTooltip(strings.t("aria.clearFilter"))
                         .accessibilityLabel(strings.t("aria.clearFilter"))
                     }
                     .padding(.horizontal, 10)
@@ -458,7 +459,10 @@ struct AccountLedgerCard: View {
             Text(APIErrorMessage.text(error, strings: strings))
                 .foregroundStyle(theme.destructive)
         } else if model.visibleLedger.isEmpty {
-            VisionEmptyState(symbol: "tray", title: strings.t("accounts.detail.noTransactions")) {
+            VisionEmptyState(
+                symbol: "list.bullet.rectangle.portrait", title: strings.t("accounts.detail.noTransactions"),
+                compact: true
+            ) {
                 EmptyView()
             }
         } else {
@@ -540,25 +544,31 @@ struct AccountSparkline: View {
         }
     }
 
+    /// `Sparkline`'s coordinates: the value range padded by 10 % (1 when flat) mapped onto
+    /// `height - 2 ... 2`, spread evenly over the width.
+    private func plotted(_ size: CGSize) -> [CGPoint] {
+        let values = points.map { NSDecimalNumber(decimal: $0).doubleValue }
+        let low = values.min() ?? 0
+        let high = values.max() ?? 0
+        let pad = high != low ? (high - low) * 0.1 : 1
+        let bottom = low - pad
+        let span = (high + pad) - bottom
+        return values.enumerated().map { index, value in
+            let x = values.count > 1 ? size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
+            let ratio = span > 0 ? (value - bottom) / span : 0.5
+            return CGPoint(x: x, y: (size.height - 2) - CGFloat(ratio) * (size.height - 4))
+        }
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            let values = points.map { NSDecimalNumber(decimal: $0).doubleValue }
-            let low = values.min() ?? 0
-            let high = values.max() ?? 0
-            let span = high - low
-            Path { path in
-                for (index, value) in values.enumerated() {
-                    let x = values.count > 1 ? proxy.size.width * CGFloat(index) / CGFloat(values.count - 1) : 0
-                    let ratio = span > 0 ? (value - low) / span : 0.5
-                    let y = proxy.size.height * (1 - CGFloat(ratio))
-                    if index == 0 {
-                        path.move(to: CGPoint(x: x, y: y))
-                    } else {
-                        path.addLine(to: CGPoint(x: x, y: y))
-                    }
-                }
+            let plot = plotted(proxy.size)
+            ZStack {
+                // `fillArea`: the series colour at 15 % under the smoothed line.
+                ChartCurve.area(plot, baseline: proxy.size.height).fill(color.opacity(0.15))
+                ChartCurve.line(plot)
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
             }
-            .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
         }
     }
 }

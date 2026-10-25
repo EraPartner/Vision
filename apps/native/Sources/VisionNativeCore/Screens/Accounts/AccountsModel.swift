@@ -5,7 +5,7 @@ import Observation
 public enum AccountsScreen: Equatable, Hashable, Sendable {
     case hub
     /// `/accounts/:id`; `0` for an id that is not a positive whole number.
-    case detail(Int)
+    case detail(AccountID)
 }
 
 /// A group header's or Net cash's figure.
@@ -124,14 +124,14 @@ public final class AccountsModel {
     @ObservationIgnored private var cacheGeneration = 0
     @ObservationIgnored private var portfolioFetchedAt: Date?
     @ObservationIgnored private var totalsFetchedAt: Date?
-    @ObservationIgnored private var totalsCurrency: String?
-    @ObservationIgnored private var totalsInFlight: (currency: String, task: Task<Void, Never>)?
-    @ObservationIgnored private var portfolioCurrency: String?
-    @ObservationIgnored private var portfolioInFlight: (currency: String, task: Task<Void, Never>)?
-    @ObservationIgnored private(set) var detailId: Int?
+    @ObservationIgnored private var totalsCurrency: CurrencyCode?
+    @ObservationIgnored private var totalsInFlight: (currency: CurrencyCode, task: Task<Void, Never>)?
+    @ObservationIgnored private var portfolioCurrency: CurrencyCode?
+    @ObservationIgnored private var portfolioInFlight: (currency: CurrencyCode, task: Task<Void, Never>)?
+    @ObservationIgnored private(set) var detailId: AccountID?
     @ObservationIgnored private var ledgerVersion = 0
-    @ObservationIgnored private var ledgerInFlight: (id: Int, task: Task<Void, Never>)?
-    @ObservationIgnored private var plannedInFlight: (id: Int, task: Task<Void, Never>)?
+    @ObservationIgnored private var ledgerInFlight: (id: AccountID, task: Task<Void, Never>)?
+    @ObservationIgnored private var plannedInFlight: (id: AccountID, task: Task<Void, Never>)?
 
     public init(
         service: any AccountsService, rates: ExchangeRatesModel? = nil, calendar: Calendar = PlannedDates.local,
@@ -152,7 +152,7 @@ public final class AccountsModel {
     public var settings: NativeAppSettings { shell?.settings ?? .defaults }
 
     /// `appSettings.defaultCurrency || "EUR"`: the hub's display currency.
-    public var displayCurrency: String { settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency }
+    public var displayCurrency: CurrencyCode { LedgerCurrency.display(settings) }
 
     /// Today's local day.
     public var today: PlannedDay { PlannedDay(now(), calendar: calendar) }
@@ -206,7 +206,7 @@ public final class AccountsModel {
         pendingDelete = nil
     }
 
-    private func resetDetail(_ id: Int) {
+    private func resetDetail(_ id: AccountID) {
         detailId = id
         ledgerVersion += 1
         ledger = nil
@@ -419,13 +419,13 @@ public final class AccountsModel {
 
     /// The meta line: type, currency and institution.
     public func meta(_ account: OpenAPI.Account) -> String {
-        var parts = [typeLabel(account), account.currency]
+        var parts = [typeLabel(account), account.currency.rawValue]
         if let institution = account.institution, !institution.isEmpty { parts.append(institution) }
         return parts.joined(separator: " · ")
     }
 
     public func typeLabel(_ account: OpenAPI.Account) -> String {
-        strings.t("accounts.type.\(account.type)")
+        strings.t("accounts.type.\(account.type.rawValue)")
     }
 
     /// The drift chip; none for wallets and exchanges.
@@ -451,9 +451,9 @@ public final class AccountsModel {
     }
 
     /// `formatCurrency` in the app's number format.
-    public func money(_ amount: Decimal, currency: String, signed: Bool = false) -> String {
+    public func money(_ amount: Decimal, currency: CurrencyCode, signed: Bool = false) -> String {
         VisionFormat.currency(
-            amount, code: currency.uppercased(), locale: settings.numberFormat.locale,
+            amount, code: currency, locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces, signed: signed)
     }
 
@@ -480,20 +480,20 @@ public final class AccountsModel {
     // MARK: Detail
 
     /// The detail's account, once the list is in.
-    public func detailState(_ id: Int) -> AccountDetailState {
+    public func detailState(_ id: AccountID) -> AccountDetailState {
         if let accountsError { return .failed(accountsError) }
         guard let accounts else { return .loading }
-        guard id > 0, let account = accounts.first(where: { $0.id == id }) else { return .notFound }
+        guard id.rawValue > 0, let account = accounts.first(where: { $0.id == id }) else { return .notFound }
         return .loaded(account)
     }
 
     /// The detail's account, or `nil`.
-    public func account(_ id: Int) -> OpenAPI.Account? {
-        guard id > 0 else { return nil }
+    public func account(_ id: AccountID) -> OpenAPI.Account? {
+        guard id.rawValue > 0 else { return nil }
         return accounts?.first { $0.id == id }
     }
 
-    private func loadDetail(_ id: Int, force: Bool) async {
+    private func loadDetail(_ id: AccountID, force: Bool) async {
         guard let account = account(id) else { return }
         var tasks: [Task<Void, Never>] = []
         if AccountKinds.isPortfolio(account) {
@@ -543,11 +543,11 @@ public final class AccountsModel {
     public func details(_ account: OpenAPI.Account) -> [AccountDetailEntry] {
         var entries = [
             AccountDetailEntry(labelKey: "accounts.field.type", value: typeLabel(account)),
-            AccountDetailEntry(labelKey: "accounts.field.currency", value: account.currency),
-            AccountDetailEntry(labelKey: "accounts.field.owner", value: strings.t("accounts.owner.\(account.owner)")),
+            AccountDetailEntry(labelKey: "accounts.field.currency", value: account.currency.rawValue),
+            AccountDetailEntry(labelKey: "accounts.field.owner", value: strings.t("accounts.owner.\(account.owner.rawValue)")),
             AccountDetailEntry(
                 labelKey: "accounts.field.liquidityClass",
-                value: strings.t("accounts.liquidity.\(account.liquidityClass)")),
+                value: strings.t("accounts.liquidity.\(account.liquidityClass.rawValue)")),
         ]
         if let institution = account.institution, !institution.isEmpty {
             entries.append(AccountDetailEntry(labelKey: "accounts.field.institution", value: institution))
@@ -592,7 +592,7 @@ public final class AccountsModel {
     public var isLedgerLoading: Bool { ledger == nil && ledgerError == nil }
 
     /// The first page (a reload after a write keeps the loaded window).
-    func loadLedger(_ id: Int, force: Bool = false) async {
+    func loadLedger(_ id: AccountID, force: Bool = false) async {
         if let ledgerInFlight, ledgerInFlight.id == id {
             await ledgerInFlight.task.value
             if !force { return }
@@ -659,7 +659,7 @@ public final class AccountsModel {
     public var isPlannedLoading: Bool { planned == nil && plannedError == nil }
 
     /// `useAccountPlannedTransactions`.
-    func loadPlanned(_ id: Int, force: Bool = false) async {
+    func loadPlanned(_ id: AccountID, force: Bool = false) async {
         if let plannedInFlight, plannedInFlight.id == id {
             await plannedInFlight.task.value
             if !force { return }

@@ -2,60 +2,97 @@ import SwiftUI
 import VisionNativeCore
 
 /// Fiscal amounts are supplied by the TypeScript dashboard. These cards only format them.
+///
+/// PortfolioTaxSummaryCards: the year's total costs as the headline on the left and, from `xl`,
+/// the supporting figures beside it in three columns (two rows); below `xl` they sit under it.
 struct PortfolioTaxSummaryView: View {
     let data: PortfolioTaxDashboard
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
+    private var separator: Character? { shell.settings.numberFormat.locale.decimalSeparator?.first }
+
     var body: some View {
-        TaxCard {
-            Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            RollingNumber(
-                value: money(data.totals.totalTaxesAndFees),
-                decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
-            ).font(.visionLargeTitle)
-                .monospacedDigit().foregroundStyle(theme.loss)
-            Text(strings.t("tax.combinedTaxesAndFeesYear", ["year": String(data.year)]))
-                .font(.footnote).foregroundStyle(theme.secondaryLabel)
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 220), alignment: .leading)], alignment: .leading, spacing: 20
-            ) {
-                metric(
-                    "tax.totalTaxesPaid", amount: data.totals.totalTaxes,
-                    detail: strings.t("tax.acrossAllInvestmentsYear", ["year": String(data.year)]), color: theme.loss)
-                metric(
-                    "tax.totalFeesPaid", amount: data.totals.totalFees,
-                    detail: strings.t("tax.brokerAndMgmtFeesYear", ["year": String(data.year)]), color: theme.loss)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(strings.t("tax.effectiveTaxRate")).font(.caption).foregroundStyle(theme.tertiaryLabel)
-                    Text(
-                        VisionFormat.percent(
-                            data.totals.effectiveTaxRate, digits: 1, locale: shell.settings.numberFormat.locale)
-                    )
-                    .font(Font.visionTitle3).monospacedDigit()
-                    .foregroundStyle(data.totals.effectiveTaxRate > 25 ? theme.loss : theme.foreground)
-                    Text(strings.t("tax.onRealizedGains")).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                }.accessibilityElement(children: .combine)
-                metric(
-                    "tax.totalWithPIT", amount: data.totals.portfolioTaxesPlusPIT,
-                    detail: strings.t("tax.totalWithPITDesc"), color: theme.primary)
-                metric(
-                    "tax.manualAdjustments", amount: data.totals.totalManualCosts,
-                    detail: strings.t("tax.manualAdjustmentsDescShort"), color: theme.foreground)
-            }.padding(.top, 10)
+        VisionBreakpointReader(breakpoint: VisionBreakpoint.xl) { wide in
+            TaxCard {
+                if wide {
+                    HStack(alignment: .top, spacing: 24) {
+                        hero.frame(width: 260, alignment: .leading)
+                        figures
+                    }
+                } else {
+                    hero
+                    figures
+                }
+            }
         }
     }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            RollingNumber(
+                value: money(data.totals.totalTaxesAndFees), decimalSeparator: separator, display: .largeTitle
+            )
+            .monospacedDigit().foregroundStyle(theme.loss)
+            Text(strings.t("tax.combinedTaxesAndFeesYear", ["year": String(data.year)]))
+                .font(.footnote).foregroundStyle(theme.secondaryLabel)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// `grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3`.
+    private var figures: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: 32, alignment: .topLeading), count: 3),
+            alignment: .leading, spacing: 24
+        ) {
+            metric(
+                "tax.totalTaxesPaid", amount: data.totals.totalTaxes,
+                detail: strings.t("tax.acrossAllInvestmentsYear", ["year": String(data.year)]), color: theme.loss)
+            metric(
+                "tax.totalFeesPaid", amount: data.totals.totalFees,
+                detail: strings.t("tax.brokerAndMgmtFeesYear", ["year": String(data.year)]), color: theme.loss)
+            effectiveRate
+            metric(
+                "tax.totalWithPIT", amount: data.totals.portfolioTaxesPlusPIT,
+                detail: strings.t("tax.totalWithPITDesc"), color: theme.primary)
+            metric(
+                "tax.manualAdjustments", amount: data.totals.totalManualCosts,
+                detail: strings.t("tax.manualAdjustmentsDescShort"), color: theme.foreground)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var effectiveRate: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(strings.t("tax.effectiveTaxRate")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            Text(
+                VisionFormat.percent(
+                    data.totals.effectiveTaxRate, digits: 1, locale: shell.settings.numberFormat.locale)
+            )
+            .font(Font.visionTitle3).monospacedDigit()
+            .foregroundStyle(data.totals.effectiveTaxRate > 25 ? theme.loss : theme.foreground)
+            Text(strings.t("tax.onRealizedGains")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
     private func metric(_ key: String, amount: Decimal, detail: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            RollingNumber(
-                value: money(amount), decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
-            ).font(Font.visionTitle3).foregroundStyle(color)
+            RollingNumber(value: money(amount), decimalSeparator: separator, display: .title3)
+                .foregroundStyle(color)
             Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel)
-        }.accessibilityElement(children: .combine)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
+
+    /// `fmt(value)`: the amount without a sign, as the web's currency formatter writes it.
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: data.currency, settings: shell.settings)
+        MoneyText.text(value, currency: data.currency, settings: shell.settings, signed: false)
     }
 }
 
@@ -186,7 +223,7 @@ struct PortfolioTaxInvestmentBreakdownView: View {
                             if let symbol = investment.symbol {
                                 Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
                             }
-                            VisionBadge(text: strings.t("portfolio.assetClass." + investment.assetClass))
+                            VisionBadge(text: strings.t("portfolio.assetClass." + investment.assetClass.rawValue))
                         }
                         Text(
                             strings.t("tax.taxes") + ": " + money(investment.recordedTaxes) + " + "
@@ -215,7 +252,7 @@ struct PortfolioTaxInvestmentBreakdownView: View {
         }
     }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: data.currency, settings: shell.settings)
+        MoneyText.text(value, currency: data.currency, settings: shell.settings, signed: false)
     }
 }
 
@@ -304,7 +341,7 @@ struct PortfolioTaxRulesView: View {
             .font(.callout).foregroundStyle(theme.secondaryLabel)
     }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: data.currency, settings: shell.settings)
+        MoneyText.text(value, currency: data.currency, settings: shell.settings, signed: false)
     }
     private func rate(_ percent: Decimal, digits: Int) -> String {
         VisionFormat.percent(percent, digits: digits, locale: shell.settings.numberFormat.locale)

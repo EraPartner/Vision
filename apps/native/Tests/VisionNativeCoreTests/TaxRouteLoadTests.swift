@@ -9,7 +9,7 @@ struct TaxRouteLoadTests {
         let transport = try TaxRouteTransport()
         let screens = TaxScreens(client: routeClient(transport))
         let requested = try #require(NativeRoute("/portfolio/tax?year=2024oops&keep=a%2Bb&keep=c"))
-        let canonical = try #require(await screens.loadRoute(route: requested, currency: "EUR"))
+        let canonical = try #require(await screens.loadRoute(route: requested, currency: .eur))
         #expect(canonical.string == "/portfolio/tax?year=2025&keep=a%2Bb&keep=c")
         #expect(screens.dashboard.error == nil)
         #expect(screens.overview.overview?.year == 2025 && screens.dashboard.data?.year == 2025)
@@ -19,7 +19,7 @@ struct TaxRouteLoadTests {
         let transport = try TaxRouteTransport()
         let screens = TaxScreens(client: routeClient(transport))
         let requested = try #require(NativeRoute("/tax?year=1980&keep=x"))
-        #expect(await screens.loadRoute(route: requested, currency: "EUR") == requested)
+        #expect(await screens.loadRoute(route: requested, currency: .eur) == requested)
         #expect(screens.overview.overview?.year == 1980 && screens.overview.overview?.hasSnapshot == true)
         #expect(screens.dashboard.data?.year == 1980 && screens.deductions.data?.year == 2025)
     }
@@ -28,14 +28,14 @@ struct TaxRouteLoadTests {
         let screens = TaxScreens(client: routeClient(transport))
         await transport.pauseOverview(year: nil)
         let oldRoute = try #require(NativeRoute("/tax?year=2024&old=1"))
-        let old = Task { await screens.loadRoute(route: oldRoute, currency: "EUR") }
+        let old = Task { await screens.loadRoute(route: oldRoute, currency: .eur) }
         await transport.waitForPause()
         let current = try #require(NativeRoute("/portfolio/tax?year=2023&new=1"))
-        #expect(await screens.loadRoute(route: current, currency: "USD") == current)
+        #expect(await screens.loadRoute(route: current, currency: PortfolioCurrency.code("USD")) == current)
         await transport.release()
         #expect(await old.value == nil)
         #expect(screens.overview.overview?.year == 2023)
-        #expect(screens.dashboard.data?.year == 2023 && screens.dashboard.data?.currency == "USD")
+        #expect(screens.dashboard.data?.year == 2023 && screens.dashboard.data?.currency == PortfolioCurrency.code("USD"))
         #expect(screens.routeLoadError == nil)
     }
     @Test func newProbeFailureInvalidatesAnAlreadyRunningOldSelectedYearRead() async throws {
@@ -43,11 +43,11 @@ struct TaxRouteLoadTests {
         let screens = TaxScreens(client: routeClient(transport))
         await transport.pauseOverview(year: 2024)
         let oldRoute = try #require(NativeRoute("/tax?year=2024"))
-        let old = Task { await screens.loadRoute(route: oldRoute, currency: "EUR") }
+        let old = Task { await screens.loadRoute(route: oldRoute, currency: .eur) }
         await transport.waitForPause()
         await transport.failLiveProbe()
         let current = try #require(NativeRoute("/tax?year=2023"))
-        #expect(await screens.loadRoute(route: current, currency: "USD") == nil)
+        #expect(await screens.loadRoute(route: current, currency: PortfolioCurrency.code("USD")) == nil)
         let newError = try #require(screens.routeLoadError)
         await transport.release()
         #expect(await old.value == nil)

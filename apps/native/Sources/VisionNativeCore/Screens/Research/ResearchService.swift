@@ -13,18 +13,18 @@ public protocol ResearchService: Sendable {
     func researchNews(symbol: String) async throws -> ResearchSnapshot<ResearchNewsData>
     func researchWatchlist() async throws -> ResearchWatchlistPage
     func researchCreateWatchlist(_ input: TaxValue) async throws -> ResearchWatchlistItem
-    func researchUpdateWatchlist(id: Int, input: TaxValue) async throws -> ResearchWatchlistItem
-    func researchDeleteWatchlist(id: Int) async throws
+    func researchUpdateWatchlist(id: WatchlistItemID, input: TaxValue) async throws -> ResearchWatchlistItem
+    func researchDeleteWatchlist(id: WatchlistItemID) async throws
     func researchInvestments() async throws -> [PortfolioInvestment]
-    func researchPortfolioSummary(currency: String) async throws -> PortfolioSummaryData
-    func researchPriceHistory(id: Int, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData
+    func researchPortfolioSummary(currency: CurrencyCode) async throws -> PortfolioSummaryData
+    func researchPriceHistory(id: InvestmentID, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData
     func researchMappings(instrumentKey: String, keyType: String) async throws -> ResearchSnapshot<ResearchMappingsData>
     func researchResolveMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingResolveData>
     func researchSaveMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingsData>
-    func researchDeleteMapping(id: Int) async throws
+    func researchDeleteMapping(id: InstrumentProviderMappingID) async throws
     func researchAuditMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingAuditData>
     func researchCreateInvestment(_ input: TaxValue) async throws -> PortfolioInvestment
-    func researchCreateTransaction(investmentId: Int, input: TaxValue) async throws -> PortfolioTransaction
+    func researchCreateTransaction(investmentId: InvestmentID, input: TaxValue) async throws -> PortfolioTransaction
     func researchPresentation(_ input: TaxValue) async throws -> TaxValue
 }
 public struct ResearchRequest<Operation: APIOperation, Value: Decodable & Sendable>: APIOperation {
@@ -135,15 +135,15 @@ extension APIClient: ResearchService {
             ResearchRequest<OpenAPIOperations.AddToWatchlist, ResearchWatchlistItem>(
                 OpenAPIOperations.AddToWatchlist.self, body: input))
     }
-    public func researchUpdateWatchlist(id: Int, input: TaxValue) async throws -> ResearchWatchlistItem {
+    public func researchUpdateWatchlist(id: WatchlistItemID, input: TaxValue) async throws -> ResearchWatchlistItem {
         try await send(
             ResearchRequest<OpenAPIOperations.UpdateWatchlistItem, ResearchWatchlistItem>(
-                OpenAPIOperations.UpdateWatchlistItem.self, parameters: ["id": String(id)], body: input))
+                OpenAPIOperations.UpdateWatchlistItem.self, parameters: ["id": String(id.rawValue)], body: input))
     }
-    public func researchDeleteWatchlist(id: Int) async throws {
+    public func researchDeleteWatchlist(id: WatchlistItemID) async throws {
         let _: APIEmpty = try await send(
             ResearchRequest<OpenAPIOperations.DeleteWatchlistItem, APIEmpty>(
-                OpenAPIOperations.DeleteWatchlistItem.self, parameters: ["id": String(id)]))
+                OpenAPIOperations.DeleteWatchlistItem.self, parameters: ["id": String(id.rawValue)]))
     }
     public func researchInvestments() async throws -> [PortfolioInvestment] {
         try await send(
@@ -152,15 +152,15 @@ extension APIClient: ResearchService {
                 query: [.init(name: "limit", value: "500"), .init(name: "active", value: "false")])
         ).items
     }
-    public func researchPortfolioSummary(currency: String) async throws -> PortfolioSummaryData {
+    public func researchPortfolioSummary(currency: CurrencyCode) async throws -> PortfolioSummaryData {
         try await send(
             ResearchRequest<OpenAPIOperations.GetPortfolioSummary, PortfolioSummaryData>(
-                OpenAPIOperations.GetPortfolioSummary.self, query: [.init(name: "currency", value: currency)]))
+                OpenAPIOperations.GetPortfolioSummary.self, query: [.init(name: "currency", value: currency.rawValue)]))
     }
-    public func researchPriceHistory(id: Int, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData {
+    public func researchPriceHistory(id: InvestmentID, fromMs: Decimal, dbOnly: Bool) async throws -> ResearchPriceHistoryData {
         try await send(
             ResearchRequest<OpenAPIOperations.GetInvestmentPriceHistory, ResearchPriceHistoryData>(
-                OpenAPIOperations.GetInvestmentPriceHistory.self, parameters: ["id": String(id)],
+                OpenAPIOperations.GetInvestmentPriceHistory.self, parameters: ["id": String(id.rawValue)],
                 query: [
                     .init(name: "from_ms", value: NSDecimalNumber(decimal: fromMs).stringValue),
                     .init(name: "db_only", value: String(dbOnly)),
@@ -185,10 +185,10 @@ extension APIClient: ResearchService {
             ResearchRequest<OpenAPIOperations.ResearchSaveMappings, ResearchMappingsData>(
                 OpenAPIOperations.ResearchSaveMappings.self, body: input))
     }
-    public func researchDeleteMapping(id: Int) async throws {
+    public func researchDeleteMapping(id: InstrumentProviderMappingID) async throws {
         let _: APIEmpty = try await send(
             ResearchRequest<OpenAPIOperations.ResearchDeleteMapping, APIEmpty>(
-                OpenAPIOperations.ResearchDeleteMapping.self, parameters: ["id": String(id)]))
+                OpenAPIOperations.ResearchDeleteMapping.self, parameters: ["id": String(id.rawValue)]))
     }
     public func researchAuditMappings(_ input: TaxValue) async throws -> ResearchSnapshot<ResearchMappingAuditData> {
         try await researchSnapshot(
@@ -200,10 +200,10 @@ extension APIClient: ResearchService {
             ResearchRequest<OpenAPIOperations.CreateInvestment, PortfolioInvestment>(
                 OpenAPIOperations.CreateInvestment.self, body: input))
     }
-    public func researchCreateTransaction(investmentId: Int, input: TaxValue) async throws -> PortfolioTransaction {
+    public func researchCreateTransaction(investmentId: InvestmentID, input: TaxValue) async throws -> PortfolioTransaction {
         try await send(
             ResearchRequest<OpenAPIOperations.CreateInvestmentTransaction, PortfolioTransaction>(
-                OpenAPIOperations.CreateInvestmentTransaction.self, parameters: ["id": String(investmentId)],
+                OpenAPIOperations.CreateInvestmentTransaction.self, parameters: ["id": String(investmentId.rawValue)],
                 body: input))
     }
     /// Runs in the app from the Swift port of the shared TypeScript (`ResearchPresentation`); there is

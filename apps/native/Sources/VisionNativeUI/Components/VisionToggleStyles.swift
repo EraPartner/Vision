@@ -42,6 +42,9 @@ private struct VisionToggleRow<Control: View>: View {
     let configuration: ToggleStyleConfiguration
     let control: Control
     var isRadio = false
+    /// `false` draws the control alone; the label stays the accessibility name. A custom style does
+    /// not inherit `.labelsHidden()`, so hidden-label call sites use the `…Labelless` styles.
+    var showsLabel = true
     @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
@@ -54,7 +57,7 @@ private struct VisionToggleRow<Control: View>: View {
         } label: {
             HStack(spacing: VisionToggleMetrics.labelGap) {
                 control
-                configuration.label
+                if showsLabel { configuration.label }
             }
             .contentShape(Rectangle())
         }
@@ -73,8 +76,12 @@ private struct VisionToggleRow<Control: View>: View {
 /// colour over `--duration-normal` and the thumb on the snappy spring (no animation under Reduce
 /// Motion). Use as `.toggleStyle(.visionSwitch)`.
 struct VisionSwitchToggleStyle: ToggleStyle {
+    var showsLabel = true
+
     func makeBody(configuration: Configuration) -> some View {
-        VisionToggleRow(configuration: configuration, control: VisionSwitchControl(isOn: configuration.isOn))
+        VisionToggleRow(
+            configuration: configuration, control: VisionSwitchControl(isOn: configuration.isOn),
+            showsLabel: showsLabel)
     }
 }
 
@@ -118,8 +125,11 @@ private struct VisionSwitchControl: View {
 /// bg-background/40`, `hover:border-primary/60`, checked `border-primary bg-primary` with a 14 pt
 /// check (stroke 3) and the glow `0 2px 8px -2px primary/0.35`. Use as `.toggleStyle(.visionCheckbox)`.
 struct VisionCheckboxToggleStyle: ToggleStyle {
+    var showsLabel = true
     func makeBody(configuration: Configuration) -> some View {
-        VisionToggleRow(configuration: configuration, control: VisionCheckboxControl(isOn: configuration.isOn))
+        VisionToggleRow(
+            configuration: configuration, control: VisionCheckboxControl(isOn: configuration.isOn),
+            showsLabel: showsLabel)
     }
 }
 
@@ -208,9 +218,20 @@ extension ToggleStyle where Self == VisionSwitchToggleStyle {
     static var visionSwitch: VisionSwitchToggleStyle { VisionSwitchToggleStyle() }
 }
 
+extension ToggleStyle where Self == VisionSwitchToggleStyle {
+    /// `.visionSwitch` without the visible label, for a switch whose name sits beside it (the
+    /// `.labelsHidden()` call sites); VoiceOver still reads the label.
+    static var visionSwitchLabelless: VisionSwitchToggleStyle { VisionSwitchToggleStyle(showsLabel: false) }
+}
+
 extension ToggleStyle where Self == VisionCheckboxToggleStyle {
     /// Replaces `.toggleStyle(.checkbox)`.
     static var visionCheckbox: VisionCheckboxToggleStyle { VisionCheckboxToggleStyle() }
+}
+
+extension ToggleStyle where Self == VisionCheckboxToggleStyle {
+    /// `.visionCheckbox` without the visible label; the label stays the VoiceOver name.
+    static var visionCheckboxLabelless: VisionCheckboxToggleStyle { VisionCheckboxToggleStyle(showsLabel: false) }
 }
 
 extension ToggleStyle where Self == VisionRadioToggleStyle {

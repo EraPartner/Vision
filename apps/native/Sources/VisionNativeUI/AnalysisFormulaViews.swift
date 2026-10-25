@@ -55,7 +55,7 @@ struct AnalysisFormulaEditorView: View {
                 model.draft.addFormula()
                 active = index
                 focusedExpression = index
-            }
+            }.buttonStyle(.visionOutline)
             if model.draft.formulas.indices.contains(active) {
                 fieldInsertion
                 functionInsertion
@@ -71,6 +71,7 @@ struct AnalysisFormulaEditorView: View {
                     Text(t("previewFailed") + ": " + error).foregroundStyle(theme.destructive).textSelection(.enabled)
                     Spacer()
                     Button(t("retryPreview")) { model.retryPreview() }
+                        .buttonStyle(.visionOutline).controlSize(.small)
                 }
             }
             if let preview = model.preview { AnalysisWorkbenchReportView(output: preview, model: model, shell: shell) }
@@ -117,12 +118,13 @@ struct AnalysisFormulaEditorView: View {
             Button(t("startWithField") + " · " + model.fieldLabel(field.id, strings: shell.strings)) {
                 text(index, "expression").wrappedValue = "row." + field.id
                 focusedExpression = index
-            }
+            }.buttonStyle(.visionOutline).controlSize(.small)
         }
         DisclosureGroup(t("technicalDetails")) {
             AnalysisWorkbenchTextField(key: "id", value: text(index, "id"), shell: shell).padding(.top, 8)
         }
-        Button(t("remove")) { model.draft.formulas.remove(at: index) }
+        Button(t("remove"), role: .destructive) { model.draft.formulas.remove(at: index) }
+            .buttonStyle(.visionOutline).controlSize(.small)
     }
     private var fieldInsertion: some View {
         DisclosureGroup(t("insertField")) {
@@ -149,7 +151,7 @@ struct AnalysisFormulaEditorView: View {
                                             theme.secondaryLabel)
                                     }
                                 }.frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            }.buttonStyle(.visionGhost).controlSize(.small)
                         }
                     }
                 }.frame(maxHeight: 220)

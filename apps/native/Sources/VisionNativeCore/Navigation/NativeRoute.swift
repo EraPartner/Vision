@@ -2,7 +2,7 @@ import Foundation
 
 /// A route of the web app's router: a path and its query, as `pathname + search`.
 public struct NativeRoute: Equatable, Sendable {
-    public static let home = NativeRoute(path: "/", query: [])
+    public static let home = NativeRoute(.home)
     /// `shell:route-changed` messages above this size are refused.
     public static let maximumLength = 2048
     /// Chart Builder shares allow a 20,000-character payload plus the route and other query values.
@@ -15,6 +15,16 @@ public struct NativeRoute: Equatable, Sendable {
         self.path = path
         self.query = query
     }
+
+    /// A route to a page of the sidebar registry (`NavigationRegistry`), with an optional query.
+    /// Use this for every page the registry lists; `init(path:query:)` and `init?(_:)` stay the
+    /// parse and serialize edge for paths that arrive as text.
+    public init(_ destination: Destination, query: [URLQueryItem] = []) {
+        self.init(path: destination.rawValue, query: query)
+    }
+
+    /// The registry page this route's path names, or `nil` for any other path.
+    public var destination: Destination? { Destination(rawValue: path) }
 
     /// An app-relative route: one leading `/` (not `//`), no fragment, backslash or
     /// control character. Chart Builder alone admits its larger, bounded share URL.
@@ -111,7 +121,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case netWorth
     case portfolioTax
     case portfolioImport
-    case portfolioImportReview(batchId: String)
+    case portfolioImportReview(batchId: PortfolioImportBatchID)
     case analysis
     case analysisMonitors
     case researchHome
@@ -143,7 +153,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     /// `/accounts`, the accounts hub (phase 3f).
     case accounts
     /// `/accounts/:id`, one account's ledger; `0` for an id that is not a positive whole number.
-    case accountDetail(id: Int)
+    case accountDetail(id: AccountID)
     /// `/categories`, the category tree (phase 3f part B).
     case categories
     /// `/recipients`, the payees table (phase 3f part B).
@@ -179,7 +189,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .netWorth: return "/portfolio/net-worth"
         case .portfolioTax: return "/portfolio/tax"
         case .portfolioImport: return "/portfolio/import"
-        case .portfolioImportReview(let batchId): return "/portfolio/import/\(batchId)/review"
+        case .portfolioImportReview(let batchId): return "/portfolio/import/\(batchId.rawValue)/review"
         case .analysis: return "/analysis"
         case .analysisMonitors: return "/analysis/monitors"
         case .researchHome: return "/research"
@@ -220,7 +230,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         if components.count == 5, components[0].isEmpty, components[1] == "portfolio",
             components[2] == "import", components[4] == "review", !components[3].isEmpty
         {
-            return .portfolioImportReview(batchId: String(components[3]))
+            return .portfolioImportReview(batchId: PortfolioImportBatchID(String(components[3])))
         }
         if TransactionsRoutes.owesIsNative && path == TransactionsRoutes.owesPath { return .owes }
         if let id = AccountsRoutes.detailId(forPath: path) { return .accountDetail(id: id) }

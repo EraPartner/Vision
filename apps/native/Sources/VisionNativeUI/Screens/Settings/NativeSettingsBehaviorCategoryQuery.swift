@@ -6,7 +6,7 @@ enum NativeSettingsBehaviorCategoryQuery {
         // Active structural ancestors are assignable; hierarchyOnly is not a filter.
         categories.filter(\.isActive)
     }
-    static func label(_ id: Int?, categories: [OpenAPI.CategoryNode]) -> String? {
+    static func label(_ id: CategoryID?, categories: [OpenAPI.CategoryNode]) -> String? {
         guard let id, let category = active(categories).first(where: { $0.id == id }) else { return nil }
         return category.path.joined(separator: " / ")
     }
@@ -14,7 +14,7 @@ enum NativeSettingsBehaviorCategoryQuery {
         let query = search.lowercased()
         return active(categories).filter { category in
             query.isEmpty
-                || (category.path.joined(separator: " / ") + " " + String(category.id)).lowercased().contains(query)
+                || (category.path.joined(separator: " / ") + " " + String(category.id.rawValue)).lowercased().contains(query)
         }
     }
 }

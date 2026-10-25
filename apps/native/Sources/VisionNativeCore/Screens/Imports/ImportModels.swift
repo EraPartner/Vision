@@ -1,6 +1,16 @@
 import Foundation
 import UniformTypeIdentifiers
 
+extension StringIdentifier where Tag == ImportBatchIDTag {
+    /// The batch a numeric route or stream event names; the API carries BIGINT ids as text.
+    public init(numeric id: Int) {
+        self.init(String(id))
+    }
+
+    /// The batch id as a number, `nil` when it is not one.
+    public var numericValue: Int? { Int(rawValue) }
+}
+
 /// The routes of the Import & export page and the Review import page.
 public enum ImportRoutes {
     public static let path = "/import"
@@ -258,14 +268,14 @@ public struct CSVParserDraft: Equatable, Sendable {
 /// or other.
 public enum ImportSource: Hashable, Sendable {
     case adapter(String)
-    case saved(Int)
+    case saved(CustomParserConfigID)
     case custom
 
     /// The web select's value string.
     public var value: String {
         switch self {
         case .adapter(let key): return key
-        case .saved(let id): return "saved:\(id)"
+        case .saved(let id): return "saved:\(id.rawValue)"
         case .custom: return "custom"
         }
     }
@@ -430,15 +440,15 @@ public enum ImportBatchStatus {
         case outline
     }
 
-    public static func labelKey(_ status: String) -> String {
-        "importHistory.status.\(status)"
+    public static func labelKey(_ status: OpenAPI.ImportBatch.Status) -> String {
+        "importHistory.status.\(status.rawValue)"
     }
 
-    public static func tone(_ status: String) -> Tone {
+    public static func tone(_ status: OpenAPI.ImportBatch.Status) -> Tone {
         switch status {
-        case "pending", "aborted": return .outline
-        case "complete": return .primary
-        case "failed": return .destructive
+        case .pending, .aborted: return .outline
+        case .complete: return .primary
+        case .failed: return .destructive
         default: return .secondary
         }
     }
@@ -447,35 +457,25 @@ public enum ImportBatchStatus {
 extension OpenAPI.ImportBatch {
     /// The source file name, or `importHistory.batchFallback`.
     public func title(_ strings: any Localizing) -> String {
-        sourceFilename ?? strings.t("importHistory.batchFallback", ["id": id])
+        sourceFilename ?? strings.t("importHistory.batchFallback", ["id": id.rawValue])
     }
 
     /// The batch id as a number (BIGINT arrives as a string).
-    public var numericId: Int? { Int(id) }
+    public var numericId: Int? { id.numericValue }
 
     /// Resume review: only a parked batch.
-    public var canResumeReview: Bool { status == "awaiting_review" }
+    public var canResumeReview: Bool { status == .awaitingReview }
 
     /// Roll back: a completed batch with transactions left.
-    public var canRollBack: Bool { status == "complete" && transactionsRemaining > 0 }
+    public var canRollBack: Bool { status == .complete && transactionsRemaining > 0 }
 
     /// `formatDate(parseISO(started_at), "yyyy-MM-dd HH:mm")` in the local time zone.
     public func startedText(timeZone: TimeZone = .current) -> String {
-        guard let date = Self.parseTimestamp(startedAt) else { return startedAt }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: startedAt.date)
         return String(
             format: "%04ld-%02ld-%02ld %02ld:%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0, parts.hour ?? 0,
             parts.minute ?? 0)
-    }
-
-    static func parseTimestamp(_ text: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: text) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: text)
     }
 }

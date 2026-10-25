@@ -34,7 +34,304 @@ const METHODS = ["get", "put", "post", "delete", "patch", "head", "options"];
 /** The ADR-026 envelope and its error; the client decodes every response with them. */
 const ALWAYS_GENERATED = ["Envelope", "ErrorPayload"];
 
+/*
+ * Typed identifiers (WP-1). Every entity id gets its own Swift type, `<Entity>ID`
+ * (`IntIdentifier<Tag>` / `StringIdentifier<Tag>` in API/Types/Identifier.swift).
+ * An `id` property belongs to the entity named after its schema; an `xId` / `x_id`
+ * property or parameter belongs to the entity its stem names (the last words of a
+ * stem are tried too, so `fromAccountId` and `ancestor_category_id` need no entry).
+ * The tables below carry only the irregular names. An id-like integer or string
+ * field that no rule maps, and that UNTYPED_IDS does not list with a reason, fails
+ * generation.
+ */
+
+/** Schemas whose `id` identifies an entity other than the schema's own name. */
+export const SCHEMA_ID_ENTITY: Record<string, string> = {
+  AnalysisColumnRef: "AnalysisColumn",
+  BelgianPortfolioTaxInvestmentCosts: "Investment",
+  BelgianPortfolioTaxSummary: "Investment",
+  BelgianTaxInputPartnerActivity: "TaxPartnerActivity",
+  BelgianTaxInputRelationshipEvent: "TaxRelationshipEvent",
+  CategoryNode: "Category",
+  PortfolioSummaryItem: "Investment",
+  ResearchDossierSummary: "ResearchDossier",
+  SplitOwedDetail: "Split",
+  TransactionTagRef: "Tag",
+};
+
+/** Entities a `xId` stem names when the stem is not itself an entity name. */
+export const STEM_ENTITY: Record<string, string> = {
+  Activity: "TaxPartnerActivity",
+  AnalysisRun: "AnalysisRun",
+  Conversation: "AiConversation",
+  Document: "ResearchDocument",
+  Dossier: "ResearchDossier",
+  Monitor: "AnalysisMonitor",
+  Observation: "AnalysisMonitorObservation",
+  Pattern: "RecipientPattern",
+  RecipientGroup: "RecipientGroup",
+  SavedAnalysis: "SavedAnalysis",
+  Txn: "PortfolioTransaction",
+};
+
+/**
+ * Per-field entity overrides, keyed `Schema.field`, `Schema.Nested.field`,
+ * `Operation.field` or `*.field` (nested struct names as generated). Checked
+ * before the stem rules.
+ */
+export const FIELD_ENTITY: Record<string, string> = {
+  "*.transfer_peer_id": "Transaction",
+  "AccountTotals.AccountsItem.id": "Account",
+  "AnalysisVisualPlan.OrderByItem.id": "AnalysisColumn",
+  "CategoryNode.parentId": "Category",
+  "CategoryNode.pathIds": "Category",
+  "CategoryNodeCreate.parentId": "Category",
+  "CategoryNodeUpdate.parentId": "Category",
+  "CategoryPivotData.CategoryPivotValueItem.categoryPathIds": "Category",
+  "CreateCategory.ResponseData.id": "Category",
+  "CreateRecipient.ResponseData.id": "Recipient",
+  "CreateRecipientPattern.ResponseData.id": "RecipientPattern",
+  "CreateTag.ResponseData.id": "Tag",
+  "EvaluateAnalysisExtension.Body.outcomeId": "AnalysisColumn",
+  "ExecuteAnalysis.SqlVariant.ColumnsItem.id": "AnalysisColumn",
+  "EvaluateAnalysisExtension.Body.variableId": "AnalysisColumn",
+  "GetPlannedMatchSuggestions.ResponseData.ItemsItem.CandidatesItem.id":
+    "Transaction",
+  "GetPlannedMatchSuggestions.ResponseData.ItemsItem.Planned.id":
+    "PlannedTransaction",
+  "MarkTransfer.Body.aId": "Transaction",
+  "MarkTransfer.Body.bId": "Transaction",
+  "MergeAccounts.Body.source_ids": "Account",
+  "MergeCategoryNode.Body.targetId": "Category",
+  "MergeRecipient.Body.alias_ids": "Recipient",
+  // The spec serializes import batch ids as BIGINT strings on the batch itself (and in
+  // paths) but as numbers wherever a batch is referenced from a portfolio import payload.
+  // They are two wire shapes, so two types: `ImportBatchID` / `PortfolioImportBatchID`
+  // (strings) and the `...NumericID` ones (numbers).
+  "PortfolioImportPreviewData.batch_id": "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationCommitResult.BatchesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.ActionsItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.ActionsItem.duplicateOfRowId":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.ActionsItem.rowId": "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.BatchPoliciesItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.RowChoicesItem.batchId":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationPlan.RowChoicesItem.rowId":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationPlan.batchIds": "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.BatchPoliciesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.RowChoicesItem.batch_id":
+    "PortfolioImportBatchNumeric",
+  "PortfolioImportReconciliationRequest.RowChoicesItem.row_id":
+    "PortfolioImportRow",
+  "PortfolioImportReconciliationRequest.batch_ids":
+    "PortfolioImportBatchNumeric",
+  "PortfolioSummaryData.ArchivedInKindIncomeItem.id": "Investment",
+  "PortfolioTransaction.import_batch_id": "PortfolioImportBatch",
+  "ReconcileAccount.ResponseData.Transaction.id": "Transaction",
+  "ResearchDossierExport.DossiersItem.id": "ResearchDossier",
+};
+
+/**
+ * Path parameters whose entity is not the singular of the segment before them
+ * (`/api/accounts/{id}` needs no entry). The longest matching path prefix wins.
+ */
+export const PATH_ID_ENTITY: { prefix: string; param: string; entity: string }[] =
+  [
+    { prefix: "/api/ai-research/documents/{id}", param: "id", entity: "ResearchDocument" },
+    { prefix: "/api/ai-research/investigations/{id}", param: "id", entity: "AiInvestigation" },
+    { prefix: "/api/ai/conversations/{id}", param: "id", entity: "AiConversation" },
+    { prefix: "/api/analysis/monitors/notifications/{id}", param: "id", entity: "AnalysisMonitorNotification" },
+    { prefix: "/api/analysis/monitors/{id}", param: "id", entity: "AnalysisMonitor" },
+    { prefix: "/api/analysis/saved/{id}", param: "id", entity: "SavedAnalysis" },
+    { prefix: "/api/categories/tree/{id}", param: "id", entity: "Category" },
+    { prefix: "/api/import/batches/{id}", param: "id", entity: "ImportBatch" },
+    { prefix: "/api/import/batches/{id}/rows/{rowId}", param: "rowId", entity: "ImportRow" },
+    { prefix: "/api/import/parsers/{id}", param: "id", entity: "CustomParserConfig" },
+    { prefix: "/api/portfolio/import/batches/{id}", param: "id", entity: "PortfolioImportBatch" },
+    { prefix: "/api/portfolio/import/batches/{id}/rows/{rowId}", param: "rowId", entity: "PortfolioImportRow" },
+    { prefix: "/api/portfolio/import/parsers/{id}", param: "id", entity: "PortfolioParserConfig" },
+    { prefix: "/api/recipients/{id}/bank-accounts/{accountId}", param: "accountId", entity: "RecipientBankAccount" },
+    { prefix: "/api/research/mappings/{id}", param: "id", entity: "InstrumentProviderMapping" },
+    { prefix: "/api/splits/owed/{id}", param: "id", entity: "Recipient" },
+    { prefix: "/api/watchlist/{id}", param: "id", entity: "WatchlistItem" },
+  ];
+
+/**
+ * Id-like integer/string fields that deliberately stay plain, each with its
+ * reason. Keys as in FIELD_ENTITY. A stale entry (matching nothing) fails the
+ * generator test.
+ */
+export const UNTYPED_IDS: Record<string, string> = {
+  "*.account_ids":
+    "Comma-separated query string of account ids (wire format), not an array.",
+  "*.category_ids":
+    "Comma-separated query string of category ids (wire format), not an array.",
+  "*.investment_ids":
+    "Comma-separated query string of investment ids (wire format), not an array.",
+  "*.datasetId": "Analysis dataset catalog key (a fixed code), not a stored entity.",
+  "*.datasetIds": "Analysis dataset catalog keys (fixed codes), not stored entities.",
+  "*.fieldId": "Analysis dataset field catalog key (a fixed code), not a stored entity.",
+  "*.historicalId":
+    "Snapshot of a reference to an entity that may no longer exist; the kind varies per row.",
+  "*.historicalTargetId":
+    "Snapshot of a reference to an entity that may no longer exist; the kind varies per row.",
+  "*.issuerId": "Exposure issuer grouping key derived from instrument data, not a stored entity.",
+  "*.methodId": "Cash forecast method code from a fixed catalog, not a stored entity.",
+  "*.price_provider_id":
+    "The market data provider's own symbol or code for the instrument, not a Vision entity.",
+  "*.requestId":
+    "Client-generated correlation token for an in-flight request, not a stored entity.",
+  "*.seriesId": "Macro data series code of the research provider, not a stored entity.",
+  "*.series_id": "Macro data series code of the research provider, not a stored entity.",
+  "BelgianTaxDashboard.SuggestionsItem.id":
+    "Static tax suggestion catalog key (pairs with i18n keys), not a stored entity.",
+  "PortfolioExposureDimension.RowsItem.id":
+    "Exposure bucket key (a dimension value such as a sector), not a stored entity.",
+};
+
+/**
+ * Request-body fields that must be able to send an explicit `null` (clear the
+ * stored value), keyed by the body struct (`Schema` or `Operation.Body`). Only
+ * fields the web frontend demonstrably sends as `null` (apps/frontend callers) are
+ * listed; every other nullable PATCH field stays `T?`.
+ */
+export const NULLABLE_PATCH_FIELDS: Record<string, string[]> = {
+  // accountFormMapping.ts: an edit sends `display_name: null` / `institution: null` to clear.
+  AccountUpdate: ["display_name", "institution"],
+  // TransactionsPage.tsx: "Explicit null clears the category / recipient on the backend".
+  TransactionUpdate: ["category_id", "recipient_id"],
+  // CategoryNodeDialog.tsx sends `parentId` (null = root) and `description || null`.
+  CategoryNodeUpdate: ["parentId", "description"],
+  // useImportReviewData.tsx persists `default_category_id: null` to clear the default.
+  RecipientUpdate: ["default_category_id"],
+  // plannedPaymentMapper.ts: null clears the end date / max count.
+  "UpdatePlannedTransaction.Body": ["recurrence_end_date", "max_occurrences"],
+  // CustomChartBuilderModal.tsx sends `dateRangeStart || null` / `dateRangeEnd || null`.
+  "UpdateSavedChart.Body": ["dateRangeStart", "dateRangeEnd"],
+  // RecipientPatternsDialog.tsx: "null clears an existing note on PATCH".
+  "UpdateRecipientPattern.Body": ["notes"],
+  // EditPortfolioTxnDialog.tsx: cleared note / FX rate / account / end date are explicit null.
+  "UpdatePortfolioTransaction.Body": [
+    "fx_rate_to_eur",
+    "account_id",
+    "note",
+    "recurrence_end_date",
+  ],
+};
+
+/**
+ * String fields and parameters that the spec declares as a date or date-time but that
+ * deliberately stay plain `String`, each with its reason (WP-2). Keys as in FIELD_ENTITY.
+ * A stale entry (matching nothing) fails the generator test. Empty today: every date and
+ * date-time field of the generated surface was checked against its backend producer.
+ */
+export const UNTYPED_DATES: Record<string, string> = {};
+
+/**
+ * oneOf / anyOf schemas that stay `JSONValue` because no typed form exists, each with its
+ * reason. Keyed by the component schema name, or `Context.hint` for an inline union (the
+ * enclosing generated structs, then the property or `Body`). A stale entry fails the
+ * generator test; a union that is neither typeable nor listed fails generation.
+ */
+export const UNTYPED_UNIONS: Record<string, string> = {
+  "PortfolioImportRowsInvestmentOverride.Body":
+    "oneOf only states that `investment_id` and `create_new` are mutually exclusive on one plain object (constraint branches have no shape), and the sole caller builds the body by hand (bodyOverride).",
+};
+
+type IdKind = "int" | "string";
+
+/** The override tables the generator reads; tests pass their own around a toy spec. */
+export interface GeneratorTables {
+  schemaIdEntity: Record<string, string>;
+  stemEntity: Record<string, string>;
+  fieldEntity: Record<string, string>;
+  pathIdEntity: { prefix: string; param: string; entity: string }[];
+  untypedIds: Record<string, string>;
+  nullablePatchFields: Record<string, string[]>;
+  untypedDates: Record<string, string>;
+  untypedUnions: Record<string, string>;
+}
+
+/**
+ * Schemas whose currency fields carry market-data provider text rather than a
+ * stored ISO 4217 code. Providers return values such as "GBp" (pence), and the
+ * backend passes them through unchanged, so these stay `String`.
+ */
+export const PROVIDER_CURRENCY_SCHEMAS: ReadonlySet<string> = new Set([
+  "InstrumentProviderMapping",
+  "MarketQuoteItem",
+  "MarketSearchResult",
+  "QuotesItem",
+  "ResearchChartData",
+  "ResearchFundamentals",
+  "ResearchMappingProposal",
+]);
+
+export const DEFAULT_TABLES: GeneratorTables = {
+  schemaIdEntity: SCHEMA_ID_ENTITY,
+  stemEntity: STEM_ENTITY,
+  fieldEntity: FIELD_ENTITY,
+  pathIdEntity: PATH_ID_ENTITY,
+  untypedIds: UNTYPED_IDS,
+  nullablePatchFields: NULLABLE_PATCH_FIELDS,
+  untypedDates: UNTYPED_DATES,
+  untypedUnions: UNTYPED_UNIONS,
+};
+
+export interface GenerationStats {
+  /** Entity id types emitted. */
+  identifierTypes: number;
+  /** Model fields and operation parameters typed with an identifier. */
+  identifierFields: number;
+  enumsNamed: number;
+  enumsInline: number;
+  currencyFields: number;
+  /** PROVIDER_CURRENCY_SCHEMAS entries that matched a currency field. */
+  providerCurrencySchemasHit: string[];
+  nullableFields: number;
+  /** Keys of UNTYPED_IDS that matched a field. */
+  untypedIdsHit: string[];
+  /** Keys of NULLABLE_PATCH_FIELDS entries that matched a field (`Struct.field`). */
+  nullableFieldsHit: string[];
+  /** String fields and parameters typed `CalendarDay`. */
+  dateFields: number;
+  /** String fields and parameters typed `Instant`. */
+  dateTimeFields: number;
+  /** Keys of UNTYPED_DATES that matched a field. */
+  untypedDatesHit: string[];
+  /** oneOf / anyOf schemas generated as Swift enums with associated values. */
+  unionsTyped: number;
+  /** Keys of UNTYPED_UNIONS that matched a union (kept `JSONValue`). */
+  untypedUnionsHit: string[];
+}
+
 type Schema = { [key: string]: unknown };
+
+/** One branch of a oneOf / anyOf, resolved. */
+interface UnionBranch {
+  /** The component schema name when the branch is a `$ref`. */
+  ref: string | undefined;
+  schema: Schema;
+  properties: Schema;
+  required: string[];
+  isObject: boolean;
+}
+
+type UnionPlan =
+  | { kind: "scalar"; branches: (UnionBranch & { json: string })[] }
+  | {
+      kind: "tagged";
+      wire: string;
+      tagType: "string" | "bool";
+      branches: (UnionBranch & { values: string[] })[];
+    }
+  | { kind: "keyed"; branches: (UnionBranch & { key: string })[] };
 
 interface Spec {
   paths: Record<string, Schema>;
@@ -57,6 +354,10 @@ interface Operation {
 export interface GeneratedAPI {
   models: string;
   operations: string;
+  identifiers: string;
+  /** The component schemas emitted as Swift models (struct, enum or typealias), sorted. */
+  schemas: string[];
+  stats: GenerationStats;
 }
 
 function isObject(value: unknown): value is Schema {
@@ -99,14 +400,382 @@ function indentBlock(block: string, indent: string): string {
     .join("\n");
 }
 
+/** `account_ids` -> stem `account`, plural; `id` -> empty stem; not id-like -> undefined. */
+export function identifierStem(
+  wire: string,
+): { stem: string; plural: boolean } | undefined {
+  if (wire === "id") return { stem: "", plural: false };
+  const match = /^(.+?)(_ids?|Ids?)$/.exec(wire);
+  if (!match) return undefined;
+  return { stem: match[1] ?? "", plural: (match[2] ?? "").endsWith("s") };
+}
+
+/** `batches` -> `batch`, `categories` -> `category`, `tags` -> `tag`. */
+function singular(word: string): string {
+  if (/ies$/.test(word)) return `${word.slice(0, -3)}y`;
+  if (/(ch|sh|x|ss)es$/.test(word)) return word.slice(0, -2);
+  if (/s$/.test(word) && !/ss$/.test(word)) return word.slice(0, -1);
+  return word;
+}
+
+/** Currency fields: names ending in currency/currencies, or the `^[A-Z]{3}$` pattern. */
+export function isCurrencyField(wire: string, schema: Schema): boolean {
+  const target =
+    schema.type === "array" && isObject(schema.items) ? schema.items : schema;
+  if (target.type !== "string" || Array.isArray(target.enum)) return false;
+  if (target.pattern === "^[A-Z]{3}$") return true;
+  return /(?:^|[_-])(?:currency|currencies)$|(?:Currency|Currencies)$/.test(
+    wire,
+  );
+}
+
+/** The spec's two spellings of a calendar day: the plain shape and the leap-aware one. */
+const DAY_PATTERN = "^\\d{4}-\\d{2}-\\d{2}$";
+const LEAP_DAY_PATTERN_PREFIX = "^(?:(?:\\d\\d[2468][048]";
+
+/**
+ * `date` for `format: date` and the `YYYY-MM-DD` patterns (a calendar day, no zone),
+ * `date-time` for `format: date-time` (an instant), undefined for anything else.
+ */
+export function dateKind(schema: Schema): "date" | "date-time" | undefined {
+  if (schema.type !== "string" || Array.isArray(schema.enum)) return undefined;
+  if (schema.format === "date") return "date";
+  if (schema.format === "date-time") return "date-time";
+  const pattern = schema.pattern;
+  if (
+    typeof pattern === "string" &&
+    (pattern === DAY_PATTERN || pattern.startsWith(LEAP_DAY_PATTERN_PREFIX))
+  )
+    return "date";
+  return undefined;
+}
+
+const RESERVED_TYPE_NAMES = new Set([
+  "Type",
+  "Protocol",
+  "Self",
+  "Any",
+  "String",
+  "Int",
+  "Bool",
+  "Decimal",
+  "Data",
+  "Date",
+  "URL",
+  "Array",
+  "Optional",
+  "Dictionary",
+  "JSONValue",
+  "CurrencyCode",
+  "CalendarDay",
+  "Instant",
+  "Money",
+  "Nullable",
+  "OpenAPI",
+]);
+
+const RESERVED_CASES = new Set([
+  "unknown",
+  "rawValue",
+  "allCases",
+  "allKnownCases",
+  "hashValue",
+  "init",
+]);
+
+/** Swift case names for enum values, unique and clear of the generated members. */
+export function enumCases(values: string[]): { name: string; value: string }[] {
+  const used = new Set<string>(RESERVED_CASES);
+  return values.map((value, index) => {
+    let name: string;
+    try {
+      name = camelCase(value);
+    } catch {
+      name = `value${index}`;
+    }
+    if (RESERVED_CASES.has(name)) name = `${name}Value`;
+    while (used.has(name)) name = `${name}Value`;
+    used.add(name);
+    return { name: swiftIdentifier(name), value };
+  });
+}
+
+/** The Swift for an enum whose unknown raw values decode to `.unknown(raw)`. */
+function enumDeclaration(
+  name: string,
+  values: string[],
+  description: string | undefined,
+  indent = "",
+): string {
+  const cases = enumCases(values);
+  const lines: string[] = [...docLines(description, "")];
+  lines.push(
+    "/// A value this client does not know decodes to `.unknown` and encodes back unchanged.",
+    `public enum ${name}: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {`,
+  );
+  for (const item of cases) lines.push(`    case ${item.name}`);
+  lines.push(
+    "    case unknown(String)",
+    "",
+    `    public static var allKnownCases: [${name}] {`,
+    `        [${cases.map((item) => `.${item.name}`).join(", ")}]`,
+    "    }",
+    "",
+    `    public static var allCases: [${name}] { allKnownCases }`,
+    "",
+    "    public init(rawValue: String) {",
+    "        switch rawValue {",
+  );
+  for (const item of cases)
+    lines.push(
+      `        case ${swiftString(item.value)}: self = .${item.name}`,
+    );
+  lines.push(
+    "        default: self = .unknown(rawValue)",
+    "        }",
+    "    }",
+    "",
+    "    public var rawValue: String {",
+    "        switch self {",
+  );
+  for (const item of cases)
+    lines.push(`        case .${item.name}: return ${swiftString(item.value)}`);
+  lines.push(
+    "        case .unknown(let value): return value",
+    "        }",
+    "    }",
+    "",
+    "    public init(from decoder: any Decoder) throws {",
+    "        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))",
+    "    }",
+    "",
+    "    public func encode(to encoder: any Encoder) throws {",
+    "        var container = encoder.singleValueContainer()",
+    "        try container.encode(rawValue)",
+    "    }",
+    "}",
+  );
+  return indent ? indentBlock(lines.join("\n"), indent) : lines.join("\n");
+}
+
+interface TypeOptions {
+  /** Keep string enums as `String` (request parameters accept only what the server lists). */
+  plainStrings?: boolean;
+}
+
 class Generator {
   private readonly required = new Set<string>(ALWAYS_GENERATED);
   private readonly pending = [...ALWAYS_GENERATED];
 
   private readonly spec: Spec;
+  private readonly tables: GeneratorTables;
 
-  constructor(spec: Spec) {
+  /** The struct names being generated, outermost first (the context of a field). */
+  private readonly context: string[] = [];
+  /** Entity -> wire kinds seen: from every schema `id` up front, then from each use. */
+  private readonly entities = new Map<string, Set<IdKind>>();
+  private readonly schemaEntities = new Set<string>();
+  private readonly nestedNames = new WeakMap<string[], Set<string>>();
+  readonly unmappedIds = new Set<string>();
+  readonly untypedHits = new Set<string>();
+  readonly nullableHits = new Set<string>();
+  readonly untypedDateHits = new Set<string>();
+  readonly untypedUnionHits = new Set<string>();
+  /** Unions that are neither typeable nor listed in UNTYPED_UNIONS. */
+  readonly unmappedUnions = new Set<string>();
+  /** Allow-list keys of the field (or schema) whose type is being built, for date fields. */
+  private fieldKeys: string[] = [];
+  readonly stats = {
+    dateFields: 0,
+    dateTimeFields: 0,
+    unionsTyped: 0,
+    identifierFields: 0,
+    enumsNamed: 0,
+    enumsInline: 0,
+    currencyFields: 0,
+    providerCurrencySchemasHit: new Set<string>(),
+    nullableFields: 0,
+  };
+
+  constructor(spec: Spec, tables: GeneratorTables) {
     this.spec = spec;
+    this.tables = tables;
+    for (const [name, raw] of Object.entries(spec.components.schemas)) {
+      if (!isObject(raw)) continue;
+      const properties = isObject(raw.properties)
+        ? raw.properties
+        : Array.isArray(raw.allOf)
+          ? this.mergeAllOf(raw.allOf).properties
+          : undefined;
+      const id = properties && isObject(properties.id) ? properties.id : undefined;
+      const shape = id ? this.idShape(id) : undefined;
+      if (!shape || shape.array) continue;
+      const entity = this.tables.schemaIdEntity[name] ?? name;
+      this.schemaEntities.add(name);
+      this.register(entity, shape.kind);
+    }
+  }
+
+  /** Where each entity was first seen with each wire kind, for conflict messages. */
+  private readonly firstSeen = new Map<string, string>();
+
+  private register(entity: string, kind: IdKind, where = "schema id"): void {
+    const kinds = this.entities.get(entity) ?? new Set<IdKind>();
+    kinds.add(kind);
+    this.entities.set(entity, kinds);
+    const key = `${entity}:${kind}`;
+    if (!this.firstSeen.has(key)) this.firstSeen.set(key, where);
+  }
+
+  /** `int` / `string` and whether it is an array, for an id-shaped schema. */
+  private idShape(schema: Schema): { kind: IdKind; array: boolean } | undefined {
+    let current: Schema = schema;
+    let array = false;
+    for (let depth = 0; depth < 4; depth++) {
+      const ref = stringField(current, "$ref");
+      if (ref) {
+        current = this.schema(refName(ref, "schemas"));
+        continue;
+      }
+      if (!array && current.type === "array" && isObject(current.items)) {
+        array = true;
+        current = current.items;
+        continue;
+      }
+      break;
+    }
+    if (current.type === "integer") return { kind: "int", array };
+    if (current.type === "string" && !Array.isArray(current.enum))
+      return { kind: "string", array };
+    return undefined;
+  }
+
+  /** The entity a `xId` stem names, trying shorter word suffixes of the stem. */
+  private entityForStem(stem: string): string | undefined {
+    const words = pascalCase(stem).match(/[A-Z][a-z0-9]*/g) ?? [];
+    for (let index = 0; index < words.length; index++) {
+      const candidate = words.slice(index).join("");
+      const mapped =
+        this.tables.stemEntity[candidate] ??
+        (this.entities.has(candidate) ? candidate : undefined);
+      if (mapped) return mapped;
+    }
+    return undefined;
+  }
+
+  /**
+   * The identifier type of an id-like integer/string field or parameter, or
+   * undefined when it is not id-like, is deliberately untyped, or is unmapped
+   * (recorded in `unmappedIds`). `explicit` is a path-derived entity.
+   */
+  private identifierType(
+    wire: string,
+    schema: Schema,
+    scope: string[],
+    explicit?: string,
+    inUrl = false,
+  ): string | undefined {
+    const stem = identifierStem(wire);
+    if (!stem) return undefined;
+    const shape = this.idShape(schema);
+    if (!shape) return undefined;
+    const keys = [`${scope.join(".")}.${wire}`, `${scope[0]}.${wire}`, `*.${wire}`];
+    let entity = explicit ?? keys.map((key) => this.tables.fieldEntity[key]).find(Boolean);
+    if (!entity) {
+      const untyped = keys.find((key) => this.tables.untypedIds[key] !== undefined);
+      if (untyped) {
+        this.untypedHits.add(untyped);
+        return undefined;
+      }
+      // A plural name must be an array and a singular one a scalar; anything else
+      // (a comma-separated string of ids) needs an explicit decision.
+      if (stem.plural === shape.array) {
+        if (stem.stem === "") {
+          const root = scope[0] ?? "";
+          if (scope.length === 1 && this.schemaEntities.has(root))
+            entity = this.tables.schemaIdEntity[root] ?? root;
+        } else {
+          entity = this.entityForStem(stem.stem);
+        }
+      }
+    }
+    if (!entity) {
+      this.unmappedIds.add(keys[0] ?? wire);
+      return undefined;
+    }
+    // A URL carries the id as text, so a parameter the spec types differently from the
+    // entity's own schema id (a path `integer` for an `Attachment` string id) follows the entity.
+    if (!(inUrl && this.entities.has(entity)))
+      this.register(entity, shape.kind, keys[0]);
+    this.stats.identifierFields++;
+    const type = `${entity}ID`;
+    return shape.array ? `[${type}]` : type;
+  }
+
+  /** The entity of a path parameter: a table entry, else the singular of the segment before it. */
+  private pathEntity(operation: Operation, name: string): string | undefined {
+    const template = operation.path;
+    const marker = `{${name}}`;
+    const at = template.indexOf(marker);
+    if (at < 0) return undefined;
+    const upto = template.slice(0, at + marker.length);
+    const entry = this.tables.pathIdEntity.filter(
+      (item) => item.param === name && upto.startsWith(item.prefix),
+    ).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+    if (entry) return entry.entity;
+    if (name !== "id") return undefined;
+    const segment = upto
+      .slice(0, at)
+      .split("/")
+      .filter(Boolean)
+      .pop();
+    if (!segment || segment.startsWith("{")) return undefined;
+    const candidate = pascalCase(singular(segment));
+    return this.entities.has(candidate) ? candidate : undefined;
+  }
+
+  /** Entities and their wire kind, for the identifier file. */
+  identifierEntities(): [string, IdKind][] {
+    const result: [string, IdKind][] = [];
+    for (const [entity, kinds] of [...this.entities].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      if (kinds.size > 1) {
+        throw new Error(
+          `${entity} is both an integer (${this.firstSeen.get(`${entity}:int`)}) and a string (${this.firstSeen.get(`${entity}:string`)}) id on the wire; give one a distinct entity in FIELD_ENTITY / SCHEMA_ID_ENTITY.`,
+        );
+      }
+      if (this.spec.components.schemas[`${entity}ID`] !== undefined) {
+        throw new Error(`${entity}ID collides with a schema name.`);
+      }
+      result.push([entity, [...kinds][0] ?? "int"]);
+    }
+    return result;
+  }
+
+  /** A nested type name not yet used in this scope (collisions get a numeric suffix). */
+  private nestedName(
+    nested: string[],
+    base: string,
+    kind: "struct" | "enum" = "struct",
+  ): string {
+    const used = this.nestedNames.get(nested) ?? new Set<string>();
+    this.nestedNames.set(nested, used);
+    // `Type` and `Protocol` would read as metatypes, and a nested type named like a
+    // Foundation or generated type would shadow it inside the struct.
+    // Nested structs keep their historical names (`Data` shadows Foundation's inside the
+    // envelope structs that already declared it); new enums avoid shadowing at all.
+    const reserved =
+      kind === "enum"
+        ? RESERVED_TYPE_NAMES.has(base)
+        : ["Type", "Protocol", "Self"].includes(base);
+    const first = reserved
+      ? `${this.context[this.context.length - 1] ?? ""}${base}`
+      : base;
+    let name = first;
+    for (let index = 2; used.has(name); index++) name = `${first}${index}`;
+    used.add(name);
+    return name;
   }
 
   schema(name: string): Schema {
@@ -123,7 +792,12 @@ class Generator {
   }
 
   /** The Swift type of a schema; inline objects become nested structs in `nested`. */
-  typeFor(schema: unknown, hint: string, nested: string[]): string {
+  typeFor(
+    schema: unknown,
+    hint: string,
+    nested: string[],
+    options: TypeOptions = {},
+  ): string {
     if (!isObject(schema) || Object.keys(schema).length === 0)
       return "JSONValue";
     const ref = stringField(schema, "$ref");
@@ -133,24 +807,36 @@ class Generator {
       return `OpenAPI.${name}`;
     }
     if (schema.oneOf !== undefined || schema.anyOf !== undefined)
-      return "JSONValue";
+      return this.unionType(schema, hint, nested);
     if (Array.isArray(schema.allOf)) {
       // `allOf: [$ref]` with `nullable: true` is OpenAPI 3.0's nullable reference: the
       // referenced type itself (an enum would otherwise become an empty struct).
       if (schema.allOf.length === 1 && isObject(schema.allOf[0])) {
         const only = stringField(schema.allOf[0], "$ref");
-        if (only) return this.typeFor(schema.allOf[0], hint, nested);
+        if (only) return this.typeFor(schema.allOf[0], hint, nested, options);
       }
       const merged = this.mergeAllOf(schema.allOf);
-      const name = pascalCase(hint);
+      const name = this.nestedName(nested, pascalCase(hint));
       nested.push(
         this.struct(name, merged.properties, merged.required, undefined),
       );
       return name;
     }
     switch (schema.type) {
-      case "string":
-        return "String";
+      case "string": {
+        const kind = dateKind(schema);
+        if (kind) return this.dateType(kind);
+        const values = Array.isArray(schema.enum)
+          ? schema.enum.filter((value) => typeof value === "string")
+          : [];
+        if (options.plainStrings || values.length === 0) return "String";
+        const name = this.nestedName(nested, pascalCase(hint), "enum");
+        this.stats.enumsInline++;
+        nested.push(
+          enumDeclaration(name, values.map(String), stringField(schema, "description")),
+        );
+        return name;
+      }
       case "integer":
         return "Int";
       case "number":
@@ -158,14 +844,22 @@ class Generator {
         return "Decimal";
       case "boolean":
         return "Bool";
-      case "array":
-        return `[${this.typeFor(schema.items, `${hint}Item`, nested)}]`;
+      case "array": {
+        const item = this.typeFor(schema.items, `${hint}Item`, nested, options);
+        // A null element of a union list stays representable (`[Value?]`).
+        const nullableUnion =
+          isObject(schema.items) &&
+          schema.items.nullable === true &&
+          (schema.items.oneOf !== undefined || schema.items.anyOf !== undefined) &&
+          item !== "JSONValue";
+        return `[${item}${nullableUnion ? "?" : ""}]`;
+      }
       default: {
         const properties = isObject(schema.properties)
           ? schema.properties
           : undefined;
         if (properties && Object.keys(properties).length > 0) {
-          const name = pascalCase(hint);
+          const name = this.nestedName(nested, pascalCase(hint));
           const required = Array.isArray(schema.required)
             ? schema.required.map(String)
             : [];
@@ -177,12 +871,385 @@ class Generator {
             schema.additionalProperties,
             `${hint}Value`,
             nested,
+            options,
           );
           return `[String: ${value}]`;
         }
         return "JSONValue";
       }
     }
+  }
+
+  /** `CalendarDay` / `Instant`, or `String` when the field is listed in UNTYPED_DATES. */
+  private dateType(kind: "date" | "date-time"): string {
+    const listed = this.fieldKeys.find(
+      (key) => this.tables.untypedDates[key] !== undefined,
+    );
+    if (listed) {
+      this.untypedDateHits.add(listed);
+      return "String";
+    }
+    if (kind === "date") {
+      this.stats.dateFields++;
+      return "CalendarDay";
+    }
+    this.stats.dateTimeFields++;
+    return "Instant";
+  }
+
+  /** Runs `body` with the allow-list keys of the field whose type it builds. */
+  private withFieldKeys<T>(keys: string[], body: () => T): T {
+    const saved = this.fieldKeys;
+    this.fieldKeys = keys;
+    try {
+      return body();
+    } finally {
+      this.fieldKeys = saved;
+    }
+  }
+
+  /** The Swift type of a oneOf / anyOf schema: a nested enum, or `JSONValue` when listed. */
+  private unionType(schema: Schema, hint: string, nested: string[]): string {
+    const key = [...this.context, hint].join(".");
+    if (this.tables.untypedUnions[key] !== undefined) {
+      this.untypedUnionHits.add(key);
+      return "JSONValue";
+    }
+    const plan = this.unionPlan(schema);
+    if (!plan) {
+      this.unmappedUnions.add(key);
+      return "JSONValue";
+    }
+    const name = this.nestedName(nested, pascalCase(hint), "enum");
+    nested.push(this.unionDeclaration(name, plan, stringField(schema, "description")));
+    return name;
+  }
+
+  /**
+   * How a oneOf / anyOf is told apart on the wire, or undefined when no typed form exists:
+   *  - scalar: every branch is a different JSON type (`string | number`);
+   *  - tagged: every branch is an object with a required single-value enum property
+   *    (the discriminator) and the value sets are disjoint;
+   *  - keyed: every branch is an object with a required property no other branch declares.
+   */
+  private unionPlan(schema: Schema): UnionPlan | undefined {
+    const raw = Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : Array.isArray(schema.anyOf)
+        ? schema.anyOf
+        : [];
+    if (raw.length < 2) return undefined;
+    const branches: UnionBranch[] = [];
+    for (const item of raw) {
+      if (!isObject(item)) return undefined;
+      const ref = stringField(item, "$ref");
+      const target = ref ? this.schema(refName(ref, "schemas")) : item;
+      const parts = Array.isArray(target.allOf)
+        ? this.mergeAllOf(target.allOf)
+        : {
+            properties: isObject(target.properties) ? target.properties : {},
+            required: Array.isArray(target.required)
+              ? target.required.map(String)
+              : [],
+          };
+      branches.push({
+        ref: ref ? refName(ref, "schemas") : undefined,
+        schema: target,
+        properties: parts.properties,
+        required: parts.required,
+        isObject:
+          Object.keys(parts.properties).length > 0 &&
+          (target.type === "object" ||
+            target.type === undefined ||
+            Array.isArray(target.allOf)),
+      });
+    }
+    if (branches.every((branch) => !branch.isObject)) {
+      const kinds = branches.map((branch) =>
+        typeof branch.schema.type === "string" &&
+        ["string", "number", "integer", "boolean", "array"].includes(branch.schema.type)
+          ? branch.schema.type
+          : undefined,
+      );
+      if (kinds.some((kind) => kind === undefined)) return undefined;
+      const distinct = new Set(kinds);
+      if (
+        distinct.size !== kinds.length ||
+        (distinct.has("number") && distinct.has("integer"))
+      )
+        return undefined;
+      return {
+        kind: "scalar",
+        branches: branches.map((branch, index) => ({
+          ...branch,
+          json: String(kinds[index]),
+        })),
+      };
+    }
+    if (!branches.every((branch) => branch.isObject)) return undefined;
+
+    const candidates: string[] = [];
+    const named = isObject(schema.discriminator)
+      ? stringField(schema.discriminator, "propertyName")
+      : undefined;
+    if (named) candidates.push(named);
+    for (const wire of Object.keys(branches[0]?.properties ?? {}))
+      if (!candidates.includes(wire)) candidates.push(wire);
+    for (const wire of candidates) {
+      const tagged = this.taggedBranches(branches, wire);
+      if (tagged) return { kind: "tagged", wire, ...tagged };
+    }
+
+    const keyed: (UnionBranch & { key: string })[] = [];
+    for (const branch of branches) {
+      const others = branches.filter((other) => other !== branch);
+      const key = branch.required.find((wire) =>
+        others.every((other) => !(wire in other.properties)),
+      );
+      if (key === undefined) return undefined;
+      keyed.push({ ...branch, key });
+    }
+    return { kind: "keyed", branches: keyed };
+  }
+
+  /** The branches tagged by property `wire`, when it is a single-value enum on each. */
+  private taggedBranches(
+    branches: UnionBranch[],
+    wire: string,
+  ): { tagType: "string" | "bool"; branches: (UnionBranch & { values: string[] })[] } | undefined {
+    const tagged: (UnionBranch & { values: string[] })[] = [];
+    let tagType: "string" | "bool" | undefined;
+    const seen = new Set<string>();
+    for (const branch of branches) {
+      const property = branch.properties[wire];
+      if (!isObject(property) || !branch.required.includes(wire)) return undefined;
+      if (!Array.isArray(property.enum) || property.enum.length === 0) return undefined;
+      const type =
+        property.enum.every((value) => typeof value === "string")
+          ? "string"
+          : property.enum.every((value) => typeof value === "boolean")
+            ? "bool"
+            : undefined;
+      if (type === undefined || (tagType !== undefined && tagType !== type))
+        return undefined;
+      tagType = type;
+      const values = property.enum.map(String);
+      for (const value of values) {
+        if (seen.has(value)) return undefined;
+        seen.add(value);
+      }
+      tagged.push({ ...branch, values });
+    }
+    return tagType ? { tagType, branches: tagged } : undefined;
+  }
+
+  /** Swift for a typed union: an enum with one associated value per branch. */
+  private unionDeclaration(
+    name: string,
+    plan: UnionPlan,
+    description: string | undefined,
+  ): string {
+    this.stats.unionsTyped++;
+    const used = new Set<string>(RESERVED_CASES);
+    const caseName = (base: string): string => {
+      let result = base;
+      while (used.has(result)) result = `${result}Value`;
+      used.add(result);
+      return swiftIdentifier(result);
+    };
+    const lines: string[] = [...docLines(description, "")];
+    const nested: string[] = [];
+
+    if (plan.kind === "scalar") {
+      lines.push(
+        `/// One of ${plan.branches.map((branch) => branch.json).join(", ")}; decoded by its JSON type.`,
+        `public enum ${name}: Codable, Equatable, Sendable {`,
+      );
+      const order = ["boolean", "integer", "number", "string", "array"];
+      const byType = [...plan.branches].sort(
+        (a, b) => order.indexOf(a.json) - order.indexOf(b.json),
+      );
+      const scalarCases = byType.map((branch) => {
+        let type: string;
+        switch (branch.json) {
+          case "string":
+            type = "String";
+            break;
+          case "number":
+            type = "Decimal";
+            break;
+          case "integer":
+            type = "Int";
+            break;
+          case "boolean":
+            type = "Bool";
+            break;
+          default:
+            type = this.typeFor(
+              isObject(branch.schema.items) ? branch.schema.items : {},
+              `${name}Item`,
+              nested,
+            );
+            type = `[${type}]`;
+        }
+        return { swift: caseName(branch.json), type };
+      });
+      for (const item of scalarCases)
+        lines.push(`    case ${item.swift}(${item.type})`);
+      lines.push(
+        "",
+        "    public init(from decoder: any Decoder) throws {",
+        "        let container = try decoder.singleValueContainer()",
+      );
+      for (const item of scalarCases)
+        lines.push(
+          `        if let value = try? container.decode(${item.type}.self) {`,
+          `            self = .${item.swift}(value)`,
+          "            return",
+          "        }",
+        );
+      lines.push(
+        "        throw DecodingError.typeMismatch(",
+        `            ${name}.self,`,
+        "            DecodingError.Context(",
+        "                codingPath: decoder.codingPath,",
+        `                debugDescription: ${swiftString(`Expected ${plan.branches.map((branch) => branch.json).join(" or ")}.`)}))`,
+        "    }",
+        "",
+        "    public func encode(to encoder: any Encoder) throws {",
+        "        var container = encoder.singleValueContainer()",
+        "        switch self {",
+      );
+      for (const item of scalarCases)
+        lines.push(
+          `        case .${item.swift}(let value): try container.encode(value)`,
+        );
+      lines.push("        }", "    }");
+      for (const block of nested) lines.push("", indentBlock(block, "    "));
+      lines.push("}");
+      return lines.join("\n");
+    }
+
+    const variantType = (branch: UnionBranch, swift: string): string => {
+      if (branch.ref) {
+        this.requireSchema(branch.ref);
+        return `OpenAPI.${branch.ref}`;
+      }
+      const type = `${pascalCase(swift.replace(/`/g, ""))}Variant`;
+      nested.push(
+        this.struct(
+          type,
+          branch.properties,
+          branch.required,
+          stringField(branch.schema, "description"),
+        ),
+      );
+      return type;
+    };
+
+    if (plan.kind === "tagged") {
+      const isString = plan.tagType === "string";
+      lines.push(
+        `/// Tells its branches apart by \`${plan.wire}\`.${isString ? " An unlisted value decodes to `.unknown` and encodes back unchanged." : ""}`,
+        `public enum ${name}: Codable, Equatable, Sendable {`,
+      );
+      const taggedCases = plan.branches.map((branch) => {
+        const base = isString
+          ? camelCase(branch.values.join("_or_"))
+          : camelCase(`${plan.wire}_${branch.values.join("_or_")}`);
+        const swift = caseName(base);
+        return { branch, swift, type: variantType(branch, swift) };
+      });
+      for (const item of taggedCases)
+        lines.push(`    case ${item.swift}(${item.type})`);
+      if (isString) lines.push("    case unknown(JSONValue)");
+      lines.push(
+        "",
+        "    private enum TagKey: String, CodingKey {",
+        `        case tag = ${swiftString(plan.wire)}`,
+        "    }",
+        "",
+        "    public init(from decoder: any Decoder) throws {",
+        "        let probe = try decoder.container(keyedBy: TagKey.self)",
+        `        switch try probe.decode(${isString ? "String" : "Bool"}.self, forKey: .tag) {`,
+      );
+      for (const item of taggedCases) {
+        const patterns = item.branch.values
+          .map((value) => (isString ? swiftString(value) : value))
+          .join(", ");
+        lines.push(
+          `        case ${patterns}: self = .${item.swift}(try ${item.type}(from: decoder))`,
+        );
+      }
+      if (isString) {
+        lines.push("        default: self = .unknown(try JSONValue(from: decoder))");
+      } else if (new Set(plan.branches.flatMap((branch) => branch.values)).size < 2) {
+        lines.push(
+          "        default:",
+          "            throw DecodingError.dataCorrupted(",
+          "                DecodingError.Context(",
+          "                    codingPath: decoder.codingPath,",
+          `                    debugDescription: ${swiftString(`No variant of ${name} has this ${plan.wire}.`)}))`,
+        );
+      }
+      lines.push(
+        "        }",
+        "    }",
+        "",
+        "    public func encode(to encoder: any Encoder) throws {",
+        "        switch self {",
+      );
+      for (const item of taggedCases)
+        lines.push(`        case .${item.swift}(let value): try value.encode(to: encoder)`);
+      if (isString) lines.push("        case .unknown(let value): try value.encode(to: encoder)");
+      lines.push("        }", "    }");
+      for (const block of nested) lines.push("", indentBlock(block, "    "));
+      lines.push("}");
+      return lines.join("\n");
+    }
+
+    lines.push(
+      `/// Tells its branches apart by which of ${plan.branches.map((branch) => `\`${branch.key}\``).join(", ")} is present.`,
+      `public enum ${name}: Codable, Equatable, Sendable {`,
+    );
+    const keyedCases = plan.branches.map((branch) => {
+      const swift = caseName(camelCase(branch.key));
+      return { branch, swift, type: variantType(branch, swift) };
+    });
+    for (const item of keyedCases)
+      lines.push(`    case ${item.swift}(${item.type})`);
+    lines.push("", "    private enum ProbeKey: String, CodingKey {");
+    for (const item of keyedCases)
+      lines.push(`        case ${item.swift} = ${swiftString(item.branch.key)}`);
+    lines.push(
+      "    }",
+      "",
+      "    public init(from decoder: any Decoder) throws {",
+      "        let probe = try decoder.container(keyedBy: ProbeKey.self)",
+    );
+    for (const item of keyedCases)
+      lines.push(
+        `        if probe.contains(.${item.swift}) {`,
+        `            self = .${item.swift}(try ${item.type}(from: decoder))`,
+        "            return",
+        "        }",
+      );
+    lines.push(
+      "        throw DecodingError.dataCorrupted(",
+      "            DecodingError.Context(",
+      "                codingPath: decoder.codingPath,",
+      `                debugDescription: ${swiftString(`No variant of ${name} matches (needs ${plan.branches.map((branch) => branch.key).join(" or ")}).`)}))`,
+      "    }",
+      "",
+      "    public func encode(to encoder: any Encoder) throws {",
+      "        switch self {",
+    );
+    for (const item of keyedCases)
+      lines.push(`        case .${item.swift}(let value): try value.encode(to: encoder)`);
+    lines.push("        }", "    }");
+    for (const block of nested) lines.push("", indentBlock(block, "    "));
+    lines.push("}");
+    return lines.join("\n");
   }
 
   private mergeAllOf(parts: unknown[]): {
@@ -216,12 +1283,29 @@ class Generator {
     required: string[],
     description: string | undefined,
   ): string {
+    this.context.push(name);
+    try {
+      return this.structBody(name, properties, required, description);
+    } finally {
+      this.context.pop();
+    }
+  }
+
+  private structBody(
+    name: string,
+    properties: Schema,
+    required: string[],
+    description: string | undefined,
+  ): string {
     const nested: string[] = [];
     const nameCounts = new Map<string, number>();
     for (const wire of Object.keys(properties)) {
       const name = camelCase(wire);
       nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
     }
+    const scope = [...this.context];
+    const patchKey = scope.join(".");
+    const nullable = new Set(this.tables.nullablePatchFields[patchKey] ?? []);
     const usedNames = new Set<string>();
     const fields = Object.entries(properties).map(([wire, raw]) => {
       const schema = isObject(raw) ? raw : {};
@@ -236,17 +1320,54 @@ class Generator {
       }
       usedNames.add(name);
       const swiftName = swiftIdentifier(name);
-      const base = this.typeFor(schema, wire, nested);
-      const optional = !required.includes(wire) || schema.nullable === true;
+      let base = this.identifierType(wire, schema, scope);
+      const providerCurrency = scope.some((part) => PROVIDER_CURRENCY_SCHEMAS.has(part));
+      if (providerCurrency && isCurrencyField(wire, schema)) {
+        for (const part of scope) {
+          if (PROVIDER_CURRENCY_SCHEMAS.has(part)) this.stats.providerCurrencySchemasHit.add(part);
+        }
+      }
+      if (base === undefined && !providerCurrency && isCurrencyField(wire, schema)) {
+        base = schema.type === "array" ? "[CurrencyCode]" : "CurrencyCode";
+        this.stats.currencyFields++;
+      }
+      base ??= this.withFieldKeys(
+        [`${patchKey}.${wire}`, `${scope[0]}.${wire}`, `*.${wire}`],
+        () => this.typeFor(schema, wire, nested),
+      );
+      let optional = !required.includes(wire) || schema.nullable === true;
+      let type = optional ? `${base}?` : base;
+      const patchable = nullable.has(wire);
+      if (patchable) {
+        if (schema.nullable !== true) {
+          throw new Error(
+            `${patchKey}.${wire} is listed in NULLABLE_PATCH_FIELDS but is not nullable in openapi.yaml.`,
+          );
+        }
+        this.nullableHits.add(`${patchKey}.${wire}`);
+        this.stats.nullableFields++;
+        type = `Nullable<${base}>`;
+        optional = false;
+      }
       return {
         wire,
         swiftName,
         plainName: swiftName.replace(/`/g, ""),
-        type: optional ? `${base}?` : base,
+        base,
+        type,
         optional,
+        patchable,
+        required: required.includes(wire),
         description: stringField(schema, "description"),
       };
     });
+    for (const wire of nullable) {
+      if (!(wire in properties)) {
+        throw new Error(
+          `${patchKey}.${wire} is listed in NULLABLE_PATCH_FIELDS but is not a property.`,
+        );
+      }
+    }
     const lines: string[] = [...docLines(description, "")];
     lines.push(`public struct ${name}: Codable, Equatable, Sendable {`);
     for (const field of fields) {
@@ -257,7 +1378,7 @@ class Generator {
     const parameters = fields
       .map(
         (field) =>
-          `${field.swiftName}: ${field.type}${field.optional ? " = nil" : ""}`,
+          `${field.swiftName}: ${field.type}${field.patchable ? " = .absent" : field.optional ? " = nil" : ""}`,
       )
       .join(", ");
     lines.push(`    public init(${parameters}) {`);
@@ -270,6 +1391,47 @@ class Generator {
         lines.push(
           `        case ${field.swiftName} = ${swiftString(field.wire)}`,
         );
+      lines.push("    }");
+    }
+    if (fields.some((field) => field.patchable)) {
+      // Synthesized Codable cannot tell an absent key from an explicit null.
+      lines.push(
+        "",
+        "    public init(from decoder: any Decoder) throws {",
+        "        let container = try decoder.container(keyedBy: CodingKeys.self)",
+      );
+      for (const field of fields) {
+        const key = `forKey: .${field.swiftName}`;
+        if (field.patchable) {
+          lines.push(
+            `        self.${field.plainName} = try container.decodeNullable(${field.base}.self, ${key})`,
+          );
+        } else if (field.optional) {
+          lines.push(
+            `        self.${field.plainName} = try container.decodeIfPresent(${field.type.slice(0, -1)}.self, ${key})`,
+          );
+        } else {
+          lines.push(
+            `        self.${field.plainName} = try container.decode(${field.type}.self, ${key})`,
+          );
+        }
+      }
+      lines.push(
+        "    }",
+        "",
+        "    public func encode(to encoder: any Encoder) throws {",
+        "        var container = encoder.container(keyedBy: CodingKeys.self)",
+      );
+      for (const field of fields) {
+        const key = `forKey: .${field.swiftName}`;
+        lines.push(
+          field.patchable
+            ? `        try container.encodeNullable(${field.plainName}, ${key})`
+            : field.optional
+              ? `        try container.encodeIfPresent(${field.plainName}, ${key})`
+              : `        try container.encode(${field.plainName}, ${key})`,
+        );
+      }
       lines.push("    }");
     }
     for (const block of nested) lines.push("", indentBlock(block, "    "));
@@ -291,6 +1453,13 @@ class Generator {
       ].join("\n");
     }
     if (schema.oneOf !== undefined || schema.anyOf !== undefined) {
+      if (this.tables.untypedUnions[name] !== undefined) {
+        this.untypedUnionHits.add(name);
+      } else {
+        const plan = this.unionPlan(schema);
+        if (plan) return this.unionDeclaration(name, plan, description);
+        this.unmappedUnions.add(name);
+      }
       return [
         ...docLines(description, ""),
         "/// A oneOf/anyOf schema, decoded as plain JSON.",
@@ -302,17 +1471,12 @@ class Generator {
       return this.struct(name, merged.properties, merged.required, description);
     }
     if (schema.type === "string" && Array.isArray(schema.enum)) {
-      const lines = [...docLines(description, "")];
-      lines.push(
-        `public enum ${name}: String, Codable, Sendable, CaseIterable {`,
+      this.stats.enumsNamed++;
+      return enumDeclaration(
+        name,
+        schema.enum.filter((value) => typeof value === "string").map(String),
+        description,
       );
-      for (const value of schema.enum.map(String)) {
-        lines.push(
-          `    case ${swiftIdentifier(camelCase(value))} = ${swiftString(value)}`,
-        );
-      }
-      lines.push("}");
-      return lines.join("\n");
     }
     const properties = isObject(schema.properties)
       ? schema.properties
@@ -324,10 +1488,8 @@ class Generator {
       return this.struct(name, properties, required, description);
     }
     const nested: string[] = [];
-    const type = this.typeFor(
-      { ...schema, description: undefined },
-      name,
-      nested,
+    const type = this.withFieldKeys([name], () =>
+      this.typeFor({ ...schema, description: undefined }, name, nested),
     );
     if (nested.length > 0)
       throw new Error(`Schema ${name} needs a nested type at the top level.`);
@@ -425,6 +1587,15 @@ class Generator {
   }
 
   operationStruct(operation: Operation): string {
+    this.context.push(pascalCase(operation.id));
+    try {
+      return this.operationStructBody(operation);
+    } finally {
+      this.context.pop();
+    }
+  }
+
+  private operationStructBody(operation: Operation): string {
     const name = pascalCase(operation.id);
     const nested: string[] = [];
     const response = this.responseType(operation, nested);
@@ -453,10 +1624,25 @@ class Generator {
     const field = (parameter: Schema, forcedRequired: boolean): Field => {
       const wire = String(parameter.name);
       const schema = isObject(parameter.schema) ? parameter.schema : {};
-      const base = this.typeFor(schema, wire, nested);
+      let base = this.identifierType(
+        wire,
+        schema,
+        [name],
+        parameter.in === "path" ? this.pathEntity(operation, wire) : undefined,
+        true,
+      );
+      if (base === undefined && isCurrencyField(wire, schema)) {
+        base = schema.type === "array" ? "[CurrencyCode]" : "CurrencyCode";
+        this.stats.currencyFields++;
+      }
+      base ??= this.withFieldKeys([`${name}.${wire}`, `*.${wire}`], () =>
+        this.typeFor(schema, wire, nested, { plainStrings: true }),
+      );
       if (
-        !["String", "Int", "Decimal", "Bool", "[String]", "[Int]"].includes(
-          base,
+        !(
+          ["String", "Int", "Decimal", "Bool", "[String]", "[Int]"].includes(
+            base,
+          ) || /^\[?(?:[A-Za-z]+ID|CurrencyCode|CalendarDay|Instant)\]?$/.test(base)
         )
       ) {
         throw new Error(
@@ -594,13 +1780,18 @@ class Generator {
       if (emitted.has(name)) continue;
       emitted.set(name, this.component(name));
     }
-    return [...emitted.keys()].sort().map((name) => emitted.get(name) ?? "");
+    this.emittedSchemas = [...emitted.keys()].sort();
+    return this.emittedSchemas.map((name) => emitted.get(name) ?? "");
   }
+
+  /** Names of the schemas `models()` emitted. */
+  emittedSchemas: string[] = [];
 }
 
 export function generateAPI(
   specText: string,
   allowListText: string,
+  tables: GeneratorTables = DEFAULT_TABLES,
 ): GeneratedAPI {
   const parsed = parseYaml(specText);
   if (
@@ -613,18 +1804,31 @@ export function generateAPI(
   const spec = parsed as unknown as Spec;
   const ids = parseListFile(allowListText, ALLOW_LIST);
   if (ids.length === 0) throw new Error(`${ALLOW_LIST} lists no operations.`);
-  const generator = new Generator(spec);
+  const generator = new Generator(spec, tables);
   const operations = ids.map((id) =>
     generator.operationStruct(generator.operation(id)),
   );
   const models = generator.models();
+  if (generator.unmappedUnions.size > 0) {
+    throw new Error(
+      `${generator.unmappedUnions.size} oneOf/anyOf schemas have no typed form (no discriminator, no distinguishing required property, not scalar). List each in UNTYPED_UNIONS with a reason:\n  ${[...generator.unmappedUnions].sort().join("\n  ")}`,
+    );
+  }
+  if (generator.unmappedIds.size > 0) {
+    throw new Error(
+      `${generator.unmappedIds.size} id-like integer/string fields have no identifier type. Map each in SCHEMA_ID_ENTITY, STEM_ENTITY, FIELD_ENTITY or PATH_ID_ENTITY, or list it in UNTYPED_IDS with a reason:\n  ${[...generator.unmappedIds].sort().join("\n  ")}`,
+    );
+  }
+  const entities = generator.identifierEntities();
 
   const modelsFile = [
     generatedHeader(SOURCE, COMMAND),
     "import Foundation",
     "",
     "/// The OpenAPI component schemas the allow-listed operations use",
-    `/// (\`${ALLOW_LIST}\`). Dates stay the wire strings; numbers are \`Decimal\`.`,
+    `/// (\`${ALLOW_LIST}\`). Calendar days are \`CalendarDay\` and timestamps \`Instant\`; numbers are`,
+    "/// `Decimal`; ids, currencies, string enums and oneOf unions are typed (`OpenAPIIdentifiers.swift`,",
+    "/// `CurrencyCode`, enums with `.unknown`, enums with associated values).",
     "public enum OpenAPI {}",
     "",
     "extension OpenAPI {",
@@ -648,7 +1852,44 @@ export function generateAPI(
     "",
   ].join("\n");
 
-  return { models: modelsFile, operations: operationsFile };
+  const identifiersFile = [
+    generatedHeader(SOURCE, COMMAND),
+    "/// One identifier type per entity the OpenAPI spec has ids for (`API/Types/Identifier.swift`",
+    "/// holds the generic types). Ids of different entities never convert into one another.",
+    entities
+      .map(([entity, kind]) =>
+        [
+          `/// The id of a ${entity} (${kind === "int" ? "an integer" : "a string"} on the wire).`,
+          `public enum ${entity}IDTag: IdentifierTag {}`,
+          `public typealias ${entity}ID = ${kind === "int" ? "IntIdentifier" : "StringIdentifier"}<${entity}IDTag>`,
+        ].join("\n"),
+      )
+      .join("\n\n"),
+    "",
+  ].join("\n");
+
+  return {
+    models: modelsFile,
+    operations: operationsFile,
+    identifiers: identifiersFile,
+    schemas: generator.emittedSchemas,
+    stats: {
+      identifierTypes: entities.length,
+      identifierFields: generator.stats.identifierFields,
+      enumsNamed: generator.stats.enumsNamed,
+      enumsInline: generator.stats.enumsInline,
+      currencyFields: generator.stats.currencyFields,
+      providerCurrencySchemasHit: [...generator.stats.providerCurrencySchemasHit].sort(),
+      nullableFields: generator.stats.nullableFields,
+      untypedIdsHit: [...generator.untypedHits].sort(),
+      nullableFieldsHit: [...generator.nullableHits].sort(),
+      dateFields: generator.stats.dateFields,
+      dateTimeFields: generator.stats.dateTimeFields,
+      untypedDatesHit: [...generator.untypedDateHits].sort(),
+      unionsTyped: generator.stats.unionsTyped,
+      untypedUnionsHit: [...generator.untypedUnionHits].sort(),
+    },
+  };
 }
 
 function main(): void {
@@ -664,6 +1905,19 @@ function main(): void {
     writeGenerated(
       repoPath(OUTPUT_DIR, "OpenAPIOperations.swift"),
       generated.operations,
+    );
+    writeGenerated(
+      repoPath(OUTPUT_DIR, "OpenAPIIdentifiers.swift"),
+      generated.identifiers,
+    );
+    const stats = generated.stats;
+    console.log(
+      `[native-openapi] ${stats.identifierTypes} identifier types on ${stats.identifierFields} fields/parameters; ` +
+        `${stats.enumsNamed + stats.enumsInline} enums (${stats.enumsNamed} named, ${stats.enumsInline} inline); ` +
+        `${stats.currencyFields} CurrencyCode fields; ${stats.nullableFields} Nullable fields; ` +
+        `${stats.dateFields} CalendarDay and ${stats.dateTimeFields} Instant fields; ` +
+        `${stats.unionsTyped} unions typed, ${stats.untypedUnionsHit.length} kept JSONValue; ` +
+        `${stats.untypedIdsHit.length} untyped id rules used.`,
     );
   } catch (error) {
     console.error(

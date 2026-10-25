@@ -53,7 +53,7 @@ struct TransactionAddSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 448, idealWidth: 470, minHeight: 560, idealHeight: 720)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
         .onAppear { amountFocused = true }
@@ -63,16 +63,12 @@ struct TransactionAddSheet: View {
 
     private var fields: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Picker(
-                strings.t("addTxn.kind"),
-                selection: Binding(get: { draft.kind }, set: { form.setKind($0) })
-            ) {
-                ForEach(TransactionKind.allCases, id: \.self) { kind in
-                    Text(strings.t(kind.labelKey)).tag(kind)
+            VisionSegmentedControl(
+                selection: Binding(get: { draft.kind }, set: { form.setKind($0) }),
+                options: TransactionKind.allCases.map { kind in
+                    VisionSegmentOption(value: kind, title: strings.t(kind.labelKey))
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            )
             .frame(maxWidth: 320)
             .frame(maxWidth: .infinity)
             .accessibilityLabel(strings.t("addTxn.kind"))
@@ -132,22 +128,14 @@ struct TransactionAddSheet: View {
             }
             field("addTxn.commentOptional") {
                 TextEditor(text: Binding(get: { draft.comment }, set: { form.setComment($0) }))
-                    .font(.body)
-                    .frame(height: 64)
-                    .scrollContentBackground(.hidden)
-                    .padding(4)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                    .visionTextEditor()
                     .overlay(alignment: .topLeading) {
                         if draft.comment.isEmpty {
                             Text(strings.t("addTxn.commentPlaceholder"))
+                                .font(VisionControlMetrics.fieldFont)
                                 .foregroundStyle(theme.tertiaryLabel)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
+                                .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
                                 .allowsHitTesting(false)
                         }
                     }
@@ -182,7 +170,7 @@ struct TransactionAddSheet: View {
                 .accessibilityLabel(strings.t("form.addTransaction.amount"))
                 TextField(
                     strings.t("addTxn.currencyPlaceholder"),
-                    text: Binding(get: { draft.currency }, set: { form.setCurrency($0) })
+                    text: Binding(get: { draft.currencyText }, set: { form.setCurrency($0) })
                 )
                 .textFieldStyle(.vision)
                 .frame(width: 64)
@@ -202,17 +190,14 @@ struct TransactionAddSheet: View {
     private var dateField: some View {
         field("form.addTransaction.date", error: .date) {
             HStack(spacing: 8) {
-                Picker(
-                    strings.t("form.addTransaction.date"),
-                    selection: Binding(get: { form.dateChoice }, set: { form.setDateChoice($0) })
-                ) {
-                    ForEach(AddTransactionDateChoice.allCases, id: \.self) { choice in
-                        Text(strings.t(choice.labelKey)).tag(choice)
+                VisionSegmentedControl(
+                    selection: Binding(get: { form.dateChoice }, set: { form.setDateChoice($0) }),
+                    options: AddTransactionDateChoice.allCases.map { choice in
+                        VisionSegmentOption(value: choice, title: strings.t(choice.labelKey))
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                )
                 .fixedSize()
+                .accessibilityLabel(strings.t("form.addTransaction.date"))
                 .focused($focused, equals: .date)
                 if form.dateChoice == .other {
                     VisionDateField(
@@ -309,7 +294,6 @@ struct TransactionAddSheet: View {
                 .accessibilityHidden(true)
                 .disabled(form.isPending)
         }
-        .controlSize(.large)
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
     }

@@ -105,15 +105,15 @@ struct PortfolioImportTests {
 
     @Test func accountDetectionRequiresUniqueFullStatementIdentity() {
         let accounts = [importAccount(id: 42, name: "Kinesis"), importAccount(id: 43, name: "Second broker")]
-        #expect(PortfolioImportDetected(source: "kinesis", sourceAccountIdentities: []).resolveAccount(accounts) == 42)
+        #expect(PortfolioImportDetected(source: .kinesis, sourceAccountIdentities: []).resolveAccount(accounts) == 42)
         #expect(
-            PortfolioImportDetected(source: "kinesis", sourceAccountIdentities: ["Second broker"]).resolveAccount(
+            PortfolioImportDetected(source: .kinesis, sourceAccountIdentities: ["Second broker"]).resolveAccount(
                 accounts) == 43)
         #expect(
-            PortfolioImportDetected(source: "kinesis", sourceAccountIdentities: ["KX", "OTHER"]).resolveAccount(
+            PortfolioImportDetected(source: .kinesis, sourceAccountIdentities: ["KX", "OTHER"]).resolveAccount(
                 accounts) == nil)
         #expect(
-            PortfolioImportDetected(source: "kinesis", sourceAccountIdentities: []).resolveAccount(
+            PortfolioImportDetected(source: .kinesis, sourceAccountIdentities: []).resolveAccount(
                 accounts + [importAccount(id: 44, name: "Kinesis")]) == nil)
     }
 
@@ -137,7 +137,7 @@ struct PortfolioImportTests {
         await model.load()
         #expect(model.ids == [7])
         #expect(model.statements.first?.file == nil)
-        #expect(model.policy == "preserve_existing")
+        #expect(model.policy == .preserveExisting)
         model.setStatementPolicy(id: "statement-1", policy: .preserveExisting)
         await model.flushCheckpoint()
         let saved = try JSONDecoder().decode(
@@ -167,7 +167,7 @@ struct PortfolioImportTests {
             ]))
         let model = PortfolioImportSessionModel(service: ImportFixtureService(), store: store)
         await model.load()
-        #expect(model.ids == [7] && model.policy == "auto")
+        #expect(model.ids == [7] && model.policy == .auto)
     }
 
     @Test func checkpointsFromTheRemovedExistingHistoryFeatureAreDropped() async throws {
@@ -202,7 +202,7 @@ struct PortfolioImportTests {
         await service.release()
         await stage.value
         #expect(await service.streamCalls == 1)
-        #expect(model.statements.map(\.status) == ["staged", "ready"])
+        #expect(model.statements.map(\.status) == [.staged, .ready])
         #expect(model.statements.first?.batchId == 7)
         #expect(model.stopped)
     }
@@ -235,7 +235,7 @@ struct PortfolioImportTests {
         await service.pause("plan")
         let preview = Task { await model.preview() }
         await service.waitForPause()
-        model.setPolicy("preserve_existing")
+        model.setPolicy(.preserveExisting)
         await service.release()
         await preview.value
         #expect(model.plan == nil)
@@ -273,7 +273,7 @@ struct PortfolioImportTests {
         #expect(model.rowChoices.isEmpty && model.plan == nil)
         await model.preview()
         await model.choose(batchId: 7, rowId: 4, choice: .keepBoth)
-        model.setPolicy("preserve_existing")
+        model.setPolicy(.preserveExisting)
         #expect(model.rowChoices.isEmpty && model.plan == nil)
     }
 
@@ -342,7 +342,7 @@ struct PortfolioImportTests {
         await model.stage()
         await model.preview()
         await model.commit()
-        #expect(model.statements.map(\.status) == ["completed"])
+        #expect(model.statements.map(\.status) == [.completed])
         #expect(model.result?.imported == 1 && model.result?.adopted == 0 && model.result?.duplicates == 0)
         #expect(model.plan == nil && !model.outcomeUncertain && model.error == nil)
         #expect(await service.commitScopes.count == 1)
@@ -360,7 +360,7 @@ struct PortfolioImportTests {
         await model.commit()
         #expect(model.error == "Existing history changed")
         #expect(!model.outcomeUncertain && model.plan == nil && !model.canCommit)
-        #expect(model.statements.map(\.status) == ["staged"])
+        #expect(model.statements.map(\.status) == [.staged])
         #expect(await service.historyCalls == 0)
         await model.preview()
         #expect(model.canCommit)
@@ -429,7 +429,7 @@ struct PortfolioImportTests {
         for _ in 0..<3 { await Task.yield() }
         #expect(await service.probeCalls == 1)
         #expect(model.typeValues == ["Buy", "BUY"])
-        #expect(model.detected?.source == "kinesis")
+        #expect(model.detected?.source == .kinesis)
     }
 
     @Test func editsDuringParserSaveRemainDirtyAndPreserveUnknownKeys() async throws {
@@ -512,7 +512,7 @@ struct PortfolioImportTests {
         #expect(model.page?.limit == 10)
         await service.loseRollbackAcknowledgement()
         await model.rollback(batchId: 7)
-        #expect(model.page?.items.first?.status == "aborted")
+        #expect(model.page?.items.first?.status == .aborted)
         #expect(model.error != nil)
         #expect(confirmed)
         #expect(changes == 1)
@@ -686,9 +686,9 @@ private func importFile(_ name: String) -> PortfolioImportFile {
 }
 private func importAccount(id: Int, name: String) -> OpenAPI.Account {
     .init(
-        id: id, name: name, currency: "EUR", type: "brokerage", liquidityClass: "liquid", spendable: false,
-        inNetWorth: true, taxWrapper: "none", owner: "self", multiCurrencyCash: false, hasCashSleeve: true,
-        isActive: true, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        id: AccountID(id), name: name, currency: "EUR", type: .brokerage, liquidityClass: .liquid, spendable: false,
+        inNetWorth: true, taxWrapper: .none, owner: .me, multiCurrencyCash: false, hasCashSleeve: true,
+        isActive: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 }
 private func importPreviewFixture(batchId: Int) throws -> PortfolioImportPreview {
     try importPreviewWire(batchId: batchId).decode(PortfolioImportPreview.self)
@@ -734,13 +734,13 @@ private actor ImportFixtureService: PortfolioImportService {
     private var uploadsFail = false
     private var batchStatus = "complete"
     private var historyFails = false
-    private var blockedRows: [Int] = []
+    private var blockedRows: [PortfolioImportRowID] = []
     private var planActions: [String] = []
     private var commitFailure: APIError?
     private(set) var previewScopes: [PortfolioImportReconciliationScope] = []
     private(set) var commitScopes: [PortfolioImportReconciliationScope] = []
     func failHistoryReads(_ fail: Bool) { historyFails = fail }
-    func blockRows(_ rows: [Int]) { blockedRows = rows }
+    func blockRows(_ rows: [PortfolioImportRowID]) { blockedRows = rows }
     func useActions(_ actions: [String]) { planActions = actions }
     func rejectCommit(_ failure: APIError) { commitFailure = failure }
     func pause(_ operation: String) {
@@ -780,14 +780,14 @@ private actor ImportFixtureService: PortfolioImportService {
         ]).decode(PortfolioImportProbe.self)
     }
     func importParsers() async throws -> [PortfolioImportParser] { [] }
-    func importSaveParser(id: Int?, name: String, config: PortfolioImportConfig) async throws -> PortfolioImportParser {
+    func importSaveParser(id: PortfolioParserConfigID?, name: String, config: PortfolioImportConfig) async throws -> PortfolioImportParser {
         await wait("save")
         return try TaxValue.object([
-            "id": .number(Decimal(id ?? 1)), "name": .string(name), "kind": .string("portfolio"),
+            "id": .number(Decimal((id ?? 1).rawValue)), "name": .string(name), "kind": .string("portfolio"),
             "config": config.payload, "created_at": .string("2026-01-01"), "updated_at": .string("2026-01-01"),
         ]).decode(PortfolioImportParser.self)
     }
-    func importDeleteParser(id: Int) async throws {}
+    func importDeleteParser(id: PortfolioParserConfigID) async throws {}
     func importAccounts() async throws -> [OpenAPI.Account] {
         [importAccount(id: 42, name: "Kinesis"), importAccount(id: 43, name: "Other broker")]
     }
@@ -814,17 +814,21 @@ private actor ImportFixtureService: PortfolioImportService {
             ]), "total": .number(1), "limit": .number(Decimal(limit)), "offset": .number(Decimal(offset)),
         ]).decode(PortfolioImportBatchPage.self)
     }
-    func importPreview(batchId: Int) async throws -> PortfolioImportPreview {
-        try importPreviewFixture(batchId: batchId)
+    func importPreview(batchId: PortfolioImportBatchNumericID) async throws -> PortfolioImportPreview {
+        try importPreviewFixture(batchId: batchId.rawValue)
     }
-    func importOverride(batchId: Int, rowIds: [String], investmentId: Int?, createNew: Bool) async throws {}
-    func importCommit(batchId: Int, accountId: Int?) async throws -> PortfolioImportCommitResult {
+    func importOverride(
+        batchId: PortfolioImportBatchNumericID, rowIds: [String], investmentId: InvestmentID?, createNew: Bool
+    ) async throws {}
+    func importCommit(batchId: PortfolioImportBatchNumericID, accountId: AccountID?) async throws
+        -> PortfolioImportCommitResult
+    {
         try TaxValue.object([
-            "batch_id": .number(Decimal(batchId)), "total": .number(2), "imported": .number(2),
+            "batch_id": .number(Decimal(batchId.rawValue)), "total": .number(2), "imported": .number(2),
             "duplicates": .number(0), "errors": .number(0),
         ]).decode(PortfolioImportCommitResult.self)
     }
-    func importRollback(batchId: Int) async throws -> Int {
+    func importRollback(batchId: PortfolioImportBatchNumericID) async throws -> Int {
         batchStatus = "aborted"
         if lostRollback { throw APIError.network("Synthetic lost rollback acknowledgement") }
         return 2
@@ -837,14 +841,14 @@ private actor ImportFixtureService: PortfolioImportService {
         let answered = Set(scope.rowChoices.map(\.rowId))
         let blockers: [TaxValue] = blockedRows.filter { !answered.contains($0) }.map { row in
             .object([
-                "batchId": .number(Decimal(scope.batchIds[0])), "rowId": .number(Decimal(row)),
-                "rowOrdinal": .number(Decimal(row)), "reason": .string("funding_date_mismatch"),
+                "batchId": .number(Decimal(scope.batchIds[0].rawValue)), "rowId": .number(Decimal(row.rawValue)),
+                "rowOrdinal": .number(Decimal(row.rawValue)), "reason": .string("funding_date_mismatch"),
                 "candidateTransactionIds": .array([.number(9)]),
             ])
         }
         let actions: [TaxValue] = planActions.enumerated().map { index, action in
             var value: TaxValue = .object([
-                "batchId": .number(Decimal(scope.batchIds[0])), "rowId": .number(Decimal(index + 1)),
+                "batchId": .number(Decimal(scope.batchIds[0].rawValue)), "rowId": .number(Decimal(index + 1)),
                 "rowOrdinal": .number(Decimal(index + 1)), "action": .string(action),
                 "existingTransactionId": .number(9),
             ])
@@ -857,16 +861,18 @@ private actor ImportFixtureService: PortfolioImportService {
             return value
         }
         return try TaxValue.object([
-            "batchIds": .array(scope.batchIds.map { .number(Decimal($0)) }),
+            "batchIds": .array(scope.batchIds.map { .number(Decimal($0.rawValue)) }),
             "adoptPolicy": scope.adoptPolicy.map { .string($0.rawValue) } ?? .null,
             "batchPolicies": .array(
                 scope.sortedBatchPolicies.map {
-                    .object(["batchId": .number(Decimal($0.batchId)), "adoptPolicy": .string($0.adoptPolicy.rawValue)])
+                    .object([
+                        "batchId": .number(Decimal($0.batchId.rawValue)), "adoptPolicy": .string($0.adoptPolicy.rawValue),
+                    ])
                 }),
             "rowChoices": .array(
                 scope.sortedRowChoices.map {
                     .object([
-                        "batchId": .number(Decimal($0.batchId)), "rowId": .number(Decimal($0.rowId)),
+                        "batchId": .number(Decimal($0.batchId.rawValue)), "rowId": .number(Decimal($0.rowId.rawValue)),
                         "choice": .string($0.choice.rawValue),
                     ])
                 }),
@@ -886,7 +892,7 @@ private actor ImportFixtureService: PortfolioImportService {
             "batches": .array(
                 scope.batchIds.map {
                     .object([
-                        "batch_id": .number(Decimal($0)), "imported": .number(1), "duplicates": .number(0),
+                        "batch_id": .number(Decimal($0.rawValue)), "imported": .number(1), "duplicates": .number(0),
                         "adopted": .number(0), "errors": .number(0),
                     ])
                 }),

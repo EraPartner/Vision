@@ -5,7 +5,8 @@ import VisionNativeCore
 /// people who owe you; a person opens their detail (`RecipientOwesDetail`) with Back, Export
 /// CSV in the ••• menu, Settle all, the open splits with Record payment and the row menu
 /// (Mark as settled, Delete split), and the Recent transactions table. Confirms are alerts;
-/// Record payment is a sheet.
+/// Record payment is a dialog. Both present from this view, not from the detail inside the
+/// scrolling page, so they centre over the page.
 public struct OwesView: View {
     private let model: OwesModel
     private let shell: NativeShellModel
@@ -38,6 +39,34 @@ public struct OwesView: View {
                 notice: model.notice, strings: strings, actionTitle: nil, duration: OwesModel.noticeDuration,
                 action: {}, clear: { model.clearNotice($0) }, bindsUndoShortcut: false)
         }
+        .visionDialog(
+            isPresented: Binding(
+                get: { model.payment != nil },
+                set: { presented in
+                    if !presented { model.closePayment() }
+                }),
+            metrics: .init(maxWidth: nil, padding: 0, spacing: 0)
+        ) {
+            OwesPaymentSheet(model: model, shell: shell)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
+        }
+        // `useConfirmDialog`. The buttons decide; the binding only reads.
+        .visionAlert(
+            title: model.confirmationText()?.title ?? "",
+            message: model.confirmationText()?.message,
+            isPresented: Binding(get: { model.confirmation != nil }, set: { _ in })
+        ) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelConfirmation() }
+            VisionDialogAction(model.confirmationText()?.action ?? "", role: confirmRole) {
+                Task { await model.confirm() }
+            }
+        }
+    }
+
+    private var confirmRole: VisionDialogActionRole? {
+        if case .deleteSplit? = model.confirmation { return .destructive }
+        return nil
     }
 
     // MARK: Summary
@@ -79,9 +108,8 @@ public struct OwesView: View {
                         Spacer()
                         MoneyText(
                             amount: model.totalOutstanding, currency: model.defaultCurrency, settings: settings,
-                            signed: false, colored: false
+                            signed: false, colored: false, display: .largeTitle
                         )
-                        .font(.visionLargeTitle)
                     }
                 }
             }
@@ -99,7 +127,7 @@ public struct OwesView: View {
                 AdminCard(padding: 0) {
                     VStack(spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element.recipientId) { index, item in
-                            if index > 0 { Divider() }
+                            if index > 0 { Divider().opacity(0.5) }
                             personRow(item)
                         }
                     }
@@ -108,38 +136,54 @@ public struct OwesView: View {
         }
     }
 
+    /// `ListRow` with a subtitle grid: the counts on the left and a short `h-1 w-24` progress bar
+    /// beside them, then the remaining amount (`w-36`, `type-headline`) and the chevron.
     private func personRow(_ item: OpenAPI.SplitOwed) -> some View {
         Button {
             Task { await model.open(item) }
         } label: {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(item.recipientName)
-                        .font(.body.weight(.medium))
-                    Text(model.personSubtitle(item))
-                        .font(.footnote)
-                        .foregroundStyle(theme.secondaryLabel)
-                    ProgressView(value: OwesModel.progress(paid: item.totalPaid, of: item.totalOwed))
-                        .frame(maxWidth: 240)
-                        .accessibilityLabel(strings.t("owesPage.repaymentProgress", ["recipient": item.recipientName]))
+                        .lineLimit(1)
+                    HStack(spacing: 16) {
+                        Text(model.personSubtitle(item))
+                            .font(.footnote)
+                            .foregroundStyle(theme.secondaryLabel)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ProgressView(value: OwesModel.progress(paid: item.totalPaid, of: item.totalOwed))
+                            .progressViewStyle(.vision(height: Self.progressHeight))
+                            .frame(width: Self.progressWidth)
+                            .accessibilityLabel(
+                                strings.t("owesPage.repaymentProgress", ["recipient": item.recipientName]))
+                    }
                 }
-                Spacer(minLength: 8)
                 MoneyText(
                     amount: item.remaining, currency: model.defaultCurrency, settings: settings, signed: false,
                     colored: false
                 )
                 .font(.headline)
+                .frame(width: Self.amountWidth, alignment: .trailing)
                 Image(systemName: "chevron.right")
                     .imageScale(.small)
                     .foregroundStyle(theme.tertiaryLabel)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
+
+    /// `h-1`.
+    static let progressHeight: CGFloat = 4
+    /// `w-24`.
+    static let progressWidth: CGFloat = 96
+    /// `w-36`.
+    static let amountWidth: CGFloat = 144
 }
 
 /// `PageError`: `common.loadFailedRetry` with Retry.
@@ -175,6 +219,11 @@ struct OwesPersonDetail: View {
     private var settings: NativeAppSettings { shell.settings }
     private var items: [OpenAPI.SplitOwedDetail] { model.splits ?? [] }
 
+    /// `HandCoins`, the page icon.
+    static var symbol: String {
+        NavigationRegistry.matchItem(path: TransactionsRoutes.owesPath)?.symbol ?? "dollarsign.circle"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Button {
@@ -182,8 +231,10 @@ struct OwesPersonDetail: View {
             } label: {
                 Label(strings.t("common.back"), systemImage: "chevron.left")
             }
-            .buttonStyle(.borderless)
-            VisionPageHeader(title: person.name, subtitle: strings.t("owesPage.outstandingSplits"), symbol: "person.crop.circle") {
+            .buttonStyle(.vision(.ghost, size: .sm))
+            VisionPageHeader(
+                title: person.name, subtitle: strings.t("owesPage.outstandingSplits"), symbol: Self.symbol
+            ) {
                 HStack(spacing: 8) {
                     Menu {
                         Button {
@@ -197,9 +248,8 @@ struct OwesPersonDetail: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .help(strings.t("owesPage.menu"))
+                    .visionMoreActionsMenu()
+                    .visionTooltip(strings.t("owesPage.menu"))
                     .accessibilityLabel(strings.t("owesPage.menu"))
                     Button(strings.t(model.isSettlingAll ? "owesPage.settleAll.loading" : "owesPage.settleAll.button")) {
                         model.requestSettleAll()
@@ -211,34 +261,6 @@ struct OwesPersonDetail: View {
             content
         }
         .task(id: person.id) { await model.loadSplits() }
-        .sheet(
-            isPresented: Binding(
-                get: { model.payment != nil },
-                set: { presented in
-                    if !presented { model.closePayment() }
-                })
-        ) {
-            OwesPaymentSheet(model: model, shell: shell)
-                .environment(\.visionTheme, theme)
-                .environment(\.colorScheme, theme.colorScheme)
-        }
-        // `useConfirmDialog`. The buttons decide; the binding only reads.
-        .alert(
-            model.confirmationText()?.title ?? "",
-            isPresented: Binding(get: { model.confirmation != nil }, set: { _ in })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelConfirmation() }
-            Button(model.confirmationText()?.action ?? "", role: confirmRole) {
-                Task { await model.confirm() }
-            }
-        } message: {
-            Text(model.confirmationText()?.message ?? "")
-        }
-    }
-
-    private var confirmRole: ButtonRole? {
-        if case .deleteSplit? = model.confirmation { return .destructive }
-        return nil
     }
 
     @ViewBuilder
@@ -269,7 +291,7 @@ struct OwesPersonDetail: View {
                 AdminCard(padding: 0) {
                     VStack(spacing: 0) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, split in
-                            if index > 0 { Divider() }
+                            if index > 0 { Divider().opacity(0.5) }
                             splitRow(split)
                         }
                     }
@@ -279,72 +301,88 @@ struct OwesPersonDetail: View {
         }
     }
 
+    /// `ListRow`: the transaction link (foreground, medium) with its date, the original amount and
+    /// note, then a short progress bar with the paid / total figures; the remaining amount, Record
+    /// payment and the row menu on the trailing side.
     private func splitRow(_ split: OpenAPI.SplitOwedDetail) -> some View {
         let title = model.title(split)
         let date = model.dateText(split)
         let context = "\(title), \(date)"
+        let currency = model.currency(of: split)
         return HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Button(title) {
                         model.openTransaction(split.transactionId, label: title)
                     }
-                    .buttonStyle(.visionLink)
+                    .buttonStyle(.plain)
+                    .fontWeight(.medium)
+                    .foregroundStyle(theme.foreground)
                     .lineLimit(1)
                     Text(date)
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
+                        .fixedSize()
                 }
-                Text(model.originalText(split))
-                    .font(.footnote)
-                    .foregroundStyle(theme.secondaryLabel)
-                HStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    Text(model.originalText(split))
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryLabel)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     ProgressView(value: OwesModel.progress(paid: split.amountPaid, of: split.amount))
-                        .frame(maxWidth: 200)
+                        .progressViewStyle(.vision(height: OwesView.progressHeight))
+                        .frame(width: OwesView.progressWidth)
                         .accessibilityLabel(strings.t("owesPage.repaymentProgress", ["recipient": person.name]))
                     Text(
-                        verbatim:
-                            "\(model.money(split.amountPaid, currency: model.currency(of: split))) / \(model.money(split.amount, currency: model.currency(of: split)))"
+                        verbatim: "\(model.money(split.amountPaid, currency: currency)) / \(model.money(split.amount, currency: currency))"
                     )
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(theme.secondaryLabel)
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(theme.secondaryLabel)
+                    .fixedSize()
                 }
             }
-            Spacer(minLength: 8)
-            MoneyText(amount: split.remaining, currency: model.currency(of: split), settings: settings, signed: false)
-                .font(.body.weight(.semibold))
+            MoneyText(amount: split.remaining, currency: currency, settings: settings, signed: false, colored: false)
+                .font(.headline)
+                .frame(width: OwesView.amountWidth, alignment: .trailing)
             Button {
                 model.openPayment(split)
             } label: {
                 Label(strings.t("owesPage.recordPayment"), systemImage: "banknote")
             }
-            .buttonStyle(.visionOutline)
-            .controlSize(.small)
+            .buttonStyle(.vision(.outline, size: .sm))
             .accessibilityLabel("\(strings.t("owesPage.recordPayment")): \(context)")
-            Menu {
-                Button {
-                    Task { await model.settle(split.id) }
-                } label: {
-                    Label(strings.t("owesPage.markSettled"), systemImage: "checkmark")
-                }
-                .disabled(model.settlePending)
-                Divider()
-                Button(role: .destructive) {
-                    model.requestDeleteSplit(split.id)
-                } label: {
-                    Label(strings.t("owesPage.deleteSplit"), systemImage: "trash")
-                }
-                .disabled(model.deletePending)
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-            .menuIndicator(.hidden)
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .accessibilityLabel(strings.t("owesPage.rowMenu", ["name": context]))
+            splitMenu(split, context: context)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+    }
+
+    private func splitMenu(_ split: OpenAPI.SplitOwedDetail, context: String) -> some View {
+        Menu {
+            Button {
+                Task { await model.settle(split.id) }
+            } label: {
+                Label(strings.t("owesPage.markSettled"), systemImage: "checkmark")
+            }
+            .disabled(model.settlePending)
+            Divider()
+            Button(role: .destructive) {
+                model.requestDeleteSplit(split.id)
+            } label: {
+                Label(strings.t("owesPage.deleteSplit"), systemImage: "trash")
+            }
+            .disabled(model.deletePending)
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.ghost, size: .iconSm))
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(strings.t("owesPage.rowMenu", ["name": context]))
     }
 }
 
@@ -375,7 +413,7 @@ struct OwesRecentTransactions: View {
                         Text(strings.t("owesPage.recentTransactionsTitle"))
                             .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
-                        VisionEmptyState(symbol: "dollarsign.circle", title: strings.t("owesPage.noRecentTransactions")) {
+                        VisionEmptyState(symbol: OwesPersonDetail.symbol, title: strings.t("owesPage.noRecentTransactions")) {
                             EmptyView()
                         }
                     }

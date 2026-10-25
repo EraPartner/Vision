@@ -120,7 +120,11 @@ struct ImportExportCard: View {
                                         Text(strings.t("importPage.exporting"))
                                     }
                                 } else {
-                                    Label(strings.t(format.labelKey), systemImage: "arrow.down.doc")
+                                    // `<Download className="mr-2 h-4 w-4" />` and the full label.
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.down.to.line").accessibilityHidden(true)
+                                        Text(strings.t(format.labelKey)).minimumScaleFactor(0.85)
+                                    }
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -188,7 +192,9 @@ struct ImportExportCard: View {
             model.activeCategories, selection: picked, value: { $0.id }, searchText: { PickerDataModel.label($0) },
             search: search
         ).map { node in
-            MultiSelectOption(id: String(node.id), title: PickerDataModel.label(node), isSelected: picked.contains(node.id)) {
+            MultiSelectOption(
+                id: String(node.id.rawValue), title: PickerDataModel.label(node), isSelected: picked.contains(node.id)
+            ) {
                 model.toggleCategory(node.id)
             }
         }
@@ -224,7 +230,7 @@ struct ImportSetupReferenceCard: View {
                     }
                     .buttonStyle(.visionOutline)
                     .accessibilityLabel(strings.t("importPage.toggleSetupReference"))
-                    .help(strings.t("importPage.toggleSetupReference"))
+                    .visionTooltip(strings.t("importPage.toggleSetupReference"))
                 }
                 if model.isSetupReferenceExpanded {
                     VStack(alignment: .leading, spacing: 16) {
@@ -275,31 +281,25 @@ struct SimpleCSVImportCard: View {
                 }
                 LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 12) {
                     ImportField(label: strings.t("importPage.separator")) {
-                        Picker(
-                            strings.t("importPage.separator"),
-                            selection: Binding(get: { model.separator }, set: { model.separator = $0 })
-                        ) {
-                            ForEach(CSVSeparator.candidates, id: \.self) { separator in
-                                Text(CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator).tag(separator)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
+                        VisionSelect(
+                            selection: Binding(get: { model.separator }, set: { model.separator = $0 }),
+                            options: CSVSeparator.candidates.map { separator in
+                                VisionSelectOption(
+                                    value: separator,
+                                    title: CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator)
+                            },
+                            accessibilityLabel: strings.t("importPage.separator"), expands: true)
                     }
                     if model.kind.showsEncoding {
                         ImportField(label: strings.t("importPage.encoding")) {
-                            Picker(
-                                strings.t("importPage.encoding"),
+                            VisionSelect(
                                 selection: Binding(
                                     get: { CSVFormatOptions.selectedEncoding(model.encoding) },
-                                    set: { model.encoding = $0 })
-                            ) {
-                                ForEach(CSVFormatOptions.encodings, id: \.value) { option in
-                                    Text(verbatim: option.label).tag(option.value)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
+                                    set: { model.encoding = $0 }),
+                                options: CSVFormatOptions.encodings.map { option in
+                                    VisionSelectOption(value: option.value, title: option.label)
+                                },
+                                accessibilityLabel: strings.t("importPage.encoding"), expands: true)
                         }
                     }
                 }

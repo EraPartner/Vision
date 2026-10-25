@@ -1,0 +1,31 @@
+{
+  "ok": true,
+  "data": {
+    "subscriptionCreep": {
+      "new": [
+        "value"
+      ],
+      "priceChanges": [
+        "value"
+      ]
+    },
+    "categoryOutliers": [
+      "value"
+    ],
+    "cashForecast": {
+      "month": "2024-01",
+      "currency": "EUR",
+      "monthEndNetCashflow": 1.5,
+      "monthEndNetCashflowLow": 1.5,
+      "monthEndNetCashflowHigh": 1.5,
+      "movedSignificantly": true,
+      "prominence": "alert",
+      "methodId": "id-1"
+    }
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  }
+}

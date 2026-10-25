@@ -13,7 +13,7 @@ public struct PortfolioOverviewView: View {
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
-    private var currency: String { shell.settings.defaultCurrency }
+    private var currency: CurrencyCode { shell.settings.portfolioCurrency }
     private var summary: PortfolioSummaryData? { model.summary?.currency == currency ? model.summary : nil }
     private var performance: PortfolioPerformanceData? {
         model.performance?.currency == currency ? model.performance : nil
@@ -39,8 +39,9 @@ public struct PortfolioOverviewView: View {
                             } else {
                                 Image(systemName: "arrow.clockwise")
                             }
-                        }.accessibilityLabel(strings.t("portfolio.refreshPrices"))
-                            .help(
+                        }.buttonStyle(.vision(.outline, size: .iconSm))
+                            .accessibilityLabel(strings.t("portfolio.refreshPrices"))
+                            .visionTooltip(
                                 strings.t(model.isOnline ? "portfolio.refreshPrices" : "portfolio.refreshPricesOffline")
                             )
                             .disabled(model.isRefreshingPrices || !model.isOnline)
@@ -50,9 +51,10 @@ public struct PortfolioOverviewView: View {
                             Divider()
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
-                            Image(systemName: "ellipsis")
+                            Image(systemName: "ellipsis").visionChipChrome()
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel(strings.t("portfolio.menu"))
                         Button(strings.t("addInv.title"), systemImage: "plus") { editing.beginAddInvestment() }
                             .buttonStyle(.visionPrimary)
                     }
@@ -63,6 +65,7 @@ public struct PortfolioOverviewView: View {
                     Text(strings.t("stocks.pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else {
                     if model.active.isEmpty {
                         AdminCard {
@@ -80,11 +83,19 @@ public struct PortfolioOverviewView: View {
                         }
                         hero(summary)
                         figures(summary)
-                        if model.widgets.isVisible("investments") { holdings }
-                        if model.widgets.isVisible("allocation") { allocation }
-                        if model.widgets.isVisible("performance") { costs(summary) }
-                        if model.widgets.isVisible("exposure") {
-                            PortfolioExposureView(model: model, editing: editing, shell: shell)
+                        // `grid gap-6 lg:grid-cols-3`: Holdings spans two columns, Allocation one.
+                        VisionResponsiveColumns(weights: [2, 1]) {
+                            if model.widgets.isVisible("investments") { holdings }
+                            if model.widgets.isVisible("allocation"), let allocation = allocationSlices {
+                                allocationCard(allocation)
+                            }
+                        }
+                        // `grid items-start gap-6 lg:grid-cols-2`: gains and exposure side by side.
+                        VisionResponsiveColumns(weights: [1, 1]) {
+                            if model.widgets.isVisible("performance") { costs(summary) }
+                            if model.widgets.isVisible("exposure") {
+                                PortfolioExposureView(model: model, editing: editing, shell: shell)
+                            }
                         }
                         PortfolioPerformanceWidgets(model: model, shell: shell)
                         if model.widgets.isVisible("news"), !model.newsSymbols.isEmpty {
@@ -95,13 +106,13 @@ public struct PortfolioOverviewView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: currency + shell.route.string + String(shell.settingsRevision)) { await reload() }
-        .sheet(isPresented: $customize) {
+        .task(id: currency.rawValue + shell.route.string + String(shell.settingsRevision)) { await reload() }
+        .visionDialog(isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics) {
             PortfolioWidgetsSheet(
                 definitions: PortfolioWidgetsModel.definitions, visible: model.widgets.isVisible,
                 setVisible: model.widgets.setVisible, setAll: model.widgets.setAll, reset: model.widgets.reset,
                 reload: model.widgets.load, isLoaded: model.widgets.isLoaded, isSaving: model.widgets.isSaving,
-                error: model.widgets.error, strings: strings)
+                error: model.widgets.error, strings: strings, inDialog: true)
         }
     }
 
@@ -127,7 +138,7 @@ public struct PortfolioOverviewView: View {
                 .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
             MoneyText(
                 amount: summary.totals.totalPortfolioValue, currency: currency, settings: shell.settings,
-                signed: false, colored: false
+                signed: false, colored: false, rolling: true
             ).font(.visionLargeTitle)
             if let gain = periodGain(summary) {
                 HStack(spacing: 6) {
@@ -147,21 +158,15 @@ public struct PortfolioOverviewView: View {
                 Text(strings.t("performance.emptyTitle")).font(.callout).foregroundStyle(
                     theme.secondaryLabel)
             }
-            Picker(
-                strings.t("portfolio.period.label"),
+            VisionSegmentedControl(
                 selection: Binding(
                     get: { model.period },
-                    set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) })
-            ) {
-                ForEach(PortfolioPeriod.allCases, id: \.self) { period in
-                    Text(strings.t("portfolio.period." + period.rawValue)).tag(period)
-                        .accessibilityLabel(strings.t("performance.period." + period.rawValue))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
+                    set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) }),
+                values: PortfolioPeriod.allCases, title: { strings.t("portfolio.period." + $0.rawValue) },
+                size: .sm, compact: true
+            )
             .fixedSize()
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(strings.t("portfolio.period.label"))
         }
     }
@@ -178,14 +183,21 @@ public struct PortfolioOverviewView: View {
                             points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
                             dashed: true),
                     ], title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
-                    height: 200, colors: ["value": theme.primary, "invested": theme.secondaryLabel])
+                    height: 200, dayTicks: PortfolioChartTicks.usesDayTicks(model.period),
+                    colors: ["value": theme.primary, "invested": theme.secondaryLabel])
                 if data.snapshots.last?.isProvisional == true {
-                    Label(strings.t("performance.latestSnapshotProvisional"), systemImage: "info.circle")
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
-                        .help(strings.t("performance.latestSnapshotProvisionalDescription"))
+                    // `<p role="note">`: the lead sentence in the foreground colour, then the
+                    // explanation.
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "info.circle").accessibilityHidden(true)
+                        (Text(strings.t("performance.latestSnapshotProvisional")).foregroundStyle(theme.foreground)
+                            + Text(" " + strings.t("performance.latestSnapshotProvisionalDescription")))
+                    }
+                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    .accessibilityElement(children: .combine)
                 }
             }
-        } else if let error = model.errors[currency + "|" + model.period.rawValue] {
+        } else if let error = model.errors[currency.rawValue + "|" + model.period.rawValue] {
             VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("common.loadError", ["msg": error])).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await reload(force: true) } }
@@ -271,147 +283,222 @@ public struct PortfolioOverviewView: View {
             if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel).monospacedDigit() }
         }
     }
+    private var brokerFilterOptions: [VisionSelectOption<PortfolioBrokerFilter>] {
+        [VisionSelectOption(value: PortfolioBrokerFilter.all, title: strings.t("portfolio.brokerFilter.all"))]
+            + model.brokerOptions.map { option in
+                VisionSelectOption(
+                    value: option.id,
+                    title: option.id == .unassigned ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
+            }
+    }
     private var holdings: some View {
-        PortfolioCard(title: strings.t("portfolio.widget.holdings")) {
-            HStack {
-                Picker(
-                    strings.t("portfolio.sort.label"), selection: Binding(get: { model.sort }, set: { model.sort = $0 })
-                ) {
-                    Text(strings.t("portfolio.sort.value")).tag(PortfolioHoldingsSort.value)
-                    Text(strings.t("portfolio.sort.return")).tag(PortfolioHoldingsSort.returnRate)
-                }.pickerStyle(.segmented).frame(maxWidth: 250)
-                Spacer()
-                Picker(
-                    strings.t("portfolio.brokerFilter.label"),
-                    selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 })
-                ) {
-                    Text(strings.t("portfolio.brokerFilter.all")).tag("all")
-                    ForEach(model.brokerOptions) { option in
-                        Text(option.id == "unassigned" ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
-                            .tag(option.id)
-                    }
-                }.frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
-            }
-            if model.filteredHoldings.isEmpty {
-                Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel).padding(20)
-            }
-            ForEach(model.filteredHoldings) { holding in
-                let metrics = model.metrics(for: holding)
-                HStack(spacing: 14) {
-                    Button {
-                        Task { await model.openDetail(id: holding.id) }
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: PortfolioOverviewAsset.symbol(holding.assetClass)).foregroundStyle(
-                                theme.primary
-                            )
-                            .frame(width: 32).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 5) {
-                                HStack {
-                                    Text(holding.name).font(.callout.weight(.medium))
-                                    if metrics.oversold {
-                                        Label(
-                                            strings.t("portfolio.oversold.label"),
-                                            systemImage: "exclamationmark.triangle"
-                                        )
-                                        .font(.caption).foregroundStyle(theme.warning).help(
-                                            strings.t("portfolio.oversold.description"))
-                                    }
-                                }
-                                Text(
-                                    [strings.t("portfolio.assetClass." + holding.assetClass), holding.symbol].compactMap
-                                    {
-                                        $0
-                                    }.joined(separator: " · ")
-                                )
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 5) {
-                                MoneyText(
-                                    amount: metrics.currentValue, currency: currency, settings: shell.settings,
-                                    signed: false,
-                                    colored: false)
-                                HStack(spacing: 5) {
-                                    MoneyText(amount: metrics.gainLoss, currency: currency, settings: shell.settings)
-                                    Text(
-                                        signedPercent(
-                                            model.brokerFilter == "all"
-                                                ? holding.gainLossPercent : metrics.returnPercent)
-                                    )
-                                    .monospacedDigit().foregroundStyle(metrics.gainLoss >= 0 ? theme.gain : theme.loss)
-                                }.font(.caption)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(strings.t("invDetail.trigger") + ": " + holding.name)
-                    PortfolioHoldingActionsMenu(holding: holding, model: model, editing: editing, shell: shell)
-                }.padding(.vertical, 10)
-                if !holding.fullyAssigned {
-                    PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
-                }
-            }
-            Divider()
-            if let status = model.brokerFilterStatusKey {
-                let unavailable = status == "portfolio.brokerFilter.unavailable"
-                Text(strings.t(status)).font(.footnote)
-                    .foregroundStyle(unavailable ? theme.warning : theme.secondaryLabel)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            } else {
-                moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
-                moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+        AdminCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 14) {
+                holdingsHeader
+                holdingsList
+                holdingsFooter
             }
         }
     }
-    private var allocation: some View {
-        // Group values are the server's totals (ADR-216); only the shares are derived here.
-        let groups = PortfolioOverviewAsset.groups.map { key, classes in
-            (
-                key: key,
-                value: model.holdingTotals(assetClasses: classes).totalPortfolioValue,
-                colorIndex: PortfolioOverviewAsset.groups.firstIndex { $0.0 == key } ?? 0
-            )
-        }.filter { $0.value > 0 }
-        let total = groups.reduce(0) { $0 + $1.value }
-        return Group {
-            if total > 0 {
-                PortfolioCard(
-                    title: strings.t("portfolio.widget.allocation"),
-                    description: strings.t("portfolio.allocationByClass")
-                ) {
-                    GeometryReader { geometry in
-                        HStack(spacing: 0) {
-                            ForEach(Array(groups.enumerated()), id: \.element.key) { _, item in
-                                Rectangle().fill(PortfolioOverviewAsset.color(item.colorIndex, theme: theme))
-                                    .frame(
-                                        width: geometry.size.width
-                                            * CGFloat(NSDecimalNumber(decimal: item.value / total).doubleValue))
+    /// The web Holdings `CardHeader`: the title with the sort control and broker select inline
+    /// (`flex flex-row flex-wrap items-center justify-between gap-3`; select `h-8 w-44`).
+    private var holdingsHeader: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(strings.t("portfolio.widget.holdings")).font(Font.visionTitle3)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                VisionSegmentedControl(
+                    selection: Binding(get: { model.sort }, set: { model.sort = $0 }),
+                    options: [
+                        VisionSegmentOption(
+                            value: PortfolioHoldingsSort.value, title: strings.t("portfolio.sort.value")),
+                        VisionSegmentOption(
+                            value: PortfolioHoldingsSort.returnRate, title: strings.t("portfolio.sort.return")),
+                    ], size: .sm, compact: true
+                )
+                .fixedSize()
+                .accessibilityElement(children: .contain).accessibilityLabel(strings.t("portfolio.sort.label"))
+                VisionSelect(
+                    selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 }),
+                    options: brokerFilterOptions, accessibilityLabel: strings.t("portfolio.brokerFilter.label"),
+                    expands: true
+                ).frame(width: 176).disabled(model.brokerFilterStatusKey != nil)
+            }
+        }
+    }
+    /// The web `<List>`: `divide-y divide-border/50 overflow-hidden rounded-card border
+    /// border-border/60 bg-card/70`, rows flush and clipped by the group.
+    @ViewBuilder private var holdingsList: some View {
+        if model.filteredHoldings.isEmpty {
+            Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel)
+                .frame(maxWidth: .infinity).padding(.vertical, 24)
+        } else {
+            let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+            VStack(spacing: 0) {
+                ForEach(Array(model.filteredHoldings.enumerated()), id: \.element.id) { index, holding in
+                    if index > 0 { Rectangle().fill(theme.border.opacity(0.5)).frame(height: 1) }
+                    holdingRow(holding)
+                }
+            }
+            .background(theme.card.opacity(0.7), in: shape)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+        }
+    }
+    @ViewBuilder private var holdingsFooter: some View {
+        if let status = model.brokerFilterStatusKey {
+            let unavailable = status == "portfolio.brokerFilter.unavailable"
+            Text(strings.t(status)).font(.footnote)
+                .foregroundStyle(unavailable ? theme.warning : theme.secondaryLabel)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        } else {
+            // `<p class="flex flex-wrap justify-end gap-x-4">`: both subtotals on one line.
+            HStack(spacing: 16) {
+                subtotal("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
+                subtotal("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+            }
+            .font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+    private func subtotal(_ key: String, _ amount: Decimal, signed: Bool = false) -> some View {
+        let tone = signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground
+        return (Text(strings.t(key) + " ")
+            + Text(money(amount, signed: signed)).foregroundStyle(tone))
+    }
+    @ViewBuilder private func holdingRow(_ holding: PortfolioHolding) -> some View {
+        VStack(spacing: 0) {
+            holdingRowContent(holding)
+            if !holding.fullyAssigned {
+                // The web `<li className="px-4 pb-3">` under the row.
+                PortfolioHoldingsUnassignedView(holding: holding, model: model, editing: editing, shell: shell)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+            }
+        }
+    }
+    @ViewBuilder private func holdingRowContent(_ holding: PortfolioHolding) -> some View {
+        let metrics = model.metrics(for: holding)
+        HStack(spacing: 14) {
+            Button {
+                Task { await model.openDetail(id: holding.id) }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: PortfolioOverviewAsset.symbol(holding.assetClass)).foregroundStyle(
+                        theme.primary
+                    )
+                    .frame(width: 32).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack {
+                            Text(holding.name).font(.callout.weight(.medium))
+                            if metrics.oversold {
+                                Label(
+                                    strings.t("portfolio.oversold.label"),
+                                    systemImage: "exclamationmark.triangle"
+                                )
+                                .font(.caption).foregroundStyle(theme.warning).visionTooltip(
+                                    strings.t("portfolio.oversold.description"))
                             }
                         }
-                    }.frame(height: 14).clipShape(Capsule()).accessibilityLabel(
-                        strings.t("portfolio.allocation.legendAria"))
-                    ForEach(Array(groups.enumerated()), id: \.element.key) { _, item in
-                        HStack {
-                            Circle().fill(PortfolioOverviewAsset.color(item.colorIndex, theme: theme)).frame(
-                                width: 8, height: 8
-                            )
-                            .accessibilityHidden(true)
-                            Text(strings.t("portfolio.assetGroup." + item.key))
-                            Spacer()
-                            MoneyText(
-                                amount: item.value, currency: currency, settings: shell.settings, signed: false,
-                                colored: false)
-                            Text(
-                                VisionFormat.percent(
-                                    item.value / total * 100, digits: 0, locale: shell.settings.numberFormat.locale)
-                            ).monospacedDigit()
-                        }.font(.callout)
+                        Text(
+                            [strings.t("portfolio.assetClass." + holding.assetClass.rawValue), holding.symbol].compactMap
+                            {
+                                $0
+                            }.joined(separator: " · ")
+                        )
+                        .font(.caption).foregroundStyle(theme.secondaryLabel)
                     }
-                    Button(strings.t("nav.rebalance")) { shell.navigate(to: "/portfolio/rebalance") }.buttonStyle(.visionOutline)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 5) {
+                        MoneyText(
+                            amount: metrics.currentValue, currency: currency, settings: shell.settings,
+                            signed: false,
+                            colored: false)
+                        HStack(spacing: 5) {
+                            MoneyText(amount: metrics.gainLoss, currency: currency, settings: shell.settings)
+                            Text(
+                                signedPercent(
+                                    model.brokerFilter.isAll
+                                        ? holding.gainLossPercent : metrics.returnPercent)
+                            )
+                            .monospacedDigit().foregroundStyle(metrics.gainLoss >= 0 ? theme.gain : theme.loss)
+                        }.font(.caption)
+                    }
+                }
+            }
+            .buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(strings.t("invDetail.trigger") + ": " + holding.name)
+            PortfolioHoldingActionsMenu(holding: holding, model: model, editing: editing, shell: shell)
+        }.padding(.horizontal, 16).padding(.vertical, 10)
+    }
+    private struct AllocationSlice {
+        let key: String
+        let value: Decimal
+        let colorIndex: Int
+    }
+    private struct AllocationData {
+        let slices: [AllocationSlice]
+        let total: Decimal
+    }
+    /// Group values are the server's totals (ADR-216); only the shares are derived here.
+    private var allocationSlices: AllocationData? {
+        let slices = PortfolioOverviewAsset.groups.enumerated().map { index, group in
+            AllocationSlice(
+                key: group.0, value: model.holdingTotals(assetClasses: group.1).totalPortfolioValue,
+                colorIndex: index)
+        }.filter { $0.value > 0 }
+        let total = slices.reduce(0) { $0 + $1.value }
+        return total > 0 ? AllocationData(slices: slices, total: total) : nil
+    }
+    private func allocationCard(_ data: AllocationData) -> some View {
+        PortfolioCard(
+            title: strings.t("portfolio.widget.allocation"),
+            description: strings.t("portfolio.allocationByClass"),
+            accessory: {
+                // `Button variant="link"` to the rebalance page, in the card header.
+                Button(strings.t("nav.rebalance")) { shell.navigate(to: "/portfolio/rebalance") }
+                    .buttonStyle(.visionLink)
+            }
+        ) {
+            allocationBar(data)
+            ForEach(data.slices, id: \.key) { item in
+                HStack(spacing: 8) {
+                    Circle().fill(PortfolioOverviewAsset.color(item.colorIndex, theme: theme)).frame(
+                        width: 10, height: 10
+                    )
+                    .accessibilityHidden(true)
+                    Text(strings.t("portfolio.assetGroup." + item.key)).foregroundStyle(theme.secondaryLabel)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    MoneyText(
+                        amount: item.value, currency: currency, settings: shell.settings, signed: false,
+                        colored: false)
+                    Text(
+                        VisionFormat.percent(
+                            item.value / data.total * 100, digits: 0, locale: shell.settings.numberFormat.locale)
+                    ).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+                        .frame(width: 48, alignment: .trailing)
+                }.font(.footnote)
+            }
+        }
+    }
+    private func allocationBar(_ data: AllocationData) -> some View {
+        GeometryReader { geometry in
+            HStack(spacing: 1) {
+                ForEach(data.slices, id: \.key) { item in
+                    Rectangle().fill(PortfolioOverviewAsset.color(item.colorIndex, theme: theme))
+                        .frame(
+                            width: max(
+                                0,
+                                (geometry.size.width - CGFloat(data.slices.count - 1))
+                                    * CGFloat(NSDecimalNumber(decimal: item.value / data.total).doubleValue)))
                 }
             }
         }
+        .frame(height: 10).background(theme.foreground.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(strings.t("portfolio.allocation.legendAria"))
     }
     private func costs(_ summary: PortfolioSummaryData) -> some View {
         let totals = summary.totals
@@ -513,22 +600,22 @@ private struct PortfolioFigureInfo: View {
         } label: {
             Image(systemName: symbol).font(.caption)
         }
-        .buttonStyle(.plain).help(text).accessibilityLabel(title)
+        .buttonStyle(.plain).visionTooltip(text).accessibilityLabel(title)
         .popover(isPresented: $open) { Text(text).font(.callout).padding(16).frame(maxWidth: 340) }
     }
 }
 
 enum PortfolioOverviewAsset {
-    static let groups: [(String, [String])] = [
-        ("stocksEtfs", ["stock", "etf"]), ("crypto", ["crypto"]),
-        ("metals", ["metals"]), ("realEstate", ["real_estate"]), ("savingsBonds", ["savings", "bond"]),
+    static let groups: [(String, [OpenAPI.AssetClass])] = [
+        ("stocksEtfs", [.stock, .etf]), ("crypto", [.crypto]),
+        ("metals", [.metals]), ("realEstate", [.realEstate]), ("savingsBonds", [.savings, .bond]),
     ]
-    static func symbol(_ asset: String) -> String {
+    static func symbol(_ asset: OpenAPI.AssetClass) -> String {
         switch asset {
-        case "crypto": "bitcoinsign.circle"
-        case "metals": "diamond"
-        case "real_estate": "building.2"
-        case "savings", "bond": "banknote"
+        case .crypto: "bitcoinsign.circle"
+        case .metals: "diamond"
+        case .realEstate: "building.2"
+        case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"
         }
     }

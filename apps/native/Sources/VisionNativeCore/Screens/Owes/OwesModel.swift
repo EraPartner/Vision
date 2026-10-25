@@ -3,10 +3,10 @@ import Observation
 
 /// The person whose detail `/owes` shows (`selectedRecipient`).
 public struct OwesPerson: Equatable, Sendable {
-    public let id: Int
+    public let id: RecipientID
     public let name: String
 
-    public init(id: Int, name: String) {
+    public init(id: RecipientID, name: String) {
         self.id = id
         self.name = name
     }
@@ -14,10 +14,10 @@ public struct OwesPerson: Equatable, Sendable {
 
 /// The Record payment dialog: the split, its remaining amount and the typed amount.
 public struct OwesPaymentDraft: Equatable, Sendable {
-    public let splitId: Int
+    public let splitId: SplitID
     public let remaining: Decimal
     /// The split's own currency (the transaction's), `splitCurrency` of the web dialog.
-    public let currency: String
+    public let currency: CurrencyCode
     public var amountText: String
     /// `owesPage.recordDialog.invalidAmount` shows.
     public var invalid = false
@@ -28,19 +28,19 @@ public enum OwesConfirmation: Equatable, Sendable {
     /// Settle all outstanding splits of the person.
     case settleAll(count: Int, amount: Decimal, unconvertedCount: Int)
     /// Delete this split.
-    case deleteSplit(Int)
+    case deleteSplit(SplitID)
 }
 
 /// One row of the person detail's Recent transactions table.
 public struct OwesRecentRow: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: TransactionID
     public let date: String
     /// The memo, else `owesPage.transaction`.
     public let description: String
     /// The category, else `txPage.field.uncategorized`.
     public let category: String
     public let amount: Decimal
-    public let currency: String
+    public let currency: CurrencyCode
     /// The bank account, else `—`.
     public let bankAccount: String
 
@@ -113,8 +113,8 @@ public final class OwesModel {
     @ObservationIgnored private var summaryFetchedAt: Date?
     @ObservationIgnored private var summaryInFlight: Task<Void, Never>?
     @ObservationIgnored private var splitsFetchedAt: Date?
-    @ObservationIgnored private var splitsInFlight: (id: Int, task: Task<Void, Never>)?
-    @ObservationIgnored private var recentInFlight: (id: Int, task: Task<Void, Never>)?
+    @ObservationIgnored private var splitsInFlight: (id: RecipientID, task: Task<Void, Never>)?
+    @ObservationIgnored private var recentInFlight: (id: RecipientID, task: Task<Void, Never>)?
     @ObservationIgnored private var recentOffset = 0
     @ObservationIgnored private var recentVersion = 0
     @ObservationIgnored private var isVisible = false
@@ -138,7 +138,7 @@ public final class OwesModel {
     private var settings: NativeAppSettings { shell?.settings ?? .defaults }
 
     /// `appSettings.defaultCurrency || "EUR"`: the owed amounts' currency.
-    public var defaultCurrency: String { settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency }
+    public var defaultCurrency: CurrencyCode { LedgerCurrency.display(settings) }
 
     // MARK: Visibility
 
@@ -239,9 +239,9 @@ public final class OwesModel {
     }
 
     /// `formatCurrency(amount, defaultCurrency, locale, decimals)`.
-    public func money(_ amount: Decimal, currency: String? = nil) -> String {
+    public func money(_ amount: Decimal, currency: CurrencyCode? = nil) -> String {
         VisionFormat.currency(
-            amount, code: (currency ?? defaultCurrency).uppercased(), locale: settings.numberFormat.locale,
+            amount, code: (currency ?? defaultCurrency), locale: settings.numberFormat.locale,
             fractionDigits: settings.showDecimalPlaces)
     }
 
@@ -313,8 +313,8 @@ public final class OwesModel {
     public var personOutstanding: Decimal { splitsTotals?.remaining ?? 0 }
 
     /// The split's own currency: its transaction's, else the default currency.
-    public func currency(of split: OpenAPI.SplitOwedDetail) -> String {
-        split.transactionCurrency.isEmpty ? defaultCurrency : split.transactionCurrency
+    public func currency(of split: OpenAPI.SplitOwedDetail) -> CurrencyCode {
+        split.transactionCurrency
     }
 
     /// The split row's title: "payee - memo", else `owesPage.transaction`.
@@ -339,18 +339,18 @@ public final class OwesModel {
     }
 
     /// `/transactions?transaction_id=<id>&filter_label=<label>`.
-    public nonisolated static func transactionLink(_ id: Int, label: String) -> String {
+    public nonisolated static func transactionLink(_ id: TransactionID, label: String) -> String {
         NativeRoute(
             path: TransactionsRoutes.path,
             query: [
-                URLQueryItem(name: "transaction_id", value: String(id)),
+                URLQueryItem(name: "transaction_id", value: String(id.rawValue)),
                 URLQueryItem(name: "filter_label", value: label),
             ]
         ).string
     }
 
     /// The title link, the Recent transactions description link.
-    public func openTransaction(_ id: Int, label: String) {
+    public func openTransaction(_ id: TransactionID, label: String) {
         guard isVisible else { return }
         shell?.navigate(to: Self.transactionLink(id, label: label))
     }
@@ -397,7 +397,7 @@ public final class OwesModel {
     // MARK: Settle and delete
 
     /// Mark as settled.
-    public func settle(_ splitId: Int) async {
+    public func settle(_ splitId: SplitID) async {
         guard !settlePending else { return }
         settlePending = true
         defer { settlePending = false }
@@ -418,7 +418,7 @@ public final class OwesModel {
     }
 
     /// Delete split: asks first.
-    public func requestDeleteSplit(_ splitId: Int) {
+    public func requestDeleteSplit(_ splitId: SplitID) {
         confirmation = .deleteSplit(splitId)
     }
 
@@ -473,7 +473,7 @@ public final class OwesModel {
         }
     }
 
-    private func deleteSplit(_ id: Int) async {
+    private func deleteSplit(_ id: SplitID) async {
         deletePending = true
         defer { deletePending = false }
         do {
@@ -550,7 +550,7 @@ public final class OwesModel {
         let task = Task { [weak self] in
             guard
                 let page = try? await service.recipientTransactions(
-                    groupId: id, offset: 0, limit: OwesModel.recentPageSize)
+                    groupId: RecipientGroupID(rawValue: id.rawValue), offset: 0, limit: OwesModel.recentPageSize)
             else {
                 if self?.recentVersion == version { self?.recentLoaded = true }
                 return
@@ -574,7 +574,7 @@ public final class OwesModel {
         defer { if recentVersion == version { isFetchingMoreRecent = false } }
         guard
             let page = try? await service.recipientTransactions(
-                groupId: person.id, offset: recentOffset, limit: Self.recentPageSize),
+                groupId: RecipientGroupID(rawValue: person.id.rawValue), offset: recentOffset, limit: Self.recentPageSize),
             recentVersion == version
         else { return }
         let existing = Set(recent.map(\.id))
@@ -584,7 +584,7 @@ public final class OwesModel {
     }
 
     /// A row was drawn: near the end of the loaded rows, the next page loads.
-    public func recentRowAppeared(_ id: Int) async {
+    public func recentRowAppeared(_ id: TransactionID) async {
         let shown = recentRows
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         if index >= shown.count - 3 { await loadMoreRecent() }
@@ -596,11 +596,11 @@ public final class OwesModel {
         let uncategorized = strings.t("txPage.field.uncategorized")
         return recent.map { item in
             OwesRecentRow(
-                id: item.id, date: item.transactionDate,
+                id: item.id, date: item.transactionDate.description,
                 description: item.memo.flatMap { $0.isEmpty ? nil : $0 } ?? transaction,
                 category: item.categoryName.flatMap { $0.isEmpty ? nil : $0 } ?? uncategorized,
                 amount: item.amount,
-                currency: item.currency.flatMap { $0.isEmpty ? nil : $0 } ?? defaultCurrency,
+                currency: item.currency ?? defaultCurrency,
                 bankAccount: item.bankAccount.flatMap { $0.isEmpty ? nil : $0 } ?? "—")
         }
     }

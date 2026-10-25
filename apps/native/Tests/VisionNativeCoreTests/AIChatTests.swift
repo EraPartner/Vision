@@ -484,23 +484,23 @@ private actor ChatWatchdogClock {
 
 private actor ChatFixtureService: AIChatService {
     var requests: [AIChatSendRequest] = []
-    var deleted: [String] = []
+    var deleted: [AiConversationID] = []
     var modelReads = 0
     var statusReads = 0
-    var detailReads: [String] = []
+    var detailReads: [AiConversationID] = []
     var offsets: [Int] = []
     private var ok = true
     private var enabled = true
-    private var details: [String: AIChatConversationDetail] = [:]
+    private var details: [AiConversationID: AIChatConversationDetail] = [:]
     private var paged = false
-    private var pipes: [String: AsyncThrowingStream<ServerSentEvent, Error>.Continuation] = [:]
-    private var streamCounts: [String: Int] = [:]
-    private var streamWaiters: [String: [(count: Int, continuation: CheckedContinuation<Void, Never>)]] = [:]
+    private var pipes: [AiConversationID: AsyncThrowingStream<ServerSentEvent, Error>.Continuation] = [:]
+    private var streamCounts: [AiConversationID: Int] = [:]
+    private var streamWaiters: [AiConversationID: [(count: Int, continuation: CheckedContinuation<Void, Never>)]] = [:]
     private var createWaiter: CheckedContinuation<Void, Never>?
     private var detailWaiter: CheckedContinuation<Void, Never>?
     private var createPaused = false
     private var createGate: CheckedContinuation<Void, Never>?
-    private var detailPauseID: String?
+    private var detailPauseID: AiConversationID?
     private var detailGate: CheckedContinuation<Void, Never>?
     func setStatus(ok: Bool, enabled: Bool) {
         self.ok = ok
@@ -508,7 +508,7 @@ private actor ChatFixtureService: AIChatService {
     }
     func setDetail(_ detail: AIChatConversationDetail) { details[detail.conversation.id] = detail }
     func setPagedList() { paged = true }
-    func pauseDetail(_ id: String) { detailPauseID = id }
+    func pauseDetail(_ id: AiConversationID) { detailPauseID = id }
     func waitForDetail() async {
         if detailGate != nil { return }
         await withCheckedContinuation { detailWaiter = $0 }
@@ -531,15 +531,17 @@ private actor ChatFixtureService: AIChatService {
     }
     func chatConversations(offset: Int) async throws -> AIChatConversationPage {
         offsets.append(offset)
-        let ids =
-            paged ? (offset == 0 ? (0..<50).map { "id\($0)" } : ["id50"]) : ["a", "b"].filter { !deleted.contains($0) }
+        let ids: [AiConversationID] =
+            paged
+            ? (offset == 0 ? (0..<50).map { AiConversationID("id\($0)") } : ["id50"])
+            : ["a", "b"].filter { !deleted.contains($0) }
         return .init(
-            items: try ids.map { try .init(raw: fixtureConversation($0)) }, total: paged ? 51 : ids.count, limit: 50,
+            items: try ids.map { try .init(raw: fixtureConversation($0.rawValue)) }, total: paged ? 51 : ids.count, limit: 50,
             offset: offset)
     }
-    func chatConversation(id: String) async throws -> AIChatConversationDetail {
+    func chatConversation(id: AiConversationID) async throws -> AIChatConversationDetail {
         detailReads.append(id)
-        let value = try details[id] ?? chatDetail(id)
+        let value = try details[id] ?? chatDetail(id.rawValue)
         if detailPauseID == id {
             detailPauseID = nil
             await withCheckedContinuation {
@@ -570,10 +572,10 @@ private actor ChatFixtureService: AIChatService {
         }
         return try chatDetail("created")
     }
-    func chatRename(id: String, title: String) async throws -> AIChatConversation {
-        try .init(raw: fixtureConversation(id))
+    func chatRename(id: AiConversationID, title: String) async throws -> AIChatConversation {
+        try .init(raw: fixtureConversation(id.rawValue))
     }
-    func chatDelete(id: String) async throws { deleted.append(id) }
+    func chatDelete(id: AiConversationID) async throws { deleted.append(id) }
     func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void) async throws
         -> AIChatComplete
     {
@@ -589,14 +591,14 @@ private actor ChatFixtureService: AIChatService {
             for try await frame in stream { try await receive(frame) }
         }
     }
-    func waitForStream(_ id: String, count: Int = 1) async {
+    func waitForStream(_ id: AiConversationID, count: Int = 1) async {
         if streamCounts[id, default: 0] >= count { return }
         await withCheckedContinuation { streamWaiters[id, default: []].append((count, $0)) }
     }
-    func push(_ id: String, event: String, raw: TaxValue) throws {
+    func push(_ id: AiConversationID, event: String, raw: TaxValue) throws {
         pipes[id]?.yield(.init(event: event, data: String(decoding: try APIBody.encode(raw), as: UTF8.self)))
     }
-    func finish(_ id: String) { pipes[id]?.finish() }
+    func finish(_ id: AiConversationID) { pipes[id]?.finish() }
 }
 
 private final class ChatFixtureClock: @unchecked Sendable {

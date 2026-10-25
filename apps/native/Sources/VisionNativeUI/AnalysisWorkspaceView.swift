@@ -160,21 +160,24 @@ public struct AnalysisWorkspaceView: View {
                         .foregroundStyle(theme.secondaryLabel)
                         .frame(maxWidth: 560, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
-                    ForEach(AnalysisTemplate.all) { template in
-                        Button {
-                            model.applyTemplate(template, name: strings.t(template.titleKey))
-                            templatesOpen = false
-                            builderOpen = false
-                            builderFocused = true
-                            scroll(proxy, to: "analysis-data")
-                        } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(strings.t(template.titleKey)).font(.headline)
-                                Text(strings.t(template.descriptionKey)).font(.footnote).foregroundStyle(
-                                    theme.secondaryLabel)
-                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                            .visionCardBackground()
+                    // `grid gap-3 md:grid-cols-3`.
+                    VisionResponsiveColumns(weights: [1, 1, 1], minimumPageWidth: 600, spacing: 12) {
+                        ForEach(AnalysisTemplate.all) { template in
+                            Button {
+                                model.applyTemplate(template, name: strings.t(template.titleKey))
+                                templatesOpen = false
+                                builderOpen = false
+                                builderFocused = true
+                                scroll(proxy, to: "analysis-data")
+                            } label: {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(strings.t(template.titleKey)).font(.headline)
+                                    Text(strings.t(template.descriptionKey)).font(.footnote).foregroundStyle(
+                                        theme.secondaryLabel)
+                                }.padding(12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .visionCardBackground()
+                        }
                     }
                     Button(strings.t("analysis.blank")) {
                         model.startBlank()

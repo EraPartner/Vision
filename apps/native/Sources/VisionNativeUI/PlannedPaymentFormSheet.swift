@@ -45,7 +45,7 @@ struct PlannedPaymentFormSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 470, idealWidth: 470, minHeight: 520, idealHeight: 720)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
     }
@@ -69,13 +69,10 @@ struct PlannedPaymentFormSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 field("plannedForm.currency") {
-                    Picker(strings.t("plannedForm.currency"), selection: $form.currency) {
-                        ForEach(currencyOptions, id: \.self) { code in
-                            Text(verbatim: code).tag(code)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    VisionSelect(
+                        selection: $form.currency,
+                        options: currencyOptions.map { code in VisionSelectOption(value: code, title: code.rawValue) },
+                        accessibilityLabel: strings.t("plannedForm.currency"), expands: true)
                 }
                 .frame(width: 140)
             }
@@ -117,22 +114,14 @@ struct PlannedPaymentFormSheet: View {
             if form.showsRecurrenceFields { recurrenceFields }
             field("plannedForm.notes") {
                 TextEditor(text: $form.notes)
-                    .font(.body)
-                    .frame(height: 48)
-                    .scrollContentBackground(.hidden)
-                    .padding(4)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                    .visionTextEditor()
                     .overlay(alignment: .topLeading) {
                         if form.notes.isEmpty {
                             Text(strings.t("plannedForm.notesPlaceholder2"))
+                                .font(VisionControlMetrics.fieldFont)
                                 .foregroundStyle(theme.tertiaryLabel)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
+                                .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
                         }
@@ -149,24 +138,26 @@ struct PlannedPaymentFormSheet: View {
     }
 
     /// The six offered currencies, plus a stored one outside them so an edit still shows it.
-    private var currencyOptions: [String] {
+    private var currencyOptions: [CurrencyCode] {
         let offered = PlannedPaymentFormModel.currencies
         return offered.contains(form.currency) ? offered : offered + [form.currency]
     }
 
     private var directionField: some View {
         field("plannedForm.direction") {
-            Picker(
-                strings.t("plannedForm.direction"),
-                selection: Binding(get: { form.effectiveDirection }, set: { form.direction = $0 })
-            ) {
-                Label(strings.t(PlannedDirection.expense.labelKey), systemImage: "arrow.down.right")
-                    .tag(PlannedDirection.expense)
-                Label(strings.t(PlannedDirection.income.labelKey), systemImage: "arrow.up.right")
-                    .tag(PlannedDirection.income)
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
+            VisionSegmentedControl(
+                selection: Binding(get: { form.effectiveDirection }, set: { form.direction = $0 }),
+                options: [
+                    VisionSegmentOption(
+                        value: PlannedDirection.expense, title: strings.t(PlannedDirection.expense.labelKey),
+                        systemImage: "arrow.down.right"),
+                    VisionSegmentOption(
+                        value: PlannedDirection.income, title: strings.t(PlannedDirection.income.labelKey),
+                        systemImage: "arrow.up.right"),
+                ]
+            )
+            .fillingWidth()
+            .accessibilityLabel(strings.t("plannedForm.direction"))
             .disabled(form.isLoan)
             helpText(form.directionHelpKey)
         }
@@ -175,13 +166,20 @@ struct PlannedPaymentFormSheet: View {
     private var loanFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             field("plannedForm.loanType") {
-                Picker(strings.t("plannedForm.loanType"), selection: $form.loanType) {
-                    Text(strings.t("plannedForm.loanType.amortizing")).tag(OpenAPI.PlannedLoanType.amortizing)
-                    Text(strings.t("plannedForm.loanType.fixedPrincipal")).tag(OpenAPI.PlannedLoanType.fixedPrincipal)
-                    Text(strings.t("plannedForm.loanType.interestOnly")).tag(OpenAPI.PlannedLoanType.interestOnly)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
+                VisionSelect(
+                    selection: $form.loanType,
+                    options: [
+                        VisionSelectOption(
+                            value: OpenAPI.PlannedLoanType.amortizing,
+                            title: strings.t("plannedForm.loanType.amortizing")),
+                        VisionSelectOption(
+                            value: OpenAPI.PlannedLoanType.fixedPrincipal,
+                            title: strings.t("plannedForm.loanType.fixedPrincipal")),
+                        VisionSelectOption(
+                            value: OpenAPI.PlannedLoanType.interestOnly,
+                            title: strings.t("plannedForm.loanType.interestOnly")),
+                    ],
+                    accessibilityLabel: strings.t("plannedForm.loanType"), expands: true)
             }
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.loanPrincipal", error: .loanPrincipal) {
@@ -218,13 +216,13 @@ struct PlannedPaymentFormSheet: View {
     private var recurrenceFields: some View {
         VStack(alignment: .leading, spacing: 12) {
             field("plannedForm.frequency") {
-                Picker(strings.t("plannedForm.frequency"), selection: $form.frequency) {
-                    ForEach(PlannedPaymentFormModel.frequencies, id: \.self) { frequency in
-                        Text(strings.t("plannedForm.freq.\(frequency.rawValue)")).tag(frequency)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
+                VisionSelect(
+                    selection: $form.frequency,
+                    options: PlannedPaymentFormModel.frequencies.map { frequency in
+                        VisionSelectOption(
+                            value: frequency, title: strings.t("plannedForm.freq.\(frequency.rawValue)"))
+                    },
+                    accessibilityLabel: strings.t("plannedForm.frequency"), expands: true)
             }
             if form.showsCustomDays {
                 field("plannedForm.repeatEvery", error: .customDays) {
@@ -268,7 +266,7 @@ struct PlannedPaymentFormSheet: View {
                 form.resetErrors()
                 model.dismissEditor()
             }
-            .buttonStyle(.visionOutline)
+            .buttonStyle(.vision(.ghost))
             .keyboardShortcut(.cancelAction)
             Button(action: save) {
                 HStack(spacing: 6) {
@@ -282,7 +280,6 @@ struct PlannedPaymentFormSheet: View {
             .keyboardShortcut(.defaultAction)
             .disabled(saving)
         }
-        .controlSize(.large)
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
     }
@@ -332,7 +329,7 @@ struct PlannedPaymentFormSheet: View {
             Spacer(minLength: 0)
             Toggle(strings.t(labelKey), isOn: isOn)
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(.visionSwitchLabelless)
                 .disabled(disabled)
         }
         .padding(12)

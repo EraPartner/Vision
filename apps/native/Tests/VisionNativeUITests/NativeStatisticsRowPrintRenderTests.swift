@@ -76,7 +76,7 @@
                 height: page.bounds(for: .mediaBox).height)
             let columnText = documents.compactMap { $0.page(at: 0)?.selection(for: column)?.string }.joined()
             let expected = MoneyText.text(
-                Decimal(string: StatisticsRowsPrintTransport.amount)!, currency: "EUR", settings: settings,
+                Decimal(string: StatisticsRowsPrintTransport.amount)!, currency: ReportingFallbackCurrency.euro, settings: settings,
                 signed: false)
             #expect(compact(columnText).contains(compact(expected)))
             expectHorizontalBounds(documents)

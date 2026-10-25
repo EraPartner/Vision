@@ -41,7 +41,7 @@ public final class PortfolioImportParserModel {
     }
     public var brokerAccounts: [OpenAPI.Account] { portfolioImportBrokerAccounts(accounts) }
     public var selectedParser: PortfolioImportParser? {
-        source.hasPrefix("saved:") ? savedParsers.first { $0.id == Int(source.dropFirst(6)) } : nil
+        source.hasPrefix("saved:") ? savedParsers.first { $0.id == PortfolioParserConfigID(String(source.dropFirst(6))) } : nil
     }
     public var parserDirty: Bool { parserName != baselineName || config != baselineConfig }
     public var isDirty: Bool { file != nil || parserDirty }
@@ -129,7 +129,7 @@ public final class PortfolioImportParserModel {
         suppressProbe = false
         await refreshProbe(applyDetection: true)
     }
-    public func setAccount(_ id: Int?) {
+    public func setAccount(_ id: AccountID?) {
         guard !isBusy else { return }
         accountChosenManually = true
         config.accountId = id
@@ -170,7 +170,7 @@ public final class PortfolioImportParserModel {
                     value.detectionError != nil
                     || (file.filename.lowercased().hasSuffix(".xls") || file.filename.lowercased().hasSuffix(".xlsx"))
                         && value.detected == nil
-                if let detected, let preset = PortfolioImportConfig.preset(detected.presetKey ?? detected.source) {
+                if let detected, let preset = PortfolioImportConfig.preset(detected.presetKey?.rawValue ?? detected.source.rawValue) {
                     let account = config.accountId
                     config = preset
                     if accountChosenManually {
@@ -244,11 +244,10 @@ public final class PortfolioImportParserModel {
         let submitted = config
         let submittedNavigation = navigationRevision
         let adapter =
-            submitted.isSpecialized
-            ? submitted.format!
-            : selectedParser?.name
-                ?? (parserName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? "portfolio_generic" : parserName.trimmingCharacters(in: .whitespacesAndNewlines))
+            submitted.format?.rawValue
+            ?? selectedParser?.name
+            ?? (parserName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "portfolio_generic" : parserName.trimmingCharacters(in: .whitespacesAndNewlines))
         let task = Task {
             try await service.importStream(file: file, config: submitted, adapterName: adapter) {
                 [weak self] progress in await self?.receive(progress)

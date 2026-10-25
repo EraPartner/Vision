@@ -14,16 +14,16 @@ struct NativeShellNotificationsTests {
         await service.waitForFXRead()
         var receiptSeen = false
         model.didRefreshRates = {
-            await service.setFXSource("database")
+            await service.setFXSource(.database)
             receiptSeen = true
         }
         let refreshing = Task { await model.refresh() }
         while !receiptSeen { await Task.yield() }
-        #expect(model.data?.source == "fallback")
+        #expect(model.data?.source == .fallback)
         await service.releaseFXRead()
         await older.value
         await refreshing.value
-        #expect(model.data?.source == "database" && !model.shouldShow)
+        #expect(model.data?.source == .database && !model.shouldShow)
         #expect(await service.fxReads == 3)
         #expect(await service.refreshes == 1)
     }
@@ -123,7 +123,7 @@ struct NativeShellNotificationsTests {
         storage.values[.upcomingDismissals] = "[8,\"8\",\"1:2026-03-28\",\"2:2026-03-29\",\"bad\",\"2:2026-03-29\"]"
         let service = BannerService()
         await service.setUpcoming([
-            payment(1, "2026-03-29"), payment(2, "2026-03-29T00:00:00.000Z"),
+            payment(1, "2026-03-29"), payment(2, "2026-03-29"),
             payment(3, "2026-03-30", executed: true), payment(4, "2026-03-31", executed: true, recurring: true),
         ])
         let model = ShellUpcomingPaymentsModel(
@@ -277,7 +277,7 @@ struct NativeShellNotificationsTests {
         -> OpenAPI.PlannedTransaction
     {
         .init(
-            id: id, plannedDate: date, amount: Decimal(string: "-12.34")!, isRecurring: recurring,
+            id: PlannedTransactionID(rawValue: id), plannedDate: CalendarDay(stringLiteral: date), amount: Decimal(string: "-12.34")!, isRecurring: recurring,
             isExecuted: executed, executionCount: executed ? 1 : 0, isActive: true, links: [])
     }
 }
@@ -339,7 +339,7 @@ private actor BannerService: ShellNotificationsService {
     private var pauseUpcoming = false
     private var cancelRefresh = false
     private var pauseFX = false
-    private var fxSource = "fallback"
+    private var fxSource: OpenAPI.ExchangeRates.Source = .fallback
     private var fxGate: CheckedContinuation<Void, Never>?
     private var fxWaiter: CheckedContinuation<Void, Never>?
     private var refreshGate: CheckedContinuation<Void, Never>?
@@ -352,7 +352,7 @@ private actor BannerService: ShellNotificationsService {
     func pauseNextUpcoming() { pauseUpcoming = true }
     func cancelNextRefresh() { cancelRefresh = true }
     func pauseNextFXRead() { pauseFX = true }
-    func setFXSource(_ source: String) { fxSource = source }
+    func setFXSource(_ source: OpenAPI.ExchangeRates.Source) { fxSource = source }
     func waitForFXRead() async {
         if fxGate == nil { await withCheckedContinuation { fxWaiter = $0 } }
     }

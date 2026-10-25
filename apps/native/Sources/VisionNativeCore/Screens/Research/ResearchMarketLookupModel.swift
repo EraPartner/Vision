@@ -9,12 +9,12 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         }
     }
     public var rawInvestmentId: String? { route.value("investmentId") }
-    public var mappingInvestmentId: Int? {
+    public var mappingInvestmentId: InvestmentID? {
         guard let raw = rawInvestmentId,
             let number = Decimal(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)), number > 0,
             number <= Decimal(Int.max), Decimal(NSDecimalNumber(decimal: number).intValue) == number
         else { return nil }
-        return NSDecimalNumber(decimal: number).intValue
+        return InvestmentID(NSDecimalNumber(decimal: number).intValue)
     }
     public var range: ResearchRangeOption {
         ResearchRangeOption.lookup.first { $0.range == route.value("range") } ?? ResearchRangeOption.lookup.first {
@@ -42,7 +42,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     public let search: ResearchSearchModel
     public let mapping: ResearchMarketMappingModel
     public let action: ResearchMarketActionModel
-    public private(set) var route = NativeRoute(path: "/research/market")
+    public private(set) var route = NativeRoute(.marketLookup)
     public var state: ResearchMarketLookupState { .init(route: route) }
     public private(set) var holdings: [PortfolioHolding] = []
     public private(set) var holdingsLoaded = false
@@ -60,7 +60,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     public var providerHolding: PortfolioHolding? {
         guard let raw = state.rawInvestmentId else { return nil }
         return holdings.first {
-            String($0.id) == raw && !($0.priceProvider ?? "").isEmpty && $0.priceProvider != "yahoo"
+            String($0.id.rawValue) == raw && !($0.priceProvider?.rawValue ?? "").isEmpty && $0.priceProvider != .yahoo
         }
     }
     public var isProviderAsset: Bool { providerHolding != nil }
@@ -90,7 +90,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         mapping.didMutate = { [weak self] in
             guard let self else { return }
             if let holding = providerHolding {
-                cache.invalidate(key: "lookup-history:\(holding.id):\(state.range.range)")
+                cache.invalidate(key: "lookup-history:\(holding.id.rawValue):\(state.range.range)")
             }
             portfolioDataDidChange()
         }
@@ -167,11 +167,11 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
     }
     private func loadHoldings(force: Bool) async {
         let stamp = holdingsRevision
-        let currency = settings.defaultCurrency
+        let currency = ReportingFallbackCurrency.resolve(settings.defaultCurrency)
         let service = service
         do {
             let data: PortfolioSummaryData = try await cache.request(
-                key: "lookup-summary:" + currency, freshFor: 60, force: force
+                key: "lookup-summary:" + currency.rawValue, freshFor: 60, force: force
             ) {
                 try await service.researchPortfolioSummary(currency: currency)
             }
@@ -204,7 +204,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
             let from = days == 0 ? Decimal(0) : Decimal(now().timeIntervalSince1970 * 1000) - Decimal(days * 86_400_000)
             do {
                 let history: ResearchPriceHistoryData = try await cache.request(
-                    key: "lookup-history:\(holding.id):\(range.range)", freshFor: 60, force: force
+                    key: "lookup-history:\(holding.id.rawValue):\(range.range)", freshFor: 60, force: force
                 ) {
                     try await service.researchPriceHistory(id: holding.id, fromMs: from, dbOnly: false)
                 }
@@ -216,15 +216,15 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
                 }
                 let chart = try ResearchChartData(
                     raw: .object([
-                        "symbol": .string(holding.symbol ?? symbol), "currency": .string(holding.currency),
+                        "symbol": .string(holding.symbol ?? symbol), "currency": .string(holding.currency.rawValue),
                         "points": .array(points),
                     ]))
                 let body: TaxValue = .object([
                     "kind": .string("providerQuote"), "selectedSymbol": .string(symbol), "points": .array(points),
                     "investment": .object([
                         "symbol": holding.symbol.map(TaxValue.string) ?? .null, "name": .string(holding.name),
-                        "currency": .string(holding.currency),
-                        "priceProvider": holding.priceProvider.map(TaxValue.string) ?? .null,
+                        "currency": .string(holding.currency.rawValue),
+                        "priceProvider": holding.priceProvider.map { TaxValue.string($0.rawValue) } ?? .null,
                     ]),
                 ])
                 let response = try await service.researchPresentation(body)
@@ -330,7 +330,7 @@ public struct ResearchMarketLookupState: Equatable, Sendable {
         await loadQuote(symbol: symbol, stamp: revision, force: true)
     }
     public func portfolioDataDidChange() {
-        cache.invalidate(key: "lookup-summary:" + settings.defaultCurrency)
+        cache.invalidate(key: "lookup-summary:" + settings.defaultCurrency.description)
         holdingsRevision = UUID()
         holdingsLoaded = false
         if isActive {

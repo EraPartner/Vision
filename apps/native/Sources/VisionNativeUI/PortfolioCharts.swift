@@ -7,11 +7,13 @@ import VisionNativeCore
 struct PortfolioSeriesChart: View {
     let series: [InsightChartSeries]
     let title: String
-    let currency: String
+    let currency: CurrencyCode
     let shell: NativeShellModel
     var percent = false
     var area = false
     var height: CGFloat = 280
+    /// The web's `xTickPattern`: day ticks ("d MMM") for 1M/3M/6M, month ticks ("MMM yy") otherwise.
+    var dayTicks = false
     var colors: [String: Color] = [:]
     @State private var selected: String?
     @State private var rangeStart: String?
@@ -24,14 +26,10 @@ struct PortfolioSeriesChart: View {
     private var keyIndex: [String: Int] {
         Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
     }
-    /// The web AreaChart's fitted domain: the data range plus a margin, not zero-based, so a
-    /// slowly growing portfolio fills the plot instead of a flat line at the top.
+    /// The web AreaChart's fitted domain: the data range plus an 8 % margin, niced, not
+    /// zero-based, so a slowly growing portfolio fills the plot instead of a flat line at the top.
     private var yDomain: ClosedRange<Double> {
-        let values = series.flatMap { $0.points.map { coordinate($0.value) } }
-        guard let low = values.min(), let high = values.max() else { return 0...1 }
-        let span = high - low
-        let margin = span > 0 ? span * 0.08 : max(abs(high) * 0.05, 1)
-        return (low - margin)...(high + margin)
+        ChartAxisTicks.fittedDomain(series.flatMap { $0.points.map { coordinate($0.value) } })
     }
 
     var body: some View {
@@ -49,11 +47,8 @@ struct PortfolioSeriesChart: View {
                                 yEnd: .value(line.label, coordinate(point.value)),
                                 series: .value(title, line.id)
                             )
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [color.opacity(0.28), color.opacity(0.02)], startPoint: .top,
-                                    endPoint: .bottom)
-                            )
+                            .foregroundStyle(ChartFill.areaGradient(color))
+                            .interpolationMethod(.monotone)
                             .accessibilityHidden(true)
                         }
                         if let x = index[point.key] {
@@ -67,6 +62,7 @@ struct PortfolioSeriesChart: View {
                                     lineWidth: line.dashed ? 1.5 : 2.5, lineCap: .round, lineJoin: .round,
                                     dash: line.dashed ? [4, 4] : [])
                             )
+                            .interpolationMethod(.monotone)
                             .accessibilityLabel(line.label + ". " + dateLabel(point.key))
                             .accessibilityValue(format(point.value))
                         }
@@ -81,23 +77,18 @@ struct PortfolioSeriesChart: View {
                 }
             }
             .chartXScale(domain: 0...max(keys.count - 1, 1))
-            .chartYScale(domain: domain)
             .chartLegend(.hidden)
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(Array(keys.indices), count: 5)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(Array(keys.indices), count: 7)) { value in
                     AxisValueLabel {
                         if let position = value.as(Int.self), keys.indices.contains(position) {
-                            Text(dateLabel(keys[position]))
+                            Text(dateLabel(keys[position], pattern: dayTicks ? "d MMM" : "MMM yy"))
+                                .font(ChartTickText.font).foregroundStyle(theme.secondaryLabel)
                         }
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(theme.border.opacity(0.5))
-                    AxisValueLabel { if let value = value.as(Double.self) { Text(format(Decimal(value), axis: true)) } }
-                }
-            }
+            .visionChartYAxis(domain: domain) { format(Decimal($0), axis: true) }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle().fill(.clear).contentShape(Rectangle())
@@ -130,20 +121,12 @@ struct PortfolioSeriesChart: View {
                     rangeStart = nil
                 }
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), alignment: .leading)], alignment: .leading) {
-                ForEach(Array(series.enumerated()), id: \.element.id) { index, line in
-                    HStack(spacing: 6) {
-                        if line.dashed {
-                            Rectangle().fill(colors[line.id] ?? Color(token: palette[index % palette.count]))
-                                .frame(width: 16, height: 2)
-                        } else {
-                            Circle().fill(colors[line.id] ?? Color(token: palette[index % palette.count]))
-                                .frame(width: 7, height: 7)
-                        }
-                        Text(line.label).font(.caption).foregroundStyle(theme.secondaryLabel)
-                    }
-                }
-            }
+            ChartLegendRow(
+                items: series.enumerated().map { index, line in
+                    ChartLegendItem(
+                        id: line.id, label: line.label,
+                        color: colors[line.id] ?? Color(token: palette[index % palette.count]), dashed: line.dashed)
+                })
             if let selected, keys.contains(selected) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(rangeStart.map { "\(dateLabel($0)) – \(dateLabel(selected))" } ?? dateLabel(selected))
@@ -162,7 +145,10 @@ struct PortfolioSeriesChart: View {
                             }.font(.caption)
                         }
                     }
-                }.padding(10).background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(10)
+                    .background(
+                        theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                    )
                     .accessibilityElement(children: .combine)
             }
         }
@@ -190,16 +176,28 @@ struct PortfolioSeriesChart: View {
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: axis ? 0 : shell.settings.showDecimalPlaces, signed: signed)
     }
-    private func dateLabel(_ key: String) -> String {
+    /// `formatDate(parseISO(day), pattern, appLanguageToLocale(language))`: month names follow the
+    /// app language, never the system or number-format locale. The default is the web's
+    /// `CHART_DATE_PATTERNS.detail`.
+    private func dateLabel(_ key: String, pattern: String = "d MMM yyyy") -> String {
         let parts = key.split(separator: "-").compactMap { Int($0) }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
         guard parts.count >= 2,
-            let date = Calendar.current.date(
+            let date = calendar.date(
                 from: DateComponents(
                     year: parts[0], month: parts[1], day: parts.count > 2 ? parts[2] : 1))
         else { return key }
-        return date.formatted(
-            Date.FormatStyle(locale: shell.settings.numberFormat.locale)
-                .month(.abbreviated).day(.twoDigits).year(.twoDigits))
+        let locale = LanguageLocale.locale(shell.strings.language)
+        let formatter = FormatterCache.shared("portfolio.chart|\(locale.identifier)|\(pattern)") {
+            () -> DateFormatter in
+            let made = DateFormatter()
+            made.locale = locale
+            made.calendar = Calendar(identifier: .gregorian)
+            made.dateFormat = pattern
+            return made
+        }
+        return formatter.string(from: date)
     }
     private func key(_ x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
         guard let anchor = proxy.plotFrame else { return nil }
@@ -240,22 +238,50 @@ struct PortfolioSeriesChart: View {
     }
 }
 
-struct PortfolioCard<Content: View>: View {
+struct PortfolioCard<Content: View, Accessory: View>: View {
     let title: String
     var description: String? = nil
     /// `CardTitle` default (type-title-2) rather than `variant="sm"` (type-title-3).
     var large = false
+    /// The trailing header control (the web `CardHeader` row's right side).
+    @ViewBuilder var accessory: () -> Accessory
     @ViewBuilder var content: () -> Content
     @Environment(\.visionTheme) private var theme
+
+    init(
+        title: String, description: String? = nil, large: Bool = false,
+        @ViewBuilder accessory: @escaping () -> Accessory, @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.description = description
+        self.large = large
+        self.accessory = accessory
+        self.content = content
+    }
+
     var body: some View {
         AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(title).font(large ? .visionCardTitle : Font.visionTitle3)
-                    .accessibilityAddTraits(.isHeader)
-                if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(large ? .visionCardTitle : Font.visionTitle3)
+                            .accessibilityAddTraits(.isHeader)
+                        if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
+                    }
+                    Spacer(minLength: 0)
+                    accessory()
+                }
                 content()
             }
         }
+    }
+}
+
+extension PortfolioCard where Accessory == EmptyView {
+    init(
+        title: String, description: String? = nil, large: Bool = false, @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.init(title: title, description: description, large: large, accessory: { EmptyView() }, content: content)
     }
 }
 
@@ -264,8 +290,18 @@ struct PortfolioInlineDisclosure: View {
     let explanation: String
     @State private var open = false
     var body: some View {
-        Button(label) { open = true }.buttonStyle(.plain).help(explanation)
+        Button(label) { open = true }.buttonStyle(.plain).visionTooltip(explanation)
             .accessibilityLabel(label == "ⓘ" ? explanation : label + ". " + explanation)
             .popover(isPresented: $open) { Text(explanation).padding(16).frame(maxWidth: 320) }
+    }
+}
+
+enum PortfolioChartTicks {
+    /// The web `xTickPattern`: day ticks for 1M, 3M and 6M, month ticks for longer periods.
+    static func usesDayTicks(_ period: PortfolioPeriod) -> Bool {
+        switch period {
+        case .oneMonth, .threeMonths, .sixMonths: return true
+        case .oneYear, .threeYears, .all: return false
+        }
     }
 }

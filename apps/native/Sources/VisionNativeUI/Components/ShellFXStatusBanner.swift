@@ -55,7 +55,7 @@ public struct ShellFXStatusBanner: View {
 
     private func message(_ data: OpenAPI.ExchangeRates) -> some View {
         Text(
-            data.source == "fallback"
+            data.source == .fallback
                 ? shell.strings.t("exchangeRates.fallbackInUse")
                 : shell.strings.t(
                     "exchangeRates.staleWarning",

@@ -120,7 +120,7 @@ public struct ResearchForecastData: Codable, Equatable, Sendable {
                 }
             }
             projected = try ResearchDecode.required(raw["projected"], ResearchForecastBands.self)
-            guard projected?.mean != nil, ["parametric", "block_bootstrap"].contains(raw["method"]?.stringValue ?? ""),
+            guard projected?.mean != nil, [.parametric, .blockBootstrap].contains(ResearchForecastMethod(rawValue: raw["method"]?.stringValue ?? "")),
                 try ResearchDecode.count(raw["horizonMonths"]) > 0, try ResearchDecode.count(raw["paths"]) > 0
             else {
                 throw ResearchDecode.failure("Invalid available forecast metadata or projected mean")

@@ -30,6 +30,8 @@ public final class HomeModel {
     public private(set) var transactionCount = 0
     public private(set) var needsCategory = 0
     public private(set) var matchCount = 0
+    /// The payees of the first three suggestions, the "looks paid" row's subtitle.
+    public private(set) var matchPayees: [String] = []
     public private(set) var exclusions = InsightExclusions()
     public private(set) var widgets = InsightWidgetVisibility(nil)
     public private(set) var widgetsLoaded = false
@@ -56,7 +58,7 @@ public final class HomeModel {
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private let readLocal: @MainActor (String) async -> JSONValue?
     @ObservationIgnored private let writeLocal: @MainActor (String, JSONValue) async -> Void
-    @ObservationIgnored private var currency = "EUR"
+    @ObservationIgnored private var currency = LedgerCurrency.eur
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
     @ObservationIgnored private var revision = UUID()
@@ -92,7 +94,7 @@ public final class HomeModel {
     }
 
     public func appear(settings: NativeAppSettings, route: NativeRoute, force: Bool = false) async {
-        let nextCurrency = settings.defaultCurrency
+        let nextCurrency = LedgerCurrency.display(settings)
         let currencyChanged = nextCurrency != currency
         if currencyChanged {
             revision = UUID()
@@ -195,7 +197,7 @@ public final class HomeModel {
             }
         async let count = Self.result { try await service.homeTransactionCount() }
         async let needsCategory = Self.result { try await service.homeNeedsCategory() }
-        async let matches = Self.result { try await service.homeMatchCount() }
+        async let matches = Self.result { try await service.homeMatches() }
         async let widgetSetting = Self.result { try await service.homeWidgetSetting() }
         let monthlyAnswer = await monthly
         let unfilteredAnswer = await unfiltered ?? monthlyAnswer
@@ -225,9 +227,12 @@ public final class HomeModel {
         }
         if case .success(let value) = answers.10 { transactionCount = value }
         if case .success(let value) = answers.11 { self.needsCategory = value }
-        if case .success(let value) = answers.12 { matchCount = value }
+        if case .success(let value) = answers.12 {
+            matchCount = value.count
+            matchPayees = value.payees
+        }
         if case .success(let value) = answers.13, !widgetSavePending, widgetToken == widgetRevision {
-            widgetBaseline = value.expected
+            widgetBaseline = value.expected.json
             widgets = InsightWidgetVisibility(value.value)
             widgetsLoaded = true
             widgetError = nil
@@ -303,8 +308,16 @@ public final class HomeModel {
         let rows = transactions.filter {
             graphExclusions["categoryPie"] == false || exclusions.includes($0)
         }
-        let groups = Dictionary(grouping: rows) { $0.categoryId ?? -1 }
-        let sorted = groups.filter { $0.key != -1 }.sorted {
+        var groups: [CategoryID: [OpenAPI.Transaction]] = [:]
+        var uncategorisedRows: [OpenAPI.Transaction] = []
+        for row in rows {
+            if let id = row.categoryId {
+                groups[id, default: []].append(row)
+            } else {
+                uncategorisedRows.append(row)
+            }
+        }
+        let sorted = groups.sorted {
             $0.value.count == $1.value.count ? $0.key < $1.key : $0.value.count > $1.value.count
         }
         var slices = sorted.prefix(5).map { id, rows in
@@ -312,14 +325,14 @@ public final class HomeModel {
             let detail = name.split(separator: ":", maxSplits: 1).last.map(String.init) ?? name
             let label = String(detail.prefix(1)) + detail.dropFirst().lowercased()
             return HomeCategorySlice(
-                id: String(id), name: label, count: rows.count,
+                id: String(id.rawValue), name: label, count: rows.count,
                 route: InsightsRoutes.drill(categoryIds: [id], label: name))
         }
-        if let uncategorised = groups[-1] {
+        if !uncategorisedRows.isEmpty {
             let label = strings.t("txPage.field.uncategorized")
             slices.append(
                 HomeCategorySlice(
-                    id: "uncategorised", name: label, count: uncategorised.count,
+                    id: "uncategorised", name: label, count: uncategorisedRows.count,
                     route: InsightsRoutes.drill(uncategorised: true, label: label)))
         }
         let others = sorted.dropFirst(5)
@@ -336,10 +349,14 @@ public final class HomeModel {
     public var plannedIncoming: Decimal { plannedTotals?.restOfMonth.incoming ?? 0 }
     /// The hero's Planned out: `rest_of_month.outgoing` (negative or zero).
     public var plannedOutgoing: Decimal { plannedTotals?.restOfMonth.outgoing ?? 0 }
+    /// Catalog key of an account's type subtitle (`accounts.type.crypto_exchange`, never the Swift case name).
+    public nonisolated static func accountTypeKey(_ account: OpenAPI.Account) -> String {
+        "accounts.type.\(account.type.rawValue)"
+    }
     /// `AccountsList`: the active accounts with the largest server-converted balance first. An
     /// account whose balance has an unconverted partition, or no balance, follows in list order.
     public var sortedAccounts: [OpenAPI.Account] {
-        var converted: [Int: Decimal] = [:]
+        var converted: [AccountID: Decimal] = [:]
         for row in accountTotals?.accounts ?? [] where row.unconvertedCurrencies.isEmpty {
             converted[row.id] = row.convertedBalance
         }
@@ -356,7 +373,7 @@ public final class HomeModel {
         Array(
             upcoming.filter {
                 !($0.isExecuted && !$0.isRecurring)
-                    && !dismissedUpcoming.contains("\($0.id):\($0.plannedDate.prefix(10))")
+                    && !dismissedUpcoming.contains("\($0.id.rawValue):\($0.plannedDate)")
             }.sorted { ($0.plannedDate, $0.id) < ($1.plannedDate, $1.id) }.prefix(5))
     }
     /// The shell banner owns the source's shared query and occurrence storage in a native graph.
@@ -379,12 +396,12 @@ public final class HomeModel {
         return Array(
             (balances?.accounts ?? []).filter {
                 !$0.last_transaction.isEmpty && String($0.last_transaction.prefix(10)) < cutoff
-                    && dismissedAccounts[String($0.id)] != String($0.last_transaction.prefix(10))
+                    && dismissedAccounts[String($0.id.rawValue)] != String($0.last_transaction.prefix(10))
             }.prefix(3))
     }
     public func dismissInactivity(_ account: HomeBankBalances.Account) async {
         inactivityRevision = UUID()
-        dismissedAccounts[String(account.id)] = String(account.last_transaction.prefix(10))
+        dismissedAccounts[String(account.id.rawValue)] = String(account.last_transaction.prefix(10))
         await persistLocal(
             "vision.home.dismissedAccountInactivity",
             .object(dismissedAccounts.mapValues(JSONValue.string)))
@@ -425,7 +442,7 @@ public final class HomeModel {
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
-            widgetBaseline = saved.expected
+            widgetBaseline = saved.expected.json
             widgets = InsightWidgetVisibility(saved.value)
         } catch {
             widgets = old

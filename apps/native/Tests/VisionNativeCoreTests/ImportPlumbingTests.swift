@@ -423,7 +423,7 @@ actor EventLog {
         #expect(
             try await client.supportedAdapters() == [ImportAdapter(key: "kbc", name: "KBC", adapterClass: "KbcAdapter")]
         )
-        #expect(try await client.rollbackImportBatch(id: 12) == 4)
+        #expect(try await client.rollbackImportBatch(id: "12") == 4)
         let page: ImportBatchPage = try await client.importBatches(limit: 10, offset: 20)
         #expect(page.offset == 20)
         let urls = await transport.requests.map { request in request.method.rawValue + " " + request.url.absoluteString

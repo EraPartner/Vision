@@ -18,7 +18,7 @@ struct ResearchDossierEditorView: View {
                         .font(.researchCardTitle).lineLimit(1).accessibilityAddTraits(.isHeader)
                     if let detail = model.detail, model.selectedId != nil {
                         Text(
-                            strings.t("dossiers.workspace." + detail.workspace) + " · "
+                            strings.t("dossiers.workspace." + detail.workspace.rawValue) + " · "
                                 + strings.t("dossiers.version", ["version": String(detail.version)])
                         )
                         .foregroundStyle(theme.secondaryLabel)
@@ -37,7 +37,8 @@ struct ResearchDossierEditorView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuIndicator(.hidden).accessibilityLabel(strings.t("dossiers.editorMenu"))
+                    .menuStyle(.button).buttonStyle(.vision(.outline, size: .icon)).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel(strings.t("dossiers.editorMenu"))
                 }
                 Button(strings.t("dossiers.save"), systemImage: "square.and.arrow.down") { Task { await model.save() } }
                     .buttonStyle(.visionPrimary).disabled(model.busy)
@@ -49,11 +50,11 @@ struct ResearchDossierEditorView: View {
                     )
                 }
                 ResearchDossierField(label: strings.t("dossiers.field.workspace")) {
-                    Picker("", selection: text(\.workspace)) {
-                        ForEach(ResearchDossierContent.workspaces, id: \.self) {
-                            Text(strings.t("dossiers.workspace." + $0)).tag($0)
-                        }
-                    }.labelsHidden().accessibilityLabel(strings.t("dossiers.field.workspace"))
+                    VisionSelect(
+                        selection: choice(\.workspace, fallback: .research),
+                        options: ResearchDossierContent.workspaces.map {
+                            VisionSelectOption(value: $0, title: strings.t("dossiers.workspace." + $0.rawValue))
+                        }, accessibilityLabel: strings.t("dossiers.field.workspace"), expands: true)
                 }
             }
             area("dossiers.field.question", \.question)
@@ -62,7 +63,7 @@ struct ResearchDossierEditorView: View {
                 lines("dossiers.field.assumptions", \.assumptions, .assumptions)
                 lines("dossiers.field.openQuestions", \.openQuestions, .openQuestions)
             }
-            area("dossiers.field.conclusion", \.conclusion, height: 105)
+            area("dossiers.field.conclusion", \.conclusion, height: 120)
             ResearchDossierField(label: strings.t("dossiers.field.reviewDate")) {
                 VisionDateField(
                     day: PlannedDay(ymd: model.draft?.reviewDate, calendar: .current), placeholder: "",
@@ -72,10 +73,14 @@ struct ResearchDossierEditorView: View {
             }.frame(maxWidth: 280)
         }
     }
+    private func choice<Value>(_ path: WritableKeyPath<ResearchDossierContent, Value>, fallback: Value) -> Binding<Value> {
+        Binding(get: { model.draft?[keyPath: path] ?? fallback }, set: { model.draft?[keyPath: path] = $0 })
+    }
     private func text(_ path: WritableKeyPath<ResearchDossierContent, String>) -> Binding<String> {
         Binding(get: { model.draft?[keyPath: path] ?? "" }, set: { model.draft?[keyPath: path] = $0 })
     }
-    private func area(_ key: String, _ path: WritableKeyPath<ResearchDossierContent, String>, height: CGFloat = 65)
+    private func area(_ key: String, _ path: WritableKeyPath<ResearchDossierContent, String>,
+        height: CGFloat = VisionControlMetrics.textAreaMinHeight)
         -> some View
     {
         ResearchDossierField(label: strings.t(key)) {
@@ -109,13 +114,11 @@ struct ResearchDossierField<Content: View>: View {
 struct ResearchDossierTextArea: View {
     @Binding var text: String
     let label: String
-    var height: CGFloat = 65
-    @Environment(\.visionTheme) private var theme
+    /// `Textarea`: `min-h-20`; `rows={5}` on the conclusion.
+    var height: CGFloat = VisionControlMetrics.textAreaMinHeight
+    @FocusState private var focused: Bool
     var body: some View {
-        TextEditor(text: $text).font(.body).scrollContentBackground(.hidden).padding(5).frame(
-            minHeight: height, maxHeight: height
-        )
-        .background(theme.card, in: RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border)).accessibilityLabel(label)
+        TextEditor(text: $text).focused($focused).visionTextEditor(isFocused: focused, minHeight: height)
+            .frame(height: height).accessibilityLabel(label)
     }
 }

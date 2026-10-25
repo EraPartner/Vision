@@ -22,7 +22,7 @@ public enum TransactionsRoutes {
     public static let newTransactionRoute = "\(path)?\(newParameter)=1"
 
     /// `?transaction_id={id}`: one transaction.
-    public static func transactionRoute(_ id: Int) -> String {
+    public static func transactionRoute(_ id: TransactionID) -> String {
         "\(path)?transaction_id=\(id)"
     }
 
@@ -32,8 +32,8 @@ public enum TransactionsRoutes {
     }
 
     /// The row the route asks to select, if a positive whole number.
-    public static func selectedId(_ route: NativeRoute) -> Int? {
-        route.value(selectParameter).flatMap(TransactionFilters.parseId)
+    public static func selectedId(_ route: NativeRoute) -> TransactionID? {
+        route.value(selectParameter).flatMap { TransactionFilters.parseId($0) }
     }
 
     /// The typed search the URL mirrors (`?search=`).
@@ -74,27 +74,27 @@ public enum TransactionsRoutes {
     }
 
     /// Show all from a payee: a fresh filter set of `recipient_id` and `filter_label`.
-    public static func showingAll(from recipientId: Int, name: String) -> NativeRoute {
+    public static func showingAll(from recipientId: RecipientID, name: String) -> NativeRoute {
         NativeRoute(
             path: path,
             query: [
-                URLQueryItem(name: "recipient_id", value: String(recipientId)),
+                URLQueryItem(name: "recipient_id", value: String(recipientId.rawValue)),
                 URLQueryItem(name: "filter_label", value: name),
             ])
     }
 
     /// `handleAccountFilterChange`: `account_id` and `filter_label`, or both removed.
-    public static func route(_ route: NativeRoute, account: (id: Int, label: String)?) -> NativeRoute {
+    public static func route(_ route: NativeRoute, account: (id: AccountID, label: String)?) -> NativeRoute {
         guard let account else { return route.removing("account_id").removing("filter_label") }
-        return route.setting("account_id", to: String(account.id)).setting("filter_label", to: account.label)
+        return route.setting("account_id", to: String(account.id.rawValue)).setting("filter_label", to: account.label)
     }
 
     /// `handleCategoryFilterChange`: `category_ids` always goes; `category_id` and
     /// `filter_label` are set or removed.
-    public static func route(_ route: NativeRoute, category: (id: Int, label: String)?) -> NativeRoute {
+    public static func route(_ route: NativeRoute, category: (id: CategoryID, label: String)?) -> NativeRoute {
         let base = route.removing("category_ids")
         guard let category else { return base.removing("category_id").removing("filter_label") }
-        return base.setting("category_id", to: String(category.id)).setting("filter_label", to: category.label)
+        return base.setting("category_id", to: String(category.id.rawValue)).setting("filter_label", to: category.label)
     }
 
     /// `handleDatePresetChange`.
@@ -194,16 +194,16 @@ public enum TransactionDatePreset: String, CaseIterable, Sendable {
 /// The URL filters of `/transactions`, read like `TransactionsPage`: an id is a positive whole
 /// number, a flag is the text `true`, an empty value is no filter.
 public struct TransactionFilters: Equatable, Sendable {
-    public var transactionId: Int?
-    public var recipientId: Int?
-    public var categoryId: Int?
+    public var transactionId: TransactionID?
+    public var recipientId: RecipientID?
+    public var categoryId: CategoryID?
     /// `category_ids`, a comma list; `nil` when absent or empty.
-    public var categoryIds: [Int]?
+    public var categoryIds: [CategoryID]?
     public var uncategorised = false
     public var filterLabel: String?
-    public var startDate: String?
-    public var endDate: String?
-    public var accountId: Int?
+    public var startDate: CalendarDay?
+    public var endDate: CalendarDay?
+    public var accountId: AccountID?
     public var bankAccount: String?
     public var transactionType: TransactionTypeFilter?
     public var amountMin: Decimal?
@@ -219,16 +219,16 @@ public struct TransactionFilters: Equatable, Sendable {
             guard let value = route.value(name), !value.isEmpty else { return nil }
             return value
         }
-        transactionId = text("transaction_id").flatMap(Self.parseId)
-        recipientId = text("recipient_id").flatMap(Self.parseId)
-        categoryId = text("category_id").flatMap(Self.parseId)
-        let ids = text("category_ids")?.split(separator: ",").compactMap { Self.parseId(String($0)) } ?? []
+        transactionId = text("transaction_id").flatMap { Self.parseId($0) }
+        recipientId = text("recipient_id").flatMap { Self.parseId($0) }
+        categoryId = text("category_id").flatMap { Self.parseId($0) }
+        let ids: [CategoryID] = text("category_ids")?.split(separator: ",").compactMap { Self.parseId(String($0)) } ?? []
         categoryIds = ids.isEmpty ? nil : ids
         uncategorised = route.value("uncategorised") == "true"
         filterLabel = text("filter_label")
-        startDate = text("start_date")
-        endDate = text("end_date")
-        accountId = text("account_id").flatMap(Self.parseId)
+        startDate = text("start_date").flatMap { CalendarDay($0) }
+        endDate = text("end_date").flatMap { CalendarDay($0) }
+        accountId = text("account_id").flatMap { Self.parseId($0) }
         bankAccount = text("bank_account")
         transactionType = route.value("transaction_type").flatMap(TransactionTypeFilter.init(rawValue:))
         amountMin = text("amount_min").flatMap(JSInteger.number)
@@ -239,12 +239,12 @@ public struct TransactionFilters: Equatable, Sendable {
     }
 
     /// A positive whole number (the backend's id rule); anything else is no filter.
-    public static func parseId(_ text: String) -> Int? {
+    public static func parseId<Tag: IdentifierTag>(_ text: String) -> IntIdentifier<Tag>? {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed.allSatisfy({ $0.isASCII && $0.isNumber }), let id = Int(trimmed), id > 0,
             id <= Int(Int32.max)
         else { return nil }
-        return id
+        return IntIdentifier<Tag>(rawValue: id)
     }
 
     public var hasAmountFilter: Bool { amountMin != nil || amountMax != nil }
@@ -262,7 +262,7 @@ public struct TransactionFilters: Equatable, Sendable {
 
     /// The Date chip's preset, or `nil` for a custom range.
     public func datePreset(today: PlannedDay, calendar: Calendar) -> TransactionDatePreset? {
-        TransactionDatePreset.matching(start: startDate, end: endDate, today: today, calendar: calendar)
+        TransactionDatePreset.matching(start: startDate?.description, end: endDate?.description, today: today, calendar: calendar)
     }
 
     /// `customDateLabel`: "start – end" in the app date format, `…` for an open side.
@@ -275,7 +275,7 @@ public struct TransactionFilters: Equatable, Sendable {
 
     /// `category_ids` as the API takes it.
     var categoryIdsParameter: String? {
-        categoryIds.map { $0.map(String.init).joined(separator: ",") }
+        categoryIds.map { $0.map { String($0.rawValue) }.joined(separator: ",") }
     }
 
     /// `tags` as the API takes it.
@@ -301,19 +301,19 @@ public enum TransactionFilterDescriptor {
     ) -> String {
         var descriptors: [String] = []
         var scopes: [String] = []
-        if let id = filters.transactionId { scopes.append(strings.t("filter.transactionId", ["id": String(id)])) }
+        if let id = filters.transactionId { scopes.append(strings.t("filter.transactionId", ["id": id.description])) }
         if let id = filters.recipientId {
             switch recipient {
             case .found(let name): scopes.append(name)
             case .failed: scopes.append(strings.t("filter.recipientUnknown"))
-            case .loading: scopes.append(strings.t("filter.recipientId", ["id": String(id)]))
+            case .loading: scopes.append(strings.t("filter.recipientId", ["id": id.description]))
             }
         }
-        if let id = filters.categoryId { scopes.append(strings.t("filter.categoryId", ["id": String(id)])) }
+        if let id = filters.categoryId { scopes.append(strings.t("filter.categoryId", ["id": id.description])) }
         if let ids = filters.categoryIds {
             scopes.append(strings.t("filter.categoryIds", ["count": String(ids.count)]))
         }
-        if let id = filters.accountId { scopes.append(strings.t("filter.accountId", ["id": String(id)])) }
+        if let id = filters.accountId { scopes.append(strings.t("filter.accountId", ["id": id.description])) }
         if let name = filters.bankAccount { scopes.append(strings.t("filter.bankAccount", ["name": name])) }
         if let label = filters.filterLabel { descriptors.append(label) }
         if filters.filterLabel == nil || scopes.count != 1 { descriptors.append(contentsOf: scopes) }
@@ -332,7 +332,7 @@ public enum TransactionFilterDescriptor {
     /// `amountLabel`: `= x`, `x–y`, `≥ x` or `≤ y` with the default currency; signed bounds
     /// show `+` before a positive value.
     public static func amountLabel(_ filters: TransactionFilters, settings: NativeAppSettings) -> String {
-        let currency = settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency
+        let currency = settings.defaultCurrency.rawValue
         func format(_ value: Decimal) -> String {
             let text = value.formatted(
                 Decimal.FormatStyle(locale: settings.numberFormat.locale).precision(.fractionLength(0...20)))

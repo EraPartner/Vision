@@ -112,9 +112,9 @@ public enum NativeTaxReportProfile {
         let activities = partnerA?["activities"]?.arrayValue ?? []
         let primary =
             activities.first { $0["id"] == .string(primaryActivityID) }
-            ?? activities.first { $0["kind"] != .string("net_professional_amount") }
+            ?? activities.first { $0["kind"] != .string(ActivityKind.netProfessionalAmount.rawValue) }
             ?? activities.first
-        let kind = primary?["kind"]?.stringValue ?? "employee"
+        let kind = primary?["kind"]?.stringValue.map { ActivityKind(rawValue: $0) } ?? .employee
         var profile: [String: TaxValue] = ["employmentType": .string(employmentType(kind))]
         profile["region"] = household["region"]
         profile["taxYear"] = household["taxYear"]
@@ -122,16 +122,19 @@ public enum NativeTaxReportProfile {
     }
 
     /// `employmentTypeFor`.
-    static func employmentType(_ kind: String) -> String {
+    static func employmentType(_ kind: ActivityKind) -> String {
         switch kind {
-        case "employee": return "employee"
-        case "civil_servant": return "civil_servant"
-        case "director": return "director"
-        case "self_employed_profits", "self_employed_fees": return "self_employed"
-        case "pension": return "retired"
-        default: return "other"
+        case .employee: return "employee"
+        case .civilServant: return "civil_servant"
+        case .director: return "director"
+        case .selfEmployedProfits, .selfEmployedFees: return "self_employed"
+        case .pension: return "retired"
+        case .helpingSpouse, .otherProfessional, .netProfessionalAmount, .unknown: return "other"
         }
     }
+
+    /// The activity kinds of a household partner (`BelgianTaxInputPartnerActivity.kind`).
+    typealias ActivityKind = OpenAPI.BelgianTaxInputPartnerActivity.Kind
 }
 
 @MainActor public struct NativeTaxReportContextService {

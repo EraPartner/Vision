@@ -3,11 +3,11 @@ import Observation
 
 @MainActor @Observable
 public final class PortfolioImportReviewModel {
-    public private(set) var batchId: Int?
+    public private(set) var batchId: PortfolioImportBatchNumericID?
     public private(set) var preview: PortfolioImportPreview?
     public private(set) var investments: [PortfolioInvestment] = []
     public private(set) var accounts: [OpenAPI.Account] = []
-    public var selectedRepairBrokerId: Int?
+    public var selectedRepairBrokerId: AccountID?
     public private(set) var isLoading = false
     public private(set) var isBusy = false
     public private(set) var busyGroup: String?
@@ -33,14 +33,14 @@ public final class PortfolioImportReviewModel {
     @ObservationIgnored private let service: any PortfolioImportService
     @ObservationIgnored private var revision = UUID()
     public init(service: any PortfolioImportService) { self.service = service }
-    public static func parseBatchId(_ raw: String) -> Int? {
+    public static func parseBatchId(_ raw: String) -> PortfolioImportBatchNumericID? {
         guard raw.range(of: "^[1-9][0-9]*$", options: .regularExpression) != nil, let id = Int(raw),
             id <= 9_007_199_254_740_991
         else { return nil }
-        return id
+        return PortfolioImportBatchNumericID(id)
     }
-    public func load(batchId: Int, force: Bool = false) async {
-        guard batchId > 0, batchId <= 9_007_199_254_740_991 else {
+    public func load(batchId: PortfolioImportBatchNumericID, force: Bool = false) async {
+        guard batchId.rawValue > 0, batchId.rawValue <= 9_007_199_254_740_991 else {
             invalidate()
             error = "Invalid portfolio import batch identifier"
             return
@@ -88,14 +88,14 @@ public final class PortfolioImportReviewModel {
         isLoading = false
         commitResult = nil
     }
-    public func override(group: PortfolioImportPreviewGroup, investmentId: Int) async {
+    public func override(group: PortfolioImportPreviewGroup, investmentId: InvestmentID) async {
         guard investments.contains(where: { $0.id == investmentId && $0.isActive }) else { return }
         await resolve(group: group, investmentId: investmentId, createNew: false)
     }
     public func createNew(group: PortfolioImportPreviewGroup) async {
         await resolve(group: group, investmentId: nil, createNew: true)
     }
-    private func resolve(group: PortfolioImportPreviewGroup, investmentId: Int?, createNew: Bool) async {
+    private func resolve(group: PortfolioImportPreviewGroup, investmentId: InvestmentID?, createNew: Bool) async {
         guard !isBusy, !isLoading, error == nil, !outcomeUncertain, let batchId,
             let current = groups.first(where: { $0 == group }), !current.resolvableRowIds.isEmpty
         else { return }

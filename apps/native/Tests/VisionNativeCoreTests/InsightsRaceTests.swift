@@ -30,7 +30,7 @@ struct InsightsRaceTests {
             configuration: draft, statistics: snapshot,
             recipients: nil, tags: nil, otherLabel: "Other")
         #expect(monthly.entities.first?.values == ["2026-01": 100, "2026-02": 20])
-        draft.timeBucket = "yearly"
+        draft.timeBucket = .yearly
         let yearly = CustomChartDataset(
             configuration: draft, statistics: snapshot,
             recipients: nil, tags: nil, otherLabel: "Other")
@@ -118,7 +118,7 @@ struct InsightsRaceTests {
             #expect(model.datasets[chart.id] == nil)
         } else {
             #expect(model.charts.first?.name == "Updated synthetic chart")
-            #expect(model.charts.first?.chartType == "bar")
+            #expect(model.charts.first?.chartType == .bar)
             #expect(model.datasets[chart.id]?.periods == ["2026-02"])
         }
         #expect(!model.isSaving)
@@ -252,7 +252,7 @@ private actor RaceHomeService: StatisticsService {
     private func widgetRecord() -> OpenAPI.Setting {
         OpenAPI.Setting(
             key: "widget_visibility", value: widgets,
-            expected: .object(["exists": .bool(true), "value": widgets]))
+            expected: .wire(.object(["exists": .bool(true), "value": widgets])))
     }
     func homeWidgetSetting() async throws -> OpenAPI.Setting {
         let record = widgetRecord()
@@ -272,13 +272,13 @@ private actor RaceHomeService: StatisticsService {
         return widgetRecord()
     }
     func homeExclusions(scope: String) async throws -> InsightExclusions { InsightExclusions() }
-    func homeMonthly(currency: String, exclusions: InsightExclusions) async throws -> InsightMonthlySummary {
+    func homeMonthly(currency: CurrencyCode, exclusions: InsightExclusions) async throws -> InsightMonthlySummary {
         try raceDecode(InsightMonthlySummary.self, #"{"months":[]}"#)
     }
-    func homePace(currency: String) async throws -> HomeSpendingPace { throw APIError.backendUnavailable }
-    func homeBalances(currency: String) async throws -> HomeBankBalances { throw APIError.backendUnavailable }
-    func homeNetWorth(currency: String) async throws -> HomeNetWorth { throw APIError.backendUnavailable }
-    func homeForecast(currency: String, exclusions: InsightExclusions, options: InsightForecastOptions) async throws
+    func homePace(currency: CurrencyCode) async throws -> HomeSpendingPace { throw APIError.backendUnavailable }
+    func homeBalances(currency: CurrencyCode) async throws -> HomeBankBalances { throw APIError.backendUnavailable }
+    func homeNetWorth(currency: CurrencyCode) async throws -> HomeNetWorth { throw APIError.backendUnavailable }
+    func homeForecast(currency: CurrencyCode, exclusions: InsightExclusions, options: InsightForecastOptions) async throws
         -> InsightForecast
     {
         throw APIError.backendUnavailable
@@ -304,7 +304,7 @@ private actor RaceHomeService: StatisticsService {
     func statisticsRecipientYears(_ query: StatisticsQuery) async throws -> StatisticsRecipientYears {
         try raceDecode(StatisticsRecipientYears.self, #"{"recipientsByYear":{}}"#)
     }
-    func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
+    func statisticsFlow(currency: CurrencyCode, year: Int, exclusions: InsightExclusions) async throws -> StatisticsFlow {
         throw APIError.backendUnavailable
     }
 }
@@ -333,18 +333,18 @@ private actor RaceSavedChartsService: SavedChartsService {
         }
         return snapshot
     }
-    func saveChart(id: Int?, draft: CustomChartDraft) async throws -> OpenAPI.SavedChart {
+    func saveChart(id: SavedChartID?, draft: CustomChartDraft) async throws -> OpenAPI.SavedChart {
         if pauseMutation {
             pauseMutation = false
             _ = await mutationGate.suspend(true)
         }
         if failMutations { throw APIError.invalidRequest("Synthetic chart failure") }
-        let saved = raceChart(id: id ?? charts.count + 1, draft: draft)
+        let saved = raceChart(id: id ?? SavedChartID(rawValue: charts.count + 1), draft: draft)
         charts.removeAll { $0.id == saved.id }
         charts.append(saved)
         return saved
     }
-    func deleteSavedChart(id: Int) async throws {
+    func deleteSavedChart(id: SavedChartID) async throws {
         if pauseMutation {
             pauseMutation = false
             _ = await mutationGate.suspend(true)
@@ -352,17 +352,17 @@ private actor RaceSavedChartsService: SavedChartsService {
         if failMutations { throw APIError.invalidRequest("Synthetic chart failure") }
         charts.removeAll { $0.id == id }
     }
-    func customRecipientPivot(currency: String, draft: CustomChartDraft) async throws -> CustomRecipientPivot {
+    func customRecipientPivot(currency: CurrencyCode, draft: CustomChartDraft) async throws -> CustomRecipientPivot {
         try raceDecode(CustomRecipientPivot.self, #"{"recipientPivot":{}}"#)
     }
-    func customTagPivot(currency: String, draft: CustomChartDraft) async throws -> CustomTagPivot {
+    func customTagPivot(currency: CurrencyCode, draft: CustomChartDraft) async throws -> CustomTagPivot {
         try raceDecode(CustomTagPivot.self, #"{"tagPivot":{}}"#)
     }
     func customChartRecipients() async throws -> [OpenAPI.Recipient] { [] }
     func customChartTags() async throws -> [OpenAPI.Tag] { [] }
 }
 
-private func raceChart(id: Int = 1, draft: CustomChartDraft? = nil) -> OpenAPI.SavedChart {
+private func raceChart(id: SavedChartID = 1, draft: CustomChartDraft? = nil) -> OpenAPI.SavedChart {
     var configuration = draft ?? CustomChartDraft()
     if draft == nil {
         configuration.name = "Original synthetic chart"
@@ -371,9 +371,10 @@ private func raceChart(id: Int = 1, draft: CustomChartDraft? = nil) -> OpenAPI.S
     return OpenAPI.SavedChart(
         id: id, name: configuration.name, chartType: configuration.kind.chartType,
         chartVariant: configuration.kind.variant, timeBucket: configuration.timeBucket,
-        categoryIds: configuration.categoryIds, recipientIds: configuration.recipientIds, tagIds: configuration.tagIds,
+        categoryIds: configuration.categoryIds.map(\.rawValue), recipientIds: configuration.recipientIds, tagIds: configuration.tagIds,
         allCategories: configuration.allCategories, allRecipients: configuration.allRecipients,
         allTags: configuration.allTags,
-        dateRangeStart: configuration.dateRangeStart, dateRangeEnd: configuration.dateRangeEnd,
-        createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        dateRangeStart: configuration.dateRangeStart.flatMap { CalendarDay($0) },
+        dateRangeEnd: configuration.dateRangeEnd.flatMap { CalendarDay($0) },
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 }

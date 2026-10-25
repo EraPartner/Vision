@@ -46,8 +46,7 @@ struct CSVDropzone: View {
                 Button(role: .destructive, action: remove) {
                     Label(strings.t("importPage.remove"), systemImage: "trash")
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(theme.destructive)
+                .buttonStyle(.vision(.ghost, size: .sm))
             } else {
                 Image(systemName: "icloud.and.arrow.up")
                     .font(.system(size: compact ? 28 : 34))
@@ -151,14 +150,11 @@ struct ImportCustomSetup: View {
                 Spacer()
                 if model.showsSavedSummary {
                     Button(strings.t("importPage.customParser.edit")) { model.startEditing() }
-                        .buttonStyle(.visionOutline)
-                        .controlSize(.small)
+                        .buttonStyle(.vision(.outline, size: .sm))
                     Button(strings.t("importPage.customParser.delete"), role: .destructive) {
                         model.requestParserDelete()
                     }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .foregroundStyle(theme.destructive)
+                    .buttonStyle(.vision(.ghost, size: .sm))
                     .disabled(model.isDeletingParser)
                 }
             }
@@ -203,49 +199,43 @@ struct ImportCustomSetup: View {
             }
             LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 16) {
                 ImportField(label: strings.t("importPage.separator")) {
-                    Picker(strings.t("importPage.separator"), selection: binding(\.separator)) {
-                        ForEach(CSVSeparator.candidates, id: \.self) { separator in
-                            Text(CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator).tag(separator)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    VisionSelect(
+                        selection: binding(\.separator),
+                        options: CSVSeparator.candidates.map { separator in
+                            VisionSelectOption(
+                                value: separator, title: CSVSeparator.labelKey(separator).map { strings.t($0) } ?? separator)
+                        },
+                        accessibilityLabel: strings.t("importPage.separator"), expands: true)
                 }
                 ImportField(label: strings.t("importPage.dateFormat")) {
-                    Picker(strings.t("importPage.dateFormat"), selection: binding(\.dateFormat)) {
-                        ForEach(CSVFormatOptions.dateFormats, id: \.value) { option in
-                            Text(verbatim: option.label).tag(option.value)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    VisionSelect(
+                        selection: binding(\.dateFormat),
+                        options: CSVFormatOptions.dateFormats.map { option in
+                            VisionSelectOption(value: option.value, title: option.label)
+                        },
+                        accessibilityLabel: strings.t("importPage.dateFormat"), expands: true)
                 }
                 ImportField(label: strings.t("importPage.numberFormat.label")) {
-                    Picker(strings.t("importPage.numberFormat.label"), selection: binding(\.numberFormat)) {
-                        ForEach(OpenAPI.CsvNumberFormat.allCases, id: \.self) { format in
-                            Text(strings.t(CSVFormatOptions.numberFormatKey(format))).tag(format)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    VisionSelect(
+                        selection: binding(\.numberFormat),
+                        options: OpenAPI.CsvNumberFormat.allCases.map { format in
+                            VisionSelectOption(value: format, title: strings.t(CSVFormatOptions.numberFormatKey(format)))
+                        },
+                        accessibilityLabel: strings.t("importPage.numberFormat.label"), expands: true)
                     Text(strings.t("importPage.numberFormat.hint"))
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ImportField(label: strings.t("importPage.encoding")) {
-                    Picker(
-                        strings.t("importPage.encoding"),
+                    VisionSelect(
                         selection: Binding(
                             get: { CSVFormatOptions.selectedEncoding(model.config.encoding) },
-                            set: { model.config.encoding = $0 })
-                    ) {
-                        ForEach(CSVFormatOptions.encodings, id: \.value) { option in
-                            Text(verbatim: option.label).tag(option.value)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                            set: { model.config.encoding = $0 }),
+                        options: CSVFormatOptions.encodings.map { option in
+                            VisionSelectOption(value: option.value, title: option.label)
+                        },
+                        accessibilityLabel: strings.t("importPage.encoding"), expands: true)
                 }
                 ImportField(label: strings.t("importPage.skipRows")) {
                     HStack(spacing: 6) {
@@ -274,13 +264,11 @@ struct ImportCustomSetup: View {
                 Button(strings.t(model.isSaved ? "importPage.customParser.saveChanges" : "importPage.customParser.save")) {
                     Task { await model.saveParser(strings: strings) }
                 }
-                .buttonStyle(.visionPrimary)
-                .controlSize(.small)
+                .buttonStyle(.vision(.default, size: .sm))
                 .disabled(!model.canSaveParser)
                 if model.isSaved {
                     Button(strings.t("common.cancel")) { model.cancelEditing() }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
+                        .buttonStyle(.vision(.ghost, size: .sm))
                 }
             }
         }
@@ -297,20 +285,23 @@ struct ImportCustomSetup: View {
                         TextField(strings.t(field.placeholderKey), text: binding(field.keyPath))
                             .textFieldStyle(.vision)
                     } else {
-                        Picker(strings.t(field.labelKey), selection: binding(field.keyPath)) {
-                            Text(strings.t("importPage.noMapping"))
-                                .foregroundStyle(theme.secondaryLabel)
-                                .tag("")
-                            ForEach(options(headers, current: model.config[keyPath: field.keyPath]), id: \.self) { header in
-                                Text(verbatim: header).tag(header)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
+                        VisionSelect(
+                            selection: binding(field.keyPath),
+                            options: mappingOptions(headers, current: model.config[keyPath: field.keyPath]),
+                            accessibilityLabel: strings.t(field.labelKey), expands: true)
                     }
                 }
             }
         }
+    }
+
+    /// Not mapped, then the headers.
+    private func mappingOptions(_ headers: [String], current: String) -> [VisionSelectOption<String>] {
+        var list = [VisionSelectOption(value: "", title: strings.t("importPage.noMapping"))]
+        for header in options(headers, current: current) {
+            list.append(VisionSelectOption(value: header, title: header))
+        }
+        return list
     }
 
     /// The headers, plus a mapped column the file does not have (so the select can show it).
@@ -426,6 +417,8 @@ struct ImportHeadersPanel: View {
 /// Lays chips out in rows, wrapping at the available width.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
+    /// Pins the last subview to the trailing edge of its row (the web's `ml-auto`).
+    var lastTrailing = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
@@ -451,13 +444,14 @@ struct FlowLayout: Layout {
         var x = bounds.minX
         var y = bounds.minY
         var rowHeight: CGFloat = 0
-        for subview in subviews {
+        for (index, subview) in subviews.enumerated() {
             let size = subview.sizeThatFits(.unspecified)
             if x > bounds.minX, x + size.width > bounds.maxX {
                 y += rowHeight + spacing
                 x = bounds.minX
                 rowHeight = 0
             }
+            if lastTrailing, index == subviews.count - 1 { x = max(x, bounds.maxX - size.width) }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
@@ -492,10 +486,10 @@ struct ImportHistoryCard: View {
                         Image(systemName: "arrow.clockwise")
                             .symbolEffect(.rotate, isActive: model.isHistoryFetching)
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.vision(.ghost, size: .iconSm))
                     .disabled(model.isHistoryFetching)
                     .accessibilityLabel(strings.t("common.refresh"))
-                    .help(strings.t("common.refresh"))
+                    .visionTooltip(strings.t("common.refresh"))
                 }
                 content
             }
@@ -509,8 +503,9 @@ struct ImportHistoryCard: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, minHeight: 80)
         } else if model.historyBatches.isEmpty {
-            VisionEmptyState(symbol: "clock.arrow.circlepath", title: strings.t("importHistory.empty")) { EmptyView() }
-                .padding(.vertical, 16)
+            VisionEmptyState(
+                symbol: "clock.arrow.circlepath", title: strings.t("importHistory.empty"), compact: true
+            ) { EmptyView() }
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(model.historyBatches.enumerated()), id: \.element.id) { index, batch in
@@ -588,8 +583,7 @@ struct ImportHistoryCard: View {
                 } label: {
                     Label(strings.t("importHistory.resumeReview"), systemImage: "doc.text.magnifyingglass")
                 }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
+                .buttonStyle(.vision(.ghost, size: .sm))
             }
             if batch.canRollBack {
                 let rolling = model.rollingBack.contains(batch.id)
@@ -605,16 +599,14 @@ struct ImportHistoryCard: View {
                         Label(strings.t("importHistory.rollback"), systemImage: "arrow.uturn.backward")
                     }
                 }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .foregroundStyle(theme.destructive)
+                .buttonStyle(.vision(.ghost, size: .sm))
                 .disabled(rolling)
             }
         }
         .padding(.vertical, 10)
     }
 
-    private func tone(_ status: String) -> BadgeTone {
+    private func tone(_ status: OpenAPI.ImportBatch.Status) -> BadgeTone {
         switch ImportBatchStatus.tone(status) {
         case .primary: return .primary
         case .secondary: return .secondary

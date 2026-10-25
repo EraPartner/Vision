@@ -93,8 +93,8 @@ public struct NativeTaxPrintSectionView: View {
                 if !overview.isHistorical {
                     ForEach(uniqueIssues, id: \.code) { issue in
                         Text(
-                            "• " + strings.t("tax.household.issue.severity." + issue.severity) + ": "
-                                + strings.t("tax.household.issue." + issue.code)
+                            "• " + strings.t("tax.household.issue.severity." + issue.severity.rawValue) + ": "
+                                + strings.t("tax.household.issue." + issue.code.rawValue)
                         ).font(.callout)
                     }
                 }
@@ -159,7 +159,7 @@ public struct NativeTaxPrintSectionView: View {
     }
     private var uniqueIssues: [OpenAPI.BelgianTaxHouseholdTaxIssue] {
         var seen = Set<String>()
-        return overview.result.issues.filter { seen.insert($0.code).inserted }
+        return overview.result.issues.filter { seen.insert($0.code.rawValue).inserted }
     }
 }
 

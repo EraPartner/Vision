@@ -51,7 +51,7 @@ public final class PortfolioWidgetsModel {
             guard token == revision, !Task.isCancelled else { return }
             try validate(setting)
             visibility = InsightWidgetVisibility(setting.value)
-            baseline = setting.expected
+            baseline = setting.expected.json
             isLoaded = true
             error = nil
         } catch { if token == revision, !Task.isCancelled { self.error = error.localizedDescription } }
@@ -78,7 +78,7 @@ public final class PortfolioWidgetsModel {
         do {
             let record = try await service.savePortfolioWidgets(value: visibility.json, expected: baseline)
             try validate(record)
-            baseline = record.expected
+            baseline = record.expected.json
             visibility = InsightWidgetVisibility(record.value)
         } catch {
             visibility = previous
@@ -86,7 +86,7 @@ public final class PortfolioWidgetsModel {
             // A lost acknowledgement can follow a committed write. Read the current
             // whole value before another edit so its CAS token cannot remain stale.
             if let record = try? await service.portfolioWidgetSetting(), (try? validate(record)) != nil {
-                baseline = record.expected
+                baseline = record.expected.json
                 visibility = InsightWidgetVisibility(record.value)
             }
         }
@@ -95,8 +95,8 @@ public final class PortfolioWidgetsModel {
     }
     private func validate(_ record: OpenAPI.Setting) throws {
         guard record.key == "widget_visibility", InsightWidgetVisibility.isValidSetting(record.value),
-            let exists = record.expected["exists"]?.boolValue,
-            Set(record.expected.objectValue?.keys ?? [String: JSONValue]().keys)
+            let exists = record.expected.json["exists"]?.boolValue,
+            Set(record.expected.json.objectValue?.keys ?? [String: JSONValue]().keys)
                 == (exists ? ["exists", "value"] : ["exists"])
         else {
             throw APIError.contract(

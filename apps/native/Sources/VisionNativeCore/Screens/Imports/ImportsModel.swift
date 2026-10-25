@@ -70,7 +70,7 @@ public final class ImportsModel {
     public private(set) var historyError: APIError?
     public private(set) var isHistoryFetching = false
     /// The batches whose Roll back is running.
-    public private(set) var rollingBack: Set<String> = []
+    public private(set) var rollingBack: Set<ImportBatchID> = []
     /// The batch the Roll back import? alert asks about.
     public private(set) var pendingRollback: OpenAPI.ImportBatch?
 
@@ -755,14 +755,14 @@ public final class ImportsModel {
     public func confirmRollback(strings: any Localizing) async {
         guard let batch = pendingRollback else { return }
         pendingRollback = nil
-        guard let id = batch.numericId else {
+        guard batch.numericId != nil else {
             post(.error, "importHistory.rollbackFailed", detail: strings.t("apiError.unknown"))
             return
         }
         rollingBack.insert(batch.id)
         defer { rollingBack.remove(batch.id) }
         do {
-            let deleted = try await service.rollbackImportBatch(id: id)
+            let deleted = try await service.rollbackImportBatch(id: batch.id)
             post(.success, "importHistory.rollbackSuccess", ["n": String(deleted)])
             await refreshHistory(strings: strings)
         } catch {

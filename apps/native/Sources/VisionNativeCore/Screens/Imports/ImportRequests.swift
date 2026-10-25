@@ -10,9 +10,10 @@ public protocol ImportService: Sendable {
     /// `createCustomParserConfig(name, config)`.
     func createCustomParser(name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig
     /// `updateCustomParserConfig(id, { name, config })`.
-    func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig
+    func updateCustomParser(id: CustomParserConfigID, name: String, config: CSVParserConfig) async throws
+        -> OpenAPI.CustomParserConfig
     /// `deleteCustomParserConfig(id)`.
-    func deleteCustomParser(id: Int) async throws
+    func deleteCustomParser(id: CustomParserConfigID) async throws
     /// `importCSVWithProgress(file, bankName, onProgress)`: the SSE import of a built-in bank.
     /// Each `progress` event (and the final `complete` or `review_required` panel) goes to
     /// `onProgress`. Cancelling the task aborts the stream.
@@ -24,7 +25,7 @@ public protocol ImportService: Sendable {
     /// `listImportBatches(limit, offset)`.
     func importBatches(limit: Int, offset: Int) async throws -> ImportBatchPage
     /// `rollbackImportBatch(id)`: the number of transactions deleted.
-    func rollbackImportBatch(id: Int) async throws -> Int
+    func rollbackImportBatch(id: ImportBatchID) async throws -> Int
 }
 
 /// One page of `GET /api/import/batches`.
@@ -43,13 +44,13 @@ extension APIClient: ImportService {
         try await send(OpenAPIOperations.CreateCustomParser(body: .init(name: name, config: config.payload)))
     }
 
-    public func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws
+    public func updateCustomParser(id: CustomParserConfigID, name: String, config: CSVParserConfig) async throws
         -> OpenAPI.CustomParserConfig
     {
         try await send(OpenAPIOperations.UpdateCustomParser(id: id, body: .init(name: name, config: config.payload)))
     }
 
-    public func deleteCustomParser(id: Int) async throws {
+    public func deleteCustomParser(id: CustomParserConfigID) async throws {
         _ = try await send(OpenAPIOperations.DeleteCustomParser(id: id))
     }
 
@@ -84,7 +85,7 @@ extension APIClient: ImportService {
         try await send(OpenAPIOperations.GetImportBatches(limit: limit, offset: offset))
     }
 
-    public func rollbackImportBatch(id: Int) async throws -> Int {
+    public func rollbackImportBatch(id: ImportBatchID) async throws -> Int {
         try await send(OpenAPIOperations.DeleteImportBatch(id: id)).deleted
     }
 }

@@ -9,11 +9,11 @@ enum TaxYearPresentation {
         // TaxFilingMasthead: the current profile year also shows its filed status.
         if metadata(overview)["filing"]?.objectValue != nil { return "filed" }
         guard overview.isHistorical else { return "live" }
-        if overview.calculationSource == "frozen" { return "frozen" }
+        if overview.calculationSource == .frozen { return "frozen" }
         return overview.hasSnapshot ? "snapshot" : "estimate"
     }
     static func partner(_ id: String, overview: OpenAPI.BelgianTaxOverview, strings: any Localizing) -> String {
-        if let name = overview.household.partners.first(where: { $0.id == id })?.displayName,
+        if let name = overview.household.partners.first(where: { $0.id.rawValue == id })?.displayName,
             !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             return name
@@ -27,6 +27,7 @@ struct TaxYearSwitcherView: View {
     let availableYears: [Int]
     let actions: TaxActionsModel
     let shell: NativeShellModel
+    @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var years: [Int] {
         Array(
@@ -54,8 +55,19 @@ struct TaxYearSwitcherView: View {
                 }
             }
         } label: {
-            Text(strings.t("tax.yearSwitcher.label", ["year": String(overview.year)]))
+            // `Button variant="outline" className="tabular-nums"` with a trailing `ChevronDown`.
+            HStack(spacing: 8) {
+                Text(strings.t("tax.yearSwitcher.label", ["year": String(overview.year)])).monospacedDigit()
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.secondaryLabel)
+                    .accessibilityHidden(true)
+            }
         }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.outline))
+        .menuIndicator(.hidden)
+        .fixedSize()
         .accessibilityLabel(strings.t("tax.yearSwitcher.trigger"))
         .disabled(actions.isSaving)
     }
@@ -108,7 +120,7 @@ struct TaxMastheadView: View {
                     Text(strings.t("tax.historical.banner.filedReferencePrefix") + " " + reference).font(.caption)
                 }
                 HStack {
-                    if !overview.hasSnapshot && overview.calculationSource != "frozen" {
+                    if !overview.hasSnapshot && overview.calculationSource != .frozen {
                         Button(strings.t("tax.yearSwitcher.createSnapshot", ["year": String(overview.year)])) {
                             Task { await actions.perform(.createSnapshot) }
                         }.disabled(actions.isSaving)
@@ -116,17 +128,24 @@ struct TaxMastheadView: View {
                     Button(strings.t("tax.historical.banner.returnCta", ["year": String(overview.liveYear)])) {
                         shell.replaceQuery("year", with: String(overview.liveYear))
                     }
-                }
+                }.buttonStyle(.visionOutline)
             }
         }
     }
+    /// `STATUS_ICON`: Sparkles, History, History, Snowflake, Lock.
+    static func statusSymbol(_ status: String) -> String {
+        statusSymbols[status] ?? "clock.arrow.circlepath"
+    }
+    /// Sparkles, snowflake and lock mark live, frozen and filed years.
+    private static let statusSymbols = ["live": "sparkles", "frozen": "snowflake", "filed": "lock"]
     private var identity: some View {
         HStack(spacing: 12) {
             Text(String(overview.year)).font(.visionLargeTitle).monospacedDigit()
                 .accessibilityAddTraits(.isHeader)
             VisionBadge(
                 text: strings.t("tax.masthead.status." + status),
-                tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary)
+                tone: status == "filed" ? .warning : status == "live" ? .primary : .secondary,
+                symbol: Self.statusSymbol(status))
         }
     }
     /// The web masthead meta: Region and Marginal rate as small labelled figures, then a
@@ -135,7 +154,7 @@ struct TaxMastheadView: View {
         HStack(alignment: .bottom, spacing: 24) {
             meta(
                 strings.t("tax.masthead.meta.region"),
-                value: strings.t("tax.profile.region." + overview.household.region + ".label"))
+                value: strings.t("tax.profile.region." + overview.household.region.rawValue + ".label"))
             meta(
                 strings.t("tax.masthead.meta.marginalRate"),
                 value: overview.calculation.marginalRate.map {
@@ -167,15 +186,21 @@ struct TaxMarkFiledSheet: View {
     let actions: TaxActionsModel
     let shell: NativeShellModel
     @State private var reference = ""
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
     @FocusState private var referenceFocused: Bool
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: shell.strings.t("tax.markFiled.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.markFiled.description"),
-                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() })
+                closeLabel: shell.strings.t("common.close"), onClose: { close() })
             if !TaxYearMutation.canFile(overview) {
                 Text(shell.strings.t("tax.markFiled.prerequisite")).font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
@@ -194,7 +219,7 @@ struct TaxMarkFiledSheet: View {
             }
             if let error = actions.error { Text(error).foregroundStyle(theme.destructive) }
             VisionDialogFooter {
-                Button(shell.strings.t("common.cancel")) { dismiss() }
+                Button(shell.strings.t("common.cancel")) { close() }
                     .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
@@ -206,22 +231,28 @@ struct TaxMarkFiledSheet: View {
     private func confirm() {
         guard TaxYearMutation.canFile(overview) else { return }
         let value = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-        Task { if await actions.perform(.file(reference: value.isEmpty ? nil : value)) { dismiss() } }
+        Task { if await actions.perform(.file(reference: value.isEmpty ? nil : value)) { close() } }
     }
 }
 
 struct TaxHistorySheet: View {
     let overview: OpenAPI.BelgianTaxOverview
     let shell: NativeShellModel
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     private var entries: [TaxValue] { (TaxYearPresentation.metadata(overview)["history"]?.arrayValue ?? []).reversed() }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: shell.strings.t("tax.history.title", ["year": String(overview.year)]),
                 description: shell.strings.t("tax.history.description"),
-                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() }
+                closeLabel: shell.strings.t("common.close"), onClose: { close() }
             )
             .keyboardShortcut(.cancelAction)
             if entries.isEmpty {
@@ -344,7 +375,7 @@ struct TaxHistorySheet: View {
         }
     }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false)
+        MoneyText.text(value, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: false)
     }
     private func describe(_ value: TaxValue) -> String {
         switch value {

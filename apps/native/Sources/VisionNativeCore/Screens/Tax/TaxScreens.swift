@@ -20,7 +20,7 @@ public final class TaxScreens {
     @ObservationIgnored public var save: (@MainActor (Data, String) async throws -> Bool)?
     @ObservationIgnored public var didInvalidate: (@MainActor () -> Void)?
     @ObservationIgnored private let client: APIClient
-    @ObservationIgnored private var currency = "EUR"
+    @ObservationIgnored private var currency = CurrencyCode.eur
     @ObservationIgnored private var revision = UUID()
     @ObservationIgnored private var routeRevision = UUID()
     @ObservationIgnored private var isOpeningProfile = false
@@ -51,7 +51,7 @@ public final class TaxScreens {
     }
 
     /// Adopt and mirror the URL after the live household and stored snapshot years are known.
-    public func loadRoute(route: NativeRoute, currency: String, force: Bool = false) async -> NativeRoute? {
+    public func loadRoute(route: NativeRoute, currency: CurrencyCode, force: Bool = false) async -> NativeRoute? {
         let token = UUID()
         routeRevision = token
         routeLoadError = nil
@@ -78,7 +78,7 @@ public final class TaxScreens {
         }
     }
 
-    public func load(year: Int? = nil, currency: String, force: Bool = false) async {
+    public func load(year: Int? = nil, currency: CurrencyCode, force: Bool = false) async {
         let token = UUID()
         revision = token
         self.currency = currency

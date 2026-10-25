@@ -27,7 +27,7 @@ public struct ResearchDossiersView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
-                    .menuIndicator(.hidden)
+                    .visionMoreActionsMenu()
                     .accessibilityLabel(strings.t("dossiers.menu"))
                     Button(strings.t("dossiers.new"), systemImage: "plus") { model.requestNew() }
                         .buttonStyle(.visionPrimary)
@@ -36,6 +36,7 @@ public struct ResearchDossiersView: View {
                     ResearchDossierMessage(text: strings.t(error), kind: .error) {
                         if model.conflict && model.selectedId != nil {
                             Button(strings.t("dossiers.reloadLatest")) { model.requestReloadLatest() }
+                                .buttonStyle(.vision(.outline, size: .sm))
                         }
                     }
                 }
@@ -56,10 +57,12 @@ public struct ResearchDossiersView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .sheet(
-            isPresented: Binding(get: { model.pendingReview != nil }, set: { if !$0 { model.cancelPendingReview() } })
-        ) {
-            ResearchDossierConfirmationView(model: model, shell: shell)
+        // An `AlertDialog`: the scrim does not dismiss it, the Cancel button answers Escape.
+        .visionDialog(
+            item: Binding(get: { model.pendingReview }, set: { if $0 == nil { model.cancelPendingReview() } }),
+            metrics: VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0), dismissDisabled: true
+        ) { review in
+            ResearchDossierConfirmationView(model: model, review: review, shell: shell)
         }
     }
     private var list: some View {
@@ -72,6 +75,7 @@ public struct ResearchDossiersView: View {
             if let error = model.listError {
                 ResearchDossierMessage(text: strings.t(error), kind: .error) {
                     Button(strings.t("common.retry")) { Task { await model.retryList() } }
+                        .buttonStyle(.vision(.outline, size: .sm))
                 }
             }
             if !model.listLoading && model.listError == nil && model.items.isEmpty {
@@ -87,7 +91,7 @@ public struct ResearchDossiersView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(item.title).font(.body.weight(model.selectedId == item.id ? .medium : .regular))
                             Text(
-                                strings.t("dossiers.workspace." + item.workspace) + " · "
+                                strings.t("dossiers.workspace." + item.workspace.rawValue) + " · "
                                     + strings.t("dossiers.version", ["version": String(item.version)])
                             )
                             .font(.caption).foregroundStyle(theme.secondaryLabel)
@@ -100,7 +104,8 @@ public struct ResearchDossiersView: View {
                 .visionCardBackground()
             if model.total > 500 {
                 HStack {
-                    Button(strings.t("dossiers.previous")) { Task { await model.previousPage() } }.disabled(
+                    Button(strings.t("dossiers.previous")) { Task { await model.previousPage() } }
+                        .buttonStyle(.vision(.outline, size: .sm)).disabled(
                         model.listOffset == 0)
                     Text(
                         strings.t(
@@ -111,7 +116,8 @@ public struct ResearchDossiersView: View {
                             ])
                     )
                     .font(.caption).monospacedDigit().foregroundStyle(theme.secondaryLabel)
-                    Button(strings.t("dossiers.next")) { Task { await model.nextPage() } }.disabled(
+                    Button(strings.t("dossiers.next")) { Task { await model.nextPage() } }
+                        .buttonStyle(.vision(.outline, size: .sm)).disabled(
                         model.listOffset + 500 >= model.total)
                 }
             }
@@ -127,6 +133,7 @@ public struct ResearchDossiersView: View {
             if model.selectedId != nil, let error = model.detailError {
                 ResearchDossierMessage(text: strings.t(error), kind: .error) {
                     Button(strings.t("common.retry")) { Task { await model.retryDetail() } }
+                        .buttonStyle(.vision(.outline, size: .sm))
                 }
             }
             if model.draft != nil {
@@ -161,7 +168,7 @@ struct ResearchDossierMessage<Actions: View>: View {
                 actions()
             }
         }.font(.callout).foregroundStyle(color).padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
             .accessibilityElement(children: .contain)
             .task(id: text) { AccessibilityNotification.Announcement(text).post() }
     }

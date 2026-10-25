@@ -7,7 +7,7 @@ import VisionNativeCore
 struct StatisticsRhythmCard: View {
     let snapshot: StatisticsSnapshot
     let currentPeriod: String
-    let currency: String
+    let currency: CurrencyCode
     let settings: NativeAppSettings
     let strings: any Localizing
     let isPrinting: Bool

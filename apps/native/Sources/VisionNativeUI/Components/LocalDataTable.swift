@@ -12,6 +12,12 @@ struct LocalDataColumn<Row>: Identifiable {
     /// The column that takes the remaining width (`minWidth` only on the web).
     var flexible = false
     var alignment: Alignment = .leading
+    /// A plain header label for a column that neither sorts nor filters (the web's `table.edit`
+    /// header of the inline-edit column).
+    var plainHeader: String?
+    /// A titled column that only labels its cells, as the "#" rank column: a plain header
+    /// without the sort and filter buttons or the resize handle.
+    var sortable = true
     let cell: (Row) -> AnyView
 
     var id: String { key }
@@ -46,6 +52,11 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     var onRowDoubleClick: ((Row) -> Void)?
     /// The search field's placeholder; `table.searchAllColumns` when `nil`.
     var searchPrompt: String?
+    /// A short list drops the search field and the count footer (the web `Table` has neither);
+    /// they return once a search or filter is active.
+    var isMinimal = false
+    /// `maxHeight` of `VirtualDataTable`: the rows scroll inside the table below the header.
+    var maxBodyHeight: CGFloat?
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
     @State private var hoveredHeader: String?
@@ -85,6 +96,22 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         return copy
     }
 
+    /// A short list shows only the header and rows, like the web `Table`.
+    func minimalChrome(_ minimal: Bool) -> Self {
+        var copy = self
+        copy.isMinimal = minimal
+        return copy
+    }
+
+    private var showsChrome: Bool { !isMinimal || !query.search.isEmpty || query.showsClearAll }
+
+    /// The rows scroll inside the table once they are taller than `height`.
+    func bodyMaxHeight(_ height: CGFloat) -> Self {
+        var copy = self
+        copy.maxBodyHeight = height
+        return copy
+    }
+
     /// A server search names what it looks through (`serverMode.search.placeholder`).
     func searchPlaceholder(_ text: String) -> Self {
         var copy = self
@@ -96,34 +123,17 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             // A page whose header already names the table passes no title.
             if !title.isEmpty || !subtitle.isEmpty { heading }
-            toolbar
+            if showsChrome { toolbar }
             if !query.filters.isEmpty { chips }
             ScrollView(.horizontal) {
                 VStack(alignment: .leading, spacing: 0) {
                     headerRow
                     Divider()
-                    if rows.isEmpty {
-                        empty()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
+                    if let maxBodyHeight {
+                        ScrollView(.vertical) { bodyRows }
+                            .frame(maxHeight: maxBodyHeight)
                     } else {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(rows) { row in
-                                rowView(row)
-                                    .onAppear { onRowAppear?(row.id) }
-                                Divider()
-                            }
-                        }
-                        if isFetchingMore {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text(strings.t("table.loadingMore"))
-                                    .font(.footnote)
-                                    .foregroundStyle(theme.secondaryLabel)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                        }
+                        bodyRows
                     }
                 }
                 .containerRelativeFrame(.horizontal, alignment: .leading) { length, _ in
@@ -131,8 +141,36 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 }
             }
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            Divider()
-            footer
+            if showsChrome {
+                Divider()
+                footer
+            }
+        }
+    }
+
+    @ViewBuilder private var bodyRows: some View {
+        if rows.isEmpty {
+            empty()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+        } else {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { row in
+                    rowView(row)
+                        .onAppear { onRowAppear?(row.id) }
+                    Divider()
+                }
+            }
+            if isFetchingMore {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(strings.t("table.loadingMore"))
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+            }
         }
     }
 
@@ -268,7 +306,14 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
 
     @ViewBuilder
     private func headerCell(_ column: LocalDataColumn<Row>) -> some View {
-        if column.isTitled {
+        if column.isTitled, !column.sortable {
+            Text(column.title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                .lineLimit(1)
+                .padding(.vertical, 11)
+                .accessibilityAddTraits(.isHeader)
+        } else if column.isTitled {
             HStack(spacing: 4) {
                 sortButton(column)
                 filterButton(column)
@@ -282,6 +327,12 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                     hoveredHeader = nil
                 }
             }
+        } else if let label = column.plainHeader {
+            Text(label)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                .lineLimit(1)
+                .padding(.vertical, 11)
         } else {
             Color.clear.frame(height: 1)
         }

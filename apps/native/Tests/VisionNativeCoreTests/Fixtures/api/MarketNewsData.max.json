@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "title": "string",
+      "link": "string",
+      "publisher": "string",
+      "publishedAt": 1.5,
+      "thumbnail": "string",
+      "relatedSymbols": [
+        "string"
+      ]
+    }
+  ],
+  "total": 1
+}

@@ -9,7 +9,7 @@ struct PortfolioImportStatementView: View {
     @State private var changingBroker = false
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
-    private var readOnly: Bool { isLocked || model.locked || statement.file == nil || statement.status == "completed" }
+    private var readOnly: Bool { isLocked || model.locked || statement.file == nil || statement.status == .completed }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
@@ -21,7 +21,7 @@ struct PortfolioImportStatementView: View {
                 Button(strings.t("portfolioImport.session.remove"), systemImage: "xmark") {
                     model.remove(id: statement.id)
                 }
-                .buttonStyle(.borderless).disabled(isLocked || model.locked)
+                .buttonStyle(.vision(.ghost, size: .xs)).disabled(isLocked || model.locked)
                 .accessibilityLabel(strings.t("portfolioImport.session.removeFile", ["name": statement.name]))
             }
             if statement.detected != nil {
@@ -46,53 +46,48 @@ struct PortfolioImportStatementView: View {
                     }
                 }
             }
-            Picker(
-                strings.t("portfolioImport.session.statementPolicy"),
-                selection: Binding(
-                    get: { statement.adoptPolicy },
-                    set: { model.setStatementPolicy(id: statement.id, policy: $0) })
-            ) {
-                Text(strings.t("portfolioImport.session.useSessionPolicy")).tag(
-                    Optional<PortfolioImportReconciliationPolicy>.none)
-                Text(strings.t("portfolioImport.session.preserve")).tag(
-                    Optional(PortfolioImportReconciliationPolicy.preserveExisting))
-                Text(strings.t("portfolioImport.session.source")).tag(
-                    Optional(PortfolioImportReconciliationPolicy.preferSource))
-            }.disabled(isLocked || model.locked || statement.status == "completed")
-                .accessibilityLabel(strings.t("portfolioImport.session.policyForFile", ["name": statement.name]))
-            if let source = statement.detected?.source, ["nexo", "kinesis"].contains(source) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("portfolioImport.session.statementPolicy")).font(.callout.weight(.medium))
+                VisionSelect(
+                    selection: Binding(
+                        get: { statement.adoptPolicy },
+                        set: { model.setStatementPolicy(id: statement.id, policy: $0) }),
+                    options: policyOptions,
+                    accessibilityLabel: strings.t("portfolioImport.session.policyForFile", ["name": statement.name]),
+                    expands: true
+                ).disabled(isLocked || model.locked || statement.status == .completed)
+            }
+            if let source = statement.detected?.source, [.nexo, .kinesis].contains(source) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Picker(
-                        strings.t(
-                            source == "nexo"
-                                ? "portfolioImport.session.otherCustodyAccount"
-                                : "portfolioImport.session.transferDestination"),
+                    let label = strings.t(
+                        source == .nexo
+                            ? "portfolioImport.session.otherCustodyAccount"
+                            : "portfolioImport.session.transferDestination")
+                    Text(label).font(.callout.weight(.medium))
+                    VisionSelect(
                         selection: Binding(
                             get: {
-                                source != "nexo"
+                                source != .nexo
                                     || statement.transferOriginAccountId == statement.transferDestinationAccountId
                                     ? statement.transferDestinationAccountId : nil
-                            }, set: { model.setTransferAccount(id: statement.id, accountId: $0) })
-                    ) {
-                        Text(
-                            strings.t(
-                                source == "nexo"
+                            }, set: { model.setTransferAccount(id: statement.id, accountId: $0) }),
+                        options: accountOptions(
+                            unassigned: strings.t(
+                                source == .nexo
                                     ? "portfolioImport.session.custodyUnassigned"
-                                    : "portfolioImport.session.transferUnassigned")
-                        ).tag(Optional<Int>.none)
-                        ForEach(model.brokerAccounts.filter { $0.id != statement.accountId }, id: \.id) { account in
-                            Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
-                        }
-                    }.disabled(readOnly)
+                                    : "portfolioImport.session.transferUnassigned"),
+                            excluding: statement.accountId),
+                        accessibilityLabel: label, expands: true
+                    ).disabled(readOnly)
                     Text(
                         strings.t(
-                            source == "nexo"
+                            source == .nexo
                                 ? "portfolioImport.session.otherCustodyHint" : "portfolioImport.session.transferHint")
                     )
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
                 }
             }
-            if statement.status == "staging" {
+            if statement.status == .staging {
                 HStack {
                     ProgressView().controlSize(.small)
                     Text(strings.t("portfolioImport.session.staging"))
@@ -131,14 +126,13 @@ struct PortfolioImportStatementView: View {
     }
     private var sourceKey: String {
         guard let detected = statement.detected else { return "portfolioImport.session.detecting" }
-        if detected.presetKey == "ibkr_funding_history" { return "portfolioImport.ibkrFundingParser" }
+        if detected.presetKey == .ibkrFundingHistory { return "portfolioImport.ibkrFundingParser" }
         switch detected.source {
-        case "ibkr": return "portfolioImport.ibkrParser"
-        case "kinesis": return "portfolioImport.kinesisParser"
-        case "nexo": return "portfolioImport.nexoParser"
-        case "nexo_pro": return "portfolioImport.nexoProParser"
-        case "saxo": return "portfolioImport.saxoParser"
-        default: return "portfolioImport.session.detecting"
+        case .ibkr: return "portfolioImport.ibkrParser"
+        case .kinesis: return "portfolioImport.kinesisParser"
+        case .nexo: return "portfolioImport.nexoParser"
+        case .nexoPro: return "portfolioImport.nexoProParser"
+        case .saxo: return "portfolioImport.saxoParser"
         }
     }
     @ViewBuilder private var broker: some View {
@@ -146,24 +140,41 @@ struct PortfolioImportStatementView: View {
             HStack {
                 Text(strings.t("addPortTxn.broker")).font(.callout.weight(.medium))
                 Text(verbatim: selected.name)
-                Button(strings.t("addPortTxn.broker.change")) { changingBroker = true }.disabled(readOnly)
+                Button(strings.t("addPortTxn.broker.change")) { changingBroker = true }
+                    .buttonStyle(.visionLink).disabled(readOnly)
             }
         } else {
-            Picker(
-                strings.t("addPortTxn.broker"),
-                selection: Binding(
-                    get: { statement.accountId }, set: { model.setAccount(id: statement.id, accountId: $0) })
-            ) {
-                Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
-                ForEach(model.brokerAccounts, id: \.id) { account in
-                    Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
-                }
-            }.disabled(readOnly)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("addPortTxn.broker")).font(.callout.weight(.medium))
+                VisionSelect(
+                    selection: Binding(
+                        get: { statement.accountId }, set: { model.setAccount(id: statement.id, accountId: $0) }),
+                    options: accountOptions(unassigned: strings.t("addPortTxn.broker.unassigned"), excluding: nil),
+                    accessibilityLabel: strings.t("addPortTxn.broker"), expands: true
+                ).disabled(readOnly)
+            }
         }
     }
-    private func batchLink(_ id: Int) -> some View {
-        Button(strings.t("portfolioImport.session.batch", ["id": String(id)])) {
-            shell.navigate(to: "/portfolio/import/\(id)/review")
+    /// The unassigned choice followed by the broker accounts, without `excluding`.
+    private func accountOptions(unassigned: String, excluding: AccountID?) -> [VisionSelectOption<AccountID?>] {
+        let accounts = model.brokerAccounts.filter { $0.id != excluding }
+        return [VisionSelectOption<AccountID?>(value: nil, title: unassigned)]
+            + accounts.map { VisionSelectOption<AccountID?>(value: $0.id, title: $0.displayName ?? $0.name) }
+    }
+    private var policyOptions: [VisionSelectOption<PortfolioImportReconciliationPolicy?>] {
+        [
+            VisionSelectOption(value: nil, title: strings.t("portfolioImport.session.useSessionPolicy")),
+            VisionSelectOption(
+                value: PortfolioImportReconciliationPolicy.preserveExisting,
+                title: strings.t("portfolioImport.session.preserve")),
+            VisionSelectOption(
+                value: PortfolioImportReconciliationPolicy.preferSource,
+                title: strings.t("portfolioImport.session.source")),
+        ]
+    }
+    private func batchLink(_ id: PortfolioImportBatchNumericID) -> some View {
+        Button(strings.t("portfolioImport.session.batch", ["id": String(id.rawValue)])) {
+            shell.navigate(to: "/portfolio/import/\(id.rawValue)/review")
         }.buttonStyle(.visionLink)
     }
 }

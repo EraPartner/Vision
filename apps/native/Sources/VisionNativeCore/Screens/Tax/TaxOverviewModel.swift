@@ -9,7 +9,7 @@ public final class TaxOverviewModel {
     public private(set) var error: String?
     public private(set) var isFetching = false
     public var isLoading: Bool { isFetching && overview == nil }
-    public var isFrozen: Bool { overview?.calculationSource == "frozen" }
+    public var isFrozen: Bool { overview?.calculationSource == .frozen }
 
     @ObservationIgnored private let service: any TaxComputationService
     @ObservationIgnored private let now: @Sendable () -> Date

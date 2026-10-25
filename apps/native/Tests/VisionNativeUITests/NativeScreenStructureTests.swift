@@ -19,12 +19,12 @@ actor StaticImportService: ImportService {
 
     static let sample = [
         OpenAPI.ImportBatch(
-            id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: "complete",
+            id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: .complete,
             rowsTotal: 40, rowsImported: 37, rowsDuplicate: 2, rowsError: 1, errorSummary: "1 row has no amount",
-            startedAt: "2026-10-12T08:30:00.000Z", transactionsRemaining: 37),
+            startedAt: fixtureInstant("2026-10-12T08:30:00.000Z"), transactionsRemaining: 37),
         OpenAPI.ImportBatch(
-            id: "13", adapterName: "generic", status: "awaiting_review", rowsTotal: 5, rowsImported: 0,
-            rowsDuplicate: 0, rowsError: 0, startedAt: "2026-10-12T09:00:00.000Z", transactionsRemaining: 0),
+            id: "13", adapterName: "generic", status: .awaitingReview, rowsTotal: 5, rowsImported: 0,
+            rowsDuplicate: 0, rowsError: 0, startedAt: fixtureInstant("2026-10-12T09:00:00.000Z"), transactionsRemaining: 0),
     ]
 
     static let parser = OpenAPI.CustomParserConfig(
@@ -46,11 +46,11 @@ actor StaticImportService: ImportService {
         OpenAPI.CustomParserConfig(id: 8, name: name, config: config.payload)
     }
 
-    func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
+    func updateCustomParser(id: CustomParserConfigID, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
         OpenAPI.CustomParserConfig(id: id, name: name, config: config.payload)
     }
 
-    func deleteCustomParser(id: Int) async throws {}
+    func deleteCustomParser(id: CustomParserConfigID) async throws {}
 
     func importStream(
         file: ImportFile, bankName: String, onProgress: @escaping @Sendable (ImportProgress) async -> Void
@@ -70,7 +70,7 @@ actor StaticImportService: ImportService {
         return ImportBatchPage(total: batches.count + 20, limit: limit, offset: offset, items: batches)
     }
 
-    func rollbackImportBatch(id: Int) async throws -> Int { 37 }
+    func rollbackImportBatch(id: ImportBatchID) async throws -> Int { 37 }
 }
 
 extension StaticImportService: ImportExportService {
@@ -101,10 +101,10 @@ extension StaticImportService: ImportReviewService {
                 rows: [
                     ImportStagingRow(
                         id: "501", recipientRaw: "HUISBAAS NV OVERSCHRIJVING HUUR OKTOBER", amount: "-950.00",
-                        currency: "EUR", txDate: "2026-10-01", memo: "Huur oktober 2026 appartement", bankAccount: "BE00 1234",
+                        currency: .eur, txDate: "2026-10-01", memo: "Huur oktober 2026 appartement", bankAccount: "BE00 1234",
                         matchSource: "exact"),
                     ImportStagingRow(
-                        id: "502", recipientRaw: "HUISBAAS NV", amount: "-950.00", currency: "EUR", txDate: "2026-09-01",
+                        id: "502", recipientRaw: "HUISBAAS NV", amount: "-950.00", currency: .eur, txDate: "2026-09-01",
                         memo: nil, bankAccount: "BE00 1234", matchSource: "fuzzy", matchSimilarity: 0.86),
                 ]),
             ImportPreviewGroup(
@@ -123,22 +123,22 @@ extension StaticImportService: ImportReviewService {
         ],
         totals: ["exact": 1, "fuzzy": 1, "pattern": 1, "new": 0, "unresolved": 1])
 
-    func importPreview(batchId: Int) async throws -> ImportPreview {
+    func importPreview(batchId: ImportBatchID) async throws -> ImportPreview {
         if failing { throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Batch not found")) }
         return Self.preview
     }
 
-    func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {}
+    func overrideImportRow(batchId: ImportBatchID, rowId: String, recipientId: RecipientID?) async throws {}
 
-    func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws {}
+    func overrideImportRowCategory(batchId: ImportBatchID, rowId: String, categoryId: CategoryID?) async throws {}
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {}
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
-    func commitImportBatch(batchId: Int) async throws -> ImportCommitResult {
+    func commitImportBatch(batchId: ImportBatchID) async throws -> ImportCommitResult {
         ImportCommitResult(imported: 4, duplicates: 0, errors: 0, autoLinkedCount: 1)
     }
 
-    func discardImportBatch(batchId: Int) async throws {}
+    func discardImportBatch(batchId: ImportBatchID) async throws {}
 
     func allAccounts() async throws -> [OpenAPI.Account] { [] }
 }
@@ -162,8 +162,8 @@ actor StaticAdminService: AdminService {
     }
 
     static let provider = OpenAPI.ProviderHealth(
-        provider: "ecb", kind: "fx", label: "ECB", lastSuccessAt: "2026-10-09T08:05:00.000Z",
-        lastErrorAt: "2026-10-09T09:30:00.000Z", lastError: "Fetch timeout after 5000ms", consecutiveFailures: 1,
+        provider: "ecb", kind: "fx", label: "ECB", lastSuccessAt: fixtureInstant("2026-10-09T08:05:00.000Z"),
+        lastErrorAt: fixtureInstant("2026-10-09T09:30:00.000Z"), lastError: "Fetch timeout after 5000ms", consecutiveFailures: 1,
         updatedAt: nil)
 
     private func check() throws {
@@ -269,7 +269,7 @@ actor StaticDatabaseService: DatabaseAdminService {
     {
         OpenAPI.DbEditorMutationResult(
             dryRun: dryRun, count: changes.count,
-            statements: changes.map { OpenAPI.DbEditorStatement(op: $0.op, preview: "\($0.op.uppercased()) …") },
+            statements: changes.map { OpenAPI.DbEditorStatement(op: $0.op.rawValue, preview: "\($0.op.rawValue.uppercased()) …") },
             applied: dryRun ? nil : changes.count)
     }
 }
@@ -289,7 +289,7 @@ actor StaticPlannedService: PlannedPaymentsService {
         return includePaused ? rows : rows.filter { row in row.isActive }
     }
 
-    func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
+    func setPlannedPaymentActive(id: PlannedTransactionID, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return OpenAPI.PlannedTransaction(
             id: row.id, plannedDate: row.plannedDate, recipientName: row.recipientName, memo: row.memo,
@@ -300,12 +300,12 @@ actor StaticPlannedService: PlannedPaymentsService {
             executions: row.executions, isActive: isActive, links: [])
     }
 
-    func deletePlannedPayment(id: Int) async throws {}
+    func deletePlannedPayment(id: PlannedTransactionID) async throws {}
 
-    func transaction(id: Int) async throws -> OpenAPI.Transaction? {
+    func transaction(id: TransactionID) async throws -> OpenAPI.Transaction? {
         OpenAPI.Transaction(
-            id: id, transactionDate: "2026-10-01", recipientName: "Landlord", memo: nil, amount: -950,
-            currency: "EUR", categoryName: "Housing", links: [])
+            id: id, transactionDate: fixtureDay("2026-10-01"), recipientName: "Landlord", memo: nil, amount: -950,
+            currency: fixtureCurrency("EUR"), categoryName: "Housing", links: [])
     }
 
     /// The local day `offset` days from today, as `planned_date`.
@@ -318,26 +318,28 @@ actor StaticPlannedService: PlannedPaymentsService {
         return String(format: "%04d-%02d-%02d", parts.year ?? 2026, parts.month ?? 1, parts.day ?? 1)
     }
 
+    static func typedDay(_ offset: Int) -> CalendarDay { fixtureDay(day(offset)) }
+
     static var sample: [OpenAPI.PlannedTransaction] {
         [
             OpenAPI.PlannedTransaction(
-                id: 1, plannedDate: day(0), recipientName: "Landlord", memo: "Rent", amount: -950, currency: "EUR",
+                id: 1, plannedDate: typedDay(0), recipientName: "Landlord", memo: "Rent", amount: -950, currency: fixtureCurrency("EUR"),
                 categoryName: "Housing", url: "https://example.com/lease", isRecurring: true,
                 recurrencePattern: "monthly", isExecuted: true, executedTransactionId: 31, executionCount: 4,
                 executions: [
-                    OpenAPI.PlannedTransactionExecution(id: 1, executedTransactionId: 31, executionDate: day(-30))
+                    OpenAPI.PlannedTransactionExecution(id: 1, executedTransactionId: 31, executionDate: typedDay(-30))
                 ],
                 isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 2, plannedDate: day(3), memo: "Streaming", amount: Decimal(string: "-12.99")!, currency: "USD",
+                id: 2, plannedDate: typedDay(3), memo: "Streaming", amount: Decimal(string: "-12.99")!, currency: fixtureCurrency("USD"),
                 categoryName: "Leisure", isRecurring: true, recurrencePattern: "every 14 days", isExecuted: false,
                 executionCount: 0, isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 3, plannedDate: day(40), memo: "Car loan", amount: -310, currency: "EUR", isRecurring: true,
+                id: 3, plannedDate: typedDay(40), memo: "Car loan", amount: -310, currency: fixtureCurrency("EUR"), isRecurring: true,
                 recurrencePattern: "monthly", isLoan: true, loanTermMonths: 48, isExecuted: false, executionCount: 0,
                 isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 4, plannedDate: day(-2), memo: "Old gym", amount: -40, currency: "XYZ", isRecurring: false,
+                id: 4, plannedDate: typedDay(-2), memo: "Old gym", amount: -40, currency: fixtureCurrency("XYZ"), isRecurring: false,
                 isExecuted: false, executionCount: 0, isActive: false, links: []),
         ]
     }
@@ -354,16 +356,16 @@ extension StaticPlannedService: PlannedEditingService {
 
     func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction {
         OpenAPI.PlannedTransaction(
-            id: 51, plannedDate: body.plannedDate, memo: body.memo, amount: body.amount, currency: body.currency,
+            id: 51, plannedDate: fixtureDay(body.plannedDate), memo: body.memo, amount: body.amount, currency: body.currency,
             isRecurring: true, isExecuted: false, executionCount: 0, isActive: true, links: [])
     }
 
-    func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
+    func updatePlannedPayment(id: PlannedTransactionID, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return row
     }
 
-    func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+    func executePlannedPayment(id: PlannedTransactionID, transactionId: TransactionID, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
     {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
@@ -382,18 +384,18 @@ extension StaticPlannedService: PlannedEditingService {
                 amountChanges: [
                     PlannedRecurringPattern.AmountChange(
                         date: Self.day(-10), previousAmount: 84, newAmount: 96, percentChange: Decimal(string: "14.29")!,
-                        direction: "increased")
+                        direction: .init(rawValue: "increased"))
                 ], confidence: 92),
             PlannedRecurringPattern(
-                recipientId: 12, recipientName: "Gym", direction: "expense", detectedPattern: "custom", intervalDays: 10,
+                recipientId: 12, recipientName: "Gym", direction: .init(rawValue: "expense"), detectedPattern: "custom", intervalDays: 10,
                 latestAmount: 25, predictedNext: "", confidence: 64),
             PlannedRecurringPattern(
-                recipientId: 13, recipientName: "Salary", direction: "income", latestAmount: 3200,
+                recipientId: 13, recipientName: "Salary", direction: .init(rawValue: "income"), latestAmount: 3200,
                 predictedNext: Self.day(18),
                 amountChanges: [
                     PlannedRecurringPattern.AmountChange(
                         date: Self.day(-12), previousAmount: 3300, newAmount: 3200, percentChange: Decimal(string: "-3.03")!,
-                        direction: "decreased")
+                        direction: .init(rawValue: "decreased"))
                 ], confidence: 45),
         ]
     }
@@ -401,41 +403,41 @@ extension StaticPlannedService: PlannedEditingService {
     func linkCandidates(_ query: PlannedLinkQuery) async throws -> [OpenAPI.Transaction] {
         [
             OpenAPI.Transaction(
-                id: 31, transactionDate: Self.day(-1), recipientName: "Streaming service", memo: "STREAMING 4411",
-                amount: Decimal(string: "-12.99")!, currency: "USD", links: []),
-            OpenAPI.Transaction(id: 32, transactionDate: Self.day(-2), amount: Decimal(string: "-13.10")!, links: []),
+                id: 31, transactionDate: Self.typedDay(-1), recipientName: "Streaming service", memo: "STREAMING 4411",
+                amount: Decimal(string: "-12.99")!, currency: fixtureCurrency("USD"), links: []),
+            OpenAPI.Transaction(id: 32, transactionDate: Self.typedDay(-2), amount: Decimal(string: "-13.10")!, links: []),
         ]
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 }
 
 extension StaticPlannedService: PickerDataService {
     func recipients(search: String?, limit: Int) async throws -> [OpenAPI.Recipient] {
         [
-            OpenAPI.Recipient(id: 1, name: "Landlord", isActive: true, createdAt: "2026-01-01", links: []),
-            OpenAPI.Recipient(id: 2, name: "Streaming service", isActive: true, createdAt: "2026-01-01", links: []),
+            OpenAPI.Recipient(id: 1, name: "Landlord", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: []),
+            OpenAPI.Recipient(id: 2, name: "Streaming service", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: []),
         ]
     }
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         OpenAPI.Recipient(
-            id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: "2026-01-01", links: [])
+            id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     func accounts() async throws -> [OpenAPI.Account] {
         [
             OpenAPI.Account(
-                id: 7, name: "BE00 1234", displayName: "Everyday account", currency: "EUR", type: "checking",
-                liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self",
-                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: "2026-01-01",
-                updatedAt: "2026-01-01")
+                id: 7, name: "BE00 1234", displayName: "Everyday account", currency: fixtureCurrency("EUR"), type: .init(rawValue: "checking"),
+                liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .init(rawValue: "none"), owner: .init(rawValue: "self"),
+                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
         ]
     }
 
@@ -448,7 +450,7 @@ extension StaticPlannedService: PickerDataService {
     }
 
     func tags() async throws -> [OpenAPI.Tag] {
-        [OpenAPI.Tag(id: 1, slug: "fixed-costs", color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "", updatedAt: "")]
+        [OpenAPI.Tag(id: 1, slug: "fixed-costs", color: "hsl(210, 62%, 50%)", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))]
     }
 
     func createTag(slug: String, color: String?) async throws {}
@@ -466,18 +468,18 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
 
     static let sample: [OpenAPI.Transaction] = [
         OpenAPI.Transaction(
-            id: 3, transactionDate: "2026-10-09", accountId: 7, bankAccount: "BE00 1234", recipientId: 1,
-            recipientName: "Landlord", memo: "Rent October", amount: Decimal(string: "-950.00")!, currency: "EUR",
+            id: 3, transactionDate: fixtureDay("2026-10-09"), accountId: 7, bankAccount: "BE00 1234", recipientId: 1,
+            recipientName: "Landlord", memo: "Rent October", amount: Decimal(string: "-950.00")!, currency: fixtureCurrency("EUR"),
             balance: Decimal(string: "1520.40")!, categoryId: 7, categoryName: "Energy", comment: "Paid on time",
             isActive: true, tags: [OpenAPI.TransactionTagRef(id: 1, slug: "fixed-costs", isActive: true)],
             links: []),
         OpenAPI.Transaction(
-            id: 2, transactionDate: "2026-10-05", accountId: 7, bankAccount: "BE00 1234", recipientId: 2,
+            id: 2, transactionDate: fixtureDay("2026-10-05"), accountId: 7, bankAccount: "BE00 1234", recipientId: 2,
             recipientName: "Streaming service", memo: "Monthly plan", amount: Decimal(string: "-12.99")!,
-            currency: "EUR", isActive: true, tags: [], links: []),
+            currency: fixtureCurrency("EUR"), isActive: true, tags: [], links: []),
         OpenAPI.Transaction(
-            id: 1, transactionDate: "2026-10-01", accountId: 7, bankAccount: "BE00 1234", recipientId: 3,
-            recipientName: "Employer", memo: "Salary", amount: Decimal(string: "2480.00")!, currency: "EUR",
+            id: 1, transactionDate: fixtureDay("2026-10-01"), accountId: 7, bankAccount: "BE00 1234", recipientId: 3,
+            recipientName: "Employer", memo: "Salary", amount: Decimal(string: "2480.00")!, currency: fixtureCurrency("EUR"),
             isActive: false, tags: [], links: []),
     ]
 
@@ -487,9 +489,9 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         return TransactionPage(items: offset == 0 ? shown : [], total: shown.count)
     }
 
-    func uncategorisedCount(recipientId: Int?) async throws -> Int { 2 }
+    func uncategorisedCount(recipientId: RecipientID?) async throws -> Int { 2 }
 
-    func updateTransaction(id: Int, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
+    func updateTransaction(id: TransactionID, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return row
     }
@@ -498,27 +500,27 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         throw APIError.network("unsupported")
     }
 
-    func deleteTransaction(id: Int) async throws {}
+    func deleteTransaction(id: TransactionID) async throws {}
 
-    func categorizeUncategorised(recipientId: Int, categoryId: Int, expectedCount: Int) async throws
+    func categorizeUncategorised(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) async throws
         -> BulkUpdateResult
     {
         BulkUpdateResult(updated: expectedCount, requested: expectedCount, matched: expectedCount)
     }
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {}
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
-        OpenAPI.Recipient(id: id, name: "Landlord", defaultCategoryId: 7, isActive: true, createdAt: "2026-01-01", links: [])
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
+        OpenAPI.Recipient(id: id, name: "Landlord", defaultCategoryId: 7, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     func allAccounts() async throws -> [OpenAPI.Account] {
         [
             OpenAPI.Account(
-                id: 7, name: "BE00 1234", displayName: "Everyday account", currency: "EUR", type: "checking",
-                liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self",
-                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: "2026-01-01",
-                updatedAt: "2026-01-01")
+                id: 7, name: "BE00 1234", displayName: "Everyday account", currency: fixtureCurrency("EUR"), type: .init(rawValue: "checking"),
+                liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .init(rawValue: "none"), owner: .init(rawValue: "self"),
+                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
         ]
     }
 
@@ -526,31 +528,31 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         Data("id,amount\n".utf8)
     }
 
-    func setting(key: String) async throws -> OpenAPI.Setting {
+    func setting(key: SettingKey) async throws -> OpenAPI.Setting {
         throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
     }
 
-    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+    func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 
-    func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment] {
+    func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment] {
         [
             OpenAPI.Attachment(
                 id: "41", transactionId: transactionId, filename: "invoice-october.pdf", storedPath: "a/invoice.pdf",
-                mimeType: "application/pdf", sizeBytes: 48_213, createdAt: "2026-10-09T10:00:00Z")
+                mimeType: "application/pdf", sizeBytes: 48_213, createdAt: fixtureInstant("2026-10-09T10:00:00Z"))
         ]
     }
 
-    func uploadAttachment(transactionId: Int, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
+    func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
         OpenAPI.Attachment(
             id: "42", transactionId: transactionId, filename: file.name, storedPath: "a/\(file.name)",
-            mimeType: file.contentType, sizeBytes: file.data.count, createdAt: "2026-10-09T10:00:00Z")
+            mimeType: file.contentType, sizeBytes: file.data.count, createdAt: fixtureInstant("2026-10-09T10:00:00Z"))
     }
 
-    func downloadAttachment(id: Int) async throws -> Data { Data("%PDF-1.7".utf8) }
+    func downloadAttachment(id: AttachmentID) async throws -> Data { Data("%PDF-1.7".utf8) }
 
-    func deleteAttachment(id: Int) async throws {}
+    func deleteAttachment(id: AttachmentID) async throws {}
 }
 
 /// The bulk and split calls with fixed answers: two open splits owed by Anna and three
@@ -567,15 +569,15 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
     static let sample: [OpenAPI.SplitOwedDetail] = [
         OpenAPI.SplitOwedDetail(
             id: 1, transactionId: 3, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "20.00")!,
-            amountPaid: Decimal(string: "5.00")!, note: "Half", isSettled: false, createdAt: "2026-10-01",
-            updatedAt: "2026-10-01", transactionDate: "2026-10-09", transactionMemo: "Dinner",
-            transactionAmount: Decimal(string: "-40.00")!, transactionCurrency: "EUR",
+            amountPaid: Decimal(string: "5.00")!, note: "Half", isSettled: false, createdAt: fixtureInstant("2026-10-01T00:00:00.000Z"),
+            updatedAt: fixtureInstant("2026-10-01T00:00:00.000Z"), transactionDate: fixtureDay("2026-10-09"), transactionMemo: "Dinner",
+            transactionAmount: Decimal(string: "-40.00")!, transactionCurrency: fixtureCurrency("EUR"),
             transactionRecipientName: "Bistro", remaining: Decimal(string: "15.00")!),
         OpenAPI.SplitOwedDetail(
             id: 2, transactionId: 2, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "6.50")!,
-            amountPaid: 0, note: nil, isSettled: false, createdAt: "2026-10-05", updatedAt: "2026-10-05",
-            transactionDate: "2026-10-05", transactionMemo: nil, transactionAmount: Decimal(string: "-12.99")!,
-            transactionCurrency: "EUR", transactionRecipientName: "Streaming service",
+            amountPaid: 0, note: nil, isSettled: false, createdAt: fixtureInstant("2026-10-05T00:00:00.000Z"), updatedAt: fixtureInstant("2026-10-05T00:00:00.000Z"),
+            transactionDate: fixtureDay("2026-10-05"), transactionMemo: nil, transactionAmount: Decimal(string: "-12.99")!,
+            transactionCurrency: fixtureCurrency("EUR"), transactionRecipientName: "Streaming service",
             remaining: Decimal(string: "6.50")!),
     ]
 
@@ -591,28 +593,28 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         BulkExportFile(data: Data("id\n".utf8), exportedCount: selector.count)
     }
 
-    func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
+    func bulkTag(ids: [TransactionID], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
         OpenAPI.BulkTagResult(added: add.count, removed: remove.count, transactionsAffected: ids.count)
     }
 
-    func markTransfer(_ first: Int, _ second: Int) async throws {}
+    func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {}
 
     func createRecipient(name: String) async throws -> CreatedRecipient {
-        CreatedRecipient(id: 9, name: name, isActive: true, createdAt: "2026-10-09", links: [], created: true)
+        CreatedRecipient(id: 9, name: name, isActive: true, createdAt: fixtureInstant("2026-10-09T00:00:00.000Z"), links: [], created: true)
     }
 
-    func splits(transactionId: Int) async throws -> [OpenAPI.Split] {
+    func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split] {
         [
             OpenAPI.Split(
                 id: 1, transactionId: transactionId, recipientId: 4, recipientName: "Anna",
-                amount: Decimal(string: "20.00")!, amountPaid: 0, isSettled: false, createdAt: "2026-10-01",
-                updatedAt: "2026-10-01")
+                amount: Decimal(string: "20.00")!, amountPaid: 0, isSettled: false, createdAt: fixtureInstant("2026-10-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-10-01T00:00:00.000Z"))
         ]
     }
 
-    func createSplits(transactionId: Int, shares: [SplitShare]) async throws {}
+    func createSplits(transactionId: TransactionID, shares: [SplitShare]) async throws {}
 
-    func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
+    func bulkSplit(transactionIds: [TransactionID], recipientId: RecipientID, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
     {
         OpenAPI.BulkSplitResult(
@@ -620,7 +622,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             skippedMissing: 0, items: [])
     }
 
-    func owedSummary(currency: String) async throws -> OwedSummaryPage {
+    func owedSummary(currency: CurrencyCode) async throws -> OwedSummaryPage {
         if failing { throw APIError.network("The network connection was lost.") }
         let totals = OpenAPI.OwedTotals(
             currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
@@ -636,7 +638,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             ], summary: totals)
     }
 
-    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+    func owed(recipientId: RecipientID, currency: CurrencyCode) async throws -> OwedDetailPage {
         OwedDetailPage(
             items: owedSplits,
             summary: OpenAPI.OwedTotals(
@@ -644,17 +646,17 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
                 unconvertedCount: 0, unconvertedCurrencies: []))
     }
 
-    func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
+    func exportOwedCsv(recipientId: RecipientID) async throws -> Data { Data("date,amount\n".utf8) }
 
-    func recordPayment(splitId: Int, amount: Decimal) async throws {}
+    func recordPayment(splitId: SplitID, amount: Decimal) async throws {}
 
-    func settle(splitId: Int) async throws {}
+    func settle(splitId: SplitID) async throws {}
 
-    func settleAll(recipientId: Int) async throws -> Int { owedSplits.count }
+    func settleAll(recipientId: RecipientID) async throws -> Int { owedSplits.count }
 
-    func deleteSplit(id: Int) async throws {}
+    func deleteSplit(id: SplitID) async throws {}
 
-    func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage {
+    func recipientTransactions(groupId: RecipientGroupID, offset: Int, limit: Int) async throws -> TransactionPage {
         TransactionPage(items: offset == 0 ? StaticTransactionsService.sample : [], total: StaticTransactionsService.sample.count)
     }
 }
@@ -671,27 +673,27 @@ actor StaticAccountsService: AccountsService {
     }
 
     static func account(
-        _ id: Int, _ name: String, type: String, balance: Decimal, isActive: Bool = true,
+        _ id: AccountID, _ name: String, type: OpenAPI.Account.AccountType, balance: Decimal, isActive: Bool = true,
         statements: [OpenAPI.Account.StatementBalancesItem]? = nil, drift: Decimal? = nil
     ) -> OpenAPI.Account {
         let flags = AccountTypeFlags.of(type)
         return OpenAPI.Account(
-            id: id, name: name, displayName: nil, institution: "KBC", currency: "EUR", type: type,
+            id: id, name: name, displayName: nil, institution: "KBC", currency: fixtureCurrency("EUR"), type: type,
             liquidityClass: flags.liquidityClass, spendable: flags.spendable, inNetWorth: true,
-            taxWrapper: flags.taxWrapper, owner: "me", multiCurrencyCash: false, hasCashSleeve: flags.hasCashSleeve,
+            taxWrapper: flags.taxWrapper, owner: .init(rawValue: "me"), multiCurrencyCash: false, hasCashSleeve: flags.hasCashSleeve,
             statementBalances: statements, computedBalance: balance, balanceParts: nil, balanceIncomplete: false,
-            unconvertedCurrencies: nil, reconcilableBalance: balance, reconcilableCurrency: "EUR", drift: drift,
+            unconvertedCurrencies: nil, reconcilableBalance: balance, reconcilableCurrency: fixtureCurrency("EUR"), drift: drift,
             anchorDate: nil, postAnchorCount: nil, hasTransactions: true, isActive: isActive,
-            createdAt: "2026-01-01", updatedAt: "2026-01-01")
+            createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
     }
 
     static let sample = [
         account(
-            1, "Zichtrekening met een bijzonder lange naam", type: "checking", balance: Decimal(string: "1234.56")!,
-            statements: [.init(currency: "EUR", balance: Decimal(string: "1244.56")!, balanceDate: "2026-10-01")],
+            1, "Zichtrekening met een bijzonder lange naam", type: .init(rawValue: "checking"), balance: Decimal(string: "1234.56")!,
+            statements: [.init(currency: fixtureCurrency("EUR"), balance: Decimal(string: "1244.56")!, balanceDate: fixtureDay("2026-10-01"))],
             drift: 10),
-        account(2, "Bolero", type: "brokerage", balance: 250),
-        account(3, "Spaarrekening", type: "savings", balance: 0, isActive: false),
+        account(2, "Bolero", type: .init(rawValue: "brokerage"), balance: 250),
+        account(3, "Spaarrekening", type: .init(rawValue: "savings"), balance: 0, isActive: false),
     ]
 
     func accounts(active: String) async throws -> [OpenAPI.Account] {
@@ -699,13 +701,13 @@ actor StaticAccountsService: AccountsService {
         return active == "true" ? rows.filter(\.isActive) : rows
     }
 
-    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+    func portfolioAccountRows(currency: CurrencyCode) async throws -> AccountPortfolioSummary {
         AccountPortfolioSummary(
-            byAccount: [PortfolioAccountRow(accountId: 2, contributionKind: "position", currentValue: 4200)],
+            byAccount: [PortfolioAccountRow(accountId: 2, contributionKind: .init(rawValue: "position"), currentValue: 4200)],
             accountTotals: [PortfolioAccountTotalsRow(accountId: 2, oversold: false, gainLoss: 310)])
     }
 
-    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+    func accountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals {
         func group(_ total: Decimal) -> OpenAPI.AccountGroupTotal {
             OpenAPI.AccountGroupTotal(
                 total: total, cash: total, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0,
@@ -718,7 +720,7 @@ actor StaticAccountsService: AccountsService {
             accounts: [])
     }
 
-    func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
+    func ledger(accountId: AccountID, offset: Int, limit: Int) async throws -> AccountLedgerPage {
         AccountLedgerPage(
             rows: [
                 AccountLedgerRow(
@@ -731,32 +733,32 @@ actor StaticAccountsService: AccountsService {
             total: 140)
     }
 
-    func plannedRows(accountId: Int) async throws -> AccountPlannedPage {
+    func plannedRows(accountId: AccountID) async throws -> AccountPlannedPage {
         AccountPlannedPage(
-            rows: [AccountPlannedRow(id: 7, date: "2026-11-01", recipientName: "Huur", amount: -950, currency: "EUR")],
+            rows: [AccountPlannedRow(id: 7, date: "2026-11-01", recipientName: "Huur", amount: -950, currency: fixtureCurrency("EUR"))],
             total: 1)
     }
 
-    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int { 9 }
-    func updateAccount(id: Int, patch: AccountPatch) async throws {}
-    func deleteAccount(id: Int) async throws {}
-    func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? { nil }
-    func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws {}
-    func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws {}
+    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> AccountID { 9 }
+    func updateAccount(id: AccountID, patch: AccountPatch) async throws {}
+    func deleteAccount(id: AccountID) async throws {}
+    func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? { nil }
+    func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws {}
+    func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws {}
 
-    func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview {
+    func mergePreview(sourceId: AccountID, targetId: AccountID) async throws -> AccountMergePreview {
         AccountMergePreview(
             into: targetId, source: sourceId, transactions: 12, planned: 1, projectedBalance: 1500,
-            projectedBalanceCurrency: "EUR")
+            projectedBalanceCurrency: fixtureCurrency("EUR"))
     }
 
-    func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts {
+    func merge(targetId: AccountID, sourceIds: [AccountID]) async throws -> AccountMergeCounts {
         AccountMergeCounts(transactions: 12, planned: 1)
     }
 
-    func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws {}
+    func closeAccount(id: AccountID, balanceHandling: CloseBalanceHandling) async throws {}
 
-    func lotPreview(accountId: Int) async throws -> AccountLotPreview {
+    func lotPreview(accountId: AccountID) async throws -> AccountLotPreview {
         AccountLotPreview(accountId: accountId, eligibleCount: 3, transactionIds: [21, 22, 23], limit: 500)
     }
 
@@ -772,10 +774,10 @@ actor StaticAccountsService: AccountsService {
         totalRates: 3,
         rates: [
             OpenAPI.ExchangeRate(
-                currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
-                fetchedAt: "2026-10-09T15:05:00.000Z")
+                currency: fixtureCurrency("USD"), rateToEur: Decimal(string: "1.0842")!, rateDate: fixtureDay("2026-10-09"),
+                fetchedAt: fixtureInstant("2026-10-09T15:05:00.000Z"))
         ],
-        source: "database", isStale: false, lastFetchedAt: nil)
+        source: .init(rawValue: "database"), isStale: false, lastFetchedAt: nil)
 
     func makeShell(
         language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,
@@ -922,7 +924,7 @@ actor StaticAccountsService: AccountsService {
         #expect(model.isLoading)
         #expect(layOutPlanned(shell).fittingSize.width > 0)
         // Loaded with paused rows: the strip, Estimated monthly and the table.
-        await model.appear(showAll: true, defaultCurrency: "EUR")
+        await model.appear(showAll: true, defaultCurrency: fixtureCurrency("EUR"))
         #expect(model.payments.count == 4)
         #expect(model.tablePayments.count == 4)
         #expect(model.strip.dueCount == 2)
@@ -951,20 +953,20 @@ actor StaticAccountsService: AccountsService {
         #expect(layOut(PlannedHistorySheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
         // No payments at all, and every payment paused.
         let empty = makeShell(language: language, appearance: appearance)
-        await empty.planned.appear(showAll: false, defaultCurrency: "EUR")
+        await empty.planned.appear(showAll: false, defaultCurrency: fixtureCurrency("EUR"))
         #expect(empty.planned.emptyState == .noPayments)
         #expect(empty.planned.strip.dueCount == 0)
         #expect(layOutPlanned(empty).fittingSize.height > 0)
         let paused = makeShell(
             language: language, appearance: appearance,
             planned: StaticPlannedService(rows: [StaticPlannedService.sample[3]]))
-        await paused.planned.appear(showAll: false, defaultCurrency: "EUR")
+        await paused.planned.appear(showAll: false, defaultCurrency: fixtureCurrency("EUR"))
         #expect(paused.planned.emptyState == .allPaused || paused.planned.payments.isEmpty)
         #expect(layOutPlanned(paused).fittingSize.height > 0)
         // The error state.
         let failing = makeShell(
             language: language, appearance: appearance, planned: StaticPlannedService(failing: true))
-        await failing.planned.appear(showAll: false, defaultCurrency: "EUR")
+        await failing.planned.appear(showAll: false, defaultCurrency: fixtureCurrency("EUR"))
         #expect(failing.planned.error != nil)
         #expect(layOutPlanned(failing).fittingSize.height > 0)
     }
@@ -978,7 +980,7 @@ actor StaticAccountsService: AccountsService {
         let model = shell.planned
         let theme = VisionTheme(selection: shell.theme)
         shell.show(try #require(NativeRoute("/planned")))
-        await model.appear(showAll: false, defaultCurrency: "EUR")
+        await model.appear(showAll: false, defaultCurrency: fixtureCurrency("EUR"))
         // The recurring panel before its answer: hidden until the dismissals are known, like the web.
         #expect(model.recurring.display == .hidden)
         #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.width == 0)
@@ -1502,7 +1504,7 @@ actor StaticAccountsService: AccountsService {
                 .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
     }
 
-    func layOutAccount(_ shell: NativeShellModel, _ id: Int) -> NSHostingView<some View> {
+    func layOutAccount(_ shell: NativeShellModel, _ id: AccountID) -> NSHostingView<some View> {
         layOut(
             AccountDetailView(model: shell.accounts, shell: shell, accountId: id)
                 .environment(\.visionTheme, VisionTheme(selection: shell.theme)))

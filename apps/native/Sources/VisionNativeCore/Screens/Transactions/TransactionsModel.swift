@@ -3,7 +3,7 @@ import Observation
 
 /// The inline row editor (`VirtualDataTable`'s editing row): the Date and Amount editors.
 public struct TransactionRowEditor: Equatable, Sendable {
-    public let id: Int
+    public let id: TransactionID
     public var day: PlannedDay?
     public var amountText: String
 
@@ -127,18 +127,18 @@ public final class TransactionsModel {
     // MARK: Selection and editing
 
     /// The row the inspector shows.
-    public private(set) var selectedId: Int?
+    public private(set) var selectedId: TransactionID?
     /// The inspector of the selected row.
     public private(set) var inspector: TransactionInspectorModel?
     /// The row focus returns to after the inspector or Quick Look closes; a row gaining focus
     /// this way is not selected again.
-    public private(set) var focusRequest: Int?
+    public private(set) var focusRequest: TransactionID?
     /// The checkbox selection the bulk bar acts on.
-    public internal(set) var selection = ServerTableSelection()
+    public internal(set) var selection = ServerTableSelection<TransactionID>()
     /// The row being edited inline.
     public var rowEditor: TransactionRowEditor?
     /// The row the Quick Look dialog shows.
-    public private(set) var quickLookId: Int?
+    public private(set) var quickLookId: TransactionID?
     /// The row the Delete transaction alert asks about.
     public private(set) var pendingDelete: TransactionRow?
     /// The Add transaction sheet.
@@ -194,7 +194,7 @@ public final class TransactionsModel {
     @ObservationIgnored private var visibilitySaves: Task<Void, Never>?
     @ObservationIgnored private var accountsInFlight: Task<Void, Never>?
     @ObservationIgnored private var countInFlight: Task<Void, Never>?
-    @ObservationIgnored private var bannerRecipientId: Int?
+    @ObservationIgnored private var bannerRecipientId: RecipientID?
 
     public init(
         service: any TransactionsService, attachments: any TransactionAttachmentsService,
@@ -280,13 +280,13 @@ public final class TransactionsModel {
     private var route: NativeRoute { shell?.route ?? NativeRoute(path: TransactionsRoutes.path) }
 
     public func setAccountFilter(_ account: OpenAPI.Account?) {
-        var selection: (id: Int, label: String)?
+        var selection: (id: AccountID, label: String)?
         if let account { selection = (id: account.id, label: Self.accountLabel(account)) }
         apply(TransactionsRoutes.route(route, account: selection))
     }
 
-    public func setCategoryFilter(_ id: Int?) {
-        var selection: (id: Int, label: String)?
+    public func setCategoryFilter(_ id: CategoryID?) {
+        var selection: (id: CategoryID, label: String)?
         if let id, let label = pickers.categoryLabel(id) { selection = (id: id, label: label) }
         apply(TransactionsRoutes.route(route, category: selection))
     }
@@ -513,7 +513,7 @@ public final class TransactionsModel {
     }
 
     /// A row was drawn: within the threshold of the end, the next page loads.
-    public func rowAppeared(_ id: Int) async {
+    public func rowAppeared(_ id: TransactionID) async {
         let shown = visibleRows
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: query?.pageSize ?? 50)
@@ -600,8 +600,8 @@ public final class TransactionsModel {
     }
 
     /// The account display names, for the Account cells.
-    public var accountNames: [Int: String] {
-        var names: [Int: String] = [:]
+    public var accountNames: [AccountID: String] {
+        var names: [AccountID: String] = [:]
         for account in pickers.accounts where names[account.id] == nil {
             names[account.id] = Self.accountLabel(account)
         }
@@ -646,7 +646,7 @@ public final class TransactionsModel {
                 let setting = try await service.setting(key: TransactionColumnVisibility.settingKey)
                 guard let self else { return }
                 self.visibilitySetting = setting.value
-                self.visibilityBaseline = setting.expected
+                self.visibilityBaseline = setting.expected.json
                 self.columnVisibility = TransactionColumnVisibility.read(setting.value)
             } catch {
                 if case .client(let failure)? = error as? APIError, failure.status == 404 {
@@ -704,12 +704,12 @@ public final class TransactionsModel {
         return rows?.first { $0.id == selectedId }
     }
 
-    public func row(_ id: Int) -> TransactionRow? {
+    public func row(_ id: TransactionID) -> TransactionRow? {
         rows?.first { $0.id == id }
     }
 
     /// A row click, Enter or the row gaining focus: the inspector shows it.
-    public func select(_ id: Int) {
+    public func select(_ id: TransactionID) {
         guard selectedId != id || inspector == nil else { return }
         selectedId = id
         if let row = row(id) {
@@ -745,7 +745,7 @@ public final class TransactionsModel {
     }
 
     /// A row gained keyboard focus: it is selected, unless focus is returning to it.
-    public func rowFocused(_ id: Int) {
+    public func rowFocused(_ id: TransactionID) {
         if focusRequest == id {
             focusRequest = nil
             return
@@ -775,7 +775,7 @@ public final class TransactionsModel {
     }
 
     /// A key on a focused row; returns the row focus moves to.
-    public func handleRowKey(_ key: TransactionRowKey, from id: Int) -> Int? {
+    public func handleRowKey(_ key: TransactionRowKey, from id: TransactionID) -> TransactionID? {
         let shown = visibleRows
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return nil }
         switch key {
@@ -797,7 +797,7 @@ public final class TransactionsModel {
     }
 
     /// Space or the context menu's Quick Look; Space again closes it.
-    public func toggleQuickLook(_ id: Int) {
+    public func toggleQuickLook(_ id: TransactionID) {
         if quickLookId == id {
             closeQuickLook()
         } else {
@@ -816,14 +816,14 @@ public final class TransactionsModel {
 
     // MARK: Checkbox selection
 
-    private var shownIds: [Int] { visibleRows.map(\.id) }
+    private var shownIds: [TransactionID] { visibleRows.map(\.id) }
 
-    public func toggleSelection(_ id: Int) {
+    public func toggleSelection(_ id: TransactionID) {
         selection.toggle(id)
     }
 
     /// Shift-click: a range from the last toggled row.
-    public func extendSelection(to id: Int) {
+    public func extendSelection(to id: TransactionID) {
         selection.extend(to: id, in: shownIds)
     }
 
@@ -867,7 +867,7 @@ public final class TransactionsModel {
 
     /// `handleSelectCategory`: the row shows the category at once, then the server's answer;
     /// a failure puts the old category back. `nil` clears it.
-    public func selectCategory(_ row: TransactionRow, categoryId: Int?) async {
+    public func selectCategory(_ row: TransactionRow, categoryId: CategoryID?) async {
         if rowEditor?.id == row.id { rowEditor = nil }
         var patch = TransactionPatch()
         patch.categoryId = .some(categoryId)
@@ -880,7 +880,7 @@ public final class TransactionsModel {
     }
 
     /// `handleSelectRecipient`, the same for the payee.
-    public func selectRecipient(_ row: TransactionRow, recipientId: Int?) async {
+    public func selectRecipient(_ row: TransactionRow, recipientId: RecipientID?) async {
         if rowEditor?.id == row.id { rowEditor = nil }
         var patch = TransactionPatch()
         patch.recipientId = .some(recipientId)
@@ -906,7 +906,7 @@ public final class TransactionsModel {
     /// `transactions.updateFailedTitle` with the reason.
     @discardableResult
     func update(
-        _ id: Int, patch: TransactionPatch, optimistic: ((inout TransactionRow) -> Void)? = nil
+        _ id: TransactionID, patch: TransactionPatch, optimistic: ((inout TransactionRow) -> Void)? = nil
     ) async -> Bool {
         let before = row(id)
         if let optimistic, let index = rows?.firstIndex(where: { $0.id == id }), var edited = rows?[index] {
@@ -943,7 +943,7 @@ public final class TransactionsModel {
         rows?[index] = restored
     }
 
-    func removeRow(_ id: Int) {
+    func removeRow(_ id: TransactionID) {
         guard let index = rows?.firstIndex(where: { $0.id == id }) else { return }
         rows?.remove(at: index)
         total = max(0, total - 1)
@@ -1209,7 +1209,7 @@ public final class TransactionsModel {
             let days = calendar
             let clock = now
             addForm = AddTransactionModel(
-                defaultCurrency: settings.defaultCurrency, pickers: pickers, calendar: days,
+                defaultCurrency: LedgerCurrency.display(settings), pickers: pickers, calendar: days,
                 today: { PlannedDay(clock(), calendar: days) })
         }
         isAddPresented = true

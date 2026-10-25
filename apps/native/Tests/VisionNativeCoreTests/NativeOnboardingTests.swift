@@ -545,11 +545,11 @@ private actor OnboardingFixture: NativeOnboardingService, NativeSettingsService 
         return importReceipt
     }
     func readNativeSettings() async throws -> NativeSettingsSnapshot { .init(settings: [:], expected: [:]) }
-    func readNativeSetting(_ key: String) async throws -> NativeSettingsRecord {
+    func readNativeSetting(_ key: SettingKey) async throws -> NativeSettingsRecord {
         settingReads += 1
-        return .init(key: key, value: value, expected: .object(["exists": .bool(false)]))
+        return .init(key: key.rawValue, value: value, expected: .object(["exists": .bool(false)]))
     }
-    func saveNativeSetting(_ key: String, value: TaxValue, expected: TaxValue) async throws -> NativeSettingsRecord {
+    func saveNativeSetting(_ key: SettingKey, value: TaxValue, expected: TaxValue) async throws -> NativeSettingsRecord {
         expectedWrites.append(expected)
         if gateSave {
             gateSave = false
@@ -557,7 +557,7 @@ private actor OnboardingFixture: NativeOnboardingService, NativeSettingsService 
         }
         if saveFails { throw APIError.backendUnavailable }
         self.value = value
-        return .init(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        return .init(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
     func nativeSettingsCategories() async throws -> [OpenAPI.CategoryNode] { [] }
     func nativeSettingsRecipients() async throws -> [OpenAPI.Recipient] { [] }

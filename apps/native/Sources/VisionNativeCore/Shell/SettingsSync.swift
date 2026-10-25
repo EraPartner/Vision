@@ -69,8 +69,8 @@ public struct SettingsResponse: Equatable, Sendable {
 /// replace database state the user never saw. Writes to one key run one after another.
 public actor SettingsWriter {
     private let transport: any SettingsTransport
-    private var baselines: [String: JSONValue] = [:]
-    private var pending: [String: Task<JSONValue, Error>] = [:]
+    private var baselines: [SettingKey: JSONValue] = [:]
+    private var pending: [SettingKey: Task<JSONValue, Error>] = [:]
     private enum Lifetime: Equatable { case active, suspended, retired }
     private var lifetime = Lifetime.active
     private var permissions: [UUID: CheckedContinuation<Void, any Error>] = [:]
@@ -80,23 +80,23 @@ public actor SettingsWriter {
         self.transport = transport
     }
 
-    public static func url(baseURL: URL, key: String) -> URL {
-        baseURL.appendingPathComponent("api/settings/\(key)", isDirectory: false)
+    public static func url(baseURL: URL, key: SettingKey) -> URL {
+        baseURL.appendingPathComponent("api/settings/\(key.rawValue)", isDirectory: false)
     }
 
     /// Keeps the first baseline a load returned for the key.
-    public func loaded(_ key: String, data: JSONValue?) {
+    public func loaded(_ key: SettingKey, data: JSONValue?) {
         guard baselines[key] == nil, let expected = data?["expected"], expected.isTruthy else { return }
         baselines[key] = expected
     }
 
-    public func baseline(_ key: String) -> JSONValue? {
+    public func baseline(_ key: SettingKey) -> JSONValue? {
         baselines[key]
     }
 
     /// A rejected or unacknowledged write poisons this key's queue until app reload,
     /// matching Electron: a later edit cannot silently retry unknown durable state.
-    public func save(_ key: String, value: JSONValue, baseURL: URL) async throws -> JSONValue {
+    public func save(_ key: SettingKey, value: JSONValue, baseURL: URL) async throws -> JSONValue {
         try await awaitPermission()
         let previous = pending[key]
         let task = Task {
@@ -154,7 +154,7 @@ public actor SettingsWriter {
         permissions.removeValue(forKey: id)?.resume(throwing: CancellationError())
     }
 
-    private func write(_ key: String, value: JSONValue, baseURL: URL) async throws -> JSONValue {
+    private func write(_ key: SettingKey, value: JSONValue, baseURL: URL) async throws -> JSONValue {
         guard let expected = baselines[key] else {
             throw SettingsWriteError("Settings were not loaded. Reopen Vision before saving.")
         }
@@ -176,7 +176,7 @@ public actor SettingsWriter {
 /// truth and `settings.json` keeps a mirror for the quit path, which may run after the
 /// backend stopped answering.
 public enum ServicesSettings {
-    public static let key = "services_settings"
+    public static let key = SettingKey.servicesSettings
 
     /// The stored value when the database answered with an object, else the mirror.
     public static func load(
@@ -224,7 +224,7 @@ public struct BackupSettingsValue: Equatable, Sendable {
 /// `backup:load-settings` and `backup:save-settings`: the same database setting and
 /// `settings.json` mirror as Electron, resolved with the iCloud Drive default directory.
 public enum BackupSettings {
-    public static let key = "backup_settings"
+    public static let key = SettingKey.backupSettings
 
     /// `BLOCKED_BACKUP_PREFIXES` in packaging/electron/runtime/ipc-schemas.ts.
     public static let blockedPrefixes = [

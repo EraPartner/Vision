@@ -60,7 +60,7 @@ struct BackgroundQueryIndicator: View {
     @State private var phase: CGFloat = -1
 
     var body: some View {
-        if inspector.inFlight.contains(where: { $0.method == "GET" }) {
+        if inspector.inFlight.contains(where: { $0.method == .get }) {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     theme.primary.opacity(0.25)

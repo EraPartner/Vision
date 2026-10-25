@@ -44,26 +44,42 @@ public struct PortfolioImportFile: Identifiable, Equatable, Sendable {
     }
 }
 
+extension IntIdentifier where Tag == PortfolioImportBatchNumericIDTag {
+    /// The same batch as the path parameters name it: the paths carry the batch's decimal text.
+    public var pathID: PortfolioImportBatchID { PortfolioImportBatchID(String(rawValue)) }
+}
+
+/// The statement sources the server detects.
+public enum PortfolioImportSource: String, Codable, CaseIterable, Sendable {
+    case ibkr, kinesis, nexo, saxo
+    case nexoPro = "nexo_pro"
+}
+
 public struct PortfolioImportDetected: Codable, Equatable, Sendable {
-    public let source: String
+    public let source: PortfolioImportSource
     public let sourceAccountIdentities: [String]
-    public let presetKey: String?
-    public init(source: String, sourceAccountIdentities: [String], presetKey: String? = nil) {
+    /// Only the IBKR funding history carries a preset beside its source.
+    public let presetKey: PortfolioImportFormat?
+    public init(
+        source: PortfolioImportSource, sourceAccountIdentities: [String], presetKey: PortfolioImportFormat? = nil
+    ) {
         self.source = source
         self.sourceAccountIdentities = sourceAccountIdentities
         self.presetKey = presetKey
     }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: Keys.self)
-        source = try c.decode(String.self, forKey: .source)
+        let rawSource = try c.decode(String.self, forKey: .source)
         sourceAccountIdentities = try c.decode([String].self, forKey: .sourceAccountIdentities)
-        presetKey = try c.decodeIfPresent(String.self, forKey: .presetKey)
-        guard ["ibkr", "kinesis", "nexo", "nexo_pro", "saxo"].contains(source),
-            presetKey == nil || presetKey == "ibkr_funding_history"
+        let rawPreset = try c.decodeIfPresent(String.self, forKey: .presetKey)
+        guard let detectedSource = PortfolioImportSource(rawValue: rawSource),
+            rawPreset == nil || rawPreset == PortfolioImportFormat.ibkrFundingHistory.rawValue
         else { throw PortfolioImportFailure.unverified("Unsupported detected portfolio source") }
+        source = detectedSource
+        presetKey = rawPreset.flatMap(PortfolioImportFormat.init(rawValue:))
     }
     enum Keys: String, CodingKey { case source, sourceAccountIdentities, presetKey }
-    public func resolveAccount(_ accounts: [OpenAPI.Account]) -> Int? {
+    public func resolveAccount(_ accounts: [OpenAPI.Account]) -> AccountID? {
         let eligible = portfolioImportBrokerAccounts(accounts)
         let clean: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
         let identities = Set(sourceAccountIdentities.map { $0.lowercased() })
@@ -72,9 +88,9 @@ public struct PortfolioImportDetected: Codable, Equatable, Sendable {
             identities.contains(clean($0.name)) || $0.displayName.map { identities.contains(clean($0)) } == true
         }
         if !exact.isEmpty { return exact.count == 1 ? exact.first?.id : nil }
-        let aliases: [String: [String]] = [
-            "ibkr": ["ibkr", "interactive brokers"], "kinesis": ["kinesis", "kinesis money"], "nexo": ["nexo"],
-            "nexo_pro": ["nexo pro", "nexo"], "saxo": ["saxo", "saxo bank"],
+        let aliases: [PortfolioImportSource: [String]] = [
+            .ibkr: ["ibkr", "interactive brokers"], .kinesis: ["kinesis", "kinesis money"], .nexo: ["nexo"],
+            .nexoPro: ["nexo pro", "nexo"], .saxo: ["saxo", "saxo bank"],
         ]
         let matches = eligible.filter {
             (aliases[source] ?? []).contains(clean($0.name))
@@ -85,11 +101,11 @@ public struct PortfolioImportDetected: Codable, Equatable, Sendable {
 }
 
 public func portfolioImportBrokerAccounts(_ accounts: [OpenAPI.Account]) -> [OpenAPI.Account] {
-    accounts.filter { $0.isActive && ["brokerage", "crypto_exchange", "wallet"].contains($0.type) }
+    accounts.filter { $0.isActive && [.brokerage, .cryptoExchange, .wallet].contains($0.type) }
 }
 
 public struct PortfolioImportParser: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: PortfolioParserConfigID
     public let name: String
     public let kind: String
     public let config: PortfolioImportConfig
@@ -108,7 +124,7 @@ public struct PortfolioImportPreviewRow: Decodable, Equatable, Sendable, Identif
     public let status: String
     public let route: String?
     public let txDate: String?
-    public let type: String?
+    public let type: OpenAPI.PortfolioTxnType?
     public let typeRaw: String?
     public let symbolRaw: String?
     public let nameRaw: String?
@@ -122,7 +138,7 @@ public struct PortfolioImportPreviewRow: Decodable, Equatable, Sendable, Identif
     public let note: String?
     public let matchSource: String?
     public let errorMessage: String?
-    public let userOverrideInvestmentId: Int?
+    public let userOverrideInvestmentId: InvestmentID?
     public var isHoldingResolvable: Bool {
         status == "matched" || (status == "error" && errorMessage == "unresolved instrument — pick or create a holding")
     }
@@ -153,7 +169,7 @@ public struct PortfolioImportPreviewRow: Decodable, Equatable, Sendable, Identif
         status = try c.decode(String.self, forKey: .status)
         route = try c.decodeIfPresent(String.self, forKey: .route)
         txDate = try c.decodeIfPresent(String.self, forKey: .txDate)
-        type = try c.decodeIfPresent(String.self, forKey: .type)
+        type = try c.decodeIfPresent(OpenAPI.PortfolioTxnType.self, forKey: .type)
         typeRaw = try c.decodeIfPresent(String.self, forKey: .typeRaw)
         symbolRaw = try c.decodeIfPresent(String.self, forKey: .symbolRaw)
         nameRaw = try c.decodeIfPresent(String.self, forKey: .nameRaw)
@@ -167,16 +183,16 @@ public struct PortfolioImportPreviewRow: Decodable, Equatable, Sendable, Identif
         note = try c.decodeIfPresent(String.self, forKey: .note)
         matchSource = try c.decodeIfPresent(String.self, forKey: .matchSource)
         errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
-        userOverrideInvestmentId = try c.decodeIfPresent(Int.self, forKey: .userOverrideInvestmentId)
+        userOverrideInvestmentId = try c.decodeIfPresent(InvestmentID.self, forKey: .userOverrideInvestmentId)
     }
 }
 
 public struct PortfolioImportPreviewGroup: Decodable, Equatable, Sendable, Identifiable {
     public let isCash: Bool
-    public let investmentId: Int?
+    public let investmentId: InvestmentID?
     public let investmentName: String?
     public let investmentSymbol: String?
-    public let investmentAssetClass: String?
+    public let investmentAssetClass: OpenAPI.AssetClass?
     public let rawSymbol: String?
     public let rawName: String?
     public let rowCount: Int
@@ -201,10 +217,10 @@ public struct PortfolioImportPreviewGroup: Decodable, Equatable, Sendable, Ident
                 .allSatisfy(c.contains)
         else { throw PortfolioImportFailure.unverified("Incomplete portfolio preview group") }
         isCash = try c.decode(Bool.self, forKey: .isCash)
-        investmentId = try c.decodeIfPresent(Int.self, forKey: .investmentId)
+        investmentId = try c.decodeIfPresent(InvestmentID.self, forKey: .investmentId)
         investmentName = try c.decodeIfPresent(String.self, forKey: .investmentName)
         investmentSymbol = try c.decodeIfPresent(String.self, forKey: .investmentSymbol)
-        investmentAssetClass = try c.decodeIfPresent(String.self, forKey: .investmentAssetClass)
+        investmentAssetClass = try c.decodeIfPresent(OpenAPI.AssetClass.self, forKey: .investmentAssetClass)
         rawSymbol = try c.decodeIfPresent(String.self, forKey: .rawSymbol)
         rawName = try c.decodeIfPresent(String.self, forKey: .rawName)
         rowCount = try c.decode(Int.self, forKey: .rowCount)
@@ -213,8 +229,8 @@ public struct PortfolioImportPreviewGroup: Decodable, Equatable, Sendable, Ident
 }
 
 public struct PortfolioImportPreview: Decodable, Equatable, Sendable {
-    public let batchId: Int
-    public let accountId: Int?
+    public let batchId: PortfolioImportBatchNumericID
+    public let accountId: AccountID?
     public let accountName: String?
     public let accountValid: Bool
     public let groups: [PortfolioImportPreviewGroup]
@@ -240,16 +256,16 @@ public struct PortfolioImportPreview: Decodable, Equatable, Sendable {
         guard c.contains(.accountId), c.contains(.accountName) else {
             throw PortfolioImportFailure.unverified("Incomplete portfolio account routing evidence")
         }
-        batchId = try c.decode(Int.self, forKey: .batchId)
-        accountId = try c.decodeIfPresent(Int.self, forKey: .accountId)
+        batchId = try c.decode(PortfolioImportBatchNumericID.self, forKey: .batchId)
+        accountId = try c.decodeIfPresent(AccountID.self, forKey: .accountId)
         accountName = try c.decodeIfPresent(String.self, forKey: .accountName)
         accountValid = try c.decode(Bool.self, forKey: .accountValid)
         groups = try c.decode([PortfolioImportPreviewGroup].self, forKey: .groups)
         totals = try c.decode([String: Int].self, forKey: .totals)
     }
-    public func validate(batchId: Int) throws {
+    public func validate(batchId: PortfolioImportBatchNumericID) throws {
         let ids = groups.flatMap(\.rows).map(\.id)
-        guard self.batchId == batchId, batchId > 0, batchId <= 9_007_199_254_740_991,
+        guard self.batchId == batchId, batchId.rawValue > 0, batchId.rawValue <= 9_007_199_254_740_991,
             ["symbol", "name_exact", "unresolved", "error"].allSatisfy({ totals[$0] != nil }),
             totals.values.allSatisfy({ $0 >= 0 }), groups.allSatisfy({ $0.rowCount >= 0 }), Set(ids).count == ids.count
         else { throw PortfolioImportFailure.unverified("Unverified portfolio preview") }
@@ -269,7 +285,7 @@ public struct PortfolioImportPreview: Decodable, Equatable, Sendable {
 }
 
 public struct PortfolioImportCommitResult: Decodable, Equatable, Sendable {
-    public let batchId: Int
+    public let batchId: PortfolioImportBatchNumericID
     public let total: Int
     public let imported: Int
     public let duplicates: Int
@@ -281,7 +297,7 @@ public struct PortfolioImportCommitResult: Decodable, Equatable, Sendable {
 }
 
 public struct PortfolioImportOutcome: Decodable, Equatable, Sendable {
-    public let batchId: Int
+    public let batchId: PortfolioImportBatchNumericID
     public let total: Int?
     public let skipped: Int?
     public let imported: Int
@@ -296,7 +312,7 @@ public struct PortfolioImportOutcome: Decodable, Equatable, Sendable {
     }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        batchId = try c.decode(Int.self, forKey: .batchId)
+        batchId = try c.decode(PortfolioImportBatchNumericID.self, forKey: .batchId)
         requiresReview = try c.decodeIfPresent(Bool.self, forKey: .requiresReview) ?? false
         total = try c.decodeIfPresent(Int.self, forKey: .total)
         skipped = try c.decodeIfPresent(Int.self, forKey: .skipped)
@@ -304,7 +320,8 @@ public struct PortfolioImportOutcome: Decodable, Equatable, Sendable {
         imported = try c.decodeIfPresent(Int.self, forKey: .imported) ?? (requiresReview ? 0 : -1)
         duplicates = try c.decodeIfPresent(Int.self, forKey: .duplicates) ?? (requiresReview ? 0 : -1)
         errors = try c.decodeIfPresent(Int.self, forKey: .errors) ?? (requiresReview ? 0 : -1)
-        guard batchId > 0, batchId <= 9_007_199_254_740_991, [imported, duplicates, errors].allSatisfy({ $0 >= 0 }),
+        guard batchId.rawValue > 0, batchId.rawValue <= 9_007_199_254_740_991,
+            [imported, duplicates, errors].allSatisfy({ $0 >= 0 }),
             skipped.map({ $0 >= 0 }) ?? true,
             total.map({ $0 >= 0 }) ?? true
         else { throw PortfolioImportFailure.unverified("Invalid portfolio import outcome") }
@@ -324,15 +341,15 @@ public struct PortfolioImportProbe: Decodable, Equatable, Sendable {
 }
 
 public struct PortfolioImportBatch: Decodable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: PortfolioImportBatchNumericID
     public let adapterName: String
     public let sourceFilename: String?
-    public let accountId: Int?
-    public let status: String
+    public let accountId: AccountID?
+    public let status: OpenAPI.PortfolioImportBatch.Status
     public let rowsTotal: Int
     public let rowsError: Int
     public let customConfig: TaxValue?
-    public var canRollback: Bool { ["complete", "complete_with_errors"].contains(status) }
+    public var canRollback: Bool { [.complete, .completeWithErrors].contains(status) }
     public init(from decoder: any Decoder) throws {
         let value = try TaxValue(from: decoder)
         func id(_ raw: TaxValue?) -> Int? {
@@ -345,21 +362,19 @@ public struct PortfolioImportBatch: Decodable, Equatable, Sendable, Identifiable
             return nil
         }
         guard let batchId = id(value["id"]), let adapter = value["adapter_name"]?.stringValue,
-            let status = value["status"]?.stringValue,
-            [
-                "pending", "staging", "validating", "matching", "committing", "complete", "complete_with_errors",
-                "failed", "aborted", "awaiting_review",
-            ].contains(status),
+            let rawStatus = value["status"]?.stringValue,
             let rowsTotal = value["rows_total"]?.importIntValue, let rowsError = value["rows_error"]?.importIntValue
         else { throw PortfolioImportFailure.unverified("Unverified portfolio batch") }
+        let status = OpenAPI.PortfolioImportBatch.Status(rawValue: rawStatus)
+        if case .unknown = status { throw PortfolioImportFailure.unverified("Unverified portfolio batch") }
         let rawAccount = value["account_id"]
         guard rawAccount == nil || rawAccount == .null || id(rawAccount) != nil else {
             throw PortfolioImportFailure.unverified("Invalid portfolio batch account")
         }
-        self.id = batchId
+        self.id = PortfolioImportBatchNumericID(batchId)
         adapterName = adapter
         sourceFilename = value["source_filename"]?.stringValue
-        accountId = id(rawAccount)
+        accountId = id(rawAccount).map { AccountID($0) }
         self.status = status
         self.rowsTotal = rowsTotal
         self.rowsError = rowsError

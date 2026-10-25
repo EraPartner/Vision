@@ -57,7 +57,8 @@ jobs:
       - name: Build the app (Debug, unsigned)
         run: |
           xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" \
-            -configuration Debug CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/build.log" 2>&1 || {
+            -configuration Debug CODE_SIGNING_ALLOWED=NO -IDEBuildingContinueBuildingAfterErrors=YES \
+            build > "$RUNNER_TEMP/build.log" 2>&1 || {
             grep -E ': (error|fatal error): ' "$RUNNER_TEMP/build.log" | sed "s#^$GITHUB_WORKSPACE/##" | sort -u | head -500
             exit 1
           }

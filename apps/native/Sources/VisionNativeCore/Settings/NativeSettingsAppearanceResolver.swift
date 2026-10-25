@@ -3,7 +3,7 @@ import Foundation
 public struct NativeSettingsAppearance: Equatable, Sendable {
     public let theme: ThemeSelection
     public let systemAccent: Bool
-    public let effectiveVisualEffects: String
+    public let effectiveVisualEffects: VisualEffects
     public let isLargeDisplay: Bool
     /// Missing/nonstring schedule inputs would throw in ThemeHydration. Retain the last appearance.
     public let invalidSchedule: Bool
@@ -21,7 +21,7 @@ public enum NativeSettingsAppearanceResolver {
     }
     public static func resolve(
         theme: TaxValue?, settings: NativeAppSettings, date: Date = Date(), calendar: Calendar = .current,
-        systemIsDark: Bool, physicalPixelCount: Double, isBuiltInDisplay: Bool? = nil, sessionTierOverride: String? = nil,
+        systemIsDark: Bool, physicalPixelCount: Double, isBuiltInDisplay: Bool? = nil, sessionTierOverride: VisualEffects? = nil,
         previousAppearance: ThemeAppearance = .dark
     ) -> NativeSettingsAppearance {
         let mode = theme?["mode"]?.stringValue ?? "dark"
@@ -37,7 +37,7 @@ public enum NativeSettingsAppearanceResolver {
         }
         let variant = theme?["variant"]?.stringValue.flatMap(ThemeVariant.init(rawValue:)) ?? .default
         let large = isLargeDisplay(physicalPixelCount: physicalPixelCount, isBuiltIn: isBuiltInDisplay)
-        let tier = settings.autoAdaptDisplay && large ? sessionTierOverride ?? "reduced" : settings.visualEffects
+        let tier = settings.autoAdaptDisplay && large ? sessionTierOverride ?? .reduced : settings.visualEffects
         return .init(
             theme: .init(
                 variant: variant, appearance: appearance ?? previousAppearance,

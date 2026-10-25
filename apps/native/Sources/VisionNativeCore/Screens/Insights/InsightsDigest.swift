@@ -3,32 +3,32 @@ import Observation
 
 public struct StatisticsDigest: Decodable, Equatable, Sendable {
     public struct NewSubscription: Decodable, Equatable, Sendable, Identifiable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let recipientName: String
         public let latestAmount: Decimal
-        public let currency: String
+        public let currency: CurrencyCode
         public let detectedPattern: String
         public let predictedNext: String
-        public var id: Int { recipientId }
+        public var id: RecipientID { recipientId }
         public var dismissal: JSONValue {
-            .object(["kind": .string("subscription_new"), "recipient_id": .int(recipientId)])
+            .object(["kind": .string("subscription_new"), "recipient_id": .int(recipientId.rawValue)])
         }
     }
     public struct PriceChange: Decodable, Equatable, Sendable, Identifiable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let recipientName: String
         public let previousAmount: Decimal
         public let newAmount: Decimal
         public let percentChange: Decimal
         public let direction: String
-        public let currency: String
-        public var id: Int { recipientId }
+        public let currency: CurrencyCode
+        public var id: RecipientID { recipientId }
         public var dismissal: JSONValue {
-            .object(["kind": .string("subscription_price_change"), "recipient_id": .int(recipientId)])
+            .object(["kind": .string("subscription_price_change"), "recipient_id": .int(recipientId.rawValue)])
         }
     }
     public struct Outlier: Decodable, Equatable, Sendable, Identifiable {
-        public let categoryId: Int
+        public let categoryId: CategoryID
         public let categoryName: String
         public let monthKey: String
         public let comparisonEndDay: Int
@@ -36,10 +36,10 @@ public struct StatisticsDigest: Decodable, Equatable, Sendable {
         public let baselineMedian: Decimal
         public let deviation: Decimal
         public let direction: String
-        public var id: String { "\(categoryId):\(monthKey)" }
+        public var id: String { "\(categoryId.rawValue):\(monthKey)" }
         public var dismissal: JSONValue {
             .object([
-                "kind": .string("category_outlier"), "category_id": .int(categoryId), "month_key": .string(monthKey),
+                "kind": .string("category_outlier"), "category_id": .int(categoryId.rawValue), "month_key": .string(monthKey),
             ])
         }
     }
@@ -66,7 +66,7 @@ extension APIClient: StatisticsDigestService {
                 OpenAPIOperations.GetInsightsDigest(), query: []))
     }
     public func dismissStatisticsInsight(_ body: JSONValue) async throws {
-        _ = try await send(OpenAPIOperations.DismissInsight(body: body))
+        _ = try await send(OpenAPIOperations.DismissInsight(body: .unknown(body)))
     }
 }
 

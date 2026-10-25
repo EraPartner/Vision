@@ -4,26 +4,28 @@
 import Foundation
 
 /// The OpenAPI component schemas the allow-listed operations use
-/// (`apps/native/openapi-operations.txt`). Dates stay the wire strings; numbers are `Decimal`.
+/// (`apps/native/openapi-operations.txt`). Calendar days are `CalendarDay` and timestamps `Instant`; numbers are
+/// `Decimal`; ids, currencies, string enums and oneOf unions are typed (`OpenAPIIdentifiers.swift`,
+/// `CurrencyCode`, enums with `.unknown`, enums with associated values).
 public enum OpenAPI {}
 
 extension OpenAPI {
     public struct Account: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: AccountID
         public let name: String
         public let displayName: String?
         public let institution: String?
         /// ISO 4217 currency code
-        public let currency: String
-        public let type: String
-        public let liquidityClass: String
+        public let currency: CurrencyCode
+        public let type: AccountType
+        public let liquidityClass: LiquidityClass
         public let spendable: Bool
         public let inNetWorth: Bool
-        public let taxWrapper: String
-        public let owner: String
+        public let taxWrapper: TaxWrapper
+        public let owner: Owner
         public let multiCurrencyCash: Bool
         public let hasCashSleeve: Bool
-        public let fundingAccountId: Int?
+        public let fundingAccountId: AccountID?
         /// Authoritative statement readings per native currency (ADR-089 D2).
         public let statementBalances: [StatementBalancesItem]?
         /// The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a
@@ -40,7 +42,7 @@ extension OpenAPI {
         public let balanceIncomplete: Bool?
         /// Currency codes excluded from computed_balance because a conversion rate is unavailable; only
         /// returned by the list endpoint.
-        public let unconvertedCurrencies: [String]?
+        public let unconvertedCurrencies: [CurrencyCode]?
         /// The reconciliation base: the computed balance of the single currency partition the selected
         /// statement reading is a statement for, in `reconcilable_currency` and NOT FX-converted.
         /// Equals `computed_balance` for a single-currency account and differs on a multi-currency one,
@@ -52,7 +54,7 @@ extension OpenAPI {
         /// Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole
         /// funded partition's code when the declared currency partition is absent and the ledger
         /// contains one funded foreign partition. Only returned by the list endpoint.
-        public let reconcilableCurrency: String?
+        public let reconcilableCurrency: CurrencyCode?
         /// selected statement balance − reconcilable_balance, in `reconcilable_currency` (ADR-094);
         /// null if no statement balance. Native-currency by design — never statement balance −
         /// computed_balance, which on a multi-currency account would make the badge move with the daily
@@ -60,7 +62,7 @@ extension OpenAPI {
         public let drift: Decimal?
         /// YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1
         /// provenance); absent when nothing is stamped. Only returned by the list endpoint.
-        public let anchorDate: String?
+        public let anchorDate: CalendarDay?
         /// Active ledger entries after the anchor, or all active entries when unstamped — the "{n}
         /// entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list
         /// endpoint.
@@ -70,11 +72,11 @@ extension OpenAPI {
         public let isActive: Bool
         /// Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088
         /// addendum, D5)
-        public let closedAt: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let closedAt: Instant?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, name: String, displayName: String? = nil, institution: String? = nil, currency: String, type: String, liquidityClass: String, spendable: Bool, inNetWorth: Bool, taxWrapper: String, owner: String, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: Int? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [String]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: String? = nil, drift: Decimal? = nil, anchorDate: String? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: AccountID, name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode, type: AccountType, liquidityClass: LiquidityClass, spendable: Bool, inNetWorth: Bool, taxWrapper: TaxWrapper, owner: Owner, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: AccountID? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [CurrencyCode]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil, anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: Instant? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.displayName = displayName
@@ -138,12 +140,188 @@ extension OpenAPI {
             case updatedAt = "updated_at"
         }
 
-        public struct StatementBalancesItem: Codable, Equatable, Sendable {
-            public let currency: String
-            public let balance: Decimal
-            public let balanceDate: String
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AccountType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case checking
+            case savings
+            case brokerage
+            case cryptoExchange
+            case wallet
+            case pension
+            case liability
+            case unknown(String)
 
-            public init(currency: String, balance: Decimal, balanceDate: String) {
+            public static var allKnownCases: [AccountType] {
+                [.checking, .savings, .brokerage, .cryptoExchange, .wallet, .pension, .liability]
+            }
+
+            public static var allCases: [AccountType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "checking": self = .checking
+                case "savings": self = .savings
+                case "brokerage": self = .brokerage
+                case "crypto_exchange": self = .cryptoExchange
+                case "wallet": self = .wallet
+                case "pension": self = .pension
+                case "liability": self = .liability
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .checking: return "checking"
+                case .savings: return "savings"
+                case .brokerage: return "brokerage"
+                case .cryptoExchange: return "crypto_exchange"
+                case .wallet: return "wallet"
+                case .pension: return "pension"
+                case .liability: return "liability"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum LiquidityClass: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case liquid
+            case semiLiquid
+            case illiquid
+            case unknown(String)
+
+            public static var allKnownCases: [LiquidityClass] {
+                [.liquid, .semiLiquid, .illiquid]
+            }
+
+            public static var allCases: [LiquidityClass] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "liquid": self = .liquid
+                case "semi_liquid": self = .semiLiquid
+                case "illiquid": self = .illiquid
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .liquid: return "liquid"
+                case .semiLiquid: return "semi_liquid"
+                case .illiquid: return "illiquid"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TaxWrapper: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case pension
+            case taxAdvantaged
+            case unknown(String)
+
+            public static var allKnownCases: [TaxWrapper] {
+                [.none, .pension, .taxAdvantaged]
+            }
+
+            public static var allCases: [TaxWrapper] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "pension": self = .pension
+                case "tax_advantaged": self = .taxAdvantaged
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .pension: return "pension"
+                case .taxAdvantaged: return "tax_advantaged"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Owner: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case me
+            case partner
+            case joint
+            case unknown(String)
+
+            public static var allKnownCases: [Owner] {
+                [.me, .partner, .joint]
+            }
+
+            public static var allCases: [Owner] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "me": self = .me
+                case "partner": self = .partner
+                case "joint": self = .joint
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .me: return "me"
+                case .partner: return "partner"
+                case .joint: return "joint"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        public struct StatementBalancesItem: Codable, Equatable, Sendable {
+            public let currency: CurrencyCode
+            public let balance: Decimal
+            public let balanceDate: CalendarDay
+
+            public init(currency: CurrencyCode, balance: Decimal, balanceDate: CalendarDay) {
                 self.currency = currency
                 self.balance = balance
                 self.balanceDate = balanceDate
@@ -157,10 +335,10 @@ extension OpenAPI {
         }
 
         public struct BalancePartsItem: Codable, Equatable, Sendable {
-            public let currency: String
+            public let currency: CurrencyCode
             public let balance: Decimal
 
-            public init(currency: String, balance: Decimal) {
+            public init(currency: CurrencyCode, balance: Decimal) {
                 self.currency = currency
                 self.balance = balance
             }
@@ -176,18 +354,18 @@ extension OpenAPI {
         public let name: String
         public let displayName: String?
         public let institution: String?
-        public let currency: String?
-        public let type: String?
-        public let liquidityClass: String?
+        public let currency: CurrencyCode?
+        public let type: AccountCreateType?
+        public let liquidityClass: LiquidityClass?
         public let spendable: Bool?
         public let inNetWorth: Bool?
-        public let taxWrapper: String?
-        public let owner: String?
+        public let taxWrapper: TaxWrapper?
+        public let owner: Owner?
         public let multiCurrencyCash: Bool?
         public let hasCashSleeve: Bool?
-        public let fundingAccountId: Int?
+        public let fundingAccountId: AccountID?
 
-        public init(name: String, displayName: String? = nil, institution: String? = nil, currency: String? = nil, type: String? = nil, liquidityClass: String? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: String? = nil, owner: String? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: Int? = nil) {
+        public init(name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode? = nil, type: AccountCreateType? = nil, liquidityClass: LiquidityClass? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: TaxWrapper? = nil, owner: Owner? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: AccountID? = nil) {
             self.name = name
             self.displayName = displayName
             self.institution = institution
@@ -218,6 +396,182 @@ extension OpenAPI {
             case hasCashSleeve = "has_cash_sleeve"
             case fundingAccountId = "funding_account_id"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AccountCreateType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case checking
+            case savings
+            case brokerage
+            case cryptoExchange
+            case wallet
+            case pension
+            case liability
+            case unknown(String)
+
+            public static var allKnownCases: [AccountCreateType] {
+                [.checking, .savings, .brokerage, .cryptoExchange, .wallet, .pension, .liability]
+            }
+
+            public static var allCases: [AccountCreateType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "checking": self = .checking
+                case "savings": self = .savings
+                case "brokerage": self = .brokerage
+                case "crypto_exchange": self = .cryptoExchange
+                case "wallet": self = .wallet
+                case "pension": self = .pension
+                case "liability": self = .liability
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .checking: return "checking"
+                case .savings: return "savings"
+                case .brokerage: return "brokerage"
+                case .cryptoExchange: return "crypto_exchange"
+                case .wallet: return "wallet"
+                case .pension: return "pension"
+                case .liability: return "liability"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum LiquidityClass: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case liquid
+            case semiLiquid
+            case illiquid
+            case unknown(String)
+
+            public static var allKnownCases: [LiquidityClass] {
+                [.liquid, .semiLiquid, .illiquid]
+            }
+
+            public static var allCases: [LiquidityClass] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "liquid": self = .liquid
+                case "semi_liquid": self = .semiLiquid
+                case "illiquid": self = .illiquid
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .liquid: return "liquid"
+                case .semiLiquid: return "semi_liquid"
+                case .illiquid: return "illiquid"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TaxWrapper: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case pension
+            case taxAdvantaged
+            case unknown(String)
+
+            public static var allKnownCases: [TaxWrapper] {
+                [.none, .pension, .taxAdvantaged]
+            }
+
+            public static var allCases: [TaxWrapper] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "pension": self = .pension
+                case "tax_advantaged": self = .taxAdvantaged
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .pension: return "pension"
+                case .taxAdvantaged: return "tax_advantaged"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Owner: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case me
+            case partner
+            case joint
+            case unknown(String)
+
+            public static var allKnownCases: [Owner] {
+                [.me, .partner, .joint]
+            }
+
+            public static var allCases: [Owner] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "me": self = .me
+                case "partner": self = .partner
+                case "joint": self = .joint
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .me: return "me"
+                case .partner: return "partner"
+                case .joint: return "joint"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct AccountGroupTotal: Codable, Equatable, Sendable {
@@ -231,9 +585,9 @@ extension OpenAPI {
         public let holdingsUnavailable: Bool
         /// Accounts with a balance partition left out for want of a stored rate.
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
 
-        public init(total: Decimal, cash: Decimal, holdings: Decimal, holdingsUnavailable: Bool, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+        public init(total: Decimal, cash: Decimal, holdings: Decimal, holdingsUnavailable: Bool, unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
             self.total = total
             self.cash = cash
             self.holdings = holdings
@@ -277,13 +631,13 @@ extension OpenAPI {
     }
 
     public struct AccountTotals: Codable, Equatable, Sendable {
-        public let currency: String
+        public let currency: CurrencyCode
         /// Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet.
         public let netCash: NetCash
         public let groups: Groups
         public let accounts: [AccountsItem]
 
-        public init(currency: String, netCash: NetCash, groups: Groups, accounts: [AccountsItem]) {
+        public init(currency: CurrencyCode, netCash: NetCash, groups: Groups, accounts: [AccountsItem]) {
             self.currency = currency
             self.netCash = netCash
             self.groups = groups
@@ -300,9 +654,9 @@ extension OpenAPI {
         public struct NetCash: Codable, Equatable, Sendable {
             public let total: Decimal
             public let unconvertedCount: Int
-            public let unconvertedCurrencies: [String]
+            public let unconvertedCurrencies: [CurrencyCode]
 
-            public init(total: Decimal, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+            public init(total: Decimal, unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
                 self.total = total
                 self.unconvertedCount = unconvertedCount
                 self.unconvertedCurrencies = unconvertedCurrencies
@@ -337,13 +691,13 @@ extension OpenAPI {
         }
 
         public struct AccountsItem: Codable, Equatable, Sendable {
-            public let id: Int
-            public let group: String
+            public let id: AccountID
+            public let group: Group
             /// Sum of the account's convertible balance partitions.
             public let convertedBalance: Decimal
-            public let unconvertedCurrencies: [String]
+            public let unconvertedCurrencies: [CurrencyCode]
 
-            public init(id: Int, group: String, convertedBalance: Decimal, unconvertedCurrencies: [String]) {
+            public init(id: AccountID, group: Group, convertedBalance: Decimal, unconvertedCurrencies: [CurrencyCode]) {
                 self.id = id
                 self.group = group
                 self.convertedBalance = convertedBalance
@@ -356,26 +710,70 @@ extension OpenAPI {
                 case convertedBalance = "converted_balance"
                 case unconvertedCurrencies = "unconverted_currencies"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Group: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case cash
+                case portfolio
+                case liabilities
+                case archived
+                case unknown(String)
+
+                public static var allKnownCases: [Group] {
+                    [.cash, .portfolio, .liabilities, .archived]
+                }
+
+                public static var allCases: [Group] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "cash": self = .cash
+                    case "portfolio": self = .portfolio
+                    case "liabilities": self = .liabilities
+                    case "archived": self = .archived
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .cash: return "cash"
+                    case .portfolio: return "portfolio"
+                    case .liabilities: return "liabilities"
+                    case .archived: return "archived"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct AccountUpdate: Codable, Equatable, Sendable {
         public let name: String?
-        public let displayName: String?
-        public let institution: String?
-        public let currency: String?
-        public let type: String?
-        public let liquidityClass: String?
+        public let displayName: Nullable<String>
+        public let institution: Nullable<String>
+        public let currency: CurrencyCode?
+        public let type: AccountUpdateType?
+        public let liquidityClass: LiquidityClass?
         public let spendable: Bool?
         public let inNetWorth: Bool?
-        public let taxWrapper: String?
-        public let owner: String?
+        public let taxWrapper: TaxWrapper?
+        public let owner: Owner?
         public let multiCurrencyCash: Bool?
         public let hasCashSleeve: Bool?
-        public let fundingAccountId: Int?
+        public let fundingAccountId: AccountID?
         public let isActive: Bool?
 
-        public init(name: String? = nil, displayName: String? = nil, institution: String? = nil, currency: String? = nil, type: String? = nil, liquidityClass: String? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: String? = nil, owner: String? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: Int? = nil, isActive: Bool? = nil) {
+        public init(name: String? = nil, displayName: Nullable<String> = .absent, institution: Nullable<String> = .absent, currency: CurrencyCode? = nil, type: AccountUpdateType? = nil, liquidityClass: LiquidityClass? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: TaxWrapper? = nil, owner: Owner? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: AccountID? = nil, isActive: Bool? = nil) {
             self.name = name
             self.displayName = displayName
             self.institution = institution
@@ -407,6 +805,218 @@ extension OpenAPI {
             case hasCashSleeve = "has_cash_sleeve"
             case fundingAccountId = "funding_account_id"
             case isActive = "is_active"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
+            self.displayName = try container.decodeNullable(String.self, forKey: .displayName)
+            self.institution = try container.decodeNullable(String.self, forKey: .institution)
+            self.currency = try container.decodeIfPresent(CurrencyCode.self, forKey: .currency)
+            self.type = try container.decodeIfPresent(AccountUpdateType.self, forKey: .type)
+            self.liquidityClass = try container.decodeIfPresent(LiquidityClass.self, forKey: .liquidityClass)
+            self.spendable = try container.decodeIfPresent(Bool.self, forKey: .spendable)
+            self.inNetWorth = try container.decodeIfPresent(Bool.self, forKey: .inNetWorth)
+            self.taxWrapper = try container.decodeIfPresent(TaxWrapper.self, forKey: .taxWrapper)
+            self.owner = try container.decodeIfPresent(Owner.self, forKey: .owner)
+            self.multiCurrencyCash = try container.decodeIfPresent(Bool.self, forKey: .multiCurrencyCash)
+            self.hasCashSleeve = try container.decodeIfPresent(Bool.self, forKey: .hasCashSleeve)
+            self.fundingAccountId = try container.decodeIfPresent(AccountID.self, forKey: .fundingAccountId)
+            self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeNullable(displayName, forKey: .displayName)
+            try container.encodeNullable(institution, forKey: .institution)
+            try container.encodeIfPresent(currency, forKey: .currency)
+            try container.encodeIfPresent(type, forKey: .type)
+            try container.encodeIfPresent(liquidityClass, forKey: .liquidityClass)
+            try container.encodeIfPresent(spendable, forKey: .spendable)
+            try container.encodeIfPresent(inNetWorth, forKey: .inNetWorth)
+            try container.encodeIfPresent(taxWrapper, forKey: .taxWrapper)
+            try container.encodeIfPresent(owner, forKey: .owner)
+            try container.encodeIfPresent(multiCurrencyCash, forKey: .multiCurrencyCash)
+            try container.encodeIfPresent(hasCashSleeve, forKey: .hasCashSleeve)
+            try container.encodeIfPresent(fundingAccountId, forKey: .fundingAccountId)
+            try container.encodeIfPresent(isActive, forKey: .isActive)
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AccountUpdateType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case checking
+            case savings
+            case brokerage
+            case cryptoExchange
+            case wallet
+            case pension
+            case liability
+            case unknown(String)
+
+            public static var allKnownCases: [AccountUpdateType] {
+                [.checking, .savings, .brokerage, .cryptoExchange, .wallet, .pension, .liability]
+            }
+
+            public static var allCases: [AccountUpdateType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "checking": self = .checking
+                case "savings": self = .savings
+                case "brokerage": self = .brokerage
+                case "crypto_exchange": self = .cryptoExchange
+                case "wallet": self = .wallet
+                case "pension": self = .pension
+                case "liability": self = .liability
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .checking: return "checking"
+                case .savings: return "savings"
+                case .brokerage: return "brokerage"
+                case .cryptoExchange: return "crypto_exchange"
+                case .wallet: return "wallet"
+                case .pension: return "pension"
+                case .liability: return "liability"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum LiquidityClass: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case liquid
+            case semiLiquid
+            case illiquid
+            case unknown(String)
+
+            public static var allKnownCases: [LiquidityClass] {
+                [.liquid, .semiLiquid, .illiquid]
+            }
+
+            public static var allCases: [LiquidityClass] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "liquid": self = .liquid
+                case "semi_liquid": self = .semiLiquid
+                case "illiquid": self = .illiquid
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .liquid: return "liquid"
+                case .semiLiquid: return "semi_liquid"
+                case .illiquid: return "illiquid"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TaxWrapper: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case pension
+            case taxAdvantaged
+            case unknown(String)
+
+            public static var allKnownCases: [TaxWrapper] {
+                [.none, .pension, .taxAdvantaged]
+            }
+
+            public static var allCases: [TaxWrapper] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "pension": self = .pension
+                case "tax_advantaged": self = .taxAdvantaged
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .pension: return "pension"
+                case .taxAdvantaged: return "tax_advantaged"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Owner: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case me
+            case partner
+            case joint
+            case unknown(String)
+
+            public static var allKnownCases: [Owner] {
+                [.me, .partner, .joint]
+            }
+
+            public static var allCases: [Owner] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "me": self = .me
+                case "partner": self = .partner
+                case "joint": self = .joint
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .me: return "me"
+                case .partner: return "partner"
+                case .joint: return "joint"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -455,10 +1065,10 @@ extension OpenAPI {
     /// Provenance of an aggregation payload (ADR-011): when it was computed and whether it came from a
     /// materialized view (`mv`), a live query (`live`) or a forecast cache (`cache`).
     public struct AggregationMeta: Codable, Equatable, Sendable {
-        public let computedAt: String
+        public let computedAt: Instant
         public let source: String
 
-        public init(computedAt: String, source: String) {
+        public init(computedAt: Instant, source: String) {
             self.computedAt = computedAt
             self.source = source
         }
@@ -513,12 +1123,12 @@ extension OpenAPI {
 
     public struct AiAnalysisEditProposal: Codable, Equatable, Sendable {
         public let schemaVersion: Int
-        public let savedAnalysisId: String
+        public let savedAnalysisId: SavedAnalysisID
         public let baseVersion: Int
         public let rationale: String
         public let operations: [OperationsItem]
 
-        public init(schemaVersion: Int, savedAnalysisId: String, baseVersion: Int, rationale: String, operations: [OperationsItem]) {
+        public init(schemaVersion: Int, savedAnalysisId: SavedAnalysisID, baseVersion: Int, rationale: String, operations: [OperationsItem]) {
             self.schemaVersion = schemaVersion
             self.savedAnalysisId = savedAnalysisId
             self.baseVersion = baseVersion
@@ -535,11 +1145,11 @@ extension OpenAPI {
         }
 
         public struct OperationsItem: Codable, Equatable, Sendable {
-            public let op: String
+            public let op: Op
             public let path: String
             public let value: JSONValue?
 
-            public init(op: String, path: String, value: JSONValue? = nil) {
+            public init(op: Op, path: String, value: JSONValue? = nil) {
                 self.op = op
                 self.path = path
                 self.value = value
@@ -550,17 +1160,58 @@ extension OpenAPI {
                 case path = "path"
                 case value = "value"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Op: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case add
+                case replace
+                case remove
+                case unknown(String)
+
+                public static var allKnownCases: [Op] {
+                    [.add, .replace, .remove]
+                }
+
+                public static var allCases: [Op] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "add": self = .add
+                    case "replace": self = .replace
+                    case "remove": self = .remove
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .add: return "add"
+                    case .replace: return "replace"
+                    case .remove: return "remove"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct AiConversation: Codable, Equatable, Sendable {
-        public let id: String
+        public let id: AiConversationID
         public let title: String
         public let model: String
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: String, title: String, model: String, createdAt: String, updatedAt: String) {
+        public init(id: AiConversationID, title: String, model: String, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.title = title
             self.model = model
@@ -594,8 +1245,8 @@ extension OpenAPI {
 
     public struct AiInvestigationRequest: Codable, Equatable, Sendable {
         public let question: String
-        public let route: String?
-        public let researchMode: String?
+        public let route: Route?
+        public let researchMode: ResearchMode?
         /// Explicit public-only search text; never derived from question.
         public let publicWebQuery: String?
         public let publicSymbols: [String]?
@@ -603,12 +1254,12 @@ extension OpenAPI {
         public let clarification: String?
         /// Ollama model name, or the configured default when omitted.
         public let model: String?
-        public let depth: String?
-        public let language: String?
+        public let depth: Depth?
+        public let language: Language?
         public let scope: Scope
-        public let savedAnalysisId: String?
+        public let savedAnalysisId: SavedAnalysisID?
 
-        public init(question: String, route: String? = nil, researchMode: String? = nil, publicWebQuery: String? = nil, publicSymbols: [String]? = nil, publicMacroQueries: [String]? = nil, clarification: String? = nil, model: String? = nil, depth: String? = nil, language: String? = nil, scope: Scope, savedAnalysisId: String? = nil) {
+        public init(question: String, route: Route? = nil, researchMode: ResearchMode? = nil, publicWebQuery: String? = nil, publicSymbols: [String]? = nil, publicMacroQueries: [String]? = nil, clarification: String? = nil, model: String? = nil, depth: Depth? = nil, language: Language? = nil, scope: Scope, savedAnalysisId: SavedAnalysisID? = nil) {
             self.question = question
             self.route = route
             self.researchMode = researchMode
@@ -638,16 +1289,168 @@ extension OpenAPI {
             case savedAnalysisId = "savedAnalysisId"
         }
 
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Route: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case local
+            case unknown(String)
+
+            public static var allKnownCases: [Route] {
+                [.local]
+            }
+
+            public static var allCases: [Route] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "local": self = .local
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .local: return "local"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ResearchMode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case localOnly
+            case publicProviders
+            case publicWeb
+            case unknown(String)
+
+            public static var allKnownCases: [ResearchMode] {
+                [.localOnly, .publicProviders, .publicWeb]
+            }
+
+            public static var allCases: [ResearchMode] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "local-only": self = .localOnly
+                case "public-providers": self = .publicProviders
+                case "public-web": self = .publicWeb
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .localOnly: return "local-only"
+                case .publicProviders: return "public-providers"
+                case .publicWeb: return "public-web"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Depth: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case quick
+            case detailed
+            case unknown(String)
+
+            public static var allKnownCases: [Depth] {
+                [.quick, .detailed]
+            }
+
+            public static var allCases: [Depth] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "quick": self = .quick
+                case "detailed": self = .detailed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .quick: return "quick"
+                case .detailed: return "detailed"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Language: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case en
+            case nl
+            case unknown(String)
+
+            public static var allKnownCases: [Language] {
+                [.en, .nl]
+            }
+
+            public static var allCases: [Language] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "en": self = .en
+                case "nl": self = .nl
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .en: return "en"
+                case .nl: return "nl"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct Scope: Codable, Equatable, Sendable {
-            public let workspaces: [String]
-            public let accountIds: [Int]?
-            public let investmentIds: [Int]?
-            public let dateFrom: String?
-            public let dateTo: String?
-            public let currency: String?
+            public let workspaces: [WorkspacesItem]
+            public let accountIds: [AccountID]?
+            public let investmentIds: [InvestmentID]?
+            public let dateFrom: CalendarDay?
+            public let dateTo: CalendarDay?
+            public let currency: CurrencyCode?
             public let constraints: [String]?
 
-            public init(workspaces: [String], accountIds: [Int]? = nil, investmentIds: [Int]? = nil, dateFrom: String? = nil, dateTo: String? = nil, currency: String? = nil, constraints: [String]? = nil) {
+            public init(workspaces: [WorkspacesItem], accountIds: [AccountID]? = nil, investmentIds: [InvestmentID]? = nil, dateFrom: CalendarDay? = nil, dateTo: CalendarDay? = nil, currency: CurrencyCode? = nil, constraints: [String]? = nil) {
                 self.workspaces = workspaces
                 self.accountIds = accountIds
                 self.investmentIds = investmentIds
@@ -666,22 +1469,66 @@ extension OpenAPI {
                 case currency = "currency"
                 case constraints = "constraints"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum WorkspacesItem: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case budgeting
+                case portfolio
+                case research
+                case crossWorkspace
+                case unknown(String)
+
+                public static var allKnownCases: [WorkspacesItem] {
+                    [.budgeting, .portfolio, .research, .crossWorkspace]
+                }
+
+                public static var allCases: [WorkspacesItem] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "budgeting": self = .budgeting
+                    case "portfolio": self = .portfolio
+                    case "research": self = .research
+                    case "cross-workspace": self = .crossWorkspace
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .budgeting: return "budgeting"
+                    case .portfolio: return "portfolio"
+                    case .research: return "research"
+                    case .crossWorkspace: return "cross-workspace"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct AiMessage: Codable, Equatable, Sendable {
-        public let id: String
-        public let conversationId: String
-        public let role: String
+        public let id: AiMessageID
+        public let conversationId: AiConversationID
+        public let role: Role
         public let content: String?
         public let toolName: String?
         public let toolArgs: JSONValue?
         public let toolResult: JSONValue?
         public let toolPresentation: OpenAPI.AiToolPresentation?
-        public let status: String
-        public let createdAt: String
+        public let status: Status
+        public let createdAt: Instant
 
-        public init(id: String, conversationId: String, role: String, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: String, createdAt: String) {
+        public init(id: AiMessageID, conversationId: AiConversationID, role: Role, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: Status, createdAt: Instant) {
             self.id = id
             self.conversationId = conversationId
             self.role = role
@@ -705,6 +1552,94 @@ extension OpenAPI {
             case toolPresentation = "toolPresentation"
             case status = "status"
             case createdAt = "createdAt"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Role: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case user
+            case assistant
+            case tool
+            case system
+            case unknown(String)
+
+            public static var allKnownCases: [Role] {
+                [.user, .assistant, .tool, .system]
+            }
+
+            public static var allCases: [Role] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "user": self = .user
+                case "assistant": self = .assistant
+                case "tool": self = .tool
+                case "system": self = .system
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .user: return "user"
+                case .assistant: return "assistant"
+                case .tool: return "tool"
+                case .system: return "system"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case complete
+            case streaming
+            case aborted
+            case error
+            case unknown(String)
+
+            public static var allKnownCases: [Status] {
+                [.complete, .streaming, .aborted, .error]
+            }
+
+            public static var allCases: [Status] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "complete": self = .complete
+                case "streaming": self = .streaming
+                case "aborted": self = .aborted
+                case "error": self = .error
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .complete: return "complete"
+                case .streaming: return "streaming"
+                case .aborted: return "aborted"
+                case .error: return "error"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -811,9 +1746,9 @@ extension OpenAPI {
     }
 
     public struct AnalysisColumnRef: Codable, Equatable, Sendable {
-        public let id: String
+        public let id: AnalysisColumnID
 
-        public init(id: String) {
+        public init(id: AnalysisColumnID) {
             self.id = id
         }
 
@@ -823,28 +1758,28 @@ extension OpenAPI {
     }
 
     public struct AnalysisMonitor: Codable, Equatable, Sendable {
-        public let id: String
-        public let kind: String
+        public let id: AnalysisMonitorID
+        public let kind: Kind
         public let title: String
         public let enabled: Bool
-        public let savedAnalysisId: String?
-        public let dossierId: String?
+        public let savedAnalysisId: SavedAnalysisID?
+        public let dossierId: ResearchDossierID?
         public let historicalTargetId: String
         public let targetLabel: String
         public let targetAvailable: Bool
         public let fieldId: String?
-        public let `operator`: String?
+        public let `operator`: Operator?
         public let threshold: String?
         public let intervalMinutes: Int
         public let cooldownMinutes: Int
-        public let nextDueAt: String
-        public let lastCheckedAt: String?
+        public let nextDueAt: Instant
+        public let lastCheckedAt: Instant?
         public let lastStatus: String?
         public let lastObservation: OpenAPI.AnalysisMonitorObservation?
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: String, kind: String, title: String, enabled: Bool, savedAnalysisId: String? = nil, dossierId: String? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: OpenAPI.AnalysisMonitorObservation? = nil, createdAt: String, updatedAt: String) {
+        public init(id: AnalysisMonitorID, kind: Kind, title: String, enabled: Bool, savedAnalysisId: SavedAnalysisID? = nil, dossierId: ResearchDossierID? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: Operator? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: Instant, lastCheckedAt: Instant? = nil, lastStatus: String? = nil, lastObservation: OpenAPI.AnalysisMonitorObservation? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.kind = kind
             self.title = title
@@ -889,10 +1824,277 @@ extension OpenAPI {
             case createdAt = "createdAt"
             case updatedAt = "updatedAt"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case analysisThreshold
+            case dossierEvidence
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.analysisThreshold, .dossierEvidence]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "analysis-threshold": self = .analysisThreshold
+                case "dossier-evidence": self = .dossierEvidence
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .analysisThreshold: return "analysis-threshold"
+                case .dossierEvidence: return "dossier-evidence"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Operator: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case above
+            case below
+            case unknown(String)
+
+            public static var allKnownCases: [Operator] {
+                [.above, .below]
+            }
+
+            public static var allCases: [Operator] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "above": self = .above
+                case "below": self = .below
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .above: return "above"
+                case .below: return "below"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias AnalysisMonitorCreate = JSONValue
+    /// Tells its branches apart by `kind`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum AnalysisMonitorCreate: Codable, Equatable, Sendable {
+        case analysisThreshold(AnalysisThresholdVariant)
+        case dossierEvidence(DossierEvidenceVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "kind"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "analysis-threshold": self = .analysisThreshold(try AnalysisThresholdVariant(from: decoder))
+            case "dossier-evidence": self = .dossierEvidence(try DossierEvidenceVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .analysisThreshold(let value): try value.encode(to: encoder)
+            case .dossierEvidence(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct AnalysisThresholdVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let title: String
+            public let savedAnalysisId: SavedAnalysisID
+            public let fieldId: String
+            public let `operator`: Operator
+            /// Exact decimal string; never a JSON number.
+            public let threshold: String
+            public let intervalMinutes: Int?
+            public let cooldownMinutes: Int?
+
+            public init(kind: Kind, title: String, savedAnalysisId: SavedAnalysisID, fieldId: String, `operator`: Operator, threshold: String, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+                self.kind = kind
+                self.title = title
+                self.savedAnalysisId = savedAnalysisId
+                self.fieldId = fieldId
+                self.operator = `operator`
+                self.threshold = threshold
+                self.intervalMinutes = intervalMinutes
+                self.cooldownMinutes = cooldownMinutes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case title = "title"
+                case savedAnalysisId = "savedAnalysisId"
+                case fieldId = "fieldId"
+                case `operator` = "operator"
+                case threshold = "threshold"
+                case intervalMinutes = "intervalMinutes"
+                case cooldownMinutes = "cooldownMinutes"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case analysisThreshold
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.analysisThreshold]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "analysis-threshold": self = .analysisThreshold
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .analysisThreshold: return "analysis-threshold"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Operator: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case above
+                case below
+                case unknown(String)
+
+                public static var allKnownCases: [Operator] {
+                    [.above, .below]
+                }
+
+                public static var allCases: [Operator] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "above": self = .above
+                    case "below": self = .below
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .above: return "above"
+                    case .below: return "below"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct DossierEvidenceVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let title: String
+            public let dossierId: ResearchDossierID
+            public let intervalMinutes: Int?
+            public let cooldownMinutes: Int?
+
+            public init(kind: Kind, title: String, dossierId: ResearchDossierID, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+                self.kind = kind
+                self.title = title
+                self.dossierId = dossierId
+                self.intervalMinutes = intervalMinutes
+                self.cooldownMinutes = cooldownMinutes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case title = "title"
+                case dossierId = "dossierId"
+                case intervalMinutes = "intervalMinutes"
+                case cooldownMinutes = "cooldownMinutes"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case dossierEvidence
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.dossierEvidence]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "dossier-evidence": self = .dossierEvidence
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .dossierEvidence: return "dossier-evidence"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct AnalysisMonitorEnvelope: Codable, Equatable, Sendable {
         public let ok: Bool
@@ -952,19 +2154,19 @@ extension OpenAPI {
     }
 
     public struct AnalysisMonitorNotification: Codable, Equatable, Sendable {
-        public let id: String
-        public let monitorId: String
-        public let observationId: String
-        public let kind: String
+        public let id: AnalysisMonitorNotificationID
+        public let monitorId: AnalysisMonitorID
+        public let observationId: AnalysisMonitorObservationID
+        public let kind: Kind
         public let title: String
         public let reasonCode: String
         public let reason: String
         public let previousValue: String?
         public let currentValue: String?
-        public let createdAt: String
-        public let readAt: String?
+        public let createdAt: Instant
+        public let readAt: Instant?
 
-        public init(id: String, monitorId: String, observationId: String, kind: String, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: String, readAt: String? = nil) {
+        public init(id: AnalysisMonitorNotificationID, monitorId: AnalysisMonitorID, observationId: AnalysisMonitorObservationID, kind: Kind, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: Instant, readAt: Instant? = nil) {
             self.id = id
             self.monitorId = monitorId
             self.observationId = observationId
@@ -990,6 +2192,44 @@ extension OpenAPI {
             case currentValue = "currentValue"
             case createdAt = "createdAt"
             case readAt = "readAt"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case analysisThreshold
+            case dossierEvidence
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.analysisThreshold, .dossierEvidence]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "analysis-threshold": self = .analysisThreshold
+                case "dossier-evidence": self = .dossierEvidence
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .analysisThreshold: return "analysis-threshold"
+                case .dossierEvidence: return "dossier-evidence"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -1054,24 +2294,24 @@ extension OpenAPI {
     }
 
     public struct AnalysisMonitorObservation: Codable, Equatable, Sendable {
-        public let id: String
-        public let monitorId: String
-        public let status: String
+        public let id: AnalysisMonitorObservationID
+        public let monitorId: AnalysisMonitorID
+        public let status: Status
         public let previousValue: String?
         public let currentValue: String?
         public let previousEvidenceVersion: Int?
         public let currentEvidenceVersion: Int?
         public let analysisDefinitionVersion: Int?
-        public let analysisRunId: String?
-        public let historicalAnalysisRunId: String?
+        public let analysisRunId: AnalysisRunID?
+        public let historicalAnalysisRunId: AnalysisRunID?
         public let analysisRunStatus: String?
         public let analysisWindow: JSONValue?
         public let coverage: Coverage
         public let reasonCode: String
         public let reason: String
-        public let checkedAt: String
+        public let checkedAt: Instant
 
-        public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+        public init(id: AnalysisMonitorObservationID, monitorId: AnalysisMonitorID, status: Status, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: AnalysisRunID? = nil, historicalAnalysisRunId: AnalysisRunID? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: Instant) {
             self.id = id
             self.monitorId = monitorId
             self.status = status
@@ -1109,11 +2349,64 @@ extension OpenAPI {
             case checkedAt = "checkedAt"
         }
 
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case baseline
+            case unchanged
+            case triggered
+            case cooldownPending
+            case partial
+            case stale
+            case failed
+            case unknown(String)
+
+            public static var allKnownCases: [Status] {
+                [.baseline, .unchanged, .triggered, .cooldownPending, .partial, .stale, .failed]
+            }
+
+            public static var allCases: [Status] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "baseline": self = .baseline
+                case "unchanged": self = .unchanged
+                case "triggered": self = .triggered
+                case "cooldown-pending": self = .cooldownPending
+                case "partial": self = .partial
+                case "stale": self = .stale
+                case "failed": self = .failed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .baseline: return "baseline"
+                case .unchanged: return "unchanged"
+                case .triggered: return "triggered"
+                case .cooldownPending: return "cooldown-pending"
+                case .partial: return "partial"
+                case .stale: return "stale"
+                case .failed: return "failed"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct Coverage: Codable, Equatable, Sendable {
-            public let status: String
+            public let status: Status
             public let reason: String
 
-            public init(status: String, reason: String) {
+            public init(status: Status, reason: String) {
                 self.status = status
                 self.reason = reason
             }
@@ -1121,6 +2414,41 @@ extension OpenAPI {
             enum CodingKeys: String, CodingKey {
                 case status = "status"
                 case reason = "reason"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case unknownValue
+                case unknown(String)
+
+                public static var allKnownCases: [Status] {
+                    [.unknownValue]
+                }
+
+                public static var allCases: [Status] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "unknown": self = .unknownValue
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .unknownValue: return "unknown"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
             }
         }
     }
@@ -1187,12 +2515,12 @@ extension OpenAPI {
         public let title: String?
         public let enabled: Bool?
         public let fieldId: String?
-        public let `operator`: String?
+        public let `operator`: Operator?
         public let threshold: String?
         public let intervalMinutes: Int?
         public let cooldownMinutes: Int?
 
-        public init(title: String? = nil, enabled: Bool? = nil, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+        public init(title: String? = nil, enabled: Bool? = nil, fieldId: String? = nil, `operator`: Operator? = nil, threshold: String? = nil, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
             self.title = title
             self.enabled = enabled
             self.fieldId = fieldId
@@ -1211,17 +2539,189 @@ extension OpenAPI {
             case intervalMinutes = "intervalMinutes"
             case cooldownMinutes = "cooldownMinutes"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Operator: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case above
+            case below
+            case unknown(String)
+
+            public static var allKnownCases: [Operator] {
+                [.above, .below]
+            }
+
+            public static var allCases: [Operator] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "above": self = .above
+                case "below": self = .below
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .above: return "above"
+                case .below: return "below"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias AnalysisQuerySpec = JSONValue
+    /// Tells its branches apart by `mode`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum AnalysisQuerySpec: Codable, Equatable, Sendable {
+        case visual(VisualVariant)
+        case sql(SqlVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "mode"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "visual": self = .visual(try VisualVariant(from: decoder))
+            case "sql": self = .sql(try SqlVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .visual(let value): try value.encode(to: encoder)
+            case .sql(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct VisualVariant: Codable, Equatable, Sendable {
+            public let mode: Mode
+            public let plan: OpenAPI.AnalysisVisualPlan
+
+            public init(mode: Mode, plan: OpenAPI.AnalysisVisualPlan) {
+                self.mode = mode
+                self.plan = plan
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case mode = "mode"
+                case plan = "plan"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case visual
+                case unknown(String)
+
+                public static var allKnownCases: [Mode] {
+                    [.visual]
+                }
+
+                public static var allCases: [Mode] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "visual": self = .visual
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .visual: return "visual"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct SqlVariant: Codable, Equatable, Sendable {
+            public let mode: Mode
+            public let sql: String
+            public let datasetIds: [String]
+            public let columns: [OpenAPI.AnalysisColumnRef]?
+            public let visualOrigin: OpenAPI.AnalysisVisualPlan?
+
+            public init(mode: Mode, sql: String, datasetIds: [String], columns: [OpenAPI.AnalysisColumnRef]? = nil, visualOrigin: OpenAPI.AnalysisVisualPlan? = nil) {
+                self.mode = mode
+                self.sql = sql
+                self.datasetIds = datasetIds
+                self.columns = columns
+                self.visualOrigin = visualOrigin
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case mode = "mode"
+                case sql = "sql"
+                case datasetIds = "datasetIds"
+                case columns = "columns"
+                case visualOrigin = "visualOrigin"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case sql
+                case unknown(String)
+
+                public static var allKnownCases: [Mode] {
+                    [.sql]
+                }
+
+                public static var allCases: [Mode] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "sql": self = .sql
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .sql: return "sql"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct AnalysisVisualFilter: Codable, Equatable, Sendable {
         public let fieldId: String
         public let `operator`: String
-        public let value: JSONValue?
+        public let value: Value?
 
-        public init(fieldId: String, `operator`: String, value: JSONValue? = nil) {
+        public init(fieldId: String, `operator`: String, value: Value? = nil) {
             self.fieldId = fieldId
             self.operator = `operator`
             self.value = value
@@ -1231,6 +2731,43 @@ extension OpenAPI {
             case fieldId = "fieldId"
             case `operator` = "operator"
             case value = "value"
+        }
+
+        /// One of string, number, boolean; decoded by its JSON type.
+        public enum Value: Codable, Equatable, Sendable {
+            case boolean(Bool)
+            case number(Decimal)
+            case string(String)
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(Bool.self) {
+                    self = .boolean(value)
+                    return
+                }
+                if let value = try? container.decode(Decimal.self) {
+                    self = .number(value)
+                    return
+                }
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    Value.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected string or number or boolean."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .boolean(let value): try container.encode(value)
+                case .number(let value): try container.encode(value)
+                case .string(let value): try container.encode(value)
+                }
+            }
         }
     }
 
@@ -1245,7 +2782,7 @@ extension OpenAPI {
         public let filters: [OpenAPI.AnalysisVisualFilter]?
         public let orderBy: [OrderByItem]?
         public let limit: Decimal?
-        public let reportingCurrency: String?
+        public let reportingCurrency: CurrencyCode?
         public let from: String?
         public let to: String?
         public let symbol: String?
@@ -1253,7 +2790,7 @@ extension OpenAPI {
         public let costBasisMethod: String?
         public let generatedSql: String?
 
-        public init(datasetId: String, fields: [String]? = nil, groups: [String]? = nil, measures: [String]? = nil, joins: [String]? = nil, filters: [OpenAPI.AnalysisVisualFilter]? = nil, orderBy: [OrderByItem]? = nil, limit: Decimal? = nil, reportingCurrency: String? = nil, from: String? = nil, to: String? = nil, symbol: String? = nil, range: String? = nil, costBasisMethod: String? = nil, generatedSql: String? = nil) {
+        public init(datasetId: String, fields: [String]? = nil, groups: [String]? = nil, measures: [String]? = nil, joins: [String]? = nil, filters: [OpenAPI.AnalysisVisualFilter]? = nil, orderBy: [OrderByItem]? = nil, limit: Decimal? = nil, reportingCurrency: CurrencyCode? = nil, from: String? = nil, to: String? = nil, symbol: String? = nil, range: String? = nil, costBasisMethod: String? = nil, generatedSql: String? = nil) {
             self.datasetId = datasetId
             self.fields = fields
             self.groups = groups
@@ -1290,10 +2827,10 @@ extension OpenAPI {
         }
 
         public struct OrderByItem: Codable, Equatable, Sendable {
-            public let id: String
-            public let direction: String
+            public let id: AnalysisColumnID
+            public let direction: Direction
 
-            public init(id: String, direction: String) {
+            public init(id: AnalysisColumnID, direction: Direction) {
                 self.id = id
                 self.direction = direction
             }
@@ -1301,6 +2838,44 @@ extension OpenAPI {
             enum CodingKeys: String, CodingKey {
                 case id = "id"
                 case direction = "direction"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Direction: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case asc
+                case desc
+                case unknown(String)
+
+                public static var allKnownCases: [Direction] {
+                    [.asc, .desc]
+                }
+
+                public static var allCases: [Direction] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "asc": self = .asc
+                    case "desc": self = .desc
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .asc: return "asc"
+                    case .desc: return "desc"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
             }
         }
     }
@@ -1320,27 +2895,70 @@ extension OpenAPI {
         }
     }
 
-    public enum AssetClass: String, Codable, Sendable, CaseIterable {
-        case stock = "stock"
-        case etf = "etf"
-        case crypto = "crypto"
-        case metals = "metals"
-        case realEstate = "real_estate"
-        case savings = "savings"
-        case bond = "bond"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum AssetClass: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case stock
+        case etf
+        case crypto
+        case metals
+        case realEstate
+        case savings
+        case bond
+        case unknown(String)
+
+        public static var allKnownCases: [AssetClass] {
+            [.stock, .etf, .crypto, .metals, .realEstate, .savings, .bond]
+        }
+
+        public static var allCases: [AssetClass] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "stock": self = .stock
+            case "etf": self = .etf
+            case "crypto": self = .crypto
+            case "metals": self = .metals
+            case "real_estate": self = .realEstate
+            case "savings": self = .savings
+            case "bond": self = .bond
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .stock: return "stock"
+            case .etf: return "etf"
+            case .crypto: return "crypto"
+            case .metals: return "metals"
+            case .realEstate: return "real_estate"
+            case .savings: return "savings"
+            case .bond: return "bond"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     public struct Attachment: Codable, Equatable, Sendable {
         /// BIGSERIAL identity, serialized as a decimal string.
-        public let id: String
-        public let transactionId: Int
+        public let id: AttachmentID
+        public let transactionId: TransactionID
         public let filename: String
         public let storedPath: String
         public let mimeType: String
         public let sizeBytes: Int
-        public let createdAt: String
+        public let createdAt: Instant
 
-        public init(id: String, transactionId: Int, filename: String, storedPath: String, mimeType: String, sizeBytes: Int, createdAt: String) {
+        public init(id: AttachmentID, transactionId: TransactionID, filename: String, storedPath: String, mimeType: String, sizeBytes: Int, createdAt: Instant) {
             self.id = id
             self.transactionId = transactionId
             self.filename = filename
@@ -1422,13 +3040,13 @@ extension OpenAPI {
     public struct BelgianPortfolioTaxDashboard: Codable, Equatable, Sendable {
         /// Additive (ADR-216). Currencies of amounts left out because no stored rate converts them;
         /// empty when everything converted.
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
         /// Additive (ADR-216). Figures that miss such an amount: totals, taxBreakdown, feeBreakdown,
         /// taxByAssetClass, investmentBreakdown, yearlyCostTrend, dividend, or estimates.<name>. A tax
         /// estimate in this list is a lower bound, not a guess.
         public let incompleteFigures: [String]
         public let year: Int
-        public let currency: String
+        public let currency: CurrencyCode
         public let isEmpty: Bool
         public let hasProfile: Bool
         public let hasInKindIncomeUnclassified: Bool
@@ -1444,7 +3062,7 @@ extension OpenAPI {
         public let summaries: [OpenAPI.BelgianPortfolioTaxSummary]
         public let records: [OpenAPI.Setting]
 
-        public init(unconvertedCurrencies: [String], incompleteFigures: [String], year: Int, currency: String, isEmpty: Bool, hasProfile: Bool, hasInKindIncomeUnclassified: Bool, totals: OpenAPI.BelgianPortfolioTaxTotals, taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts], investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts], yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts], dividend: OpenAPI.BelgianPortfolioTaxDividend, estimates: OpenAPI.BelgianPortfolioTaxEstimates, taxTable: OpenAPI.BelgianPortfolioTaxRates, summaries: [OpenAPI.BelgianPortfolioTaxSummary], records: [OpenAPI.Setting]) {
+        public init(unconvertedCurrencies: [CurrencyCode], incompleteFigures: [String], year: Int, currency: CurrencyCode, isEmpty: Bool, hasProfile: Bool, hasInKindIncomeUnclassified: Bool, totals: OpenAPI.BelgianPortfolioTaxTotals, taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts], investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts], yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts], dividend: OpenAPI.BelgianPortfolioTaxDividend, estimates: OpenAPI.BelgianPortfolioTaxEstimates, taxTable: OpenAPI.BelgianPortfolioTaxRates, summaries: [OpenAPI.BelgianPortfolioTaxSummary], records: [OpenAPI.Setting]) {
             self.unconvertedCurrencies = unconvertedCurrencies
             self.incompleteFigures = incompleteFigures
             self.year = year
@@ -1550,7 +3168,7 @@ extension OpenAPI {
     /// realizedGain and all cost amounts are already expressed in the response currency; assetClass is
     /// the untranslated localization suffix.
     public struct BelgianPortfolioTaxInvestmentCosts: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: InvestmentID
         public let name: String
         public let symbol: String?
         public let assetClass: String
@@ -1562,9 +3180,9 @@ extension OpenAPI {
         public let fees: Decimal
         public let total: Decimal
         public let realizedGain: Decimal
-        public let currency: String
+        public let currency: CurrencyCode
 
-        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, recordedTaxes: Decimal, recordedFees: Decimal, manualTaxes: Decimal, manualFees: Decimal, taxes: Decimal, fees: Decimal, total: Decimal, realizedGain: Decimal, currency: String) {
+        public init(id: InvestmentID, name: String, symbol: String? = nil, assetClass: String, recordedTaxes: Decimal, recordedFees: Decimal, manualTaxes: Decimal, manualFees: Decimal, taxes: Decimal, fees: Decimal, total: Decimal, realizedGain: Decimal, currency: CurrencyCode) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -1645,13 +3263,13 @@ extension OpenAPI {
     }
 
     public struct BelgianPortfolioTaxSummary: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: InvestmentID
         public let name: String
         public let symbol: String?
         public let assetClass: String
-        public let currency: String
+        public let currency: CurrencyCode
 
-        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, currency: String) {
+        public init(id: InvestmentID, name: String, symbol: String? = nil, assetClass: String, currency: CurrencyCode) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -1719,9 +3337,9 @@ extension OpenAPI {
     }
 
     public struct BelgianTaxActivityTaxResult: Codable, Equatable, Sendable {
-        public let activityId: String
-        public let kind: String
-        public let forfaitCategory: String
+        public let activityId: TaxPartnerActivityID
+        public let kind: Kind
+        public let forfaitCategory: ForfaitCategory
         public let grossIncome: Decimal
         public let employeeSocialSecurity: Decimal
         /// Self-employed social contributions deducted before the forfait (art. 52, 7°).
@@ -1730,7 +3348,7 @@ extension OpenAPI {
         public let professionalExpenses: Decimal
         public let netProfessionalIncome: Decimal
 
-        public init(activityId: String, kind: String, forfaitCategory: String, grossIncome: Decimal, employeeSocialSecurity: Decimal, socialContributionsPaid: Decimal, professionalExpenses: Decimal, netProfessionalIncome: Decimal) {
+        public init(activityId: TaxPartnerActivityID, kind: Kind, forfaitCategory: ForfaitCategory, grossIncome: Decimal, employeeSocialSecurity: Decimal, socialContributionsPaid: Decimal, professionalExpenses: Decimal, netProfessionalIncome: Decimal) {
             self.activityId = activityId
             self.kind = kind
             self.forfaitCategory = forfaitCategory
@@ -1751,19 +3369,128 @@ extension OpenAPI {
             case professionalExpenses = "professionalExpenses"
             case netProfessionalIncome = "netProfessionalIncome"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case employee
+            case civilServant
+            case director
+            case selfEmployedProfits
+            case selfEmployedFees
+            case helpingSpouse
+            case pension
+            case otherProfessional
+            case netProfessionalAmount
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.employee, .civilServant, .director, .selfEmployedProfits, .selfEmployedFees, .helpingSpouse, .pension, .otherProfessional, .netProfessionalAmount]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "employee": self = .employee
+                case "civil_servant": self = .civilServant
+                case "director": self = .director
+                case "self_employed_profits": self = .selfEmployedProfits
+                case "self_employed_fees": self = .selfEmployedFees
+                case "helping_spouse": self = .helpingSpouse
+                case "pension": self = .pension
+                case "other_professional": self = .otherProfessional
+                case "net_professional_amount": self = .netProfessionalAmount
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .employee: return "employee"
+                case .civilServant: return "civil_servant"
+                case .director: return "director"
+                case .selfEmployedProfits: return "self_employed_profits"
+                case .selfEmployedFees: return "self_employed_fees"
+                case .helpingSpouse: return "helping_spouse"
+                case .pension: return "pension"
+                case .otherProfessional: return "other_professional"
+                case .netProfessionalAmount: return "net_professional_amount"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ForfaitCategory: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case director
+            case helpingSpouse
+            case remuneration
+            case profits
+            case fees
+            case none
+            case unknown(String)
+
+            public static var allKnownCases: [ForfaitCategory] {
+                [.director, .helpingSpouse, .remuneration, .profits, .fees, .none]
+            }
+
+            public static var allCases: [ForfaitCategory] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "director": self = .director
+                case "helping_spouse": self = .helpingSpouse
+                case "remuneration": self = .remuneration
+                case "profits": self = .profits
+                case "fees": self = .fees
+                case "none": self = .none
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .director: return "director"
+                case .helpingSpouse: return "helping_spouse"
+                case .remuneration: return "remuneration"
+                case .profits: return "profits"
+                case .fees: return "fees"
+                case .none: return "none"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxAssessmentDecision: Codable, Equatable, Sendable {
-        public let mode: String
-        public let reason: String
+        public let mode: Mode
+        public let reason: Reason
         /// Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°".
         public let legalBasis: String
         /// True when the taxpayer may elect the other mode (year of death, art. 126 §3).
         public let electable: Bool?
         /// Partners assessed for the year (the survivor only after a death in an earlier year).
-        public let partnerIds: [String]
+        public let partnerIds: [PartnerIdsItem]
 
-        public init(mode: String, reason: String, legalBasis: String, electable: Bool? = nil, partnerIds: [String]) {
+        public init(mode: Mode, reason: Reason, legalBasis: String, electable: Bool? = nil, partnerIds: [PartnerIdsItem]) {
             self.mode = mode
             self.reason = reason
             self.legalBasis = legalBasis
@@ -1777,6 +3504,159 @@ extension OpenAPI {
             case legalBasis = "legalBasis"
             case electable = "electable"
             case partnerIds = "partnerIds"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case single
+            case separate
+            case joint
+            case unknown(String)
+
+            public static var allKnownCases: [Mode] {
+                [.single, .separate, .joint]
+            }
+
+            public static var allCases: [Mode] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "single": self = .single
+                case "separate": self = .separate
+                case "joint": self = .joint
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .single: return "single"
+                case .separate: return "separate"
+                case .joint: return "joint"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Reason: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case onePartner
+            case noLegalUnion
+            case unionYear
+            case unionYearAfterLegalCohabitation
+            case unionInForce
+            case factualSeparationYear
+            case factuallySeparated
+            case dissolutionYear
+            case dissolved
+            case deathYear
+            case deathYearJointElection
+            case survivingPartner
+            case treatyExemptIncome
+            case legacyAssumedJoint
+            case unknown(String)
+
+            public static var allKnownCases: [Reason] {
+                [.onePartner, .noLegalUnion, .unionYear, .unionYearAfterLegalCohabitation, .unionInForce, .factualSeparationYear, .factuallySeparated, .dissolutionYear, .dissolved, .deathYear, .deathYearJointElection, .survivingPartner, .treatyExemptIncome, .legacyAssumedJoint]
+            }
+
+            public static var allCases: [Reason] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "one_partner": self = .onePartner
+                case "no_legal_union": self = .noLegalUnion
+                case "union_year": self = .unionYear
+                case "union_year_after_legal_cohabitation": self = .unionYearAfterLegalCohabitation
+                case "union_in_force": self = .unionInForce
+                case "factual_separation_year": self = .factualSeparationYear
+                case "factually_separated": self = .factuallySeparated
+                case "dissolution_year": self = .dissolutionYear
+                case "dissolved": self = .dissolved
+                case "death_year": self = .deathYear
+                case "death_year_joint_election": self = .deathYearJointElection
+                case "surviving_partner": self = .survivingPartner
+                case "treaty_exempt_income": self = .treatyExemptIncome
+                case "legacy_assumed_joint": self = .legacyAssumedJoint
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .onePartner: return "one_partner"
+                case .noLegalUnion: return "no_legal_union"
+                case .unionYear: return "union_year"
+                case .unionYearAfterLegalCohabitation: return "union_year_after_legal_cohabitation"
+                case .unionInForce: return "union_in_force"
+                case .factualSeparationYear: return "factual_separation_year"
+                case .factuallySeparated: return "factually_separated"
+                case .dissolutionYear: return "dissolution_year"
+                case .dissolved: return "dissolved"
+                case .deathYear: return "death_year"
+                case .deathYearJointElection: return "death_year_joint_election"
+                case .survivingPartner: return "surviving_partner"
+                case .treatyExemptIncome: return "treaty_exempt_income"
+                case .legacyAssumedJoint: return "legacy_assumed_joint"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PartnerIdsItem: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [PartnerIdsItem] {
+                [.a, .b]
+            }
+
+            public static var allCases: [PartnerIdsItem] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -1830,7 +3710,7 @@ extension OpenAPI {
         public let personalExemptionBenefit: Decimal
         public let federalTaxCredits: Decimal
         /// Regime applied for own-home credit, if any.
-        public let ownHomeCreditRegime: String
+        public let ownHomeCreditRegime: OwnHomeCreditRegime
         /// Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
         public let ownHomeCredit: Decimal
         /// Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
@@ -1862,7 +3742,7 @@ extension OpenAPI {
         public let serviceVoucherCredit: Decimal
         public let breakdown: [BreakdownItem]
 
-        public init(grossIncome: Decimal, spouseProfessionalIncome: Decimal, householdGrossIncome: Decimal, employeeSocialSecurity: Decimal, specialSocialSecurityContribution: Decimal, personalExemptionAmount: Decimal, netIncomeAfterSS: Decimal, professionalExpenses: Decimal, otherDeductionsTotal: Decimal, deductions: [String: Decimal], taxableIncome: Decimal, federalPITBracket1: Decimal, federalPITBracket2: Decimal, federalPITBracket3: Decimal, federalPITBracket4: Decimal, federalPITBeforeExemption: Decimal, personalExemptionBenefit: Decimal, federalTaxCredits: Decimal, ownHomeCreditRegime: String, ownHomeCredit: Decimal, taxReductions: Decimal, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, totalTaxBurden: Decimal, effectiveRate: Decimal, marginalRate: Decimal, netTakeHome: Decimal, monthlyTaxReserve: Decimal, propertyTaxEstimate: Decimal, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, maritalQuotientTransfer: Decimal, maritalQuotientBenefit: Decimal, serviceVoucherCredit: Decimal, breakdown: [BreakdownItem]) {
+        public init(grossIncome: Decimal, spouseProfessionalIncome: Decimal, householdGrossIncome: Decimal, employeeSocialSecurity: Decimal, specialSocialSecurityContribution: Decimal, personalExemptionAmount: Decimal, netIncomeAfterSS: Decimal, professionalExpenses: Decimal, otherDeductionsTotal: Decimal, deductions: [String: Decimal], taxableIncome: Decimal, federalPITBracket1: Decimal, federalPITBracket2: Decimal, federalPITBracket3: Decimal, federalPITBracket4: Decimal, federalPITBeforeExemption: Decimal, personalExemptionBenefit: Decimal, federalTaxCredits: Decimal, ownHomeCreditRegime: OwnHomeCreditRegime, ownHomeCredit: Decimal, taxReductions: Decimal, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, totalTaxBurden: Decimal, effectiveRate: Decimal, marginalRate: Decimal, netTakeHome: Decimal, monthlyTaxReserve: Decimal, propertyTaxEstimate: Decimal, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, maritalQuotientTransfer: Decimal, maritalQuotientBenefit: Decimal, serviceVoucherCredit: Decimal, breakdown: [BreakdownItem]) {
             self.grossIncome = grossIncome
             self.spouseProfessionalIncome = spouseProfessionalIncome
             self.householdGrossIncome = householdGrossIncome
@@ -1942,6 +3822,48 @@ extension OpenAPI {
             case breakdown = "breakdown"
         }
 
+        /// Regime applied for own-home credit, if any.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum OwnHomeCreditRegime: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case flemishWoonbonus
+            case walloonChequeHabitat
+            case unknown(String)
+
+            public static var allKnownCases: [OwnHomeCreditRegime] {
+                [.none, .flemishWoonbonus, .walloonChequeHabitat]
+            }
+
+            public static var allCases: [OwnHomeCreditRegime] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "flemish_woonbonus": self = .flemishWoonbonus
+                case "walloon_cheque_habitat": self = .walloonChequeHabitat
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .flemishWoonbonus: return "flemish_woonbonus"
+                case .walloonChequeHabitat: return "walloon_cheque_habitat"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct BreakdownItem: Codable, Equatable, Sendable {
             /// English calculation-side label. Not a display string: the on-screen PIT table renders its
             /// own translated rows (`tax.pit.row.*`). Consumers that do surface a row translate it
@@ -1974,15 +3896,15 @@ extension OpenAPI {
     }
 
     public struct BelgianTaxCategoryTaxResult: Codable, Equatable, Sendable {
-        public let category: String
-        public let method: String
+        public let category: Category
+        public let method: Method
         public let grossAfterContributions: Decimal
         public let professionalExpenses: Decimal
         public let unionDuesApplied: Decimal
         /// Category net income, clamped at 0 (no loss offset).
         public let netIncome: Decimal
 
-        public init(category: String, method: String, grossAfterContributions: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netIncome: Decimal) {
+        public init(category: Category, method: Method, grossAfterContributions: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netIncome: Decimal) {
             self.category = category
             self.method = method
             self.grossAfterContributions = grossAfterContributions
@@ -1998,6 +3920,94 @@ extension OpenAPI {
             case professionalExpenses = "professionalExpenses"
             case unionDuesApplied = "unionDuesApplied"
             case netIncome = "netIncome"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Category: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case director
+            case helpingSpouse
+            case remuneration
+            case profits
+            case fees
+            case none
+            case unknown(String)
+
+            public static var allKnownCases: [Category] {
+                [.director, .helpingSpouse, .remuneration, .profits, .fees, .none]
+            }
+
+            public static var allCases: [Category] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "director": self = .director
+                case "helping_spouse": self = .helpingSpouse
+                case "remuneration": self = .remuneration
+                case "profits": self = .profits
+                case "fees": self = .fees
+                case "none": self = .none
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .director: return "director"
+                case .helpingSpouse: return "helping_spouse"
+                case .remuneration: return "remuneration"
+                case .profits: return "profits"
+                case .fees: return "fees"
+                case .none: return "none"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Method: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case lumpSum
+            case actual
+            case unknown(String)
+
+            public static var allKnownCases: [Method] {
+                [.lumpSum, .actual]
+            }
+
+            public static var allCases: [Method] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "lump_sum": self = .lumpSum
+                case "actual": self = .actual
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .lumpSum: return "lump_sum"
+                case .actual: return "actual"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -2019,13 +4029,13 @@ extension OpenAPI {
     public struct BelgianTaxDashboard: Codable, Equatable, Sendable {
         /// Additive (ADR-216). Currencies of amounts left out because no stored rate converts them;
         /// empty when everything converted.
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
         /// Additive (ADR-216). Response fields that miss such an amount, from yearlyIncome,
         /// monthlyIncomeTax, recordedIncomeByPartner, portfolioTaxesForYear, totalTaxIncludingPortfolio
         /// and totalTaxIncludingPropertyEstimate.
         public let incompleteFigures: [String]
         public let year: Int
-        public let currency: String
+        public let currency: CurrencyCode
         public let isHistorical: Bool
         public let hasIncomeSources: Bool
         public let hasStatsData: Bool
@@ -2047,7 +4057,7 @@ extension OpenAPI {
         public let householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow]
         public let rules: [OpenAPI.BelgianTaxDashboardRuleSection]
 
-        public init(unconvertedCurrencies: [String], incompleteFigures: [String], year: Int, currency: String, isHistorical: Bool, hasIncomeSources: Bool, hasStatsData: Bool, isEmpty: Bool, portfolioTaxesForYear: Decimal, totalTaxIncludingPortfolio: Decimal, totalTaxIncludingPropertyEstimate: Decimal? = nil, yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome], monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome], recordedIncomeByPartner: RecordedIncomeByPartner? = nil, yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation], currentInputs: JSONValue, exportProfile: JSONValue, suggestions: [SuggestionsItem], householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow], rules: [OpenAPI.BelgianTaxDashboardRuleSection]) {
+        public init(unconvertedCurrencies: [CurrencyCode], incompleteFigures: [String], year: Int, currency: CurrencyCode, isHistorical: Bool, hasIncomeSources: Bool, hasStatsData: Bool, isEmpty: Bool, portfolioTaxesForYear: Decimal, totalTaxIncludingPortfolio: Decimal, totalTaxIncludingPropertyEstimate: Decimal? = nil, yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome], monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome], recordedIncomeByPartner: RecordedIncomeByPartner? = nil, yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation], currentInputs: JSONValue, exportProfile: JSONValue, suggestions: [SuggestionsItem], householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow], rules: [OpenAPI.BelgianTaxDashboardRuleSection]) {
             self.unconvertedCurrencies = unconvertedCurrencies
             self.incompleteFigures = incompleteFigures
             self.year = year
@@ -2138,11 +4148,11 @@ extension OpenAPI {
 
     public struct BelgianTaxDashboardHouseholdRow: Codable, Equatable, Sendable {
         public let key: String
-        public let tone: String
+        public let tone: Tone
         public let partnerAmounts: [String: Decimal]
         public let household: Decimal
 
-        public init(key: String, tone: String, partnerAmounts: [String: Decimal], household: Decimal) {
+        public init(key: String, tone: Tone, partnerAmounts: [String: Decimal], household: Decimal) {
             self.key = key
             self.tone = tone
             self.partnerAmounts = partnerAmounts
@@ -2154,6 +4164,50 @@ extension OpenAPI {
             case tone = "tone"
             case partnerAmounts = "partnerAmounts"
             case household = "household"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Tone: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case base
+            case reduction
+            case adjustment
+            case total
+            case unknown(String)
+
+            public static var allKnownCases: [Tone] {
+                [.base, .reduction, .adjustment, .total]
+            }
+
+            public static var allCases: [Tone] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "base": self = .base
+                case "reduction": self = .reduction
+                case "adjustment": self = .adjustment
+                case "total": self = .total
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .base: return "base"
+                case .reduction: return "reduction"
+                case .adjustment: return "adjustment"
+                case .total: return "total"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -2314,7 +4368,7 @@ extension OpenAPI {
         public let personalExemptionBenefit: Decimal?
         public let federalTaxCredits: Decimal?
         /// Regime applied for own-home credit, if any.
-        public let ownHomeCreditRegime: String?
+        public let ownHomeCreditRegime: OwnHomeCreditRegime?
         /// Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
         public let ownHomeCredit: Decimal?
         /// Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
@@ -2346,7 +4400,7 @@ extension OpenAPI {
         public let serviceVoucherCredit: Decimal?
         public let breakdown: [BreakdownItem]?
 
-        public init(grossIncome: Decimal? = nil, spouseProfessionalIncome: Decimal? = nil, householdGrossIncome: Decimal? = nil, employeeSocialSecurity: Decimal? = nil, specialSocialSecurityContribution: Decimal? = nil, personalExemptionAmount: Decimal? = nil, netIncomeAfterSS: Decimal? = nil, professionalExpenses: Decimal? = nil, otherDeductionsTotal: Decimal? = nil, deductions: [String: Decimal]? = nil, taxableIncome: Decimal? = nil, federalPITBracket1: Decimal? = nil, federalPITBracket2: Decimal? = nil, federalPITBracket3: Decimal? = nil, federalPITBracket4: Decimal? = nil, federalPITBeforeExemption: Decimal? = nil, personalExemptionBenefit: Decimal? = nil, federalTaxCredits: Decimal? = nil, ownHomeCreditRegime: String? = nil, ownHomeCredit: Decimal? = nil, taxReductions: Decimal? = nil, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal? = nil, communalSurcharge: Decimal? = nil, totalPIT: Decimal, totalTaxBurden: Decimal? = nil, effectiveRate: Decimal? = nil, marginalRate: Decimal? = nil, netTakeHome: Decimal? = nil, monthlyTaxReserve: Decimal? = nil, propertyTaxEstimate: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, savingsInterestTax: Decimal? = nil, maritalQuotientTransfer: Decimal? = nil, maritalQuotientBenefit: Decimal? = nil, serviceVoucherCredit: Decimal? = nil, breakdown: [BreakdownItem]? = nil) {
+        public init(grossIncome: Decimal? = nil, spouseProfessionalIncome: Decimal? = nil, householdGrossIncome: Decimal? = nil, employeeSocialSecurity: Decimal? = nil, specialSocialSecurityContribution: Decimal? = nil, personalExemptionAmount: Decimal? = nil, netIncomeAfterSS: Decimal? = nil, professionalExpenses: Decimal? = nil, otherDeductionsTotal: Decimal? = nil, deductions: [String: Decimal]? = nil, taxableIncome: Decimal? = nil, federalPITBracket1: Decimal? = nil, federalPITBracket2: Decimal? = nil, federalPITBracket3: Decimal? = nil, federalPITBracket4: Decimal? = nil, federalPITBeforeExemption: Decimal? = nil, personalExemptionBenefit: Decimal? = nil, federalTaxCredits: Decimal? = nil, ownHomeCreditRegime: OwnHomeCreditRegime? = nil, ownHomeCredit: Decimal? = nil, taxReductions: Decimal? = nil, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal? = nil, communalSurcharge: Decimal? = nil, totalPIT: Decimal, totalTaxBurden: Decimal? = nil, effectiveRate: Decimal? = nil, marginalRate: Decimal? = nil, netTakeHome: Decimal? = nil, monthlyTaxReserve: Decimal? = nil, propertyTaxEstimate: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, savingsInterestTax: Decimal? = nil, maritalQuotientTransfer: Decimal? = nil, maritalQuotientBenefit: Decimal? = nil, serviceVoucherCredit: Decimal? = nil, breakdown: [BreakdownItem]? = nil) {
             self.grossIncome = grossIncome
             self.spouseProfessionalIncome = spouseProfessionalIncome
             self.householdGrossIncome = householdGrossIncome
@@ -2426,6 +4480,48 @@ extension OpenAPI {
             case breakdown = "breakdown"
         }
 
+        /// Regime applied for own-home credit, if any.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum OwnHomeCreditRegime: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case flemishWoonbonus
+            case walloonChequeHabitat
+            case unknown(String)
+
+            public static var allKnownCases: [OwnHomeCreditRegime] {
+                [.none, .flemishWoonbonus, .walloonChequeHabitat]
+            }
+
+            public static var allCases: [OwnHomeCreditRegime] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "flemish_woonbonus": self = .flemishWoonbonus
+                case "walloon_cheque_habitat": self = .walloonChequeHabitat
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .flemishWoonbonus: return "flemish_woonbonus"
+                case .walloonChequeHabitat: return "walloon_cheque_habitat"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct BreakdownItem: Codable, Equatable, Sendable {
             /// English calculation-side label. Not a display string: the on-screen PIT table renders its
             /// own translated rows (`tax.pit.row.*`). Consumers that do surface a row translate it
@@ -2458,12 +4554,12 @@ extension OpenAPI {
     }
 
     public struct BelgianTaxHouseholdCsssResult: Codable, Equatable, Sendable {
-        public let scale: String
+        public let scale: Scale
         /// Household base under joint assessment, otherwise the sum of each subject partner's base.
         public let base: Decimal
         public let total: Decimal
 
-        public init(scale: String, base: Decimal, total: Decimal) {
+        public init(scale: Scale, base: Decimal, total: Decimal) {
             self.scale = scale
             self.base = base
             self.total = total
@@ -2474,6 +4570,47 @@ extension OpenAPI {
             case base = "base"
             case total = "total"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Scale: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case single
+            case joint
+            case none
+            case unknown(String)
+
+            public static var allKnownCases: [Scale] {
+                [.single, .joint, .none]
+            }
+
+            public static var allCases: [Scale] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "single": self = .single
+                case "joint": self = .joint
+                case "none": self = .none
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .single: return "single"
+                case .joint: return "joint"
+                case .none: return "none"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     /// V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner
@@ -2483,16 +4620,16 @@ extension OpenAPI {
         public let version: Int
         public let taxYear: Int
         public let profileConfigured: Bool
-        public let region: String
+        public let region: Region
         public let communalSurchargePercent: Decimal
         public let partners: [OpenAPI.BelgianTaxInputPartner]
         public let relationship: OpenAPI.BelgianTaxInputRelationship
         public let dependents: OpenAPI.BelgianTaxInputDependents
         public let home: OpenAPI.BelgianTaxInputHome
-        public let taxIncomeCategoryIds: [Int]?
+        public let taxIncomeCategoryIds: [CategoryID]?
         public let migratedFrom: OpenAPI.BelgianTaxInputMigratedFrom?
 
-        public init(version: Int, taxYear: Int, profileConfigured: Bool, region: String, communalSurchargePercent: Decimal, partners: [OpenAPI.BelgianTaxInputPartner], relationship: OpenAPI.BelgianTaxInputRelationship, dependents: OpenAPI.BelgianTaxInputDependents, home: OpenAPI.BelgianTaxInputHome, taxIncomeCategoryIds: [Int]? = nil, migratedFrom: OpenAPI.BelgianTaxInputMigratedFrom? = nil) {
+        public init(version: Int, taxYear: Int, profileConfigured: Bool, region: Region, communalSurchargePercent: Decimal, partners: [OpenAPI.BelgianTaxInputPartner], relationship: OpenAPI.BelgianTaxInputRelationship, dependents: OpenAPI.BelgianTaxInputDependents, home: OpenAPI.BelgianTaxInputHome, taxIncomeCategoryIds: [CategoryID]? = nil, migratedFrom: OpenAPI.BelgianTaxInputMigratedFrom? = nil) {
             self.version = version
             self.taxYear = taxYear
             self.profileConfigured = profileConfigured
@@ -2519,15 +4656,56 @@ extension OpenAPI {
             case taxIncomeCategoryIds = "taxIncomeCategoryIds"
             case migratedFrom = "migratedFrom"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Region: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case flanders
+            case wallonia
+            case brussels
+            case unknown(String)
+
+            public static var allKnownCases: [Region] {
+                [.flanders, .wallonia, .brussels]
+            }
+
+            public static var allCases: [Region] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "flanders": self = .flanders
+                case "wallonia": self = .wallonia
+                case "brussels": self = .brussels
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .flanders: return "flanders"
+                case .wallonia: return "wallonia"
+                case .brussels: return "brussels"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxHouseholdTaxIssue: Codable, Equatable, Sendable {
-        public let code: String
-        public let severity: String
-        public let partnerId: String?
-        public let activityId: String?
+        public let code: Code
+        public let severity: Severity
+        public let partnerId: PartnerId?
+        public let activityId: TaxPartnerActivityID?
 
-        public init(code: String, severity: String, partnerId: String? = nil, activityId: String? = nil) {
+        public init(code: Code, severity: Severity, partnerId: PartnerId? = nil, activityId: TaxPartnerActivityID? = nil) {
             self.code = code
             self.severity = severity
             self.partnerId = partnerId
@@ -2539,6 +4717,171 @@ extension OpenAPI {
             case severity = "severity"
             case partnerId = "partnerId"
             case activityId = "activityId"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Code: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case relationshipDatesMissing
+            case treatyExemptSeparateAssessment
+            case deceasedPartnerNotAssessed
+            case directorContributionsNotDeducted
+            case forfaitCategoryAggregationUnverified
+            case unionDuesOutsideRemunerationClaim
+            case lossOffsetNotModelled
+            case jointReductionAllocationUnverified
+            case csssMixedActivityBaseUnverified
+            case refundableChildCreditNotModelled
+            case isolatedParentSupplementNotGranted
+            case seniorQuotientCapBirthYearsMissing
+            case woonbonusChildrenAtLoanStartMissing
+            case pensionReductionActivityIncomeNotExcluded
+            case pensionExclusionOtherIncomeCountedAsActivity
+            case pensionQuotientPartialExclusionUnverified
+            case donationJointCeilingUnverified
+            case mortgageRegionNotUsed
+            case unknown(String)
+
+            public static var allKnownCases: [Code] {
+                [.relationshipDatesMissing, .treatyExemptSeparateAssessment, .deceasedPartnerNotAssessed, .directorContributionsNotDeducted, .forfaitCategoryAggregationUnverified, .unionDuesOutsideRemunerationClaim, .lossOffsetNotModelled, .jointReductionAllocationUnverified, .csssMixedActivityBaseUnverified, .refundableChildCreditNotModelled, .isolatedParentSupplementNotGranted, .seniorQuotientCapBirthYearsMissing, .woonbonusChildrenAtLoanStartMissing, .pensionReductionActivityIncomeNotExcluded, .pensionExclusionOtherIncomeCountedAsActivity, .pensionQuotientPartialExclusionUnverified, .donationJointCeilingUnverified, .mortgageRegionNotUsed]
+            }
+
+            public static var allCases: [Code] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "relationship_dates_missing": self = .relationshipDatesMissing
+                case "treaty_exempt_separate_assessment": self = .treatyExemptSeparateAssessment
+                case "deceased_partner_not_assessed": self = .deceasedPartnerNotAssessed
+                case "director_contributions_not_deducted": self = .directorContributionsNotDeducted
+                case "forfait_category_aggregation_unverified": self = .forfaitCategoryAggregationUnverified
+                case "union_dues_outside_remuneration_claim": self = .unionDuesOutsideRemunerationClaim
+                case "loss_offset_not_modelled": self = .lossOffsetNotModelled
+                case "joint_reduction_allocation_unverified": self = .jointReductionAllocationUnverified
+                case "csss_mixed_activity_base_unverified": self = .csssMixedActivityBaseUnverified
+                case "refundable_child_credit_not_modelled": self = .refundableChildCreditNotModelled
+                case "isolated_parent_supplement_not_granted": self = .isolatedParentSupplementNotGranted
+                case "senior_quotient_cap_birth_years_missing": self = .seniorQuotientCapBirthYearsMissing
+                case "woonbonus_children_at_loan_start_missing": self = .woonbonusChildrenAtLoanStartMissing
+                case "pension_reduction_activity_income_not_excluded": self = .pensionReductionActivityIncomeNotExcluded
+                case "pension_exclusion_other_income_counted_as_activity": self = .pensionExclusionOtherIncomeCountedAsActivity
+                case "pension_quotient_partial_exclusion_unverified": self = .pensionQuotientPartialExclusionUnverified
+                case "donation_joint_ceiling_unverified": self = .donationJointCeilingUnverified
+                case "mortgage_region_not_used": self = .mortgageRegionNotUsed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .relationshipDatesMissing: return "relationship_dates_missing"
+                case .treatyExemptSeparateAssessment: return "treaty_exempt_separate_assessment"
+                case .deceasedPartnerNotAssessed: return "deceased_partner_not_assessed"
+                case .directorContributionsNotDeducted: return "director_contributions_not_deducted"
+                case .forfaitCategoryAggregationUnverified: return "forfait_category_aggregation_unverified"
+                case .unionDuesOutsideRemunerationClaim: return "union_dues_outside_remuneration_claim"
+                case .lossOffsetNotModelled: return "loss_offset_not_modelled"
+                case .jointReductionAllocationUnverified: return "joint_reduction_allocation_unverified"
+                case .csssMixedActivityBaseUnverified: return "csss_mixed_activity_base_unverified"
+                case .refundableChildCreditNotModelled: return "refundable_child_credit_not_modelled"
+                case .isolatedParentSupplementNotGranted: return "isolated_parent_supplement_not_granted"
+                case .seniorQuotientCapBirthYearsMissing: return "senior_quotient_cap_birth_years_missing"
+                case .woonbonusChildrenAtLoanStartMissing: return "woonbonus_children_at_loan_start_missing"
+                case .pensionReductionActivityIncomeNotExcluded: return "pension_reduction_activity_income_not_excluded"
+                case .pensionExclusionOtherIncomeCountedAsActivity: return "pension_exclusion_other_income_counted_as_activity"
+                case .pensionQuotientPartialExclusionUnverified: return "pension_quotient_partial_exclusion_unverified"
+                case .donationJointCeilingUnverified: return "donation_joint_ceiling_unverified"
+                case .mortgageRegionNotUsed: return "mortgage_region_not_used"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Severity: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case info
+            case warning
+            case needsSource
+            case unknown(String)
+
+            public static var allKnownCases: [Severity] {
+                [.info, .warning, .needsSource]
+            }
+
+            public static var allCases: [Severity] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "info": self = .info
+                case "warning": self = .warning
+                case "needs_source": self = .needsSource
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .info: return "info"
+                case .warning: return "warning"
+                case .needsSource: return "needs_source"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [PartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [PartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -2649,9 +4992,9 @@ extension OpenAPI {
         public let childrenDisabled: Int?
         public let otherPersons: Int
         public let otherPersonsDisabled: Int?
-        public let claimantPartnerId: String?
+        public let claimantPartnerId: ClaimantPartnerId?
 
-        public init(children: Int, childrenUnder3: Int? = nil, childrenDisabled: Int? = nil, otherPersons: Int, otherPersonsDisabled: Int? = nil, claimantPartnerId: String? = nil) {
+        public init(children: Int, childrenUnder3: Int? = nil, childrenDisabled: Int? = nil, otherPersons: Int, otherPersonsDisabled: Int? = nil, claimantPartnerId: ClaimantPartnerId? = nil) {
             self.children = children
             self.childrenUnder3 = childrenUnder3
             self.childrenDisabled = childrenDisabled
@@ -2668,6 +5011,44 @@ extension OpenAPI {
             case otherPersonsDisabled = "otherPersonsDisabled"
             case claimantPartnerId = "claimantPartnerId"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ClaimantPartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [ClaimantPartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [ClaimantPartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxInputHome: Codable, Equatable, Sendable {
@@ -2677,14 +5058,14 @@ extension OpenAPI {
         public let mortgageInterestPaid: Decimal
         public let mortgageCapitalRepaid: Decimal?
         public let mortgageStartYear: Int?
-        public let mortgageRegion: String?
+        public let mortgageRegion: MortgageRegion?
         public let mortgageIsPrimaryResidence: Bool?
-        public let mortgageCreditPartnerId: String?
+        public let mortgageCreditPartnerId: MortgageCreditPartnerId?
         public let mortgageSharePartnerB: Decimal?
         public let firstQualifyingYear: Int?
         public let woonbonusChildrenAtLoanStart: Int?
 
-        public init(cadastralIncome: Decimal, cadastralCentimesOverride: Decimal? = nil, additionalResidences: [OpenAPI.BelgianTaxInputHomeAdditionalResidence]? = nil, mortgageInterestPaid: Decimal, mortgageCapitalRepaid: Decimal? = nil, mortgageStartYear: Int? = nil, mortgageRegion: String? = nil, mortgageIsPrimaryResidence: Bool? = nil, mortgageCreditPartnerId: String? = nil, mortgageSharePartnerB: Decimal? = nil, firstQualifyingYear: Int? = nil, woonbonusChildrenAtLoanStart: Int? = nil) {
+        public init(cadastralIncome: Decimal, cadastralCentimesOverride: Decimal? = nil, additionalResidences: [OpenAPI.BelgianTaxInputHomeAdditionalResidence]? = nil, mortgageInterestPaid: Decimal, mortgageCapitalRepaid: Decimal? = nil, mortgageStartYear: Int? = nil, mortgageRegion: MortgageRegion? = nil, mortgageIsPrimaryResidence: Bool? = nil, mortgageCreditPartnerId: MortgageCreditPartnerId? = nil, mortgageSharePartnerB: Decimal? = nil, firstQualifyingYear: Int? = nil, woonbonusChildrenAtLoanStart: Int? = nil) {
             self.cadastralIncome = cadastralIncome
             self.cadastralCentimesOverride = cadastralCentimesOverride
             self.additionalResidences = additionalResidences
@@ -2713,16 +5094,95 @@ extension OpenAPI {
             case firstQualifyingYear = "firstQualifyingYear"
             case woonbonusChildrenAtLoanStart = "woonbonusChildrenAtLoanStart"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum MortgageRegion: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case flanders
+            case wallonia
+            case brussels
+            case unknown(String)
+
+            public static var allKnownCases: [MortgageRegion] {
+                [.flanders, .wallonia, .brussels]
+            }
+
+            public static var allCases: [MortgageRegion] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "flanders": self = .flanders
+                case "wallonia": self = .wallonia
+                case "brussels": self = .brussels
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .flanders: return "flanders"
+                case .wallonia: return "wallonia"
+                case .brussels: return "brussels"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum MortgageCreditPartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [MortgageCreditPartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [MortgageCreditPartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxInputHomeAdditionalResidence: Codable, Equatable, Sendable {
         public let label: String?
         public let cadastralIncome: Decimal
-        public let region: String?
+        public let region: Region?
         public let isOwnHome: Bool?
         public let centimesOverride: Decimal?
 
-        public init(label: String? = nil, cadastralIncome: Decimal, region: String? = nil, isOwnHome: Bool? = nil, centimesOverride: Decimal? = nil) {
+        public init(label: String? = nil, cadastralIncome: Decimal, region: Region? = nil, isOwnHome: Bool? = nil, centimesOverride: Decimal? = nil) {
             self.label = label
             self.cadastralIncome = cadastralIncome
             self.region = region
@@ -2736,6 +5196,47 @@ extension OpenAPI {
             case region = "region"
             case isOwnHome = "isOwnHome"
             case centimesOverride = "centimesOverride"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Region: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case flanders
+            case wallonia
+            case brussels
+            case unknown(String)
+
+            public static var allKnownCases: [Region] {
+                [.flanders, .wallonia, .brussels]
+            }
+
+            public static var allCases: [Region] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "flanders": self = .flanders
+                case "wallonia": self = .wallonia
+                case "brussels": self = .brussels
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .flanders: return "flanders"
+                case .wallonia: return "wallonia"
+                case .brussels: return "brussels"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -2773,7 +5274,7 @@ extension OpenAPI {
     }
 
     public struct BelgianTaxInputPartner: Codable, Equatable, Sendable {
-        public let id: String
+        public let id: Id
         public let displayName: String?
         public let birthYear: Int?
         public let isDisabled: Bool
@@ -2788,7 +5289,7 @@ extension OpenAPI {
         public let annualDividendIncome: Decimal?
         public let annualSavingsInterest: Decimal?
 
-        public init(id: String, displayName: String? = nil, birthYear: Int? = nil, isDisabled: Bool, isIsolatedParent: Bool? = nil, activities: [OpenAPI.BelgianTaxInputPartnerActivity], professionalExpenses: [String: ProfessionalExpensesValue], unionDues: Decimal, otherTaxableIncome: Decimal, alimonyPaid: Decimal, treatyExemptProfessionalIncome: Decimal? = nil, reductions: OpenAPI.BelgianTaxInputPartnerReductions, annualDividendIncome: Decimal? = nil, annualSavingsInterest: Decimal? = nil) {
+        public init(id: Id, displayName: String? = nil, birthYear: Int? = nil, isDisabled: Bool, isIsolatedParent: Bool? = nil, activities: [OpenAPI.BelgianTaxInputPartnerActivity], professionalExpenses: [String: ProfessionalExpensesValue], unionDues: Decimal, otherTaxableIncome: Decimal, alimonyPaid: Decimal, treatyExemptProfessionalIncome: Decimal? = nil, reductions: OpenAPI.BelgianTaxInputPartnerReductions, annualDividendIncome: Decimal? = nil, annualSavingsInterest: Decimal? = nil) {
             self.id = id
             self.displayName = displayName
             self.birthYear = birthYear
@@ -2822,11 +5323,49 @@ extension OpenAPI {
             case annualSavingsInterest = "annualSavingsInterest"
         }
 
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Id: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [Id] {
+                [.a, .b]
+            }
+
+            public static var allCases: [Id] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct ProfessionalExpensesValue: Codable, Equatable, Sendable {
-            public let method: String
+            public let method: Method
             public let actualAmount: Decimal
 
-            public init(method: String, actualAmount: Decimal) {
+            public init(method: Method, actualAmount: Decimal) {
                 self.method = method
                 self.actualAmount = actualAmount
             }
@@ -2835,25 +5374,63 @@ extension OpenAPI {
                 case method = "method"
                 case actualAmount = "actualAmount"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Method: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case lumpSum
+                case actual
+                case unknown(String)
+
+                public static var allKnownCases: [Method] {
+                    [.lumpSum, .actual]
+                }
+
+                public static var allCases: [Method] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "lump_sum": self = .lumpSum
+                    case "actual": self = .actual
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .lumpSum: return "lump_sum"
+                    case .actual: return "actual"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct BelgianTaxInputPartnerActivity: Codable, Equatable, Sendable {
-        public let id: String
-        public let kind: String
+        public let id: TaxPartnerActivityID
+        public let kind: Kind
         public let label: String?
         public let grossIncome: Decimal
         public let netProfessionalIncome: Decimal?
-        public let pensionKind: String?
-        public let startDate: String?
-        public let endDate: String?
-        public let selfEmployedOccupation: String?
+        public let pensionKind: PensionKind?
+        public let startDate: CalendarDay?
+        public let endDate: CalendarDay?
+        public let selfEmployedOccupation: SelfEmployedOccupation?
         public let socialContributionsPaid: Decimal?
         public let withholdingTax: Decimal?
         public let prepayments: Decimal?
         public let sourceRefs: [String]?
 
-        public init(id: String, kind: String, label: String? = nil, grossIncome: Decimal, netProfessionalIncome: Decimal? = nil, pensionKind: String? = nil, startDate: String? = nil, endDate: String? = nil, selfEmployedOccupation: String? = nil, socialContributionsPaid: Decimal? = nil, withholdingTax: Decimal? = nil, prepayments: Decimal? = nil, sourceRefs: [String]? = nil) {
+        public init(id: TaxPartnerActivityID, kind: Kind, label: String? = nil, grossIncome: Decimal, netProfessionalIncome: Decimal? = nil, pensionKind: PensionKind? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, selfEmployedOccupation: SelfEmployedOccupation? = nil, socialContributionsPaid: Decimal? = nil, withholdingTax: Decimal? = nil, prepayments: Decimal? = nil, sourceRefs: [String]? = nil) {
             self.id = id
             self.kind = kind
             self.label = label
@@ -2884,11 +5461,149 @@ extension OpenAPI {
             case prepayments = "prepayments"
             case sourceRefs = "sourceRefs"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case employee
+            case civilServant
+            case director
+            case selfEmployedProfits
+            case selfEmployedFees
+            case helpingSpouse
+            case pension
+            case otherProfessional
+            case netProfessionalAmount
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.employee, .civilServant, .director, .selfEmployedProfits, .selfEmployedFees, .helpingSpouse, .pension, .otherProfessional, .netProfessionalAmount]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "employee": self = .employee
+                case "civil_servant": self = .civilServant
+                case "director": self = .director
+                case "self_employed_profits": self = .selfEmployedProfits
+                case "self_employed_fees": self = .selfEmployedFees
+                case "helping_spouse": self = .helpingSpouse
+                case "pension": self = .pension
+                case "other_professional": self = .otherProfessional
+                case "net_professional_amount": self = .netProfessionalAmount
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .employee: return "employee"
+                case .civilServant: return "civil_servant"
+                case .director: return "director"
+                case .selfEmployedProfits: return "self_employed_profits"
+                case .selfEmployedFees: return "self_employed_fees"
+                case .helpingSpouse: return "helping_spouse"
+                case .pension: return "pension"
+                case .otherProfessional: return "other_professional"
+                case .netProfessionalAmount: return "net_professional_amount"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PensionKind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case statutoryFromLegalAge
+            case survivorOrTransition
+            case other
+            case unknown(String)
+
+            public static var allKnownCases: [PensionKind] {
+                [.statutoryFromLegalAge, .survivorOrTransition, .other]
+            }
+
+            public static var allCases: [PensionKind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "statutory_from_legal_age": self = .statutoryFromLegalAge
+                case "survivor_or_transition": self = .survivorOrTransition
+                case "other": self = .other
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .statutoryFromLegalAge: return "statutory_from_legal_age"
+                case .survivorOrTransition: return "survivor_or_transition"
+                case .other: return "other"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum SelfEmployedOccupation: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case main
+            case secondary
+            case unknown(String)
+
+            public static var allKnownCases: [SelfEmployedOccupation] {
+                [.main, .secondary]
+            }
+
+            public static var allCases: [SelfEmployedOccupation] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "main": self = .main
+                case "secondary": self = .secondary
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .main: return "main"
+                case .secondary: return "secondary"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxInputPartnerReductions: Codable, Equatable, Sendable {
         public let personalPensionContributions: Decimal
-        public let pensionScheme: String?
+        public let pensionScheme: PensionScheme?
         public let pensionEligible: Bool?
         public let lifeInsurancePremiums: Decimal
         public let lifeInsuranceEligible: Bool?
@@ -2906,7 +5621,7 @@ extension OpenAPI {
         public let serviceVoucherEligible: Bool?
         public let medicalExpenses: Decimal
 
-        public init(personalPensionContributions: Decimal, pensionScheme: String? = nil, pensionEligible: Bool? = nil, lifeInsurancePremiums: Decimal, lifeInsuranceEligible: Bool? = nil, employeeGroupInsuranceContributions: Decimal? = nil, employeeGroupInsuranceEligible: Bool? = nil, charitableDonations: Decimal, charitableDonationsEligible: Bool? = nil, childcareCosts: Decimal, childcareEligibleDays: Int? = nil, childcareEligible: Bool? = nil, domesticHelpCosts: Decimal? = nil, domesticHelpEligible: Bool? = nil, serviceVoucherCount: Int? = nil, serviceVoucherSpend: Decimal? = nil, serviceVoucherEligible: Bool? = nil, medicalExpenses: Decimal) {
+        public init(personalPensionContributions: Decimal, pensionScheme: PensionScheme? = nil, pensionEligible: Bool? = nil, lifeInsurancePremiums: Decimal, lifeInsuranceEligible: Bool? = nil, employeeGroupInsuranceContributions: Decimal? = nil, employeeGroupInsuranceEligible: Bool? = nil, charitableDonations: Decimal, charitableDonationsEligible: Bool? = nil, childcareCosts: Decimal, childcareEligibleDays: Int? = nil, childcareEligible: Bool? = nil, domesticHelpCosts: Decimal? = nil, domesticHelpEligible: Bool? = nil, serviceVoucherCount: Int? = nil, serviceVoucherSpend: Decimal? = nil, serviceVoucherEligible: Bool? = nil, medicalExpenses: Decimal) {
             self.personalPensionContributions = personalPensionContributions
             self.pensionScheme = pensionScheme
             self.pensionEligible = pensionEligible
@@ -2947,14 +5662,52 @@ extension OpenAPI {
             case serviceVoucherEligible = "serviceVoucherEligible"
             case medicalExpenses = "medicalExpenses"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PensionScheme: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case _1050
+            case _1350
+            case unknown(String)
+
+            public static var allKnownCases: [PensionScheme] {
+                [._1050, ._1350]
+            }
+
+            public static var allCases: [PensionScheme] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "1050": self = ._1050
+                case "1350": self = ._1350
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case ._1050: return "1050"
+                case ._1350: return "1350"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxInputRelationship: Codable, Equatable, Sendable {
         public let events: [OpenAPI.BelgianTaxInputRelationshipEvent]
-        public let deathYearElection: String?
+        public let deathYearElection: DeathYearElection?
         public let legacyAssumedJoint: Bool?
 
-        public init(events: [OpenAPI.BelgianTaxInputRelationshipEvent], deathYearElection: String? = nil, legacyAssumedJoint: Bool? = nil) {
+        public init(events: [OpenAPI.BelgianTaxInputRelationshipEvent], deathYearElection: DeathYearElection? = nil, legacyAssumedJoint: Bool? = nil) {
             self.events = events
             self.deathYearElection = deathYearElection
             self.legacyAssumedJoint = legacyAssumedJoint
@@ -2965,15 +5718,53 @@ extension OpenAPI {
             case deathYearElection = "deathYearElection"
             case legacyAssumedJoint = "legacyAssumedJoint"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum DeathYearElection: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case joint
+            case separate
+            case unknown(String)
+
+            public static var allKnownCases: [DeathYearElection] {
+                [.joint, .separate]
+            }
+
+            public static var allCases: [DeathYearElection] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "joint": self = .joint
+                case "separate": self = .separate
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .joint: return "joint"
+                case .separate: return "separate"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxInputRelationshipEvent: Codable, Equatable, Sendable {
-        public let id: String
-        public let kind: String
-        public let date: String
-        public let partnerId: String?
+        public let id: TaxRelationshipEventID
+        public let kind: Kind
+        public let date: CalendarDay
+        public let partnerId: PartnerId?
 
-        public init(id: String, kind: String, date: String, partnerId: String? = nil) {
+        public init(id: TaxRelationshipEventID, kind: Kind, date: CalendarDay, partnerId: PartnerId? = nil) {
             self.id = id
             self.kind = kind
             self.date = date
@@ -2986,20 +5777,111 @@ extension OpenAPI {
             case date = "date"
             case partnerId = "partnerId"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case marriage
+            case legalCohabitation
+            case legalCohabitationEnded
+            case factualCohabitationStart
+            case factualSeparation
+            case divorce
+            case death
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.marriage, .legalCohabitation, .legalCohabitationEnded, .factualCohabitationStart, .factualSeparation, .divorce, .death]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "marriage": self = .marriage
+                case "legal_cohabitation": self = .legalCohabitation
+                case "legal_cohabitation_ended": self = .legalCohabitationEnded
+                case "factual_cohabitation_start": self = .factualCohabitationStart
+                case "factual_separation": self = .factualSeparation
+                case "divorce": self = .divorce
+                case "death": self = .death
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .marriage: return "marriage"
+                case .legalCohabitation: return "legal_cohabitation"
+                case .legalCohabitationEnded: return "legal_cohabitation_ended"
+                case .factualCohabitationStart: return "factual_cohabitation_start"
+                case .factualSeparation: return "factual_separation"
+                case .divorce: return "divorce"
+                case .death: return "death"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [PartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [PartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxMaritalQuotientResult: Codable, Equatable, Sendable {
         public let applied: Bool
         public let transfer: Decimal
-        public let fromPartnerId: String?
-        public let toPartnerId: String?
+        public let fromPartnerId: FromPartnerId?
+        public let toPartnerId: ToPartnerId?
         /// min(30% of the household professional income, cap).
         public let target: Decimal
         public let cap: Decimal
         /// Combined tax saving (0 when not applied).
         public let benefit: Decimal
 
-        public init(applied: Bool, transfer: Decimal, fromPartnerId: String? = nil, toPartnerId: String? = nil, target: Decimal, cap: Decimal, benefit: Decimal) {
+        public init(applied: Bool, transfer: Decimal, fromPartnerId: FromPartnerId? = nil, toPartnerId: ToPartnerId? = nil, target: Decimal, cap: Decimal, benefit: Decimal) {
             self.applied = applied
             self.transfer = transfer
             self.fromPartnerId = fromPartnerId
@@ -3017,6 +5899,82 @@ extension OpenAPI {
             case target = "target"
             case cap = "cap"
             case benefit = "benefit"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum FromPartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [FromPartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [FromPartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ToPartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [ToPartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [ToPartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -3036,12 +5994,12 @@ extension OpenAPI {
         public let metadata: JSONValue
         public let calculation: OpenAPI.BelgianTaxHistoricalCalculation
         public let result: OpenAPI.BelgianTaxHouseholdTaxResult
-        public let calculationSource: String
-        public let householdResultSource: String
+        public let calculationSource: CalculationSource
+        public let householdResultSource: HouseholdResultSource
         public let warnings: [OpenAPI.BelgianTaxSettingsWarning]
         public let records: [OpenAPI.Setting]
 
-        public init(year: Int, liveYear: Int, isHistorical: Bool, hasSnapshot: Bool, hasProfile: Bool, householdMigrationNeeded: Bool, snapshotsMigrationNeeded: Bool, storedValueInvalid: Bool, household: OpenAPI.BelgianTaxHouseholdInput, liveHousehold: OpenAPI.BelgianTaxHouseholdInput, householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput], snapshotMetas: [String: JSONValue], metadata: JSONValue, calculation: OpenAPI.BelgianTaxHistoricalCalculation, result: OpenAPI.BelgianTaxHouseholdTaxResult, calculationSource: String, householdResultSource: String, warnings: [OpenAPI.BelgianTaxSettingsWarning], records: [OpenAPI.Setting]) {
+        public init(year: Int, liveYear: Int, isHistorical: Bool, hasSnapshot: Bool, hasProfile: Bool, householdMigrationNeeded: Bool, snapshotsMigrationNeeded: Bool, storedValueInvalid: Bool, household: OpenAPI.BelgianTaxHouseholdInput, liveHousehold: OpenAPI.BelgianTaxHouseholdInput, householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput], snapshotMetas: [String: JSONValue], metadata: JSONValue, calculation: OpenAPI.BelgianTaxHistoricalCalculation, result: OpenAPI.BelgianTaxHouseholdTaxResult, calculationSource: CalculationSource, householdResultSource: HouseholdResultSource, warnings: [OpenAPI.BelgianTaxSettingsWarning], records: [OpenAPI.Setting]) {
             self.year = year
             self.liveYear = liveYear
             self.isHistorical = isHistorical
@@ -3084,10 +6042,86 @@ extension OpenAPI {
             case warnings = "warnings"
             case records = "records"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum CalculationSource: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case frozen
+            case computed
+            case unknown(String)
+
+            public static var allKnownCases: [CalculationSource] {
+                [.frozen, .computed]
+            }
+
+            public static var allCases: [CalculationSource] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "frozen": self = .frozen
+                case "computed": self = .computed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .frozen: return "frozen"
+                case .computed: return "computed"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum HouseholdResultSource: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case frozen
+            case computed
+            case unknown(String)
+
+            public static var allKnownCases: [HouseholdResultSource] {
+                [.frozen, .computed]
+            }
+
+            public static var allCases: [HouseholdResultSource] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "frozen": self = .frozen
+                case "computed": self = .computed
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .frozen: return "frozen"
+                case .computed: return "computed"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxPartnerTaxResult: Codable, Equatable, Sendable {
-        public let partnerId: String
+        public let partnerId: PartnerId
         public let activities: [OpenAPI.BelgianTaxActivityTaxResult]
         public let categories: [OpenAPI.BelgianTaxCategoryTaxResult]
         /// Gross income of the activities that carry a gross figure (not `net_professional_amount`).
@@ -3108,7 +6142,7 @@ extension OpenAPI {
         public let exemptionBenefit: Decimal
         public let pitAfterExemption: Decimal
         public let reductions: OpenAPI.BelgianTaxTaxReductionBreakdown
-        public let ownHomeCreditRegime: String
+        public let ownHomeCreditRegime: OwnHomeCreditRegime
         public let ownHomeCredit: Decimal
         /// Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150).
         public let pensionReduction: Decimal
@@ -3124,7 +6158,7 @@ extension OpenAPI {
         public let savingsInterestTax: Decimal
         public let marginalRate: Decimal
 
-        public init(partnerId: String, activities: [OpenAPI.BelgianTaxActivityTaxResult], categories: [OpenAPI.BelgianTaxCategoryTaxResult], grossIncome: Decimal, employeeSocialSecurity: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netProfessionalIncome: Decimal, otherTaxableIncome: Decimal, alimonyDeduction: Decimal, taxableIncomeBeforeQuotient: Decimal, quotientAdjustment: Decimal, taxableIncome: Decimal, bracketTax: OpenAPI.BelgianTaxBracketTax, exemption: OpenAPI.BelgianTaxExemptionAllocation, exemptionBenefit: Decimal, pitAfterExemption: Decimal, reductions: OpenAPI.BelgianTaxTaxReductionBreakdown, ownHomeCreditRegime: String, ownHomeCredit: Decimal, pensionReduction: Decimal, reductionsApplied: Decimal, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, specialSocialSecurityContribution: Decimal, csssSubject: Bool, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, marginalRate: Decimal) {
+        public init(partnerId: PartnerId, activities: [OpenAPI.BelgianTaxActivityTaxResult], categories: [OpenAPI.BelgianTaxCategoryTaxResult], grossIncome: Decimal, employeeSocialSecurity: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netProfessionalIncome: Decimal, otherTaxableIncome: Decimal, alimonyDeduction: Decimal, taxableIncomeBeforeQuotient: Decimal, quotientAdjustment: Decimal, taxableIncome: Decimal, bracketTax: OpenAPI.BelgianTaxBracketTax, exemption: OpenAPI.BelgianTaxExemptionAllocation, exemptionBenefit: Decimal, pitAfterExemption: Decimal, reductions: OpenAPI.BelgianTaxTaxReductionBreakdown, ownHomeCreditRegime: OwnHomeCreditRegime, ownHomeCredit: Decimal, pensionReduction: Decimal, reductionsApplied: Decimal, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, specialSocialSecurityContribution: Decimal, csssSubject: Bool, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, marginalRate: Decimal) {
             self.partnerId = partnerId
             self.activities = activities
             self.categories = categories
@@ -3189,14 +6223,93 @@ extension OpenAPI {
             case savingsInterestTax = "savingsInterestTax"
             case marginalRate = "marginalRate"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PartnerId: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case a
+            case b
+            case unknown(String)
+
+            public static var allKnownCases: [PartnerId] {
+                [.a, .b]
+            }
+
+            public static var allCases: [PartnerId] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "A": self = .a
+                case "B": self = .b
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .a: return "A"
+                case .b: return "B"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum OwnHomeCreditRegime: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case none
+            case flemishWoonbonus
+            case walloonChequeHabitat
+            case unknown(String)
+
+            public static var allKnownCases: [OwnHomeCreditRegime] {
+                [.none, .flemishWoonbonus, .walloonChequeHabitat]
+            }
+
+            public static var allCases: [OwnHomeCreditRegime] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "none": self = .none
+                case "flemish_woonbonus": self = .flemishWoonbonus
+                case "walloon_cheque_habitat": self = .walloonChequeHabitat
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .none: return "none"
+                case .flemishWoonbonus: return "flemish_woonbonus"
+                case .walloonChequeHabitat: return "walloon_cheque_habitat"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct BelgianTaxSettingsWarning: Codable, Equatable, Sendable {
         public let key: String
-        public let kind: String
+        public let kind: Kind
         public let issues: [String]
 
-        public init(key: String, kind: String, issues: [String]) {
+        public init(key: String, kind: Kind, issues: [String]) {
             self.key = key
             self.kind = kind
             self.issues = issues
@@ -3206,6 +6319,44 @@ extension OpenAPI {
             case key = "key"
             case kind = "kind"
             case issues = "issues"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case invalidStored
+            case invalidUpgrade
+            case unknown(String)
+
+            public static var allKnownCases: [Kind] {
+                [.invalidStored, .invalidUpgrade]
+            }
+
+            public static var allCases: [Kind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "invalid_stored": self = .invalidStored
+                case "invalid_upgrade": self = .invalidUpgrade
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .invalidStored: return "invalid_stored"
+                case .invalidUpgrade: return "invalid_upgrade"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -3245,8 +6396,67 @@ extension OpenAPI {
 
     /// Selects transactions to act on. Explicit-id mode accepts only `ids`. Filter mode requires both
     /// `filter` and the `expected_count` shown when the user confirmed the action.
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias BulkSelection = JSONValue
+    /// Tells its branches apart by which of `ids`, `filter` is present.
+    public enum BulkSelection: Codable, Equatable, Sendable {
+        case ids(IdsVariant)
+        case filter(FilterVariant)
+
+        private enum ProbeKey: String, CodingKey {
+            case ids = "ids"
+            case filter = "filter"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: ProbeKey.self)
+            if probe.contains(.ids) {
+                self = .ids(try IdsVariant(from: decoder))
+                return
+            }
+            if probe.contains(.filter) {
+                self = .filter(try FilterVariant(from: decoder))
+                return
+            }
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "No variant of BulkSelection matches (needs ids or filter)."))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .ids(let value): try value.encode(to: encoder)
+            case .filter(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct IdsVariant: Codable, Equatable, Sendable {
+            public let ids: [Int]
+
+            public init(ids: [Int]) {
+                self.ids = ids
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case ids = "ids"
+            }
+        }
+
+        public struct FilterVariant: Codable, Equatable, Sendable {
+            public let filter: OpenAPI.BulkTransactionFilter
+            /// Count shown when the user confirmed the action.
+            public let expectedCount: Int
+
+            public init(filter: OpenAPI.BulkTransactionFilter, expectedCount: Int) {
+                self.filter = filter
+                self.expectedCount = expectedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case filter = "filter"
+                case expectedCount = "expected_count"
+            }
+        }
+    }
 
     public struct BulkSplitResult: Codable, Equatable, Sendable {
         public let requested: Int
@@ -3276,11 +6486,11 @@ extension OpenAPI {
     }
 
     public struct BulkTagRequest: Codable, Equatable, Sendable {
-        public let transactionIds: [Int]
+        public let transactionIds: [TransactionID]
         public let addSlugs: [String]?
         public let removeSlugs: [String]?
 
-        public init(transactionIds: [Int], addSlugs: [String]? = nil, removeSlugs: [String]? = nil) {
+        public init(transactionIds: [TransactionID], addSlugs: [String]? = nil, removeSlugs: [String]? = nil) {
             self.transactionIds = transactionIds
             self.addSlugs = addSlugs
             self.removeSlugs = removeSlugs
@@ -3311,18 +6521,169 @@ extension OpenAPI {
         }
     }
 
+    /// Filter-mode selector. Every field is validated and an unknown key, a wrong type or a malformed
+    /// value rejects the whole request with a 400 — these endpoints include a hard DELETE, and a filter
+    /// field that was skipped rather than rejected made the action cover a WIDER set of rows than the
+    /// caller named. Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field". Each
+    /// field also accepts its camelCase spelling, but not both spellings at once.
+    public struct BulkTransactionFilter: Codable, Equatable, Sendable {
+        public let transactionId: TransactionID?
+        public let startDate: CalendarDay?
+        public let endDate: CalendarDay?
+        public let accountId: AccountID?
+        /// Substring match on the account name
+        public let bankAccount: String?
+        /// Exact account names. Must be an array, not a comma string.
+        public let bankAccounts: [String]?
+        public let categoryId: CategoryID?
+        /// Must be an array of integers, not a comma string.
+        public let categoryIds: [Int]?
+        /// Defaults to false. When true, selects the uncategorised queue the list endpoint's
+        /// `uncategorised=true` returns: active rows whose effective category is empty. `active`,
+        /// `category_id` and `category_ids` are then ignored.
+        public let uncategorised: Bool?
+        public let recipientId: RecipientID?
+        public let recipientGroupId: RecipientGroupID?
+        public let recipientName: String?
+        public let search: String?
+        /// Defaults to true (active rows only) when omitted.
+        public let active: Bool?
+        public let transactionType: TransactionType?
+        public let amountMin: Decimal?
+        public let amountMax: Decimal?
+        /// Defaults to false, comparing amount_min/amount_max against |amount|; true compares against
+        /// the signed amount.
+        public let amountSigned: Bool?
+        /// Tag slugs, as an array or a comma-separated string.
+        public let tags: Tags?
+
+        public init(transactionId: TransactionID? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, accountId: AccountID? = nil, bankAccount: String? = nil, bankAccounts: [String]? = nil, categoryId: CategoryID? = nil, categoryIds: [Int]? = nil, uncategorised: Bool? = nil, recipientId: RecipientID? = nil, recipientGroupId: RecipientGroupID? = nil, recipientName: String? = nil, search: String? = nil, active: Bool? = nil, transactionType: TransactionType? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil, tags: Tags? = nil) {
+            self.transactionId = transactionId
+            self.startDate = startDate
+            self.endDate = endDate
+            self.accountId = accountId
+            self.bankAccount = bankAccount
+            self.bankAccounts = bankAccounts
+            self.categoryId = categoryId
+            self.categoryIds = categoryIds
+            self.uncategorised = uncategorised
+            self.recipientId = recipientId
+            self.recipientGroupId = recipientGroupId
+            self.recipientName = recipientName
+            self.search = search
+            self.active = active
+            self.transactionType = transactionType
+            self.amountMin = amountMin
+            self.amountMax = amountMax
+            self.amountSigned = amountSigned
+            self.tags = tags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case transactionId = "transaction_id"
+            case startDate = "start_date"
+            case endDate = "end_date"
+            case accountId = "account_id"
+            case bankAccount = "bank_account"
+            case bankAccounts = "bank_accounts"
+            case categoryId = "category_id"
+            case categoryIds = "category_ids"
+            case uncategorised = "uncategorised"
+            case recipientId = "recipient_id"
+            case recipientGroupId = "recipient_group_id"
+            case recipientName = "recipient_name"
+            case search = "search"
+            case active = "active"
+            case transactionType = "transaction_type"
+            case amountMin = "amount_min"
+            case amountMax = "amount_max"
+            case amountSigned = "amount_signed"
+            case tags = "tags"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TransactionType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case income
+            case expense
+            case unknown(String)
+
+            public static var allKnownCases: [TransactionType] {
+                [.income, .expense]
+            }
+
+            public static var allCases: [TransactionType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "income": self = .income
+                case "expense": self = .expense
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .income: return "income"
+                case .expense: return "expense"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// Tag slugs, as an array or a comma-separated string.
+        /// One of array, string; decoded by its JSON type.
+        public enum Tags: Codable, Equatable, Sendable {
+            case string(String)
+            case array([String])
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                if let value = try? container.decode([String].self) {
+                    self = .array(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    Tags.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected array or string."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .string(let value): try container.encode(value)
+                case .array(let value): try container.encode(value)
+                }
+            }
+        }
+    }
+
     public struct CashForecastInsight: Codable, Equatable, Sendable {
         public let month: String
-        public let currency: String
+        public let currency: CurrencyCode
         /// Zero-based expected income minus outflows at month end; not an account balance.
         public let monthEndNetCashflow: Decimal
         public let monthEndNetCashflowLow: Decimal?
         public let monthEndNetCashflowHigh: Decimal?
         public let movedSignificantly: Bool
-        public let prominence: String
+        public let prominence: Prominence
         public let methodId: String
 
-        public init(month: String, currency: String, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: String, methodId: String) {
+        public init(month: String, currency: CurrencyCode, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: Prominence, methodId: String) {
             self.month = month
             self.currency = currency
             self.monthEndNetCashflow = monthEndNetCashflow
@@ -3343,19 +6704,57 @@ extension OpenAPI {
             case prominence = "prominence"
             case methodId = "methodId"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Prominence: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case alert
+            case standing
+            case unknown(String)
+
+            public static var allKnownCases: [Prominence] {
+                [.alert, .standing]
+            }
+
+            public static var allCases: [Prominence] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "alert": self = .alert
+                case "standing": self = .standing
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .alert: return "alert"
+                case .standing: return "standing"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct Category: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: CategoryID
         public let general: String
         public let detail: String
         public let description: String?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: CategoryID, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.general = general
             self.detail = detail
@@ -3421,10 +6820,10 @@ extension OpenAPI {
     }
 
     public struct CategoryNode: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: CategoryID
         public let name: String
-        public let parentId: Int?
-        public let pathIds: [Int]
+        public let parentId: CategoryID?
+        public let pathIds: [CategoryID]
         public let path: [String]
         /// Display projection only. Use path or pathIds for hierarchy logic.
         public let categoryName: String
@@ -3434,7 +6833,7 @@ extension OpenAPI {
         public let hierarchyOnly: Bool
         public let legacyCompatible: Bool
 
-        public init(id: Int, name: String, parentId: Int? = nil, pathIds: [Int], path: [String], categoryName: String, depth: Int, description: String? = nil, isActive: Bool, hierarchyOnly: Bool, legacyCompatible: Bool) {
+        public init(id: CategoryID, name: String, parentId: CategoryID? = nil, pathIds: [CategoryID], path: [String], categoryName: String, depth: Int, description: String? = nil, isActive: Bool, hierarchyOnly: Bool, legacyCompatible: Bool) {
             self.id = id
             self.name = name
             self.parentId = parentId
@@ -3465,10 +6864,10 @@ extension OpenAPI {
 
     public struct CategoryNodeCreate: Codable, Equatable, Sendable {
         public let name: String
-        public let parentId: Int?
+        public let parentId: CategoryID?
         public let description: String?
 
-        public init(name: String, parentId: Int? = nil, description: String? = nil) {
+        public init(name: String, parentId: CategoryID? = nil, description: String? = nil) {
             self.name = name
             self.parentId = parentId
             self.description = description
@@ -3501,11 +6900,11 @@ extension OpenAPI {
 
     public struct CategoryNodeUpdate: Codable, Equatable, Sendable {
         public let name: String?
-        public let parentId: Int?
-        public let description: String?
+        public let parentId: Nullable<CategoryID>
+        public let description: Nullable<String>
         public let isActive: Bool?
 
-        public init(name: String? = nil, parentId: Int? = nil, description: String? = nil, isActive: Bool? = nil) {
+        public init(name: String? = nil, parentId: Nullable<CategoryID> = .absent, description: Nullable<String> = .absent, isActive: Bool? = nil) {
             self.name = name
             self.parentId = parentId
             self.description = description
@@ -3518,16 +6917,32 @@ extension OpenAPI {
             case description = "description"
             case isActive = "is_active"
         }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
+            self.parentId = try container.decodeNullable(CategoryID.self, forKey: .parentId)
+            self.description = try container.decodeNullable(String.self, forKey: .description)
+            self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeNullable(parentId, forKey: .parentId)
+            try container.encodeNullable(description, forKey: .description)
+            try container.encodeIfPresent(isActive, forKey: .isActive)
+        }
     }
 
     public struct CategoryPivotData: Codable, Equatable, Sendable {
         /// Additive (ADR-216). Transactions left out of every cell because no stored rate converts
         /// their currency.
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
         public let categoryPivot: [String: [CategoryPivotValueItem]]
 
-        public init(unconvertedCount: Int, unconvertedCurrencies: [String], categoryPivot: [String: [CategoryPivotValueItem]]) {
+        public init(unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode], categoryPivot: [String: [CategoryPivotValueItem]]) {
             self.unconvertedCount = unconvertedCount
             self.unconvertedCurrencies = unconvertedCurrencies
             self.categoryPivot = categoryPivot
@@ -3540,9 +6955,9 @@ extension OpenAPI {
         }
 
         public struct CategoryPivotValueItem: Codable, Equatable, Sendable {
-            public let categoryId: Int?
+            public let categoryId: CategoryID?
             public let categoryName: String
-            public let categoryPathIds: [Int]
+            public let categoryPathIds: [CategoryID]
             public let categoryPathSegments: [String]
             public let total: Decimal
             public let income: Decimal
@@ -3553,7 +6968,7 @@ extension OpenAPI {
             /// transactions without an account.
             public let incomeByOwner: IncomeByOwner?
 
-            public init(categoryId: Int? = nil, categoryName: String, categoryPathIds: [Int], categoryPathSegments: [String], total: Decimal, income: Decimal, expense: Decimal, transactionCount: Int, incomeByOwner: IncomeByOwner? = nil) {
+            public init(categoryId: CategoryID? = nil, categoryName: String, categoryPathIds: [CategoryID], categoryPathSegments: [String], total: Decimal, income: Decimal, expense: Decimal, transactionCount: Int, incomeByOwner: IncomeByOwner? = nil) {
                 self.categoryId = categoryId
                 self.categoryName = categoryName
                 self.categoryPathIds = categoryPathIds
@@ -3630,20 +7045,55 @@ extension OpenAPI {
     /// Generic custom numeric grammar, independent of the CSV delimiter. Auto rejects values with
     /// conflicting valid decimal/grouping interpretations. Choose decimal_dot or decimal_comma to
     /// disambiguate. Ambiguity rejects the complete import with a row/column diagnostic before staging.
-    public enum CsvNumberFormat: String, Codable, Sendable, CaseIterable {
-        case auto = "auto"
-        case decimalDot = "decimal_dot"
-        case decimalComma = "decimal_comma"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum CsvNumberFormat: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case auto
+        case decimalDot
+        case decimalComma
+        case unknown(String)
+
+        public static var allKnownCases: [CsvNumberFormat] {
+            [.auto, .decimalDot, .decimalComma]
+        }
+
+        public static var allCases: [CsvNumberFormat] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "auto": self = .auto
+            case "decimal_dot": self = .decimalDot
+            case "decimal_comma": self = .decimalComma
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .auto: return "auto"
+            case .decimalDot: return "decimal_dot"
+            case .decimalComma: return "decimal_comma"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     public struct CustomParserConfig: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: CustomParserConfigID
         public let name: String
         public let config: OpenAPI.TransactionParserConfig
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
 
-        public init(id: Int, name: String, config: OpenAPI.TransactionParserConfig, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: CustomParserConfigID, name: String, config: OpenAPI.TransactionParserConfig, createdAt: Instant? = nil, updatedAt: Instant? = nil) {
             self.id = id
             self.name = name
             self.config = config
@@ -3948,13 +7398,13 @@ extension OpenAPI {
 
     public struct ExchangeRate: Codable, Equatable, Sendable {
         /// ISO 4217 currency code
-        public let currency: String
+        public let currency: CurrencyCode
         /// The value of one unit in EUR
         public let rateToEur: Decimal
-        public let rateDate: String
-        public let fetchedAt: String
+        public let rateDate: CalendarDay
+        public let fetchedAt: Instant
 
-        public init(currency: String, rateToEur: Decimal, rateDate: String, fetchedAt: String) {
+        public init(currency: CurrencyCode, rateToEur: Decimal, rateDate: CalendarDay, fetchedAt: Instant) {
             self.currency = currency
             self.rateToEur = rateToEur
             self.rateDate = rateDate
@@ -3974,12 +7424,12 @@ extension OpenAPI {
         public let rates: [OpenAPI.ExchangeRate]
         /// `database` when rates are stored. `fallback` when none are stored yet; amounts in other
         /// currencies are then unavailable (flagged), never converted at built-in constants.
-        public let source: String
+        public let source: Source
         /// The stored rate date is before today
         public let isStale: Bool
-        public let lastFetchedAt: String?
+        public let lastFetchedAt: Instant?
 
-        public init(totalRates: Int, rates: [OpenAPI.ExchangeRate], source: String, isStale: Bool, lastFetchedAt: String? = nil) {
+        public init(totalRates: Int, rates: [OpenAPI.ExchangeRate], source: Source, isStale: Bool, lastFetchedAt: Instant? = nil) {
             self.totalRates = totalRates
             self.rates = rates
             self.source = source
@@ -3994,21 +7444,61 @@ extension OpenAPI {
             case isStale = "is_stale"
             case lastFetchedAt = "last_fetched_at"
         }
+
+        /// `database` when rates are stored. `fallback` when none are stored yet; amounts in other
+        /// currencies are then unavailable (flagged), never converted at built-in constants.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Source: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case database
+            case fallback
+            case unknown(String)
+
+            public static var allKnownCases: [Source] {
+                [.database, .fallback]
+            }
+
+            public static var allCases: [Source] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "database": self = .database
+                case "fallback": self = .fallback
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .database: return "database"
+                case .fallback: return "fallback"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct FundHoldingRow: Codable, Equatable, Sendable {
         public let provenance: Provenance
         public let name: String
         public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
-        public let instrumentType: String
-        public let exposureKind: String
-        public let exposureStatus: String
+        public let instrumentType: InstrumentType
+        public let exposureKind: ExposureKind
+        public let exposureStatus: ExposureStatus
         public let unsupportedReason: String?
         public let weightPercent: String
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let countryCode: String?
 
-        public init(provenance: Provenance, name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], instrumentType: String, exposureKind: String, exposureStatus: String, unsupportedReason: String? = nil, weightPercent: String, currency: String? = nil, countryCode: String? = nil) {
+        public init(provenance: Provenance, name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], instrumentType: InstrumentType, exposureKind: ExposureKind, exposureStatus: ExposureStatus, unsupportedReason: String? = nil, weightPercent: String, currency: CurrencyCode? = nil, countryCode: String? = nil) {
             self.provenance = provenance
             self.name = name
             self.identifiers = identifiers
@@ -4048,6 +7538,144 @@ extension OpenAPI {
                 case sheetName = "sheetName"
             }
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum InstrumentType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case equity
+            case bond
+            case cash
+            case fund
+            case derivative
+            case other
+            case unknown(String)
+
+            public static var allKnownCases: [InstrumentType] {
+                [.equity, .bond, .cash, .fund, .derivative, .other]
+            }
+
+            public static var allCases: [InstrumentType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "equity": self = .equity
+                case "bond": self = .bond
+                case "cash": self = .cash
+                case "fund": self = .fund
+                case "derivative": self = .derivative
+                case "other": self = .other
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .equity: return "equity"
+                case .bond: return "bond"
+                case .cash: return "cash"
+                case .fund: return "fund"
+                case .derivative: return "derivative"
+                case .other: return "other"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ExposureKind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case direct
+            case cash
+            case nestedFund
+            case derivative
+            case synthetic
+            case unknownValue
+            case unknown(String)
+
+            public static var allKnownCases: [ExposureKind] {
+                [.direct, .cash, .nestedFund, .derivative, .synthetic, .unknownValue]
+            }
+
+            public static var allCases: [ExposureKind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "direct": self = .direct
+                case "cash": self = .cash
+                case "nested-fund": self = .nestedFund
+                case "derivative": self = .derivative
+                case "synthetic": self = .synthetic
+                case "unknown": self = .unknownValue
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .direct: return "direct"
+                case .cash: return "cash"
+                case .nestedFund: return "nested-fund"
+                case .derivative: return "derivative"
+                case .synthetic: return "synthetic"
+                case .unknownValue: return "unknown"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ExposureStatus: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case supported
+            case unsupported
+            case unknown(String)
+
+            public static var allKnownCases: [ExposureStatus] {
+                [.supported, .unsupported]
+            }
+
+            public static var allCases: [ExposureStatus] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "supported": self = .supported
+                case "unsupported": self = .unsupported
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .supported: return "supported"
+                case .unsupported: return "unsupported"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct FundHoldingsDocument: Codable, Equatable, Sendable {
@@ -4080,15 +7708,15 @@ extension OpenAPI {
         }
 
         public struct Source: Codable, Equatable, Sendable {
-            public let kind: String
+            public let kind: Kind
             public let providerName: String?
             public let fileName: String
             public let sourceUrl: String?
-            public let asOfDate: String
-            public let retrievedAt: String
+            public let asOfDate: CalendarDay
+            public let retrievedAt: Instant
             public let license: License
 
-            public init(kind: String, providerName: String? = nil, fileName: String, sourceUrl: String? = nil, asOfDate: String, retrievedAt: String, license: License) {
+            public init(kind: Kind, providerName: String? = nil, fileName: String, sourceUrl: String? = nil, asOfDate: CalendarDay, retrievedAt: Instant, license: License) {
                 self.kind = kind
                 self.providerName = providerName
                 self.fileName = fileName
@@ -4108,13 +7736,48 @@ extension OpenAPI {
                 case license = "license"
             }
 
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case userSuppliedFile
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.userSuppliedFile]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "user-supplied-file": self = .userSuppliedFile
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .userSuppliedFile: return "user-supplied-file"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+
             public struct License: Codable, Equatable, Sendable {
-                public let status: String
-                public let redistribution: String
+                public let status: Status
+                public let redistribution: Redistribution
                 public let termsUrl: String?
                 public let note: String?
 
-                public init(status: String, redistribution: String, termsUrl: String? = nil, note: String? = nil) {
+                public init(status: Status, redistribution: Redistribution, termsUrl: String? = nil, note: String? = nil) {
                     self.status = status
                     self.redistribution = redistribution
                     self.termsUrl = termsUrl
@@ -4127,17 +7790,102 @@ extension OpenAPI {
                     case termsUrl = "termsUrl"
                     case note = "note"
                 }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case userProvided
+                    case permissionConfirmed
+                    case unknownValue
+                    case restricted
+                    case unknown(String)
+
+                    public static var allKnownCases: [Status] {
+                        [.userProvided, .permissionConfirmed, .unknownValue, .restricted]
+                    }
+
+                    public static var allCases: [Status] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "user-provided": self = .userProvided
+                        case "permission-confirmed": self = .permissionConfirmed
+                        case "unknown": self = .unknownValue
+                        case "restricted": self = .restricted
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .userProvided: return "user-provided"
+                        case .permissionConfirmed: return "permission-confirmed"
+                        case .unknownValue: return "unknown"
+                        case .restricted: return "restricted"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Redistribution: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case allowed
+                    case forbidden
+                    case unknownValue
+                    case unknown(String)
+
+                    public static var allKnownCases: [Redistribution] {
+                        [.allowed, .forbidden, .unknownValue]
+                    }
+
+                    public static var allCases: [Redistribution] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "allowed": self = .allowed
+                        case "forbidden": self = .forbidden
+                        case "unknown": self = .unknownValue
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .allowed: return "allowed"
+                        case .forbidden: return "forbidden"
+                        case .unknownValue: return "unknown"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
             }
         }
 
         public struct Coverage: Codable, Equatable, Sendable {
-            public let status: String
+            public let status: Status
             public let reportedWeightPercent: String
             public let supportedWeightPercent: String
             public let unsupportedWeightPercent: String
             public let missingWeightPercent: String
 
-            public init(status: String, reportedWeightPercent: String, supportedWeightPercent: String, unsupportedWeightPercent: String, missingWeightPercent: String) {
+            public init(status: Status, reportedWeightPercent: String, supportedWeightPercent: String, unsupportedWeightPercent: String, missingWeightPercent: String) {
                 self.status = status
                 self.reportedWeightPercent = reportedWeightPercent
                 self.supportedWeightPercent = supportedWeightPercent
@@ -4152,15 +7900,53 @@ extension OpenAPI {
                 case unsupportedWeightPercent = "unsupportedWeightPercent"
                 case missingWeightPercent = "missingWeightPercent"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case complete
+                case partial
+                case unknown(String)
+
+                public static var allKnownCases: [Status] {
+                    [.complete, .partial]
+                }
+
+                public static var allCases: [Status] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "complete": self = .complete
+                    case "partial": self = .partial
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .complete: return "complete"
+                    case .partial: return "partial"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
 
         public struct Staleness: Codable, Equatable, Sendable {
-            public let evaluatedAt: String
+            public let evaluatedAt: CalendarDay
             public let maximumAgeDays: Int
             public let ageDays: Int
-            public let status: String
+            public let status: Status
 
-            public init(evaluatedAt: String, maximumAgeDays: Int, ageDays: Int, status: String) {
+            public init(evaluatedAt: CalendarDay, maximumAgeDays: Int, ageDays: Int, status: Status) {
                 self.evaluatedAt = evaluatedAt
                 self.maximumAgeDays = maximumAgeDays
                 self.ageDays = ageDays
@@ -4173,15 +7959,53 @@ extension OpenAPI {
                 case ageDays = "ageDays"
                 case status = "status"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case current
+                case stale
+                case unknown(String)
+
+                public static var allKnownCases: [Status] {
+                    [.current, .stale]
+                }
+
+                public static var allCases: [Status] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "current": self = .current
+                    case "stale": self = .stale
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .current: return "current"
+                    case .stale: return "stale"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct FundHoldingsIdentity: Codable, Equatable, Sendable {
         public let name: String
         public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
-        public let currency: String?
+        public let currency: CurrencyCode?
 
-        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: String? = nil) {
+        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: CurrencyCode? = nil) {
             self.name = name
             self.identifiers = identifiers
             self.currency = currency
@@ -4197,9 +8021,9 @@ extension OpenAPI {
     public struct FundHoldingsShareClass: Codable, Equatable, Sendable {
         public let name: String
         public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
-        public let currency: String
+        public let currency: CurrencyCode
 
-        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: String) {
+        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: CurrencyCode) {
             self.name = name
             self.identifiers = identifiers
             self.currency = currency
@@ -4214,24 +8038,24 @@ extension OpenAPI {
 
     public struct ImportBatch: Codable, Equatable, Sendable {
         /// PostgreSQL BIGINT serialized by node-postgres as a string.
-        public let id: String
+        public let id: ImportBatchID
         public let adapterName: String
         public let sourceFilename: String?
         /// PostgreSQL BIGINT serialized by node-postgres as a string.
         public let sourceSizeBytes: String?
         /// Present on batch-detail responses; omitted from batch-list rows.
         public let customConfig: JSONValue?
-        public let status: String
+        public let status: Status
         public let rowsTotal: Int
         public let rowsImported: Int
         public let rowsDuplicate: Int
         public let rowsError: Int
         public let errorSummary: String?
-        public let startedAt: String
-        public let completedAt: String?
+        public let startedAt: Instant
+        public let completedAt: Instant?
         public let transactionsRemaining: Int
 
-        public init(id: String, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: String? = nil, customConfig: JSONValue? = nil, status: String, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil, transactionsRemaining: Int) {
+        public init(id: ImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: String? = nil, customConfig: JSONValue? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil, transactionsRemaining: Int) {
             self.id = id
             self.adapterName = adapterName
             self.sourceFilename = sourceFilename
@@ -4264,6 +8088,65 @@ extension OpenAPI {
             case completedAt = "completed_at"
             case transactionsRemaining = "transactions_remaining"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case pending
+            case staging
+            case validating
+            case matching
+            case awaitingReview
+            case committing
+            case complete
+            case failed
+            case aborted
+            case unknown(String)
+
+            public static var allKnownCases: [Status] {
+                [.pending, .staging, .validating, .matching, .awaitingReview, .committing, .complete, .failed, .aborted]
+            }
+
+            public static var allCases: [Status] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "pending": self = .pending
+                case "staging": self = .staging
+                case "validating": self = .validating
+                case "matching": self = .matching
+                case "awaiting_review": self = .awaitingReview
+                case "committing": self = .committing
+                case "complete": self = .complete
+                case "failed": self = .failed
+                case "aborted": self = .aborted
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .pending: return "pending"
+                case .staging: return "staging"
+                case .validating: return "validating"
+                case .matching: return "matching"
+                case .awaitingReview: return "awaiting_review"
+                case .committing: return "committing"
+                case .complete: return "complete"
+                case .failed: return "failed"
+                case .aborted: return "aborted"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct InfoMessage: Codable, Equatable, Sendable {
@@ -4278,15 +8161,146 @@ extension OpenAPI {
         }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias InsightDismissalRequest = JSONValue
+    /// Tells its branches apart by `kind`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum InsightDismissalRequest: Codable, Equatable, Sendable {
+        case subscriptionNewOrSubscriptionPriceChange(SubscriptionNewOrSubscriptionPriceChangeVariant)
+        case categoryOutlier(CategoryOutlierVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "kind"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "subscription_new", "subscription_price_change": self = .subscriptionNewOrSubscriptionPriceChange(try SubscriptionNewOrSubscriptionPriceChangeVariant(from: decoder))
+            case "category_outlier": self = .categoryOutlier(try CategoryOutlierVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .subscriptionNewOrSubscriptionPriceChange(let value): try value.encode(to: encoder)
+            case .categoryOutlier(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct SubscriptionNewOrSubscriptionPriceChangeVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let recipientId: RecipientID
+
+            public init(kind: Kind, recipientId: RecipientID) {
+                self.kind = kind
+                self.recipientId = recipientId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case recipientId = "recipient_id"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case subscriptionNew
+                case subscriptionPriceChange
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.subscriptionNew, .subscriptionPriceChange]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "subscription_new": self = .subscriptionNew
+                    case "subscription_price_change": self = .subscriptionPriceChange
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .subscriptionNew: return "subscription_new"
+                    case .subscriptionPriceChange: return "subscription_price_change"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct CategoryOutlierVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let categoryId: CategoryID
+            public let monthKey: String
+
+            public init(kind: Kind, categoryId: CategoryID, monthKey: String) {
+                self.kind = kind
+                self.categoryId = categoryId
+                self.monthKey = monthKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case categoryId = "category_id"
+                case monthKey = "month_key"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case categoryOutlier
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.categoryOutlier]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "category_outlier": self = .categoryOutlier
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .categoryOutlier: return "category_outlier"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct InsightsCountData: Codable, Equatable, Sendable {
         public let count: Int?
-        public let status: String
-        public let computedAt: String?
+        public let status: Status
+        public let computedAt: Instant?
 
-        public init(count: Int? = nil, status: String, computedAt: String? = nil) {
+        public init(count: Int? = nil, status: Status, computedAt: Instant? = nil) {
             self.count = count
             self.status = status
             self.computedAt = computedAt
@@ -4296,6 +8310,47 @@ extension OpenAPI {
             case count = "count"
             case status = "status"
             case computedAt = "computed_at"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case ready
+            case pending
+            case unavailable
+            case unknown(String)
+
+            public static var allKnownCases: [Status] {
+                [.ready, .pending, .unavailable]
+            }
+
+            public static var allCases: [Status] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "ready": self = .ready
+                case "pending": self = .pending
+                case "unavailable": self = .unavailable
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .ready: return "ready"
+                case .pending: return "pending"
+                case .unavailable: return "unavailable"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -4369,9 +8424,9 @@ extension OpenAPI {
     }
 
     public struct InstrumentProviderMapping: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: InstrumentProviderMappingID
         public let instrumentKey: String
-        public let keyType: String
+        public let keyType: KeyType
         public let provider: String
         public let providerSymbol: String?
         public let resolvedName: String?
@@ -4382,7 +8437,7 @@ extension OpenAPI {
         public let createdAt: String?
         public let updatedAt: String?
 
-        public init(id: Int, instrumentKey: String, keyType: String, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: InstrumentProviderMappingID, instrumentKey: String, keyType: KeyType, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
             self.id = id
             self.instrumentKey = instrumentKey
             self.keyType = keyType
@@ -4411,17 +8466,55 @@ extension OpenAPI {
             case createdAt = "created_at"
             case updatedAt = "updated_at"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum KeyType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case isin
+            case `internal`
+            case unknown(String)
+
+            public static var allKnownCases: [KeyType] {
+                [.isin, .`internal`]
+            }
+
+            public static var allCases: [KeyType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "isin": self = .isin
+                case "internal": self = .`internal`
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .isin: return "isin"
+                case .`internal`: return "internal"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct Investment: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: InvestmentID
         public let name: String
         public let symbol: String?
         public let assetClass: OpenAPI.AssetClass
-        public let currency: String
+        public let currency: CurrencyCode
         public let currentPrice: Decimal?
         public let interestRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let cadastralIncome: Decimal?
@@ -4436,13 +8529,13 @@ extension OpenAPI {
         public let priceProviderHistoryPath: String?
         public let priceProviderHistoryTsPath: String?
         public let priceProviderHistoryPricePath: String?
-        public let priceUpdatedAt: String?
+        public let priceUpdatedAt: Instant?
         public let isActive: Bool
         public let showInTicker: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, name: String, symbol: String? = nil, assetClass: OpenAPI.AssetClass, currency: String, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, notes: String? = nil, priceProvider: OpenAPI.PriceProvider? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, priceUpdatedAt: String? = nil, isActive: Bool, showInTicker: Bool, createdAt: String, updatedAt: String) {
+        public init(id: InvestmentID, name: String, symbol: String? = nil, assetClass: OpenAPI.AssetClass, currency: CurrencyCode, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, notes: String? = nil, priceProvider: OpenAPI.PriceProvider? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, priceUpdatedAt: Instant? = nil, isActive: Bool, showInTicker: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -4509,12 +8602,12 @@ extension OpenAPI {
         /// Asset class is immutable on updates; the existing value may be resubmitted.
         public let assetClass: String
         /// Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let currentPrice: Decimal?
         public let interestRate: Decimal?
         public let cadastralIncome: Decimal?
         public let municipalityTaxRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let notes: String?
@@ -4528,7 +8621,7 @@ extension OpenAPI {
         public let priceProviderHistoryTsPath: String?
         public let priceProviderHistoryPricePath: String?
 
-        public init(name: String, symbol: String? = nil, assetClass: String, currency: String? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil) {
+        public init(name: String, symbol: String? = nil, assetClass: String, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil) {
             self.name = name
             self.symbol = symbol
             self.assetClass = assetClass
@@ -4602,11 +8695,11 @@ extension OpenAPI {
     }
 
     public struct InvestmentPriceHistoryData: Codable, Equatable, Sendable {
-        public let investmentId: Int
+        public let investmentId: InvestmentID
         public let provider: String
         public let points: [OpenAPI.InvestmentPriceHistoryPoint]
 
-        public init(investmentId: Int, provider: String, points: [OpenAPI.InvestmentPriceHistoryPoint]) {
+        public init(investmentId: InvestmentID, provider: String, points: [OpenAPI.InvestmentPriceHistoryPoint]) {
             self.investmentId = investmentId
             self.provider = provider
             self.points = points
@@ -4640,12 +8733,12 @@ extension OpenAPI {
         /// Asset class is immutable on updates; the existing value may be resubmitted.
         public let assetClass: OpenAPI.AssetClass?
         /// Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let currentPrice: Decimal?
         public let interestRate: Decimal?
         public let cadastralIncome: Decimal?
         public let municipalityTaxRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let notes: String?
@@ -4660,9 +8753,9 @@ extension OpenAPI {
         public let priceProviderHistoryPricePath: String?
         public let isActive: Bool?
         public let showInTicker: Bool?
-        public let priceUpdatedAt: String?
+        public let priceUpdatedAt: Instant?
 
-        public init(name: String? = nil, symbol: String? = nil, assetClass: OpenAPI.AssetClass? = nil, currency: String? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, isActive: Bool? = nil, showInTicker: Bool? = nil, priceUpdatedAt: String? = nil) {
+        public init(name: String? = nil, symbol: String? = nil, assetClass: OpenAPI.AssetClass? = nil, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, isActive: Bool? = nil, showInTicker: Bool? = nil, priceUpdatedAt: Instant? = nil) {
             self.name = name
             self.symbol = symbol
             self.assetClass = assetClass
@@ -4895,14 +8988,14 @@ extension OpenAPI {
     }
 
     public struct NetWorthByAccountResponse: Codable, Equatable, Sendable {
-        public let currency: String
+        public let currency: CurrencyCode
         /// Ordered by account id, the unassigned row last.
         public let rows: [OpenAPI.NetWorthByAccountRow]
         /// Σ row totals; null while any cash balance is unconverted.
         public let total: Decimal?
-        public let unconvertedAccountIds: [Int]
+        public let unconvertedAccountIds: [AccountID]
 
-        public init(currency: String, rows: [OpenAPI.NetWorthByAccountRow], total: Decimal? = nil, unconvertedAccountIds: [Int]) {
+        public init(currency: CurrencyCode, rows: [OpenAPI.NetWorthByAccountRow], total: Decimal? = nil, unconvertedAccountIds: [AccountID]) {
             self.currency = currency
             self.rows = rows
             self.total = total
@@ -4919,11 +9012,11 @@ extension OpenAPI {
 
     public struct NetWorthByAccountRow: Codable, Equatable, Sendable {
         /// null for holdings not assigned to an account.
-        public let accountId: Int?
+        public let accountId: AccountID?
         /// Account display_name or name; null for the unassigned row or an unknown account.
         public let name: String?
         public let type: String?
-        public let cashCurrency: String?
+        public let cashCurrency: CurrencyCode?
         /// Cash balance at the latest stored rate. 0 for accounts outside net worth, holdings-only
         /// accounts (crypto_exchange, wallet) and the unassigned row; null when the account currency
         /// has no rate.
@@ -4934,7 +9027,7 @@ extension OpenAPI {
         public let total: Decimal?
         public let unconverted: Bool
 
-        public init(accountId: Int? = nil, name: String? = nil, type: String? = nil, cashCurrency: String? = nil, cash: Decimal? = nil, holdings: Decimal, total: Decimal? = nil, unconverted: Bool) {
+        public init(accountId: AccountID? = nil, name: String? = nil, type: String? = nil, cashCurrency: CurrencyCode? = nil, cash: Decimal? = nil, holdings: Decimal, total: Decimal? = nil, unconverted: Bool) {
             self.accountId = accountId
             self.name = name
             self.type = type
@@ -4960,7 +9053,7 @@ extension OpenAPI {
     public struct NetWorthResponse: Codable, Equatable, Sendable {
         /// Additive (ADR-216). Currencies of account balances left out of `liquid`, `liabilities` and
         /// the snapshots because no stored rate converts them; empty when every balance converted.
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
         public let current: Current
         public let monthlyChange: Decimal
         public let monthlyChangePercent: Decimal
@@ -4969,7 +9062,7 @@ extension OpenAPI {
         public let snapshotsLimit: Int?
         public let snapshotsOffset: Int?
 
-        public init(unconvertedCurrencies: [String], current: Current, monthlyChange: Decimal, monthlyChangePercent: Decimal, snapshots: [OpenAPI.NetWorthSnapshot], snapshotsTotal: Int? = nil, snapshotsLimit: Int? = nil, snapshotsOffset: Int? = nil) {
+        public init(unconvertedCurrencies: [CurrencyCode], current: Current, monthlyChange: Decimal, monthlyChangePercent: Decimal, snapshots: [OpenAPI.NetWorthSnapshot], snapshotsTotal: Int? = nil, snapshotsLimit: Int? = nil, snapshotsOffset: Int? = nil) {
             self.unconvertedCurrencies = unconvertedCurrencies
             self.current = current
             self.monthlyChange = monthlyChange
@@ -4996,9 +9089,9 @@ extension OpenAPI {
             public let liabilities: Decimal
             public let investments: Decimal
             public let netWorth: Decimal
-            public let currency: String
+            public let currency: CurrencyCode
 
-            public init(liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal, currency: String) {
+            public init(liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal, currency: CurrencyCode) {
                 self.liquid = liquid
                 self.liabilities = liabilities
                 self.investments = investments
@@ -5017,7 +9110,7 @@ extension OpenAPI {
     }
 
     public struct NetWorthSnapshot: Codable, Equatable, Sendable {
-        public let date: String
+        public let date: CalendarDay
         public let liquid: Decimal
         /// Σ liability-account balances (negative); split out of liquid so debt is not counted as a
         /// liquid asset (ADR-092).
@@ -5025,7 +9118,7 @@ extension OpenAPI {
         public let investments: Decimal
         public let netWorth: Decimal
 
-        public init(date: String, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
+        public init(date: CalendarDay, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
             self.date = date
             self.liquid = liquid
             self.liabilities = liabilities
@@ -5106,13 +9199,13 @@ extension OpenAPI {
     }
 
     public struct OwedTotals: Codable, Equatable, Sendable {
-        public let currency: String
+        public let currency: CurrencyCode
         public let remaining: Decimal
         /// Open splits left out for want of a stored rate.
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
 
-        public init(currency: String, remaining: Decimal, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+        public init(currency: CurrencyCode, remaining: Decimal, unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
             self.currency = currency
             self.remaining = remaining
             self.unconvertedCount = unconvertedCount
@@ -5133,11 +9226,11 @@ extension OpenAPI {
     /// `unconvertedCount` counts their transactions and `unconvertedCurrencies` lists their currencies.
     public struct PeriodPivotConversion: Codable, Equatable, Sendable {
         public let usedHistoricalFallback: Bool
-        public let affectedCurrencies: [String]
+        public let affectedCurrencies: [CurrencyCode]
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
 
-        public init(usedHistoricalFallback: Bool, affectedCurrencies: [String], unconvertedCount: Int, unconvertedCurrencies: [String]) {
+        public init(usedHistoricalFallback: Bool, affectedCurrencies: [CurrencyCode], unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
             self.usedHistoricalFallback = usedHistoricalFallback
             self.affectedCurrencies = affectedCurrencies
             self.unconvertedCount = unconvertedCount
@@ -5154,13 +9247,13 @@ extension OpenAPI {
 
     public struct PlannedLoanScheduleEntry: Codable, Equatable, Sendable {
         public let installmentNumber: Int
-        public let dueDate: String
+        public let dueDate: CalendarDay
         public let paymentAmount: Decimal
         public let principalAmount: Decimal
         public let interestAmount: Decimal
         public let remainingPrincipal: Decimal
 
-        public init(installmentNumber: Int, dueDate: String, paymentAmount: Decimal, principalAmount: Decimal, interestAmount: Decimal, remainingPrincipal: Decimal) {
+        public init(installmentNumber: Int, dueDate: CalendarDay, paymentAmount: Decimal, principalAmount: Decimal, interestAmount: Decimal, remainingPrincipal: Decimal) {
             self.installmentNumber = installmentNumber
             self.dueDate = dueDate
             self.paymentAmount = paymentAmount
@@ -5179,16 +9272,51 @@ extension OpenAPI {
         }
     }
 
-    public enum PlannedLoanType: String, Codable, Sendable, CaseIterable {
-        case amortizing = "amortizing"
-        case fixedPrincipal = "fixed_principal"
-        case interestOnly = "interest_only"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum PlannedLoanType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case amortizing
+        case fixedPrincipal
+        case interestOnly
+        case unknown(String)
+
+        public static var allKnownCases: [PlannedLoanType] {
+            [.amortizing, .fixedPrincipal, .interestOnly]
+        }
+
+        public static var allCases: [PlannedLoanType] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "amortizing": self = .amortizing
+            case "fixed_principal": self = .fixedPrincipal
+            case "interest_only": self = .interestOnly
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .amortizing: return "amortizing"
+            case .fixedPrincipal: return "fixed_principal"
+            case .interestOnly: return "interest_only"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     public struct PlannedTotals: Codable, Equatable, Sendable {
-        public let currency: String
-        public let today: String
-        public let monthEnd: String
+        public let currency: CurrencyCode
+        public let today: CalendarDay
+        public let monthEnd: CalendarDay
         public let restOfMonth: RestOfMonth
         public let monthlyEquivalent: MonthlyEquivalent
         /// Today and the seven days after it (eight entries), every recurring occurrence counted on its
@@ -5198,7 +9326,7 @@ extension OpenAPI {
         /// `rest_of_month`.
         public let nextDaysTotal: NextDaysTotal
 
-        public init(currency: String, today: String, monthEnd: String, restOfMonth: RestOfMonth, monthlyEquivalent: MonthlyEquivalent, nextDays: [NextDaysItem], nextDaysTotal: NextDaysTotal) {
+        public init(currency: CurrencyCode, today: CalendarDay, monthEnd: CalendarDay, restOfMonth: RestOfMonth, monthlyEquivalent: MonthlyEquivalent, nextDays: [NextDaysItem], nextDaysTotal: NextDaysTotal) {
             self.currency = currency
             self.today = today
             self.monthEnd = monthEnd
@@ -5253,13 +9381,13 @@ extension OpenAPI {
         }
 
         public struct NextDaysItem: Codable, Equatable, Sendable {
-            public let date: String
+            public let date: CalendarDay
             public let incoming: Decimal
             /// Negative or zero.
             public let outgoing: Decimal
             public let unconvertedCount: Int
 
-            public init(date: String, incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
+            public init(date: CalendarDay, incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
                 self.date = date
                 self.incoming = incoming
                 self.outgoing = outgoing
@@ -5275,15 +9403,15 @@ extension OpenAPI {
         }
 
         public struct NextDaysTotal: Codable, Equatable, Sendable {
-            public let from: String
-            public let to: String
+            public let from: CalendarDay
+            public let to: CalendarDay
             public let incoming: Decimal
             /// Negative or zero.
             public let outgoing: Decimal
             public let net: Decimal
             public let unconvertedCount: Int
 
-            public init(from: String, to: String, incoming: Decimal, outgoing: Decimal, net: Decimal, unconvertedCount: Int) {
+            public init(from: CalendarDay, to: CalendarDay, incoming: Decimal, outgoing: Decimal, net: Decimal, unconvertedCount: Int) {
                 self.from = from
                 self.to = to
                 self.incoming = incoming
@@ -5304,25 +9432,25 @@ extension OpenAPI {
     }
 
     public struct PlannedTransaction: Codable, Equatable, Sendable {
-        public let id: Int
-        public let plannedDate: String
+        public let id: PlannedTransactionID
+        public let plannedDate: CalendarDay
         /// Display name of the linked account; null or absent when account_id is null
         public let bankAccount: String?
         /// Stable linked account identity
-        public let accountId: Int?
-        public let recipientId: Int?
+        public let accountId: AccountID?
+        public let recipientId: RecipientID?
         public let recipientName: String?
         public let memo: String?
         public let amount: Decimal
-        public let currency: String?
-        public let categoryId: Int?
+        public let currency: CurrencyCode?
+        public let categoryId: CategoryID?
         public let categoryName: String?
         public let comment: String?
         public let url: String?
         public let isRecurring: Bool
         public let recurrencePattern: String?
         /// Recurrence bound — the series completes once the next occurrence would fall past this date.
-        public let recurrenceEndDate: String?
+        public let recurrenceEndDate: CalendarDay?
         /// Recurrence bound — the series completes at this execution count.
         public let maxOccurrences: Int?
         public let isLoan: Bool?
@@ -5330,24 +9458,24 @@ extension OpenAPI {
         public let loanPrincipal: Decimal?
         public let loanAnnualInterestRate: Decimal?
         public let loanTermMonths: Int?
-        public let loanStartDate: String?
+        public let loanStartDate: CalendarDay?
         public let loanPaymentDay: Int?
         public let loanRegularPaymentAmount: Decimal?
-        public let loanFirstPaymentDate: String?
+        public let loanFirstPaymentDate: CalendarDay?
         public let loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]?
         public let isExecuted: Bool
-        public let lastExecutedDate: String?
-        public let executedTransactionId: Int?
+        public let lastExecutedDate: CalendarDay?
+        public let executedTransactionId: TransactionID?
         public let executionCount: Int
         public let executions: [OpenAPI.PlannedTransactionExecution]?
         /// Tags attached to this planned transaction
         public let tags: [OpenAPI.TransactionTagRef]?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, plannedDate: String, bankAccount: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: String? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: String? = nil, executedTransactionId: Int? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: PlannedTransactionID, plannedDate: CalendarDay, bankAccount: String? = nil, accountId: AccountID? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: CalendarDay? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: CalendarDay? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: CalendarDay? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: CalendarDay? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.plannedDate = plannedDate
             self.bankAccount = bankAccount
@@ -5429,20 +9557,20 @@ extension OpenAPI {
     }
 
     public struct PlannedTransactionCreate: Codable, Equatable, Sendable {
-        public let plannedDate: String
+        public let plannedDate: CalendarDay
         /// Canonical account identity
-        public let accountId: Int
-        public let recipientId: Int?
+        public let accountId: AccountID
+        public let recipientId: RecipientID?
         public let memo: String?
         public let amount: Decimal
-        public let currency: String?
-        public let categoryId: Int?
+        public let currency: CurrencyCode?
+        public let categoryId: CategoryID?
         public let comment: String?
         public let url: String?
         public let isRecurring: Bool?
         public let recurrencePattern: String?
         /// Recurrence bound — the series completes once the next occurrence would fall past this date.
-        public let recurrenceEndDate: String?
+        public let recurrenceEndDate: CalendarDay?
         /// Recurrence bound — the series completes at this execution count.
         public let maxOccurrences: Int?
         public let isLoan: Bool?
@@ -5450,12 +9578,12 @@ extension OpenAPI {
         public let loanPrincipal: Decimal?
         public let loanAnnualInterestRate: Decimal?
         public let loanTermMonths: Int?
-        public let loanStartDate: String?
+        public let loanStartDate: CalendarDay?
         public let loanPaymentDay: Int?
         /// Tag slugs to assign
         public let tags: [String]?
 
-        public init(plannedDate: String, accountId: Int, recipientId: Int? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+        public init(plannedDate: CalendarDay, accountId: AccountID, recipientId: RecipientID? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: CalendarDay? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: CalendarDay? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
             self.plannedDate = plannedDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -5505,12 +9633,12 @@ extension OpenAPI {
     }
 
     public struct PlannedTransactionExecution: Codable, Equatable, Sendable {
-        public let id: Int
-        public let executedTransactionId: Int
-        public let executionDate: String
-        public let createdAt: String?
+        public let id: PlannedTransactionExecutionID
+        public let executedTransactionId: TransactionID
+        public let executionDate: CalendarDay
+        public let createdAt: Instant?
 
-        public init(id: Int, executedTransactionId: Int, executionDate: String, createdAt: String? = nil) {
+        public init(id: PlannedTransactionExecutionID, executedTransactionId: TransactionID, executionDate: CalendarDay, createdAt: Instant? = nil) {
             self.id = id
             self.executedTransactionId = executedTransactionId
             self.executionDate = executionDate
@@ -5637,7 +9765,7 @@ extension OpenAPI {
     }
 
     public struct PortfolioAssetGroupTotals: Codable, Equatable, Sendable {
-        public let group: String
+        public let group: Group
         public let assetClasses: [String]
         public let holdingCount: Int
         /// Σ currentValue.
@@ -5671,7 +9799,7 @@ extension OpenAPI {
         public let monthlyRentRateMissing: Bool
         public let usedFallbackRate: Bool
 
-        public init(group: String, assetClasses: [String], holdingCount: Int, totalPortfolioValue: Decimal, totalInvested: Decimal, totalGainLoss: Decimal, totalRealizedGain: Decimal, totalUnrealizedGain: Decimal, totalIncome: Decimal, totalDividends: Decimal, totalInKindIncome: Decimal, totalFees: Decimal, totalTaxes: Decimal, totalFeesAndTaxes: Decimal, netReturnExcludingIncome: Decimal, netReturnWithDividends: Decimal, totalAppreciation: Decimal, totalPropertyReturn: Decimal, totalAccruedInterest: Decimal, totalProjectedAnnualInterest: Decimal, valueWeightedInterestRate: Decimal, estimatedMonthlyRent: Decimal, monthlyRentRateMissing: Bool, usedFallbackRate: Bool) {
+        public init(group: Group, assetClasses: [String], holdingCount: Int, totalPortfolioValue: Decimal, totalInvested: Decimal, totalGainLoss: Decimal, totalRealizedGain: Decimal, totalUnrealizedGain: Decimal, totalIncome: Decimal, totalDividends: Decimal, totalInKindIncome: Decimal, totalFees: Decimal, totalTaxes: Decimal, totalFeesAndTaxes: Decimal, netReturnExcludingIncome: Decimal, netReturnWithDividends: Decimal, totalAppreciation: Decimal, totalPropertyReturn: Decimal, totalAccruedInterest: Decimal, totalProjectedAnnualInterest: Decimal, valueWeightedInterestRate: Decimal, estimatedMonthlyRent: Decimal, monthlyRentRateMissing: Bool, usedFallbackRate: Bool) {
             self.group = group
             self.assetClasses = assetClasses
             self.holdingCount = holdingCount
@@ -5724,19 +9852,66 @@ extension OpenAPI {
             case monthlyRentRateMissing = "monthlyRentRateMissing"
             case usedFallbackRate = "usedFallbackRate"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Group: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case stocksEtfs
+            case crypto
+            case metals
+            case realEstate
+            case savingsBonds
+            case unknown(String)
+
+            public static var allKnownCases: [Group] {
+                [.stocksEtfs, .crypto, .metals, .realEstate, .savingsBonds]
+            }
+
+            public static var allCases: [Group] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "stocks_etfs": self = .stocksEtfs
+                case "crypto": self = .crypto
+                case "metals": self = .metals
+                case "real_estate": self = .realEstate
+                case "savings_bonds": self = .savingsBonds
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .stocksEtfs: return "stocks_etfs"
+                case .crypto: return "crypto"
+                case .metals: return "metals"
+                case .realEstate: return "real_estate"
+                case .savingsBonds: return "savings_bonds"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioBrokerRetagReceipt: Codable, Equatable, Sendable {
         public let idempotencyKey: String
-        public let fromAccountId: Int?
-        public let toAccountId: Int?
-        public let transactionIds: [Int]
+        public let fromAccountId: AccountID?
+        public let toAccountId: AccountID?
+        public let transactionIds: [TransactionID]
         public let previousAssignments: [PreviousAssignmentsItem]
         public let selectedCount: Int
         public let changedCount: Int
         public let replayed: Bool
 
-        public init(idempotencyKey: String, fromAccountId: Int? = nil, toAccountId: Int? = nil, transactionIds: [Int], previousAssignments: [PreviousAssignmentsItem], selectedCount: Int, changedCount: Int, replayed: Bool) {
+        public init(idempotencyKey: String, fromAccountId: AccountID? = nil, toAccountId: AccountID? = nil, transactionIds: [TransactionID], previousAssignments: [PreviousAssignmentsItem], selectedCount: Int, changedCount: Int, replayed: Bool) {
             self.idempotencyKey = idempotencyKey
             self.fromAccountId = fromAccountId
             self.toAccountId = toAccountId
@@ -5759,10 +9934,10 @@ extension OpenAPI {
         }
 
         public struct PreviousAssignmentsItem: Codable, Equatable, Sendable {
-            public let transactionId: Int
-            public let accountId: Int?
+            public let transactionId: TransactionID
+            public let accountId: AccountID?
 
-            public init(transactionId: Int, accountId: Int? = nil) {
+            public init(transactionId: TransactionID, accountId: AccountID? = nil) {
                 self.transactionId = transactionId
                 self.accountId = accountId
             }
@@ -5775,8 +9950,8 @@ extension OpenAPI {
     }
 
     public struct PortfolioExposure: Codable, Equatable, Sendable {
-        public let currency: String
-        public let computedAt: String
+        public let currency: CurrencyCode
+        public let computedAt: Instant
         public let totalValue: Decimal
         public let uncoveredValue: Decimal
         public let uncoveredWeightPercent: Decimal
@@ -5789,7 +9964,7 @@ extension OpenAPI {
         public let warnings: [JSONValue]
         public let scopeNotes: [String]
 
-        public init(currency: String, computedAt: String, totalValue: Decimal, uncoveredValue: Decimal, uncoveredWeightPercent: Decimal, coveredCashValue: Decimal, coveredCashWeightPercent: Decimal, fundSources: [OpenAPI.PortfolioExposureFundSource], issuer: OpenAPI.PortfolioExposureDimension, sector: OpenAPI.PortfolioExposureDimension, issuerCountry: OpenAPI.PortfolioExposureDimension, warnings: [JSONValue], scopeNotes: [String]) {
+        public init(currency: CurrencyCode, computedAt: Instant, totalValue: Decimal, uncoveredValue: Decimal, uncoveredWeightPercent: Decimal, coveredCashValue: Decimal, coveredCashWeightPercent: Decimal, fundSources: [OpenAPI.PortfolioExposureFundSource], issuer: OpenAPI.PortfolioExposureDimension, sector: OpenAPI.PortfolioExposureDimension, issuerCountry: OpenAPI.PortfolioExposureDimension, warnings: [JSONValue], scopeNotes: [String]) {
             self.currency = currency
             self.computedAt = computedAt
             self.totalValue = totalValue
@@ -5837,11 +10012,11 @@ extension OpenAPI {
         }
 
         public struct FundDocumentsItem: Codable, Equatable, Sendable {
-            public let investmentId: Int
+            public let investmentId: InvestmentID
             public let shareClassIdentifier: OpenAPI.PortfolioSecurityIdentifier
             public let document: OpenAPI.FundHoldingsDocument
 
-            public init(investmentId: Int, shareClassIdentifier: OpenAPI.PortfolioSecurityIdentifier, document: OpenAPI.FundHoldingsDocument) {
+            public init(investmentId: InvestmentID, shareClassIdentifier: OpenAPI.PortfolioSecurityIdentifier, document: OpenAPI.FundHoldingsDocument) {
                 self.investmentId = investmentId
                 self.shareClassIdentifier = shareClassIdentifier
                 self.document = document
@@ -5857,7 +10032,7 @@ extension OpenAPI {
 
     /// Exactly one of investmentId or identifier must be present.
     public struct PortfolioExposureClassification: Codable, Equatable, Sendable {
-        public let investmentId: Int?
+        public let investmentId: InvestmentID?
         public let identifier: OpenAPI.PortfolioSecurityIdentifier?
         public let issuerId: String
         public let issuerName: String
@@ -5865,7 +10040,7 @@ extension OpenAPI {
         public let issuerCountryCode: String?
         public let sourceLabel: String
 
-        public init(investmentId: Int? = nil, identifier: OpenAPI.PortfolioSecurityIdentifier? = nil, issuerId: String, issuerName: String, sector: String? = nil, issuerCountryCode: String? = nil, sourceLabel: String) {
+        public init(investmentId: InvestmentID? = nil, identifier: OpenAPI.PortfolioSecurityIdentifier? = nil, issuerId: String, issuerName: String, sector: String? = nil, issuerCountryCode: String? = nil, sourceLabel: String) {
             self.investmentId = investmentId
             self.identifier = identifier
             self.issuerId = issuerId
@@ -5887,15 +10062,15 @@ extension OpenAPI {
     }
 
     public struct PortfolioExposureContribution: Codable, Equatable, Sendable {
-        public let sourceType: String
-        public let investmentId: Int
+        public let sourceType: SourceType
+        public let investmentId: InvestmentID
         public let investmentName: String
         public let sourceFundName: String?
         public let amount: Decimal
-        public let sourceAsOfDate: String?
+        public let sourceAsOfDate: CalendarDay?
         public let stale: Bool
 
-        public init(sourceType: String, investmentId: Int, investmentName: String, sourceFundName: String? = nil, amount: Decimal, sourceAsOfDate: String? = nil, stale: Bool) {
+        public init(sourceType: SourceType, investmentId: InvestmentID, investmentName: String, sourceFundName: String? = nil, amount: Decimal, sourceAsOfDate: CalendarDay? = nil, stale: Bool) {
             self.sourceType = sourceType
             self.investmentId = investmentId
             self.investmentName = investmentName
@@ -5913,6 +10088,44 @@ extension OpenAPI {
             case amount = "amount"
             case sourceAsOfDate = "sourceAsOfDate"
             case stale = "stale"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum SourceType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case direct
+            case fund
+            case unknown(String)
+
+            public static var allKnownCases: [SourceType] {
+                [.direct, .fund]
+            }
+
+            public static var allCases: [SourceType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "direct": self = .direct
+                case "fund": self = .fund
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .direct: return "direct"
+                case .fund: return "fund"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -5965,16 +10178,16 @@ extension OpenAPI {
     }
 
     public struct PortfolioExposureFundSource: Codable, Equatable, Sendable {
-        public let investmentId: Int
+        public let investmentId: InvestmentID
         public let investmentName: String
-        public let asOfDate: String
-        public let evaluatedAt: String
+        public let asOfDate: CalendarDay
+        public let evaluatedAt: CalendarDay
         public let ageDays: Int
         public let maximumAgeDays: Int
         public let stale: Bool
-        public let coverageStatus: String
+        public let coverageStatus: CoverageStatus
 
-        public init(investmentId: Int, investmentName: String, asOfDate: String, evaluatedAt: String, ageDays: Int, maximumAgeDays: Int, stale: Bool, coverageStatus: String) {
+        public init(investmentId: InvestmentID, investmentName: String, asOfDate: CalendarDay, evaluatedAt: CalendarDay, ageDays: Int, maximumAgeDays: Int, stale: Bool, coverageStatus: CoverageStatus) {
             self.investmentId = investmentId
             self.investmentName = investmentName
             self.asOfDate = asOfDate
@@ -5995,23 +10208,61 @@ extension OpenAPI {
             case stale = "stale"
             case coverageStatus = "coverageStatus"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum CoverageStatus: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case complete
+            case partial
+            case unknown(String)
+
+            public static var allKnownCases: [CoverageStatus] {
+                [.complete, .partial]
+            }
+
+            public static var allCases: [CoverageStatus] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "complete": self = .complete
+                case "partial": self = .partial
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .complete: return "complete"
+                case .partial: return "partial"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioImportBatch: Codable, Equatable, Sendable {
-        public let id: String
+        public let id: PortfolioImportBatchID
         public let adapterName: String
         public let sourceFilename: String?
         public let sourceSizeBytes: Int?
-        public let status: String
+        public let status: Status
         public let rowsTotal: Int
         public let rowsImported: Int
         public let rowsDuplicate: Int
         public let rowsError: Int
         public let errorSummary: String?
-        public let startedAt: String
-        public let completedAt: String?
+        public let startedAt: Instant
+        public let completedAt: Instant?
 
-        public init(id: String, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: String, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil) {
+        public init(id: PortfolioImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil) {
             self.id = id
             self.adapterName = adapterName
             self.sourceFilename = sourceFilename
@@ -6040,18 +10291,80 @@ extension OpenAPI {
             case startedAt = "started_at"
             case completedAt = "completed_at"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case pending
+            case staging
+            case validating
+            case matching
+            case committing
+            case complete
+            case completeWithErrors
+            case failed
+            case aborted
+            case awaitingReview
+            case unknown(String)
+
+            public static var allKnownCases: [Status] {
+                [.pending, .staging, .validating, .matching, .committing, .complete, .completeWithErrors, .failed, .aborted, .awaitingReview]
+            }
+
+            public static var allCases: [Status] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "pending": self = .pending
+                case "staging": self = .staging
+                case "validating": self = .validating
+                case "matching": self = .matching
+                case "committing": self = .committing
+                case "complete": self = .complete
+                case "complete_with_errors": self = .completeWithErrors
+                case "failed": self = .failed
+                case "aborted": self = .aborted
+                case "awaiting_review": self = .awaitingReview
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .pending: return "pending"
+                case .staging: return "staging"
+                case .validating: return "validating"
+                case .matching: return "matching"
+                case .committing: return "committing"
+                case .complete: return "complete"
+                case .completeWithErrors: return "complete_with_errors"
+                case .failed: return "failed"
+                case .aborted: return "aborted"
+                case .awaitingReview: return "awaiting_review"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioImportPreviewData: Codable, Equatable, Sendable {
-        public let batchId: Int
-        public let accountId: Int?
+        public let batchId: PortfolioImportBatchNumericID
+        public let accountId: AccountID?
         public let accountName: String?
         /// True only when account_id still names an active portfolio account.
         public let accountValid: Bool
         public let groups: [JSONValue]
         public let totals: [String: Int]
 
-        public init(batchId: Int, accountId: Int? = nil, accountName: String? = nil, accountValid: Bool, groups: [JSONValue], totals: [String: Int]) {
+        public init(batchId: PortfolioImportBatchNumericID, accountId: AccountID? = nil, accountName: String? = nil, accountValid: Bool, groups: [JSONValue], totals: [String: Int]) {
             self.batchId = batchId
             self.accountId = accountId
             self.accountName = accountName
@@ -6124,9 +10437,9 @@ extension OpenAPI {
             public let duplicates: Int
             public let adopted: Int
             public let errors: Int
-            public let batchId: Int
+            public let batchId: PortfolioImportBatchNumericID
 
-            public init(imported: Int, duplicates: Int, adopted: Int, errors: Int, batchId: Int) {
+            public init(imported: Int, duplicates: Int, adopted: Int, errors: Int, batchId: PortfolioImportBatchNumericID) {
                 self.imported = imported
                 self.duplicates = duplicates
                 self.adopted = adopted
@@ -6145,8 +10458,8 @@ extension OpenAPI {
     }
 
     public struct PortfolioImportReconciliationPlan: Codable, Equatable, Sendable {
-        public let batchIds: [Int]
-        public let adoptPolicy: String?
+        public let batchIds: [PortfolioImportBatchNumericID]
+        public let adoptPolicy: AdoptPolicy?
         public let batchPolicies: [BatchPoliciesItem]
         /// The applied row_choices, sorted by batch and row.
         public let rowChoices: [RowChoicesItem]
@@ -6184,7 +10497,7 @@ extension OpenAPI {
         /// Counts of actions in this plan by action kind.
         public let summary: [String: Int]
 
-        public init(batchIds: [Int], adoptPolicy: String? = nil, batchPolicies: [BatchPoliciesItem], rowChoices: [RowChoicesItem], ready: Bool, actions: [ActionsItem], blockers: [JSONValue], summary: [String: Int]) {
+        public init(batchIds: [PortfolioImportBatchNumericID], adoptPolicy: AdoptPolicy? = nil, batchPolicies: [BatchPoliciesItem], rowChoices: [RowChoicesItem], ready: Bool, actions: [ActionsItem], blockers: [JSONValue], summary: [String: Int]) {
             self.batchIds = batchIds
             self.adoptPolicy = adoptPolicy
             self.batchPolicies = batchPolicies
@@ -6206,11 +10519,49 @@ extension OpenAPI {
             case summary = "summary"
         }
 
-        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
-            public let batchId: Int
-            public let adoptPolicy: String
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AdoptPolicy: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case preserveExisting
+            case preferSource
+            case unknown(String)
 
-            public init(batchId: Int, adoptPolicy: String) {
+            public static var allKnownCases: [AdoptPolicy] {
+                [.preserveExisting, .preferSource]
+            }
+
+            public static var allCases: [AdoptPolicy] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "preserve_existing": self = .preserveExisting
+                case "prefer_source": self = .preferSource
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .preserveExisting: return "preserve_existing"
+                case .preferSource: return "prefer_source"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+            public let batchId: PortfolioImportBatchNumericID
+            public let adoptPolicy: AdoptPolicy
+
+            public init(batchId: PortfolioImportBatchNumericID, adoptPolicy: AdoptPolicy) {
                 self.batchId = batchId
                 self.adoptPolicy = adoptPolicy
             }
@@ -6219,14 +10570,52 @@ extension OpenAPI {
                 case batchId = "batchId"
                 case adoptPolicy = "adoptPolicy"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum AdoptPolicy: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case preserveExisting
+                case preferSource
+                case unknown(String)
+
+                public static var allKnownCases: [AdoptPolicy] {
+                    [.preserveExisting, .preferSource]
+                }
+
+                public static var allCases: [AdoptPolicy] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "preserve_existing": self = .preserveExisting
+                    case "prefer_source": self = .preferSource
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .preserveExisting: return "preserve_existing"
+                    case .preferSource: return "prefer_source"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
 
         public struct RowChoicesItem: Codable, Equatable, Sendable {
-            public let batchId: Int
-            public let rowId: Int
-            public let choice: String
+            public let batchId: PortfolioImportBatchNumericID
+            public let rowId: PortfolioImportRowID
+            public let choice: Choice
 
-            public init(batchId: Int, rowId: Int, choice: String) {
+            public init(batchId: PortfolioImportBatchNumericID, rowId: PortfolioImportRowID, choice: Choice) {
                 self.batchId = batchId
                 self.rowId = rowId
                 self.choice = choice
@@ -6237,24 +10626,62 @@ extension OpenAPI {
                 case rowId = "rowId"
                 case choice = "choice"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Choice: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case keepBoth
+                case sameTransaction
+                case unknown(String)
+
+                public static var allKnownCases: [Choice] {
+                    [.keepBoth, .sameTransaction]
+                }
+
+                public static var allCases: [Choice] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "keep_both": self = .keepBoth
+                    case "same_transaction": self = .sameTransaction
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .keepBoth: return "keep_both"
+                    case .sameTransaction: return "same_transaction"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
 
         public struct ActionsItem: Codable, Equatable, Sendable {
-            public let batchId: Int
-            public let rowId: Int
+            public let batchId: PortfolioImportBatchNumericID
+            public let rowId: PortfolioImportRowID
             public let rowOrdinal: Int
             public let action: String
-            public let investmentId: Int?
+            public let investmentId: InvestmentID?
             /// Existing canonical transaction for an adoption or an owned duplicate.
-            public let existingTransactionId: Int?
+            public let existingTransactionId: TransactionID?
             /// Settled against another export of the same broker history or a manual cash entry.
             public let crossFormat: Bool?
             /// The existing transaction is brokerage cash, not a portfolio transaction.
             public let cash: Bool?
             /// For duplicate_source, the selected staged row that records the same event.
-            public let duplicateOfRowId: Int?
+            public let duplicateOfRowId: PortfolioImportRowID?
 
-            public init(batchId: Int, rowId: Int, rowOrdinal: Int, action: String, investmentId: Int? = nil, existingTransactionId: Int? = nil, crossFormat: Bool? = nil, cash: Bool? = nil, duplicateOfRowId: Int? = nil) {
+            public init(batchId: PortfolioImportBatchNumericID, rowId: PortfolioImportRowID, rowOrdinal: Int, action: String, investmentId: InvestmentID? = nil, existingTransactionId: TransactionID? = nil, crossFormat: Bool? = nil, cash: Bool? = nil, duplicateOfRowId: PortfolioImportRowID? = nil) {
                 self.batchId = batchId
                 self.rowId = rowId
                 self.rowOrdinal = rowOrdinal
@@ -6283,10 +10710,10 @@ extension OpenAPI {
     /// Shared preview and commit body. Unknown fields, including the removed reconciliation_scope,
     /// cash_funding_policy and expected_plan_fingerprint, are rejected with 400.
     public struct PortfolioImportReconciliationRequest: Codable, Equatable, Sendable {
-        public let batchIds: [Int]
+        public let batchIds: [PortfolioImportBatchNumericID]
         /// Preserve recorded facts, or use proven source facts while preserving known original transfer
         /// basis.
-        public let adoptPolicy: String?
+        public let adoptPolicy: AdoptPolicy?
         /// Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once;
         /// IDs outside batch_ids reject.
         public let batchPolicies: [BatchPoliciesItem]?
@@ -6299,7 +10726,7 @@ extension OpenAPI {
         /// Each row may occur at most once; a row outside the selected batches rejects with 400.
         public let rowChoices: [RowChoicesItem]?
 
-        public init(batchIds: [Int], adoptPolicy: String? = nil, batchPolicies: [BatchPoliciesItem]? = nil, rowChoices: [RowChoicesItem]? = nil) {
+        public init(batchIds: [PortfolioImportBatchNumericID], adoptPolicy: AdoptPolicy? = nil, batchPolicies: [BatchPoliciesItem]? = nil, rowChoices: [RowChoicesItem]? = nil) {
             self.batchIds = batchIds
             self.adoptPolicy = adoptPolicy
             self.batchPolicies = batchPolicies
@@ -6313,11 +10740,51 @@ extension OpenAPI {
             case rowChoices = "row_choices"
         }
 
-        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
-            public let batchId: Int
-            public let adoptPolicy: String
+        /// Preserve recorded facts, or use proven source facts while preserving known original transfer
+        /// basis.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AdoptPolicy: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case preserveExisting
+            case preferSource
+            case unknown(String)
 
-            public init(batchId: Int, adoptPolicy: String) {
+            public static var allKnownCases: [AdoptPolicy] {
+                [.preserveExisting, .preferSource]
+            }
+
+            public static var allCases: [AdoptPolicy] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "preserve_existing": self = .preserveExisting
+                case "prefer_source": self = .preferSource
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .preserveExisting: return "preserve_existing"
+                case .preferSource: return "prefer_source"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+            public let batchId: PortfolioImportBatchNumericID
+            public let adoptPolicy: AdoptPolicy
+
+            public init(batchId: PortfolioImportBatchNumericID, adoptPolicy: AdoptPolicy) {
                 self.batchId = batchId
                 self.adoptPolicy = adoptPolicy
             }
@@ -6326,14 +10793,52 @@ extension OpenAPI {
                 case batchId = "batch_id"
                 case adoptPolicy = "adopt_policy"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum AdoptPolicy: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case preserveExisting
+                case preferSource
+                case unknown(String)
+
+                public static var allKnownCases: [AdoptPolicy] {
+                    [.preserveExisting, .preferSource]
+                }
+
+                public static var allCases: [AdoptPolicy] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "preserve_existing": self = .preserveExisting
+                    case "prefer_source": self = .preferSource
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .preserveExisting: return "preserve_existing"
+                    case .preferSource: return "prefer_source"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
 
         public struct RowChoicesItem: Codable, Equatable, Sendable {
-            public let batchId: Int
-            public let rowId: Int
-            public let choice: String
+            public let batchId: PortfolioImportBatchNumericID
+            public let rowId: PortfolioImportRowID
+            public let choice: Choice
 
-            public init(batchId: Int, rowId: Int, choice: String) {
+            public init(batchId: PortfolioImportBatchNumericID, rowId: PortfolioImportRowID, choice: Choice) {
                 self.batchId = batchId
                 self.rowId = rowId
                 self.choice = choice
@@ -6344,17 +10849,55 @@ extension OpenAPI {
                 case rowId = "row_id"
                 case choice = "choice"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Choice: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case keepBoth
+                case sameTransaction
+                case unknown(String)
+
+                public static var allKnownCases: [Choice] {
+                    [.keepBoth, .sameTransaction]
+                }
+
+                public static var allCases: [Choice] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "keep_both": self = .keepBoth
+                    case "same_transaction": self = .sameTransaction
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .keepBoth: return "keep_both"
+                    case .sameTransaction: return "same_transaction"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct PortfolioParserConfig: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: PortfolioParserConfigID
         public let name: String
         public let config: Config
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
 
-        public init(id: Int, name: String, config: Config, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: PortfolioParserConfigID, name: String, config: Config, createdAt: Instant? = nil, updatedAt: Instant? = nil) {
             self.id = id
             self.name = name
             self.config = config
@@ -6372,15 +10915,15 @@ extension OpenAPI {
 
         public struct Config: Codable, Equatable, Sendable {
             /// Optional active portfolio account used as the file-level broker destination.
-            public let accountId: Int?
+            public let accountId: AccountID?
             /// Optional custody account receiving asset withdrawals.
-            public let transferDestinationAccountId: Int?
+            public let transferDestinationAccountId: AccountID?
             /// Optional custody account supplying incoming asset returns.
-            public let transferOriginAccountId: Int?
+            public let transferOriginAccountId: AccountID?
             /// Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
-            public let yieldBasisPolicy: String?
+            public let yieldBasisPolicy: YieldBasisPolicy?
 
-            public init(accountId: Int? = nil, transferDestinationAccountId: Int? = nil, transferOriginAccountId: Int? = nil, yieldBasisPolicy: String? = nil) {
+            public init(accountId: AccountID? = nil, transferDestinationAccountId: AccountID? = nil, transferOriginAccountId: AccountID? = nil, yieldBasisPolicy: YieldBasisPolicy? = nil) {
                 self.accountId = accountId
                 self.transferDestinationAccountId = transferDestinationAccountId
                 self.transferOriginAccountId = transferOriginAccountId
@@ -6393,16 +10936,52 @@ extension OpenAPI {
                 case transferOriginAccountId = "transferOriginAccountId"
                 case yieldBasisPolicy = "yieldBasisPolicy"
             }
+
+            /// Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum YieldBasisPolicy: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case zero
+                case unknown(String)
+
+                public static var allKnownCases: [YieldBasisPolicy] {
+                    [.zero]
+                }
+
+                public static var allCases: [YieldBasisPolicy] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "zero": self = .zero
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .zero: return "zero"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
     public struct PortfolioSecurityIdentifier: Codable, Equatable, Sendable {
-        public let type: String
+        public let type: PortfolioSecurityIdentifierType
         public let value: String
         /// Allowed only for ticker identifiers.
         public let exchange: String?
 
-        public init(type: String, value: String, exchange: String? = nil) {
+        public init(type: PortfolioSecurityIdentifierType, value: String, exchange: String? = nil) {
             self.type = type
             self.value = value
             self.exchange = exchange
@@ -6413,12 +10992,62 @@ extension OpenAPI {
             case value = "value"
             case exchange = "exchange"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PortfolioSecurityIdentifierType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case isin
+            case ticker
+            case sedol
+            case cusip
+            case lei
+            case proprietary
+            case unknown(String)
+
+            public static var allKnownCases: [PortfolioSecurityIdentifierType] {
+                [.isin, .ticker, .sedol, .cusip, .lei, .proprietary]
+            }
+
+            public static var allCases: [PortfolioSecurityIdentifierType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "isin": self = .isin
+                case "ticker": self = .ticker
+                case "sedol": self = .sedol
+                case "cusip": self = .cusip
+                case "lei": self = .lei
+                case "proprietary": self = .proprietary
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .isin: return "isin"
+                case .ticker: return "ticker"
+                case .sedol: return "sedol"
+                case .cusip: return "cusip"
+                case .lei: return "lei"
+                case .proprietary: return "proprietary"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioSummaryAccountTotals: Codable, Equatable, Sendable {
-        public let accountId: Int?
+        public let accountId: AccountID?
         /// Stable machine-readable identity for accountless contributions.
-        public let assignment: String
+        public let assignment: Assignment
         public let oversold: Bool
         public let currentValue: Decimal
         public let totalInvested: Decimal
@@ -6426,7 +11055,7 @@ extension OpenAPI {
         public let unrealizedGain: Decimal
         public let gainLoss: Decimal
 
-        public init(accountId: Int? = nil, assignment: String, oversold: Bool, currentValue: Decimal, totalInvested: Decimal, realizedGain: Decimal, unrealizedGain: Decimal, gainLoss: Decimal) {
+        public init(accountId: AccountID? = nil, assignment: Assignment, oversold: Bool, currentValue: Decimal, totalInvested: Decimal, realizedGain: Decimal, unrealizedGain: Decimal, gainLoss: Decimal) {
             self.accountId = accountId
             self.assignment = assignment
             self.oversold = oversold
@@ -6447,14 +11076,53 @@ extension OpenAPI {
             case unrealizedGain = "unrealizedGain"
             case gainLoss = "gainLoss"
         }
+
+        /// Stable machine-readable identity for accountless contributions.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Assignment: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case account
+            case unassigned
+            case unknown(String)
+
+            public static var allKnownCases: [Assignment] {
+                [.account, .unassigned]
+            }
+
+            public static var allCases: [Assignment] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "account": self = .account
+                case "unassigned": self = .unassigned
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .account: return "account"
+                case .unassigned: return "unassigned"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioSummaryByAccountItem: Codable, Equatable, Sendable {
-        public let accountId: Int?
+        public let accountId: AccountID?
         /// Stable machine-readable identity for accountless contributions.
-        public let assignment: String
+        public let assignment: Assignment
         /// Lot-bearing position result or standalone income/adjustment partition.
-        public let contributionKind: String
+        public let contributionKind: ContributionKind
         public let oversold: Bool
         public let currentValue: Decimal
         public let totalInvested: Decimal
@@ -6462,7 +11130,7 @@ extension OpenAPI {
         public let unrealizedGain: Decimal
         public let gainLoss: Decimal
 
-        public init(accountId: Int? = nil, assignment: String, contributionKind: String, oversold: Bool, currentValue: Decimal, totalInvested: Decimal, realizedGain: Decimal, unrealizedGain: Decimal, gainLoss: Decimal) {
+        public init(accountId: AccountID? = nil, assignment: Assignment, contributionKind: ContributionKind, oversold: Bool, currentValue: Decimal, totalInvested: Decimal, realizedGain: Decimal, unrealizedGain: Decimal, gainLoss: Decimal) {
             self.accountId = accountId
             self.assignment = assignment
             self.contributionKind = contributionKind
@@ -6485,15 +11153,93 @@ extension OpenAPI {
             case unrealizedGain = "unrealizedGain"
             case gainLoss = "gainLoss"
         }
+
+        /// Stable machine-readable identity for accountless contributions.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Assignment: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case account
+            case unassigned
+            case unknown(String)
+
+            public static var allKnownCases: [Assignment] {
+                [.account, .unassigned]
+            }
+
+            public static var allCases: [Assignment] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "account": self = .account
+                case "unassigned": self = .unassigned
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .account: return "account"
+                case .unassigned: return "unassigned"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// Lot-bearing position result or standalone income/adjustment partition.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ContributionKind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case position
+            case nonPosition
+            case unknown(String)
+
+            public static var allKnownCases: [ContributionKind] {
+                [.position, .nonPosition]
+            }
+
+            public static var allCases: [ContributionKind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "position": self = .position
+                case "non_position": self = .nonPosition
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .position: return "position"
+                case .nonPosition: return "non_position"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioSummaryData: Codable, Equatable, Sendable {
-        public let currency: String
-        public let computedAt: String
+        public let currency: CurrencyCode
+        public let computedAt: Instant
         /// Earliest ordinary transaction on active investments, independent of selected performance
         /// chart period and investment creation dates. Custody/adjustment event dates and inactive
         /// investments are excluded. Omitted when no qualifying transaction exists.
-        public let firstInvestmentDate: String?
+        public let firstInvestmentDate: CalendarDay?
         public let totals: OpenAPI.PortfolioSummaryTotals
         /// Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote
         /// FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind
@@ -6523,7 +11269,7 @@ extension OpenAPI {
         /// remain unchanged.
         public let archivedInKindIncome: [ArchivedInKindIncomeItem]?
 
-        public init(currency: String, computedAt: String, firstInvestmentDate: String? = nil, totals: OpenAPI.PortfolioSummaryTotals, archivedPresentation: [OpenAPI.PortfolioSummaryItem]? = nil, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals], byAssetClass: [OpenAPI.PortfolioAssetClassTotals], byAssetGroup: [OpenAPI.PortfolioAssetGroupTotals], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
+        public init(currency: CurrencyCode, computedAt: Instant, firstInvestmentDate: CalendarDay? = nil, totals: OpenAPI.PortfolioSummaryTotals, archivedPresentation: [OpenAPI.PortfolioSummaryItem]? = nil, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals], byAssetClass: [OpenAPI.PortfolioAssetClassTotals], byAssetGroup: [OpenAPI.PortfolioAssetGroupTotals], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
             self.currency = currency
             self.computedAt = computedAt
             self.firstInvestmentDate = firstInvestmentDate
@@ -6576,10 +11322,10 @@ extension OpenAPI {
             }
 
             public struct ByAccountItem: Codable, Equatable, Sendable {
-                public let accountId: Int
+                public let accountId: AccountID
                 public let total: Decimal
 
-                public init(accountId: Int, total: Decimal) {
+                public init(accountId: AccountID, total: Decimal) {
                     self.accountId = accountId
                     self.total = total
                 }
@@ -6592,10 +11338,10 @@ extension OpenAPI {
         }
 
         public struct ArchivedInKindIncomeItem: Codable, Equatable, Sendable {
-            public let id: Int
+            public let id: InvestmentID
             public let totalInKindIncome: Decimal
 
-            public init(id: Int, totalInKindIncome: Decimal) {
+            public init(id: InvestmentID, totalInKindIncome: Decimal) {
                 self.id = id
                 self.totalInKindIncome = totalInKindIncome
             }
@@ -6626,13 +11372,13 @@ extension OpenAPI {
     }
 
     public struct PortfolioSummaryItem: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: InvestmentID
         public let name: String?
         public let symbol: String?
         public let asset_class: String?
         public let assetClass: String?
-        public let currency: String?
-        public let originalCurrency: String?
+        public let currency: CurrencyCode?
+        public let originalCurrency: CurrencyCode?
         public let summarySource: String?
         public let isActive: Bool?
         /// A transaction-date rate was missing (current-rate fallback), or the holding's currency has
@@ -6678,8 +11424,8 @@ extension OpenAPI {
         /// Real Estate return shown per property, totalAppreciation + totalIncome − totalFees −
         /// totalTaxes, from the rounded fields.
         public let propertyReturn: Decimal?
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         /// Current units including custody fees and unit adjustments, rounded to eight decimal places.
         public let totalUnits: Decimal?
         /// Literal income already represented by acquired units, converted to the response currency.
@@ -6697,7 +11443,7 @@ extension OpenAPI {
         /// these instead of adding byAccount rows.
         public let accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]
 
-        public init(id: Int, name: String? = nil, symbol: String? = nil, asset_class: String? = nil, assetClass: String? = nil, currency: String? = nil, originalCurrency: String? = nil, summarySource: String? = nil, isActive: Bool? = nil, usedFallbackRate: Bool? = nil, gainLossPercent: Decimal? = nil, interestRate: Decimal? = nil, transactionCount: Int? = nil, currentPrice: Decimal? = nil, currentValue: Decimal? = nil, totalInvested: Decimal? = nil, totalBuyCost: Decimal? = nil, totalSellProceeds: Decimal? = nil, totalFees: Decimal? = nil, totalTaxes: Decimal? = nil, totalDividends: Decimal? = nil, totalIncome: Decimal? = nil, avgCostBasis: Decimal? = nil, realizedGain: Decimal? = nil, unrealizedGain: Decimal? = nil, totalGain: Decimal? = nil, gainLoss: Decimal? = nil, assetGain: Decimal? = nil, fxGain: Decimal? = nil, nativeCurrentValue: Decimal? = nil, accruedInterest: Decimal? = nil, projectedAnnualInterest: Decimal? = nil, totalAppreciation: Decimal? = nil, nativeCurrentPrice: Decimal? = nil, nativeAvgCostBasis: Decimal? = nil, unrealizedGainPercent: Decimal? = nil, estimatedMonthlyRent: Decimal? = nil, monthlyRent: Decimal? = nil, feesAndTaxes: Decimal? = nil, propertyReturn: Decimal? = nil, createdAt: String? = nil, updatedAt: String? = nil, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]) {
+        public init(id: InvestmentID, name: String? = nil, symbol: String? = nil, asset_class: String? = nil, assetClass: String? = nil, currency: CurrencyCode? = nil, originalCurrency: CurrencyCode? = nil, summarySource: String? = nil, isActive: Bool? = nil, usedFallbackRate: Bool? = nil, gainLossPercent: Decimal? = nil, interestRate: Decimal? = nil, transactionCount: Int? = nil, currentPrice: Decimal? = nil, currentValue: Decimal? = nil, totalInvested: Decimal? = nil, totalBuyCost: Decimal? = nil, totalSellProceeds: Decimal? = nil, totalFees: Decimal? = nil, totalTaxes: Decimal? = nil, totalDividends: Decimal? = nil, totalIncome: Decimal? = nil, avgCostBasis: Decimal? = nil, realizedGain: Decimal? = nil, unrealizedGain: Decimal? = nil, totalGain: Decimal? = nil, gainLoss: Decimal? = nil, assetGain: Decimal? = nil, fxGain: Decimal? = nil, nativeCurrentValue: Decimal? = nil, accruedInterest: Decimal? = nil, projectedAnnualInterest: Decimal? = nil, totalAppreciation: Decimal? = nil, nativeCurrentPrice: Decimal? = nil, nativeAvgCostBasis: Decimal? = nil, unrealizedGainPercent: Decimal? = nil, estimatedMonthlyRent: Decimal? = nil, monthlyRent: Decimal? = nil, feesAndTaxes: Decimal? = nil, propertyReturn: Decimal? = nil, createdAt: Instant? = nil, updatedAt: Instant? = nil, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -6855,10 +11601,10 @@ extension OpenAPI {
     }
 
     public struct PortfolioTransaction: Codable, Equatable, Sendable {
-        public let id: Int
-        public let investmentId: Int
+        public let id: PortfolioTransactionID
+        public let investmentId: InvestmentID
         public let type: OpenAPI.PortfolioTxnType
-        public let date: String
+        public let date: CalendarDay
         public let amount: Decimal
         public let units: Decimal?
         public let pricePerUnit: Decimal?
@@ -6866,29 +11612,29 @@ extension OpenAPI {
         public let taxes: Decimal?
         /// Whether a dividend transaction's amount is before or after withholding tax. Unknown for
         /// legacy or unclassified rows and ignored for non-dividend transactions.
-        public let dividendAmountConvention: String
+        public let dividendAmountConvention: DividendAmountConvention
         /// Read-only accounting role. included_in_units is allowed only for dividends whose literal
         /// income is already represented by proved acquired units. Amount and source facts are
         /// retained, but ordinary income and gain totals exclude the row. The role does not classify
         /// legal tax treatment. Older responses and immutable snapshots without this field mean
         /// standard; explicit role setters are rejected by create/update endpoints.
-        public let incomeRecognitionRole: String?
-        public let currency: String
+        public let incomeRecognitionRole: IncomeRecognitionRole?
+        public let currency: CurrencyCode
         public let fxRateToEur: Decimal?
         /// Owning account for the lot (ADR-091); null = unassigned/global
-        public let accountId: Int?
+        public let accountId: AccountID?
         /// Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by
         /// node-postgres as a string; null means the transaction was created manually or predates batch
         /// attribution.
-        public let importBatchId: String?
+        public let importBatchId: PortfolioImportBatchID?
         public let note: String?
         public let isRecurring: Bool
         public let recurrenceInterval: OpenAPI.RecurrenceInterval?
-        public let recurrenceEndDate: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let recurrenceEndDate: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, investmentId: Int, type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String, incomeRecognitionRole: String? = nil, currency: String, fxRateToEur: Decimal? = nil, accountId: Int? = nil, importBatchId: String? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: PortfolioTransactionID, investmentId: InvestmentID, type: OpenAPI.PortfolioTxnType, date: CalendarDay, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention, incomeRecognitionRole: IncomeRecognitionRole? = nil, currency: CurrencyCode, fxRateToEur: Decimal? = nil, accountId: AccountID? = nil, importBatchId: PortfolioImportBatchID? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.investmentId = investmentId
             self.type = type
@@ -6935,6 +11681,92 @@ extension OpenAPI {
             case createdAt = "created_at"
             case updatedAt = "updated_at"
         }
+
+        /// Whether a dividend transaction's amount is before or after withholding tax. Unknown for legacy
+        /// or unclassified rows and ignored for non-dividend transactions.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum DividendAmountConvention: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case gross
+            case net
+            case unknownValue
+            case unknown(String)
+
+            public static var allKnownCases: [DividendAmountConvention] {
+                [.gross, .net, .unknownValue]
+            }
+
+            public static var allCases: [DividendAmountConvention] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "gross": self = .gross
+                case "net": self = .net
+                case "unknown": self = .unknownValue
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .gross: return "gross"
+                case .net: return "net"
+                case .unknownValue: return "unknown"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// Read-only accounting role. included_in_units is allowed only for dividends whose literal income
+        /// is already represented by proved acquired units. Amount and source facts are retained, but
+        /// ordinary income and gain totals exclude the row. The role does not classify legal tax treatment.
+        /// Older responses and immutable snapshots without this field mean standard; explicit role setters
+        /// are rejected by create/update endpoints.
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum IncomeRecognitionRole: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case standard
+            case includedInUnits
+            case unknown(String)
+
+            public static var allKnownCases: [IncomeRecognitionRole] {
+                [.standard, .includedInUnits]
+            }
+
+            public static var allCases: [IncomeRecognitionRole] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "standard": self = .standard
+                case "included_in_units": self = .includedInUnits
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .standard: return "standard"
+                case .includedInUnits: return "included_in_units"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct PortfolioTransactionList: Codable, Equatable, Sendable {
@@ -6961,28 +11793,122 @@ extension OpenAPI {
         }
     }
 
-    public enum PortfolioTxnType: String, Codable, Sendable, CaseIterable {
-        case buy = "buy"
-        case sell = "sell"
-        case dividend = "dividend"
-        case fee = "fee"
-        case tax = "tax"
-        case interest = "interest"
-        case rentIncome = "rent_income"
-        case appreciation = "appreciation"
-        case gift = "gift"
-        case split = "split"
-        case merger = "merger"
-        case spinoff = "spinoff"
-        case returnOfCapital = "return_of_capital"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum PortfolioTxnType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case buy
+        case sell
+        case dividend
+        case fee
+        case tax
+        case interest
+        case rentIncome
+        case appreciation
+        case gift
+        case split
+        case merger
+        case spinoff
+        case returnOfCapital
+        case unknown(String)
+
+        public static var allKnownCases: [PortfolioTxnType] {
+            [.buy, .sell, .dividend, .fee, .tax, .interest, .rentIncome, .appreciation, .gift, .split, .merger, .spinoff, .returnOfCapital]
+        }
+
+        public static var allCases: [PortfolioTxnType] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "buy": self = .buy
+            case "sell": self = .sell
+            case "dividend": self = .dividend
+            case "fee": self = .fee
+            case "tax": self = .tax
+            case "interest": self = .interest
+            case "rent_income": self = .rentIncome
+            case "appreciation": self = .appreciation
+            case "gift": self = .gift
+            case "split": self = .split
+            case "merger": self = .merger
+            case "spinoff": self = .spinoff
+            case "return_of_capital": self = .returnOfCapital
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .buy: return "buy"
+            case .sell: return "sell"
+            case .dividend: return "dividend"
+            case .fee: return "fee"
+            case .tax: return "tax"
+            case .interest: return "interest"
+            case .rentIncome: return "rent_income"
+            case .appreciation: return "appreciation"
+            case .gift: return "gift"
+            case .split: return "split"
+            case .merger: return "merger"
+            case .spinoff: return "spinoff"
+            case .returnOfCapital: return "return_of_capital"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
-    public enum PriceProvider: String, Codable, Sendable, CaseIterable {
-        case manual = "manual"
-        case binance = "binance"
-        case yahoo = "yahoo"
-        case custom = "custom"
-        case kinesis = "kinesis"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum PriceProvider: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case manual
+        case binance
+        case yahoo
+        case custom
+        case kinesis
+        case unknown(String)
+
+        public static var allKnownCases: [PriceProvider] {
+            [.manual, .binance, .yahoo, .custom, .kinesis]
+        }
+
+        public static var allCases: [PriceProvider] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "manual": self = .manual
+            case "binance": self = .binance
+            case "yahoo": self = .yahoo
+            case "custom": self = .custom
+            case "kinesis": self = .kinesis
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .manual: return "manual"
+            case .binance: return "binance"
+            case .yahoo: return "yahoo"
+            case .custom: return "custom"
+            case .kinesis: return "kinesis"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     public struct ProbeResult: Codable, Equatable, Sendable {
@@ -7009,13 +11935,13 @@ extension OpenAPI {
         /// The provider kind: price, fx, inflation or research
         public let kind: String
         public let label: String
-        public let lastSuccessAt: String?
-        public let lastErrorAt: String?
+        public let lastSuccessAt: Instant?
+        public let lastErrorAt: Instant?
         public let lastError: String?
         public let consecutiveFailures: Int
-        public let updatedAt: String?
+        public let updatedAt: Instant?
 
-        public init(provider: String, kind: String, label: String, lastSuccessAt: String? = nil, lastErrorAt: String? = nil, lastError: String? = nil, consecutiveFailures: Int, updatedAt: String? = nil) {
+        public init(provider: String, kind: String, label: String, lastSuccessAt: Instant? = nil, lastErrorAt: Instant? = nil, lastError: String? = nil, consecutiveFailures: Int, updatedAt: Instant? = nil) {
             self.provider = provider
             self.kind = kind
             self.label = label
@@ -7054,21 +11980,21 @@ extension OpenAPI {
     }
 
     public struct Recipient: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: RecipientID
         public let name: String
         public let primaryBankAccount: String?
-        public let defaultCategoryId: Int?
+        public let defaultCategoryId: CategoryID?
         public let defaultCategoryName: String?
-        public let primaryRecipientId: Int?
+        public let primaryRecipientId: RecipientID?
         public let primaryRecipientName: String?
         public let aliasCount: Int?
         public let notes: String?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, name: String, primaryBankAccount: String? = nil, defaultCategoryId: Int? = nil, defaultCategoryName: String? = nil, primaryRecipientId: Int? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: RecipientID, name: String, primaryBankAccount: String? = nil, defaultCategoryId: CategoryID? = nil, defaultCategoryName: String? = nil, primaryRecipientId: RecipientID? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.name = name
             self.primaryBankAccount = primaryBankAccount
@@ -7103,10 +12029,10 @@ extension OpenAPI {
 
     public struct RecipientCreate: Codable, Equatable, Sendable {
         public let name: String
-        public let defaultCategoryId: Int?
+        public let defaultCategoryId: CategoryID?
         public let notes: String?
 
-        public init(name: String, defaultCategoryId: Int? = nil, notes: String? = nil) {
+        public init(name: String, defaultCategoryId: CategoryID? = nil, notes: String? = nil) {
             self.name = name
             self.defaultCategoryId = defaultCategoryId
             self.notes = notes
@@ -7145,18 +12071,18 @@ extension OpenAPI {
 
     /// A `recipient_match_patterns` row as `listPatternsForRecipient` selects it.
     public struct RecipientPattern: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: RecipientPatternID
         public let pattern: String
-        public let patternKind: String
+        public let patternKind: PatternKind
         public let caseSensitive: Bool
         public let priority: Int
         public let isActive: Bool
-        public let source: String
+        public let source: Source
         public let notes: String?
-        public let createdAt: String
-        public let updatedAt: String?
+        public let createdAt: Instant
+        public let updatedAt: Instant?
 
-        public init(id: Int, pattern: String, patternKind: String, caseSensitive: Bool, priority: Int, isActive: Bool, source: String, notes: String? = nil, createdAt: String, updatedAt: String? = nil) {
+        public init(id: RecipientPatternID, pattern: String, patternKind: PatternKind, caseSensitive: Bool, priority: Int, isActive: Bool, source: Source, notes: String? = nil, createdAt: Instant, updatedAt: Instant? = nil) {
             self.id = id
             self.pattern = pattern
             self.patternKind = patternKind
@@ -7181,17 +12107,99 @@ extension OpenAPI {
             case createdAt = "created_at"
             case updatedAt = "updated_at"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum PatternKind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case literalPrefix
+            case glob
+            case regex
+            case unknown(String)
+
+            public static var allKnownCases: [PatternKind] {
+                [.literalPrefix, .glob, .regex]
+            }
+
+            public static var allCases: [PatternKind] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "literal_prefix": self = .literalPrefix
+                case "glob": self = .glob
+                case "regex": self = .regex
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .literalPrefix: return "literal_prefix"
+                case .glob: return "glob"
+                case .regex: return "regex"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Source: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case user
+            case suggested
+            case system
+            case unknown(String)
+
+            public static var allKnownCases: [Source] {
+                [.user, .suggested, .system]
+            }
+
+            public static var allCases: [Source] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "user": self = .user
+                case "suggested": self = .suggested
+                case "system": self = .system
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .user: return "user"
+                case .suggested: return "suggested"
+                case .system: return "system"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     /// `null` name or is_active leaves that field unchanged. Each field must have the stated JSON type;
     /// a string such as "false" for is_active returns 400.
     public struct RecipientUpdate: Codable, Equatable, Sendable {
         public let name: String?
-        public let defaultCategoryId: Int?
+        public let defaultCategoryId: Nullable<CategoryID>
         public let notes: String?
         public let isActive: Bool?
 
-        public init(name: String? = nil, defaultCategoryId: Int? = nil, notes: String? = nil, isActive: Bool? = nil) {
+        public init(name: String? = nil, defaultCategoryId: Nullable<CategoryID> = .absent, notes: String? = nil, isActive: Bool? = nil) {
             self.name = name
             self.defaultCategoryId = defaultCategoryId
             self.notes = notes
@@ -7204,25 +12212,82 @@ extension OpenAPI {
             case notes = "notes"
             case isActive = "is_active"
         }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.name = try container.decodeIfPresent(String.self, forKey: .name)
+            self.defaultCategoryId = try container.decodeNullable(CategoryID.self, forKey: .defaultCategoryId)
+            self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
+            self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(name, forKey: .name)
+            try container.encodeNullable(defaultCategoryId, forKey: .defaultCategoryId)
+            try container.encodeIfPresent(notes, forKey: .notes)
+            try container.encodeIfPresent(isActive, forKey: .isActive)
+        }
     }
 
-    public enum RecurrenceInterval: String, Codable, Sendable, CaseIterable {
-        case daily = "daily"
-        case weekly = "weekly"
-        case biweekly = "biweekly"
-        case monthly = "monthly"
-        case quarterly = "quarterly"
-        case yearly = "yearly"
+    /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+    public enum RecurrenceInterval: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+        case daily
+        case weekly
+        case biweekly
+        case monthly
+        case quarterly
+        case yearly
+        case unknown(String)
+
+        public static var allKnownCases: [RecurrenceInterval] {
+            [.daily, .weekly, .biweekly, .monthly, .quarterly, .yearly]
+        }
+
+        public static var allCases: [RecurrenceInterval] { allKnownCases }
+
+        public init(rawValue: String) {
+            switch rawValue {
+            case "daily": self = .daily
+            case "weekly": self = .weekly
+            case "biweekly": self = .biweekly
+            case "monthly": self = .monthly
+            case "quarterly": self = .quarterly
+            case "yearly": self = .yearly
+            default: self = .unknown(rawValue)
+            }
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .daily: return "daily"
+            case .weekly: return "weekly"
+            case .biweekly: return "biweekly"
+            case .monthly: return "monthly"
+            case .quarterly: return "quarterly"
+            case .yearly: return "yearly"
+            case .unknown(let value): return value
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     public struct ResearchAnalystAction: Codable, Equatable, Sendable {
-        public let date: JSONValue?
+        public let date: ResearchAnalystActionDate?
         public let firm: String?
         public let toGrade: String?
         public let fromGrade: String?
         public let action: String?
 
-        public init(date: JSONValue? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
+        public init(date: ResearchAnalystActionDate? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
             self.date = date
             self.firm = firm
             self.toGrade = toGrade
@@ -7236,6 +12301,37 @@ extension OpenAPI {
             case toGrade = "toGrade"
             case fromGrade = "fromGrade"
             case action = "action"
+        }
+
+        /// One of string, number; decoded by its JSON type.
+        public enum ResearchAnalystActionDate: Codable, Equatable, Sendable {
+            case number(Decimal)
+            case string(String)
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(Decimal.self) {
+                    self = .number(value)
+                    return
+                }
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    ResearchAnalystActionDate.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected string or number."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .number(let value): try container.encode(value)
+                case .string(let value): try container.encode(value)
+                }
+            }
         }
     }
 
@@ -7379,22 +12475,22 @@ extension OpenAPI {
 
     public struct ResearchDossier: Codable, Equatable, Sendable {
         public let title: String
-        public let workspace: String
+        public let workspace: Workspace
         public let question: String
         public let userThesis: String?
         public let assumptions: [String]?
         public let openQuestions: [String]?
         public let conclusion: String?
-        public let reviewDate: String?
+        public let reviewDate: CalendarDay?
         public let evidence: [OpenAPI.ResearchDossierEvidence]?
         public let links: OpenAPI.ResearchDossierLinks?
-        public let id: String
+        public let id: ResearchDossierID
         public let version: Int
         public let linkDetails: [LinkDetailsItem]
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String) {
+        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: Instant, updatedAt: Instant) {
             self.title = title
             self.workspace = workspace
             self.question = question
@@ -7430,15 +12526,59 @@ extension OpenAPI {
             case updatedAt = "updatedAt"
         }
 
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Workspace: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case budgeting
+            case portfolio
+            case research
+            case crossWorkspace
+            case unknown(String)
+
+            public static var allKnownCases: [Workspace] {
+                [.budgeting, .portfolio, .research, .crossWorkspace]
+            }
+
+            public static var allCases: [Workspace] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "budgeting": self = .budgeting
+                case "portfolio": self = .portfolio
+                case "research": self = .research
+                case "cross-workspace": self = .crossWorkspace
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .budgeting: return "budgeting"
+                case .portfolio: return "portfolio"
+                case .research: return "research"
+                case .crossWorkspace: return "cross-workspace"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
         public struct LinkDetailsItem: Codable, Equatable, Sendable {
-            public let kind: String
+            public let kind: Kind
             public let historicalId: String
             public let labelSnapshot: String
             /// Integer for category/investment, string for saved analysis; null after deletion.
-            public let liveId: JSONValue?
-            public let status: String
+            public let liveId: LiveId?
+            public let status: Status
 
-            public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+            public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: LiveId? = nil, status: Status) {
                 self.kind = kind
                 self.historicalId = historicalId
                 self.labelSnapshot = labelSnapshot
@@ -7453,6 +12593,117 @@ extension OpenAPI {
                 case liveId = "liveId"
                 case status = "status"
             }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case category
+                case investment
+                case savedAnalysis
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.category, .investment, .savedAnalysis]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "category": self = .category
+                    case "investment": self = .investment
+                    case "saved-analysis": self = .savedAnalysis
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .category: return "category"
+                    case .investment: return "investment"
+                    case .savedAnalysis: return "saved-analysis"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+
+            /// Integer for category/investment, string for saved analysis; null after deletion.
+            /// One of integer, string; decoded by its JSON type.
+            public enum LiveId: Codable, Equatable, Sendable {
+                case integer(Int)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Int.self) {
+                        self = .integer(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        LiveId.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected integer or string."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .integer(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
+                }
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case live
+                case deleted
+                case unknown(String)
+
+                public static var allKnownCases: [Status] {
+                    [.live, .deleted]
+                }
+
+                public static var allCases: [Status] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "live": self = .live
+                    case "deleted": self = .deleted
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .live: return "live"
+                    case .deleted: return "deleted"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
         }
     }
 
@@ -7461,17 +12712,17 @@ extension OpenAPI {
     /// properties; this reusable content schema also describes version snapshots.
     public struct ResearchDossierContent: Codable, Equatable, Sendable {
         public let title: String
-        public let workspace: String
+        public let workspace: Workspace
         public let question: String
         public let userThesis: String?
         public let assumptions: [String]?
         public let openQuestions: [String]?
         public let conclusion: String?
-        public let reviewDate: String?
+        public let reviewDate: CalendarDay?
         public let evidence: [OpenAPI.ResearchDossierEvidence]?
         public let links: OpenAPI.ResearchDossierLinks?
 
-        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
+        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
             self.title = title
             self.workspace = workspace
             self.question = question
@@ -7496,6 +12747,50 @@ extension OpenAPI {
             case evidence = "evidence"
             case links = "links"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Workspace: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case budgeting
+            case portfolio
+            case research
+            case crossWorkspace
+            case unknown(String)
+
+            public static var allKnownCases: [Workspace] {
+                [.budgeting, .portfolio, .research, .crossWorkspace]
+            }
+
+            public static var allCases: [Workspace] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "budgeting": self = .budgeting
+                case "portfolio": self = .portfolio
+                case "research": self = .research
+                case "cross-workspace": self = .crossWorkspace
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .budgeting: return "budgeting"
+                case .portfolio: return "portfolio"
+                case .research: return "research"
+                case .crossWorkspace: return "cross-workspace"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct ResearchDossierEnvelope: Codable, Equatable, Sendable {
@@ -7517,14 +12812,14 @@ extension OpenAPI {
     }
 
     public struct ResearchDossierEvidence: Codable, Equatable, Sendable {
-        public let id: String?
-        public let stance: String
-        public let origin: String
+        public let id: ResearchDossierEvidenceID?
+        public let stance: Stance
+        public let origin: Origin
         public let claim: String
         public let source: OpenAPI.ResearchDossierSource
         public let notes: String?
 
-        public init(id: String? = nil, stance: String, origin: String, claim: String, source: OpenAPI.ResearchDossierSource, notes: String? = nil) {
+        public init(id: ResearchDossierEvidenceID? = nil, stance: Stance, origin: Origin, claim: String, source: OpenAPI.ResearchDossierSource, notes: String? = nil) {
             self.id = id
             self.stance = stance
             self.origin = origin
@@ -7541,14 +12836,93 @@ extension OpenAPI {
             case source = "source"
             case notes = "notes"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Stance: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case support
+            case oppose
+            case context
+            case unknown(String)
+
+            public static var allKnownCases: [Stance] {
+                [.support, .oppose, .context]
+            }
+
+            public static var allCases: [Stance] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "support": self = .support
+                case "oppose": self = .oppose
+                case "context": self = .context
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .support: return "support"
+                case .oppose: return "oppose"
+                case .context: return "context"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Origin: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case user
+            case aiDraft
+            case unknown(String)
+
+            public static var allKnownCases: [Origin] {
+                [.user, .aiDraft]
+            }
+
+            public static var allCases: [Origin] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "user": self = .user
+                case "ai-draft": self = .aiDraft
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .user: return "user"
+                case .aiDraft: return "ai-draft"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct ResearchDossierExport: Codable, Equatable, Sendable {
         public let schemaVersion: Int
-        public let exportedAt: String
+        public let exportedAt: Instant
         public let dossiers: [DossiersItem]
 
-        public init(schemaVersion: Int, exportedAt: String, dossiers: [DossiersItem]) {
+        public init(schemaVersion: Int, exportedAt: Instant, dossiers: [DossiersItem]) {
             self.schemaVersion = schemaVersion
             self.exportedAt = exportedAt
             self.dossiers = dossiers
@@ -7562,23 +12936,23 @@ extension OpenAPI {
 
         public struct DossiersItem: Codable, Equatable, Sendable {
             public let title: String
-            public let workspace: String
+            public let workspace: Workspace
             public let question: String
             public let userThesis: String?
             public let assumptions: [String]?
             public let openQuestions: [String]?
             public let conclusion: String?
-            public let reviewDate: String?
+            public let reviewDate: CalendarDay?
             public let evidence: [OpenAPI.ResearchDossierEvidence]?
             public let links: OpenAPI.ResearchDossierLinks?
-            public let id: String
+            public let id: ResearchDossierID
             public let version: Int
             public let linkDetails: [LinkDetailsItem]
-            public let createdAt: String
-            public let updatedAt: String
+            public let createdAt: Instant
+            public let updatedAt: Instant
             public let versions: [OpenAPI.ResearchDossierVersion]
 
-            public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String, versions: [OpenAPI.ResearchDossierVersion]) {
+            public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: Instant, updatedAt: Instant, versions: [OpenAPI.ResearchDossierVersion]) {
                 self.title = title
                 self.workspace = workspace
                 self.question = question
@@ -7616,15 +12990,59 @@ extension OpenAPI {
                 case versions = "versions"
             }
 
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Workspace: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case budgeting
+                case portfolio
+                case research
+                case crossWorkspace
+                case unknown(String)
+
+                public static var allKnownCases: [Workspace] {
+                    [.budgeting, .portfolio, .research, .crossWorkspace]
+                }
+
+                public static var allCases: [Workspace] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "budgeting": self = .budgeting
+                    case "portfolio": self = .portfolio
+                    case "research": self = .research
+                    case "cross-workspace": self = .crossWorkspace
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .budgeting: return "budgeting"
+                    case .portfolio: return "portfolio"
+                    case .research: return "research"
+                    case .crossWorkspace: return "cross-workspace"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+
             public struct LinkDetailsItem: Codable, Equatable, Sendable {
-                public let kind: String
+                public let kind: Kind
                 public let historicalId: String
                 public let labelSnapshot: String
                 /// Integer for category/investment, string for saved analysis; null after deletion.
-                public let liveId: JSONValue?
-                public let status: String
+                public let liveId: LiveId?
+                public let status: Status
 
-                public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+                public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: LiveId? = nil, status: Status) {
                     self.kind = kind
                     self.historicalId = historicalId
                     self.labelSnapshot = labelSnapshot
@@ -7638,6 +13056,117 @@ extension OpenAPI {
                     case labelSnapshot = "labelSnapshot"
                     case liveId = "liveId"
                     case status = "status"
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case category
+                    case investment
+                    case savedAnalysis
+                    case unknown(String)
+
+                    public static var allKnownCases: [Kind] {
+                        [.category, .investment, .savedAnalysis]
+                    }
+
+                    public static var allCases: [Kind] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "category": self = .category
+                        case "investment": self = .investment
+                        case "saved-analysis": self = .savedAnalysis
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .category: return "category"
+                        case .investment: return "investment"
+                        case .savedAnalysis: return "saved-analysis"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
+
+                /// Integer for category/investment, string for saved analysis; null after deletion.
+                /// One of integer, string; decoded by its JSON type.
+                public enum LiveId: Codable, Equatable, Sendable {
+                    case integer(Int)
+                    case string(String)
+
+                    public init(from decoder: any Decoder) throws {
+                        let container = try decoder.singleValueContainer()
+                        if let value = try? container.decode(Int.self) {
+                            self = .integer(value)
+                            return
+                        }
+                        if let value = try? container.decode(String.self) {
+                            self = .string(value)
+                            return
+                        }
+                        throw DecodingError.typeMismatch(
+                            LiveId.self,
+                            DecodingError.Context(
+                                codingPath: decoder.codingPath,
+                                debugDescription: "Expected integer or string."))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        switch self {
+                        case .integer(let value): try container.encode(value)
+                        case .string(let value): try container.encode(value)
+                        }
+                    }
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case live
+                    case deleted
+                    case unknown(String)
+
+                    public static var allKnownCases: [Status] {
+                        [.live, .deleted]
+                    }
+
+                    public static var allCases: [Status] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "live": self = .live
+                        case "deleted": self = .deleted
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .live: return "live"
+                        case .deleted: return "deleted"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
                 }
             }
         }
@@ -7663,11 +13192,11 @@ extension OpenAPI {
 
     /// Current live links only; deleted targets appear in linkDetails instead.
     public struct ResearchDossierLinks: Codable, Equatable, Sendable {
-        public let categoryIds: [Int]
-        public let investmentIds: [Int]
-        public let savedAnalysisIds: [String]
+        public let categoryIds: [CategoryID]
+        public let investmentIds: [InvestmentID]
+        public let savedAnalysisIds: [SavedAnalysisID]
 
-        public init(categoryIds: [Int], investmentIds: [Int], savedAnalysisIds: [String]) {
+        public init(categoryIds: [CategoryID], investmentIds: [InvestmentID], savedAnalysisIds: [SavedAnalysisID]) {
             self.categoryIds = categoryIds
             self.investmentIds = investmentIds
             self.savedAnalysisIds = savedAnalysisIds
@@ -7724,14 +13253,14 @@ extension OpenAPI {
     public struct ResearchDossierSource: Codable, Equatable, Sendable {
         public let title: String
         public let reference: String
-        public let sourceDate: String?
-        public let accessedAt: String?
-        public let documentId: String?
+        public let sourceDate: CalendarDay?
+        public let accessedAt: Instant?
+        public let documentId: ResearchDocumentID?
         public let documentVersion: Int?
         public let passageOrdinal: Int?
         public let contentSha256: String?
 
-        public init(title: String, reference: String, sourceDate: String? = nil, accessedAt: String? = nil, documentId: String? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
+        public init(title: String, reference: String, sourceDate: CalendarDay? = nil, accessedAt: Instant? = nil, documentId: ResearchDocumentID? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
             self.title = title
             self.reference = reference
             self.sourceDate = sourceDate
@@ -7755,16 +13284,16 @@ extension OpenAPI {
     }
 
     public struct ResearchDossierSummary: Codable, Equatable, Sendable {
-        public let id: String
+        public let id: ResearchDossierID
         public let title: String
-        public let workspace: String
+        public let workspace: Workspace
         public let version: Int
         public let question: String
-        public let reviewDate: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let reviewDate: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: String, title: String, workspace: String, version: Int, question: String, reviewDate: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: ResearchDossierID, title: String, workspace: Workspace, version: Int, question: String, reviewDate: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.title = title
             self.workspace = workspace
@@ -7785,14 +13314,58 @@ extension OpenAPI {
             case createdAt = "createdAt"
             case updatedAt = "updatedAt"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Workspace: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case budgeting
+            case portfolio
+            case research
+            case crossWorkspace
+            case unknown(String)
+
+            public static var allKnownCases: [Workspace] {
+                [.budgeting, .portfolio, .research, .crossWorkspace]
+            }
+
+            public static var allCases: [Workspace] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "budgeting": self = .budgeting
+                case "portfolio": self = .portfolio
+                case "research": self = .research
+                case "cross-workspace": self = .crossWorkspace
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .budgeting: return "budgeting"
+                case .portfolio: return "portfolio"
+                case .research: return "research"
+                case .crossWorkspace: return "cross-workspace"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct ResearchDossierVersion: Codable, Equatable, Sendable {
         public let version: Int
         public let snapshot: OpenAPI.ResearchDossierContent
-        public let createdAt: String
+        public let createdAt: Instant
 
-        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: String) {
+        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: Instant) {
             self.version = version
             self.snapshot = snapshot
             self.createdAt = createdAt
@@ -8037,14 +13610,14 @@ extension OpenAPI {
     }
 
     public struct ResearchMacroSeriesData: Codable, Equatable, Sendable {
-        public let provider: String
+        public let provider: Provider
         public let seriesId: String
         public let title: String?
         public let units: String?
         public let frequency: String?
         public let points: [OpenAPI.ResearchChartPoint]
 
-        public init(provider: String, seriesId: String, title: String? = nil, units: String? = nil, frequency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
+        public init(provider: Provider, seriesId: String, title: String? = nil, units: String? = nil, frequency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
             self.provider = provider
             self.seriesId = seriesId
             self.title = title
@@ -8060,6 +13633,47 @@ extension OpenAPI {
             case units = "units"
             case frequency = "frequency"
             case points = "points"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Provider: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case fred
+            case eurostat
+            case dbnomics
+            case unknown(String)
+
+            public static var allKnownCases: [Provider] {
+                [.fred, .eurostat, .dbnomics]
+            }
+
+            public static var allCases: [Provider] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "fred": self = .fred
+                case "eurostat": self = .eurostat
+                case "dbnomics": self = .dbnomics
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .fred: return "fred"
+                case .eurostat: return "eurostat"
+                case .dbnomics: return "dbnomics"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8085,7 +13699,7 @@ extension OpenAPI {
     }
 
     public struct ResearchMacroSeriesItem: Codable, Equatable, Sendable {
-        public let provider: String
+        public let provider: Provider
         public let seriesId: String
         public let title: String?
         public let region: String?
@@ -8093,7 +13707,7 @@ extension OpenAPI {
         public let frequency: String?
         public let source: String?
 
-        public init(provider: String, seriesId: String, title: String? = nil, region: String? = nil, units: String? = nil, frequency: String? = nil, source: String? = nil) {
+        public init(provider: Provider, seriesId: String, title: String? = nil, region: String? = nil, units: String? = nil, frequency: String? = nil, source: String? = nil) {
             self.provider = provider
             self.seriesId = seriesId
             self.title = title
@@ -8111,6 +13725,47 @@ extension OpenAPI {
             case units = "units"
             case frequency = "frequency"
             case source = "source"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Provider: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case fred
+            case eurostat
+            case dbnomics
+            case unknown(String)
+
+            public static var allKnownCases: [Provider] {
+                [.fred, .eurostat, .dbnomics]
+            }
+
+            public static var allCases: [Provider] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "fred": self = .fred
+                case "eurostat": self = .eurostat
+                case "dbnomics": self = .dbnomics
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .fred: return "fred"
+                case .eurostat: return "eurostat"
+                case .dbnomics: return "dbnomics"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8218,11 +13873,11 @@ extension OpenAPI {
 
     public struct ResearchMappingResolveData: Codable, Equatable, Sendable {
         public let instrumentKey: String
-        public let keyType: String
+        public let keyType: KeyType
         public let proposals: [OpenAPI.ResearchMappingProposal]
         public let existing: [OpenAPI.InstrumentProviderMapping]
 
-        public init(instrumentKey: String, keyType: String, proposals: [OpenAPI.ResearchMappingProposal], existing: [OpenAPI.InstrumentProviderMapping]) {
+        public init(instrumentKey: String, keyType: KeyType, proposals: [OpenAPI.ResearchMappingProposal], existing: [OpenAPI.InstrumentProviderMapping]) {
             self.instrumentKey = instrumentKey
             self.keyType = keyType
             self.proposals = proposals
@@ -8234,6 +13889,44 @@ extension OpenAPI {
             case keyType = "key_type"
             case proposals = "proposals"
             case existing = "existing"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum KeyType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case isin
+            case `internal`
+            case unknown(String)
+
+            public static var allKnownCases: [KeyType] {
+                [.isin, .`internal`]
+            }
+
+            public static var allCases: [KeyType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "isin": self = .isin
+                case "internal": self = .`internal`
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .isin: return "isin"
+                case .`internal`: return "internal"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8290,10 +13983,10 @@ extension OpenAPI {
 
     public struct ResearchMeta: Codable, Equatable, Sendable {
         public let provider: String?
-        public let source: String
+        public let source: Source
         public let requestId: String?
 
-        public init(provider: String? = nil, source: String, requestId: String? = nil) {
+        public init(provider: String? = nil, source: Source, requestId: String? = nil) {
             self.provider = provider
             self.source = source
             self.requestId = requestId
@@ -8303,6 +13996,47 @@ extension OpenAPI {
             case provider = "provider"
             case source = "source"
             case requestId = "requestId"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Source: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case cache
+            case live
+            case unavailable
+            case unknown(String)
+
+            public static var allKnownCases: [Source] {
+                [.cache, .live, .unavailable]
+            }
+
+            public static var allCases: [Source] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "cache": self = .cache
+                case "live": self = .live
+                case "unavailable": self = .unavailable
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .cache: return "cache"
+                case .live: return "live"
+                case .unavailable: return "unavailable"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8372,9 +14106,9 @@ extension OpenAPI {
     /// zero values or a comparison.
     public struct ResearchPortfolioForecastData: Codable, Equatable, Sendable {
         public let available: Bool
-        public let reason: String?
-        public let currency: String?
-        public let method: String?
+        public let reason: Reason?
+        public let currency: CurrencyCode?
+        public let method: Method?
         public let horizonMonths: Int?
         public let paths: Int?
         public let seed: String?
@@ -8400,7 +14134,7 @@ extension OpenAPI {
         public let probTarget: Decimal?
         public let points: [OpenAPI.ResearchForecastPoint]?
 
-        public init(available: Bool, reason: String? = nil, currency: String? = nil, method: String? = nil, horizonMonths: Int? = nil, paths: Int? = nil, seed: String? = nil, historyDays: Int? = nil, flowArtifactDays: Int? = nil, lowConfidence: Bool? = nil, startValue: Decimal? = nil, startInvested: Decimal? = nil, monthlyContribution: Decimal? = nil, goalMonth: Int? = nil, totalContributions: Decimal? = nil, netInvested: Decimal? = nil, expectedAnnualReturn: Decimal? = nil, historicalAnnualReturn: Decimal? = nil, annualVolatility: Decimal? = nil, forwardBlend: Decimal? = nil, usedForward: Bool? = nil, forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]? = nil, projected: OpenAPI.ResearchForecastProjected? = nil, probBelowInvested: Decimal? = nil, targetValue: Decimal? = nil, probTarget: Decimal? = nil, points: [OpenAPI.ResearchForecastPoint]? = nil) {
+        public init(available: Bool, reason: Reason? = nil, currency: CurrencyCode? = nil, method: Method? = nil, horizonMonths: Int? = nil, paths: Int? = nil, seed: String? = nil, historyDays: Int? = nil, flowArtifactDays: Int? = nil, lowConfidence: Bool? = nil, startValue: Decimal? = nil, startInvested: Decimal? = nil, monthlyContribution: Decimal? = nil, goalMonth: Int? = nil, totalContributions: Decimal? = nil, netInvested: Decimal? = nil, expectedAnnualReturn: Decimal? = nil, historicalAnnualReturn: Decimal? = nil, annualVolatility: Decimal? = nil, forwardBlend: Decimal? = nil, usedForward: Bool? = nil, forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]? = nil, projected: OpenAPI.ResearchForecastProjected? = nil, probBelowInvested: Decimal? = nil, targetValue: Decimal? = nil, probTarget: Decimal? = nil, points: [OpenAPI.ResearchForecastPoint]? = nil) {
             self.available = available
             self.reason = reason
             self.currency = currency
@@ -8459,6 +14193,82 @@ extension OpenAPI {
             case probTarget = "probTarget"
             case points = "points"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Reason: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case noHoldings
+            case insufficientHistory
+            case unknown(String)
+
+            public static var allKnownCases: [Reason] {
+                [.noHoldings, .insufficientHistory]
+            }
+
+            public static var allCases: [Reason] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "no_holdings": self = .noHoldings
+                case "insufficient_history": self = .insufficientHistory
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .noHoldings: return "no_holdings"
+                case .insufficientHistory: return "insufficient_history"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Method: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case parametric
+            case blockBootstrap
+            case unknown(String)
+
+            public static var allKnownCases: [Method] {
+                [.parametric, .blockBootstrap]
+            }
+
+            public static var allCases: [Method] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "parametric": self = .parametric
+                case "block_bootstrap": self = .blockBootstrap
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .parametric: return "parametric"
+                case .blockBootstrap: return "block_bootstrap"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct ResearchPortfolioForecastEnvelope: Codable, Equatable, Sendable {
@@ -8484,10 +14294,10 @@ extension OpenAPI {
         public let label: String
         public let envVar: String
         public let configured: Bool
-        public let source: String
+        public let source: Source
         public let masked: String?
 
-        public init(provider: String, label: String, envVar: String, configured: Bool, source: String, masked: String? = nil) {
+        public init(provider: String, label: String, envVar: String, configured: Bool, source: Source, masked: String? = nil) {
             self.provider = provider
             self.label = label
             self.envVar = envVar
@@ -8503,6 +14313,47 @@ extension OpenAPI {
             case configured = "configured"
             case source = "source"
             case masked = "masked"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Source: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case settings
+            case env
+            case none
+            case unknown(String)
+
+            public static var allKnownCases: [Source] {
+                [.settings, .env, .none]
+            }
+
+            public static var allCases: [Source] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "settings": self = .settings
+                case "env": self = .env
+                case "none": self = .none
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .settings: return "settings"
+                case .env: return "env"
+                case .none: return "none"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8541,12 +14392,12 @@ extension OpenAPI {
 
     public struct ResearchScorecard: Codable, Equatable, Sendable {
         public let score: Decimal?
-        public let grade: String
+        public let grade: Grade
         public let evaluated: Int
         public let counts: Counts
         public let flags: [OpenAPI.ResearchScorecardFlag]
 
-        public init(score: Decimal? = nil, grade: String, evaluated: Int, counts: Counts, flags: [OpenAPI.ResearchScorecardFlag]) {
+        public init(score: Decimal? = nil, grade: Grade, evaluated: Int, counts: Counts, flags: [OpenAPI.ResearchScorecardFlag]) {
             self.score = score
             self.grade = grade
             self.evaluated = evaluated
@@ -8560,6 +14411,56 @@ extension OpenAPI {
             case evaluated = "evaluated"
             case counts = "counts"
             case flags = "flags"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Grade: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case strong
+            case healthy
+            case mixed
+            case weak
+            case poor
+            case unknownValue
+            case unknown(String)
+
+            public static var allKnownCases: [Grade] {
+                [.strong, .healthy, .mixed, .weak, .poor, .unknownValue]
+            }
+
+            public static var allCases: [Grade] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "strong": self = .strong
+                case "healthy": self = .healthy
+                case "mixed": self = .mixed
+                case "weak": self = .weak
+                case "poor": self = .poor
+                case "unknown": self = .unknownValue
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .strong: return "strong"
+                case .healthy: return "healthy"
+                case .mixed: return "mixed"
+                case .weak: return "weak"
+                case .poor: return "poor"
+                case .unknownValue: return "unknown"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
 
         public struct Counts: Codable, Equatable, Sendable {
@@ -8625,16 +14526,16 @@ extension OpenAPI {
 
     public struct ResearchScorecardFlag: Codable, Equatable, Sendable {
         public let metric: String
-        public let category: String
-        public let better: String
+        public let category: Category
+        public let better: Better
         public let value: Decimal
-        public let severity: String
+        public let severity: Severity
         public let code: String
         public let reasonKey: String
         public let reason: String
         public let benchmark: String
 
-        public init(metric: String, category: String, better: String, value: Decimal, severity: String, code: String, reasonKey: String, reason: String, benchmark: String) {
+        public init(metric: String, category: Category, better: Better, value: Decimal, severity: Severity, code: String, reasonKey: String, reason: String, benchmark: String) {
             self.metric = metric
             self.category = category
             self.better = better
@@ -8656,6 +14557,141 @@ extension OpenAPI {
             case reasonKey = "reasonKey"
             case reason = "reason"
             case benchmark = "benchmark"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Category: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case liquidity
+            case leverage
+            case profitability
+            case cashflow
+            case growth
+            case valuation
+            case dividend
+            case unknown(String)
+
+            public static var allKnownCases: [Category] {
+                [.liquidity, .leverage, .profitability, .cashflow, .growth, .valuation, .dividend]
+            }
+
+            public static var allCases: [Category] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "liquidity": self = .liquidity
+                case "leverage": self = .leverage
+                case "profitability": self = .profitability
+                case "cashflow": self = .cashflow
+                case "growth": self = .growth
+                case "valuation": self = .valuation
+                case "dividend": self = .dividend
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .liquidity: return "liquidity"
+                case .leverage: return "leverage"
+                case .profitability: return "profitability"
+                case .cashflow: return "cashflow"
+                case .growth: return "growth"
+                case .valuation: return "valuation"
+                case .dividend: return "dividend"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Better: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case higher
+            case lower
+            case unknown(String)
+
+            public static var allKnownCases: [Better] {
+                [.higher, .lower]
+            }
+
+            public static var allCases: [Better] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "higher": self = .higher
+                case "lower": self = .lower
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .higher: return "higher"
+                case .lower: return "lower"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum Severity: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case ok
+            case caution
+            case warn
+            case risk
+            case unknown(String)
+
+            public static var allKnownCases: [Severity] {
+                [.ok, .caution, .warn, .risk]
+            }
+
+            public static var allCases: [Severity] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "ok": self = .ok
+                case "caution": self = .caution
+                case "warn": self = .warn
+                case "risk": self = .risk
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .ok: return "ok"
+                case .caution: return "caution"
+                case .warn: return "warn"
+                case .risk: return "risk"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 
@@ -8767,28 +14803,28 @@ extension OpenAPI {
     }
 
     public struct SavedChart: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: SavedChartID
         public let name: String
-        public let chartType: String
+        public let chartType: ChartType
         /// ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400
-        public let chartVariant: String
+        public let chartVariant: ChartVariant
         /// Ignored when chart_variant=ranked
-        public let timeBucket: String
+        public let timeBucket: TimeBucket
         /// Ignored when all_categories=true
         public let categoryIds: [Int]
         /// Ignored when all_recipients=true
-        public let recipientIds: [Int]
+        public let recipientIds: [RecipientID]
         /// Ignored when all_tags=true
-        public let tagIds: [Int]
+        public let tagIds: [TagID]
         public let allCategories: Bool
         public let allRecipients: Bool
         public let allTags: Bool
-        public let dateRangeStart: String?
-        public let dateRangeEnd: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let dateRangeStart: CalendarDay?
+        public let dateRangeEnd: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, name: String, chartType: String, chartVariant: String, timeBucket: String, categoryIds: [Int], recipientIds: [Int], tagIds: [Int], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: String? = nil, dateRangeEnd: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: SavedChartID, name: String, chartType: ChartType, chartVariant: ChartVariant, timeBucket: TimeBucket, categoryIds: [Int], recipientIds: [RecipientID], tagIds: [TagID], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: CalendarDay? = nil, dateRangeEnd: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.chartType = chartType
@@ -8823,6 +14859,131 @@ extension OpenAPI {
             case createdAt = "created_at"
             case updatedAt = "updated_at"
         }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ChartType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case line
+            case bar
+            case area
+            case unknown(String)
+
+            public static var allKnownCases: [ChartType] {
+                [.line, .bar, .area]
+            }
+
+            public static var allCases: [ChartType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "line": self = .line
+                case "bar": self = .bar
+                case "area": self = .area
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .line: return "line"
+                case .bar: return "bar"
+                case .area: return "area"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum ChartVariant: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case `default`
+            case stacked
+            case grouped
+            case ranked
+            case unknown(String)
+
+            public static var allKnownCases: [ChartVariant] {
+                [.`default`, .stacked, .grouped, .ranked]
+            }
+
+            public static var allCases: [ChartVariant] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "default": self = .`default`
+                case "stacked": self = .stacked
+                case "grouped": self = .grouped
+                case "ranked": self = .ranked
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .`default`: return "default"
+                case .stacked: return "stacked"
+                case .grouped: return "grouped"
+                case .ranked: return "ranked"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// Ignored when chart_variant=ranked
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TimeBucket: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case monthly
+            case yearly
+            case unknown(String)
+
+            public static var allKnownCases: [TimeBucket] {
+                [.monthly, .yearly]
+            }
+
+            public static var allCases: [TimeBucket] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "monthly": self = .monthly
+                case "yearly": self = .yearly
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .monthly: return "monthly"
+                case .yearly: return "yearly"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
     }
 
     public struct Setting: Codable, Equatable, Sendable {
@@ -8844,22 +15005,71 @@ extension OpenAPI {
     }
 
     /// Persisted JSON from the read that produced the edit. Absence is distinct from JSON null.
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias SettingBaseline = JSONValue
+    /// Tells its branches apart by `exists`.
+    public enum SettingBaseline: Codable, Equatable, Sendable {
+        case existsFalse(ExistsFalseVariant)
+        case existsTrue(ExistsTrueVariant)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "exists"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(Bool.self, forKey: .tag) {
+            case false: self = .existsFalse(try ExistsFalseVariant(from: decoder))
+            case true: self = .existsTrue(try ExistsTrueVariant(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .existsFalse(let value): try value.encode(to: encoder)
+            case .existsTrue(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct ExistsFalseVariant: Codable, Equatable, Sendable {
+            public let exists: Bool
+
+            public init(exists: Bool) {
+                self.exists = exists
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case exists = "exists"
+            }
+        }
+
+        public struct ExistsTrueVariant: Codable, Equatable, Sendable {
+            public let exists: Bool
+            public let value: JSONValue
+
+            public init(exists: Bool, value: JSONValue) {
+                self.exists = exists
+                self.value = value
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case exists = "exists"
+                case value = "value"
+            }
+        }
+    }
 
     public struct Split: Codable, Equatable, Sendable {
-        public let id: Int
-        public let transactionId: Int
-        public let recipientId: Int
+        public let id: SplitID
+        public let transactionId: TransactionID
+        public let recipientId: RecipientID
         public let recipientName: String?
         public let amount: Decimal
         public let amountPaid: Decimal
         public let note: String?
         public let isSettled: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, transactionId: Int, recipientId: Int, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String) {
+        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.transactionId = transactionId
             self.recipientId = recipientId
@@ -8911,7 +15121,7 @@ extension OpenAPI {
     /// exchange rates, per transaction currency. Open splits in a currency without a stored rate are
     /// left out and counted.
     public struct SplitOwed: Codable, Equatable, Sendable {
-        public let recipientId: Int
+        public let recipientId: RecipientID
         public let recipientName: String
         public let totalOwed: Decimal
         public let totalPaid: Decimal
@@ -8919,9 +15129,9 @@ extension OpenAPI {
         public let splitCount: Int
         /// Open splits left out for want of a stored rate.
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
 
-        public init(recipientId: Int, recipientName: String, totalOwed: Decimal, totalPaid: Decimal, remaining: Decimal, splitCount: Int, unconvertedCount: Int, unconvertedCurrencies: [String]) {
+        public init(recipientId: RecipientID, recipientName: String, totalOwed: Decimal, totalPaid: Decimal, remaining: Decimal, splitCount: Int, unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
             self.recipientId = recipientId
             self.recipientName = recipientName
             self.totalOwed = totalOwed
@@ -8945,25 +15155,25 @@ extension OpenAPI {
     }
 
     public struct SplitOwedDetail: Codable, Equatable, Sendable {
-        public let id: Int
-        public let transactionId: Int
-        public let recipientId: Int
+        public let id: SplitID
+        public let transactionId: TransactionID
+        public let recipientId: RecipientID
         public let recipientName: String?
         public let amount: Decimal
         public let amountPaid: Decimal
         public let note: String?
         public let isSettled: Bool
-        public let createdAt: String
-        public let updatedAt: String
-        public let transactionDate: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
+        public let transactionDate: CalendarDay
         public let transactionMemo: String?
         public let transactionAmount: Decimal
-        public let transactionCurrency: String
+        public let transactionCurrency: CurrencyCode
         public let bankAccount: String?
         public let transactionRecipientName: String?
         public let remaining: Decimal
 
-        public init(id: Int, transactionId: Int, recipientId: Int, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String, transactionDate: String, transactionMemo: String? = nil, transactionAmount: Decimal, transactionCurrency: String, bankAccount: String? = nil, transactionRecipientName: String? = nil, remaining: Decimal) {
+        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: Instant, updatedAt: Instant, transactionDate: CalendarDay, transactionMemo: String? = nil, transactionAmount: Decimal, transactionCurrency: CurrencyCode, bankAccount: String? = nil, transactionRecipientName: String? = nil, remaining: Decimal) {
             self.id = id
             self.transactionId = transactionId
             self.recipientId = recipientId
@@ -9005,14 +15215,14 @@ extension OpenAPI {
     }
 
     public struct SplitPayment: Codable, Equatable, Sendable {
-        public let id: Int
-        public let splitId: Int
+        public let id: SplitPaymentID
+        public let splitId: SplitID
         public let amount: Decimal
         public let note: String?
-        public let paidAt: String
-        public let createdAt: String
+        public let paidAt: CalendarDay
+        public let createdAt: Instant
 
-        public init(id: Int, splitId: Int, amount: Decimal, note: String? = nil, paidAt: String, createdAt: String) {
+        public init(id: SplitPaymentID, splitId: SplitID, amount: Decimal, note: String? = nil, paidAt: CalendarDay, createdAt: Instant) {
             self.id = id
             self.splitId = splitId
             self.amount = amount
@@ -9032,14 +15242,14 @@ extension OpenAPI {
     }
 
     public struct Tag: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: TagID
         public let slug: String
         public let color: String?
         public let isActive: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, slug: String, color: String? = nil, isActive: Bool, createdAt: String, updatedAt: String) {
+        public init(id: TagID, slug: String, color: String? = nil, isActive: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.slug = slug
             self.color = color
@@ -9096,21 +15306,21 @@ extension OpenAPI {
     }
 
     public struct Transaction: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: TransactionID
         /// YYYY-MM-DD
-        public let transactionDate: String
+        public let transactionDate: CalendarDay
         /// Stable linked account identity
-        public let accountId: Int?
+        public let accountId: AccountID?
         /// True when ordinary income/spending statistics exclude this internal movement.
         public let isTransfer: Bool?
         /// Existing transaction on the other account, when a reciprocal transfer is paired.
-        public let transferPeerId: Int?
+        public let transferPeerId: TransactionID?
         /// Origin of transfer classification, including automatic, manual, system or brokerage.
         public let transferSource: String?
         /// Canonical display name projected from the linked account (null when account_id is); use
         /// account_id as the stable identity
         public let bankAccount: String?
-        public let recipientId: Int?
+        public let recipientId: RecipientID?
         public let recipientName: String?
         public let memo: String?
         public let amount: Decimal
@@ -9119,14 +15329,14 @@ extension OpenAPI {
         /// rate: `amount_eur` then holds the native amount, exactly as on a read without
         /// normalize_to_eur.
         public let amountEurUnconverted: Bool?
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let balance: Decimal?
         /// Per-account, per-currency running balance over the filtered set before pagination. The
         /// latest preceding stored statement balance resets the cumulative amount; later unstamped rows
         /// advance it. Present only when include_balance=true. Rows with no currency are treated as
         /// EUR.
         public let runningBalance: Decimal?
-        public let categoryId: Int?
+        public let categoryId: CategoryID?
         /// Format: GENERAL:DETAIL
         public let categoryName: String?
         public let comment: String?
@@ -9134,11 +15344,11 @@ extension OpenAPI {
         public let isActive: Bool?
         /// Tags attached to this transaction
         public let tags: [OpenAPI.TransactionTagRef]?
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, transactionDate: String, accountId: Int? = nil, isTransfer: Bool? = nil, transferPeerId: Int? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, amountEurUnconverted: Bool? = nil, currency: String? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: TransactionID, transactionDate: CalendarDay, accountId: AccountID? = nil, isTransfer: Bool? = nil, transferPeerId: TransactionID? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, amountEurUnconverted: Bool? = nil, currency: CurrencyCode? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.transactionDate = transactionDate
             self.accountId = accountId
@@ -9194,18 +15404,18 @@ extension OpenAPI {
     }
 
     public struct TransactionCreate: Codable, Equatable, Sendable {
-        public let transactionDate: String
+        public let transactionDate: CalendarDay
         /// Canonical account identity
-        public let accountId: Int
-        public let recipientId: Int
+        public let accountId: AccountID
+        public let recipientId: RecipientID
         public let memo: String?
         public let amount: Decimal
-        public let currency: String?
+        public let currency: CurrencyCode?
         public let balance: Decimal?
         /// Absent or null files the transaction uncategorized. Validated since 2026-08-11 — before that
         /// this operation forwarded the field raw and a malformed value reached Postgres as a cast
         /// error (500).
-        public let categoryId: Int?
+        public let categoryId: CategoryID?
         public let comment: String?
         /// Tag slugs to assign (replaces existing tags)
         public let tags: [String]?
@@ -9213,7 +15423,7 @@ extension OpenAPI {
         /// false to retain the default 409 duplicate guard.
         public let allowDuplicate: Bool?
 
-        public init(transactionDate: String, accountId: Int, recipientId: Int, memo: String? = nil, amount: Decimal, currency: String? = nil, balance: Decimal? = nil, categoryId: Int? = nil, comment: String? = nil, tags: [String]? = nil, allowDuplicate: Bool? = nil) {
+        public init(transactionDate: CalendarDay, accountId: AccountID, recipientId: RecipientID, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, balance: Decimal? = nil, categoryId: CategoryID? = nil, comment: String? = nil, tags: [String]? = nil, allowDuplicate: Bool? = nil) {
             self.transactionDate = transactionDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -9252,9 +15462,9 @@ extension OpenAPI {
         /// currency has no stored rate; each carries amount_eur_unconverted=true.
         public let unconvertedCount: Int?
         /// Additive (ADR-216), present only with normalize_to_eur=true.
-        public let unconvertedCurrencies: [String]?
+        public let unconvertedCurrencies: [CurrencyCode]?
 
-        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.Transaction], links: [OpenAPI.Link], unconvertedCount: Int? = nil, unconvertedCurrencies: [String]? = nil) {
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.Transaction], links: [OpenAPI.Link], unconvertedCount: Int? = nil, unconvertedCurrencies: [CurrencyCode]? = nil) {
             self.total = total
             self.limit = limit
             self.offset = offset
@@ -9317,12 +15527,12 @@ extension OpenAPI {
 
     /// A tag as transaction and planned-transaction reads embed it (no timestamps).
     public struct TransactionTagRef: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: TagID
         public let slug: String
         public let color: String?
         public let isActive: Bool
 
-        public init(id: Int, slug: String, color: String? = nil, isActive: Bool) {
+        public init(id: TagID, slug: String, color: String? = nil, isActive: Bool) {
             self.id = id
             self.slug = slug
             self.color = color
@@ -9340,21 +15550,21 @@ extension OpenAPI {
     /// PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key
     /// leaves it unchanged.
     public struct TransactionUpdate: Codable, Equatable, Sendable {
-        public let transactionDate: String?
-        public let accountId: Int?
-        public let recipientId: Int?
+        public let transactionDate: CalendarDay?
+        public let accountId: AccountID?
+        public let recipientId: Nullable<RecipientID>
         public let recipientName: String?
         public let memo: String?
         public let amount: Decimal?
-        public let currency: String?
-        public let categoryId: Int?
+        public let currency: CurrencyCode?
+        public let categoryId: Nullable<CategoryID>
         public let categoryName: String?
         public let comment: String?
         public let isActive: Bool?
         /// Tag slugs to assign (replaces existing tags when present)
         public let tags: [String]?
 
-        public init(transactionDate: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal? = nil, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [String]? = nil) {
+        public init(transactionDate: CalendarDay? = nil, accountId: AccountID? = nil, recipientId: Nullable<RecipientID> = .absent, recipientName: String? = nil, memo: String? = nil, amount: Decimal? = nil, currency: CurrencyCode? = nil, categoryId: Nullable<CategoryID> = .absent, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [String]? = nil) {
             self.transactionDate = transactionDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -9383,6 +15593,38 @@ extension OpenAPI {
             case isActive = "is_active"
             case tags = "tags"
         }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.transactionDate = try container.decodeIfPresent(CalendarDay.self, forKey: .transactionDate)
+            self.accountId = try container.decodeIfPresent(AccountID.self, forKey: .accountId)
+            self.recipientId = try container.decodeNullable(RecipientID.self, forKey: .recipientId)
+            self.recipientName = try container.decodeIfPresent(String.self, forKey: .recipientName)
+            self.memo = try container.decodeIfPresent(String.self, forKey: .memo)
+            self.amount = try container.decodeIfPresent(Decimal.self, forKey: .amount)
+            self.currency = try container.decodeIfPresent(CurrencyCode.self, forKey: .currency)
+            self.categoryId = try container.decodeNullable(CategoryID.self, forKey: .categoryId)
+            self.categoryName = try container.decodeIfPresent(String.self, forKey: .categoryName)
+            self.comment = try container.decodeIfPresent(String.self, forKey: .comment)
+            self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
+            self.tags = try container.decodeIfPresent([String].self, forKey: .tags)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(transactionDate, forKey: .transactionDate)
+            try container.encodeIfPresent(accountId, forKey: .accountId)
+            try container.encodeNullable(recipientId, forKey: .recipientId)
+            try container.encodeIfPresent(recipientName, forKey: .recipientName)
+            try container.encodeIfPresent(memo, forKey: .memo)
+            try container.encodeIfPresent(amount, forKey: .amount)
+            try container.encodeIfPresent(currency, forKey: .currency)
+            try container.encodeNullable(categoryId, forKey: .categoryId)
+            try container.encodeIfPresent(categoryName, forKey: .categoryName)
+            try container.encodeIfPresent(comment, forKey: .comment)
+            try container.encodeIfPresent(isActive, forKey: .isActive)
+            try container.encodeIfPresent(tags, forKey: .tags)
+        }
     }
 
     /// Additive (ADR-216). An amount without a stored exchange rate is left out of every figure of the
@@ -9391,9 +15633,9 @@ extension OpenAPI {
     /// currencies, sorted. Both are zero/empty when every amount converted.
     public struct UnconvertedAmounts: Codable, Equatable, Sendable {
         public let unconvertedCount: Int
-        public let unconvertedCurrencies: [String]
+        public let unconvertedCurrencies: [CurrencyCode]
 
-        public init(unconvertedCount: Int, unconvertedCurrencies: [String]) {
+        public init(unconvertedCount: Int, unconvertedCurrencies: [CurrencyCode]) {
             self.unconvertedCount = unconvertedCount
             self.unconvertedCurrencies = unconvertedCurrencies
         }
@@ -9426,20 +15668,20 @@ extension OpenAPI {
     }
 
     public struct WatchlistItem: Codable, Equatable, Sendable {
-        public let id: Int
+        public let id: WatchlistItemID
         public let name: String
         public let symbol: String?
-        public let assetClass: String
+        public let assetClass: AssetClass
         public let targetPrice: Decimal
-        public let currency: String
+        public let currency: CurrencyCode
         public let notes: String?
         public let priceProviderId: String?
         /// Live price snapshotted when the item was added (ADR-097 backtest).
         public let addedPrice: Decimal?
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, targetPrice: Decimal, currency: String, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: String, updatedAt: String) {
+        public init(id: WatchlistItemID, name: String, symbol: String? = nil, assetClass: AssetClass, targetPrice: Decimal, currency: CurrencyCode, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -9465,6 +15707,50 @@ extension OpenAPI {
             case addedPrice = "added_price"
             case createdAt = "created_at"
             case updatedAt = "updated_at"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum AssetClass: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case stock
+            case etf
+            case crypto
+            case metals
+            case unknown(String)
+
+            public static var allKnownCases: [AssetClass] {
+                [.stock, .etf, .crypto, .metals]
+            }
+
+            public static var allCases: [AssetClass] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "stock": self = .stock
+                case "etf": self = .etf
+                case "crypto": self = .crypto
+                case "metals": self = .metals
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .stock: return "stock"
+                case .etf: return "etf"
+                case .crypto: return "crypto"
+                case .metals: return "metals"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
         }
     }
 }

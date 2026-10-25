@@ -189,7 +189,7 @@ struct TransactionInspectorView: View {
                 Divider()
                 fieldRow(.amount) { MoneyText(amount: row.amount, currency: row.displayCurrency, settings: settings) }
                 Divider()
-                fieldRow(.currency) { valueText(row.currency) }
+                fieldRow(.currency) { valueText(row.currency?.rawValue) }
                 Divider()
                 fieldRow(.bank) { valueText(row.bank) }
                 if let balance = row.balance {
@@ -203,7 +203,7 @@ struct TransactionInspectorView: View {
                 Divider()
                 fieldRow(.comment) { valueText(row.comment) }
                 Divider()
-                staticRow(strings.t("txPage.field.id")) { Text(verbatim: String(row.id)).monospacedDigit() }
+                staticRow(strings.t("txPage.field.id")) { Text(verbatim: String(row.id.rawValue)).monospacedDigit() }
             }
         }
     }
@@ -238,19 +238,19 @@ struct TransactionInspectorView: View {
                     } label: {
                         Image(systemName: "checkmark")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.vision(.ghost, size: .iconSm))
                     .foregroundStyle(theme.primary)
                     .disabled(inspector.isSaving)
-                    .help(strings.t("common.save"))
+                    .visionTooltip(strings.t("common.save"))
                     .accessibilityLabel(strings.t("common.save"))
                     Button {
                         inspector.cancelEdit()
                     } label: {
                         Image(systemName: "xmark")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.vision(.ghost, size: .iconSm))
                     .foregroundStyle(theme.secondaryLabel)
-                    .help(strings.t("common.cancel"))
+                    .visionTooltip(strings.t("common.cancel"))
                     .accessibilityLabel(strings.t("aria.cancel"))
                 }
                 if field == .amount && inspector.amountError {
@@ -272,9 +272,9 @@ struct TransactionInspectorView: View {
                     Image(systemName: "pencil")
                         .imageScale(.small)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.tertiaryLabel)
-                .help(strings.t("common.editField", ["field": label]))
+                .visionTooltip(strings.t("common.editField", ["field": label]))
                 .accessibilityLabel(strings.t("common.editField", ["field": label]))
             }
             .padding(.vertical, 8)
@@ -361,8 +361,7 @@ struct TransactionInspectorView: View {
             Label(title, systemImage: symbol)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.borderless)
-        .foregroundStyle(destructive ? theme.destructive : theme.foreground)
+        .buttonStyle(.vision(.ghost, size: .sm))
     }
 }
 
@@ -395,8 +394,7 @@ struct TransactionAttachmentsPanel: View {
                         Text(strings.t("txPage.uploadAttachment"))
                     }
                 }
-                .buttonStyle(.visionOutline)
-                .controlSize(.small)
+                .buttonStyle(.vision(.outline, size: .sm))
                 .disabled(attachments.isUploading)
             }
             if attachments.uploadFailed {
@@ -419,20 +417,6 @@ struct TransactionAttachmentsPanel: View {
                 set: { url in
                     if url == nil { attachments.closePreview() }
                 }))
-        .alert(
-            strings.t("txPage.deleteAttachment"),
-            isPresented: Binding(get: { attachments.pendingDelete != nil }, set: { _ in })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { attachments.cancelDelete() }
-            Button(strings.t("common.delete"), role: .destructive) {
-                Task {
-                    await attachments.confirmDelete()
-                    model.reportAttachmentDeleteFailure()
-                }
-            }
-        } message: {
-            Text(strings.t("txPage.deleteAttachment.desc", ["name": attachments.pendingDelete?.filename ?? ""]))
-        }
     }
 
     @ViewBuilder
@@ -499,9 +483,9 @@ struct TransactionAttachmentsPanel: View {
                     Image(systemName: "arrow.down.circle")
                 }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .iconSm))
             .disabled(attachments.downloadingId != nil)
-            .help(strings.t("aria.downloadAttachment", ["name": item.filename]))
+            .visionTooltip(strings.t("aria.downloadAttachment", ["name": item.filename]))
             .accessibilityLabel(strings.t("aria.downloadAttachment", ["name": item.filename]))
             Button {
                 attachments.requestDelete(item)
@@ -512,10 +496,10 @@ struct TransactionAttachmentsPanel: View {
                     Image(systemName: "trash")
                 }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.vision(.ghost, size: .iconSm))
             .foregroundStyle(theme.destructive)
             .disabled(attachments.deletingId != nil)
-            .help(strings.t("aria.deleteAttachment", ["name": item.filename]))
+            .visionTooltip(strings.t("aria.deleteAttachment", ["name": item.filename]))
             .accessibilityLabel(strings.t("aria.deleteAttachment", ["name": item.filename]))
         }
     }

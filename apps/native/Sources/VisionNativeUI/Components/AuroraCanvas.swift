@@ -50,10 +50,10 @@ struct AuroraCanvas: View {
     }
 
     var body: some View {
-        if visualEffects == "reduced" || reduceTransparency || contrast == .increased {
+        if visualEffects == .reduced || reduceTransparency || contrast == .increased {
             EmptyView()
         } else {
-            let enhanced = visualEffects == "enhanced"
+            let enhanced = visualEffects == .enhanced
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
                     wash(proxy.size)

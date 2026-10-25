@@ -219,12 +219,14 @@ private actor ResidencyService: AIChatService {
     func chatConversations(offset: Int) async throws -> AIChatConversationPage {
         .init(items: [], total: 0, limit: 50, offset: offset)
     }
-    func chatConversation(id: String) async throws -> AIChatConversationDetail { throw APIError.backendUnavailable }
-    func chatCreate(model: String?) async throws -> AIChatConversationDetail { throw APIError.backendUnavailable }
-    func chatRename(id: String, title: String) async throws -> AIChatConversation {
+    func chatConversation(id: AiConversationID) async throws -> AIChatConversationDetail {
         throw APIError.backendUnavailable
     }
-    func chatDelete(id: String) async throws {}
+    func chatCreate(model: String?) async throws -> AIChatConversationDetail { throw APIError.backendUnavailable }
+    func chatRename(id: AiConversationID, title: String) async throws -> AIChatConversation {
+        throw APIError.backendUnavailable
+    }
+    func chatDelete(id: AiConversationID) async throws {}
     func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void)
         async throws -> AIChatComplete
     {

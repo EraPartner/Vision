@@ -2,12 +2,15 @@ import Foundation
 
 /// Read models retain server-owned Decimal amounts and their reporting currency.
 
+/// Whether a partition, broker series or broker row belongs to a broker account.
+public typealias PortfolioAssignment = OpenAPI.PortfolioSummaryByAccountItem.Assignment
+
 public struct PortfolioInvestment: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
-    public let currency: String
+    public let assetClass: OpenAPI.AssetClass
+    public let currency: CurrencyCode
     public let currentPrice: Decimal?
     public let interestRate: Decimal?
     public let maturityDate: String?
@@ -17,8 +20,8 @@ public struct PortfolioInvestment: Codable, Equatable, Sendable, Identifiable {
     public let municipalityTaxRate: Decimal?
     public let notes: String?
     public let isActive: Bool
-    public let priceProvider: String
-    public let priceProviderId: String?
+    public let priceProvider: OpenAPI.PriceProvider
+    public let priceProviderId: String?  // lint:allow raw-id provider symbol, not a Vision entity (UNTYPED_IDS)
     public let priceProviderUrl: String?
     public let priceProviderLatestUrl: String?
     public let priceProviderLatestPath: String?
@@ -61,11 +64,11 @@ public struct PortfolioInvestment: Codable, Equatable, Sendable, Identifiable {
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decode(Int.self, forKey: .id)
+        id = try values.decode(InvestmentID.self, forKey: .id)
         name = try values.decode(String.self, forKey: .name)
         symbol = try values.decodeIfPresent(String.self, forKey: .symbol)
-        assetClass = try values.decode(String.self, forKey: .assetClass)
-        currency = try values.decode(String.self, forKey: .currency)
+        assetClass = try values.decode(OpenAPI.AssetClass.self, forKey: .assetClass)
+        currency = try values.decode(CurrencyCode.self, forKey: .currency)
         currentPrice = try values.portfolioDecimalIfPresent(forKey: .currentPrice)
         interestRate = try values.portfolioDecimalIfPresent(forKey: .interestRate)
         maturityDate = try values.decodeIfPresent(String.self, forKey: .maturityDate)
@@ -75,7 +78,7 @@ public struct PortfolioInvestment: Codable, Equatable, Sendable, Identifiable {
         municipalityTaxRate = try values.portfolioDecimalIfPresent(forKey: .municipalityTaxRate)
         notes = try values.decodeIfPresent(String.self, forKey: .notes)
         isActive = try values.decode(Bool.self, forKey: .isActive)
-        priceProvider = try values.decode(String.self, forKey: .priceProvider)
+        priceProvider = try values.decode(OpenAPI.PriceProvider.self, forKey: .priceProvider)
         priceProviderId = try values.decodeIfPresent(String.self, forKey: .priceProviderId)
         priceProviderUrl = try values.decodeIfPresent(String.self, forKey: .priceProviderUrl)
         priceProviderLatestUrl = try values.decodeIfPresent(String.self, forKey: .priceProviderLatestUrl)
@@ -92,27 +95,27 @@ public struct PortfolioInvestment: Codable, Equatable, Sendable, Identifiable {
 }
 
 public struct PortfolioTransaction: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
-    public let investmentId: Int
-    public let type: String
+    public let id: PortfolioTransactionID
+    public let investmentId: InvestmentID
+    public let type: OpenAPI.PortfolioTxnType
     public let date: String
     public let amount: Decimal
     public let units: Decimal?
     public let pricePerUnit: Decimal?
     public let fees: Decimal?
     public let taxes: Decimal?
-    public let currency: String
+    public let currency: CurrencyCode
     public let fxRateToEur: Decimal?
     public let note: String?
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let isRecurring: Bool
-    public let recurrenceInterval: String?
+    public let recurrenceInterval: OpenAPI.RecurrenceInterval?
     public let recurrenceEndDate: String?
-    public let importBatchId: String?
+    public let importBatchId: PortfolioImportBatchID?
     public let createdAt: String
     public let updatedAt: String
-    public let incomeRecognitionRole: String
-    public let dividendAmountConvention: String
+    public let incomeRecognitionRole: OpenAPI.PortfolioTransaction.IncomeRecognitionRole
+    public let dividendAmountConvention: OpenAPI.PortfolioTransaction.DividendAmountConvention
     enum CodingKeys: String, CodingKey {
         case id = "id"
         case investmentId = "investment_id"
@@ -138,32 +141,38 @@ public struct PortfolioTransaction: Codable, Equatable, Sendable, Identifiable {
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decode(Int.self, forKey: .id)
-        investmentId = try values.decode(Int.self, forKey: .investmentId)
-        type = try values.decode(String.self, forKey: .type)
+        id = try values.decode(PortfolioTransactionID.self, forKey: .id)
+        investmentId = try values.decode(InvestmentID.self, forKey: .investmentId)
+        type = try values.decode(OpenAPI.PortfolioTxnType.self, forKey: .type)
         date = try values.decode(String.self, forKey: .date)
         amount = try values.portfolioDecimal(forKey: .amount)
         units = try values.portfolioDecimalIfPresent(forKey: .units)
         pricePerUnit = try values.portfolioDecimalIfPresent(forKey: .pricePerUnit)
         fees = try values.portfolioDecimalIfPresent(forKey: .fees)
         taxes = try values.portfolioDecimalIfPresent(forKey: .taxes)
-        currency = try values.decode(String.self, forKey: .currency)
+        currency = try values.decode(CurrencyCode.self, forKey: .currency)
         fxRateToEur = try values.portfolioDecimalIfPresent(forKey: .fxRateToEur)
         note = try values.decodeIfPresent(String.self, forKey: .note)
-        accountId = try values.decodeIfPresent(Int.self, forKey: .accountId)
+        accountId = try values.decodeIfPresent(AccountID.self, forKey: .accountId)
         isRecurring = try values.decode(Bool.self, forKey: .isRecurring)
-        recurrenceInterval = try values.decodeIfPresent(String.self, forKey: .recurrenceInterval)
+        recurrenceInterval = try values.decodeIfPresent(OpenAPI.RecurrenceInterval.self, forKey: .recurrenceInterval)
         recurrenceEndDate = try values.decodeIfPresent(String.self, forKey: .recurrenceEndDate)
-        importBatchId = try values.decodeIfPresent(String.self, forKey: .importBatchId)
+        importBatchId = try values.decodeIfPresent(PortfolioImportBatchID.self, forKey: .importBatchId)
         createdAt = try values.decode(String.self, forKey: .createdAt)
         updatedAt = try values.decode(String.self, forKey: .updatedAt)
         incomeRecognitionRole =
             values.contains(.incomeRecognitionRole)
-            ? try values.decode(String.self, forKey: .incomeRecognitionRole) : "standard"
-        dividendAmountConvention = try values.decode(String.self, forKey: .dividendAmountConvention)
-        guard ["standard", "included_in_units"].contains(incomeRecognitionRole),
-            incomeRecognitionRole != "included_in_units" || type == "dividend"
-        else {
+            ? try values.decode(OpenAPI.PortfolioTransaction.IncomeRecognitionRole.self, forKey: .incomeRecognitionRole)
+            : .standard
+        dividendAmountConvention = try values.decode(
+            OpenAPI.PortfolioTransaction.DividendAmountConvention.self, forKey: .dividendAmountConvention)
+        let verifiedRole: Bool
+        switch incomeRecognitionRole {
+        case .standard: verifiedRole = true
+        case .includedInUnits: verifiedRole = type == .dividend
+        case .unknown: verifiedRole = false
+        }
+        guard verifiedRole else {
             throw DecodingError.dataCorruptedError(
                 forKey: .incomeRecognitionRole, in: values,
                 debugDescription: "Unverified portfolio income recognition role")
@@ -172,13 +181,13 @@ public struct PortfolioTransaction: Codable, Equatable, Sendable, Identifiable {
 }
 
 public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
+    public let assetClass: OpenAPI.AssetClass
     public let isActive: Bool
-    public let currency: String
-    public let originalCurrency: String
+    public let currency: CurrencyCode
+    public let originalCurrency: CurrencyCode
     public let createdAt: String
     public let updatedAt: String
     public let notes: String?
@@ -187,8 +196,8 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
     public let cadastralIncome: Decimal?
     public let municipalityTaxRate: Decimal?
     public let maturityDate: String?
-    public let priceProvider: String?
-    public let priceProviderId: String?
+    public let priceProvider: OpenAPI.PriceProvider?
+    public let priceProviderId: String?  // lint:allow raw-id provider symbol, not a Vision entity (UNTYPED_IDS)
     public let priceUpdatedAt: String?
     public let totalUnits: Decimal
     public let currentPrice: Decimal
@@ -236,13 +245,17 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
     /// The broker filter reads these instead of adding `byAccount` rows.
     public let accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]
     public var isClosed: Bool { totalUnits <= 0 && currentValue == 0 }
-    public var hasLiveProvider: Bool { (priceProvider.flatMap { $0.isEmpty ? nil : $0 } ?? "manual") != "manual" }
+    /// A provider other than `manual`; an absent or empty provider is manual.
+    public var hasLiveProvider: Bool {
+        guard let provider = priceProvider, provider != .unknown("") else { return false }
+        return provider != .manual
+    }
     public func rawValue(_ key: String) -> TableRawValue {
         switch key {
         case "name": .text(name)
         case "symbol": symbol.map(TableRawValue.text) ?? .none
-        case "assetClass": .text(assetClass)
-        case "currency": .text(currency)
+        case "assetClass": .text(assetClass.rawValue)
+        case "currency": .text(currency.rawValue)
         case "totalUnits": .number(totalUnits)
         case "currentPrice": .number(currentPrice)
         case "currentValue": .number(currentValue)
@@ -305,13 +318,13 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        id = try values.decode(Int.self, forKey: .id)
+        id = try values.decode(InvestmentID.self, forKey: .id)
         name = try values.decode(String.self, forKey: .name)
         symbol = try values.decodeIfPresent(String.self, forKey: .symbol)
-        assetClass = try values.decode(String.self, forKey: .assetClass)
+        assetClass = try values.decode(OpenAPI.AssetClass.self, forKey: .assetClass)
         isActive = try values.decode(Bool.self, forKey: .isActive)
-        currency = try values.decode(String.self, forKey: .currency)
-        originalCurrency = try values.decode(String.self, forKey: .originalCurrency)
+        currency = try values.decode(CurrencyCode.self, forKey: .currency)
+        originalCurrency = try values.decode(CurrencyCode.self, forKey: .originalCurrency)
         createdAt = try values.decode(String.self, forKey: .createdAt)
         updatedAt = try values.decode(String.self, forKey: .updatedAt)
         notes = try values.decodeIfPresent(String.self, forKey: .notes)
@@ -320,7 +333,7 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
         cadastralIncome = try values.portfolioDecimalIfPresent(forKey: .cadastralIncome)
         municipalityTaxRate = try values.portfolioDecimalIfPresent(forKey: .municipalityTaxRate)
         maturityDate = try values.decodeIfPresent(String.self, forKey: .maturityDate)
-        priceProvider = try values.decodeIfPresent(String.self, forKey: .priceProvider)
+        priceProvider = try values.decodeIfPresent(OpenAPI.PriceProvider.self, forKey: .priceProvider)
         priceProviderId = try values.decodeIfPresent(String.self, forKey: .priceProviderId)
         priceUpdatedAt = try values.decodeIfPresent(String.self, forKey: .priceUpdatedAt)
         totalUnits = try values.decode(Decimal.self, forKey: .totalUnits)
@@ -366,9 +379,9 @@ public struct PortfolioHolding: Decodable, Equatable, Sendable, Identifiable {
 }
 
 public struct PortfolioPartition: Codable, Equatable, Sendable {
-    public let accountId: Int?
-    public let assignment: String
-    public let contributionKind: String
+    public let accountId: AccountID?
+    public let assignment: PortfolioAssignment
+    public let contributionKind: OpenAPI.PortfolioSummaryByAccountItem.ContributionKind
     public let oversold: Bool
     public let currentValue: Decimal
     public let totalInvested: Decimal
@@ -435,7 +448,7 @@ public struct PortfolioCashFees: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioCashFeeAccount: Codable, Equatable, Sendable {
-    public let accountId: Int
+    public let accountId: AccountID
     public let total: Decimal
     enum CodingKeys: String, CodingKey {
         case accountId = "account_id"
@@ -444,7 +457,7 @@ public struct PortfolioCashFeeAccount: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let computedAt: String
     public let totals: PortfolioTotals
     public let summaries: [PortfolioHolding]
@@ -470,7 +483,7 @@ public struct PortfolioSummaryData: Decodable, Equatable, Sendable {
     }
     public init(from decoder: any Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        currency = try values.decode(String.self, forKey: .currency)
+        currency = try values.decode(CurrencyCode.self, forKey: .currency)
         computedAt = try values.decode(String.self, forKey: .computedAt)
         totals = try values.decode(PortfolioTotals.self, forKey: .totals)
         summaries = try values.decode([PortfolioHolding].self, forKey: .summaries)
@@ -545,12 +558,18 @@ extension PortfolioHoldingTotals {
 extension PortfolioSummaryData {
     /// The server totals of exactly these asset classes: the asset group with the same classes, or
     /// the single class's own entry (`findHoldingTotals`).
-    public func holdingTotals(assetClasses: [String]) -> PortfolioHoldingTotals {
+    public func holdingTotals(assetClasses: [OpenAPI.AssetClass]) -> PortfolioHoldingTotals {
         let wanted = Set(assetClasses)
-        if let group = byAssetGroup.first(where: { Set($0.assetClasses) == wanted }) {
+        // The generated totals name their classes as text; compare them as asset classes.
+        let group = byAssetGroup.first { entry in
+            Set(entry.assetClasses.map { OpenAPI.AssetClass(rawValue: $0) }) == wanted
+        }
+        if let group {
             return PortfolioHoldingTotals(group)
         }
-        if assetClasses.count == 1, let single = byAssetClass.first(where: { $0.assetClass == assetClasses[0] }) {
+        if assetClasses.count == 1,
+            let single = byAssetClass.first(where: { OpenAPI.AssetClass(rawValue: $0.assetClass) == assetClasses[0] })
+        {
             return PortfolioHoldingTotals(single)
         }
         return .empty
@@ -622,11 +641,11 @@ public struct PortfolioHeatmap: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioPerformanceBreakdown: Codable, Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
-    public let currency: String
+    public let assetClass: OpenAPI.AssetClass
+    public let currency: CurrencyCode
     public let currentValue: Decimal
     public let totalInvested: Decimal
     public let gainLoss: Decimal
@@ -653,7 +672,7 @@ public struct PortfolioPerformanceBreakdown: Codable, Equatable, Sendable, Ident
 }
 
 public struct PortfolioPerformanceData: Codable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let startDate: String
     public let endDate: String
     public let snapshots: [PortfolioPerformanceSnapshot]
@@ -675,9 +694,9 @@ public struct PortfolioPerformanceData: Codable, Equatable, Sendable {
 
 public struct PortfolioBrokerSeries: Codable, Equatable, Sendable, Identifiable {
     public let accountKey: String
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let accountName: String
-    public let assignment: String
+    public let assignment: PortfolioAssignment
     public var id: String { accountKey }
     enum CodingKeys: String, CodingKey {
         case accountKey = "accountKey"
@@ -689,11 +708,11 @@ public struct PortfolioBrokerSeries: Codable, Equatable, Sendable, Identifiable 
 
 public struct PortfolioBrokerRow: Codable, Equatable, Sendable, Identifiable {
     public let date: String
-    public let currency: String
+    public let currency: CurrencyCode
     public let accountKey: String
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let accountName: String
-    public let assignment: String
+    public let assignment: PortfolioAssignment
     public let value: Decimal
     public let invested: Decimal
     public let gainLoss: Decimal
@@ -714,7 +733,7 @@ public struct PortfolioBrokerRow: Codable, Equatable, Sendable, Identifiable {
 }
 
 public struct PortfolioBrokerPerformance: Codable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let startDate: String
     public let endDate: String
     public let dates: [String]
@@ -732,6 +751,7 @@ public struct PortfolioBrokerPerformance: Codable, Equatable, Sendable {
 
 public struct PortfolioQuote: Codable, Equatable, Sendable, Identifiable {
     public let symbol: String
+    /// Provider text, not always ISO 4217 (for example `GBp`); format with `ResearchMoney`.
     public let currency: String
     public let name: String?
     public let price: Decimal?
@@ -767,8 +787,8 @@ public struct PortfolioNewsArticle: Codable, Equatable, Sendable, Identifiable {
 }
 
 public struct PortfolioExposureContribution: Codable, Equatable, Sendable {
-    public let sourceType: String
-    public let investmentId: Int
+    public let sourceType: OpenAPI.PortfolioExposureContribution.SourceType
+    public let investmentId: InvestmentID
     public let investmentName: String
     public let sourceFundName: String?
     public let amount: Decimal
@@ -816,15 +836,15 @@ public struct PortfolioExposureDimension: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioExposureFund: Codable, Equatable, Sendable, Identifiable {
-    public let investmentId: Int
+    public let investmentId: InvestmentID
     public let investmentName: String
     public let asOfDate: String
     public let evaluatedAt: String
     public let ageDays: Int
     public let maximumAgeDays: Int
     public let stale: Bool
-    public let coverageStatus: String
-    public var id: Int { investmentId }
+    public let coverageStatus: OpenAPI.PortfolioExposureFundSource.CoverageStatus
+    public var id: InvestmentID { investmentId }
     enum CodingKeys: String, CodingKey {
         case investmentId = "investmentId"
         case investmentName = "investmentName"
@@ -845,7 +865,7 @@ public struct PortfolioExposureWarning: Codable, Equatable, Sendable {
 }
 
 public struct PortfolioExposureData: Codable, Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let computedAt: String
     public let totalValue: Decimal
     public let uncoveredValue: Decimal

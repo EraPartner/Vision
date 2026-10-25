@@ -148,6 +148,16 @@ extension PlannedDay {
         self = PlannedDates.day(date, calendar: calendar)
     }
 
+    /// The same day as the wire's typed calendar day.
+    public init(_ day: CalendarDay) {
+        self.init(year: day.year, month: day.month, day: day.day)
+    }
+
+    /// The typed calendar day; `nil` for a year outside 0...9999.
+    public var calendarDay: CalendarDay? {
+        CalendarDay(year: year, month: month, day: day)
+    }
+
     /// The local day of an instant.
     public init(_ date: Date, calendar: Calendar) {
         self = PlannedDates.day(date, calendar: calendar)

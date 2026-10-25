@@ -121,7 +121,7 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(await transport.writes.count == 1)
         #expect(model.saveErrorNonce == 2)
-        #expect(await model.persistence.baseline("app_settings")?["value"]?["language"] == .string("en"))
+        #expect(await model.persistence.baseline(.appSettings)?["value"]?["language"] == .string("en"))
     }
     @Test func rejectedLaneDoesNotBlockIndependentDashboardAndTheme() async throws {
         let transport = NativeSettingsFixture()
@@ -140,23 +140,23 @@ struct NativeSettingsModelTests {
     @Test func missingAuthorityRefusesWriteAndReadFailureDoesNotInventAnAbsentBaseline() async throws {
         let transport = NativeSettingsFixture()
         let writer = NativeSettingsPersistence(service: settingsClient(transport))
-        await #expect(throws: SettingsWriteError.self) { try await writer.save("app_settings", value: .object([:])) }
+        await #expect(throws: SettingsWriteError.self) { try await writer.save(.appSettings, value: .object([:])) }
         #expect(await transport.writes.isEmpty)
         _ = try await writer.readAll()
-        await #expect(throws: SettingsWriteError.self) { try await writer.save("app_settings", value: .object([:])) }
+        await #expect(throws: SettingsWriteError.self) { try await writer.save(.appSettings, value: .object([:])) }
         #expect(await transport.writes.isEmpty)
-        #expect(await writer.baseline("new_key") == .object(["exists": .bool(false)]))
+        #expect(await writer.baseline(.rebalancePlans) == .object(["exists": .bool(false)]))
     }
     @Test func firstIndividualAuthoritySurvivesCompleteReadAndLaterReads() async throws {
-        let transport = NativeSettingsFixture(values: ["x": .null])
+        let transport = NativeSettingsFixture(values: ["rebalance_plans": .null])
         let writer = NativeSettingsPersistence(service: settingsClient(transport))
-        _ = try await writer.read("x")
-        await transport.setValue("x", .string("other"))
+        _ = try await writer.read(.rebalancePlans)
+        await transport.setValue("rebalance_plans", .string("other"))
         _ = try await writer.readAll()
-        _ = try await writer.read("x")
-        #expect(await writer.baseline("x") == .object(["exists": .bool(true), "value": .null]))
-        #expect(await writer.baseline("missing") == .object(["exists": .bool(false)]))
-        await #expect(throws: APIError.self) { try await writer.save("x", value: .string("mine")) }
+        _ = try await writer.read(.rebalancePlans)
+        #expect(await writer.baseline(.rebalancePlans) == .object(["exists": .bool(true), "value": .null]))
+        #expect(await writer.baseline(.fxFullHistoryRepairDone) == .object(["exists": .bool(false)]))
+        await #expect(throws: APIError.self) { try await writer.save(.rebalancePlans, value: .string("mine")) }
     }
     @Test func falseyThemeUsesExplicitLegacyFallbackButRawCASRemainsFalsey() async throws {
         let transport = NativeSettingsFixture(values: ["theme_settings": .number(0)])
@@ -218,7 +218,7 @@ struct NativeSettingsModelTests {
         let model = settingsModel(transport)
         await model.load()
         model.isLargeDisplay = true
-        model.selectVisualEffects("enhanced")
+        model.selectVisualEffects(.enhanced)
         await model.resetPreferences()
         await model.flush()
         #expect(model.appRaw == NativeSettingsDefaults.app && model.dashboardRaw == NativeSettingsDefaults.dashboard)
@@ -233,15 +233,15 @@ struct NativeSettingsModelTests {
         let model = settingsModel(transport)
         await model.load()
         model.isLargeDisplay = true
-        model.selectVisualEffects("enhanced")
-        #expect(model.effectiveVisualEffects == "enhanced" && model.appValue("visualEffects") == .string("standard"))
+        model.selectVisualEffects(.enhanced)
+        #expect(model.effectiveVisualEffects == .enhanced && model.appValue("visualEffects") == .string("standard"))
         await model.flush()
         #expect(await transport.writes.isEmpty)
-        model.selectVisualEffects("reduced")
+        model.selectVisualEffects(.reduced)
         #expect(model.sessionTierOverride == nil)
-        model.selectVisualEffects("enhanced")
+        model.selectVisualEffects(.enhanced)
         model.setAutoAdaptDisplay(false)
-        #expect(model.sessionTierOverride == nil && model.effectiveVisualEffects == "standard")
+        #expect(model.sessionTierOverride == nil && model.effectiveVisualEffects == .standard)
         await model.flush()
         #expect(await transport.writes.count == 1)
     }
@@ -280,7 +280,7 @@ struct NativeSettingsModelTests {
         await model.load()
         var invalidations = 0
         model.didChangeCostBasis = { invalidations += 1 }
-        await model.setCostBasisMethod("fifo")
+        await model.setCostBasisMethod(.fifo)
         await model.flush()
         #expect(invalidations == 1)
         #expect(Set(await transport.writes.map(\.key)) == ["app_settings", "cost_basis_method"])
@@ -395,7 +395,7 @@ struct NativeSettingsModelTests {
         model.resumeAfterFailedRestore()
         await model.flush()
         #expect(await transport.writes.count == 1 && model.saveErrorNonce == 2)
-        #expect(await model.persistence.baseline("app_settings")?["value"] == original)
+        #expect(await model.persistence.baseline(.appSettings)?["value"] == original)
         #expect(model.appValue("language") == .string("nl") && model.appValue("defaultCurrency") == .string("USD"))
     }
     @Test func realReloadRetiresPendingDraftsAndLateReadCallbacksWithoutResurrection() async throws {
@@ -435,7 +435,7 @@ struct NativeSettingsModelTests {
         #expect(model.isSuspendedForRestore && changes == 1 && acknowledgments == 0 && notices == 0)
         #expect(await transport.writes.isEmpty)
         await #expect(throws: CancellationError.self) {
-            try await model.persistence.save("app_settings", value: .object([:]))
+            try await model.persistence.save(.appSettings, value: .object([:]))
         }
     }
     @Test func restoreDrainIncludesImmediateWritesAndTheirAcknowledgedAuthority() async throws {
@@ -499,7 +499,7 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(await transport.writes.count == 1 && model.isSuspendedForRestore)
         await #expect(throws: CancellationError.self) {
-            try await model.persistence.save("includeTransfers", value: .bool(false))
+            try await model.persistence.save(.includeTransfers, value: .bool(false))
         }
     }
     @Test func hostServicesFailureRollsBackWithoutWritingAppEnvelope() async throws {

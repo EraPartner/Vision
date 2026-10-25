@@ -6,46 +6,53 @@ public struct PortfolioHoldingsView: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
-    let assetClass: String
+    let assetClass: OpenAPI.AssetClass
     @State private var query = LocalTableQuery()
     @State private var optionalColumns = Set<String>()
     @Environment(\.visionTheme) private var theme
 
-    public init(model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, assetClass: String) {
+    /// `assetClass` is the route's segment: "stocks" and "real-estate" name the stock and real estate classes.
+    public init(
+        model: PortfolioModel, editing: PortfolioEditingModel, shell: NativeShellModel, assetClass route: String
+    ) {
         self.model = model
         self.editing = editing
         self.shell = shell
-        self.assetClass = assetClass == "stocks" ? "stock" : assetClass == "real-estate" ? "real_estate" : assetClass
+        switch route {
+        case "stocks": assetClass = .stock
+        case "real-estate": assetClass = .realEstate
+        default: assetClass = OpenAPI.AssetClass(rawValue: route)
+        }
     }
     private var strings: any Localizing { shell.strings }
     private var prefix: String {
         switch assetClass {
-        case "crypto": "crypto"
-        case "metals": "metals"
-        case "real_estate": "realestate"
-        case "savings", "bond": "savings"
+        case .crypto: "crypto"
+        case .metals: "metals"
+        case .realEstate: "realestate"
+        case .savings, .bond: "savings"
         default: "stocks"
         }
     }
-    private var classes: [String] {
+    private var classes: [OpenAPI.AssetClass] {
         switch assetClass {
-        case "stock", "etf": ["stock", "etf"]
-        case "savings", "bond": ["savings", "bond"]
+        case .stock, .etf: [.stock, .etf]
+        case .savings, .bond: [.savings, .bond]
         default: [assetClass]
         }
     }
     private var symbol: String {
         switch assetClass {
-        case "crypto": "bitcoinsign.circle"
-        case "metals": "diamond"
-        case "real_estate": "building.2"
-        case "savings", "bond": "banknote"
+        case .crypto: "bitcoinsign.circle"
+        case .metals: "diamond"
+        case .realEstate: "building.2"
+        case .savings, .bond: "banknote"
         default: "chart.line.uptrend.xyaxis"
         }
     }
     private var holdings: [PortfolioHolding] { model.active.filter { classes.contains($0.assetClass) } }
-    private var isUnitBased: Bool { !["real_estate", "savings", "bond"].contains(assetClass) }
-    private var isRealEstate: Bool { assetClass == "real_estate" }
+    private var isUnitBased: Bool { ![.realEstate, .savings, .bond].contains(assetClass) }
+    private var isRealEstate: Bool { assetClass == .realEstate }
     /// `findHoldingTotals`: the page figures are the server's totals of these classes (ADR-216).
     private var totals: PortfolioHoldingTotals { model.holdingTotals(assetClasses: classes) }
     /// RealEstatePage: a property's rent without a stored rate makes the monthly rent unavailable.
@@ -69,14 +76,15 @@ public struct PortfolioHoldingsView: View {
                         }
                         .buttonStyle(.visionPrimary)
                         Menu {
-                            if assetClass != "crypto" {
+                            if assetClass != .crypto {
                                 Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
                             }
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
-                            Image(systemName: "ellipsis")
+                            Image(systemName: "ellipsis").visionChipChrome()
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
                 if model.isLoading {
@@ -85,6 +93,7 @@ public struct PortfolioHoldingsView: View {
                     Text(strings.t(prefix + ".pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else if holdings.isEmpty {
                     AdminCard {
                         VisionEmptyState(
@@ -106,111 +115,163 @@ public struct PortfolioHoldingsView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.settings.defaultCurrency + String(shell.settingsRevision)) { await reload() }
+        .task(id: shell.settings.defaultCurrency.rawValue + String(shell.settingsRevision)) { await reload() }
         .onChange(of: assetClass) { _, _ in
             query.clearAll()
             optionalColumns = []
         }
     }
     private func reload(force: Bool = false) async {
-        await model.load(currency: shell.settings.defaultCurrency, force: force)
+        await model.load(currency: shell.settings.portfolioCurrency, force: force)
     }
-    private func money(_ amount: Decimal, currency: String? = nil, signed: Bool = false) -> String {
+    private func money(_ amount: Decimal, currency: CurrencyCode? = nil, signed: Bool = false) -> String {
         MoneyText.text(
-            amount, currency: currency ?? shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
+            amount, currency: currency ?? shell.settings.portfolioCurrency, settings: shell.settings, signed: signed)
     }
+    /// The web hero card (`grid gap-6 lg:grid-cols-5`): the value on two fifths, the figures in a
+    /// three column grid (`grid-cols-2 sm:grid-cols-3`) on the other three.
     private var summary: some View {
-        let value = totals.totalPortfolioValue
-        return AdminCard(padding: 24) {
-            // The web summary: the value on the left, the figures in a grid on the right.
-            HStack(alignment: .top, spacing: 32) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(
-                    strings.t(
-                        assetClass == "real_estate"
-                            ? "portfolio.totalValue"
-                            : isUnitBased ? "portfolio.portfolioValue" : "portfolio.totalBalance")
-                ).font(.caption2.weight(.medium)).tracking(1.3).textCase(.uppercase)
-                    .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
-                MoneyText(
-                    amount: value, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false,
-                    colored: false
-                ).font(.visionLargeTitle)
-                if isUnitBased { PortfolioPriceFreshnessCaption(holdings: holdings, shell: shell) }
-            }
-            .frame(minWidth: 220, alignment: .leading)
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(minimum: 120), alignment: .leading), count: 3),
-                    alignment: .leading, spacing: 14
-                ) {
-                    if isUnitBased {
-                        figure("portfolio.realizedPnl", totals.totalRealizedGain, signed: true)
-                        figure("portfolio.unrealizedPnl", totals.totalUnrealizedGain, signed: true)
-                        if assetClass != "crypto" { figure("portfolio.dividends", totals.totalDividends) }
-                        figure("portfolio.feesAndTaxes", -totals.totalFeesAndTaxes)
-                        // Custody fees and standalone deductions sit in the server's net return; the
-                        // pages add only the income they show (crypto shows no dividends).
-                        figure(
-                            "portfolio.netReturn",
-                            assetClass == "crypto" ? totals.netReturnExcludingIncome : totals.netReturnWithDividends,
-                            signed: true)
-                    } else if assetClass == "real_estate" {
-                        figure("portfolio.appreciation", totals.totalAppreciation, signed: true)
-                        figure("portfolio.rentalIncome", totals.totalIncome, signed: true)
-                        Group {
-                            let rent = totals.estimatedMonthlyRent
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(strings.t("portfolio.yield")).font(.caption).foregroundStyle(theme.tertiaryLabel)
-                                Text(
-                                    VisionFormat.percent(
-                                        value > 0 ? rent * 12 / value * 100 : 0,
-                                        digits: 1, locale: shell.settings.numberFormat.locale)
-                                ).font(Font.visionTitle3).monospacedDigit()
-                                Text("~" + money(rent) + strings.t("realestate.perMonth")).font(.footnote)
-                                    .foregroundStyle(theme.secondaryLabel)
-                            }
-                        }
-                        let returned = totals.totalPropertyReturn
-                        figure("portfolio.totalReturn", returned, signed: true)
-                        let cost = totals.totalInvested
-                        let roi = cost > 0 ? returned / cost * 100 : 0
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(strings.t("portfolio.totalROI")).font(.caption).foregroundStyle(theme.tertiaryLabel)
-                            DeltaPill(
-                                roi,
-                                label: VisionFormat.percent(roi, digits: 1, locale: shell.settings.numberFormat.locale))
-                        }
-                    } else {
-                        let weightedRate = totals.valueWeightedInterestRate
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(strings.t("portfolio.avgInterestRate")).font(.caption).foregroundStyle(
-                                theme.tertiaryLabel)
-                            Text(
-                                VisionFormat.percent(
-                                    weightedRate, digits: 2, locale: shell.settings.numberFormat.locale)
-                            ).font(Font.visionTitle3).monospacedDigit()
-                        }
-                        figure("portfolio.interestEarned", totals.totalIncome)
-                        figure("portfolio.projectedAnnual", totals.totalProjectedAnnualInterest)
-                        if totals.totalAccruedInterest > 0 {
-                            figure("portfolio.accrued", totals.totalAccruedInterest)
-                        }
-                    }
-                }
+        AdminCard(padding: 24) {
+            VisionResponsiveColumns(weights: [2, 3]) {
+                summaryHero
+                summaryFigures
             }
         }
     }
-    private func figure(_ key: String, _ amount: Decimal, signed: Bool = false) -> some View {
+    private var summaryHero: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(
+                    strings.t(
+                        assetClass == .realEstate
+                            ? "portfolio.totalValue"
+                            : isUnitBased ? "portfolio.portfolioValue" : "portfolio.totalBalance")
+                )
+            } icon: {
+                Image(systemName: "banknote").font(.system(size: 12))
+            }
+            .font(.caption2.weight(.medium)).tracking(1.3).textCase(.uppercase)
+            .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
+            MoneyText(
+                amount: totals.totalPortfolioValue, currency: shell.settings.portfolioCurrency,
+                settings: shell.settings, signed: false, colored: false, rolling: true
+            ).font(.visionLargeTitle)
+            if isUnitBased {
+                PortfolioPriceFreshnessCaption(holdings: holdings, shell: shell)
+            } else if assetClass == .realEstate {
+                // `Total cost <Money>` under the hero value.
+                Text(strings.t("portfolio.totalCost") + " " + money(totals.totalInvested))
+                    .font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+            }
+        }
+    }
+    private var summaryFigures: some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(minimum: 120), spacing: 24, alignment: .topLeading), count: 3),
+            alignment: .leading, spacing: 16
+        ) {
+            if isUnitBased {
+                figure("portfolio.realizedPnl", totals.totalRealizedGain, signed: true)
+                figure(
+                    "portfolio.unrealizedPnl", totals.totalUnrealizedGain, signed: true,
+                    icon: assetClass == .crypto && totals.totalUnrealizedGain < 0
+                        ? "chart.line.downtrend.xyaxis" : "chart.line.uptrend.xyaxis")
+                if assetClass != .crypto { figure("portfolio.dividends", totals.totalDividends, signed: true) }
+                figure("portfolio.feesAndTaxes", -totals.totalFeesAndTaxes, signed: true)
+                // Custody fees and standalone deductions sit in the server's net return; the
+                // pages add only the income they show (crypto shows no dividends).
+                figure(
+                    "portfolio.netReturn",
+                    assetClass == .crypto ? totals.netReturnExcludingIncome : totals.netReturnWithDividends,
+                    signed: true)
+            } else if assetClass == .realEstate {
+                realEstateFigures
+            } else {
+                savingsFigures
+            }
+        }
+    }
+    @ViewBuilder private var realEstateFigures: some View {
+        let value = totals.totalPortfolioValue
+        let rent = totals.estimatedMonthlyRent
+        let returned = totals.totalPropertyReturn
+        let cost = totals.totalInvested
+        let roi = cost > 0 ? returned / cost * 100 : 0
+        figure("portfolio.appreciation", totals.totalAppreciation, signed: true)
+        figure(
+            "portfolio.rentalIncome", totals.totalIncome, signed: true,
+            detail: "~" + money(rent) + strings.t("realestate.perMonth"))
+        figureCell(label: strings.t("portfolio.yield"), detail: strings.t("portfolio.annual")) {
+            Text(
+                VisionFormat.percent(
+                    value > 0 ? rent * 12 / value * 100 : 0, digits: 1, locale: shell.settings.numberFormat.locale)
+            ).font(Font.visionTitle3).monospacedDigit()
+        }
+        figureCell(label: strings.t("portfolio.totalReturn")) {
+            MoneyText.styled(
+                money(returned, signed: true),
+                decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first,
+                color: returned >= 0 ? theme.gain : theme.loss
+            ).font(Font.visionTitle3).monospacedDigit().foregroundStyle(returned >= 0 ? theme.gain : theme.loss)
+        } detailView: {
+            HStack(spacing: 6) {
+                DeltaPill(
+                    roi,
+                    label: (roi > 0 ? "+" : "")
+                        + VisionFormat.percent(roi, digits: 1, locale: shell.settings.numberFormat.locale))
+                Text(strings.t("portfolio.totalROI"))
+            }
+        }
+    }
+    @ViewBuilder private var savingsFigures: some View {
+        figureCell(label: strings.t("portfolio.avgInterestRate")) {
+            Text(
+                VisionFormat.percent(
+                    totals.valueWeightedInterestRate, digits: 2, locale: shell.settings.numberFormat.locale)
+            ).font(Font.visionTitle3).monospacedDigit()
+        }
+        figure("portfolio.interestEarned", totals.totalIncome)
+        figure("portfolio.projectedAnnual", totals.totalProjectedAnnualInterest)
+        if totals.totalAccruedInterest > 0 {
+            figure("portfolio.accrued", totals.totalAccruedInterest)
+        }
+    }
+    /// The web `Figure`: a caption label (with an optional icon), a title-3 value and an
+    /// optional footnote line.
+    private func figureCell<Value: View, Detail: View>(
+        label: String, icon: String? = nil, detail: String? = nil, @ViewBuilder value: () -> Value,
+        @ViewBuilder detailView: () -> Detail
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                if let icon { Image(systemName: icon).font(.system(size: 11)).accessibilityHidden(true) }
+                Text(label).lineLimit(1)
+            }.font(.caption).foregroundStyle(theme.tertiaryLabel)
+            value().lineLimit(1)
+            if let detail {
+                Text(detail).font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel).lineLimit(1)
+            }
+            detailView().font(.footnote).foregroundStyle(theme.secondaryLabel)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+    private func figureCell<Value: View>(
+        label: String, icon: String? = nil, detail: String? = nil, @ViewBuilder value: () -> Value
+    ) -> some View {
+        figureCell(label: label, icon: icon, detail: detail, value: value) { EmptyView() }
+    }
+    private func figure(
+        _ key: String, _ amount: Decimal, signed: Bool = false, icon: String? = nil, detail: String? = nil
+    ) -> some View {
         let color = signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground
-        return VStack(alignment: .leading, spacing: 3) {
-            Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
+        return figureCell(label: strings.t(key), icon: icon, detail: detail) {
             MoneyText.styled(
                 money(amount, signed: signed),
                 decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first, color: color
             )
-            .font(.visionDisplayHeadline).monospacedDigit()
+            .font(Font.visionTitle3).monospacedDigit().foregroundStyle(color)
         }
-        .accessibilityElement(children: .combine)
     }
     private var holdingsTable: some View {
         let columns = tableColumns
@@ -222,10 +283,10 @@ public struct PortfolioHoldingsView: View {
                     Text(strings.t("portfolio.holdings")).font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Menu(strings.t("portfolio.columns")) {
+                    Menu {
                         ForEach(
                             ["avgCost", "realized", "fx", "dividends"].filter {
-                                ($0 != "dividends" || assetClass != "crypto")
+                                ($0 != "dividends" || assetClass != .crypto)
                                     && ($0 != "fx" || holdings.contains { $0.originalCurrency != $0.currency })
                             }, id: \.self
                         ) { key in
@@ -237,7 +298,10 @@ public struct PortfolioHoldingsView: View {
                                         if enabled { optionalColumns.insert(key) } else { optionalColumns.remove(key) }
                                     }))
                         }
+                    } label: {
+                        Text(strings.t("portfolio.columns")).visionChipChrome()
                     }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 }
                 HStack(spacing: 16) {
                     if let freshness = PortfolioPricePresentation.freshness(holdings, shell: shell) {
@@ -262,6 +326,8 @@ public struct PortfolioHoldingsView: View {
                 ) {
                     Text(strings.t("table.noFilterResults"))
                 }.rowDoubleClicked { holding in Task { await model.openDetail(id: holding.id) } }
+                // The web `Table` has no search field or count, so a short list drops them too.
+                .minimalChrome(holdings.count <= Self.minimalChromeLimit)
             }
         }
     }
@@ -272,13 +338,12 @@ public struct PortfolioHoldingsView: View {
                 cell: { holding in
                     AnyView(
                         HStack(spacing: 10) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(theme.secondaryLabel)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                                    .fill(theme.foreground.opacity(0.06)))
+                        // `rounded-full bg-primary/12 text-primary`, 32 pt, with the page icon.
+                        Image(systemName: symbol)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(theme.primary)
+                            .frame(width: 32, height: 32)
+                            .background(theme.primary.opacity(0.12), in: Circle())
                             .accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
                             if let symbol = holding.symbol {
@@ -288,12 +353,12 @@ public struct PortfolioHoldingsView: View {
                                             path: "/research/market",
                                             query: [
                                                 URLQueryItem(name: "symbol", value: symbol),
-                                                URLQueryItem(name: "investmentId", value: String(holding.id)),
+                                                URLQueryItem(name: "investmentId", value: String(holding.id.rawValue)),
                                             ]
                                         ).string)
                                 }
                                 .buttonStyle(.plain)
-                                .font(.callout.weight(.semibold))
+                                .font(.system(.callout, design: .monospaced))
                             }
                             Button(holding.name) { Task { await model.openDetail(id: holding.id) } }.buttonStyle(.plain)
                                 .font(holding.symbol == nil ? .callout.weight(.semibold) : .caption)
@@ -310,7 +375,7 @@ public struct PortfolioHoldingsView: View {
                     AnyView(
                         Text(
                             VisionFormat.decimal(
-                                h.totalUnits, fractionDigits: assetClass == "crypto" ? 8 : 4,
+                                h.totalUnits, fractionDigits: assetClass == .crypto ? 8 : 4,
                                 locale: shell.settings.numberFormat.locale)
                         ).monospacedDigit())
                 }),
@@ -354,7 +419,7 @@ public struct PortfolioHoldingsView: View {
                             ).monospacedDigit()
                             // `unrealizedPercentOf`: crypto keeps its total-return pill; the others show
                             // the server's unrealized percent (0 when absent).
-                            let percent = assetClass == "crypto" ? h.gainLossPercent : (h.unrealizedGainPercent ?? 0)
+                            let percent = assetClass == .crypto ? h.gainLossPercent : (h.unrealizedGainPercent ?? 0)
                             DeltaPill(
                                 percent,
                                 label: VisionFormat.percent(
@@ -424,8 +489,14 @@ public struct PortfolioHoldingsView: View {
         default: .none
         }
     }
+    /// Lists up to this many rows show no search field or count footer.
+    private static let minimalChromeLimit = 10
+    /// Real estate: `grid grid-cols-1 gap-4 lg:grid-cols-2`; savings: `md:grid-cols-2`.
     private var assetCards: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 390), alignment: .top)], alignment: .leading, spacing: 20) {
+        VisionResponsiveColumns(
+            weights: [1, 1], minimumPageWidth: assetClass == .realEstate ? VisionBreakpoint.lg : VisionBreakpoint.md,
+            spacing: 16
+        ) {
             ForEach(holdings) { holding in
                 PortfolioAssetCard(holding: holding, model: model, editing: editing, shell: shell)
             }

@@ -19,6 +19,7 @@ struct PortfolioDetailHistoryTable: View {
             if let error = model.historyError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.openDetail(id: holding.id) } }
+                    .buttonStyle(.visionOutline)
             }
             if model.historyComplete && model.transactions.isEmpty {
                 VisionEmptyState(symbol: "list.bullet.rectangle", title: strings.t("invDetail.noTransactions")) {
@@ -26,7 +27,7 @@ struct PortfolioDetailHistoryTable: View {
                         Button(strings.t("form.addTransaction.title")) {
                             editing.bindTransactions(model.transactions)
                             editing.beginAddTransaction(investment: investment, bookingCurrency: holding.currency)
-                        }
+                        }.buttonStyle(.visionPrimary)
                     }
                 }.padding(40)
             } else {
@@ -52,8 +53,8 @@ struct PortfolioDetailHistoryTable: View {
                     AnyView(
                         VStack(alignment: .leading, spacing: 5) {
                             VisionBadge(
-                                text: label(transaction.type),
-                                tone: transaction.type == "fee" || transaction.type == "tax" ? .muted : .primary)
+                                text: label(transaction.type.rawValue),
+                                tone: transaction.type == .fee || transaction.type == .tax ? .muted : .primary)
                             Text(VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)).font(
                                 .caption
                             ).foregroundStyle(theme.secondaryLabel)
@@ -77,7 +78,7 @@ struct PortfolioDetailHistoryTable: View {
                                 ).font(.caption).monospacedDigit()
                             }
                             if let note = transaction.note { Text(note).font(.callout).textSelection(.enabled) }
-                            if transaction.incomeRecognitionRole == "included_in_units" {
+                            if transaction.incomeRecognitionRole == .includedInUnits {
                                 Text(strings.t("portfolio.inKindIncome")).font(.caption).foregroundStyle(
                                     theme.secondaryLabel)
                             }
@@ -87,13 +88,13 @@ struct PortfolioDetailHistoryTable: View {
                 key: "amount", title: strings.t("form.addTransaction.amount"), width: 180, minWidth: 150,
                 alignment: .trailing,
                 cell: { transaction in
-                    let debit = ["buy", "fee", "tax"].contains(transaction.type)
+                    let debit = [.buy, .fee, .tax].contains(transaction.type)
                     let amount = debit ? -abs(transaction.amount) : abs(transaction.amount)
                     return AnyView(
                         VStack(alignment: .trailing, spacing: 5) {
                             Text(money(amount, currency: transaction.currency, signed: true)).monospacedDigit()
                                 .foregroundStyle(
-                                    transaction.incomeRecognitionRole == "included_in_units"
+                                    transaction.incomeRecognitionRole == .includedInUnits
                                         ? theme.secondaryLabel : debit ? theme.loss : theme.gain)
                             if let fees = transaction.fees, fees > 0 {
                                 Text(
@@ -117,9 +118,9 @@ struct PortfolioDetailHistoryTable: View {
                                     editing.beginEditTransaction(investment: investment, transaction: transaction)
                                 } label: {
                                     Image(systemName: "pencil")
-                                }.buttonStyle(.borderless)
+                                }.buttonStyle(.vision(.ghost, size: .iconSm))
                                     .accessibilityLabel(
-                                        strings.t("aria.editTransaction") + ": " + label(transaction.type) + " · "
+                                        strings.t("aria.editTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                             + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
                                     )
                                     .disabled(!model.historyComplete || model.historyLoading)
@@ -128,8 +129,8 @@ struct PortfolioDetailHistoryTable: View {
                                 } label: {
                                     Image(systemName: "trash")
                                 }
-                                .buttonStyle(.borderless).accessibilityLabel(
-                                    strings.t("aria.deleteTransaction") + ": " + label(transaction.type) + " · "
+                                .buttonStyle(.vision(.ghost, size: .iconSm)).accessibilityLabel(
+                                    strings.t("aria.deleteTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                         + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
                                 )
                                 .disabled(!model.historyComplete || model.historyLoading)
@@ -143,16 +144,16 @@ struct PortfolioDetailHistoryTable: View {
         let text = strings.t(key)
         return text == key ? type : text
     }
-    private func money(_ amount: Decimal, currency: String, signed: Bool = false) -> String {
+    private func money(_ amount: Decimal, currency: CurrencyCode, signed: Bool = false) -> String {
         MoneyText.text(amount, currency: currency, settings: shell.settings, signed: signed)
     }
     private func rawValue(_ transaction: PortfolioTransaction, _ key: String) -> TableRawValue {
         switch key {
-        case "type": .text(transaction.type)
+        case "type": .text(transaction.type.rawValue)
         case "date": .text(transaction.date)
         case "note": transaction.note.map(TableRawValue.text) ?? .none
         case "amount": .number(transaction.amount)
-        case "currency": .text(transaction.currency)
+        case "currency": .text(transaction.currency.rawValue)
         default: .none
         }
     }

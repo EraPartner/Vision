@@ -34,7 +34,7 @@ struct ExchangeRatesInvalidationTests {
         await service.releaseRead()
         await older.value
         await refreshing.value
-        #expect(model.data?.source == "fresh")
+        #expect(model.data?.source == .unknown("fresh"))
         #expect(await service.reads == 3)
         #expect(await service.refreshes == 1)
         #expect(model.notice?.key == "exchangeRates.refreshSuccess")
@@ -59,7 +59,7 @@ struct ExchangeRatesInvalidationTests {
         await service.releaseRead()
         await older.value
         await newer.value
-        #expect(model.data?.source == "fresh")
+        #expect(model.data?.source == .unknown("fresh"))
         #expect(await service.reads == 3)
         #expect(await service.refreshes == 0)
         #expect(!model.isFetching)
@@ -70,13 +70,13 @@ struct ExchangeRatesInvalidationTests {
         let model = ExchangeRatesModel(service: service)
         await model.appear()
         let cached = model.data
-        #expect(cached?.source == "fallback")
+        #expect(cached?.source == .fallback)
         model.invalidate()
         #expect(model.data == cached && !model.isFetching && model.notice == nil)
         #expect(await service.reads == 1)
         #expect(await service.refreshes == 0)
         await model.appear()
-        #expect(model.data?.source == "database")
+        #expect(model.data?.source == .database)
         #expect(await service.reads == 2)
         #expect(await service.refreshes == 0)
     }
@@ -115,7 +115,7 @@ private actor InvalidatedRatesFixture: ExchangeRatesService {
         }
         return .init(
             totalRates: 0, rates: [],
-            source: snapshot == 1 ? "fallback" : (snapshot == 2 ? "database" : "fresh"), isStale: snapshot == 1)
+            source: snapshot == 1 ? .fallback : (snapshot == 2 ? .database : .unknown("fresh")), isStale: snapshot == 1)
     }
     func refreshExchangeRates() async throws -> OpenAPI.InfoMessage {
         refreshes += 1

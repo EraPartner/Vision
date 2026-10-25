@@ -37,7 +37,9 @@ public struct PlannedFormSubmission: Equatable, Sendable {
 @Observable
 public final class PlannedPaymentFormModel: Identifiable {
     /// The Currency select's options.
-    public static let currencies = ["EUR", "USD", "GBP", "CHF", "CZK", "PLN"]
+    public static let currencies: [CurrencyCode] = ["EUR", "USD", "GBP", "CHF", "CZK", "PLN"].compactMap {
+        CurrencyCode(rawValue: $0)
+    }
     /// The Frequency select's options in order.
     public static let frequencies: [PlannedFrequency] = [.daily, .weekly, .biweekly, .monthly, .quarterly, .yearly, .custom]
     /// The Loan type select's options in order.
@@ -54,7 +56,7 @@ public final class PlannedPaymentFormModel: Identifiable {
     /// The unsigned magnitude as typed.
     public var amount: String
     public var direction: PlannedDirection
-    public var currency: String
+    public var currency: CurrencyCode
     public var dueDate: PlannedDay?
     public var isRecurring: Bool
     public var frequency: PlannedFrequency
@@ -67,11 +69,11 @@ public final class PlannedPaymentFormModel: Identifiable {
     public var customDays: String
     public var endDate: PlannedDay?
     public var maxOccurrences: String
-    public var recipientId: Int?
-    public var categoryId: Int?
+    public var recipientId: RecipientID?
+    public var categoryId: CategoryID?
     /// The account's name as the combobox shows it.
     public var bankAccount: String
-    public var accountId: Int?
+    public var accountId: AccountID?
     public var tags: [String]
     public var notes: String
     public var url: String
@@ -89,12 +91,12 @@ public final class PlannedPaymentFormModel: Identifiable {
         let format = settings.numberFormat
         var due: PlannedDay? = today
         if let initial { due = PlannedDay(ymd: initial.dueDate, calendar: calendar) }
-        let storedEnd = wire?.recurrenceEndDate.flatMap { $0.isEmpty ? nil : $0 }
+        let storedEnd = wire?.recurrenceEndDate?.description
         let start = Snapshot(
             name: initial?.name ?? "",
             amount: initial.map { LocaleNumber.editable(Self.magnitude($0.amount), format: format) } ?? "",
             direction: (initial?.amount ?? 0) > 0 ? .income : .expense,
-            currency: initial?.currency ?? settings.defaultCurrency,
+            currency: initial?.currency ?? LedgerCurrency.display(settings),
             // `initialFingerprint`: the stored string, or today for a new payment.
             dueDate: initial?.dueDate ?? today.ymd,
             isRecurring: initial?.isRecurring ?? false, frequency: initial?.frequency ?? .monthly,
@@ -151,7 +153,7 @@ public final class PlannedPaymentFormModel: Identifiable {
         var name: String
         var amount: String
         var direction: PlannedDirection
-        var currency: String
+        var currency: CurrencyCode
         var dueDate: String?
         var isRecurring: Bool
         var frequency: PlannedFrequency
@@ -164,8 +166,8 @@ public final class PlannedPaymentFormModel: Identifiable {
         var customDays: String
         var endDate: String?
         var maxOccurrences: String
-        var recipientId: Int?
-        var categoryId: Int?
+        var recipientId: RecipientID?
+        var categoryId: CategoryID?
         var bankAccount: String
         var tags: [String]
         var notes: String
@@ -265,13 +267,13 @@ public final class PlannedPaymentFormModel: Identifiable {
             focusToken += 1
             return nil
         }
-        guard let dueDate, let accountId else { return nil }
-        return payload(dueDate: dueDate, accountId: accountId)
+        guard let dueDate, let dueDay = dueDate.calendarDay, let accountId else { return nil }
+        return payload(dueDate: dueDate, dueDay: dueDay, accountId: accountId)
     }
 
     // MARK: Payload
 
-    private func payload(dueDate: PlannedDay, accountId: Int) -> PlannedFormSubmission {
+    private func payload(dueDate: PlannedDay, dueDay: CalendarDay, accountId: AccountID) -> PlannedFormSubmission {
         let due = dueDate.ymd
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let magnitude = Self.magnitude(LocaleNumber.parseOrZero(amount, format: numberFormat))
@@ -289,6 +291,7 @@ public final class PlannedPaymentFormModel: Identifiable {
         var rate: Decimal?
         var term: Int?
         var startDate: String?
+        var loanStartDay: CalendarDay?
         var paymentDay: Int?
         if isLoan {
             loanType = self.loanType
@@ -296,11 +299,13 @@ public final class PlannedPaymentFormModel: Identifiable {
             rate = LocaleNumber.parseOrZero(loanRate, format: numberFormat)
             term = JSInteger.parse(loanTermMonths)
             startDate = due
+            loanStartDay = dueDay
             paymentDay = loanPaymentDay.isEmpty ? dueDate.day : JSInteger.parse(loanPaymentDay)
         }
 
         var pattern: String?
         var endDate: String??
+        var endDay: CalendarDay?
         var maximum: Int??
         if !isLoan && isRecurring {
             let days = frequency == .custom && !customDays.isEmpty ? JSInteger.parse(customDays) : nil
@@ -311,15 +316,16 @@ public final class PlannedPaymentFormModel: Identifiable {
             }
             // Sent as `null` when cleared, so an edit drops an old bound.
             endDate = .some(self.endDate?.ymd)
+            endDay = self.endDate.flatMap(\.calendarDay)
             maximum = .some(maxOccurrences.isEmpty ? nil : JSInteger.parse(maxOccurrences))
         }
 
         let create = OpenAPI.PlannedTransactionCreate(
-            plannedDate: due, accountId: accountId, recipientId: recipient, memo: trimmedName, amount: signed,
+            plannedDate: dueDay, accountId: accountId, recipientId: recipient, memo: trimmedName, amount: signed,
             currency: currency, categoryId: categoryId, comment: comment, url: link, isRecurring: recurring,
-            recurrencePattern: pattern, recurrenceEndDate: endDate ?? nil, maxOccurrences: maximum ?? nil,
+            recurrencePattern: pattern, recurrenceEndDate: endDay, maxOccurrences: maximum ?? nil,
             isLoan: isLoan, loanType: loanType, loanPrincipal: principal, loanAnnualInterestRate: rate,
-            loanTermMonths: term, loanStartDate: startDate, loanPaymentDay: paymentDay, tags: tagList)
+            loanTermMonths: term, loanStartDate: loanStartDay, loanPaymentDay: paymentDay, tags: tagList)
 
         var patch = PlannedPaymentPatch()
         patch.plannedDate = due
@@ -353,7 +359,7 @@ public final class PlannedPaymentFormModel: Identifiable {
     public func setDueDate(_ day: PlannedDay?) { dueDate = day }
 
     /// The account combobox picked an existing account.
-    public func pickAccount(name: String, id: Int) {
+    public func pickAccount(name: String, id: AccountID) {
         bankAccount = name
         accountId = id
     }

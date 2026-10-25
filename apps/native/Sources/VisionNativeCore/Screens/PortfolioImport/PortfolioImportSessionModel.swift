@@ -1,20 +1,40 @@
 import Foundation
 import Observation
 
+/// Where one statement of the session stands.
+public enum PortfolioImportStatementStatus: String, Codable, Sendable {
+    case detecting, ready, error, staging, staged, completed
+    /// A statement that stays in the session when unstaged drafts are dropped.
+    var isSettled: Bool { self == .staged || self == .completed }
+}
+
+/// The step the session is running; everything but `idle` blocks edits.
+public enum PortfolioImportSessionOperation: String, Sendable {
+    case idle, staging, preview, commit, rollback
+    var locksEdits: Bool { self == .staging || self == .commit || self == .rollback }
+}
+
+/// How a reviewed session treats rows that match existing transactions.
+public enum PortfolioImportSessionPolicy: String, CaseIterable, Sendable {
+    case auto
+    case preserveExisting = "preserve_existing"
+    case preferSource = "prefer_source"
+}
+
 public struct PortfolioImportStatement: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
     public var file: PortfolioImportFile?
     public var detected: PortfolioImportDetected?
-    public var accountId: Int?
+    public var accountId: AccountID?
     public var accountChosenManually = false
     public var adoptPolicy: PortfolioImportReconciliationPolicy?
-    public var transferDestinationAccountId: Int?
-    public var transferOriginAccountId: Int?
+    public var transferDestinationAccountId: AccountID?
+    public var transferOriginAccountId: AccountID?
     public var includedSymbols: String?
-    public var batchId: Int?
-    public var previousBatchIds: [Int] = []
-    public var status: String
+    public var batchId: PortfolioImportBatchNumericID?
+    public var previousBatchIds: [PortfolioImportBatchNumericID] = []
+    public var status: PortfolioImportStatementStatus
     public var skipped: Int?
     public var rows: Int?
     public var sourceErrors: Int?
@@ -29,7 +49,8 @@ public struct PortfolioImportStatement: Codable, Equatable, Sendable, Identifiab
     }
     enum LegacyKeys: String, CodingKey { case kind }
     public init(
-        id: String = UUID().uuidString, name: String, file: PortfolioImportFile? = nil, status: String = "detecting"
+        id: String = UUID().uuidString, name: String, file: PortfolioImportFile? = nil,
+        status: PortfolioImportStatementStatus = .detecting
     ) {
         self.id = id
         self.name = name
@@ -40,15 +61,16 @@ public struct PortfolioImportStatement: Codable, Equatable, Sendable, Identifiab
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
-        status = try c.decode(String.self, forKey: .status)
+        status = try c.decode(PortfolioImportStatementStatus.self, forKey: .status)
         detected = try c.decodeIfPresent(PortfolioImportDetected.self, forKey: .detected)
-        accountId = try c.decodeIfPresent(Int.self, forKey: .accountId)
+        accountId = try c.decodeIfPresent(AccountID.self, forKey: .accountId)
         adoptPolicy = try c.decodeIfPresent(PortfolioImportReconciliationPolicy.self, forKey: .adoptPolicy)
-        transferDestinationAccountId = try c.decodeIfPresent(Int.self, forKey: .transferDestinationAccountId)
-        transferOriginAccountId = try c.decodeIfPresent(Int.self, forKey: .transferOriginAccountId)
+        transferDestinationAccountId = try c.decodeIfPresent(AccountID.self, forKey: .transferDestinationAccountId)
+        transferOriginAccountId = try c.decodeIfPresent(AccountID.self, forKey: .transferOriginAccountId)
         includedSymbols = try c.decodeIfPresent(String.self, forKey: .includedSymbols)
-        batchId = try c.decodeIfPresent(Int.self, forKey: .batchId)
-        previousBatchIds = try c.decodeIfPresent([Int].self, forKey: .previousBatchIds) ?? []
+        batchId = try c.decodeIfPresent(PortfolioImportBatchNumericID.self, forKey: .batchId)
+        previousBatchIds =
+            try c.decodeIfPresent([PortfolioImportBatchNumericID].self, forKey: .previousBatchIds) ?? []
         skipped = try c.decodeIfPresent(Int.self, forKey: .skipped)
         rows = try c.decodeIfPresent(Int.self, forKey: .rows)
         sourceErrors = try c.decodeIfPresent(Int.self, forKey: .sourceErrors)
@@ -102,9 +124,9 @@ public final class PortfolioImportSessionModel {
     ]
     public private(set) var statements: [PortfolioImportStatement] = []
     public private(set) var accounts: [OpenAPI.Account] = []
-    public private(set) var policy = "auto"
+    public private(set) var policy = PortfolioImportSessionPolicy.auto
     public private(set) var rowChoices: [PortfolioImportRowChoice] = []
-    public private(set) var operation = "idle"
+    public private(set) var operation = PortfolioImportSessionOperation.idle
     public private(set) var plan: PortfolioImportReconciliationPlan?
     public private(set) var result: PortfolioImportReconciliationResult?
     public private(set) var error: String?
@@ -114,38 +136,38 @@ public final class PortfolioImportSessionModel {
     public var shownActions = 50
     public var didMutate: (@MainActor () async -> Void)?
     public var brokerAccounts: [OpenAPI.Account] { portfolioImportBrokerAccounts(accounts) }
-    public var locked: Bool { isRestoring || ["staging", "commit", "rollback"].contains(operation) }
-    public var isBusy: Bool { isRestoring || operation != "idle" }
-    public var isDirty: Bool { statements.contains { !["staged", "completed"].contains($0.status) } }
-    public var ids: [Int] { statements.filter { $0.status == "staged" }.compactMap(\.batchId).sorted() }
-    public var allStaged: Bool { !statements.isEmpty && statements.allSatisfy { $0.status == "staged" } }
+    public var locked: Bool { isRestoring || operation.locksEdits }
+    public var isBusy: Bool { isRestoring || operation != .idle }
+    public var isDirty: Bool { statements.contains { !$0.status.isSettled } }
+    public var ids: [PortfolioImportBatchNumericID] { statements.filter { $0.status == .staged }.compactMap(\.batchId).sorted() }
+    public var allStaged: Bool { !statements.isEmpty && statements.allSatisfy { $0.status == .staged } }
     /// The reviewed scope: the staged batches, the session policy, the per-statement policies and
     /// the owner's row answers for those batches.
     public var scope: PortfolioImportReconciliationScope {
         let staged = ids
         var overrides: [PortfolioImportReconciliationBatchPolicy] = []
-        for item in statements where item.status == "staged" {
+        for item in statements where item.status == .staged {
             if let batchId = item.batchId, let adoptPolicy = item.adoptPolicy {
                 overrides.append(.init(batchId: batchId, adoptPolicy: adoptPolicy))
             }
         }
         return PortfolioImportReconciliationScope(
-            batchIds: staged, adoptPolicy: PortfolioImportReconciliationPolicy(rawValue: policy),
+            batchIds: staged, adoptPolicy: PortfolioImportReconciliationPolicy(rawValue: policy.rawValue),
             batchPolicies: overrides.sorted { $0.batchId < $1.batchId },
             rowChoices: rowChoices.filter { staged.contains($0.batchId) })
     }
     public var canStage: Bool {
-        !outcomeUncertain && !statements.isEmpty && statements.contains { $0.status != "staged" }
+        !outcomeUncertain && !statements.isEmpty && statements.contains { $0.status != .staged }
             && statements.allSatisfy { item in
-                item.status == "staged"
+                item.status == .staged
                     || (item.file != nil && item.detected != nil
                         && brokerAccounts.contains { account in account.id == item.accountId }
-                        && item.status != "detecting")
+                        && item.status != .detecting)
             }
     }
-    public var canPreview: Bool { !outcomeUncertain && allStaged && operation == "idle" }
+    public var canPreview: Bool { !outcomeUncertain && allStaged && operation == .idle }
     public var canCommit: Bool {
-        guard allStaged, operation == "idle", !outcomeUncertain, reviewKey == scopeKey, let plan else { return false }
+        guard allStaged, operation == .idle, !outcomeUncertain, reviewKey == scopeKey, let plan else { return false }
         return plan.ready && plan.blockers.isEmpty
             && plan.actions.allSatisfy { Self.committableActions.contains($0.action) }
     }
@@ -166,7 +188,7 @@ public final class PortfolioImportSessionModel {
     @ObservationIgnored private var commitWaiters: [CheckedContinuation<Void, Never>] = []
     private struct ReviewSettings: Codable {
         let sourceRoutingKey: String
-        let batchIds: [Int]
+        let batchIds: [PortfolioImportBatchNumericID]
         let policy: String
     }
     public init(
@@ -198,7 +220,7 @@ public final class PortfolioImportSessionModel {
         if let data, let stored = try? JSONDecoder().decode([PortfolioImportStatement].self, from: data),
             stored.count <= 100,
             stored.allSatisfy({
-                $0.status == "staged" && ($0.accountId ?? 0) > 0 && ($0.batchId ?? 0) > 0
+                $0.status == .staged && ($0.accountId?.rawValue ?? 0) > 0 && ($0.batchId?.rawValue ?? 0) > 0
                     && [$0.rows, $0.skipped, $0.sourceErrors].compactMap { $0 }.allSatisfy { $0 >= 0 }
             })
         {
@@ -206,9 +228,9 @@ public final class PortfolioImportSessionModel {
         }
         if let settings, let value = try? JSONDecoder().decode(ReviewSettings.self, from: settings),
             value.sourceRoutingKey == routingKey, value.batchIds == statements.compactMap(\.batchId).sorted(),
-            ["auto", "preserve_existing", "prefer_source"].contains(value.policy)
+            let restoredPolicy = PortfolioImportSessionPolicy(rawValue: value.policy)
         {
-            policy = value.policy
+            policy = restoredPolicy
         }
     }
     /// The statement settings a review depends on; any change to one invalidates the review. The
@@ -222,17 +244,17 @@ public final class PortfolioImportSessionModel {
         let rows = statements.map { item in
             var fields: [(String, TaxValue)] = [("id", .string(item.id)), ("name", .string(item.name))]
             if let detected = item.detected {
-                fields.append(("source", .string(detected.source)))
+                fields.append(("source", .string(detected.source.rawValue)))
                 fields.append(("identities", .array(detected.sourceAccountIdentities.map(TaxValue.string))))
             }
-            if let account = item.accountId { fields.append(("accountId", .number(Decimal(account)))) }
+            if let account = item.accountId { fields.append(("accountId", .number(Decimal(account.rawValue)))) }
             if let policy = item.adoptPolicy { fields.append(("adoptPolicy", .string(policy.rawValue))) }
             fields.append(("includedSymbols", .string(item.includedSymbols ?? "")))
             if let id = item.transferDestinationAccountId {
-                fields.append(("transferDestinationAccountId", .number(Decimal(id))))
+                fields.append(("transferDestinationAccountId", .number(Decimal(id.rawValue))))
             }
             if let id = item.transferOriginAccountId {
-                fields.append(("transferOriginAccountId", .number(Decimal(id))))
+                fields.append(("transferOriginAccountId", .number(Decimal(id.rawValue))))
             }
             return "{" + fields.map { json(.string($0.0)) + ":" + json($0.1) }.joined(separator: ",") + "}"
         }
@@ -243,13 +265,14 @@ public final class PortfolioImportSessionModel {
         return routingKey + "|" + (body.map { String(decoding: $0, as: UTF8.self) } ?? "invalid")
     }
     private func persist() {
-        let staged = statements.filter { $0.status == "staged" && $0.batchId != nil }
+        let staged = statements.filter { $0.status == .staged && $0.batchId != nil }
         let session = staged.isEmpty ? nil : try? JSONEncoder().encode(staged)
         let settings: Data?
-        if !statements.isEmpty && statements.allSatisfy({ $0.status == "staged" }) {
+        if !statements.isEmpty && statements.allSatisfy({ $0.status == .staged }) {
             settings = try? JSONEncoder().encode(
                 ReviewSettings(
-                    sourceRoutingKey: routingKey, batchIds: statements.compactMap(\.batchId).sorted(), policy: policy))
+                    sourceRoutingKey: routingKey, batchIds: statements.compactMap(\.batchId).sorted(),
+                    policy: policy.rawValue))
         } else {
             settings = nil
         }
@@ -303,7 +326,7 @@ public final class PortfolioImportSessionModel {
         }
         invalidate()
         stopped = false
-        if statements.allSatisfy({ $0.status == "completed" }) { statements = [] }
+        if statements.allSatisfy({ $0.status == .completed }) { statements = [] }
         let entries = files.map { PortfolioImportStatement(name: $0.filename, file: $0) }
         statements += entries
         await withTaskGroup(of: (String, Result<PortfolioImportProbe, Error>).self) { group in
@@ -319,16 +342,16 @@ public final class PortfolioImportSessionModel {
                 }
             }
             for await (id, result) in group {
-                guard let index = statements.firstIndex(where: { $0.id == id }), statements[index].status == "detecting"
+                guard let index = statements.firstIndex(where: { $0.id == id }), statements[index].status == .detecting
                 else { continue }
                 switch result {
                 case .success(let value):
                     statements[index].detected = value.detected
                     statements[index].accountId = value.detected?.resolveAccount(accounts)
-                    statements[index].status = value.detected == nil ? "error" : "ready"
+                    statements[index].status = value.detected == nil ? .error : .ready
                     statements[index].error = value.detected == nil ? "portfolioImport.session.unsupported" : nil
                 case .failure(let failure):
-                    statements[index].status = "error"
+                    statements[index].status = .error
                     statements[index].error = failure.localizedDescription
                 }
             }
@@ -337,13 +360,13 @@ public final class PortfolioImportSessionModel {
     }
     private func edit(_ id: String, restage: Bool = false, _ change: (inout PortfolioImportStatement) -> Void) {
         guard !locked, let index = statements.firstIndex(where: { $0.id == id }),
-            statements[index].status != "completed"
+            statements[index].status != .completed
         else { return }
         if restage && statements[index].file == nil { return }
         if restage {
             if let batch = statements[index].batchId { statements[index].previousBatchIds.append(batch) }
             statements[index].batchId = nil
-            statements[index].status = "ready"
+            statements[index].status = .ready
             statements[index].rows = nil
             statements[index].sourceErrors = nil
             statements[index].error = nil
@@ -352,7 +375,7 @@ public final class PortfolioImportSessionModel {
         invalidate()
         persist()
     }
-    public func setAccount(id: String, accountId: Int?) {
+    public func setAccount(id: String, accountId: AccountID?) {
         edit(id, restage: true) {
             $0.accountId = accountId
             $0.accountChosenManually = true
@@ -364,10 +387,10 @@ public final class PortfolioImportSessionModel {
     public func setStatementPolicy(id: String, policy: PortfolioImportReconciliationPolicy?) {
         edit(id) { $0.adoptPolicy = policy }
     }
-    public func setTransferAccount(id: String, accountId: Int?) {
+    public func setTransferAccount(id: String, accountId: AccountID?) {
         edit(id, restage: true) {
             $0.transferDestinationAccountId = accountId
-            if $0.detected?.source == "nexo" { $0.transferOriginAccountId = accountId }
+            if $0.detected?.source == .nexo { $0.transferOriginAccountId = accountId }
         }
     }
     public func remove(id: String) {
@@ -382,20 +405,20 @@ public final class PortfolioImportSessionModel {
         invalidate()
         persist()
     }
-    public func setPolicy(_ policy: String) {
-        guard !locked, ["auto", "preserve_existing", "prefer_source"].contains(policy) else { return }
+    public func setPolicy(_ policy: PortfolioImportSessionPolicy) {
+        guard !locked else { return }
         self.policy = policy
         invalidate()
         persist()
     }
     public func stage() async {
-        guard canStage, operation == "idle" else { return }
+        guard canStage, operation == .idle else { return }
         invalidate()
-        operation = "staging"
+        operation = .staging
         stopped = false
         stopRequested = false
         defer {
-            operation = "idle"
+            operation = .idle
             stopped = stopRequested
             if discardPending {
                 discardPending = false
@@ -406,25 +429,25 @@ public final class PortfolioImportSessionModel {
         let items = statements
         for item in items {
             if stopRequested { break }
-            guard item.status != "staged", let file = item.file, let detected = item.detected else { continue }
+            guard item.status != .staged, let file = item.file, let detected = item.detected else { continue }
             guard let index = statements.firstIndex(where: { $0.id == item.id }) else { continue }
-            statements[index].status = "staging"
+            statements[index].status = .staging
             statements[index].error = nil
             do {
-                var config = PortfolioImportConfig.preset(detected.presetKey ?? detected.source)!
+                var config = PortfolioImportConfig.preset(detected.presetKey?.rawValue ?? detected.source.rawValue)!
                 config.accountId = item.accountId
                 config.includedSymbols = item.includedSymbols
                 config.transferDestinationAccountId = item.transferDestinationAccountId
                 config.transferOriginAccountId = item.transferOriginAccountId
-                if detected.source == "kinesis" { config.yieldBasisPolicy = "zero" }
+                if detected.source == .kinesis { config.yieldBasisPolicy = "zero" }
                 let staged = try await service.importStream(
-                    file: file, config: config, adapterName: config.format ?? "portfolio_generic"
+                    file: file, config: config, adapterName: config.format?.rawValue ?? "portfolio_generic"
                 ) { [weak self] progress in await self?.receiveProgress(progress, id: item.id) }
-                guard staged.requiresReview, staged.imported == 0, staged.batchId > 0 else {
+                guard staged.requiresReview, staged.imported == 0, staged.batchId.rawValue > 0 else {
                     throw PortfolioImportFailure.unverified("portfolioImport.session.stageUnverified")
                 }
                 statements[index].batchId = staged.batchId
-                statements[index].status = "staged"
+                statements[index].status = .staged
                 statements[index].skipped = staged.skipped
                 statements[index].sourceErrors = staged.errors
                 persist()
@@ -432,7 +455,7 @@ public final class PortfolioImportSessionModel {
                 statements[index].rows = evidence.groups.reduce(0) { $0 + $1.rows.count }
                 statements[index].sourceErrors = (evidence.totals["error"] ?? 0) + (evidence.totals["unresolved"] ?? 0)
             } catch {
-                statements[index].status = statements[index].batchId == nil ? "error" : "staged"
+                statements[index].status = statements[index].batchId == nil ? .error : .staged
                 statements[index].error = error.localizedDescription
                 self.error = "portfolioImport.session.stageFailed"
                 stopRequested = true
@@ -447,18 +470,18 @@ public final class PortfolioImportSessionModel {
     private func receiveProgress(_ progress: ImportProgress, id: String) {
         if let index = statements.firstIndex(where: { $0.id == id }) { statements[index].progress = progress }
     }
-    public func stop() { if operation == "staging" { stopRequested = true } }
+    public func stop() { if operation == .staging { stopRequested = true } }
     public func discardUnstaged() {
         if isRestoring {
             discardPending = true
             return
         }
-        if operation == "staging" {
+        if operation == .staging {
             stopRequested = true
             discardPending = true
             return
         }
-        statements.removeAll { !["staged", "completed"].contains($0.status) }
+        statements.removeAll { !$0.status.isSettled }
         for index in statements.indices { statements[index].file = nil }
         invalidate()
         persist()
@@ -477,10 +500,10 @@ public final class PortfolioImportSessionModel {
         revision = generation
         plan = nil
         error = nil
-        operation = "preview"
+        operation = .preview
         let submitted = scope
         let key = scopeKey
-        defer { if generation == revision || operation == "preview" { operation = "idle" } }
+        defer { if generation == revision || operation == .preview { operation = .idle } }
         do {
             let value = try await service.importReconciliationPreview(scope: submitted)
             guard generation == revision, key == scopeKey else { return }
@@ -490,8 +513,10 @@ public final class PortfolioImportSessionModel {
         } catch { if generation == revision { self.error = Self.message(error) } }
     }
     /// Answers a row that resembles a transaction the account already holds, then reviews again.
-    public func choose(batchId: Int, rowId: Int, choice: PortfolioImportRowChoice.Choice) async {
-        guard !locked, operation == "idle", allStaged, ids.contains(batchId) else { return }
+    public func choose(
+        batchId: PortfolioImportBatchNumericID, rowId: PortfolioImportRowID, choice: PortfolioImportRowChoice.Choice
+    ) async {
+        guard !locked, operation == .idle, allStaged, ids.contains(batchId) else { return }
         rowChoices.removeAll { $0.batchId == batchId && $0.rowId == rowId }
         rowChoices.append(PortfolioImportRowChoice(batchId: batchId, rowId: rowId, choice: choice))
         await preview()
@@ -499,11 +524,11 @@ public final class PortfolioImportSessionModel {
     public func commit() async {
         guard canCommit else { return }
         acceptedCommitCount += 1
-        operation = "commit"
+        operation = .commit
         error = nil
         let submitted = scope
         defer {
-            operation = "idle"
+            operation = .idle
             persist()
             acceptedCommitCount -= 1
             if acceptedCommitCount == 0 {
@@ -518,7 +543,7 @@ public final class PortfolioImportSessionModel {
             self.plan = nil
             reviewKey = nil
             for index in statements.indices {
-                statements[index].status = "completed"
+                statements[index].status = .completed
                 if let batch = committed.batches.first(where: { $0.batchId == statements[index].batchId }) {
                     statements[index].sourceErrors = batch.errors
                 }
@@ -546,27 +571,27 @@ public final class PortfolioImportSessionModel {
         guard case .client(let failure)? = error as? APIError else { return false }
         return (400..<500).contains(failure.status)
     }
-    private func reconcileUnknownWrite(batchIds: [Int]) async {
+    private func reconcileUnknownWrite(batchIds: [PortfolioImportBatchNumericID]) async {
         _ = try? await service.importBatches(limit: 200, offset: 0)
         for batchId in batchIds { _ = try? await service.importPreview(batchId: batchId) }
     }
     public func acknowledgeUncertainOutcome() {
-        guard operation == "idle" else { return }
+        guard operation == .idle else { return }
         outcomeUncertain = false
         invalidate()
     }
     public func beginRollback() -> Bool {
-        guard !isRestoring, operation == "idle" else { return false }
-        operation = "rollback"
+        guard !isRestoring, operation == .idle else { return false }
+        operation = .rollback
         return true
     }
-    public func endRollback(batchId: Int?, failed: Bool) {
+    public func endRollback(batchId: PortfolioImportBatchNumericID?, failed: Bool) {
         if let batchId, !failed {
             statements.removeAll { $0.batchId == batchId }
             invalidate()
             persist()
         }
-        operation = "idle"
+        operation = .idle
     }
 }
 

@@ -74,28 +74,31 @@ public struct TransactionsView: View {
         // The Delete alert, the Add sheet and the Split dialog present from here, or from
         // inside the inspector sheet while it is open (one sheet per presenter).
         .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: !inspectorIsSheet))
-        .sheet(
+        .modifier(TransactionBulkPresentations(model: model, shell: shell, theme: theme))
+        .visionDialog(
             item: Binding(
                 get: { model.quickLookRow },
                 set: { row in
                     if row == nil { model.closeQuickLook() }
-                })
+                }),
+            metrics: .init(maxWidth: nil, padding: 0, spacing: 0)
         ) { row in
             TransactionQuickLookSheet(row: row, model: model, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
-        // Below the `lg` width the inspector is a sheet.
-        .sheet(
+        // Below the `lg` width the inspector is a sheet (`SheetContent sm:max-w-md`, `p-0`).
+        .visionSideSheet(
             isPresented: Binding(
                 get: { inspectorIsSheet },
                 set: { presented in
                     if !presented { model.closeInspector() }
-                })
+                }),
+            metrics: .sideSheet(maxWidth: 448)
         ) {
             if let row = model.selectedRow, let inspector = model.inspector {
                 TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: false)
-                    .frame(minWidth: 380, idealWidth: 420, minHeight: 520)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: true))
                     .environment(\.visionTheme, theme)
                     .environment(\.colorScheme, theme.colorScheme)
@@ -120,11 +123,17 @@ public struct TransactionsView: View {
                 TransactionFilterBanner(model: model, strings: strings)
             }
             HStack(alignment: .top, spacing: 16) {
+                // `minWidth: 0` lets the docked inspector take its share first: the card's rows have
+                // a wide intrinsic width, so without it the HStack kept that width, pushed the
+                // inspector off the window and the table never measured a width small enough to
+                // switch to the stacked layout.
                 TransactionsTableCard(model: model, shell: shell)
-                    .frame(maxWidth: .infinity)
+                    .frame(minWidth: 0, maxWidth: .infinity)
+                    .layoutPriority(0)
                 if isDocked, let row = model.selectedRow, let inspector = model.inspector {
                     TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: true)
                         .frame(width: TransactionsModel.inspectorWidth)
+                        .layoutPriority(1)
                 }
             }
         }
@@ -218,23 +227,45 @@ private struct TransactionDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             // The buttons decide; the binding only reads.
-            .alert(
-                strings.t("txPage.delete.title"),
+            .visionAlert(
+                title: strings.t("txPage.delete.title"),
+                message: strings.t(
+                    "txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]),
                 isPresented: Binding(get: { hosts && model.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-                Button(strings.t("txPage.delete.confirm"), role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                VisionDialogAction(strings.t("txPage.delete.confirm"), role: .destructive) {
                     Task { await model.confirmDelete() }
                 }
-            } message: {
-                Text(strings.t("txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]))
             }
-            .sheet(
+            // `AttachmentPanel`'s delete confirm. It presents from here, not from the panel, so the
+            // alert covers the page or the inspector sheet rather than the small panel.
+            .visionAlert(
+                title: strings.t("txPage.deleteAttachment"),
+                message: strings.t(
+                    "txPage.deleteAttachment.desc",
+                    ["name": model.inspector?.attachments.pendingDelete?.filename ?? ""]),
+                isPresented: Binding(
+                    get: { hosts && model.inspector?.attachments.pendingDelete != nil }, set: { _ in })
+            ) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) {
+                    model.inspector?.attachments.cancelDelete()
+                }
+                VisionDialogAction(strings.t("common.delete"), role: .destructive) {
+                    Task {
+                        await model.inspector?.attachments.confirmDelete()
+                        model.reportAttachmentDeleteFailure()
+                    }
+                }
+            }
+            // `SheetContent sm:max-w-[470px]`, `p-0`.
+            .visionSideSheet(
                 isPresented: Binding(
                     get: { hosts && model.isAddPresented },
                     set: { presented in
                         if !presented { model.dismissAdd() }
-                    })
+                    }),
+                metrics: .sideSheet(maxWidth: 470)
             ) {
                 if let form = model.addForm {
                     TransactionAddSheet(model: model, form: form, shell: shell)
@@ -242,12 +273,15 @@ private struct TransactionDialogs: ViewModifier {
                         .environment(\.colorScheme, theme.colorScheme)
                 }
             }
-            .sheet(
+            .visionDialog(
                 item: Binding(
                     get: { hosts ? model.splitForm.map { SplitSheetItem(form: $0) } : nil },
                     set: { item in
                         if item == nil { model.dismissSplit() }
-                    })
+                    }),
+                metrics: .init(
+                    maxWidth: 512, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0,
+                    spacing: 0)
             ) { item in
                 TransactionSplitSheet(model: model, form: item.form, shell: shell)
                     .environment(\.visionTheme, theme)
@@ -271,15 +305,17 @@ struct TransactionsToolbar: View {
 
     var body: some View {
         let filters = model.filters
-        HStack(spacing: 8) {
+        // `flex flex-wrap items-center gap-2`, the View menu `ml-auto`: the chips wrap onto
+        // further rows at narrow widths instead of running past the window.
+        FlowLayout(spacing: 8, lastTrailing: true) {
             accountChip(filters)
             categoryChip(filters)
             dateMenu(filters)
             typeMenu(filters)
             needsCategoryChip(filters)
-            Spacer(minLength: 0)
             viewMenu
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(strings.t("txPage.filter.toolbar"))
     }
@@ -344,7 +380,7 @@ struct TransactionsToolbar: View {
             else { continue }
             options.append(
                 PickerOption(
-                    id: String(account.id), title: label,
+                    id: String(account.id.rawValue), title: label,
                     detail: account.isActive ? nil : strings.t("accounts.archived"),
                     isSelected: filters.accountId == account.id
                 ) {
@@ -392,7 +428,7 @@ struct TransactionsToolbar: View {
             let label = PickerDataModel.label(node)
             guard query.isEmpty || "\(label) \(node.id)".lowercased().contains(query) else { continue }
             options.append(
-                PickerOption(id: String(node.id), title: label, isSelected: filters.categoryId == node.id) {
+                PickerOption(id: String(node.id.rawValue), title: label, isSelected: filters.categoryId == node.id) {
                     model.setCategoryFilter(node.id)
                     categoriesOpen = false
                 })
@@ -522,8 +558,8 @@ struct TransactionFilterBanner: View {
                             Image(systemName: "xmark")
                                 .imageScale(.small)
                         }
-                        .buttonStyle(.borderless)
-                        .help(strings.t("filter.tags.clearAll"))
+                        .buttonStyle(.vision(.ghost, size: .iconXs))
+                        .visionTooltip(strings.t("filter.tags.clearAll"))
                         .accessibilityLabel(strings.t("filter.tags.clearAll"))
                     }
                 }
@@ -537,9 +573,9 @@ struct TransactionFilterBanner: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .foregroundStyle(theme.secondaryLabel)
-                .help(strings.t("aria.clearFilter"))
+                .visionTooltip(strings.t("aria.clearFilter"))
                 .accessibilityLabel(strings.t("aria.clearFilter"))
             }
         }

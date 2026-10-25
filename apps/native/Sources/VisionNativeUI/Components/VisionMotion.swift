@@ -40,6 +40,8 @@ struct RollingNumber: View {
     let value: String
     var decimalSeparator: Character?
     var animate = true
+    /// The display face the figure is drawn in (see `MoneyDisplaySize`); nil keeps the caller's `.font`.
+    var display: MoneyDisplaySize?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.visionTheme) private var theme
     @State private var settled = false
@@ -59,6 +61,7 @@ struct RollingNumber: View {
                     .id(characters.count - index)
             }
         }
+        .modifier(DisplayFontModifier(display: display))
         .monospacedDigit()
         .lineLimit(1)
         .fixedSize()
@@ -78,8 +81,17 @@ struct RollingNumber: View {
         case .currency:
             // `text-[0.85em]`: a smaller glyph. Text scale resizes the layout too; a scale
             // effect left each glyph's full-size slot, which spread the figures apart.
-            glyph.fontWeight(.medium).textScale(.secondary).opacity(0.85).padding(.trailing, 1)
-        case .minor: glyph.textScale(.secondary).opacity(0.75)
+            if let display {
+                glyph.font(display.font(scale: MoneyDisplaySize.currencyScale)).opacity(0.85).padding(.trailing, 1)
+            } else {
+                glyph.fontWeight(.medium).textScale(.secondary).opacity(0.85).padding(.trailing, 1)
+            }
+        case .minor:
+            if let display {
+                glyph.font(display.font(scale: MoneyDisplaySize.fractionScale)).opacity(0.75)
+            } else {
+                glyph.textScale(.secondary).opacity(0.75)
+            }
         }
     }
 

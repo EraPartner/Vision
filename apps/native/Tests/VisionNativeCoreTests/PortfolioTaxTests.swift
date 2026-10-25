@@ -89,7 +89,7 @@ struct PortfolioTaxDataTests {
         #expect(draft.patch.expected.values.allSatisfy { $0 == .object(["exists": .bool(false)]) })
         #expect(draft.adjustments["2026:1"]?["taxes"] == .number(Decimal(string: "12.5")!))
         #expect(draft.classifications == .object([:]))
-        try source.validate(year: 2025, currency: "eur")
+        try source.validate(year: 2025, currency: PortfolioCurrency.code("eur"))
     }
     @Test func transportKeepsGeneratedPathQueryAtomicBodyAndDecimalAmounts() async throws {
         let transport = PortfolioTaxTestTransport()
@@ -239,7 +239,7 @@ struct PortfolioTaxModelTests {
         let service = try PortfolioTaxTestService()
         let widgets = PortfolioTaxWidgetsModel(service: service)
         await widgets.load()
-        let original = await service.widgetRecord.expected
+        let original = await service.widgetRecord.expected.json
         await service.pause("widgets")
         let read = Task { await widgets.load() }
         await service.waitForPause()
@@ -321,7 +321,7 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
             "otherPage": .object(["secretFuture": .bool(false)]),
         ])
         widgetRecord = .init(
-            key: "widget_visibility", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "widget_visibility", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
     func pause(_ operation: String) { paused = operation }
     func waitForPause() async { if held == nil { await withCheckedContinuation { entered = $0 } } }
@@ -345,8 +345,8 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
             key: records[0].key, value: records[0].value,
             expected: .object(["exists": .bool(true), "value": .string("changed")]))
     }
-    func portfolioTaxDashboard(year: Int, currency: String) async throws -> PortfolioTaxDashboard {
-        let value = try portfolioTaxFixture(year: year, currency: currency, records: records)
+    func portfolioTaxDashboard(year: Int, currency: CurrencyCode) async throws -> PortfolioTaxDashboard {
+        let value = try portfolioTaxFixture(year: year, currency: currency.rawValue, records: records)
         await wait("dashboard")
         return value
     }
@@ -373,7 +373,7 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
         widgetWrites.append((value, expected))
         if failure { throw APIError.invalidRequest("Synthetic widget CAS conflict") }
         widgetRecord = .init(
-            key: "widget_visibility", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "widget_visibility", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
         return widgetRecord
     }
 }

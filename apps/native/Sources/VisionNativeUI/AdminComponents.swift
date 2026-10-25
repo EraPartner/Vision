@@ -143,7 +143,7 @@ struct NoticeToast: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+            .background { ToastSurface() }
             .foregroundStyle(notice.kind == .success ? theme.foreground : theme.destructive)
             .frame(maxWidth: 520)
             .padding(.bottom, 20)

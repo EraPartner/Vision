@@ -129,7 +129,7 @@ struct ResearchMarketLookupTests {
         action.step = "transaction"
         action.trade.amount = "20"
         action.trade.units = "2"
-        action.trade.accountId = ""
+        action.trade.broker = .unassigned
         #expect(action.effectiveBrokerId == nil)
         await transport.pause("research-presentation")
         let first = Task { await action.recordTransaction() }
@@ -184,7 +184,7 @@ struct ResearchMarketLookupTests {
         #expect(model.action.trade.units == "2")
         #expect(model.action.trade.price == "10")
         await model.load(route: route)
-        #expect(model.action.holding?.currency == "USD")
+        #expect(model.action.holding?.currency == CurrencyCode(rawValue: "USD"))
         #expect(model.action.step == "transaction")
         #expect(model.action.isDirty)
         #expect((await transport.requests).filter { $0.url.path == "/api/market/quote" }.count == 1)

@@ -1,0 +1,10 @@
+{
+  "investment_id": 1,
+  "provider": "string",
+  "points": [
+    {
+      "timestampMs": 1.5,
+      "price": 1.5
+    }
+  ]
+}

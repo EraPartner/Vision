@@ -21,11 +21,11 @@ struct AnalysisResultTable: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Picker(strings.t("analysis.displayValues"), selection: $mode) {
-                    Text(strings.t("analysis.exactValues")).tag(AnalysisValueDisplayMode.exact)
-                    Text(strings.t("analysis.formattedValues")).tag(AnalysisValueDisplayMode.formatted)
-                    Text(strings.t("analysis.rawValues")).tag(AnalysisValueDisplayMode.raw)
-                }.frame(maxWidth: 270)
+                VisionSegmentedControl(
+                    selection: $mode, values: [AnalysisValueDisplayMode.exact, .formatted, .raw],
+                    title: { strings.t(Self.modeKey($0)) }, size: .sm
+                )
+                .visionAccessibilityLabel(strings.t("analysis.displayValues")).fixedSize()
                 Text(strings.t("analysis.displayPrecisionHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             ScrollView(.horizontal) {
@@ -66,7 +66,7 @@ struct AnalysisResultTable: View {
                             .accessibilityAction(named: Text(strings.t("analysis.sourceRows"))) { onDrill?(row) }
                     }
                 }.padding(.horizontal, 12).textSelection(.enabled)
-            }.overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+            }.overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.md).stroke(theme.border))
             if result.rows.count > pageSize {
                 HStack {
                     Text(
@@ -82,9 +82,16 @@ struct AnalysisResultTable: View {
                     Spacer()
                     Button(strings.t("analysis.previous")) { page = max(0, current - 1) }.disabled(current == 0)
                     Button(strings.t("analysis.next")) { page = current + 1 }.disabled(current + 1 == pages)
-                }.accessibilityElement(children: .contain).accessibilityLabel(strings.t("analysis.loadedRows"))
+                }.buttonStyle(.visionOutline).controlSize(.small).accessibilityElement(children: .contain).accessibilityLabel(strings.t("analysis.loadedRows"))
             }
         }.onChange(of: result) { page = 0 }
+    }
+    private static func modeKey(_ mode: AnalysisValueDisplayMode) -> String {
+        switch mode {
+        case .exact: return "analysis.exactValues"
+        case .formatted: return "analysis.formattedValues"
+        case .raw: return "analysis.rawValues"
+        }
     }
     private func display(_ value: AnalysisValue?, column: AnalysisColumn) -> String {
         if mode == .formatted, column.type == "date", let raw = value?.stringValue {

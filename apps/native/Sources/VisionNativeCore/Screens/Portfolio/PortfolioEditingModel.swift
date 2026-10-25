@@ -36,16 +36,16 @@ public final class PortfolioEditingModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var onChanged: (@MainActor () async -> Void)?
     private var transactions: [PortfolioTransaction] = []
-    @ObservationIgnored private var allInvestmentIds: [Int] = []
+    @ObservationIgnored private var allInvestmentIds: [InvestmentID] = []
     @ObservationIgnored private var bulkTransactions: [PortfolioTransaction] = []
-    @ObservationIgnored private var selectedHistories: [Int: [PortfolioTransaction]] = [:]
+    @ObservationIgnored private var selectedHistories: [InvestmentID: [PortfolioTransaction]] = [:]
     @ObservationIgnored private var brokerHistoryFetchedAt: Date?
     @ObservationIgnored private var brokerHistoryRevision = UUID()
     @ObservationIgnored private var brokerHistoryTask: Task<Void, Never>?
     @ObservationIgnored private var optionsTask: Task<Void, Never>?
     @ObservationIgnored private var investmentBaseline: PortfolioInvestmentDraft?
     @ObservationIgnored private var tradeBaseline: PortfolioTradeDraft?
-    @ObservationIgnored private var createdInvestmentId: Int?
+    @ObservationIgnored private var createdInvestmentId: InvestmentID?
     @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var loadedProviders = false
     @ObservationIgnored private var retagKeys: [String: String] = [:]
@@ -65,7 +65,7 @@ public final class PortfolioEditingModel {
         allInvestmentIds = ids
         invalidateBrokerHistory()
     }
-    public func bindTransactions(_ value: [PortfolioTransaction], investmentId: Int? = nil) {
+    public func bindTransactions(_ value: [PortfolioTransaction], investmentId: InvestmentID? = nil) {
         if let investmentId {
             selectedHistories[investmentId] = value
         } else {
@@ -89,7 +89,7 @@ public final class PortfolioEditingModel {
             bulkTransactions.filter { selectedHistories[$0.investmentId] == nil }
             + selectedHistories.values.flatMap { $0 }
     }
-    public func beginAddInvestment(allowedAssetClasses: [String] = PortfolioAssetKinds.all) {
+    public func beginAddInvestment(allowedAssetClasses: [OpenAPI.AssetClass] = PortfolioAssetKinds.all) {
         guard !isSaving, !isMutating else { return }
         investmentDraft = .init(settings: settings, today: today, allowedAssetClasses: allowedAssetClasses)
         investmentBaseline = investmentDraft
@@ -105,7 +105,7 @@ public final class PortfolioEditingModel {
         createdInvestmentId = nil
         open(.investment)
     }
-    public func beginAddTransaction(investment: PortfolioInvestment, bookingCurrency: String) {
+    public func beginAddTransaction(investment: PortfolioInvestment, bookingCurrency: CurrencyCode) {
         guard investment.isActive, !isSaving, !isMutating else { return }
         if tradeDraft?.transactionId != nil || tradeDraft?.investment.id != investment.id || tradeDraft == tradeBaseline
         {
@@ -162,15 +162,15 @@ public final class PortfolioEditingModel {
         error = nil
     }
     private var today: String { PlannedDates.day(now(), calendar: .current).ymd }
-    public var defaultBrokerId: Int? {
+    public var defaultBrokerId: AccountID? {
         preferredBrokerId(investmentId: presentation == .transaction ? tradeDraft?.investment.id : nil)
     }
-    public func preferredBrokerId(investmentId: Int?) -> Int? {
+    public func preferredBrokerId(investmentId: InvestmentID?) -> AccountID? {
         guard !brokersLoading, brokersError == nil, !brokerHistoryLoading, brokerHistoryError == nil,
             allInvestmentIds.isEmpty || brokerHistoryFetchedAt != nil
         else { return nil }
         let active = Set(brokers.map(\.id))
-        func latest(_ predicate: (PortfolioTransaction) -> Bool) -> Int? {
+        func latest(_ predicate: (PortfolioTransaction) -> Bool) -> AccountID? {
             transactions.filter { $0.accountId.map { active.contains($0) } == true && predicate($0) }
                 .max { lhs, rhs in
                     if lhs.date != rhs.date { return lhs.date < rhs.date }
@@ -279,7 +279,10 @@ public final class PortfolioEditingModel {
                     }
                     post(
                         "addInv.toast.added",
-                        ["name": draft.name, "assetClass": strings.t("portfolio.assetClass." + draft.assetClass)])
+                        [
+                            "name": draft.name,
+                            "assetClass": strings.t("portfolio.assetClass." + (draft.assetClass?.rawValue ?? "")),
+                        ])
                 }
                 investmentDraft = nil
                 investmentBaseline = nil
@@ -295,7 +298,7 @@ public final class PortfolioEditingModel {
                 }
                 post(
                     draft.isEditing ? "txnEdit.toast.updated" : "addPortTxn.toast.recorded",
-                    ["type": strings.t("portfolio.txnType." + draft.type), "name": draft.investment.name])
+                    ["type": strings.t("portfolio.txnType." + draft.type.rawValue), "name": draft.investment.name])
                 tradeDraft = nil
                 tradeBaseline = nil
             case nil: return false
@@ -335,27 +338,27 @@ public final class PortfolioEditingModel {
         case nil: break
         }
     }
-    @discardableResult public func archiveInvestment(id: Int) async -> Bool {
+    @discardableResult public func archiveInvestment(id: InvestmentID) async -> Bool {
         await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["is_active": .bool(false)]))
         }
     }
-    @discardableResult public func restoreInvestment(id: Int) async -> Bool {
+    @discardableResult public func restoreInvestment(id: InvestmentID) async -> Bool {
         await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["is_active": .bool(true)]))
         }
     }
-    @discardableResult public func deleteInvestment(id: Int) async -> Bool {
+    @discardableResult public func deleteInvestment(id: InvestmentID) async -> Bool {
         await mutation(key: nil, failureKey: "portfolio.deleteInvestmentFailedTitle") {
             try await service.portfolioDeleteInvestment(id: id)
         }
     }
-    @discardableResult public func deleteTransaction(id: Int) async -> Bool {
+    @discardableResult public func deleteTransaction(id: PortfolioTransactionID) async -> Bool {
         await mutation(key: nil, failureKey: "portfolio.deleteTxnFailedTitle") {
             try await service.portfolioDeleteTransaction(id: id)
         }
     }
-    @discardableResult public func setTicker(id: Int, visible: Bool) async -> Bool {
+    @discardableResult public func setTicker(id: InvestmentID, visible: Bool) async -> Bool {
         await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["show_in_ticker": .bool(visible)]))
         }
@@ -389,18 +392,18 @@ public final class PortfolioEditingModel {
     }
     /// The caller supplies a reviewed complete history; never assign a partial page.
     @discardableResult public func assignUnassignedLots(
-        investmentId: Int, completeHistory: [PortfolioTransaction], historyComplete: Bool, brokerId: Int
+        investmentId: InvestmentID, completeHistory: [PortfolioTransaction], historyComplete: Bool, brokerId: AccountID
     ) async -> Bool {
         let ids = Self.unassignedLotIds(investmentId: investmentId, history: completeHistory)
         guard historyComplete, !brokersLoading, brokersError == nil, !ids.isEmpty, ids.count <= 500,
             Set(ids).count == ids.count,
             brokers.contains(where: { $0.id == brokerId })
         else { return false }
-        let fingerprint = ids.map(String.init).joined(separator: ",") + "|\(brokerId)"
+        let fingerprint = ids.map { String($0.rawValue) }.joined(separator: ",") + "|\(brokerId.rawValue)"
         if retagKeys[fingerprint] == nil { retagKeys[fingerprint] = UUID().uuidString }
         let body = PortfolioEditingPayload([
-            "transaction_ids": .array(ids.map { .number(Decimal($0)) }), "from_account_id": .null,
-            "to_account_id": .number(Decimal(brokerId)), "idempotency_key": .string(retagKeys[fingerprint]!),
+            "transaction_ids": .array(ids.map { .number(Decimal($0.rawValue)) }), "from_account_id": .null,
+            "to_account_id": .number(Decimal(brokerId.rawValue)), "idempotency_key": .string(retagKeys[fingerprint]!),
         ])
         return await mutation(key: nil, failureKey: "portfolio.assignLotsFailedTitle") {
             let receipt = try await service.portfolioRetagLots(body)
@@ -409,7 +412,9 @@ public final class PortfolioEditingModel {
             post("portfolio.assignLotsSuccess", ["count": String(receipt.movedCount)])
         }
     }
-    public static func unassignedLotIds(investmentId: Int, history: [PortfolioTransaction]) -> [Int] {
+    public static func unassignedLotIds(investmentId: InvestmentID, history: [PortfolioTransaction])
+        -> [PortfolioTransactionID]
+    {
         history.filter {
             $0.investmentId == investmentId && $0.accountId == nil
                 && PortfolioAssetKinds.lotTransactionTypes.contains($0.type)

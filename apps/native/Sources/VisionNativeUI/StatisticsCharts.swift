@@ -5,7 +5,7 @@ import VisionNativeCore
 struct InsightRankedChart: View {
     let rows: [CustomChartEntity]
     let settings: NativeAppSettings
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     @State private var selection: String?
     private let onSelectionChange: (String?) -> Void
@@ -13,7 +13,7 @@ struct InsightRankedChart: View {
     @FocusState private var focused: Bool
 
     init(
-        rows: [CustomChartEntity], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        rows: [CustomChartEntity], settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
         initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
     ) {
         self.rows = rows
@@ -87,7 +87,7 @@ struct InsightRankedChart: View {
         .onHover { hovering in
             if hovering { selection = row.id } else if selection == row.id { selection = nil }
         }
-        .help(row.name)
+        .visionTooltip(row.name)
         .accessibilityElement(children: .combine)
         .animation(.easeOut(duration: DesignTokens.Duration.fast), value: dimmed)
     }
@@ -105,7 +105,7 @@ struct InsightRankedChart: View {
 struct StatisticsCategoryDonut: View {
     let rows: [StatisticsCategory]
     let settings: NativeAppSettings
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     @State private var selected: String?
     private let onSelectionChange: (String?) -> Void
@@ -114,7 +114,7 @@ struct StatisticsCategoryDonut: View {
     @Environment(\.visionTheme) private var theme
 
     init(
-        rows: [StatisticsCategory], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        rows: [StatisticsCategory], settings: NativeAppSettings, currency: CurrencyCode, strings: any Localizing,
         initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
     ) {
         self.rows = rows
@@ -125,7 +125,7 @@ struct StatisticsCategoryDonut: View {
         self.onSelectionChange = onSelectionChange
     }
     var body: some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 12) {
             Chart(rows) { row in
                 SectorMark(
                     angle: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), innerRadius: .ratio(0.6),
@@ -137,7 +137,7 @@ struct StatisticsCategoryDonut: View {
             }
             .chartAngleSelection(value: $angle)
             .chartForegroundStyleScale(domain: rows.map(\.name), range: rows.map { color($0.path.first ?? $0.name) })
-            .chartLegend(position: .bottom)
+            .chartLegend(.hidden)
             .chartBackground { _ in
                 if let row = rows.first(where: { $0.id == selected }) {
                     VStack(spacing: 4) {
@@ -204,7 +204,13 @@ struct StatisticsCategoryDonut: View {
                         return value < total
                     }?.id
             }
+            // `ChartLegend` under the donut, each entry carrying its amount ("HOUSING: MORTGAGE · 22.380,00 €").
+            ChartLegendRow(items: rows.map(legendItem))
         }
+    }
+    private func legendItem(_ row: StatisticsCategory) -> ChartLegendItem {
+        let amount = MoneyText.text(row.total, currency: currency, settings: settings, signed: false)
+        return ChartLegendItem(id: row.id, label: row.name + " · " + amount, color: color(row.path.first ?? row.name))
     }
     private func color(_ root: String) -> Color {
         var hash: Int32 = 0

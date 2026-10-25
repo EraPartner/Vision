@@ -3,12 +3,12 @@ import SwiftUI
 import VisionNativeCore
 
 private struct VisionVisualEffectsKey: EnvironmentKey {
-    static let defaultValue = "standard"
+    static let defaultValue = VisualEffects.standard
 }
 
 extension EnvironmentValues {
     /// The effective tier after the settings model applies the display-size cap.
-    var visionVisualEffects: String {
+    var visionVisualEffects: VisualEffects {
         get { self[VisionVisualEffectsKey.self] }
         set { self[VisionVisualEffectsKey.self] = newValue }
     }
@@ -51,13 +51,13 @@ struct SidebarGlassBackground: View {
     var body: some View {
         let glass = theme.glass
         ZStack(alignment: .trailing) {
-            if visualEffects == "reduced" || reduceTransparency {
+            if visualEffects == .reduced || reduceTransparency {
                 Color(token: glass.sidebarTop)
             } else {
                 VibrancyBackground(
                     material: .sidebar,
-                    blendingMode: visualEffects == "enhanced" ? .behindWindow : .withinWindow)
-                if fullEffects && visualEffects == "enhanced" {
+                    blendingMode: visualEffects == .enhanced ? .behindWindow : .withinWindow)
+                if fullEffects && visualEffects == .enhanced {
                     // Full effects keep both blur passes under native vibrancy: the system
                     // blur behind the window and the chrome's own `backdrop-filter: blur(24px)
                     // saturate(...)` over it (index.css `html.electron-mac.vibrancy:not(.fx-full)`
@@ -96,7 +96,7 @@ struct DetailGlassBackground: View {
     var body: some View {
         let glass = theme.glass
         ZStack {
-            if visualEffects == "enhanced" && !reduceTransparency {
+            if visualEffects == .enhanced && !reduceTransparency {
                 VibrancyBackground(material: .underWindowBackground, blendingMode: .behindWindow)
                 Color(token: glass.detailTint, opacity: glass.detailTintOpacity)
             } else {

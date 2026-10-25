@@ -13,7 +13,7 @@ public final class ResearchWatchlistModel {
     public var isOnline = true
     public var quotesUnavailable: Bool { !isOnline || quotesError != nil }
     public private(set) var metrics: [Int: ResearchWatchlistMetrics] = [:]
-    public private(set) var selectedItemID: Int?
+    public private(set) var selectedItemID: WatchlistItemID?
     public var selectedItem: ResearchWatchlistItem? { page?.items.first { $0.id == selectedItemID } }
     public private(set) var range: ResearchWatchlistRange = .month
     public private(set) var chart: ResearchChartData?
@@ -104,7 +104,7 @@ public final class ResearchWatchlistModel {
             metricsRevision = UUID()
             if selectedItemID != nil, selectedItem == nil { closeChart() }
             let symbols = Self.symbols(result)
-            if quoteSymbols != symbols {
+            if quoteSymbols != symbols || quotes.isEmpty {
                 quotesRevision = UUID()
                 isQuotesLoading = false
                 await loadQuotes()
@@ -126,8 +126,8 @@ public final class ResearchWatchlistModel {
     public func loadQuotes() async {
         guard isVisible, isOnline, !isQuotesLoading else { return }
         let symbols = page.map(Self.symbols) ?? []
-        quoteSymbols = symbols
         guard !symbols.isEmpty else {
+            quoteSymbols = symbols
             quotes = [:]
             metrics = [:]
             return
@@ -155,6 +155,9 @@ public final class ResearchWatchlistModel {
             }
             guard quotesRevision == revision, !Task.isCancelled else { return }
             quotes = Dictionary(result.map { ($0.symbol, $0) }, uniquingKeysWith: { _, latest in latest })
+            // Only a delivered response marks this symbol set as loaded. Recording it before the
+            // request meant a cancelled or superseded fetch left the rows on "Quote unavailable".
+            quoteSymbols = symbols
             quotesError = nil
             await updateMetrics()
         } catch {
@@ -175,7 +178,7 @@ public final class ResearchWatchlistModel {
         metricsRevision = revision
         let entries: [TaxValue] = page.items.map { item in
             .object([
-                "id": .number(Decimal(item.id)), "targetPrice": .number(item.targetPrice),
+                "id": .number(Decimal(item.id.rawValue)), "targetPrice": .number(item.targetPrice),
                 "currentPrice": item.symbol.flatMap { quotes[$0]?.price }.map(TaxValue.number) ?? .null,
                 "addedPrice": item.addedPrice.map(TaxValue.number) ?? .null,
             ])
@@ -198,7 +201,7 @@ public final class ResearchWatchlistModel {
         } catch { if metricsRevision == revision { metrics = [:] } }
     }
 
-    public func openChart(id: Int) async {
+    public func openChart(id: WatchlistItemID) async {
         guard page?.items.contains(where: { $0.id == id }) == true else { return }
         if selectedItemID != id {
             closeChart()

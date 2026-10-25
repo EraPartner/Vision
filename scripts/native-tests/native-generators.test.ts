@@ -1,13 +1,31 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import {
   camelCase,
   parseListFile,
   pascalCase,
+  repoPath,
   swiftIdentifier,
   swiftString,
 } from "../lib/nativeCodegen.ts";
-import { generateAPI } from "../native-openapi.ts";
+import {
+  ALLOW_LIST,
+  FIELD_ENTITY,
+  type GeneratorTables,
+  NULLABLE_PATCH_FIELDS,
+  PATH_ID_ENTITY,
+  SCHEMA_ID_ENTITY,
+  STEM_ENTITY,
+  PROVIDER_CURRENCY_SCHEMAS,
+  UNTYPED_DATES,
+  UNTYPED_IDS,
+  UNTYPED_UNIONS,
+  dateKind,
+  enumCases,
+  generateAPI,
+  identifierStem,
+} from "../native-openapi.ts";
 import {
   generateTokens,
   loadDesignSources,
@@ -118,10 +136,12 @@ test("generates the allow-listed operations and only the schemas they reach", ()
   assert.match(generated.models, /public let amount: Decimal\n/);
   assert.match(generated.models, /public let note: String\?\n/);
   assert.match(generated.models, /public let kind: OpenAPI\.ItemKind\n/);
-  assert.match(generated.models, /public let extra: JSONValue\?\n/);
+  assert.match(generated.models, /public let extra: Extra\?\n/);
+  assert.match(generated.models, /public enum Extra: Codable, Equatable, Sendable \{/);
   assert.match(generated.models, /public let meta: Meta\n/);
   assert.match(generated.models, /case createdAt = "created_at"/);
-  assert.match(generated.models, /case cryptoExchange = "crypto_exchange"/);
+  assert.match(generated.models, /case "crypto_exchange": self = \.cryptoExchange/);
+  assert.match(generated.models, /public let id: ItemID\n/);
   assert.match(generated.models, /public struct Envelope:/);
   assert.match(generated.models, /public struct ErrorPayload:/);
   assert.doesNotMatch(generated.models, /Unused/);
@@ -134,6 +154,7 @@ test("generates the allow-listed operations and only the schemas they reach", ()
     generated.operations,
     /public var path: String \{ "\/api\/items\/\\\(APIPath\.segment\(APIQuery\.value\(id\)\)\)" \}/,
   );
+  assert.match(generated.operations, /public var id: ItemID\n/);
   assert.match(
     generated.operations,
     /if let withNotes \{ items\.append\(URLQueryItem\(name: "with_notes"/,
@@ -176,6 +197,408 @@ test("compatibility field aliases retain separate wire keys and Swift members", 
   assert.doesNotMatch(
     generated.models,
     /assetClass: String\? = nil, assetClass:/,
+  );
+});
+
+/** A spec with entities, foreign keys, currencies, enums and a PATCH body, for WP-1 cases. */
+const TYPED_SPEC = `
+openapi: 3.0.3
+info: { title: Fixture, version: "1" }
+paths:
+  /api/accounts/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: integer } }
+    patch:
+      operationId: updateAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Account" }
+  /api/transactions:
+    get:
+      operationId: getTransactions
+      parameters:
+        - { in: query, name: account_id, schema: { type: integer } }
+        - { in: query, name: currency, schema: { type: string } }
+        - { in: query, name: tag_ids, schema: { type: array, items: { type: integer } } }
+        - { in: query, name: kind, schema: { type: string, enum: [a, b] } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Transaction" }
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    ErrorPayload:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    Account:
+      type: object
+      required: [id, currency, owner]
+      properties:
+        id: { type: integer }
+        currency: { type: string }
+        owner: { type: string, enum: [me, none, unknown, "2fa", "a-b", "a_b"] }
+        type: { type: string, enum: [checking, savings] }
+        funding_account_id: { type: integer, nullable: true }
+        unconverted_currencies: { type: array, items: { type: string } }
+        note: { type: string, nullable: true }
+        display_name: { type: string, nullable: true }
+    AccountUpdate:
+      type: object
+      properties:
+        display_name: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        funding_account_id: { type: integer, nullable: true }
+    Transaction:
+      type: object
+      required: [id, account_id, category_id, tag_ids, transfer_peer_id]
+      properties:
+        id: { type: integer }
+        account_id: { type: integer }
+        category_id: { type: integer, nullable: true }
+        tag_ids: { type: array, items: { type: integer } }
+        transfer_peer_id: { type: integer }
+        label: { type: string, enum: [x, null], nullable: true }
+        currency_column: { type: string }
+        pattern_currency: { type: string, pattern: "^[A-Z]{3}$" }
+    Category:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+    Tag:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+`;
+const TYPED_OPS = "updateAccount\ngetTransactions\n";
+
+/** Override tables for the toy spec, so the real tables never leak into a case. */
+function toyTables(over: Partial<GeneratorTables> = {}): GeneratorTables {
+  return {
+    schemaIdEntity: {},
+    stemEntity: {},
+    fieldEntity: { "*.transfer_peer_id": "Transaction" },
+    pathIdEntity: [],
+    untypedIds: {},
+    untypedDates: {},
+    untypedUnions: {},
+    nullablePatchFields: {},
+    ...over,
+  };
+}
+
+test("ids get one Swift type per entity, foreign keys included", () => {
+  const generated = generateAPI(TYPED_SPEC, TYPED_OPS, toyTables());
+  assert.match(
+    generated.models,
+    /public struct Account: .*\{\n {8}public let id: AccountID\n/,
+  );
+  assert.match(generated.models, /public let fundingAccountId: AccountID\?\n/);
+  assert.match(generated.models, /public let accountId: AccountID\n/);
+  assert.match(generated.models, /public let categoryId: CategoryID\?\n/);
+  assert.match(generated.models, /public let tagIds: \[TagID\]\n/);
+  assert.match(generated.models, /public let transferPeerId: TransactionID\n/);
+  assert.match(generated.models, /public let id: TransactionID\n/);
+  assert.match(generated.operations, /public var id: AccountID\n/);
+  assert.match(generated.operations, /public var accountId: AccountID\?\n/);
+  assert.match(generated.operations, /public var tagIds: \[TagID\]\?\n/);
+  assert.match(generated.operations, /for value in tagIds \{ items\.append/);
+  assert.doesNotMatch(generated.models, /: Int\??\n/, "no integer id stays Int");
+  for (const entity of ["Account", "Category", "Tag", "Transaction"]) {
+    assert.match(
+      generated.identifiers,
+      new RegExp(
+        `public enum ${entity}IDTag: IdentifierTag \\{\\}\\npublic typealias ${entity}ID = IntIdentifier<${entity}IDTag>`,
+      ),
+    );
+  }
+  assert.equal(generated.stats.identifierTypes, 4);
+});
+
+test("an id-like integer or string field with no mapping fails generation", () => {
+  const spec = TYPED_SPEC.replace(
+    "transfer_peer_id: { type: integer }",
+    "transfer_peer_id: { type: integer }\n        mystery_id: { type: string }",
+  );
+  assert.throws(
+    () => generateAPI(spec, TYPED_OPS, toyTables()),
+    /no identifier type[\s\S]*Transaction\.mystery_id/,
+  );
+  // The same field is accepted once it is mapped, or listed with a reason.
+  const mapped = generateAPI(
+    spec,
+    TYPED_OPS,
+    toyTables({
+      fieldEntity: {
+        "*.transfer_peer_id": "Transaction",
+        "Transaction.mystery_id": "Voucher",
+      },
+    }),
+  );
+  assert.match(mapped.models, /public let mysteryId: VoucherID\?\n/);
+  assert.match(mapped.identifiers, /public typealias VoucherID = StringIdentifier<VoucherIDTag>/);
+  const untyped = generateAPI(
+    spec,
+    TYPED_OPS,
+    toyTables({
+      untypedIds: { "*.mystery_id": "A catalog code, not an entity." },
+    }),
+  );
+  assert.match(untyped.models, /public let mysteryId: String\?\n/);
+  assert.deepEqual(untyped.stats.untypedIdsHit, ["*.mystery_id"]);
+});
+
+test("a comma-separated id string is never typed as one id", () => {
+  const spec = TYPED_SPEC.replace(
+    "- { in: query, name: kind,",
+    "- { in: query, name: account_ids, schema: { type: string } }\n        - { in: query, name: kind,",
+  );
+  assert.throws(
+    () => generateAPI(spec, TYPED_OPS, toyTables()),
+    /GetTransactions\.account_ids/,
+  );
+});
+
+test("identifier stems and tables are consistent", () => {
+  assert.deepEqual(identifierStem("id"), { stem: "", plural: false });
+  assert.deepEqual(identifierStem("fundingAccountId"), {
+    stem: "fundingAccount",
+    plural: false,
+  });
+  assert.deepEqual(identifierStem("transfer_origin_account_id"), {
+    stem: "transfer_origin_account",
+    plural: false,
+  });
+  assert.deepEqual(identifierStem("category_ids"), {
+    stem: "category",
+    plural: true,
+  });
+  assert.equal(identifierStem("paid"), undefined);
+  assert.equal(identifierStem("identity"), undefined);
+  // Entity names become Swift type names (`<Entity>ID`).
+  const entities = [
+    ...Object.values(SCHEMA_ID_ENTITY),
+    ...Object.values(STEM_ENTITY),
+    ...Object.values(FIELD_ENTITY),
+    ...PATH_ID_ENTITY.map((item) => item.entity),
+  ];
+  for (const entity of entities) {
+    assert.match(entity, /^[A-Z][A-Za-z0-9]*[a-z0-9]$/);
+    assert.doesNotMatch(entity, /ID$/);
+  }
+  for (const [key, reason] of Object.entries(UNTYPED_IDS))
+    assert.ok(reason.trim().length > 20, `${key} needs a reason`);
+});
+
+test("currency fields become CurrencyCode, other strings stay strings", () => {
+  const generated = generateAPI(TYPED_SPEC, TYPED_OPS, toyTables());
+  assert.match(generated.models, /public let currency: CurrencyCode\n/);
+  assert.match(
+    generated.models,
+    /public let unconvertedCurrencies: \[CurrencyCode\]\?\n/,
+  );
+  assert.match(generated.models, /public let patternCurrency: CurrencyCode\?\n/);
+  assert.match(generated.models, /public let currencyColumn: String\?\n/);
+  assert.match(generated.operations, /public var currency: CurrencyCode\?\n/);
+  assert.equal(generated.stats.currencyFields, 4);
+});
+
+test("string enums decode unknown values and re-encode the raw string", () => {
+  const generated = generateAPI(TYPED_SPEC, TYPED_OPS, toyTables());
+  assert.match(generated.models, /public let owner: Owner\n/);
+  assert.match(
+    generated.models,
+    /public enum Owner: Codable, Hashable, Sendable, CaseIterable, RawRepresentable \{/,
+  );
+  assert.match(generated.models, /case unknown\(String\)/);
+  assert.match(generated.models, /default: self = \.unknown\(rawValue\)/);
+  assert.match(generated.models, /case \.unknown\(let value\): return value/);
+  assert.match(generated.models, /public static var allKnownCases: \[Owner\]/);
+  // `type` must not become a nested type named `Type` (a metatype).
+  assert.match(generated.models, /public let type: AccountType\?\n/);
+  assert.doesNotMatch(generated.models, /enum Type\b/);
+  // A null enum member is not a case; query parameter enums stay plain strings.
+  assert.match(generated.models, /public let label: Label\?\n/);
+  assert.doesNotMatch(generated.models, /"null"/);
+  assert.match(generated.operations, /public var kind: String\?\n/);
+  assert.equal(generated.stats.enumsInline, 3);
+});
+
+test("enum case names are unique and clear of the generated members", () => {
+  const cases = enumCases([
+    "me",
+    "none",
+    "unknown",
+    "2fa",
+    "a-b",
+    "a_b",
+    "",
+    "rawValue",
+  ]);
+  const names = cases.map((item) => item.name);
+  assert.equal(new Set(names).size, names.length);
+  assert.ok(!names.includes("unknown"));
+  assert.ok(!names.includes("rawValue"));
+  assert.ok(!names.includes("allCases"));
+  assert.equal(names[1], "none");
+  assert.equal(names[2], "unknownValue");
+  assert.equal(cases.length, 8);
+});
+
+test("a nullable PATCH field that the frontend clears sends an explicit null", () => {
+  const generated = generateAPI(
+    TYPED_SPEC,
+    TYPED_OPS,
+    toyTables({
+      nullablePatchFields: {
+        AccountUpdate: ["display_name", "funding_account_id"],
+      },
+    }),
+  );
+  const body = generated.models.slice(
+    generated.models.indexOf("public struct AccountUpdate"),
+  );
+  assert.match(body, /public let displayName: Nullable<String>\n/);
+  assert.match(body, /public let fundingAccountId: Nullable<AccountID>\n/);
+  assert.match(body, /public let note: String\?\n/, "unlisted fields stay T?");
+  assert.match(body, /displayName: Nullable<String> = \.absent/);
+  assert.match(
+    body,
+    /container\.decodeNullable\(String\.self, forKey: \.displayName\)/,
+  );
+  assert.match(
+    body,
+    /try container\.encodeNullable\(displayName, forKey: \.displayName\)/,
+  );
+  assert.match(body, /try container\.encodeIfPresent\(note, forKey: \.note\)/);
+  assert.deepEqual(generated.stats.nullableFieldsHit, [
+    "AccountUpdate.display_name",
+    "AccountUpdate.funding_account_id",
+  ]);
+  // A field that is not nullable in the spec, or not a property, cannot be listed.
+  assert.throws(
+    () =>
+      generateAPI(
+        TYPED_SPEC,
+        TYPED_OPS,
+        toyTables({ nullablePatchFields: { Account: ["currency"] } }),
+      ),
+    /not nullable/,
+  );
+  assert.throws(
+    () =>
+      generateAPI(
+        TYPED_SPEC,
+        TYPED_OPS,
+        toyTables({ nullablePatchFields: { AccountUpdate: ["gone"] } }),
+      ),
+    /not a property/,
+  );
+});
+
+test("the real spec generates with every id mapped and every table entry used", () => {
+  const generated = generateAPI(
+    fs.readFileSync(repoPath("openapi.yaml"), "utf8"),
+    fs.readFileSync(repoPath(ALLOW_LIST), "utf8"),
+  );
+  // Generation itself fails on an unmapped id; these checks cover the rest.
+  assert.deepEqual(
+    generated.stats.untypedIdsHit,
+    Object.keys(UNTYPED_IDS).sort(),
+    "every UNTYPED_IDS entry matches a field, and none is stale",
+  );
+  assert.deepEqual(
+    generated.stats.untypedDatesHit,
+    Object.keys(UNTYPED_DATES).sort(),
+    "every UNTYPED_DATES entry matches a field, and none is stale",
+  );
+  assert.deepEqual(
+    generated.stats.untypedUnionsHit,
+    Object.keys(UNTYPED_UNIONS).sort(),
+    "every UNTYPED_UNIONS entry matches a union, and none is stale",
+  );
+  assert.equal(generated.models.includes("JSONValue"), true);
+  const expectedNullable = Object.entries(NULLABLE_PATCH_FIELDS)
+    .flatMap(([struct, fields]) => fields.map((field) => `${struct}.${field}`))
+    .sort();
+  assert.deepEqual(generated.stats.nullableFieldsHit, expectedNullable);
+  assert.deepEqual(
+    generated.stats.providerCurrencySchemasHit,
+    [...PROVIDER_CURRENCY_SCHEMAS].sort(),
+    "every PROVIDER_CURRENCY_SCHEMAS entry has a currency field, and none is stale",
+  );
+
+  // No integer or string id-named field stays Int/String unless it is in UNTYPED_IDS.
+  const allowedNames = new Set(
+    Object.keys(UNTYPED_IDS).map((key) => camelCase(key.split(".").pop() ?? "")),
+  );
+  const plain = [
+    ...generated.models.matchAll(
+      /public (?:let|var) (\w+): \[?(?:Int|String)\]?\??$/gm,
+    ),
+    ...generated.operations.matchAll(
+      /public (?:let|var) (\w+): \[?(?:Int|String)\]?\??$/gm,
+    ),
+  ]
+    .map((match) => match[1] ?? "")
+    .filter((name) => /^id$|Ids?$/.test(name));
+  assert.deepEqual(
+    plain.filter((name) => !allowedNames.has(name)),
+    [],
+    "an id field is typed Int/String without an UNTYPED_IDS entry",
+  );
+
+  // Each emitted type is declared once and nothing references an undeclared one.
+  const declared = new Set(
+    [...generated.identifiers.matchAll(/public typealias (\w+ID) = /g)].map((m) => m[1]),
+  );
+  const used = new Set(
+    [...(generated.models + generated.operations).matchAll(/\b([A-Z]\w*ID)\b/g)].map((m) => m[1]),
+  );
+  for (const name of used) assert.ok(declared.has(name), `${name} is not declared`);
+  assert.equal(declared.size, generated.stats.identifierTypes);
+  assert.ok(generated.stats.identifierFields > 200);
+  assert.ok(generated.stats.currencyFields > 50);
+  const enumCount = (generated.models.match(/^ *public enum \w+: Codable, Hashable/gm) ?? [])
+    .length + (generated.operations.match(/^ *public enum \w+: Codable, Hashable/gm) ?? []).length;
+  assert.equal(enumCount, generated.stats.enumsNamed + generated.stats.enumsInline);
+  // Split at each struct header so a field is attributed to its own (possibly nested) struct.
+  const stringCurrencyStructs = generated.models
+    .split(/(?=public struct \w+)/)
+    .filter((chunk) => /public let currency\w*: (?:String|\[String\])/i.test(chunk))
+    .map((chunk) => /public struct (\w+)/.exec(chunk)?.[1] ?? "?");
+  assert.deepEqual(
+    stringCurrencyStructs.filter((name) => !PROVIDER_CURRENCY_SCHEMAS.has(name)),
+    [],
+    "no currency field stays String outside PROVIDER_CURRENCY_SCHEMAS",
   );
 });
 
@@ -495,4 +918,247 @@ test("the sidebar registry maps icons to SF Symbols and needs every label key", 
     () => generateNavigation(navigation("ArrowLeftRight"), keys.slice(1)),
     /nav\.home/,
   );
+});
+
+test("the sidebar registry emits a typed route destination per page", () => {
+  const keys = [
+    "nav.home",
+    "nav.admin",
+    "nav.exchangeRates",
+    "nav.aiChat",
+    "layout.settings",
+  ];
+  const swift = generateNavigation(navigation("ArrowLeftRight"), keys);
+  assert.match(swift, /extension NativeRoute \{/);
+  assert.match(
+    swift,
+    /public enum Destination: String, CaseIterable, Sendable \{\n {8}case home = "\/"\n {8}case exchangeRates = "\/admin\/exchange-rates"\n {8}case aiChat = "\/ai-chat"\n {4}\}/,
+  );
+  assert.equal(swift, generateNavigation(navigation("ArrowLeftRight"), keys));
+  const twice = navigation("ArrowLeftRight");
+  twice.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.home", url: "/elsewhere", icon: { displayName: "Globe" } },
+  ];
+  assert.throws(
+    () => generateNavigation(twice, keys),
+    /gives the route destination home, already used by \//,
+  );
+  const keyword = navigation("ArrowLeftRight");
+  keyword.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.import", url: "/import", icon: { displayName: "Globe" } },
+  ];
+  assert.match(
+    generateNavigation(keyword, [...keys, "nav.import"]),
+    /case `import` = "\/import"/,
+  );
+  const badKey = navigation("ArrowLeftRight");
+  badKey.FOOTER_NAV_ITEMS = [
+    { titleKey: "nav.ai-chat", url: "/ai-chat", icon: { displayName: "Globe" } },
+  ];
+  assert.throws(
+    () => generateNavigation(badKey, [...keys, "nav.ai-chat"]),
+    /cannot name a route destination/,
+  );
+});
+
+/** A spec with dates, date-times and every union shape, for WP-2 cases. */
+const DATES_SPEC = `
+openapi: 3.0.3
+info: { title: Fixture, version: "1" }
+paths:
+  /api/events:
+    get:
+      operationId: getEvents
+      parameters:
+        - { in: query, name: start_date, schema: { type: string, format: date } }
+        - { in: query, name: since, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Event" }
+  /api/actions:
+    post:
+      operationId: createAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Action" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Selection" }
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    ErrorPayload:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    Event:
+      type: object
+      required: [on, at]
+      properties:
+        on: { type: string, format: date }
+        at: { type: string, format: date-time }
+        plain_day: { type: string, pattern: '^\\d{4}-\\d{2}-\\d{2}$' }
+        label: { type: string }
+        free_day: { type: string, format: date, nullable: true }
+        scalar: { $ref: "#/components/schemas/Scalar" }
+        vague: { $ref: "#/components/schemas/Vague" }
+    Action:
+      oneOf:
+        - type: object
+          required: [kind, name]
+          properties:
+            kind: { type: string, enum: [rename] }
+            name: { type: string }
+        - type: object
+          required: [kind, count]
+          properties:
+            kind: { type: string, enum: [bump] }
+            count: { type: integer }
+      discriminator: { propertyName: kind }
+    Selection:
+      oneOf:
+        - type: object
+          required: [ids]
+          properties:
+            ids: { type: array, items: { type: integer } }
+        - type: object
+          required: [filter]
+          properties:
+            filter: { type: string }
+    Scalar:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - { type: string }
+            - { type: number }
+    Vague:
+      type: object
+      properties:
+        body:
+          oneOf:
+            - type: object
+              properties: { a: { type: string } }
+            - type: object
+              properties: { b: { type: string } }
+`;
+const DATES_OPS = "getEvents\ncreateAction\n";
+
+/** The toy tables with the one deliberately untypeable union listed. */
+function dateTables(over: Partial<GeneratorTables> = {}): GeneratorTables {
+  return toyTables({
+    untypedUnions: { "Vague.body": "Two shapeless objects; nothing tells them apart." },
+    ...over,
+  });
+}
+
+test("dateKind recognises the date shapes and nothing else", () => {
+  assert.equal(dateKind({ type: "string", format: "date" }), "date");
+  assert.equal(dateKind({ type: "string", format: "date-time" }), "date-time");
+  assert.equal(dateKind({ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" }), "date");
+  assert.equal(dateKind({ type: "string" }), undefined);
+  assert.equal(dateKind({ type: "string", format: "date", enum: ["2024-01-01"] }), undefined);
+  assert.equal(dateKind({ type: "integer", format: "date" }), undefined);
+});
+
+test("dates become CalendarDay, date-times Instant, in models and parameters", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public let on: CalendarDay\n/);
+  assert.match(generated.models, /public let at: Instant\n/);
+  assert.match(generated.models, /public let plainDay: CalendarDay\?\n/);
+  assert.match(generated.models, /public let freeDay: CalendarDay\?\n/);
+  assert.match(generated.models, /public let label: String\?\n/);
+  assert.match(generated.operations, /public var startDate: CalendarDay\?\n/);
+  assert.match(generated.operations, /public var since: Instant\?\n/);
+  assert.equal(generated.stats.dateFields, 4);
+  assert.equal(generated.stats.dateTimeFields, 2);
+  assert.deepEqual(generated.stats.untypedDatesHit, []);
+});
+
+test("an UNTYPED_DATES entry keeps the field a String and a stale one is reported unused", () => {
+  const generated = generateAPI(
+    DATES_SPEC,
+    DATES_OPS,
+    dateTables({
+      untypedDates: {
+        "Event.on": "Legacy producer writes free text.",
+        "Event.nowhere": "Matches nothing.",
+      },
+    }),
+  );
+  assert.match(generated.models, /public let on: String\n/);
+  assert.match(generated.models, /public let at: Instant\n/);
+  assert.deepEqual(generated.stats.untypedDatesHit, ["Event.on"]);
+  // The stale key is the one the hit list lacks, which the real-spec test turns into a failure.
+  assert.equal(generated.stats.untypedDatesHit.includes("Event.nowhere"), false);
+});
+
+test("a tagged union becomes an enum with an unknown case", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Action: /);
+  assert.match(generated.models, /case rename\(/);
+  assert.match(generated.models, /case bump\(/);
+  assert.match(generated.models, /case unknown\(JSONValue\)/);
+});
+
+test("a union told apart by a required property is keyed", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Selection: /);
+  assert.match(generated.models, /case ids\(/);
+  assert.match(generated.models, /case filter\(/);
+});
+
+test("a union of distinct scalar types is typed by attempt", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Value: /);
+  assert.match(generated.models, /case string\(String\)/);
+  assert.match(generated.models, /case number\(Decimal\)/);
+});
+
+test("an untypeable union fails generation unless listed, and a listed one stays JSONValue", () => {
+  assert.throws(
+    () => generateAPI(DATES_SPEC, DATES_OPS, toyTables()),
+    /UNTYPED_UNIONS[\s\S]*Vague\.body/,
+  );
+  const listed = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(listed.models, /public let body: JSONValue\?\n/);
+  assert.deepEqual(listed.stats.untypedUnionsHit, ["Vague.body"]);
+  // A listed key that matches no union is not reported as used, which the real-spec test fails on.
+  const stale = generateAPI(
+    DATES_SPEC,
+    DATES_OPS,
+    dateTables({
+      untypedUnions: { "Vague.body": "Shapeless.", "Gone.body": "Matches nothing." },
+    }),
+  );
+  assert.deepEqual(stale.stats.untypedUnionsHit, ["Vague.body"]);
+});
+
+test("generation is deterministic", () => {
+  const first = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  const second = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.deepEqual(first, second);
 });

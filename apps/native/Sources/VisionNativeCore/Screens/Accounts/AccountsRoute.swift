@@ -12,20 +12,20 @@ public enum AccountsRoutes {
     public static let sinceParameter = "since"
 
     /// `/accounts/:id`.
-    public static func detailPath(_ id: Int) -> String {
+    public static func detailPath(_ id: AccountID) -> String {
         "\(path)/\(id)"
     }
 
     /// The `:id` segment of `/accounts/:id`: a positive whole number, or `0` for any other
     /// single segment (the page then shows Not found, as `validId` is false). `nil` when the
     /// path is not the detail route.
-    public static func detailId(forPath candidate: String) -> Int? {
+    public static func detailId(forPath candidate: String) -> AccountID? {
         let prefix = path + "/"
         guard candidate.hasPrefix(prefix) else { return nil }
         let segment = String(candidate.dropFirst(prefix.count))
         guard !segment.isEmpty, !segment.contains("/") else { return nil }
         let decoded = segment.removingPercentEncoding ?? segment
-        return TransactionFilters.parseId(decoded) ?? 0
+        return TransactionFilters.parseId(decoded) ?? AccountID(0)
     }
 
     /// `since` when it matches `YYYY-MM-DD`, else `nil`.
@@ -35,7 +35,7 @@ public enum AccountsRoutes {
     }
 
     /// `/accounts/:id?since=<date>`.
-    public static func sinceRoute(_ id: Int, since: String) -> String {
+    public static func sinceRoute(_ id: AccountID, since: String) -> String {
         NativeRoute(path: detailPath(id), query: [URLQueryItem(name: sinceParameter, value: since)]).string
     }
 
@@ -44,7 +44,7 @@ public enum AccountsRoutes {
         NativeRoute(
             path: TransactionsRoutes.path,
             query: [
-                URLQueryItem(name: "account_id", value: String(account.id)),
+                URLQueryItem(name: "account_id", value: String(account.id.rawValue)),
                 URLQueryItem(name: "filter_label", value: AccountKinds.label(account)),
             ]
         ).string
@@ -77,17 +77,44 @@ public enum AccountDates {
 
 /// `AccountType` (checking, savings, brokerage, crypto_exchange, wallet, pension, liability)
 /// and the type helpers of groupAccounts.ts.
-public enum AccountKind: String, CaseIterable, Sendable {
+public enum AccountKind: CaseIterable, Sendable {
     case checking
     case savings
     case brokerage
-    case cryptoExchange = "crypto_exchange"
+    case cryptoExchange
     case wallet
     case pension
     case liability
 
+    /// The known kind of a wire type; `nil` for a type this client does not know.
+    public init?(_ type: OpenAPI.Account.AccountType) {
+        switch type {
+        case .checking: self = .checking
+        case .savings: self = .savings
+        case .brokerage: self = .brokerage
+        case .cryptoExchange: self = .cryptoExchange
+        case .wallet: self = .wallet
+        case .pension: self = .pension
+        case .liability: self = .liability
+        case .unknown: return nil
+        }
+    }
+
+    /// The wire type of this kind.
+    public var type: OpenAPI.Account.AccountType {
+        switch self {
+        case .checking: return .checking
+        case .savings: return .savings
+        case .brokerage: return .brokerage
+        case .cryptoExchange: return .cryptoExchange
+        case .wallet: return .wallet
+        case .pension: return .pension
+        case .liability: return .liability
+        }
+    }
+
     /// `accounts.type.<type>`.
-    public var labelKey: String { "accounts.type.\(rawValue)" }
+    public var labelKey: String { "accounts.type.\(type.rawValue)" }
 
     /// `TYPE_ICON` with the Lucide icons mapped like the sidebar (scripts/native-navigation.ts).
     public var symbol: String {
@@ -118,7 +145,7 @@ public enum AccountKinds {
     }
 
     public static func kind(_ account: OpenAPI.Account) -> AccountKind? {
-        AccountKind(rawValue: account.type)
+        AccountKind(account.type)
     }
 
     public static func isPortfolio(_ account: OpenAPI.Account) -> Bool {
@@ -180,7 +207,7 @@ public enum AccountGrouping {
     /// `accountGroupId`: archived wins over the type.
     public static func groupId(_ account: OpenAPI.Account) -> AccountGroupID {
         if !account.isActive { return .archived }
-        if account.type == AccountKind.liability.rawValue { return .liabilities }
+        if account.type == .liability { return .liabilities }
         if AccountKinds.isPortfolio(account) { return .portfolio }
         return .cash
     }
@@ -205,11 +232,14 @@ public enum AccountGrouping {
 /// One row of `byAccount` in `GET /api/info/portfolio-summary`: its `position` row carries
 /// the account's holdings value (`getBrokerAccountMetrics`).
 public struct PortfolioAccountRow: Equatable, Sendable, Decodable {
-    public let accountId: Int?
-    public let contributionKind: String
+    public let accountId: AccountID?
+    public let contributionKind: OpenAPI.PortfolioSummaryByAccountItem.ContributionKind
     public let currentValue: Decimal
 
-    public init(accountId: Int?, contributionKind: String, currentValue: Decimal) {
+    public init(
+        accountId: AccountID?, contributionKind: OpenAPI.PortfolioSummaryByAccountItem.ContributionKind,
+        currentValue: Decimal
+    ) {
         self.accountId = accountId
         self.contributionKind = contributionKind
         self.currentValue = currentValue
@@ -223,8 +253,11 @@ public struct PortfolioAccountRow: Equatable, Sendable, Decodable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        accountId = try container.decodeIfPresent(Int.self, forKey: .accountId)
-        contributionKind = try container.decodeIfPresent(String.self, forKey: .contributionKind) ?? ""
+        accountId = try container.decodeIfPresent(AccountID.self, forKey: .accountId)
+        contributionKind =
+            try container.decodeIfPresent(
+                OpenAPI.PortfolioSummaryByAccountItem.ContributionKind.self, forKey: .contributionKind)
+            ?? .init(rawValue: "")
         currentValue = try container.decodeIfPresent(Decimal.self, forKey: .currentValue) ?? 0
     }
 }
@@ -232,11 +265,11 @@ public struct PortfolioAccountRow: Equatable, Sendable, Decodable {
 /// One row of `accountTotals` in `GET /api/info/portfolio-summary`: the server's profit and
 /// loss of an account over every contribution kind (ADR-216).
 public struct PortfolioAccountTotalsRow: Equatable, Sendable, Decodable {
-    public let accountId: Int?
+    public let accountId: AccountID?
     public let oversold: Bool
     public let gainLoss: Decimal
 
-    public init(accountId: Int?, oversold: Bool, gainLoss: Decimal) {
+    public init(accountId: AccountID?, oversold: Bool, gainLoss: Decimal) {
         self.accountId = accountId
         self.oversold = oversold
         self.gainLoss = gainLoss
@@ -250,7 +283,7 @@ public struct PortfolioAccountTotalsRow: Equatable, Sendable, Decodable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        accountId = try container.decodeIfPresent(Int.self, forKey: .accountId)
+        accountId = try container.decodeIfPresent(AccountID.self, forKey: .accountId)
         oversold = try container.decodeIfPresent(Bool.self, forKey: .oversold) ?? false
         gainLoss = try container.decodeIfPresent(Decimal.self, forKey: .gainLoss) ?? 0
     }
@@ -284,10 +317,10 @@ public struct BrokerAccountMetrics: Equatable, Sendable {
     /// `getBrokerAccountMetrics`: the account's `position` row of `byAccount` carries the
     /// holdings value and its `accountTotals` row the profit and loss and the oversold flag,
     /// both computed on the server; `nil` without a summary.
-    public static func of(_ summary: AccountPortfolioSummary?, accountId: Int) -> BrokerAccountMetrics? {
+    public static func of(_ summary: AccountPortfolioSummary?, accountId: AccountID) -> BrokerAccountMetrics? {
         guard let summary else { return nil }
         let position = summary.byAccount.first {
-            $0.accountId == accountId && $0.contributionKind == "position"
+            $0.accountId == accountId && $0.contributionKind == .position
         }
         let totals = summary.accountTotals.first { $0.accountId == accountId }
         return BrokerAccountMetrics(
@@ -319,11 +352,7 @@ public struct AccountDrift: Equatable, Sendable {
     /// `statementYmd`: the statement date of the reconcilable currency, when it reads as a day.
     public static func statementYmd(_ account: OpenAPI.Account) -> String? {
         let currency = account.reconcilableCurrency ?? account.currency
-        guard let raw = account.statementBalances?.first(where: { $0.currency == currency })?.balanceDate else {
-            return nil
-        }
-        let ymd = String(raw.prefix(10))
-        return AccountDates.isYmd(ymd) ? ymd : nil
+        return account.statementBalances?.first(where: { $0.currency == currency })?.balanceDate.description
     }
 
     /// `isStatementStale`.
@@ -338,7 +367,7 @@ public struct AccountDrift: Equatable, Sendable {
     ) -> AccountDrift? {
         guard let drift = account.drift, drift != 0 else { return nil }
         let amount = VisionFormat.currency(
-            drift, code: (account.reconcilableCurrency ?? account.currency).uppercased(),
+            drift, code: (account.reconcilableCurrency ?? account.currency),
             locale: settings.numberFormat.locale, fractionDigits: settings.showDecimalPlaces, signed: true)
         let date = statementYmd(account)
         let stale = isStale(date, today: today)
@@ -360,7 +389,7 @@ public enum AccountProvenance {
         -> String?
     {
         guard let count = account.postAnchorCount else { return nil }
-        if let anchor = account.anchorDate, !anchor.isEmpty {
+        if let anchor = account.anchorDate {
             return strings.tc(
                 "accounts.provenance.anchored", count,
                 ["date": VisionFormat.appDate(anchor, format: settings.dateFormat)])
@@ -371,7 +400,7 @@ public enum AccountProvenance {
 
 /// One ledger row of `/accounts/:id` (`GET /api/transactions?include_balance=true`).
 public struct AccountLedgerRow: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: TransactionID
     /// `YYYY-MM-DD`.
     public let date: String
     public let recipientName: String?
@@ -379,14 +408,14 @@ public struct AccountLedgerRow: Equatable, Sendable, Identifiable {
     public let categoryName: String?
     public let amount: Decimal
     /// `currency ?? "EUR"`.
-    public let currency: String
+    public let currency: CurrencyCode
     /// The server's `running_balance` window.
     public let runningBalance: Decimal?
     public let balance: Decimal?
 
     public init(
-        id: Int, date: String, recipientName: String? = nil, memo: String? = nil, categoryName: String? = nil,
-        amount: Decimal, currency: String = "EUR", runningBalance: Decimal? = nil, balance: Decimal? = nil
+        id: TransactionID, date: String, recipientName: String? = nil, memo: String? = nil, categoryName: String? = nil,
+        amount: Decimal, currency: CurrencyCode = LedgerCurrency.eur, runningBalance: Decimal? = nil, balance: Decimal? = nil
     ) {
         self.id = id
         self.date = date
@@ -401,9 +430,9 @@ public struct AccountLedgerRow: Equatable, Sendable, Identifiable {
 
     public init(_ wire: OpenAPI.Transaction) {
         self.init(
-            id: wire.id, date: String(wire.transactionDate.prefix(10)), recipientName: wire.recipientName,
+            id: wire.id, date: wire.transactionDate.description, recipientName: wire.recipientName,
             memo: wire.memo, categoryName: wire.categoryName, amount: wire.amount,
-            currency: wire.currency.flatMap { $0.isEmpty ? nil : $0 } ?? "EUR", runningBalance: wire.runningBalance,
+            currency: wire.currency ?? LedgerCurrency.eur, runningBalance: wire.runningBalance,
             balance: wire.balance)
     }
 
@@ -434,14 +463,17 @@ public struct AccountLedgerPage: Equatable, Sendable {
 
 /// One row of the Upcoming planned transactions card.
 public struct AccountPlannedRow: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: PlannedTransactionID
     public let date: String
     public let recipientName: String?
     public let memo: String?
     public let amount: Decimal
-    public let currency: String?
+    public let currency: CurrencyCode?
 
-    public init(id: Int, date: String, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil) {
+    public init(
+        id: PlannedTransactionID, date: String, recipientName: String? = nil, memo: String? = nil, amount: Decimal,
+        currency: CurrencyCode? = nil
+    ) {
         self.id = id
         self.date = date
         self.recipientName = recipientName
@@ -452,7 +484,7 @@ public struct AccountPlannedRow: Equatable, Sendable, Identifiable {
 
     public init(_ wire: OpenAPI.PlannedTransaction) {
         self.init(
-            id: wire.id, date: wire.plannedDate, recipientName: wire.recipientName, memo: wire.memo, amount: wire.amount,
+            id: wire.id, date: wire.plannedDate.description, recipientName: wire.recipientName, memo: wire.memo, amount: wire.amount,
             currency: wire.currency)
     }
 

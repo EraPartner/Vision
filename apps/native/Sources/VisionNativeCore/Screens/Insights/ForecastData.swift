@@ -52,7 +52,7 @@ public struct InsightForecast: Decodable, Equatable, Sendable {
     public let scheduled_actual: [Scheduled]
     public let planned: [Scheduled]
     public let diagnostics: Diagnostics?
-    public let currency: String
+    public let currency: CurrencyCode
     public let history_months: Int
     public let include_planned: Bool
     public let month: String?
@@ -61,7 +61,7 @@ public struct InsightForecast: Decodable, Equatable, Sendable {
     public let window_end: String?
     /// Inputs left out for want of a stored rate; absent on older cache entries (ADR-216).
     public let unconverted_count: Int?
-    public let unconverted_currencies: [String]?
+    public let unconverted_currencies: [CurrencyCode]?
     public var unconvertedCount: Int { unconverted_count ?? 0 }
 
     /// The server already includes scheduled ledger rows and planned payments in every
@@ -126,7 +126,8 @@ public struct InsightForecastOptions: Equatable, Hashable, Sendable {
     public enum Mode: String, Sendable { case month, rolling }
     public var mode: Mode = .month
     public var rollingDays = 90
-    public var includePlanned = true
+    /// `useState(false)` of CashFlowForecastChart: planned payments are opt-in.
+    public var includePlanned = false
     public var diagnostics = false
     public init() {}
     public init(route: NativeRoute) {

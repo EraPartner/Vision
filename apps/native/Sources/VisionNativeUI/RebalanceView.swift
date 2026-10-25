@@ -19,7 +19,8 @@ public struct RebalanceView: View {
                 VisionPageHeader(
                     title: strings.t("rebalance.title"), subtitle: strings.t("rebalance.subtitle"), symbol: "scalemass"
                 ) { EmptyView() }
-                inputsCard
+                // `<Card className="max-w-4xl">`: the form sizes to its content, 896 pt at most.
+                inputsCard.frame(maxWidth: 896, alignment: .leading)
                 if let projection = model.projection { projectionCard(projection) }
                 if model.showEditor { editorCard }
                 Text(strings.t("rebalance.noSellNote")).foregroundStyle(theme.secondaryLabel)
@@ -30,7 +31,7 @@ public struct RebalanceView: View {
                 if let result = model.result { resultCards(result) }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + settings.defaultCurrency + String(shell.settingsRevision)) {
+        .task(id: shell.route.string + settings.defaultCurrency.rawValue + String(shell.settingsRevision)) {
             await model.load(route: shell.route, settings: settings)
         }
         .onChange(of: model.route) {
@@ -44,16 +45,16 @@ public struct RebalanceView: View {
                 notice: model.notice, strings: strings, actionTitle: nil, duration: .seconds(4), action: {},
                 clear: model.clearNotice)
         }
-        .confirmationDialog(
-            strings.t("rebalance.plan.deleteTitle"),
+        .visionConfirmationDialog(
+            title: strings.t("rebalance.plan.deleteTitle"),
+            message: strings.t("rebalance.plan.deleteConfirm", ["name": model.deletingPlan?.name ?? model.draft.name]),
             isPresented: Binding(
-                get: { model.deletingPlan != nil }, set: { if !$0 { model.deletingPlan = nil } }),
-            titleVisibility: .visible
+                get: { model.deletingPlan != nil }, set: { if !$0 { model.deletingPlan = nil } })
         ) {
-            Button(strings.t("rebalance.plan.delete"), role: .destructive) { Task { await model.deletePlan() } }
-            Button(strings.t("common.cancel"), role: .cancel) { model.deletingPlan = nil }
-        } message: {
-            Text(strings.t("rebalance.plan.deleteConfirm", ["name": model.deletingPlan?.name ?? model.draft.name]))
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.deletingPlan = nil }
+            VisionDialogAction(strings.t("rebalance.plan.delete"), role: .destructive) {
+                Task { await model.deletePlan() }
+            }
         }
     }
     var inputsCard: some View {
@@ -73,11 +74,11 @@ public struct RebalanceView: View {
             if model.isLoadingInputs || model.isLoadingPlans { ProgressView().controlSize(.small) }
             if let error = model.inputsError {
                 Text(verbatim: error).font(.footnote).foregroundStyle(theme.destructive)
-                Button(strings.t("common.retry")) { Task { await reload() } }
+                Button(strings.t("common.retry")) { Task { await reload() } }.buttonStyle(.visionOutline)
             }
             if let error = model.plansError {
                 Text(verbatim: error).font(.footnote).foregroundStyle(theme.destructive)
-                Button(strings.t("common.retry")) { Task { await reload() } }
+                Button(strings.t("common.retry")) { Task { await reload() } }.buttonStyle(.visionOutline)
             }
             if let preset = model.draft.preset {
                 Divider()
@@ -97,33 +98,48 @@ public struct RebalanceView: View {
     }
     var sourcePicker: some View {
         field("rebalance.targetModel") {
-            Picker(
-                strings.t("rebalance.targetModel"),
-                selection: Binding(get: { model.draft.source }, set: { model.selectSource($0) })
-            ) {
-                Section(strings.t("rebalance.presets")) {
-                    ForEach(RebalancePreset.allCases, id: \.self) { preset in
-                        Text(strings.t("rebalance.model.\(preset.rawValue)")).tag("model:\(preset.rawValue)")
-                    }
-                }
-                if !model.plans.isEmpty {
-                    Section(strings.t("rebalance.savedPlans")) {
-                        ForEach(model.plans) { plan in Text(verbatim: plan.name).tag("plan:\(plan.id)") }
-                    }
-                }
-                Text(strings.t("rebalance.customNew")).tag("custom")
-                if let id = model.draft.planId, !model.plans.contains(where: { $0.id == id }) {
-                    Text(verbatim: model.draft.name.isEmpty ? id : model.draft.name).tag(model.draft.source)
-                }
-            }.labelsHidden().frame(width: 260)
+            VisionSelect(
+                selection: Binding<String?>(
+                    get: { model.draft.source }, set: { if let source = $0 { model.selectSource(source) } }),
+                entries: sourceEntries, accessibilityLabel: strings.t("rebalance.targetModel"), expands: true
+            ).frame(width: 260)
         }
+    }
+    /// `Select` groups: the preset models, the saved plans, a new custom plan, and the current plan
+    /// while the plan list does not hold it yet.
+    var sourceEntries: [VisionSelectEntry<String>] {
+        var entries: [VisionSelectEntry<String>] = [.label(strings.t("rebalance.presets"))]
+        for preset in RebalancePreset.allCases {
+            entries.append(
+                .option(
+                    VisionSelectOption(
+                        value: "model:\(preset.rawValue)", title: strings.t("rebalance.model.\(preset.rawValue)"))))
+        }
+        if !model.plans.isEmpty {
+            entries.append(.separator)
+            entries.append(.label(strings.t("rebalance.savedPlans")))
+            for plan in model.plans {
+                entries.append(.option(VisionSelectOption(value: "plan:\(plan.id)", title: plan.name)))
+            }
+        }
+        entries.append(.separator)
+        entries.append(.option(VisionSelectOption(value: "custom", title: strings.t("rebalance.customNew"))))
+        if let id = model.draft.planId, !model.plans.contains(where: { $0.id == id }) {
+            entries.append(
+                .option(
+                    VisionSelectOption(
+                        value: model.draft.source, title: model.draft.name.isEmpty ? id : model.draft.name)
+                ))
+        }
+        return entries
     }
     var reserveInput: some View {
         field("rebalance.commitment.reserveFloor") {
             TextField("0", text: Binding(get: { model.reserveFloor }, set: { model.setReserveFloor($0) }))
-                .textFieldStyle(.vision).frame(width: 160).focused($focus, equals: "reserve")
+                .textFieldStyle(.vision).multilineTextAlignment(.trailing).monospacedDigit()
+                .frame(width: 160).focused($focus, equals: "reserve")
                 .accessibilityLabel(strings.t("rebalance.commitment.reserveFloor"))
-            Text(strings.t("rebalance.reserveHelp", ["currency": model.currency])).font(.footnote)
+            Text(strings.t("rebalance.reserveHelp", ["currency": model.currency.rawValue])).font(.footnote)
                 .foregroundStyle(theme.secondaryLabel).frame(maxWidth: 260, alignment: .leading)
         }
     }
@@ -132,7 +148,11 @@ public struct RebalanceView: View {
             Task { await model.compute() }
         } label: {
             HStack {
-                if model.isComputing { ProgressView().controlSize(.small) }
+                if model.isComputing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "scalemass").accessibilityHidden(true)
+                }
                 Text(strings.t("rebalance.compute"))
             }
         }.buttonStyle(.visionPrimary).disabled(!model.canCompute)
@@ -156,12 +176,14 @@ public struct RebalanceView: View {
                 .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity, alignment: .leading)
             }
             DisclosureGroup(strings.t("rebalance.commitment.methodology"), isExpanded: $methodology) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(strings.t("rebalance.commitment.includes", ["date": value.horizonEnd]))
-                    Text(strings.t("rebalance.commitment.exchangeRates"))
-                    Text(strings.t("rebalance.commitment.exclusions"))
+                VStack(alignment: .leading, spacing: 8) {
+                    bullet(strings.t("rebalance.commitment.includes", ["date": value.horizonEnd]))
+                    bullet(strings.t("rebalance.commitment.exchangeRates"))
+                    bullet(strings.t("rebalance.commitment.exclusions"))
                 }.font(.footnote).foregroundStyle(theme.secondaryLabel).padding(.top, 8)
             }
+            // `Disclosure variant="inset" px-3 py-2`: a bordered inset row.
+            .visionInsetPanel(padding: 10, cornerRadius: DesignTokens.Radius.control, bordered: true)
         }
     }
     @ViewBuilder func resultCards(_ result: RebalanceResult) -> some View {
@@ -206,9 +228,14 @@ public struct RebalanceView: View {
             }
         }
     }
+    func bullet(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("•").accessibilityHidden(true)
+            Text(text)
+        }
+    }
     func targetChip(_ sleeve: String, _ weight: Decimal) -> some View {
-        Text("\(label(sleeve)) \(percent(weight))").font(.footnote).monospacedDigit()
-            .padding(.horizontal, 10).padding(.vertical, 6).background(theme.muted, in: Capsule())
+        VisionBadge(text: "\(label(sleeve)) \(percent(weight))", tone: .muted).monospacedDigit()
     }
     func label(_ sleeve: String) -> String {
         let key = "rebalance.sleeve.\(sleeve)"

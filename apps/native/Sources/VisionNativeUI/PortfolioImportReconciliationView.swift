@@ -15,7 +15,7 @@ public struct PortfolioImportReconciliationView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let plan = model.plan { review(plan) }
-            if model.operation == "commit" {
+            if model.operation == .commit {
                 HStack {
                     ProgressView().controlSize(.small)
                     Text(strings.t("portfolioImport.session.committing"))
@@ -57,12 +57,13 @@ public struct PortfolioImportReconciliationView: View {
                     }
                     if plan.actions.count > model.shownActions {
                         Button(strings.t("portfolioImport.session.more")) { model.shownActions += 50 }
+                            .buttonStyle(.visionOutline)
                     }
                 }.padding(.top, 12)
             }
             Text(strings.t("portfolioImport.session.atomic")).font(.caption).foregroundStyle(theme.secondaryLabel)
             Button(strings.t("portfolioImport.session.commit")) { Task { await model.commit() } }
-                .buttonStyle(.visionPrimary).disabled(!model.canCommit || model.operation != "idle")
+                .buttonStyle(.visionPrimary).disabled(!model.canCommit || model.operation != .idle)
         }.padding(16).background(
             theme.foreground.opacity(0.03), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
         )
@@ -86,18 +87,21 @@ public struct PortfolioImportReconciliationView: View {
             }
         }
     }
-    private func choiceButton(_ key: String, _ batchId: Int, _ rowId: Int, _ choice: PortfolioImportRowChoice.Choice)
-        -> some View
-    {
+    private func choiceButton(
+        _ key: String, _ batchId: PortfolioImportBatchNumericID, _ rowId: PortfolioImportRowID,
+        _ choice: PortfolioImportRowChoice.Choice
+    ) -> some View {
         Button(strings.t(key)) { Task { await model.choose(batchId: batchId, rowId: rowId, choice: choice) } }
-            .buttonStyle(.bordered).controlSize(.small).disabled(model.operation != "idle")
+            .buttonStyle(.visionOutline).controlSize(.small).disabled(model.operation != .idle)
     }
     private func blockerText(_ blocker: PortfolioImportReconciliationBlocker) -> String {
         let row = blocker.rowOrdinal.map { " · " + strings.t("portfolioImport.session.row", ["n": String($0)]) } ?? ""
         let reason = strings.t("portfolioImport.session.blockers.\(Self.blockerKeys[blocker.reason] ?? "other")")
         return "\(statementName(blocker.batchId))\(row): \(reason)"
     }
-    private func statementName(_ id: Int) -> String { model.statements.first { $0.batchId == id }?.name ?? String(id) }
+    private func statementName(_ id: PortfolioImportBatchNumericID) -> String {
+        model.statements.first { $0.batchId == id }?.name ?? String(id.rawValue)
+    }
     private func outcome(_ result: PortfolioImportReconciliationResult) -> String {
         strings.t(
             "portfolioImport.session.success",
@@ -139,10 +143,10 @@ private struct PortfolioImportEvidenceView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(
-                "\(model.statements.first { $0.batchId == action.batchId }?.name ?? String(action.batchId)) · \(strings.t("portfolioImport.session.row", ["n": String(action.rowOrdinal)])) · \(strings.t("portfolioImport.session.actions.\(PortfolioImportReconciliationView.actions.contains(action.action) ? action.action : "other")"))"
+                "\(model.statements.first { $0.batchId == action.batchId }?.name ?? String(action.batchId.rawValue)) · \(strings.t("portfolioImport.session.row", ["n": String(action.rowOrdinal)])) · \(strings.t("portfolioImport.session.actions.\(PortfolioImportReconciliationView.actions.contains(action.action) ? action.action : "other")"))"
             )
             .font(.callout.weight(.medium))
-            if let id = action.existingTransactionId { note("existingId", ["id": String(id)]) }
+            if let id = action.existingTransactionId { note("existingId", ["id": String(id.rawValue)]) }
             if let policy = action.policy {
                 note("appliedPolicy", ["policy": strings.t("portfolioImport.session.policyName.\(policy)")])
             }
@@ -161,7 +165,7 @@ private struct PortfolioImportEvidenceView: View {
     }
     private func account(_ value: TaxValue?) -> String {
         guard let id = value?.decimalValue else { return "—" }
-        return model.accounts.first { Decimal($0.id) == id }.map { $0.displayName ?? $0.name }
+        return model.accounts.first { Decimal($0.id.rawValue) == id }.map { $0.displayName ?? $0.name }
             ?? strings.t("portfolioImport.session.accountId", ["id": NSDecimalNumber(decimal: id).stringValue])
     }
     private func detail(_ key: String, _ value: String) -> some View {

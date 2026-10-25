@@ -5,6 +5,7 @@ struct ResearchMarketActionSheet: View {
     @Bindable var model: ResearchMarketActionModel
     let shell: NativeShellModel
     @State private var showsBrokerPicker = false
+    @FocusState private var editorFocus: String?
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
@@ -62,7 +63,7 @@ struct ResearchMarketActionSheet: View {
                             || (model.step == "new"
                                 && model.investment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     )
-                }.controlSize(.large)
+                }
             }
         }.visionDialogPadding().frame(width: 448).frame(maxHeight: 760)
             .onSubmit {
@@ -120,14 +121,9 @@ struct ResearchMarketActionSheet: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     fieldLabel(strings.t("addInv.label.currency"))
-                    Picker(strings.t("addInv.label.currency"), selection: $model.investment.currency) {
-                        ForEach(
-                            ["EUR", "USD", "GBP", "CHF"]
-                                + (["EUR", "USD", "GBP", "CHF"].contains(model.investment.currency)
-                                    ? [] : [model.investment.currency]),
-                            id: \.self
-                        ) { Text($0).tag($0) }
-                    }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                    VisionSelect(
+                        selection: $model.investment.currency, options: currencyOptions,
+                        accessibilityLabel: strings.t("addInv.label.currency"), expands: true)
                 }
             }
             newField("addInv.label.currentPrice", \.currentPrice)
@@ -138,23 +134,23 @@ struct ResearchMarketActionSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 fieldLabel(strings.t("addPortTxn.type"))
-                Picker(strings.t("addPortTxn.type"), selection: $model.trade.type) {
-                    ForEach(["buy", "sell", "dividend", "fee", "tax"], id: \.self) {
-                        Text(strings.t("portfolio.txnType." + $0)).tag($0)
-                    }
-                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                VisionSelect(
+                    selection: $model.trade.type,
+                    options: ["buy", "sell", "dividend", "fee", "tax"].map {
+                        VisionSelectOption(value: $0, title: strings.t("portfolio.txnType." + $0))
+                    }, accessibilityLabel: strings.t("addPortTxn.type"), expands: true)
             }
             dateField("addPortTxn.date", \.date)
             if ["buy", "sell"].contains(model.trade.type) {
                 tradeField("addPortTxn.units", \.units)
                 tradeField("addPortTxn.pricePerUnit", \.price)
             }
-            tradeField("addPortTxn.totalAmount", \.amount, variables: ["currency": model.holding?.currency ?? "EUR"])
+            tradeField("addPortTxn.totalAmount", \.amount, variables: ["currency": model.holding?.currency.rawValue ?? ReportingFallbackCurrency.euro.rawValue])
             if model.deriveUnits, model.unitMath?["isConsistent"] == .bool(false) {
                 Text(strings.t("addPortTxn.error.twoOfThreeRequired")).font(.caption).foregroundStyle(theme.destructive)
             }
             if let amount = model.unitMath?["derivedAmount"]?.decimalValue {
-                Text(ResearchMarketDisplay.money(amount, currency: model.holding?.currency ?? "EUR", shell: shell))
+                Text(ResearchMarketDisplay.money(amount, currency: model.holding?.currency.rawValue ?? ReportingFallbackCurrency.euro.rawValue, shell: shell))
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             if ["buy", "sell", "dividend"].contains(model.trade.type) {
@@ -165,26 +161,24 @@ struct ResearchMarketActionSheet: View {
                 if model.trade.type == "dividend" {
                     VStack(alignment: .leading, spacing: 8) {
                         fieldLabel(strings.t("addPortTxn.dividendAmountConvention"))
-                        Picker(
-                            strings.t("addPortTxn.dividendAmountConvention"), selection: $model.trade.dividendConvention
-                        ) {
-                            ForEach(["unknown", "gross", "net"], id: \.self) {
-                                Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
-                            }
-                        }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                        VisionSelect(
+                            selection: $model.trade.dividendConvention,
+                            options: ["unknown", "gross", "net"].map {
+                                VisionSelectOption(value: $0, title: strings.t("addPortTxn.dividendConvention." + $0))
+                            }, accessibilityLabel: strings.t("addPortTxn.dividendAmountConvention"), expands: true)
                         Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(
                             theme.secondaryLabel)
                     }
                 }
-                Toggle(strings.t("addPortTxn.recurring"), isOn: $model.trade.isRecurring)
+                Toggle(strings.t("addPortTxn.recurring"), isOn: $model.trade.isRecurring).toggleStyle(.visionSwitch)
                 if model.trade.isRecurring {
                     VStack(alignment: .leading, spacing: 8) {
                         fieldLabel(strings.t("addPortTxn.interval"))
-                        Picker(strings.t("addPortTxn.interval"), selection: $model.trade.recurrenceInterval) {
-                            ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
-                                Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
-                            }
-                        }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                        VisionSelect(
+                            selection: $model.trade.recurrenceInterval,
+                            options: ["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"].map {
+                                VisionSelectOption(value: $0, title: strings.t("addPortTxn.recurrence." + $0))
+                            }, accessibilityLabel: strings.t("addPortTxn.interval"), expands: true)
                     }
                     dateField("addPortTxn.endDate", \.recurrenceEndDate)
                 }
@@ -206,17 +200,23 @@ struct ResearchMarketActionSheet: View {
                 }
             } else {
                 fieldLabel(strings.t("addPortTxn.broker"))
-                Picker(
-                    strings.t("addPortTxn.broker"),
+                VisionSelect(
                     selection: Binding(
-                        get: { model.trade.accountId ?? model.preferredBrokerId.map(String.init) ?? "" },
-                        set: { model.trade.accountId = $0 })
-                ) {
-                    Text(strings.t("addPortTxn.broker.unassigned")).tag("")
-                    ForEach(model.brokers, id: \.id) { Text($0.name).tag(String($0.id)) }
-                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                        get: { model.effectiveBrokerId },
+                        set: { model.trade.broker = $0.map { .account($0) } ?? .unassigned }),
+                    options: brokerOptions, accessibilityLabel: strings.t("addPortTxn.broker"), expands: true)
             }
         }
+    }
+    private var currencyOptions: [VisionSelectOption<String>] {
+        let known = ["EUR", "USD", "GBP", "CHF"]
+        let codes = known + (known.contains(model.investment.currency) ? [] : [model.investment.currency])
+        return codes.map { VisionSelectOption(value: $0, title: $0) }
+    }
+    private var brokerOptions: [VisionSelectOption<AccountID?>] {
+        var options = [VisionSelectOption<AccountID?>(value: nil, title: strings.t("addPortTxn.broker.unassigned"))]
+        options += model.brokers.map { VisionSelectOption<AccountID?>(value: Optional($0.id), title: $0.name) }
+        return options
     }
     private func dateField(_ key: String, _ path: WritableKeyPath<ResearchMarketTradeDraft, String>) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -238,8 +238,9 @@ struct ResearchMarketActionSheet: View {
         return VStack(alignment: .leading, spacing: 8) {
             fieldLabel(strings.t(key))
             if path == \.notes {
-                TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key))
-                    .scrollContentBackground(.hidden).padding(4).background(editorBackground)
+                TextEditor(text: binding).focused($editorFocus, equals: key)
+                    .visionTextEditor(isFocused: editorFocus == key, minHeight: 75).frame(height: 75)
+                    .accessibilityLabel(strings.t(key))
             } else {
                 TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(strings.t(key))
             }
@@ -255,8 +256,9 @@ struct ResearchMarketActionSheet: View {
         return VStack(alignment: .leading, spacing: 8) {
             fieldLabel(strings.t(key, variables))
             if path == \.note {
-                TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key, variables))
-                    .scrollContentBackground(.hidden).padding(4).background(editorBackground)
+                TextEditor(text: binding).focused($editorFocus, equals: key)
+                    .visionTextEditor(isFocused: editorFocus == key, minHeight: 75).frame(height: 75)
+                    .accessibilityLabel(strings.t(key, variables))
             } else {
                 TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(
                     strings.t(key, variables))
@@ -266,11 +268,5 @@ struct ResearchMarketActionSheet: View {
     /// The web `Label`: `type-body font-medium text-label-primary` above its input.
     private func fieldLabel(_ text: String) -> some View {
         Text(text).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
-    }
-    /// The web `Textarea` frame, matching `.textFieldStyle(.vision)`.
-    private var editorBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-        return shape.fill(Color(token: theme.palette.background, opacity: 0.8))
-            .overlay(shape.strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
     }
 }

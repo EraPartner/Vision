@@ -12,10 +12,10 @@ struct AIChatTranscript: View {
     private var thinking: Bool {
         snapshot.isStreaming && snapshot.assistantDraft.isEmpty && snapshot.toolMessages.isEmpty
     }
-    private var terminal: Bool { ["stopped", "interrupted", "timed_out"].contains(snapshot.status.rawValue) }
+    private var terminal: Bool { [.stopped, .interrupted, .timedOut].contains(snapshot.status) }
     private var signature: String {
         [
-            model.selectedID ?? "", String(model.messages.count), model.messages.last?.id ?? "",
+            model.selectedID?.rawValue ?? "", String(model.messages.count), model.messages.last?.id.rawValue ?? "",
             String(snapshot.assistantDraft.utf16.count),
             String(snapshot.toolMessages.reduce(0) { $0 + ($1.content?.utf16.count ?? 0) }), snapshot.status.rawValue,
         ].joined(separator: "|")
@@ -47,16 +47,16 @@ struct AIChatTranscript: View {
                     }
                     if !snapshot.assistantDraft.isEmpty {
                         AIChatTextBubble(
-                            role: "assistant", content: snapshot.assistantDraft, streaming: snapshot.isStreaming,
+                            role: .assistant, content: snapshot.assistantDraft, streaming: snapshot.isStreaming,
                             shell: shell)
                     }
                     if terminal {
                         HStack(spacing: 14) {
                             Text(
                                 strings.t(
-                                    snapshot.status.rawValue == "stopped"
+                                    snapshot.status == .stopped
                                         ? "aiChat.streamStopped"
-                                        : snapshot.status.rawValue == "timed_out"
+                                        : snapshot.status == .timedOut
                                             ? "aiChat.streamTimedOut" : "aiChat.streamInterrupted")
                             )
                             .font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -70,7 +70,7 @@ struct AIChatTranscript: View {
                     }
                     if thinking {
                         HStack(spacing: 12) {
-                            AIChatAvatar(role: "assistant")
+                            AIChatAvatar(role: .assistant)
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
                                 Text(strings.t("aiChat.thinking")).foregroundStyle(theme.secondaryLabel)
@@ -92,7 +92,7 @@ struct AIChatTranscript: View {
             }
             .onChange(of: signature) { _, _ in follow(proxy) }
             .onChange(of: model.messages.last?.id) { _, _ in
-                guard isVisible, let message = model.messages.last, message.role == "assistant",
+                guard isVisible, let message = model.messages.last, message.role == .assistant,
                     let content = message.content, !content.isEmpty
                 else { return }
                 AccessibilityNotification.Announcement(content).post()
@@ -144,9 +144,9 @@ struct AIChatBubble: View {
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     var body: some View {
-        if message.role == "tool" {
+        if message.role == .tool {
             HStack(alignment: .top, spacing: 12) {
-                AIChatAvatar(role: "tool")
+                AIChatAvatar(role: .tool)
                 VStack(alignment: .leading, spacing: 10) {
                     Label(message.toolName ?? shell.strings.t("aiChat.toolResult"), systemImage: "wrench")
                         .font(.footnote.weight(.medium)).foregroundStyle(theme.secondaryLabel)
@@ -167,13 +167,13 @@ struct AIChatBubble: View {
 }
 
 struct AIChatTextBubble: View {
-    let role: String
+    let role: OpenAPI.AiMessage.Role
     let content: String
     let streaming: Bool
     let shell: NativeShellModel
     @Environment(\.visionTheme) private var theme
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
-    private var user: Bool { role == "user" }
+    private var user: Bool { role == .user }
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if user { Spacer(minLength: 30) } else { AIChatAvatar(role: role) }
@@ -199,19 +199,19 @@ struct AIChatTextBubble: View {
 }
 
 struct AIChatAvatar: View {
-    let role: String
+    let role: OpenAPI.AiMessage.Role
     @Environment(\.visionTheme) private var theme
     var body: some View {
-        Image(systemName: role == "user" ? "person" : role == "tool" ? "wrench" : "sparkles")
-            .font(.callout).foregroundStyle(role == "tool" ? theme.secondaryLabel : theme.primary)
+        Image(systemName: role == .user ? "person" : role == .tool ? "wrench" : "sparkles")
+            .font(.callout).foregroundStyle(role == .tool ? theme.secondaryLabel : theme.primary)
             .frame(width: 32, height: 32)
             .background(
-                role == "user"
+                role == .user
                     ? theme.primary.opacity(0.15)
-                    : role == "tool" ? theme.foreground.opacity(0.06) : theme.primary.opacity(0.12),
+                    : role == .tool ? theme.foreground.opacity(0.06) : theme.primary.opacity(0.12),
                 in: Circle()
             )
-            .overlay(Circle().stroke(role == "user" ? theme.primary.opacity(0.3) : theme.border.opacity(0.5)))
+            .overlay(Circle().stroke(role == .user ? theme.primary.opacity(0.3) : theme.border.opacity(0.5)))
             .accessibilityHidden(true)
     }
 }

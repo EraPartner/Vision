@@ -256,7 +256,7 @@ public struct AdminErrorState: Equatable, Sendable {
     ) {
         let clear = clear
         center?.publish(
-            notice, source: source, lifetime: lifetime, actionTitleKey: titleKey,
+            notice, source: source, lifetime: lifetime, actionTitleKey: LocalizedKey(titleKey),
             isUndo: isUndo, action: action, clear: { clear(notice.id) })
     }
 }

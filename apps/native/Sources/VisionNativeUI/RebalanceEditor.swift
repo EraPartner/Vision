@@ -6,17 +6,22 @@ extension RebalanceView {
         card("rebalance.editor.title") {
             HStack {
                 Button(strings.t("rebalance.editor.loadCurrent")) { model.loadCurrentMix() }
-                Menu(strings.t("rebalance.editor.loadPreset")) {
+                    .buttonStyle(.visionOutline).controlSize(.small)
+                Menu {
                     ForEach(RebalancePreset.allCases, id: \.self) { preset in
                         Button(strings.t("rebalance.model.\(preset.rawValue)")) { model.loadPreset(preset) }
                     }
+                } label: {
+                    Text(strings.t("rebalance.editor.loadPreset")).visionChipChrome()
                 }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
             }
             ForEach(Array(model.draft.rows.enumerated()), id: \.offset) { index, row in
                 allocationRow(index, row)
             }
             HStack {
-                Button(strings.t("rebalance.editor.addSleeve")) { model.addRow() }.disabled(model.draft.rows.count >= 8)
+                Button(strings.t("rebalance.editor.addSleeve")) { model.addRow() }
+                    .buttonStyle(.visionOutline).controlSize(.small).disabled(model.draft.rows.count >= 8)
                 Spacer()
                 Text(
                     "\(strings.t("rebalance.editor.total")): \(VisionFormat.percent(model.weightTotal, digits: 0, locale: settings.numberFormat.locale))"
@@ -34,7 +39,7 @@ extension RebalanceView {
                     set: { enabled in
                         model.updateDraft { $0.capEnabled = enabled }
                     })
-            ).toggleStyle(.switch)
+            ).toggleStyle(.visionSwitch)
             if model.draft.capEnabled {
                 TextField(
                     VisionFormat.decimal(model.availableCash, fractionDigits: 0, locale: settings.numberFormat.locale),
@@ -65,10 +70,10 @@ extension RebalanceView {
                         if model.isSaving { ProgressView().controlSize(.small) }
                         Text(strings.t(model.draft.planId == nil ? "rebalance.plan.save" : "rebalance.plan.update"))
                     }
-                }.disabled(!model.canSave)
+                }.buttonStyle(.visionPrimary).disabled(!model.canSave)
                 if model.draft.planId != nil {
-                    Button(strings.t("rebalance.plan.delete"), role: .destructive) { model.requestDelete() }.disabled(
-                        model.isSaving)
+                    Button(strings.t("rebalance.plan.delete"), role: .destructive) { model.requestDelete() }
+                        .buttonStyle(.visionOutline).disabled(model.isSaving)
                 }
             }
         }
@@ -85,13 +90,13 @@ extension RebalanceView {
         let targetLabel = "\(strings.t("rebalance.target")) \(index + 1): \(name) (%)"
         let removeLabel = "\(strings.t("rebalance.editor.removeSleeve")) \(index + 1): \(name)"
         return HStack(spacing: 12) {
-            Picker(
-                sleeveLabel,
-                selection: Binding(get: { row.sleeve }, set: { value in model.updateRow(index, sleeve: value) })
-            ) {
-                Text(strings.t("rebalance.editor.sleevePlaceholder")).tag("")
-                ForEach(RebalanceURLDraft.sleeves, id: \.self) { sleeve in Text(label(sleeve)).tag(sleeve) }
-            }.labelsHidden().frame(maxWidth: .infinity)
+            VisionSelect(
+                selection: Binding(get: { row.sleeve }, set: { value in model.updateRow(index, sleeve: value) }),
+                options: VisionSelectOption<String>.pairs(
+                    [("", strings.t("rebalance.editor.sleevePlaceholder"))]
+                        + RebalanceURLDraft.sleeves.map { ($0, label($0)) }),
+                accessibilityLabel: sleeveLabel, expands: true
+            ).frame(maxWidth: .infinity)
             TextField("%", text: Binding(get: { row.pct }, set: { value in model.updateRow(index, pct: value) }))
                 .textFieldStyle(.vision).frame(width: 100).multilineTextAlignment(.trailing)
                 .accessibilityLabel(targetLabel)
@@ -101,7 +106,8 @@ extension RebalanceView {
             } label: {
                 Image(systemName: "trash")
             }
-            .buttonStyle(.borderless).accessibilityLabel(removeLabel).help(removeLabel)
+            .buttonStyle(.vision(.ghost, size: .iconSm)).accessibilityLabel(removeLabel)
+            .visionTooltip(removeLabel)
         }
     }
 }

@@ -138,7 +138,7 @@ import Observation
                         id: "ticker", title: symbol, symbol: "chart.xyaxis.line",
                         hint: quote == nil ? strings.t("commandPalette.lookingUp") : nil,
                         action: .navigate(
-                            .init(path: "/research/market", query: [.init(name: "symbol", value: symbol)])),
+                            .init(.marketLookup, query: [.init(name: "symbol", value: symbol)])),
                         quote: quote)
                 ])
         }
@@ -161,19 +161,19 @@ import Observation
                         title: strings.t("commandPalette.searchTransactions", ["q": trimmedQuery]),
                         symbol: "list.bullet.rectangle.portrait", hint: nil,
                         action: .navigate(
-                            .init(path: "/transactions", query: [.init(name: "search", value: trimmedQuery)])))
+                            .init(.transactions, query: [.init(name: "search", value: trimmedQuery)])))
                 ])
         }
         group(
             "recipients", "nav.recipients",
             recipients.map {
                 .init(
-                    id: "recipient-\($0.id)", title: $0.name, symbol: "person.2", hint: nil,
+                    id: "recipient-\($0.id.rawValue)", title: $0.name, symbol: "person.2", hint: nil,
                     action: .navigate(
                         .init(
-                            path: "/transactions",
+                            .transactions,
                             query: [
-                                .init(name: "recipient_id", value: String($0.id)),
+                                .init(name: "recipient_id", value: String($0.id.rawValue)),
                                 .init(name: "filter_label", value: $0.name),
                             ])))
             })

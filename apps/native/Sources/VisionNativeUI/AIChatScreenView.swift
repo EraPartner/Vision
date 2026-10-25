@@ -17,7 +17,7 @@ struct AIChatScreenView: View {
         var settings = shell.settings
         // The source Investigation uses useLanguage, including an immediate language change
         // before the debounced app_settings save is acknowledged.
-        settings.language = shell.strings.language.rawValue
+        settings.language = AppLanguage(rawValue: shell.strings.language.rawValue)
         return settings
     }
     private var pollKey: String {

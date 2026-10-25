@@ -4,13 +4,13 @@ public protocol AnalysisMonitorsService: Sendable {
     func monitorRules(offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorRule>
     func monitorAnalyses() async throws -> [AnalysisSaved]
     func monitorDossiers(offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorDossier>
-    func monitorObservations(id: String, offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorObservation>
+    func monitorObservations(id: AnalysisMonitorID, offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorObservation>
     func monitorNotifications(offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorNotification>
     func monitorCreate(_ input: TaxValue) async throws -> AnalysisMonitorRule
-    func monitorUpdate(id: String, patch: TaxValue) async throws -> AnalysisMonitorRule
-    func monitorDelete(id: String) async throws
-    func monitorCheck(id: String) async throws -> AnalysisMonitorObservation
-    func monitorReadNotification(id: String) async throws -> AnalysisMonitorNotification
+    func monitorUpdate(id: AnalysisMonitorID, patch: TaxValue) async throws -> AnalysisMonitorRule
+    func monitorDelete(id: AnalysisMonitorID) async throws
+    func monitorCheck(id: AnalysisMonitorID) async throws -> AnalysisMonitorObservation
+    func monitorReadNotification(id: AnalysisMonitorNotificationID) async throws -> AnalysisMonitorNotification
 }
 extension APIClient: AnalysisMonitorsService {
     public func monitorRules(offset: Int) async throws -> AnalysisMonitorPage<AnalysisMonitorRule> {
@@ -29,7 +29,7 @@ extension APIClient: AnalysisMonitorsService {
         try Self.monitorUnique(value.items.map(\.id))
         return value
     }
-    public func monitorObservations(id: String, offset: Int) async throws -> AnalysisMonitorPage<
+    public func monitorObservations(id: AnalysisMonitorID, offset: Int) async throws -> AnalysisMonitorPage<
         AnalysisMonitorObservation
     > {
         let op = OpenAPIOperations.ListAnalysisMonitorObservations(id: id, limit: 200, offset: offset)
@@ -51,9 +51,9 @@ extension APIClient: AnalysisMonitorsService {
     public func monitorCreate(_ input: TaxValue) async throws -> AnalysisMonitorRule {
         try await send(
             InsightRequest<OpenAPIOperations.CreateAnalysisMonitor, AnalysisMonitorRule>(
-                .init(body: .object([:])), query: [], bodyOverride: APIBody.encode(input)))
+                .init(body: .unknown(.object([:]))), query: [], bodyOverride: APIBody.encode(input)))
     }
-    public func monitorUpdate(id: String, patch: TaxValue) async throws -> AnalysisMonitorRule {
+    public func monitorUpdate(id: AnalysisMonitorID, patch: TaxValue) async throws -> AnalysisMonitorRule {
         let value: AnalysisMonitorRule = try await send(
             InsightRequest(
                 OpenAPIOperations.PatchAnalysisMonitor(id: id, body: .init()),
@@ -61,23 +61,23 @@ extension APIClient: AnalysisMonitorsService {
         guard value.id == id else { throw MonitorWire.invalid("id") }
         return value
     }
-    public func monitorDelete(id: String) async throws {
+    public func monitorDelete(id: AnalysisMonitorID) async throws {
         _ = try await send(OpenAPIOperations.DeleteAnalysisMonitor(id: id))
     }
-    public func monitorCheck(id: String) async throws -> AnalysisMonitorObservation {
+    public func monitorCheck(id: AnalysisMonitorID) async throws -> AnalysisMonitorObservation {
         let value: AnalysisMonitorObservation = try await send(
             InsightRequest(OpenAPIOperations.CheckAnalysisMonitor(id: id), query: []))
         guard value.monitorId == id else { throw MonitorWire.invalid("monitorId") }
         return value
     }
-    public func monitorReadNotification(id: String) async throws -> AnalysisMonitorNotification {
+    public func monitorReadNotification(id: AnalysisMonitorNotificationID) async throws -> AnalysisMonitorNotification {
         let value: AnalysisMonitorNotification = try await send(
             InsightRequest(OpenAPIOperations.ReadAnalysisMonitorNotification(id: id), query: []))
         guard value.id == id, value.readAt != nil else { throw MonitorWire.invalid("id/readAt") }
         return value
     }
-    private static func monitorUnique(_ ids: [String]) throws {
-        guard Set(ids).count == ids.count, ids.allSatisfy({ UUID(uuidString: $0) != nil }) else {
+    private static func monitorUnique<ID: Hashable & RawRepresentable>(_ ids: [ID]) throws where ID.RawValue == String {
+        guard Set(ids).count == ids.count, ids.allSatisfy({ UUID(uuidString: $0.rawValue) != nil }) else {
             throw MonitorWire.invalid("ids")
         }
     }

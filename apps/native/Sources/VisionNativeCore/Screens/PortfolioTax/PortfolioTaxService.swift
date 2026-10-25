@@ -1,19 +1,19 @@
 import Foundation
 
 public protocol PortfolioTaxService: Sendable {
-    func portfolioTaxDashboard(year: Int, currency: String) async throws -> PortfolioTaxDashboard
+    func portfolioTaxDashboard(year: Int, currency: CurrencyCode) async throws -> PortfolioTaxDashboard
     func savePortfolioTaxSettings(_ patch: PortfolioTaxSettingsPatch) async throws
     func portfolioTaxWidgetSetting() async throws -> OpenAPI.Setting
     func savePortfolioTaxWidgets(value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting
 }
 
 extension APIClient: PortfolioTaxService {
-    public func portfolioTaxDashboard(year: Int, currency: String) async throws -> PortfolioTaxDashboard {
+    public func portfolioTaxDashboard(year: Int, currency: CurrencyCode) async throws -> PortfolioTaxDashboard {
         let result = try await send(
             InsightRequest<OpenAPIOperations.GetBelgianPortfolioTaxDashboard, PortfolioTaxDashboard>(
                 OpenAPIOperations.GetBelgianPortfolioTaxDashboard(),
                 query: [
-                    URLQueryItem(name: "year", value: String(year)), URLQueryItem(name: "currency", value: currency),
+                    URLQueryItem(name: "year", value: String(year)), URLQueryItem(name: "currency", value: currency.rawValue),
                 ]))
         try result.validate(year: year, currency: currency)
         return result
@@ -33,7 +33,7 @@ extension APIClient: PortfolioTaxService {
         try await send(
             OpenAPIOperations.SaveSetting(
                 key: PortfolioTaxWidgetsModel.settingsKey,
-                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: expected)))
+                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }
 private struct PortfolioTaxSettingsOperation: APIOperation {

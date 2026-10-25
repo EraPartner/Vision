@@ -4,6 +4,9 @@ import VisionNativeCore
 struct PortfolioImportSessionView: View {
     let model: PortfolioImportSessionModel
     let shell: NativeShellModel
+    /// The web card holds the history disclosure under its title (`PortfolioImportHistory`).
+    let history: PortfolioImportHistoryModel
+    @Binding var historyExpanded: Bool
     var isLocked = false
     var onReviewHistory: () -> Void = {}
     var onRecover: () async -> Void = {}
@@ -14,8 +17,14 @@ struct PortfolioImportSessionView: View {
     var body: some View {
         AdminCard {
             VStack(alignment: .leading, spacing: 20) {
-                Text(strings.t("portfolioImport.session.title")).font(.headline)
-                Text(strings.t("portfolioImport.session.description")).foregroundStyle(theme.secondaryLabel)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(strings.t("portfolioImport.session.title")).font(.visionCardTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(strings.t("portfolioImport.session.description")).foregroundStyle(theme.secondaryLabel)
+                }
+                PortfolioImportHistoryView(
+                    model: history, shell: shell, expanded: $historyExpanded,
+                    isLocked: model.locked || isLocked)
                 PortfolioImportFileDropzone(
                     multiple: true, strings: strings, isDisabled: locked,
                     maximumFiles: max(0, 100 - model.statements.count),
@@ -32,20 +41,22 @@ struct PortfolioImportSessionView: View {
                 HStack(spacing: 12) {
                     Button(strings.t("portfolioImport.session.stage")) { Task { await model.stage() } }
                         .buttonStyle(.visionPrimary).disabled(
-                            !model.canStage || model.operation != "idle" || isLocked)
-                    if model.operation == "staging" {
+                            !model.canStage || model.operation != .idle || isLocked)
+                    if model.operation == .staging {
                         Button(strings.t("portfolioImport.session.stop")) { model.stop() }
+                            .buttonStyle(.visionOutline)
                     }
                     Button(strings.t("portfolioImport.session.preview")) { Task { await model.preview() } }
-                        .disabled(!model.canPreview || isLocked)
+                        .buttonStyle(.visionOutline).disabled(!model.canPreview || isLocked)
                     if !model.statements.isEmpty {
-                        Button(strings.t("portfolioImport.session.clear")) { model.clear() }.disabled(locked)
+                        Button(strings.t("portfolioImport.session.clear")) { model.clear() }
+                            .buttonStyle(.visionOutline).disabled(locked)
                     }
                 }
                 if model.stopped {
                     Text(strings.t("portfolioImport.session.stopped")).foregroundStyle(theme.secondaryLabel)
                 }
-                if model.operation == "preview" {
+                if model.operation == .preview {
                     HStack {
                         ProgressView().controlSize(.small)
                         Text(strings.t("portfolioImport.session.previewing"))
@@ -58,8 +69,9 @@ struct PortfolioImportSessionView: View {
                     Text(strings.t("portfolioImport.session.responseUnverified")).foregroundStyle(theme.warning)
                     HStack {
                         Button(strings.t("portfolioImport.session.history.title"), action: onReviewHistory)
-                        Button(strings.t("common.retry")) { Task { await onRecover() } }.disabled(
-                            locked || model.isBusy)
+                            .buttonStyle(.visionOutline)
+                        Button(strings.t("common.retry")) { Task { await onRecover() } }
+                            .buttonStyle(.visionOutline).disabled(locked || model.isBusy)
                     }
                 }
                 PortfolioImportReconciliationView(model: model, shell: shell)
@@ -68,15 +80,21 @@ struct PortfolioImportSessionView: View {
     }
     private var policySettings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(
-                strings.t("portfolioImport.session.policy"),
-                selection: Binding(get: { model.policy }, set: { model.setPolicy($0) })
-            ) {
-                Text(strings.t("portfolioImport.session.auto")).tag("auto")
-                Text(strings.t("portfolioImport.session.preserve")).tag("preserve_existing")
-                Text(strings.t("portfolioImport.session.source")).tag("prefer_source")
-            }.disabled(locked)
-            Text(strings.t("portfolioImport.session.policyHint." + model.policy)).font(.caption).foregroundStyle(
+            Text(strings.t("portfolioImport.session.policy")).font(.callout.weight(.medium))
+            VisionSelect(
+                selection: Binding(get: { model.policy }, set: { model.setPolicy($0) }),
+                options: [
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.auto, title: strings.t("portfolioImport.session.auto")),
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.preserveExisting,
+                        title: strings.t("portfolioImport.session.preserve")),
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.preferSource,
+                        title: strings.t("portfolioImport.session.source")),
+                ], accessibilityLabel: strings.t("portfolioImport.session.policy"), expands: true
+            ).disabled(locked)
+            Text(strings.t("portfolioImport.session.policyHint." + model.policy.rawValue)).font(.caption).foregroundStyle(
                 theme.secondaryLabel)
         }
     }

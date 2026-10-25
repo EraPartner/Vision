@@ -7,14 +7,14 @@ import Testing
 /// `lib/__tests__/nativePaletteAnswer.test.ts` and the source evaluator's output for the
 /// JavaScript edge cases (comma operator, comments, `.5`, `**` and calls).
 @Suite struct NativePaletteCalculatorTests {
-    private func rates(_ values: [String: Decimal]) -> OpenAPI.ExchangeRates {
+    private func rates(_ values: [CurrencyCode: Decimal]) -> OpenAPI.ExchangeRates {
         OpenAPI.ExchangeRates(
             totalRates: values.count,
             rates: values.map {
                 OpenAPI.ExchangeRate(
                     currency: $0.key, rateToEur: $0.value, rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")
             },
-            source: "database", isStale: false)
+            source: .database, isStale: false)
     }
 
     /// `Intl` and Foundation put a no-break space before a trailing symbol.
@@ -88,12 +88,12 @@ import Testing
         #expect(plain(missing?.text) == "XYZ 5.00")
     }
 
-    @Test func malformedCodesAndDigitCountsFallBackToTwoDecimalsAndTheCode() async {
-        for (currency, decimals, text) in [("bad-code", 2, "5.00 bad-code"), ("EUR", 200, "5.00 EUR"), ("", 2, "5.00 ")] {
-            let answer = await NativePaletteCalculator.answer(
-                query: "5 USD", format: .us, currency: currency, decimals: decimals, readRates: { nil })
-            #expect(answer == .init(kind: .fx, text: text))
-        }
+    @Test func malformedCodesAreRejectedByTheTypeAndDigitCountsFallBackToTwoDecimalsAndTheCode() async {
+        // A malformed default currency cannot reach the calculator: `CurrencyCode` refuses it.
+        for malformed in ["bad-code", "", "eur", "EURO"] { #expect(CurrencyCode(rawValue: malformed) == nil) }
+        let answer = await NativePaletteCalculator.answer(
+            query: "5 USD", format: .us, currency: "EUR", decimals: 200, readRates: { nil })
+        #expect(answer == .init(kind: .fx, text: "5.00 EUR"))
     }
 
     @Test func identicalCurrenciesSkipTheRateRead() async {
@@ -116,8 +116,8 @@ import Testing
                 let rate = try await loads.next()
                 return OpenAPI.ExchangeRates(
                     totalRates: 1,
-                    rates: [.init(currency: "USD", rateToEur: rate, rateDate: "d", fetchedAt: "f")],
-                    source: "database", isStale: false)
+                    rates: [.init(currency: "USD", rateToEur: rate, rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")],
+                    source: .database, isStale: false)
             }, now: { clock.now })
         #expect(await cache.read()?.rates.first?.rateToEur == 1)
         clock.now = Date(timeIntervalSince1970: 600)

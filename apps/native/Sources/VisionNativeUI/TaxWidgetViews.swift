@@ -36,7 +36,7 @@ struct TaxMoneyRow: View {
     var body: some View {
         let text =
             amount.map {
-                MoneyText.text($0, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
+                MoneyText.text($0, currency: shell.settings.portfolioCurrency, settings: shell.settings, signed: signed)
             } ?? "—"
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(title).frame(maxWidth: .infinity, alignment: .leading)
@@ -60,13 +60,19 @@ struct TaxMoneyRow: View {
 struct TaxWidgetsSheet: View {
     let model: TaxWidgetsModel
     let strings: any Localizing
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismiss) private var systemDismiss
+    @Environment(\.visionDismissDialog) private var dialogDismiss
     @Environment(\.visionTheme) private var theme
+    /// Inside a `visionDialog` only the dialog dismissal acts; under a system sheet only the other.
+    private func close() {
+        dialogDismiss()
+        systemDismiss()
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: strings.t("widgets.title"), description: strings.t("widgets.description"),
-                closeLabel: strings.t("common.close"), onClose: { dismiss() }
+                closeLabel: strings.t("common.close"), onClose: { close() }
             )
             .keyboardShortcut(.cancelAction)
             VStack(alignment: .leading, spacing: 0) {
@@ -85,7 +91,7 @@ struct TaxWidgetsSheet: View {
                                 get: { model.isVisible(widget.id) },
                                 set: { value in Task { await model.setVisible(widget.id, value) } })
                         )
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .labelsHidden().toggleStyle(.visionSwitchLabelless)
                         .disabled(model.isSaving || !model.isLoaded)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -146,12 +152,19 @@ struct TaxRulesView: View {
                     })
             ) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(strings.t("tax.rules.description")).foregroundStyle(theme.secondaryLabel)
+                    Text(strings.t("tax.rules.description")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     ForEach(sections, id: \.0) { title, keys in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(strings.t("tax.rules." + title)).font(.headline)
-                            ForEach(keys, id: \.self) { key in Text("• " + strings.t("tax.rules." + key)) }
+                        // `rounded-card bg-foreground/[0.04] p-4` with a headline and footnote bullets.
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(strings.t("tax.rules." + title)).font(.headline).foregroundStyle(theme.foreground)
+                            VisionBulletList(items: keys.map { strings.t("tax.rules." + $0) })
+                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
                         }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
+                                .fill(theme.foreground.opacity(0.04)))
                     }
                 }.padding(.top, 12)
             }

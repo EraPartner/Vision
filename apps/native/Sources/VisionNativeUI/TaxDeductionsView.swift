@@ -32,14 +32,14 @@ struct SuggestedDeductionsView: View {
                             if let estimate = suggestion.estimate, estimate > 0 {
                                 Text(
                                     MoneyText.text(
-                                        estimate, currency: shell.settings.defaultCurrency, settings: shell.settings)
+                                        estimate, currency: shell.settings.portfolioCurrency, settings: shell.settings)
                                 )
                                 .font(.headline).monospacedDigit().foregroundStyle(theme.gain)
                             } else {
                                 Text(strings.t("tax.suggestions.estimateNote")).font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                             }
-                            Button(strings.t("tax.suggestions.cta"), action: onEditProfile)
+                            Button(strings.t("tax.suggestions.cta"), action: onEditProfile).buttonStyle(.visionOutline)
                         }
                     }.padding(.vertical, 8)
                     Divider()
@@ -65,11 +65,11 @@ struct TaxDeductionsView: View {
     @State private var notice: ScreenNotice?
     @State private var noticeCounter = 0
     @Environment(\.visionTheme) private var theme
-    private var strings: any Localizing { shell.strings }
+    var strings: any Localizing { shell.strings }
     private var twoPartners: Bool {
         household?["partners"]?.arrayValue?.contains { $0["id"]?.stringValue == "B" } ?? false
     }
-    private var currency: String { model.data?.currency ?? "EUR" }
+    private var currency: CurrencyCode { model.data?.currency ?? .eur }
 
     var body: some View {
         Group {
@@ -81,7 +81,7 @@ struct TaxDeductionsView: View {
                         Spacer()
                         Button(strings.t("common.retry")) {
                             Task { await model.retry() }
-                        }.disabled(model.isFetching)
+                        }.buttonStyle(.visionOutline).disabled(model.isFetching)
                     }
                 }
             } else if !model.groups.isEmpty {
@@ -107,26 +107,6 @@ struct TaxDeductionsView: View {
                 notice = ScreenNotice(
                     id: noticeCounter, kind: .success, key: "tax.deductionCandidates.toastConfirmed",
                     variables: ["type": strings.t("tax.deductionCandidates.type." + type)])
-            }
-        }
-        .confirmationDialog(
-            strings.t("tax.deductionCandidates.incompleteYearTitle", ["year": String(model.data?.year ?? 0)]),
-            isPresented: Binding(get: { model.pending != nil }, set: { if !$0 { model.pending = nil } }),
-            titleVisibility: .visible
-        ) {
-            if let group = model.pending {
-                Button(strings.t("tax.deductionCandidates.incompleteYearConfirm")) {
-                    Task { await model.apply(group, perform: onApply) }
-                }
-                .disabled(!canApply || !model.canConfirm)
-            }
-            Button(strings.t("common.cancel"), role: .cancel) { model.pending = nil }
-        } message: {
-            if let group = model.pending {
-                Text(
-                    strings.t(
-                        "tax.deductionCandidates.incompleteYearDescription",
-                        ["currentValue": money(currentTotal(group)), "candidateValue": money(group.total)]))
             }
         }
     }
@@ -176,19 +156,20 @@ struct TaxDeductionsView: View {
                             } else {
                                 Task { await model.apply(group, perform: onApply) }
                             }
-                        }.disabled(!model.canConfirm || !canApply || !hasAttribution(group))
+                        }.buttonStyle(.visionPrimary)
+                            .disabled(!model.canConfirm || !canApply || !hasAttribution(group))
                         Button(strings.t("tax.deductionCandidates.dismiss")) { Task { await model.dismiss(group) } }
-                            .disabled(model.isApplying)
+                            .buttonStyle(.visionOutline).disabled(model.isApplying)
                     }
                 }
             }
         }.padding(16).background(
             theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
     }
-    private func money(_ amount: Decimal) -> String {
+    func money(_ amount: Decimal) -> String {
         MoneyText.text(amount, currency: currency, settings: shell.settings)
     }
-    private func currentTotal(_ group: TaxDeductionGroup) -> Decimal {
+    func currentTotal(_ group: TaxDeductionGroup) -> Decimal {
         guard let household, let mapping = group.mapping else { return 0 }
         let first = mapping.currentValue(in: household)
         return twoPartners && !mapping.isHome ? first + mapping.currentValue(in: household, partner: "B") : first
@@ -202,5 +183,38 @@ struct TaxDeductionsView: View {
             .stringValue
         return name.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
             ?? strings.t("tax.household.partner." + id)
+    }
+}
+
+/// The incomplete-year confirm of the deduction candidates. It presents from the page, not
+/// from the card inside the scrolling content, so the in-window dialog centres over the page.
+struct TaxDeductionsConfirmation: ViewModifier {
+    let host: TaxDeductionsView?
+
+    func body(content: Content) -> some View {
+        content
+            .visionConfirmationDialog(
+                title: host?.strings.t(
+                    "tax.deductionCandidates.incompleteYearTitle", ["year": String(host?.model.data?.year ?? 0)])
+                    ?? "",
+                message: { group in
+                    host?.strings.t(
+                        "tax.deductionCandidates.incompleteYearDescription",
+                        [
+                            "currentValue": host?.money(host?.currentTotal(group) ?? 0) ?? "",
+                            "candidateValue": host?.money(group.total) ?? "",
+                        ])
+                },
+                item: Binding(
+                    get: { host?.model.pending }, set: { if $0 == nil { host?.model.pending = nil } })
+            ) { group in
+                if let host {
+                    VisionDialogAction(host.strings.t("common.cancel"), role: .cancel) { host.model.pending = nil }
+                    VisionDialogAction(host.strings.t("tax.deductionCandidates.incompleteYearConfirm")) {
+                        Task { await host.model.apply(group, perform: host.onApply) }
+                    }
+                    .disabled(!host.canApply || !host.model.canConfirm)
+                }
+            }
     }
 }

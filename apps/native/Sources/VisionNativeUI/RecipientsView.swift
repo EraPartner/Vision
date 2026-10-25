@@ -87,8 +87,7 @@ public struct RecipientsView: View {
         } label: {
             Label(strings.t("txPage.view.menu"), systemImage: "slider.horizontal.3")
         }
-        .menuStyle(.button)
-        .fixedSize()
+        .visionViewMenu()
         .accessibilityLabel(strings.t("txPage.view.menu"))
     }
 
@@ -103,10 +102,8 @@ public struct RecipientsView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuIndicator(.hidden)
-        .menuStyle(.button)
-        .fixedSize()
-        .help(strings.t("recipientsPage.menu"))
+        .visionMoreActionsMenu()
+        .visionTooltip(strings.t("recipientsPage.menu"))
         .accessibilityLabel(strings.t("recipientsPage.menu"))
     }
 
@@ -204,6 +201,7 @@ public struct RecipientsView: View {
                 Button(strings.t("common.retry")) {
                     Task { await model.loadMore() }
                 }
+                .buttonStyle(.visionOutline)
                 .disabled(model.isFetchingMore)
             }
         }
@@ -236,7 +234,10 @@ public struct RecipientsView: View {
                             payee.isActive ? "recipientsPage.statusActive" : "recipientsPage.statusInactive"),
                         tone: .muted, small: true))
             },
-            LocalDataColumn(key: "actions", title: "", width: 72, minWidth: 72, alignment: .trailing) { payee in
+            LocalDataColumn(
+                key: "actions", title: "", width: 72, minWidth: 72, alignment: .trailing,
+                plainHeader: strings.t("table.edit")
+            ) { payee in
                 AnyView(actionsCell(payee))
             },
         ]
@@ -271,7 +272,7 @@ public struct RecipientsView: View {
                 }
                 .buttonStyle(.plain)
                 .pointerStyle(.link)
-                .help(payee.name)
+                .visionTooltip(payee.name)
                 .accessibilityAddTraits(.isLink)
                 if let count = payee.aliasCount, count > 0 {
                     HStack(spacing: 3) {
@@ -285,7 +286,7 @@ public struct RecipientsView: View {
                 }
                 if payee.primaryRecipientId != nil {
                     VisionBadge(text: "→ \(payee.primaryRecipientName ?? "")", tone: .outline, small: true)
-                        .help(payee.primaryRecipientName ?? "")
+                        .visionTooltip(payee.primaryRecipientName ?? "")
                         .layoutPriority(-1)
                 }
             }
@@ -293,7 +294,9 @@ public struct RecipientsView: View {
     }
 
     private func accountCell(_ payee: OpenAPI.Recipient) -> some View {
-        Text(payee.primaryBankAccount ?? "")
+        // `primary_bank_account || t("recipientsPage.none")`.
+        let account = payee.primaryBankAccount.flatMap { $0.isEmpty ? nil : $0 }
+        return Text(account ?? strings.t("recipientsPage.none"))
             .font(.callout.monospaced())
             .foregroundStyle(theme.secondaryLabel)
             .strikethrough(!payee.isActive)
@@ -336,7 +339,7 @@ public struct RecipientsView: View {
                 .strikethrough(!payee.isActive)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .help(notes)
+                .visionTooltip(notes)
         }
     }
 
@@ -349,18 +352,18 @@ public struct RecipientsView: View {
                 } label: {
                     Image(systemName: "checkmark")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.primary)
-                .help(strings.t("aria.save"))
+                .visionTooltip(strings.t("aria.save"))
                 .accessibilityLabel(strings.t("aria.save"))
                 Button {
                     model.cancelEditing()
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.secondaryLabel)
-                .help(strings.t("aria.cancel"))
+                .visionTooltip(strings.t("aria.cancel"))
                 .accessibilityLabel(strings.t("aria.cancel"))
             }
         } else {
@@ -408,10 +411,11 @@ public struct RecipientsView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuStyle(.button)
+        .buttonStyle(.vision(.ghost, size: .iconXs))
         .menuIndicator(.hidden)
-        .menuStyle(.borderlessButton)
         .fixedSize()
-        .help(strings.t("recipientsPage.rowMenu", ["name": payee.name]))
+        .visionTooltip(strings.t("recipientsPage.rowMenu", ["name": payee.name]))
         .accessibilityLabel(strings.t("recipientsPage.rowMenu", ["name": payee.name]))
     }
 }
@@ -428,42 +432,44 @@ struct RecipientDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-            .alert(
-                model.deleteText()?.title ?? "",
+            .visionAlert(
+                title: model.deleteText()?.title ?? "",
+                message: model.deleteText()?.message,
                 isPresented: Binding(get: { model.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-                Button(model.deleteText()?.action ?? "", role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                VisionDialogAction(model.deleteText()?.action ?? "", role: .destructive) {
                     Task { await model.confirmDelete() }
                 }
-            } message: {
-                Text(model.deleteText()?.message ?? "")
             }
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.add != nil },
                     set: { presented in
                         if !presented { model.closeAdd() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 448, padding: 0, spacing: 0)
             ) {
                 themed(PayeeAddSheet(model: model, shell: shell))
             }
             // Escape and a click outside keep the selection; only Cancel resets it.
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.merge.isOpen },
                     set: { presented in
                         if !presented { model.merge.dismiss() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 512, padding: 0, spacing: 0)
             ) {
                 themed(PayeeMergeSheet(merge: model.merge, shell: shell))
             }
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.rules != nil },
                     set: { presented in
                         if !presented { model.closeRules() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 672, padding: 0, spacing: 0)
             ) {
                 themed(MatchRulesSheet(model: model, shell: shell))
             }
@@ -473,6 +479,7 @@ struct RecipientDialogs: ViewModifier {
         sheet
             .environment(\.visionTheme, theme)
             .environment(\.colorScheme, theme.colorScheme)
+            .environment(\.accountDialogHosted, true)
     }
 }
 
@@ -507,16 +514,8 @@ struct PayeeAddSheet: View {
                 }
                 AccountField(label: strings.t("addRec.notesOptional")) {
                     TextEditor(text: Binding(get: { model.add?.notes ?? "" }, set: { model.add?.setNotes($0) }))
-                        .font(.body)
-                        .frame(minHeight: 64, maxHeight: 120)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                                .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                                .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                        .visionTextEditor(minHeight: 64)
+                        .frame(maxHeight: 120)
                         .accessibilityLabel(strings.t("addRec.notesOptional"))
                 }
             } footer: {
@@ -624,9 +623,9 @@ struct PayeeMergeSheet: View {
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconXs))
                 .foregroundStyle(theme.secondaryLabel)
-                .help(strings.t("aria.clearSelection"))
+                .visionTooltip(strings.t("aria.clearSelection"))
                 .accessibilityLabel(strings.t("aria.clearSelection"))
             }
             .padding(10)
@@ -813,22 +812,21 @@ struct MatchRulesSheet: View {
             }
             .frame(minHeight: 360)
             // Attached inside the sheet so it presents over it.
-            .alert(
-                strings.t("recipientPatterns.deleteTitle"),
+            .visionAlert(
+                title: strings.t("recipientPatterns.deleteTitle"),
+                message: strings.t("recipientPatterns.deleteDesc"),
                 isPresented: Binding(get: { model.rules?.pendingDelete != nil }, set: { _ in })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.cancelRuleDelete() }
-                Button(strings.t("recipientPatterns.deleteConfirm"), role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.cancelRuleDelete() }
+                VisionDialogAction(strings.t("recipientPatterns.deleteConfirm"), role: .destructive) {
                     Task { await model.confirmRuleDelete() }
                 }
-            } message: {
-                Text(strings.t("recipientPatterns.deleteDesc"))
             }
         }
     }
 
     private func ruleRow(_ rule: OpenAPI.RecipientPattern, state: MatchRulesState) -> some View {
-        let kindLabel = MatchRuleKind(rawValue: rule.patternKind).map { strings.t($0.labelKey) } ?? rule.patternKind
+        let kindLabel = MatchRuleKind(rule.patternKind).map { strings.t($0.labelKey) } ?? rule.patternKind.rawValue
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
@@ -839,11 +837,11 @@ struct MatchRulesSheet: View {
                     VisionBadge(text: kindLabel, tone: .outline, small: true)
                     if rule.caseSensitive {
                         VisionBadge(text: "Aa", tone: .outline, small: true)
-                            .help(strings.t("recipientPatterns.caseSensitive"))
+                            .visionTooltip(strings.t("recipientPatterns.caseSensitive"))
                             .accessibilityLabel(strings.t("recipientPatterns.caseSensitive"))
                     }
-                    if rule.source != "user" {
-                        VisionBadge(text: rule.source, tone: .secondary, small: true)
+                    if rule.source != .user {
+                        VisionBadge(text: rule.source.rawValue, tone: .secondary, small: true)
                     }
                 }
                 if let notes = rule.notes, !notes.isEmpty {
@@ -857,9 +855,8 @@ struct MatchRulesSheet: View {
                 strings.t("recipientPatterns.activeFor", ["pattern": rule.pattern]),
                 isOn: Binding(get: { rule.isActive }, set: { _ in Task { await model.toggleRule(rule) } })
             )
-            .toggleStyle(.switch)
+            .toggleStyle(.visionSwitchLabelless)
             .labelsHidden()
-            .controlSize(.small)
             .disabled(state.isSaving)
             .accessibilityLabel(strings.t("recipientPatterns.activeFor", ["pattern": rule.pattern]))
             Menu {
@@ -878,10 +875,11 @@ struct MatchRulesSheet: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuStyle(.button)
+            .buttonStyle(.vision(.ghost, size: .iconXs))
             .menuIndicator(.hidden)
-            .menuStyle(.borderlessButton)
             .fixedSize()
-            .help(strings.t("recipientPatterns.rowMenu", ["pattern": rule.pattern]))
+            .visionTooltip(strings.t("recipientPatterns.rowMenu", ["pattern": rule.pattern]))
             .accessibilityLabel(strings.t("recipientPatterns.rowMenu", ["pattern": rule.pattern]))
         }
         .padding(.horizontal, 12)
@@ -944,16 +942,13 @@ struct MatchRuleFormCard: View {
                 }
                 HStack(alignment: .top, spacing: 12) {
                     AccountField(label: strings.t("recipientPatterns.kindLabel")) {
-                        Picker(
-                            strings.t("recipientPatterns.kindLabel"),
+                        VisionSelect(
                             selection: Binding(
-                                get: { model.rules?.form?.kind ?? .literalPrefix }, set: { model.rules?.setKind($0) })
-                        ) {
-                            ForEach(MatchRuleKind.allCases, id: \.self) { kind in
-                                Text(strings.t(kind.labelKey)).tag(kind)
-                            }
-                        }
-                        .labelsHidden()
+                                get: { model.rules?.form?.kind ?? .literalPrefix }, set: { model.rules?.setKind($0) }),
+                            options: MatchRuleKind.allCases.map { kind in
+                                VisionSelectOption(value: kind, title: strings.t(kind.labelKey))
+                            },
+                            accessibilityLabel: strings.t("recipientPatterns.kindLabel"), expands: true)
                     }
                     AccountField(label: strings.t("recipientPatterns.priorityLabel")) {
                         TextField(
@@ -981,8 +976,7 @@ struct MatchRuleFormCard: View {
                     isOn: Binding(
                         get: { model.rules?.form?.caseSensitive ?? false }, set: { model.rules?.setCaseSensitive($0) })
                 )
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                .toggleStyle(.visionSwitch)
                 HStack(spacing: 8) {
                     Spacer()
                     Button(strings.t("common.cancel")) { model.cancelRuleForm() }

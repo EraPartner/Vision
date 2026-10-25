@@ -1,0 +1,39 @@
+{
+  "batchIds": [
+    1
+  ],
+  "adoptPolicy": "preserve_existing",
+  "batchPolicies": [
+    {
+      "batchId": 1,
+      "adoptPolicy": "preserve_existing"
+    }
+  ],
+  "rowChoices": [
+    {
+      "batchId": 1,
+      "rowId": 1,
+      "choice": "keep_both"
+    }
+  ],
+  "ready": true,
+  "actions": [
+    {
+      "batchId": 1,
+      "rowId": 1,
+      "rowOrdinal": 1,
+      "action": "string",
+      "investmentId": 1,
+      "existingTransactionId": 1,
+      "crossFormat": true,
+      "cash": true,
+      "duplicateOfRowId": 1
+    }
+  ],
+  "blockers": [
+    "value"
+  ],
+  "summary": {
+    "key": 1
+  }
+}

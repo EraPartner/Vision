@@ -6,7 +6,7 @@ public protocol TaxDeductionsService: Sendable {
 extension APIClient: TaxDeductionsService {
     public func deductionCandidates(year: Int) async throws -> TaxDeductionCandidates {
         let result = try await send(TaxDeductionRequest(year: year))
-        guard result.year == year, !result.currency.isEmpty else {
+        guard result.year == year else {
             throw APIError.contract(
                 APIContractError(
                     endpoint: "/api/info/deduction-candidates", issues: ["year or currency: invalid response"]))

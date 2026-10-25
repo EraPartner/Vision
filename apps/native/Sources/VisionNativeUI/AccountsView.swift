@@ -107,7 +107,7 @@ public struct AccountsView: View {
         AdminCard(padding: 0) {
             VStack(spacing: 0) {
                 ForEach(Array(accounts.enumerated()), id: \.element.id) { index, account in
-                    if index > 0 { Divider().padding(.leading, 56) }
+                    if index > 0 { Divider().opacity(0.5) }
                     AccountHubRow(model: model, account: account, shell: shell)
                 }
             }
@@ -132,8 +132,9 @@ public struct AccountsView: View {
                 Spacer(minLength: 12)
                 switch model.netCash {
                 case .amount(let total):
-                    MoneyText(amount: total.amount, currency: model.displayCurrency, settings: settings, signed: false, colored: false)
-                        .font(Font.visionTitle1)
+                    MoneyText(
+                        amount: total.amount, currency: model.displayCurrency, settings: settings, signed: false,
+                        colored: false, display: .title1)
                 case .pending:
                     SkeletonBar(width: 128, height: 32)
                         .accessibilityLabel(strings.t("common.loading"))
@@ -181,7 +182,7 @@ public struct AccountsView: View {
 /// "(incomplete)".
 struct AccountSubtotalText: View {
     let subtotal: AccountSubtotal
-    let currency: String
+    let currency: CurrencyCode
     let strings: any Localizing
     let settings: NativeAppSettings
     @Environment(\.visionTheme) private var theme
@@ -236,7 +237,7 @@ struct AccountHubRow: View {
                     .foregroundStyle(theme.secondaryLabel)
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 0) {
                     titleLine
                     subtitle
                 }
@@ -256,8 +257,11 @@ struct AccountHubRow: View {
             .accessibilityAction { model.openDetail(account) }
             rowMenu
         }
-        .padding(.horizontal, 12)
+        // `ListRow`: `px-4 py-2.5`, the ••• menu in `pr-2` beside it.
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
         .padding(.vertical, 10)
+        .frame(minHeight: 44)
         .opacity(account.isActive ? 1 : 0.6)
     }
 
@@ -353,7 +357,7 @@ struct AccountHubRow: View {
         } else if let balance = account.computedBalance {
             MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
                 .font(.body.weight(.medium))
-                .help(strings.t("accounts.balanceTooltip"))
+                .visionTooltip(strings.t("accounts.balanceTooltip"))
         }
     }
 
@@ -387,10 +391,12 @@ struct AccountHubRow: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        // `RowMenu`: a ghost `icon-sm` square.
+        .menuStyle(.button)
+        .buttonStyle(.vision(.ghost, size: .iconSm))
         .menuIndicator(.hidden)
-        .menuStyle(.borderlessButton)
         .fixedSize()
-        .help(strings.t("accounts.rowMenu", ["name": label]))
+        .visionTooltip(strings.t("accounts.rowMenu", ["name": label]))
         .accessibilityLabel(strings.t("accounts.rowMenu", ["name": label]))
     }
 }
@@ -407,7 +413,7 @@ struct AccountDriftChip: View {
             VisionBadge(text: drift.label, tone: drift.stale ? .warning : .destructive, small: true)
         }
         .buttonStyle(.plain)
-        .help(strings.t(drift.tooltipKey))
+        .visionTooltip(strings.t(drift.tooltipKey))
         .accessibilityLabel(strings.t("accounts.reconcile.open"))
         .accessibilityValue(drift.label)
     }

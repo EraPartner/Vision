@@ -3,41 +3,41 @@ import Observation
 
 /// App-lifetime streams and conversation cache; page navigation never cancels a turn.
 @MainActor @Observable public final class AIChatStreamStore {
-    public private(set) var snapshots: [String: AIChatStreamSnapshot] = [:]
-    public private(set) var details: [String: AIChatConversationDetail] = [:]
-    public private(set) var detailDates: [String: Date] = [:]
-    public private(set) var activeIDs: [String] = []
-    public var didInvalidate: (@MainActor (String) async -> Void)?
+    public private(set) var snapshots: [AiConversationID: AIChatStreamSnapshot] = [:]
+    public private(set) var details: [AiConversationID: AIChatConversationDetail] = [:]
+    public private(set) var detailDates: [AiConversationID: Date] = [:]
+    public private(set) var activeIDs: [AiConversationID] = []
+    public var didInvalidate: (@MainActor (AiConversationID) async -> Void)?
     public var didError: (@MainActor (Error) -> Void)?
     @ObservationIgnored private let service: any AIChatService
     @ObservationIgnored private let now: @Sendable () -> Date
-    @ObservationIgnored private var tasks: [String: Task<AIChatComplete, Error>] = [:]
-    @ObservationIgnored private var generations: [String: UUID] = [:]
-    @ObservationIgnored private var revisions: [String: Int] = [:]
+    @ObservationIgnored private var tasks: [AiConversationID: Task<AIChatComplete, Error>] = [:]
+    @ObservationIgnored private var generations: [AiConversationID: UUID] = [:]
+    @ObservationIgnored private var revisions: [AiConversationID: Int] = [:]
     public init(service: any AIChatService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
         self.now = now
     }
-    public func snapshot(id: String?) -> AIChatStreamSnapshot { id.flatMap { snapshots[$0] } ?? .init() }
-    public func revision(id: String) -> Int { revisions[id] ?? 0 }
+    public func snapshot(id: AiConversationID?) -> AIChatStreamSnapshot { id.flatMap { snapshots[$0] } ?? .init() }
+    public func revision(id: AiConversationID) -> Int { revisions[id] ?? 0 }
     public func cache(_ detail: AIChatConversationDetail, date: Date? = nil) {
         let id = detail.conversation.id
         details[id] = detail
         detailDates[id] = date ?? now()
     }
-    public func invalidateDetail(id: String) { detailDates[id] = nil }
-    public func remove(id: String) {
+    public func invalidateDetail(id: AiConversationID) { detailDates[id] = nil }
+    public func remove(id: AiConversationID) {
         details[id] = nil
         detailDates[id] = nil
         clear(id: id)
     }
-    public func clear(id: String) {
+    public func clear(id: AiConversationID) {
         generations[id] = UUID()
         tasks[id] = nil
         snapshots[id] = nil
         synchronizeActiveIDs()
     }
-    public func stop(id: String) {
+    public func stop(id: AiConversationID) {
         generations[id] = UUID()
         tasks[id]?.cancel()
         tasks[id] = nil
@@ -55,8 +55,8 @@ import Observation
             continuing
             + snapshots.keys.filter { snapshots[$0]?.isStreaming == true && !continuing.contains($0) }.sorted()
     }
-    private func touch(_ id: String) { revisions[id, default: 0] += 1 }
-    private func merge(_ message: AIChatMessage, id: String) {
+    private func touch(_ id: AiConversationID) { revisions[id, default: 0] += 1 }
+    private func merge(_ message: AIChatMessage, id: AiConversationID) {
         guard var detail = details[id], !detail.messages.contains(where: { $0.id == message.id }) else { return }
         detail.messages.append(message)
         details[id] = detail
@@ -74,7 +74,8 @@ import Observation
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         initial.userMessage = try? AIChatMessage(
             raw: .object([
-                "id": .string("__optimistic_user__" + UUID().uuidString), "role": .string("user"),
+                "id": .string("__optimistic_user__" + UUID().uuidString),
+                "role": .string(OpenAPI.AiMessage.Role.user.rawValue),
                 "content": .string(request.message), "createdAt": .string(formatter.string(from: now())),
             ]))
         snapshots[id] = initial
@@ -121,7 +122,7 @@ import Observation
         if case .client(let value) = error as? APIError { return value.code.rawValue == "TURN_ALREADY_COMPLETE" }
         return false
     }
-    private func receive(_ event: AIChatEvent, id: String, generation: UUID) async {
+    private func receive(_ event: AIChatEvent, id: AiConversationID, generation: UUID) async {
         guard generations[id] == generation else { return }
         var current = snapshots[id] ?? .init()
         switch event {

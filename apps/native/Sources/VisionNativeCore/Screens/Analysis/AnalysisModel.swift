@@ -2,10 +2,10 @@ import Foundation
 import Observation
 
 public struct AnalysisPreferences: Equatable, Sendable {
-    public let currency: String
+    public let currency: CurrencyCode
     public let benchmark: String?
-    public let answerDepth: String
-    public let language: String
+    public let answerDepth: AIInvestigationDepth
+    public let language: AIInvestigationLanguage
 }
 @MainActor public protocol AnalysisSQLHistoryStore {
     func read() async -> [String]
@@ -143,9 +143,7 @@ public final class AnalysisModel {
     public var workbenchContext: String { querySignature + "|" + selectedEpoch.uuidString }
     public var effectivePreferences: AnalysisPreferences {
         let saved = selectedSaved?.parameters
-        func currency(_ value: String?) -> String? {
-            value?.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil ? value : nil
-        }
+        func currency(_ value: String?) -> CurrencyCode? { value.flatMap { CurrencyCode(rawValue: $0) } }
         func benchmark(_ value: TaxValue?) -> String? {
             let text = value?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
             return text?.range(of: "^[A-Z0-9][A-Z0-9._:-]{0,31}$", options: .regularExpression) != nil ? text : nil
@@ -164,13 +162,13 @@ public final class AnalysisModel {
             [
                 runAnswerDepth, saved?["answerDepth"]?.stringValue ?? "",
                 applicationPreferences["answerDepth"]?.stringValue ?? "",
-            ].first { ["quick", "detailed"].contains($0) } ?? "quick"
+            ].map { AIInvestigationDepth(rawValue: $0) }.first { AIInvestigationDepth.allCases.contains($0) } ?? .quick
         let language =
             [runLanguage, saved?["language"]?.stringValue ?? "", applicationPreferences["language"]?.stringValue ?? ""]
-            .first { ["en", "nl"].contains($0) } ?? "en"
+            .map { AIInvestigationLanguage(rawValue: $0) }.first { AIInvestigationLanguage.allCases.contains($0) } ?? .en
         return .init(
             currency: currency(runCurrency) ?? currency(saved?["currency"]?.stringValue) ?? currency(
-                settings.defaultCurrency) ?? "EUR", benchmark: chosenBenchmark, answerDepth: depth, language: language)
+                settings.defaultCurrency.description) ?? ReportingFallbackCurrency.euro, benchmark: chosenBenchmark, answerDepth: depth, language: language)
     }
     @ObservationIgnored private let service: any AnalysisService
     @ObservationIgnored private let historyStore: any AnalysisSQLHistoryStore
@@ -194,7 +192,7 @@ public final class AnalysisModel {
     @ObservationIgnored private var selectedEpoch = UUID()
     @ObservationIgnored private var resultQuery: String?
     @ObservationIgnored private var visualOrigin: AnalysisPlan?
-    @ObservationIgnored private var requestedSavedId: String?
+    @ObservationIgnored private var requestedSavedId: SavedAnalysisID?
     public init(
         service: any AnalysisService, historyStore: any AnalysisSQLHistoryStore = AnalysisMemorySQLHistoryStore()
     ) {
@@ -211,7 +209,7 @@ public final class AnalysisModel {
             applicationPreferences
             ?? .object([
                 "benchmark": settings.analysisBenchmark.map(TaxValue.string) ?? .null,
-                "answerDepth": .string(settings.aiAnswerDepth), "language": .string(settings.language),
+                "answerDepth": .string(settings.aiAnswerDepth.rawValue), "language": .string(settings.language.rawValue),
             ])
     }
     private var currentInputs: AnalysisResultInputs {
@@ -245,7 +243,7 @@ public final class AnalysisModel {
                     "runCurrency": .string(runCurrency), "runBenchmark": .string(runBenchmark),
                     "runWithoutBenchmark": .bool(runWithoutBenchmark), "runAnswerDepth": .string(runAnswerDepth),
                     "runLanguage": .string(runLanguage), "applicationPreferences": applicationPreferences,
-                    "defaultCurrency": .string(settings.defaultCurrency),
+                    "defaultCurrency": .string(settings.defaultCurrency.description),
                 ]))
     }
     private func signature(_ value: TaxValue) -> String {
@@ -269,7 +267,7 @@ public final class AnalysisModel {
         didChange?()
     }
     public func load(force: Bool = false, route: NativeRoute? = nil) async {
-        if let route { requestedSavedId = route.value("savedAnalysis") }
+        if let route { requestedSavedId = route.value("savedAnalysis").map { SavedAnalysisID($0) } }
         let epoch = selectedEpoch
         await restoreHistory()
         guard epoch == selectedEpoch else { return }
@@ -795,10 +793,10 @@ public final class AnalysisModel {
         }
         let preferences = effectivePreferences
         var parameters = selectedSaved?.parameters ?? .object([:])
-        parameters["currency"] = .string(preferences.currency)
+        parameters["currency"] = .string(preferences.currency.rawValue)
         parameters["benchmark"] = preferences.benchmark.map(TaxValue.string) ?? .null
-        parameters["answerDepth"] = .string(preferences.answerDepth)
-        parameters["language"] = .string(preferences.language)
+        parameters["answerDepth"] = .string(preferences.answerDepth.rawValue)
+        parameters["language"] = .string(preferences.language.rawValue)
         parameters["timezone"] = .string(timezone)
         parameters["sqlValues"] = try sqlParameterValues()
         parameters["scenarioModel"] = scenarioModel
@@ -873,8 +871,8 @@ public final class AnalysisModel {
             await didMutate?()
         }
     }
-    public func runSaved(id: String) async { await savedOperation { try await service.analysisRunSaved(id: id) } }
-    public func deleteSaved(id: String) async {
+    public func runSaved(id: SavedAnalysisID) async { await savedOperation { try await service.analysisRunSaved(id: id) } }
+    public func deleteSaved(id: SavedAnalysisID) async {
         guard !savedAction, !isSaving else { return }
         savedAction = true
         savedFeedback = nil

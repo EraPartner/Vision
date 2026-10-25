@@ -3,11 +3,11 @@ import Observation
 
 /// The inline edit of one payee row: the name and notes inputs.
 public struct PayeeRowEdit: Equatable, Sendable {
-    public let id: Int
+    public let id: RecipientID
     public var name: String
     public var notes: String
 
-    public init(id: Int, name: String, notes: String) {
+    public init(id: RecipientID, name: String, notes: String) {
         self.id = id
         self.name = name
         self.notes = notes
@@ -48,7 +48,7 @@ enum PayeePendingAction {
     /// `undoToast`'s Undo of a status flip: the payee and the status it restores.
     case undoStatus(OpenAPI.Recipient, restore: Bool)
     /// Merge's rule suggestion: Create rule on the primary.
-    case createRule(primaryId: Int, pattern: String, kind: MatchRuleKind)
+    case createRule(primaryId: RecipientID, pattern: String, kind: MatchRuleKind)
 }
 
 /// The state of `/recipients` (RecipientsPage): the server-paged payees table with its View
@@ -376,7 +376,7 @@ public final class RecipientsModel {
     }
 
     /// A drawn row near the end asks for the next page.
-    public func rowAppeared(_ id: Int) async {
+    public func rowAppeared(_ id: RecipientID) async {
         let shown = shownRows
         guard let index = shown.firstIndex(where: { $0.id == id }) else { return }
         let threshold = ServerTablePaging.loadMoreThreshold(pageSize: pageSize)
@@ -420,12 +420,12 @@ public final class RecipientsModel {
 
     /// The inline category combobox: edit mode ends, then the default category is set at
     /// once (`null` for none).
-    public func setDefaultCategory(_ payee: OpenAPI.Recipient, to categoryId: Int?) async {
+    public func setDefaultCategory(_ payee: OpenAPI.Recipient, to categoryId: CategoryID?) async {
         editing = nil
         await update(payee.id, PayeePatch(defaultCategoryId: .some(categoryId)))
     }
 
-    private func update(_ id: Int, _ patch: PayeePatch) async {
+    private func update(_ id: RecipientID, _ patch: PayeePatch) async {
         isUpdating = true
         defer { isUpdating = false }
         do {
@@ -742,7 +742,7 @@ public final class RecipientsModel {
         }
     }
 
-    private func createSuggestedRule(primaryId: Int, pattern: String, kind: MatchRuleKind) async {
+    private func createSuggestedRule(primaryId: RecipientID, pattern: String, kind: MatchRuleKind) async {
         do {
             try await service.createMatchRule(
                 recipientId: primaryId,
@@ -751,7 +751,7 @@ public final class RecipientsModel {
         } catch { post(.error, "recipientPatterns.toast.error") }
     }
 
-    private func restoreStatus(id: Int, active: Bool) async {
+    private func restoreStatus(id: RecipientID, active: Bool) async {
         isTogglingStatus = true
         defer { isTogglingStatus = false }
         do {

@@ -8,9 +8,9 @@ struct NativeSettingsAppearanceTests {
     @Test func requiredPreferenceProjectionUsesSourceDefaultsAndIndependentFieldValidation() {
         let defaults = NativeAppSettings.defaults
         #expect(
-            defaults.startOfWeek == "monday" && defaults.costBasisMethod == "weighted_avg"
-                && defaults.startupSection == "budgeting")
-        #expect(defaults.autoClearPlannedOnMatch && defaults.visualEffects == "standard" && defaults.autoAdaptDisplay)
+            defaults.startOfWeek == .monday && defaults.costBasisMethod == .weightedAvg
+                && defaults.startupSection == .budgeting)
+        #expect(defaults.autoClearPlannedOnMatch && defaults.visualEffects == .standard && defaults.autoAdaptDisplay)
         let projected = NativeAppSettings.migrate(
             .object([
                 "startOfWeek": .string("sunday"), "costBasisMethod": .string("lifo"), "startupSection": .string("last"),
@@ -18,10 +18,10 @@ struct NativeSettingsAppearanceTests {
                 "autoAdaptDisplay": .bool(false),
             ]))
         #expect(
-            projected.startOfWeek == "sunday" && projected.costBasisMethod == "lifo"
-                && projected.startupSection == "last")
+            projected.startOfWeek == .sunday && projected.costBasisMethod == .lifo
+                && projected.startupSection == .last)
         #expect(
-            !projected.autoClearPlannedOnMatch && projected.visualEffects == "enhanced" && !projected.autoAdaptDisplay)
+            !projected.autoClearPlannedOnMatch && projected.visualEffects == .enhanced && !projected.autoAdaptDisplay)
         let malformed = NativeAppSettings.migrate(
             .object([
                 "startOfWeek": .string("Saturday"), "costBasisMethod": .string("average"),
@@ -87,22 +87,22 @@ struct NativeSettingsAppearanceTests {
     }
     @Test func physicalPixelThresholdAndSessionOverrideOnlyApplyUnderActiveCap() {
         var settings = NativeAppSettings.defaults
-        settings.visualEffects = "enhanced"
+        settings.visualEffects = .enhanced
         let boundary = NativeSettingsAppearanceResolver.resolve(
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 6_000_000)
-        #expect(!boundary.isLargeDisplay && boundary.effectiveVisualEffects == "enhanced")
+        #expect(!boundary.isLargeDisplay && boundary.effectiveVisualEffects == .enhanced)
         let capped = NativeSettingsAppearanceResolver.resolve(
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 6_000_001)
-        #expect(capped.isLargeDisplay && capped.effectiveVisualEffects == "reduced")
+        #expect(capped.isLargeDisplay && capped.effectiveVisualEffects == .reduced)
         let override = NativeSettingsAppearanceResolver.resolve(
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400,
-            sessionTierOverride: "standard")
-        #expect(override.effectiveVisualEffects == "standard")
+            sessionTierOverride: .standard)
+        #expect(override.effectiveVisualEffects == .standard)
         settings.autoAdaptDisplay = false
         let uncapped = NativeSettingsAppearanceResolver.resolve(
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400,
-            sessionTierOverride: "reduced")
-        #expect(uncapped.effectiveVisualEffects == "enhanced")
+            sessionTierOverride: .reduced)
+        #expect(uncapped.effectiveVisualEffects == .enhanced)
     }
     @Test func builtInDisplayIsNeverLargeAndUnknownFallsBackToPixels() {
         // A "More Space" MacBook Air mode: 7.06 MP backing store on a built-in panel (ADR-244).
@@ -110,10 +110,10 @@ struct NativeSettingsAppearanceTests {
         #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: false))
         #expect(NativeSettingsAppearanceResolver.isLargeDisplay(physicalPixelCount: 7_056_000, isBuiltIn: nil))
         var settings = NativeAppSettings.defaults
-        settings.visualEffects = "enhanced"
+        settings.visualEffects = .enhanced
         let builtIn = NativeSettingsAppearanceResolver.resolve(
             theme: nil, settings: settings, systemIsDark: true, physicalPixelCount: 8_294_400, isBuiltInDisplay: true)
-        #expect(!builtIn.isLargeDisplay && builtIn.effectiveVisualEffects == "enhanced")
+        #expect(!builtIn.isLargeDisplay && builtIn.effectiveVisualEffects == .enhanced)
     }
 }
 

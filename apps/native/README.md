@@ -21,7 +21,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | -------------------------------------- | ------------------------------------------------------------------------------ |
 | `project.yml`                          | XcodeGen spec for the "Vision Native" app target                               |
 | `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                                      |
-| `VisionNative/`                        | AppKit app, window, menus and the native shell host                           |
+| `VisionNative/`                        | AppKit app, window, menus and the native shell host                            |
 | `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`                          |
 | `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
 | `Sources/VisionNativeCore/Shell/`      | Shell state store, menus, appearance, CSV handoff                              |
@@ -50,6 +50,9 @@ xcodegen generate --spec apps/native/project.yml
 xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
 swift test --package-path apps/native
 ```
+
+`bun run native:test-generators` also runs the Swift ban-list lint (`scripts/native-lint.ts`, ratchet in
+`apps/native/lint-baseline.txt`); annotate a justified exception with `// lint:allow <rule> <reason>`.
 
 ## Install
 
@@ -131,7 +134,7 @@ storage. The window hosts SwiftUI screens, and the backend is reached over HTTP.
 See [the architecture page](../../docs/architecture/native-app.md#native-navigation-and-screens-phase-2).
 
 - `bun run native:generate` regenerates the OpenAPI client (operations listed in
-  `openapi-operations.txt`), the design tokens, the String Catalog (keys listed in
+  `openapi-operations.txt`), its decode fixtures (`Tests/.../Fixtures/api`), the design tokens, the String Catalog (keys listed in
   `i18n-keys.txt`) and the sidebar registry. CI fails when the committed files differ.
 - The window is a `NavigationSplitView`: a native sidebar from `apps/frontend/src/lib/navigation.ts`
   and a detail column with the web view or a native screen. The page reports its route through
@@ -321,8 +324,8 @@ these steps touches Electron Vision or its data.
    Cut, Copy and Paste. Note whether spelling guesses, Learn Spelling and Select All appear; this
    settles rows #203 to #205 of the exit checklist.
 9. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services
-    running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
-    is in the backup folder, and port 54332 is no longer listening.
+   running on quit" off. Quit with `⌘Q`. Expected: the app quits within 45 seconds, a new bundle
+   is in the backup folder, and port 54332 is no longer listening.
 10. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
     canonical Demo data is back.
 11. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF

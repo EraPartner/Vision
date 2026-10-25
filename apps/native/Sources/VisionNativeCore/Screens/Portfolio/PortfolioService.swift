@@ -1,13 +1,14 @@
 import Foundation
 
 public protocol PortfolioService: PortfolioWidgetService {
-    func portfolioSummary(currency: String, includeArchived: Bool) async throws -> PortfolioSummaryData
+    func portfolioSummary(currency: CurrencyCode, includeArchived: Bool) async throws -> PortfolioSummaryData
     func portfolioInvestments(limit: Int, offset: Int) async throws -> PortfolioPage<PortfolioInvestment>
-    func portfolioTransactions(id: Int, limit: Int, offset: Int) async throws -> PortfolioPage<PortfolioTransaction>
+    func portfolioTransactions(id: InvestmentID, limit: Int, offset: Int) async throws
+        -> PortfolioPage<PortfolioTransaction>
     func portfolioAccounts() async throws -> [OpenAPI.Account]
-    func portfolioPerformance(currency: String, period: PortfolioPeriod) async throws -> PortfolioPerformanceData
-    func portfolioBrokerPerformance(currency: String) async throws -> PortfolioBrokerPerformance
-    func portfolioExposure(currency: String) async throws -> PortfolioExposureData
+    func portfolioPerformance(currency: CurrencyCode, period: PortfolioPeriod) async throws -> PortfolioPerformanceData
+    func portfolioBrokerPerformance(currency: CurrencyCode) async throws -> PortfolioBrokerPerformance
+    func portfolioExposure(currency: CurrencyCode) async throws -> PortfolioExposureData
     func portfolioQuotes(symbols: [String]) async throws -> [PortfolioQuote]
     func portfolioNews(symbols: [String]) async throws -> [PortfolioNewsArticle]
     func portfolioRefreshPrices() async throws -> PortfolioPriceRefresh
@@ -16,8 +17,8 @@ public protocol PortfolioService: PortfolioWidgetService {
 }
 
 extension APIClient: PortfolioService {
-    public func portfolioSummary(currency: String, includeArchived: Bool) async throws -> PortfolioSummaryData {
-        var query = [URLQueryItem(name: "currency", value: currency)]
+    public func portfolioSummary(currency: CurrencyCode, includeArchived: Bool) async throws -> PortfolioSummaryData {
+        var query = [URLQueryItem(name: "currency", value: currency.rawValue)]
         if includeArchived { query.append(.init(name: "active", value: "false")) }
         return try await send(
             InsightRequest<OpenAPIOperations.GetPortfolioSummary, PortfolioSummaryData>(
@@ -33,7 +34,7 @@ extension APIClient: PortfolioService {
                     .init(name: "active", value: "false"),
                 ]))
     }
-    public func portfolioTransactions(id: Int, limit: Int, offset: Int) async throws -> PortfolioPage<
+    public func portfolioTransactions(id: InvestmentID, limit: Int, offset: Int) async throws -> PortfolioPage<
         PortfolioTransaction
     > {
         try await send(
@@ -46,24 +47,26 @@ extension APIClient: PortfolioService {
     public func portfolioAccounts() async throws -> [OpenAPI.Account] {
         try await send(OpenAPIOperations.GetAccounts(active: "all")).items
     }
-    public func portfolioPerformance(currency: String, period: PortfolioPeriod) async throws -> PortfolioPerformanceData
+    public func portfolioPerformance(currency: CurrencyCode, period: PortfolioPeriod) async throws
+        -> PortfolioPerformanceData
     {
         try await send(
             InsightRequest<OpenAPIOperations.GetPortfolioPerformance, PortfolioPerformanceData>(
                 OpenAPIOperations.GetPortfolioPerformance(),
                 query: [
-                    .init(name: "currency", value: currency), .init(name: "period", value: period.rawValue),
+                    .init(name: "currency", value: currency.rawValue), .init(name: "period", value: period.rawValue),
                 ]))
     }
-    public func portfolioBrokerPerformance(currency: String) async throws -> PortfolioBrokerPerformance {
+    public func portfolioBrokerPerformance(currency: CurrencyCode) async throws -> PortfolioBrokerPerformance {
         try await send(
             InsightRequest<OpenAPIOperations.GetPortfolioPerformanceByBroker, PortfolioBrokerPerformance>(
-                OpenAPIOperations.GetPortfolioPerformanceByBroker(), query: [.init(name: "currency", value: currency)]))
+                OpenAPIOperations.GetPortfolioPerformanceByBroker(),
+                query: [.init(name: "currency", value: currency.rawValue)]))
     }
-    public func portfolioExposure(currency: String) async throws -> PortfolioExposureData {
+    public func portfolioExposure(currency: CurrencyCode) async throws -> PortfolioExposureData {
         try await send(
             InsightRequest<OpenAPIOperations.GetPortfolioExposure, PortfolioExposureData>(
-                OpenAPIOperations.GetPortfolioExposure(), query: [.init(name: "currency", value: currency)]))
+                OpenAPIOperations.GetPortfolioExposure(), query: [.init(name: "currency", value: currency.rawValue)]))
     }
     public func portfolioQuotes(symbols: [String]) async throws -> [PortfolioQuote] {
         guard !symbols.isEmpty else { return [] }
@@ -94,6 +97,7 @@ extension APIClient: PortfolioService {
     }
     public func savePortfolioWidgets(value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(
-            OpenAPIOperations.SaveSetting(key: "widget_visibility", body: .init(value: value, expected: expected)))
+            OpenAPIOperations.SaveSetting(
+                key: "widget_visibility", body: .init(value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }

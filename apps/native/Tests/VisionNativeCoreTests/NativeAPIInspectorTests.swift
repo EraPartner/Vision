@@ -10,7 +10,7 @@ private struct ScriptedTransport: APITransport {
 
 @MainActor @Suite struct NativeAPIInspectorTests {
     private func event(
-        _ id: String, _ phase: APIInspectorEvent.Phase, method: String = "GET", endpoint: String = "/api/a",
+        _ id: String, _ phase: APIInspectorEvent.Phase, method: HTTPMethod = .get, endpoint: String = "/api/a",
         duration: Double? = nil, status: Int? = nil, attempt: Int = 0
     ) -> APIInspectorEvent {
         .init(
@@ -32,7 +32,7 @@ private struct ScriptedTransport: APITransport {
     @Test func theFilterMatchesEndpointOrMethodCaseInsensitively() {
         let model = NativeAPIInspectorModel()
         model.record(event("a", .success, endpoint: "/api/transactions", duration: 1, status: 200))
-        model.record(event("b", .success, method: "POST", endpoint: "/api/tags", duration: 1, status: 201))
+        model.record(event("b", .success, method: .post, endpoint: "/api/tags", duration: 1, status: 201))
         model.filter = "TRANS"
         #expect(model.visibleEvents.map(\.requestId) == ["a"])
         model.filter = "post"
@@ -45,7 +45,7 @@ private struct ScriptedTransport: APITransport {
             model.record(event("g\(index)", .success, duration: duration, status: 200))
         }
         model.record(event("e", .error, endpoint: "/api/a", duration: 5, status: 500))
-        model.record(event("m", .success, method: "PATCH", endpoint: "/api/b", duration: 3, status: 200))
+        model.record(event("m", .success, method: .patch, endpoint: "/api/b", duration: 3, status: 200))
         #expect(model.totalRequests == 7)
         #expect(abs(model.errorRate - 1.0 / 7.0) < 1e-9)
         #expect(model.slowRequests.map(\.requestId) == ["g4"])

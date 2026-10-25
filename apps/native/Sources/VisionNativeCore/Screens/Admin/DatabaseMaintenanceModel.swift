@@ -64,11 +64,11 @@ public enum TableChange: Equatable, Sendable {
     case update(pk: [String: JSONValue], xmin: JSONValue?, set: [String: JSONValue])
     case delete(pk: [String: JSONValue], xmin: JSONValue?)
 
-    public var op: String {
+    public var op: OpenAPIOperations.AdminMutateTableRows.Body.ChangesItem.Op {
         switch self {
-        case .insert: return "insert"
-        case .update: return "update"
-        case .delete: return "delete"
+        case .insert: return .insert
+        case .update: return .update
+        case .delete: return .delete
         }
     }
 
@@ -78,9 +78,20 @@ public enum TableChange: Equatable, Sendable {
         case .insert(let values):
             return .init(op: op, values: .object(values))
         case .update(let pk, let xmin, let set):
-            return .init(op: op, pk: .object(pk), set: .object(set), xmin: xmin)
+            return .init(op: op, pk: .object(pk), set: .object(set), xmin: Self.token(xmin))
         case .delete(let pk, let xmin):
-            return .init(op: op, pk: .object(pk), xmin: xmin)
+            return .init(op: op, pk: .object(pk), xmin: Self.token(xmin))
+        }
+    }
+
+    /// The optimistic-concurrency token as the request's string-or-number; any other JSON kind
+    /// is no token.
+    private static func token(_ xmin: JSONValue?) -> OpenAPIOperations.AdminMutateTableRows.Body.ChangesItem.Xmin? {
+        switch xmin {
+        case .int(let number): return .number(Decimal(number))
+        case .double(let number): return .number(Decimal(number))
+        case .string(let text): return .string(text)
+        default: return nil
         }
     }
 }

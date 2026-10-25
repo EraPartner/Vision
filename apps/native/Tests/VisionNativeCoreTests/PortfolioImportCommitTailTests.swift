@@ -32,13 +32,13 @@ struct PortfolioImportCommitTailTests {
         }
         await Task.yield()
         #expect(!drained && !secondDrained)
-        #expect(try store.savedStatements().map(\.status) == ["staged"])
+        #expect(try store.savedStatements().map(\.status) == [.staged])
         receipt.release()
         await store.checkpoint.waitUntilHeld()
         await commit.value
         #expect(!drained && !secondDrained)
         #expect(model.result?.imported == 1)
-        #expect(try store.savedStatements().map(\.status) == ["staged"])
+        #expect(try store.savedStatements().map(\.status) == [.staged])
         store.checkpoint.release()
         await drain.value
         await second.value

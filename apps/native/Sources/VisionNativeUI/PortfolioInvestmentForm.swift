@@ -2,20 +2,39 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioInvestmentForm: View {
+    /// The focus and scroll id of the free-text field, which issues can target.
+    private static let notesField = "notes"
+    /// `AddInvestmentDialog`'s panel: the form lays out its own header, scroll area and footer.
+    static let metrics = VisionDialogMetrics(
+        maxWidth: 512, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
+    /// The asset-type step is `DialogContent className="sm:max-w-lg"` around a two-column grid: the
+    /// default padded panel sized to its content, with no footer.
+    static let typeStepMetrics = VisionDialogMetrics(maxWidth: 512)
+    static func metrics(for draft: PortfolioInvestmentDraft?) -> VisionDialogMetrics {
+        guard let draft, draft.isChoosingType || (!draft.isEditing && draft.assetClass == nil) else { return metrics }
+        return typeStepMetrics
+    }
     let model: PortfolioEditingModel
     let shell: NativeShellModel
-    @State private var selectingType = false
     @FocusState private var focused: String?
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var draft: PortfolioInvestmentDraft? { model.investmentDraft }
     private var isEditing: Bool { draft?.isEditing ?? false }
-    private var typeSelection: Bool { !isEditing && (selectingType || draft?.assetClass.isEmpty == true) }
-    private var unitBased: Bool { PortfolioAssetKinds.unitBased(draft?.assetClass ?? "") }
-    private var currencies: [String] {
-        let choices = ["EUR", "USD", "GBP", "CHF", "SAR", "BTC"]
+    private var typeSelection: Bool { !isEditing && (draft.map { $0.isChoosingType || $0.assetClass == nil } == true) }
+    private var unitBased: Bool { draft?.assetClass.map(PortfolioAssetKinds.unitBased) ?? false }
+    private var currencies: [CurrencyCode] {
+        let choices = ["EUR", "USD", "GBP", "CHF", "SAR", "BTC"].map(PortfolioCurrency.code)
         guard let current = draft?.currency, !choices.contains(current) else { return choices }
         return choices + [current]
+    }
+    private var currencySelection: Binding<CurrencyCode> {
+        Binding(
+            get: { draft?.currency ?? .eur },
+            set: {
+                model.investmentDraft?.currency = $0
+                model.clearIssue()
+            })
     }
     private func text(_ path: WritableKeyPath<PortfolioInvestmentDraft, String>, field: String = "") -> Binding<
         String
@@ -28,39 +47,61 @@ struct PortfolioInvestmentForm: View {
             })
     }
     var body: some View {
+        Group {
+            if typeSelection {
+                typeStep
+            } else {
+                detailsStep
+            }
+        }
+        .disabled(model.isSaving).visionInteractiveDismissDisabled(model.isSaving)
+        .task { await model.loadOptions() }
+    }
+    private var header: some View {
+        VisionDialogHeader(
+            title: isEditing
+                ? strings.t("invEdit.title")
+                : (typeSelection
+                    ? strings.t("addInv.chooseType")
+                    : strings.t(
+                        "addInv.assetTitle",
+                        ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass?.rawValue ?? ""))])),
+            description: typeSelection ? strings.t("addInv.chooseTypeDesc") : nil,
+            closeLabel: strings.t("common.close"), onClose: { model.dismissEditor() }
+        )
+        .keyboardShortcut(.cancelAction)
+    }
+    /// `AssetTypeSelector`: `grid grid-cols-2 gap-3` of outline tiles with an icon chip, the label
+    /// and a two-line description.
+    private var typeStep: some View {
+        VStack(alignment: .leading, spacing: CGFloat(DesignTokens.Overlay.dialogGap)) {
+            header
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12
+            ) {
+                ForEach(draft?.allowedAssetClasses ?? [], id: \.self) { value in
+                    PortfolioAssetTypeTile(
+                        title: strings.t("portfolio.assetClass." + value.rawValue),
+                        detail: strings.t("addInv.desc." + value.rawValue),
+                        symbol: value == .etf ? "chart.bar" : PortfolioOverviewAsset.symbol(value)
+                    ) {
+                        model.investmentDraft?.selectAssetClass(value)
+                    }
+                }
+            }
+            if let error = model.error {
+                Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
+            }
+        }
+    }
+    private var detailsStep: some View {
         VStack(spacing: 0) {
-            VisionDialogHeader(
-                title: isEditing
-                    ? strings.t("invEdit.title")
-                    : (typeSelection
-                        ? strings.t("addInv.chooseType")
-                        : strings.t(
-                            "addInv.assetTitle",
-                            ["assetClass": strings.t("portfolio.assetClass." + (draft?.assetClass ?? ""))])),
-                description: typeSelection ? strings.t("addInv.chooseTypeDesc") : nil,
-                closeLabel: strings.t("common.close"), onClose: { model.dismissEditor() }
-            )
-            .keyboardShortcut(.cancelAction)
+            header
             .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 20)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if typeSelection {
-                            ForEach(draft?.allowedAssetClasses ?? [], id: \.self) { value in
-                                Button {
-                                    model.investmentDraft?.selectAssetClass(value)
-                                    selectingType = false
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text(strings.t("portfolio.assetClass." + value)).font(.headline)
-                                        Text(strings.t("addInv.desc." + value)).font(.callout).foregroundStyle(
-                                            theme.secondaryLabel)
-                                    }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                                }.buttonStyle(.visionOutline)
-                            }
-                        } else {
-                            fields
-                        }
+                        fields
                         if let error = model.error {
                             Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
                         }
@@ -76,7 +117,7 @@ struct PortfolioInvestmentForm: View {
             Divider()
             HStack(spacing: 8) {
                 if !isEditing && !typeSelection && (draft?.allowedAssetClasses.count ?? 0) > 1 {
-                    Button(strings.t("addInv.back")) { selectingType = true }.buttonStyle(.visionOutline)
+                    Button(strings.t("addInv.back")) { model.investmentDraft?.isChoosingType = true }.buttonStyle(.visionOutline)
                 }
                 Spacer(minLength: 0)
                 if model.isSaving { ProgressView().controlSize(.small) }
@@ -86,21 +127,21 @@ struct PortfolioInvestmentForm: View {
                         .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                 }
             }
-            .controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
-        }.frame(width: 512, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
-            .task { await model.loadOptions() }
+            .padding(.horizontal, 24).padding(.vertical, 16)
+        }
     }
-    private var fixedIncome: Bool { PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "") }
-    private var realEstate: Bool { draft?.assetClass == "real_estate" }
+    private var fixedIncome: Bool { draft?.assetClass.map(PortfolioAssetKinds.fixedIncome) ?? false }
+    private var realEstate: Bool { draft?.assetClass == .realEstate }
     /// `InvestmentFormFields` order: identity, class fields, initial purchase, price source, notes.
     @ViewBuilder private var fields: some View {
         field("addInv.label.name", \.name, "name")
         if unitBased { field("addInv.label.ticker", \.symbol, "symbol", monospaced: true) }
         VStack(alignment: .leading, spacing: 6) {
             fieldLabel("addInv.label.currency")
-            Picker(strings.t("addInv.label.currency"), selection: text(\.currency)) {
-                ForEach(currencies, id: \.self) { Text($0).tag($0) }
-            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+            VisionSelect(
+                selection: currencySelection,
+                options: currencies.map { VisionSelectOption(value: $0, title: $0.rawValue) },
+                accessibilityLabel: strings.t("addInv.label.currency"), expands: true)
         }
         if !isEditing {
             if fixedIncome {
@@ -118,21 +159,15 @@ struct PortfolioInvestmentForm: View {
         if isEditing || unitBased {
             Divider()
             PortfolioProviderFields(model: model, shell: shell)
-            if unitBased && draft?.provider.provider == "manual" {
+            if unitBased && draft?.provider.provider == .manual {
                 field("addInv.label.currentPrice", \.currentPrice, "currentPrice")
             }
         }
         if !isEditing {
             VStack(alignment: .leading, spacing: 5) {
                 fieldLabel("addInv.label.notes")
-                TextEditor(text: text(\.notes, field: "notes")).frame(minHeight: 64).focused($focused, equals: "notes")
-                    .scrollContentBackground(.hidden).padding(6)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                TextEditor(text: text(\.notes, field: "notes")).focused($focused, equals: Self.notesField)
+                    .visionTextEditor(isFocused: focused == Self.notesField)
                     .accessibilityLabel(strings.t("addInv.label.notes"))
             }.id("notes")
         }
@@ -150,7 +185,7 @@ struct PortfolioInvestmentForm: View {
             isOn: Binding(
                 get: { draft?.addInitialPurchase ?? false }, set: { model.investmentDraft?.addInitialPurchase = $0 }
             )
-        ).toggleStyle(.switch)
+        ).toggleStyle(.visionSwitch)
         Text(
             strings.t(
                 "addInv.initial.desc",
@@ -241,4 +276,46 @@ struct PortfolioInvestmentForm: View {
         Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
     }
     private func save() { Task { await model.saveEditor(strings: strings) } }
+}
+
+
+/// One `AssetTypeSelector` tile: an outline card (`rounded-card p-4 gap-2`, `hover:border-primary/60
+/// hover:bg-primary/[0.06]`) with a 40 pt `bg-primary/12` icon chip, the label and a two-line
+/// description.
+private struct PortfolioAssetTypeTile: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let action: () -> Void
+    @Environment(\.visionTheme) private var theme
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: CGFloat(DesignTokens.Radius.card), style: .continuous)
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 20)).foregroundStyle(theme.primary).accessibilityHidden(true)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
+                            .fill(theme.primary.opacity(0.12)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
+                    Text(detail).font(.caption).foregroundStyle(theme.secondaryLabel).lineLimit(2)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+            .background(shape.fill(hovering ? theme.primary.opacity(0.06) : Color(token: theme.palette.background, opacity: 0.8)))
+            .overlay(
+                shape.strokeBorder(
+                    hovering ? theme.primary.opacity(0.6) : Color(token: theme.palette.input, opacity: 0.7),
+                    lineWidth: VisionControlMetrics.borderWidth)
+            )
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain).onHover { hovering = $0 }
+        .accessibilityElement(children: .combine)
+    }
 }

@@ -83,7 +83,7 @@ public struct ShellUpcomingPaymentsBanner: View {
         let title =
             [row.memo, row.recipientName].compactMap { $0 }.first { !$0.isEmpty }
             ?? shell.strings.t("upcoming.unnamed")
-        let currency = row.currency.flatMap { $0.isEmpty ? nil : $0 } ?? shell.settings.defaultCurrency
+        let currency = row.currency ?? shell.settings.defaultCurrency
         return HStack(spacing: 8) {
             Text(verbatim: title).fontWeight(.medium)
             Spacer(minLength: 0)

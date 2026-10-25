@@ -103,9 +103,9 @@ extension APIClient: NativeSidebarBadgeService {
     private func loadInsights() async {
         insightsReadAt = now()
         guard let value = try? await service.sidebarInsightsCount() else { return }
-        insightsPending = value.status == "pending"
+        insightsPending = value.status == .pending
         // Only a ready projection shows a count; pending never exposes a stale one.
-        insights = value.status == "ready" ? max(0, value.count ?? 0) : 0
+        insights = value.status == .ready ? max(0, value.count ?? 0) : 0
     }
 
     private func loadMonitors() async {

@@ -21,13 +21,21 @@ struct VisionBadge: View {
     var tone: BadgeTone = .secondary
     /// `size="sm"`: `px-2 py-0.5`.
     var small = false
+    /// `className="font-mono"`: tickers and other identifiers.
+    var monospaced = false
+    /// A leading 12 pt SF Symbol (`<Icon className="h-3 w-3" />` with `gap-1.5`).
+    var symbol: String?
     @Environment(\.visionTheme) var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
-        Text(text)
-            .font(VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote))
+        label
+            .font(
+                monospaced
+                    ? Font.system(size: CGFloat(DesignTokens.Typography.footnote.size), weight: .medium, design: .monospaced)
+                    : VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote)
+            )
             .lineLimit(1)
             .padding(.horizontal, small ? 8 : 10)
             .padding(.vertical, 2)
@@ -37,6 +45,20 @@ struct VisionBadge: View {
             .visionFocusRing(in: Capsule())
             .animation(VisionControlMetrics.fastTransition(reduceMotion: reduceMotion), value: hovering)
             .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder
+    private var label: some View {
+        if let symbol {
+            HStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .accessibilityHidden(true)
+                Text(text)
+            }
+        } else {
+            Text(text)
+        }
     }
 
     private var foreground: Color {

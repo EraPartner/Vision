@@ -166,7 +166,7 @@ struct ResearchSymbolSearchView: View {
             }.frame(height: popupHeight)
                 .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
                 .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border))
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                .visionElevation(DesignTokens.Elevation.level3)
                 .onChange(of: selected) { _, index in if let index { proxy.scrollTo(index, anchor: .center) } }
         }
     }
@@ -184,7 +184,7 @@ struct ResearchSymbolSearchView: View {
                 Text(exchange).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
         }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? theme.foreground.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .background(selected ? theme.foreground.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
     }
     private func move(_ direction: Int) -> KeyPress.Result {
         guard isOpen, !isUnavailable, !navigable.isEmpty else { return .ignored }
@@ -228,7 +228,7 @@ struct ResearchNewsCard: View {
                     VStack(spacing: 16) {
                         ForEach(0..<6, id: \.self) { _ in
                             HStack(spacing: 12) {
-                                RoundedRectangle(cornerRadius: 6).fill(theme.muted).frame(width: 96, height: 64)
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).fill(theme.muted).frame(width: 96, height: 64)
                                 VStack(alignment: .leading, spacing: 8) {
                                     RoundedRectangle(cornerRadius: 3).fill(theme.muted).frame(height: 12)
                                     RoundedRectangle(cornerRadius: 3).fill(theme.muted).frame(width: 160, height: 10)
@@ -306,7 +306,7 @@ private struct ResearchNewsRow: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6)
             .background(
-                interactive && hovered ? theme.foreground.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                interactive && hovered ? theme.foreground.opacity(0.04) : .clear, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.chip))
     }
     private func relative(_ milliseconds: Decimal) -> String {
         let locale = LanguageLocale.locale(shell.strings.language)
@@ -332,9 +332,9 @@ struct ResearchRemoteThumbnail: View {
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill().frame(width: 96, height: 64).clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.chip))
             case .empty:
-                RoundedRectangle(cornerRadius: 6).fill(theme.muted).frame(width: 96, height: 64)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).fill(theme.muted).frame(width: 96, height: 64)
             case .failure: EmptyView()
             @unknown default: EmptyView()
             }
@@ -358,7 +358,7 @@ struct ResearchProvenanceBadge: View {
                 Text(shell.strings.t(meta.source == "cache" ? "research.source.cache" : "research.source.live"))
                 if let provider = meta.provider { Text("· " + provider) }
             }.font(.caption).foregroundStyle(theme.secondaryLabel).padding(.horizontal, 7).padding(.vertical, 4)
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border))
+                .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).stroke(theme.border))
         }
     }
 }

@@ -25,8 +25,23 @@ public struct PortfolioPriceRefreshReceipt: Equatable, Sendable {
         self.offline = offline
     }
 }
+/// The broker the holdings table is narrowed to: every holding, the holdings not assigned to a
+/// broker, or one broker account.
+public enum PortfolioBrokerFilter: Hashable, Sendable {
+    case all
+    case unassigned
+    case account(AccountID)
+
+    /// The account whose server totals the filter selects; `nil` for the unassigned holdings (and
+    /// for `.all`, which `isAll` tells apart).
+    var selectedAccount: AccountID? {
+        if case .account(let id) = self { return id }
+        return nil
+    }
+    public var isAll: Bool { self == .all }
+}
 public struct PortfolioBrokerOption: Equatable, Sendable, Identifiable {
-    public let id: String
+    public let id: PortfolioBrokerFilter
     public let name: String
 }
 public struct PortfolioBrokerSubtotal: Equatable, Sendable {
@@ -74,17 +89,17 @@ public final class PortfolioModel {
     public private(set) var isQuotesLoading = false
     public private(set) var isNewsLoading = false
     public private(set) var isExposureLoading = false
-    public private(set) var currency = "EUR"
+    public private(set) var currency = PortfolioCurrency.eur
     public var period: PortfolioPeriod = .all
     public var showFxNeutral = false
-    public var brokerFilter = "all"
+    public var brokerFilter = PortfolioBrokerFilter.all
     public var sort: PortfolioHoldingsSort = .value
     public var tableQuery = LocalTableQuery()
     public var isOnline = true
     public let widgets: PortfolioWidgetsModel
-    public private(set) var selectedInvestmentId: Int?
+    public private(set) var selectedInvestmentId: InvestmentID?
     public private(set) var transactions: [PortfolioTransaction] = []
-    public private(set) var historyInvestmentId: Int?
+    public private(set) var historyInvestmentId: InvestmentID?
     public private(set) var historyLoading = false
     public private(set) var historyComplete = false
     public private(set) var historyVersion = 0
@@ -106,19 +121,19 @@ public final class PortfolioModel {
     /// the active ones: dated FX and the configured cost-basis method (`useAllHoldingsSummaryQuery`).
     public var archived: [PortfolioHolding] { archiveSummary?.summaries.filter { !$0.isActive } ?? [] }
     /// `findHoldingTotals`: the server totals of an asset page's classes.
-    public func holdingTotals(assetClasses: [String]) -> PortfolioHoldingTotals {
+    public func holdingTotals(assetClasses: [OpenAPI.AssetClass]) -> PortfolioHoldingTotals {
         summary?.holdingTotals(assetClasses: assetClasses) ?? .empty
     }
     public var selectedInvestment: PortfolioHolding? { (active + archived).first { $0.id == selectedInvestmentId } }
     public var firstInvestmentDate: String? { summary?.firstInvestmentDate }
-    public func investment(id: Int) -> PortfolioInvestment? {
+    public func investment(id: InvestmentID) -> PortfolioInvestment? {
         guard error == nil else { return nil }
         return investments.first { $0.id == id }
     }
     public var quoteSymbols: [String] {
         Array(
             Set(
-                investments.filter { $0.isActive && $0.priceProvider == "yahoo" && $0.showInTicker != false }.compactMap
+                investments.filter { $0.isActive && $0.priceProvider == .yahoo && $0.showInTicker != false }.compactMap
                 {
                     let identity = $0.priceProviderId.flatMap { $0.isEmpty ? nil : $0 } ?? $0.symbol ?? ""
                     let symbol = identity.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -132,7 +147,7 @@ public final class PortfolioModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var loadedAt: [String: Date] = [:]
     @ObservationIgnored private var performanceCache: [String: PortfolioPerformanceData] = [:]
-    @ObservationIgnored private var historyCache: [Int: (Date, [PortfolioTransaction])] = [:]
+    @ObservationIgnored private var historyCache: [InvestmentID: (Date, [PortfolioTransaction])] = [:]
     @ObservationIgnored private var context: String?
     @ObservationIgnored private var revision = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -163,21 +178,22 @@ public final class PortfolioModel {
         let ids = Set((summary?.accountTotals ?? []).compactMap(\.accountId))
         var result = ids.map { id in
             PortfolioBrokerOption(
-                id: String(id), name: accounts.first { $0.id == id }.map { $0.displayName ?? $0.name } ?? "#\(id)")
+                id: .account(id),
+                name: accounts.first { $0.id == id }.map { $0.displayName ?? $0.name } ?? "#\(id)")
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         if (summary?.accountTotals ?? []).contains(where: { $0.accountId == nil }) {
-            result.append(PortfolioBrokerOption(id: "unassigned", name: ""))
+            result.append(PortfolioBrokerOption(id: .unassigned, name: ""))
         }
         return result
     }
     public func metrics(for holding: PortfolioHolding) -> PortfolioBrokerSubtotal {
-        if brokerFilter == "all" {
+        if brokerFilter.isAll {
             return .init(
                 currentValue: holding.currentValue, totalInvested: holding.totalInvested, gainLoss: holding.gainLoss,
                 oversold: holding.oversold, providedReturnPercent: holding.gainLossPercent)
         }
         // The server's per-account total of this holding (ADR-216); the page only picks the row.
-        let account = brokerFilter == "unassigned" ? nil : Int(brokerFilter)
+        let account = brokerFilter.selectedAccount
         guard let row = holding.accountTotals.first(where: { $0.accountId == account }) else {
             return .init(currentValue: 0, totalInvested: 0, gainLoss: 0, oversold: false)
         }
@@ -185,36 +201,30 @@ public final class PortfolioModel {
             currentValue: row.currentValue, totalInvested: row.totalInvested, gainLoss: row.gainLoss,
             oversold: row.oversold)
     }
-    public var filteredHoldings: [PortfolioHolding] { holdings(assetClass: nil) }
+    public var filteredHoldings: [PortfolioHolding] { holdings(assetClasses: nil) }
     /// The holdings and P/L subtotals of the footer: the summary totals, or the selected broker
     /// account's server total, never a sum of the visible rows.
     public var brokerSubtotal: PortfolioBrokerSubtotal {
-        guard brokerFilter != "all" else {
+        guard !brokerFilter.isAll else {
             let totals = summary?.totals
             return .init(
                 currentValue: totals?.totalPortfolioValue ?? 0, totalInvested: totals?.totalInvested ?? 0,
                 gainLoss: totals?.totalGainLoss ?? 0, oversold: false)
         }
-        let account = brokerFilter == "unassigned" ? nil : Int(brokerFilter)
-        guard Int(brokerFilter) != nil || brokerFilter == "unassigned",
-            let row = summary?.accountTotals.first(where: { $0.accountId == account })
+        let account = brokerFilter.selectedAccount
+        guard let row = summary?.accountTotals.first(where: { $0.accountId == account })
         else { return .init(currentValue: 0, totalInvested: 0, gainLoss: 0, oversold: false) }
         return .init(
             currentValue: row.currentValue, totalInvested: row.totalInvested, gainLoss: row.gainLoss,
             oversold: row.oversold)
     }
-    public func holdings(assetClass: String?) -> [PortfolioHolding] {
+    /// The active holdings of these asset classes (`nil`: every class) in the selected broker.
+    public func holdings(assetClasses: Set<OpenAPI.AssetClass>?) -> [PortfolioHolding] {
         var rows = active.filter { holding in
-            guard
-                assetClass == nil || holding.assetClass == assetClass
-                    || assetClass == "stocks" && ["stock", "etf"].contains(holding.assetClass)
-                    || assetClass == "savings" && ["savings", "bond"].contains(holding.assetClass)
-            else { return false }
-            if brokerFilter == "all" { return true }
-            guard brokerFilter == "unassigned" || Int(brokerFilter) != nil else { return false }
-            return holding.accountTotals.contains {
-                $0.accountId == (brokerFilter == "unassigned" ? nil : Int(brokerFilter))
-            }
+            guard assetClasses?.contains(holding.assetClass) ?? true else { return false }
+            if brokerFilter.isAll { return true }
+            let account = brokerFilter.selectedAccount
+            return holding.accountTotals.contains { $0.accountId == account }
         }
         rows.sort { a, b in
             let first = metrics(for: a)
@@ -256,16 +266,16 @@ public final class PortfolioModel {
         isNewsLoading = false
         isExposureLoading = false
     }
-    public func load(currency: String, route: NativeRoute, force: Bool = false) async {
+    public func load(currency: CurrencyCode, route: NativeRoute, force: Bool = false) async {
         showFxNeutral = route.value("fx_neutral") == "true"
         await load(
             currency: currency, period: PortfolioPeriod(rawValue: route.value("period") ?? "") ?? .all, force: force)
     }
-    public func load(currency: String, force: Bool = false) async {
+    public func load(currency: CurrencyCode, force: Bool = false) async {
         await load(currency: currency, period: period, force: force)
     }
-    public func load(currency: String, period: PortfolioPeriod, force: Bool = false) async {
-        let key = currency + "|" + period.rawValue
+    public func load(currency: CurrencyCode, period: PortfolioPeriod, force: Bool = false) async {
+        let key = currency.rawValue + "|" + period.rawValue
         if currency != self.currency {
             invalidate()
             summary = nil
@@ -309,8 +319,8 @@ public final class PortfolioModel {
         let service = service
         let currency = currency
         let period = period
-        let performanceKey = currency + "|" + period.rawValue
-        let sparkKey = currency + "|1m"
+        let performanceKey = currency.rawValue + "|" + period.rawValue
+        let sparkKey = currency.rawValue + "|1m"
         let loadSummary = needs("summary", ttl: 30, force: force)
         async let summaryResult =
             loadSummary
@@ -399,7 +409,7 @@ public final class PortfolioModel {
             errors.removeValue(forKey: key)
         } catch { errors[key] = error.localizedDescription }
     }
-    private func validate(_ currency: String, expected: String) throws {
+    private func validate(_ currency: CurrencyCode, expected: CurrencyCode) throws {
         if currency != expected { throw invalid("Wrong portfolio reporting currency") }
     }
     private func invalid(_ message: String) -> APIError {
@@ -493,12 +503,12 @@ public final class PortfolioModel {
         await load(currency: currency, period: period, force: true)
         if let selected { _ = await loadHistory(investmentId: selected) }
     }
-    public func openDetail(id: Int) async {
+    public func openDetail(id: InvestmentID) async {
         selectedInvestmentId = id
         _ = await loadHistory(investmentId: id)
     }
     public func closeDetail() { selectedInvestmentId = nil }
-    public func independentHistory(investmentId: Int) async throws -> [PortfolioTransaction] {
+    public func independentHistory(investmentId: InvestmentID) async throws -> [PortfolioTransaction] {
         if let (date, rows) = historyCache[investmentId], now().timeIntervalSince(date) < 120 { return rows }
         let version = historyVersion
         let rows = try await Self.completeHistory(service: service, investmentId: investmentId)
@@ -506,7 +516,7 @@ public final class PortfolioModel {
         historyCache[investmentId] = (now(), rows)
         return rows
     }
-    @discardableResult public func loadHistory(investmentId: Int) async -> Bool {
+    @discardableResult public func loadHistory(investmentId: InvestmentID) async -> Bool {
         if historyInvestmentId == investmentId, let historyTask { return await historyTask.value }
         historyTask?.cancel()
         historyTask = nil
@@ -546,12 +556,12 @@ public final class PortfolioModel {
         }
         return complete
     }
-    public nonisolated static func completeHistory(service: any PortfolioService, investmentId: Int) async throws
-        -> [PortfolioTransaction]
+    public nonisolated static func completeHistory(service: any PortfolioService, investmentId: InvestmentID)
+        async throws -> [PortfolioTransaction]
     {
         var items: [PortfolioTransaction] = []
         var total: Int?
-        var seen: Set<Int> = []
+        var seen: Set<PortfolioTransactionID> = []
         repeat {
             try Task.checkCancellation()
             let page = try await service.portfolioTransactions(id: investmentId, limit: 1000, offset: items.count)
@@ -575,7 +585,7 @@ public final class PortfolioModel {
     {
         var items: [PortfolioInvestment] = []
         var total: Int?
-        var seen: Set<Int> = []
+        var seen: Set<InvestmentID> = []
         repeat {
             try Task.checkCancellation()
             let page = try await service.portfolioInvestments(limit: 500, offset: items.count)

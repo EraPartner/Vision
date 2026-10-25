@@ -59,6 +59,7 @@ struct TaxProfileSheet: View {
                     if let error = model.error {
                         Text(verbatim: error).foregroundStyle(theme.destructive)
                         Button(strings.t("common.retry")) { Task { await model.flush() } }
+                            .buttonStyle(.visionOutline)
                     }
                     Group {
                         switch model.step {
@@ -81,9 +82,9 @@ struct TaxProfileSheet: View {
                 Button(strings.t(model.step == .region ? "tax.profile.save" : "common.next")) {
                     Task { _ = await model.next() }
                 }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(model.isSaving)
-            }.controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
-        }.frame(minWidth: 560, idealWidth: 620, minHeight: 620, idealHeight: 780)
-            .foregroundStyle(theme.foreground).interactiveDismissDisabled(true)
+            }.padding(.horizontal, 24).padding(.vertical, 16)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(theme.foreground).visionInteractiveDismissDisabled(true)
             .task { await model.loadCategories() }
     }
 
@@ -127,10 +128,12 @@ struct TaxProfileSheet: View {
     }
     @ViewBuilder var partnerPicker: some View {
         if draft.partners.count > 1 {
-            Picker(strings.t("tax.household.partnerPicker"), selection: $model.selectedPartner) {
-                ForEach(draft.partners.compactMap { $0["id"]?.stringValue }, id: \.self) { id in Text(label(id)).tag(id)
+            VisionSegmentedControl(
+                selection: $model.selectedPartner,
+                options: draft.partners.compactMap { $0["id"]?.stringValue }.map { id in
+                    VisionSegmentOption(value: id, title: label(id))
                 }
-            }.pickerStyle(.segmented)
+            ).accessibilityLabel(strings.t("tax.household.partnerPicker"))
         }
     }
     func number(
@@ -163,15 +166,14 @@ struct TaxProfileSheet: View {
                         if path.first == "home" { $0.set(["home", "mortgageRegion"], nil) }
                     }
                 })
-        ).toggleStyle(.switch)
+        ).toggleStyle(.visionSwitch)
     }
     func choice(
         _ key: String, path: [String], values: [String], prefix: String, suffix: String = "", fallback: String = "",
         labels: [String: String] = [:]
     ) -> some View {
         field(key) {
-            Picker(
-                strings.t(key),
+            VisionSelect(
                 selection: Binding(
                     get: { draft.get(path)?.stringValue ?? fallback },
                     set: { value in
@@ -179,14 +181,22 @@ struct TaxProfileSheet: View {
                             $0.set(path, value.isEmpty ? nil : .string(value))
                             if path.first == "home" { $0.set(["home", "mortgageRegion"], nil) }
                         }
-                    })
-            ) {
-                if fallback.isEmpty { Text(strings.t(labels[""] ?? "common.none")).tag("") }
-                ForEach(values, id: \.self) { value in
-                    Text(strings.t(labels[value] ?? (prefix + value + suffix))).tag(value)
-                }
-            }.labelsHidden()
+                    }),
+                options: choiceOptions(values: values, prefix: prefix, suffix: suffix, fallback: fallback, labels: labels),
+                accessibilityLabel: strings.t(key), expands: true)
         }
+    }
+    func choiceOptions(
+        values: [String], prefix: String, suffix: String, fallback: String, labels: [String: String]
+    ) -> [VisionSelectOption<String>] {
+        var options: [VisionSelectOption<String>] = []
+        if fallback.isEmpty {
+            options.append(VisionSelectOption(value: "", title: strings.t(labels[""] ?? "common.none")))
+        }
+        for value in values {
+            options.append(VisionSelectOption(value: value, title: strings.t(labels[value] ?? (prefix + value + suffix))))
+        }
+        return options
     }
     func date(_ key: String, path: [String], optional: Bool = true) -> some View {
         field(key) {

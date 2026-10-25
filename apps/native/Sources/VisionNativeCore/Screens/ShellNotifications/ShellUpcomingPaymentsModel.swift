@@ -44,7 +44,7 @@ import Observation
         self.now = now
     }
     public static func dismissKey(_ payment: OpenAPI.PlannedTransaction) -> String {
-        "\(payment.id):\(payment.plannedDate.prefix(10))"
+        "\(payment.id.rawValue):\(payment.plannedDate)"
     }
     public func load(force: Bool = false) async {
         guard active else { return }

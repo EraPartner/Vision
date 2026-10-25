@@ -91,7 +91,7 @@ actor PrintStatisticsTransport: APITransport {
 
 actor PrintNetWorthService: NetWorthService {
     private(set) var calls = 0
-    func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+    func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         calls += 1
         var rows: [OpenAPI.NetWorthSnapshot] = []
         for index in 0..<48 {
@@ -101,7 +101,7 @@ actor PrintNetWorthService: NetWorthService {
             let investments: Decimal = Decimal(900 + index)
             let netWorth: Decimal = Decimal(990 + index)
             let row = OpenAPI.NetWorthSnapshot(
-                date: date, liquid: 100, liabilities: 10, investments: investments, netWorth: netWorth)
+                date: fixtureDay(date), liquid: 100, liabilities: 10, investments: investments, netWorth: netWorth)
             rows.append(row)
         }
         let visible: [OpenAPI.NetWorthSnapshot]
@@ -118,7 +118,7 @@ actor PrintNetWorthService: NetWorthService {
             monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
             snapshotsTotal: limit == nil ? nil : 48, snapshotsLimit: limit, snapshotsOffset: offset)
     }
-    func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+    func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
         calls += 1
         return .init(currency: currency, rows: [], total: 0, unconvertedAccountIds: [])
     }

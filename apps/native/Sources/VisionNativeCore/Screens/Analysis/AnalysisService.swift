@@ -9,14 +9,14 @@ public protocol AnalysisService: AnalysisInterchangeService {
         -> AnalysisPivotResult
     func evaluateExtension(_ input: TaxValue) async throws -> AnalysisExtensionOutput
     func analysisSaved(workspace: AnalysisWorkspace?) async throws -> [AnalysisSaved]
-    func analysisSave(id: String?, input: TaxValue) async throws -> AnalysisSaved
-    func analysisRunSaved(id: String) async throws -> AnalysisSaved
-    func analysisDeleteSaved(id: String) async throws
-    func analysisVersions(id: String) async throws -> [AnalysisSavedVersion]
-    func analysisRestore(id: String, version: Int, expectedVersion: Int) async throws -> AnalysisSaved
+    func analysisSave(id: SavedAnalysisID?, input: TaxValue) async throws -> AnalysisSaved
+    func analysisRunSaved(id: SavedAnalysisID) async throws -> AnalysisSaved
+    func analysisDeleteSaved(id: SavedAnalysisID) async throws
+    func analysisVersions(id: SavedAnalysisID) async throws -> [AnalysisSavedVersion]
+    func analysisRestore(id: SavedAnalysisID, version: Int, expectedVersion: Int) async throws -> AnalysisSaved
     func analysisPreviewProposal(_ proposal: AnalysisEditProposal) async throws -> AnalysisProposalPreview
     func analysisApplyProposal(_ proposal: AnalysisEditProposal) async throws -> AnalysisSaved
-    func analysisGenerateProposal(id: String, instruction: String, model: String?) async throws
+    func analysisGenerateProposal(id: SavedAnalysisID, instruction: String, model: String?) async throws
         -> AnalysisProposalPreview
 }
 
@@ -102,29 +102,29 @@ extension APIClient: AnalysisService {
         }
         return result.items
     }
-    public func analysisSave(id: String?, input: TaxValue) async throws -> AnalysisSaved {
+    public func analysisSave(id: SavedAnalysisID?, input: TaxValue) async throws -> AnalysisSaved {
         if let id {
             return try await send(
-                AnalysisRequest(OpenAPIOperations.UpdateSavedAnalysis.self, parameters: ["id": id], body: input))
+                AnalysisRequest(OpenAPIOperations.UpdateSavedAnalysis.self, parameters: ["id": id.rawValue], body: input))
         }
         return try await send(AnalysisRequest(OpenAPIOperations.CreateSavedAnalysis.self, body: input))
     }
-    public func analysisRunSaved(id: String) async throws -> AnalysisSaved {
-        try await send(AnalysisRequest(OpenAPIOperations.RunSavedAnalysis.self, parameters: ["id": id]))
+    public func analysisRunSaved(id: SavedAnalysisID) async throws -> AnalysisSaved {
+        try await send(AnalysisRequest(OpenAPIOperations.RunSavedAnalysis.self, parameters: ["id": id.rawValue]))
     }
-    public func analysisDeleteSaved(id: String) async throws {
+    public func analysisDeleteSaved(id: SavedAnalysisID) async throws {
         let _: APIEmpty = try await send(
-            AnalysisRequest(OpenAPIOperations.DeleteSavedAnalysis.self, parameters: ["id": id]))
+            AnalysisRequest(OpenAPIOperations.DeleteSavedAnalysis.self, parameters: ["id": id.rawValue]))
     }
-    public func analysisVersions(id: String) async throws -> [AnalysisSavedVersion] {
+    public func analysisVersions(id: SavedAnalysisID) async throws -> [AnalysisSavedVersion] {
         let page: AnalysisCollection<AnalysisSavedVersion> = try await send(
-            AnalysisRequest(OpenAPIOperations.ListSavedAnalysisVersions.self, parameters: ["id": id]))
+            AnalysisRequest(OpenAPIOperations.ListSavedAnalysisVersions.self, parameters: ["id": id.rawValue]))
         return page.items
     }
-    public func analysisRestore(id: String, version: Int, expectedVersion: Int) async throws -> AnalysisSaved {
+    public func analysisRestore(id: SavedAnalysisID, version: Int, expectedVersion: Int) async throws -> AnalysisSaved {
         try await send(
             AnalysisRequest(
-                OpenAPIOperations.RestoreSavedAnalysisVersion.self, parameters: ["id": id],
+                OpenAPIOperations.RestoreSavedAnalysisVersion.self, parameters: ["id": id.rawValue],
                 body: .object([
                     "version": .number(Decimal(version)), "expectedVersion": .number(Decimal(expectedVersion)),
                 ])))
@@ -137,12 +137,12 @@ extension APIClient: AnalysisService {
         try await send(
             AnalysisRequest(OpenAPIOperations.ApplyAnalysisProposal.self, body: try TaxValue(encoding: proposal)))
     }
-    public func analysisGenerateProposal(id: String, instruction: String, model: String?) async throws
+    public func analysisGenerateProposal(id: SavedAnalysisID, instruction: String, model: String?) async throws
         -> AnalysisProposalPreview
     {
         var body: TaxValue = .object(["instruction": .string(instruction)])
         if let model { body["model"] = .string(model) }
         return try await send(
-            AnalysisRequest(OpenAPIOperations.GenerateAnalysisProposal.self, parameters: ["id": id], body: body))
+            AnalysisRequest(OpenAPIOperations.GenerateAnalysisProposal.self, parameters: ["id": id.rawValue], body: body))
     }
 }

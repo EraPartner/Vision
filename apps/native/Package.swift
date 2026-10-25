@@ -26,8 +26,9 @@ let package = Package(
         .testTarget(
             name: "VisionNativeCoreTests",
             dependencies: ["VisionNativeCore"],
-            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte.
-            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc")]
+            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte,
+            // and the per-schema JSON samples scripts/native-fixtures.ts generates from openapi.yaml.
+            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc"), .copy("Fixtures/api")]
         ),
         .testTarget(
             name: "VisionNativeUITests",

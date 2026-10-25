@@ -29,21 +29,21 @@ enum NativeSettingsInsightsQuery {
             return CategoryGroup(name: key, items: items)
         }
     }
-    static func checkState(_ items: [OpenAPI.CategoryNode], excluded: [Int]) -> CheckState {
+    static func checkState(_ items: [OpenAPI.CategoryNode], excluded: [CategoryID]) -> CheckState {
         let all = items.allSatisfy { excluded.contains($0.id) }
         if all { return .on }
         return items.contains { excluded.contains($0.id) } ? .mixed : .off
     }
-    static func toggledGroup(_ items: [OpenAPI.CategoryNode], excluded: [Int]) -> [Int] {
+    static func toggledGroup(_ items: [OpenAPI.CategoryNode], excluded: [CategoryID]) -> [CategoryID] {
         if items.allSatisfy({ excluded.contains($0.id) }) {
             return excluded.filter { id in !items.contains { $0.id == id } }
         }
         return excluded + items.map(\.id).filter { !excluded.contains($0) }
     }
-    static func toggledID(_ id: Int, excluded: [Int]) -> [Int] {
+    static func toggledID<ID: Equatable>(_ id: ID, excluded: [ID]) -> [ID] {
         excluded.contains(id) ? excluded.filter { $0 != id } : excluded + [id]
     }
-    static func recipients(_ source: [OpenAPI.Recipient], search: String, excluded: [Int], locale: Locale = .current)
+    static func recipients(_ source: [OpenAPI.Recipient], search: String, excluded: [RecipientID], locale: Locale = .current)
         -> [OpenAPI.Recipient]
     {
         let query = search.lowercased()

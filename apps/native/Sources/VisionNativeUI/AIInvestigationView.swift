@@ -33,7 +33,7 @@ struct AIInvestigationView: View {
                     Text(error == "aiResearch.failed" ? strings.t(error) : error).textSelection(.enabled)
                 }.font(.callout).foregroundStyle(theme.destructive)
             }
-            if model.job?.state == "waiting" { clarification }
+            if model.job?.state == .waiting { clarification }
             if let answer = model.job?.result { AIInvestigationAnswerView(answer: answer, shell: shell) }
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -60,25 +60,34 @@ struct AIInvestigationView: View {
             }.buttonStyle(.visionOutline)
         }
     }
+    private static func researchModeKey(_ mode: AIResearchMode) -> String {
+        switch mode {
+        case .localOnly: return "aiResearch.localOnly"
+        case .publicProviders: return "aiResearch.publicProviders"
+        case .publicWeb: return "aiResearch.publicWeb"
+        // Never offered: the control lists the three known modes.
+        case .unknown(let raw): return raw
+        }
+    }
     private var settings: some View {
         DisclosureGroup(isExpanded: $settingsExpanded) {
             VStack(alignment: .leading, spacing: 16) {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 280), alignment: .leading)], alignment: .leading, spacing: 16
                 ) {
-                    Picker(
-                        strings.t("aiResearch.depth"),
-                        selection: Binding(get: { model.depth }, set: { model.depthOverride = $0 })
-                    ) {
-                        Text(strings.t("aiResearch.quick")).tag("quick")
-                        Text(strings.t("aiResearch.detailed")).tag("detailed")
-                    }.pickerStyle(.segmented)
+                    VisionSegmentedControl(
+                        selection: Binding(get: { model.depth }, set: { model.depthOverride = $0 }),
+                        values: [AIInvestigationDepth.quick, .detailed],
+                        title: { strings.t($0 == .quick ? "aiResearch.quick" : "aiResearch.detailed") }
+                    )
+                    .visionAccessibilityLabel(strings.t("aiResearch.depth"))
                 }
-                Picker(strings.t("aiResearch.researchMode"), selection: field(\.researchMode)) {
-                    Text(strings.t("aiResearch.localOnly")).tag("local-only")
-                    Text(strings.t("aiResearch.publicProviders")).tag("public-providers")
-                    Text(strings.t("aiResearch.publicWeb")).tag("public-web")
-                }.pickerStyle(.segmented)
+                VisionSegmentedControl(
+                    selection: field(\.researchMode),
+                    values: [AIResearchMode.localOnly, .publicProviders, .publicWeb],
+                    title: { strings.t(Self.researchModeKey($0)) }
+                )
+                .visionAccessibilityLabel(strings.t("aiResearch.researchMode"))
             }.padding(.top, 12)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
@@ -88,13 +97,13 @@ struct AIInvestigationView: View {
         }
     }
     @ViewBuilder private var publicInputs: some View {
-        if model.researchMode == "public-web" {
+        if model.researchMode == .publicWeb {
             input(
                 "aiResearch.publicWebQuery", placeholder: "aiResearch.publicWebQueryPlaceholder",
                 text: field(\.publicWebQuery))
             Text(strings.t("aiResearch.publicWebQueryHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
         }
-        if model.researchMode == "public-providers" {
+        if model.researchMode == .publicProviders {
             input(
                 "aiResearch.publicSymbols", placeholder: "aiResearch.publicSymbolsPlaceholder",
                 text: field(\.publicSymbols))
@@ -108,7 +117,7 @@ struct AIInvestigationView: View {
                 VStack(alignment: .leading, spacing: 10) { lifecycleActions }
             }
             Text(
-                model.job.map { strings.t("aiResearch.jobState", ["state": $0.state]) }
+                model.job.map { strings.t("aiResearch.jobState", ["state": $0.state.rawValue]) }
                     ?? strings.t("aiResearch.localDefault")
             )
             .font(.caption).foregroundStyle(theme.secondaryLabel)
@@ -124,13 +133,16 @@ struct AIInvestigationView: View {
             }
         }.buttonStyle(.visionPrimary).disabled(model.runDisabled)
         if let job = model.job {
-            if !["completed", "failed", "cancelled", "partial"].contains(job.state) {
+            if ![.completed, .failed, .cancelled, .partial].contains(job.state) {
                 Button(strings.t("aiResearch.cancel")) { Task { await model.cancel() } }
+                    .buttonStyle(.visionOutline)
             }
-            if ["partial", "failed"].contains(job.state) {
+            if [.partial, .failed].contains(job.state) {
                 Button(strings.t("aiResearch.resume")) { Task { await model.resume() } }
+                    .buttonStyle(.visionOutline)
             }
             Button(strings.t("aiResearch.deleteInvestigation"), role: .destructive) { Task { await model.deleteJob() } }
+                .buttonStyle(.visionOutline)
         }
     }
     private var clarification: some View {
@@ -141,11 +153,14 @@ struct AIInvestigationView: View {
                 TextField(strings.t("aiResearch.clarificationPlaceholder"), text: field(\.clarification))
                     .textFieldStyle(.vision).accessibilityLabel(strings.t("aiResearch.clarificationNeeded"))
                 Button(strings.t("aiResearch.resume")) { Task { await model.resume() } }
-                    .disabled(!model.canClarify)
+                    .buttonStyle(.visionPrimary).disabled(!model.canClarify)
             }
         }
     }
     private func field(_ key: ReferenceWritableKeyPath<AIInvestigationModel, String>) -> Binding<String> {
+        Binding(get: { model[keyPath: key] }, set: { model[keyPath: key] = $0 })
+    }
+    private func field(_ key: ReferenceWritableKeyPath<AIInvestigationModel, AIResearchMode>) -> Binding<AIResearchMode> {
         Binding(get: { model[keyPath: key] }, set: { model[keyPath: key] = $0 })
     }
     private func input(_ label: String, placeholder: String, text: Binding<String>) -> some View {
@@ -158,17 +173,15 @@ struct AIInvestigationView: View {
     private func textArea(label: String, placeholder: String, text: Binding<String>, minimumHeight: CGFloat)
         -> some View
     {
-        TextEditor(text: text).font(.body).scrollContentBackground(.hidden)
-            .padding(8).frame(minHeight: minimumHeight)
-            .background(theme.background, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+        TextEditor(text: text).visionTextEditor(minHeight: minimumHeight)
             .overlay(alignment: .topLeading) {
                 if text.wrappedValue.isEmpty {
-                    Text(strings.t(placeholder)).font(.body).foregroundStyle(theme.tertiaryLabel)
-                        .padding(.horizontal, 13).padding(.vertical, 16).allowsHitTesting(false).accessibilityHidden(
-                            true)
+                    Text(strings.t(placeholder)).font(VisionControlMetrics.fieldFont).foregroundStyle(theme.tertiaryLabel)
+                        .padding(.horizontal, VisionControlMetrics.fieldHorizontalPadding)
+                        .padding(.vertical, VisionControlMetrics.textAreaVerticalPadding)
+                        .allowsHitTesting(false).accessibilityHidden(true)
                 }
             }
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
             .accessibilityLabel(strings.t(label))
     }
 }

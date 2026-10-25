@@ -19,7 +19,7 @@ public struct PortfolioTaxView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var requestedYear: Int? { TaxYearRoute.parse(shell.route.value("year")) }
-    private var currency: String { shell.settings.defaultCurrency.uppercased() }
+    private var currency: CurrencyCode { shell.settings.portfolioCurrency }
     private var overview: OpenAPI.BelgianTaxOverview? {
         guard let source = tax.overview.overview, source.year == (requestedYear ?? source.liveYear) else { return nil }
         return source
@@ -56,7 +56,7 @@ public struct PortfolioTaxView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + currency + String(shell.settingsRevision) + "|" + String(dataRevision)) {
+        .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision) + "|" + String(dataRevision)) {
             await reload()
         }
         .onDisappear { model.closeAdjustments() }
@@ -75,34 +75,37 @@ public struct PortfolioTaxView: View {
                 await model.load(year: source.year, liveYear: source.liveYear, currency: requestedCurrency, force: true)
             }
         }
-        .sheet(isPresented: $customize) {
+        .visionDialog(isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics) {
             PortfolioWidgetsSheet(
                 definitions: PortfolioTaxWidgetsModel.definitions, visible: model.widgets.isVisible,
                 setVisible: model.widgets.setVisible, setAll: model.widgets.setAll, reset: model.widgets.reset,
                 reload: model.widgets.load, isLoaded: model.widgets.isLoaded, isSaving: model.widgets.isSaving,
-                error: model.widgets.error, strings: strings)
+                error: model.widgets.error, strings: strings, inDialog: true)
         }
-        .sheet(isPresented: $filing) {
+        .visionDialog(isPresented: $filing, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxMarkFiledSheet(overview: overview, actions: tax.actions, shell: shell) }
         }
-        .sheet(isPresented: $history) {
+        .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .sheet(
+        // `SheetContent sm:max-w-lg`, `p-0`.
+        .visionSideSheet(
             isPresented: Binding(
                 get: { tax.profile.isPresented },
                 set: { value in
                     if !value { Task { await tax.profile.close() } }
-                })
+                }),
+            metrics: .sideSheet(maxWidth: 512)
         ) {
             TaxProfileSheet(model: tax.profile, shell: shell, onUnfile: { await tax.unfileProfileYear() })
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { model.isAdjustmentsPresented },
                 set: { value in
                     if !value { model.closeAdjustments() }
-                })
+                }),
+            metrics: PortfolioTaxAdjustmentsSheet.metrics
         ) {
             PortfolioTaxAdjustmentsSheet(model: model, shell: shell)
         }
@@ -113,9 +116,14 @@ public struct PortfolioTaxView: View {
         }
     }
 
+    /// `PAGE_ICONS["/portfolio/tax"]` (Landmark).
+    static var symbol: String {
+        NavigationRegistry.matchItem(path: "/portfolio/tax")?.symbol ?? "building.columns"
+    }
+
     private var header: some View {
         VisionPageHeader(
-            title: strings.t("tax.portfolioTitle"), subtitle: strings.t("tax.portfolioDesc"), symbol: "percent"
+            title: strings.t("tax.portfolioTitle"), subtitle: strings.t("tax.portfolioDesc"), symbol: Self.symbol
         ) {
             if let overview, tax.overview.error == nil {
                 TaxYearSwitcherView(
@@ -124,11 +132,11 @@ public struct PortfolioTaxView: View {
                 // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
                 if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
                     Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
-                        .disabled(tax.actions.isSaving)
+                        .buttonStyle(.visionOutline).disabled(tax.actions.isSaving)
                 }
                 Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
                     Task { await tax.exportYearCsv() }
-                }.disabled(tax.actions.isSaving || tax.isExporting)
+                }.buttonStyle(.visionOutline).disabled(tax.actions.isSaving || tax.isExporting)
                 actionsMenu(overview)
             }
             // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
@@ -143,7 +151,7 @@ public struct PortfolioTaxView: View {
 
     private func actionsMenu(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
         let filed = TaxYearPresentation.metadata(overview)["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return Menu {
             Button(strings.t(data?.hasProfile == true ? "tax.menu.editProfile" : "tax.menu.setupProfile")) {
                 tax.profile.begin(overview: overview)
@@ -171,7 +179,7 @@ public struct PortfolioTaxView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuIndicator(.hidden)
+        .visionMoreActionsMenu()
         .accessibilityLabel(strings.t("tax.menu.label"))
         .disabled(tax.actions.isSaving || model.isSavingAdjustments)
     }
@@ -180,18 +188,19 @@ public struct PortfolioTaxView: View {
     {
         if overview.isHistorical { historicalBanner(overview) }
         if !data.isEmpty {
-            TaxCard(title: strings.t("tax.portfolioDisclaimerTitle")) {
-                Text(strings.t("tax.portfolioDisclaimerText")).font(.callout).foregroundStyle(theme.secondaryLabel)
+            // TaxDisclaimerBanner: an info `Alert`, not a titled card.
+            VisionCallout(title: strings.t("tax.portfolioDisclaimerTitle")) {
+                Text(strings.t("tax.portfolioDisclaimerText"))
             }
         }
         if !data.unconvertedCurrencies.isEmpty {
-            Text(strings.t("tax.fxUnavailable", ["currencies": data.unconvertedCurrencies.joined(separator: ", ")]))
+            Text(strings.t("tax.fxUnavailable", ["currencies": data.unconvertedCurrencies.map(\.rawValue).joined(separator: ", ")]))
                 .font(.footnote).foregroundStyle(theme.warning)
         }
         if data.isEmpty {
             TaxCard {
                 VisionEmptyState(
-                    symbol: "percent", title: strings.t("tax.noData"), description: strings.t("tax.noDataDesc")
+                    symbol: Self.symbol, title: strings.t("tax.noData"), description: strings.t("tax.noDataDesc")
                 ) {
                     Button(strings.t("tax.noDataCta")) { shell.navigate(to: "/portfolio") }.buttonStyle(.visionOutline)
                 }
@@ -199,13 +208,16 @@ public struct PortfolioTaxView: View {
         } else {
             sectionHeading("tax.costsSection", description: "tax.costsHelp")
             if model.widgets.isVisible("summaryCards") { PortfolioTaxSummaryView(data: data, shell: shell) }
-            if model.widgets.isVisible("taxByAssetClass"), !data.taxByAssetClass.isEmpty {
-                PortfolioTaxAssetClassChart(data: data, shell: shell)
+            // `grid-cols-1 gap-6 lg:grid-cols-2`: tax by asset class beside the tax and fee types.
+            VisionResponsiveGrid {
+                if model.widgets.isVisible("taxByAssetClass"), !data.taxByAssetClass.isEmpty {
+                    PortfolioTaxAssetClassChart(data: data, shell: shell)
+                }
+                if model.widgets.isVisible("taxTypes"), !data.taxBreakdown.isEmpty || !data.feeBreakdown.isEmpty {
+                    PortfolioTaxCostTypesView(data: data, shell: shell)
+                }
+                PortfolioTaxRecordedManualView(data: data, shell: shell)
             }
-            if model.widgets.isVisible("taxTypes"), !data.taxBreakdown.isEmpty || !data.feeBreakdown.isEmpty {
-                PortfolioTaxCostTypesView(data: data, shell: shell)
-            }
-            PortfolioTaxRecordedManualView(data: data, shell: shell)
             if model.widgets.isVisible("yearlyTaxFeeTrend"), !data.yearlyCostTrend.isEmpty {
                 PortfolioTaxMonthlyCostChart(data: data, shell: shell)
             }
@@ -223,9 +235,11 @@ public struct PortfolioTaxView: View {
                     tax.profile.begin(overview: overview)
                 }.buttonStyle(.visionOutline).disabled(tax.actions.isSaving || model.isSavingAdjustments)
             }
-            PortfolioTaxBudgetView(data: data, shell: shell)
-            if model.widgets.isVisible("profileInputs"), let taxData {
-                PortfolioTaxProfileInputsView(inputs: taxData.currentInputs, overview: overview, shell: shell)
+            VisionResponsiveGrid {
+                PortfolioTaxBudgetView(data: data, shell: shell)
+                if model.widgets.isVisible("profileInputs"), let taxData {
+                    PortfolioTaxProfileInputsView(inputs: taxData.currentInputs, overview: overview, shell: shell)
+                }
             }
             if data.hasInKindIncomeUnclassified {
                 Text(strings.t("tax.inKindIncomeUnclassified")).font(.footnote).foregroundStyle(theme.secondaryLabel)

@@ -65,6 +65,14 @@ struct VisionSegmentedControl<Value: Hashable>: View {
     let options: [VisionSegmentOption<Value>]
     var size: VisionSegmentedControlSize = .default
     var label: String?
+    /// The per-item `className="px-2.5 type-footnote"` the web passes for dense toolbars: 10pt
+    /// side padding and `type-footnote` instead of `px-3 type-body`.
+    var compact = false
+    /// `className="w-full"`: the track fills the width and the segments share it equally.
+    var fillsWidth = false
+    /// `orientation="vertical"` with `grid h-auto w-full grid-cols-1`: the segments stack at the
+    /// full width of the control and wrap their labels (`min-h-10 whitespace-normal py-2`).
+    var vertical = false
 
     @Environment(\.visionTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
@@ -74,23 +82,27 @@ struct VisionSegmentedControl<Value: Hashable>: View {
 
     init(
         selection: Binding<Value>, options: [VisionSegmentOption<Value>],
-        size: VisionSegmentedControlSize = .default, label: String? = nil
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false,
+        vertical: Bool = false
     ) {
         _selection = selection
         self.options = options
         self.size = size
         self.label = label
+        self.compact = compact
+        self.vertical = vertical
     }
 
     /// Picker-like: `values` shown with `title(value)`.
     init(
         selection: Binding<Value>, values: [Value], title: (Value) -> String,
-        size: VisionSegmentedControlSize = .default, label: String? = nil
+        size: VisionSegmentedControlSize = .default, label: String? = nil, compact: Bool = false,
+        vertical: Bool = false
     ) {
         self.init(
             selection: selection,
             options: values.map { VisionSegmentOption(value: $0, title: title($0)) },
-            size: size, label: label)
+            size: size, label: label, compact: compact, vertical: vertical)
     }
 
     var body: some View {
@@ -106,15 +118,24 @@ struct VisionSegmentedControl<Value: Hashable>: View {
         }
     }
 
+    /// `className="w-full"`.
+    func fillingWidth() -> Self {
+        var copy = self
+        copy.fillsWidth = true
+        return copy
+    }
+
     private var track: some View {
         let shape = RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
-        return HStack(spacing: 0) {
+        let axis = vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        return axis {
             ForEach(options) { option in
                 segment(option)
             }
         }
         .padding(trackPadding)
-        .frame(height: size.height)
+        .frame(maxWidth: fillsWidth ? .infinity : nil)
+        .frame(height: vertical ? nil : size.height)
         .background(shape.fill(theme.foreground.opacity(0.06)))
         .animation(VisionControlMetrics.snappySpring(reduceMotion: reduceMotion), value: selection)
         .accessibilityElement(children: .contain)
@@ -136,13 +157,15 @@ struct VisionSegmentedControl<Value: Hashable>: View {
                 if let symbol = option.systemImage {
                     Image(systemName: symbol).accessibilityHidden(true)
                 }
-                Text(option.title).lineLimit(1)
+                Text(option.title).lineLimit(vertical ? nil : 1)
             }
+            .frame(maxWidth: (vertical || fillsWidth) ? .infinity : nil, minHeight: vertical ? 40 : nil)
+            .padding(.vertical, vertical ? 2 : 0)
         }
         .buttonStyle(
             VisionSegmentButtonStyle(
                 isSelected: isSelected, radius: segmentRadius, namespace: pillSpace,
-                isDimmed: !isEnabled || option.isDisabled)
+                isDimmed: !isEnabled || option.isDisabled, compact: compact)
         )
         .disabled(option.isDisabled)
         .focused($focus, equals: option.value)
@@ -171,11 +194,12 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
     let radius: CGFloat
     let namespace: Namespace.ID
     let isDimmed: Bool
+    let compact: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         SegmentBody(
             configuration: configuration, isSelected: isSelected, radius: radius, namespace: namespace,
-            isDimmed: isDimmed)
+            isDimmed: isDimmed, compact: compact)
     }
 
     private struct SegmentBody: View {
@@ -184,6 +208,7 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
         let radius: CGFloat
         let namespace: Namespace.ID
         let isDimmed: Bool
+        let compact: Bool
         @Environment(\.visionTheme) private var theme
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var hovering = false
@@ -191,9 +216,12 @@ private struct VisionSegmentButtonStyle: ButtonStyle {
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             configuration.label
-                .font(VisionFonts.body(CGFloat(DesignTokens.Typography.body.size), weight: 500, relativeTo: .body))
+                .font(
+                    compact
+                        ? VisionFonts.body(CGFloat(DesignTokens.Typography.footnote.size), weight: 500, relativeTo: .footnote)
+                        : VisionFonts.body(CGFloat(DesignTokens.Typography.body.size), weight: 500, relativeTo: .body))
                 .foregroundStyle(isSelected || hovering ? theme.foreground : theme.secondaryLabel)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, compact ? 10 : 12)
                 .frame(maxHeight: .infinity)
                 .background {
                     if isSelected {

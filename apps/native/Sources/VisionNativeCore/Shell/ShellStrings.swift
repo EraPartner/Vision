@@ -20,6 +20,7 @@ public struct ShellStrings: Sendable, Equatable {
 
     /// Flat `{ key: string }` JSON; non-string values are ignored.
     public static func parseTable(_ data: Data) -> [String: String]? {
+        // lint:allow string-any-dict untyped JSONSerialization result, validated on the next line
         guard let fields = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
         return fields.compactMapValues { $0 as? String }
     }

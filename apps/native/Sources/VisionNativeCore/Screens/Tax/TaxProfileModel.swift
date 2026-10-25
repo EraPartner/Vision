@@ -61,7 +61,7 @@ public final class TaxProfileModel {
     public func begin(overview: OpenAPI.BelgianTaxOverview, initialStep: TaxProfileStep = .household) {
         guard !isPresented, !isSaving else { return }
         do {
-            let invalid = Set(overview.warnings.filter { $0.kind == "invalid_stored" }.map(\.key))
+            let invalid = Set(overview.warnings.filter { $0.kind == .invalidStored }.map(\.key))
             live = try seed(
                 TaxYearMutation.householdKey, fallback: TaxValue(encoding: overview.liveHousehold),
                 records: overview.records, replaceInvalid: invalid.contains(TaxYearMutation.householdKey))
@@ -201,11 +201,11 @@ public final class TaxProfileModel {
                         records = try patch.settings.map { key, value in
                             let json = try JSONDecoder().decode(JSONValue.self, from: APIBody.encode(value))
                             return OpenAPI.Setting(
-                                key: key, value: json, expected: .object(["exists": .bool(true), "value": json]))
+                                key: key, value: json, expected: .existsTrue(.init(exists: true, value: json)))
                         }
-                        live = patch.settings[TaxYearMutation.householdKey]!
-                        snapshots = patch.settings[TaxYearMutation.snapshotsKey]!
-                        metadata = patch.settings[TaxYearMutation.metadataKey]!
+                        live = patch.settings[TaxYearMutation.householdKey] ?? live
+                        snapshots = patch.settings[TaxYearMutation.snapshotsKey] ?? snapshots
+                        metadata = patch.settings[TaxYearMutation.metadataKey] ?? metadata
                         committed = writing
                         hasPendingChanges = draft.value != writing
                         error = nil

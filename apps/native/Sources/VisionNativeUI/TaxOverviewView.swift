@@ -20,7 +20,7 @@ public struct TaxOverviewView: View {
     }
     private var data: TaxDashboardData? {
         guard let data = screens.dashboard.data, data.year == overview?.year,
-            data.currency == shell.settings.defaultCurrency
+            data.currency == shell.settings.portfolioCurrency
         else { return nil }
         return data
     }
@@ -33,6 +33,7 @@ public struct TaxOverviewView: View {
                 if let error = screens.routeLoadError ?? screens.overview.error ?? screens.dashboard.error {
                     Text(strings.t("tax.page.loadError", ["msg": error])).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else if screens.overview.isLoading || screens.dashboard.isLoading || overview == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
                 } else if let overview {
@@ -52,7 +53,7 @@ public struct TaxOverviewView: View {
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: shell.route.string + shell.settings.defaultCurrency + String(shell.settingsRevision)) {
+        .task(id: shell.route.string + shell.settings.defaultCurrency.rawValue + String(shell.settingsRevision)) {
             await reload()
         }
         .onDisappear { screens.printLocalState = .init() }
@@ -64,21 +65,26 @@ public struct TaxOverviewView: View {
             if let value {
                 Task {
                     await screens.dashboard.load(
-                        year: value.year, currency: shell.settings.defaultCurrency, force: true)
+                        year: value.year, currency: shell.settings.portfolioCurrency, force: true)
                 }
             }
         }
-        .sheet(isPresented: $customize) { TaxWidgetsSheet(model: screens.widgets, strings: strings) }
-        .sheet(isPresented: $filing) {
+        .modifier(TaxDeductionsConfirmation(host: overview.map { deductionsView($0) }))
+        .visionDialog(isPresented: $customize, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
+            TaxWidgetsSheet(model: screens.widgets, strings: strings)
+        }
+        .visionDialog(isPresented: $filing, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxMarkFiledSheet(overview: overview, actions: screens.actions, shell: shell) }
         }
-        .sheet(isPresented: $history) {
+        .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .sheet(
+        // `SheetContent sm:max-w-lg`, `p-0`.
+        .visionSideSheet(
             isPresented: Binding(
                 get: { screens.profile.isPresented },
-                set: { value in if !value { Task { await screens.profile.close() } } })
+                set: { value in if !value { Task { await screens.profile.close() } } }),
+            metrics: .sideSheet(maxWidth: 512)
         ) {
             TaxProfileSheet(
                 model: screens.profile, shell: shell,
@@ -91,13 +97,15 @@ public struct TaxOverviewView: View {
             subtitle: strings.t(
                 "tax.page.subtitle",
                 ["year": String(overview?.year ?? requestedYear ?? Calendar.current.component(.year, from: Date()))]),
-            symbol: "percent"
+            symbol: Self.symbol
         ) {
             if let overview, screens.overview.error == nil, screens.dashboard.error == nil {
                 TaxYearSwitcherView(
                     overview: overview, availableYears: data?.yearCalculations.map(\.year) ?? [],
                     actions: screens.actions, shell: shell)
-                // YearActionsMenu: Mark as filed and CSV export live in the more menu, as on the web.
+                // YearActionsMenu: Mark as filed and Export year as CSV are visible outline buttons
+                // before the more menu, as on the web.
+                yearActionButtons(overview)
                 actionsMenu(overview)
                 Button(
                     strings.t(overview.hasProfile ? "tax.profile.edit" : "tax.profile.setup"),
@@ -108,17 +116,30 @@ public struct TaxOverviewView: View {
             }
         }
     }
+    /// `PAGE_ICONS["/tax"]` (Landmark).
+    static var symbol: String {
+        NavigationRegistry.matchItem(path: "/tax")?.symbol ?? "building.columns"
+    }
+    @ViewBuilder private func yearActionButtons(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
+        if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
+            Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
+                .buttonStyle(.visionOutline).disabled(screens.actions.isSaving)
+        }
+        Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
+            Task { await screens.exportYearCsv() }
+        }
+        .buttonStyle(.visionOutline).disabled(screens.actions.isSaving || screens.isExporting)
+    }
     private func actionsMenu(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
         let meta = TaxYearPresentation.metadata(overview)
         let filed = meta["filing"]?.objectValue != nil
-        let frozen = overview.calculationSource == "frozen"
+        let frozen = overview.calculationSource == .frozen
         return Menu {
             Button(strings.t("tax.menu.exportPdf"), systemImage: "arrow.down.document") { shell.openTaxReport() }
             Button(strings.t("tax.menu.customize"), systemImage: "square.grid.2x2") { customize = true }
             Divider()
             Text(strings.t("tax.yearActions.menuLabel", ["year": String(overview.year)]))
             if !filed {
-                Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
                 Button(
                     strings.t(frozen ? "tax.yearActions.unfreeze" : "tax.yearActions.freeze"), systemImage: "snowflake"
                 ) {
@@ -138,7 +159,7 @@ public struct TaxOverviewView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuIndicator(.hidden)
+        .visionMoreActionsMenu()
         .accessibilityLabel(strings.t("tax.menu.label")).disabled(screens.actions.isSaving)
     }
     @ViewBuilder private func content(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
@@ -149,7 +170,7 @@ public struct TaxOverviewView: View {
         disclaimer(overview)
         // `tax.fxUnavailable`: amounts without a stored rate are left out, not converted 1:1 (#308).
         if let currencies = data?.unconvertedCurrencies, !currencies.isEmpty {
-            Text(strings.t("tax.fxUnavailable", ["currencies": currencies.joined(separator: ", ")]))
+            Text(strings.t("tax.fxUnavailable", ["currencies": currencies.map(\.rawValue).joined(separator: ", ")]))
                 .font(.footnote)
                 .foregroundStyle(theme.warning)
                 .fixedSize(horizontal: false, vertical: true)
@@ -171,32 +192,38 @@ public struct TaxOverviewView: View {
                         totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
                         totalIncludingProperty: data.totalTaxIncludingPropertyEstimate)
                 }
-                if screens.widgets.isVisible("pitBreakdown") {
-                    TaxPITBreakdownView(
-                        overview: overview, shell: shell, portfolioTaxes: data.portfolioTaxesForYear,
-                        totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
-                        totalIncludingProperty: data.totalTaxIncludingPropertyEstimate,
-                        onExpandedChange: { screens.printLocalState.pitExpanded = $0 })
-                }
-                if screens.widgets.isVisible("taxRules") {
-                    TaxRulesView(strings: strings, onExpandedChange: { screens.printLocalState.rulesExpanded = $0 })
+                // `grid-cols-1 gap-6 lg:grid-cols-2`: the income tax breakdown beside the tax rules.
+                VisionResponsiveGrid {
+                    if screens.widgets.isVisible("pitBreakdown") {
+                        TaxPITBreakdownView(
+                            overview: overview, shell: shell, portfolioTaxes: data.portfolioTaxesForYear,
+                            totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
+                            totalIncludingProperty: data.totalTaxIncludingPropertyEstimate,
+                            onExpandedChange: { screens.printLocalState.pitExpanded = $0 })
+                    }
+                    if screens.widgets.isVisible("taxRules") {
+                        TaxRulesView(
+                            strings: strings, onExpandedChange: { screens.printLocalState.rulesExpanded = $0 })
+                    }
                 }
                 if screens.widgets.isVisible("householdBreakdown") {
                     TaxHouseholdBreakdownView(
                         overview: overview, data: data, shell: shell,
                         onExpandedChange: { screens.printLocalState.householdExpanded = $0 })
                 }
-                if screens.widgets.isVisible("incomeBreakdown") {
-                    TaxMonthlyIncomeView(
-                        model: screens.dashboard, overview: overview, shell: shell,
-                        openIncomeSources: { openProfile(overview, step: .incomeSources) })
+                VisionResponsiveGrid {
+                    if screens.widgets.isVisible("incomeBreakdown") {
+                        TaxMonthlyIncomeView(
+                            model: screens.dashboard, overview: overview, shell: shell,
+                            openIncomeSources: { openProfile(overview, step: .incomeSources) })
+                    }
+                    TaxCurrentInputsView(overview: overview, data: data, shell: shell)
+                    SuggestedDeductionsView(
+                        suggestions: data.suggestions, shell: shell,
+                        // SuggestedDeductionsCard opens the live profile on its Deductions step.
+                        onEditProfile: { openLiveProfile(overview, step: .exemptions) })
+                    deductions(overview)
                 }
-                TaxCurrentInputsView(overview: overview, data: data, shell: shell)
-                SuggestedDeductionsView(
-                    suggestions: data.suggestions, shell: shell,
-                    // SuggestedDeductionsCard opens the live profile on its Deductions step.
-                    onEditProfile: { openLiveProfile(overview, step: .exemptions) })
-                deductions(overview)
                 if screens.widgets.isVisible("yearComparison") {
                     TaxYearComparisonView(
                         model: screens.dashboard, overview: overview, shell: shell,
@@ -212,44 +239,37 @@ public struct TaxOverviewView: View {
         }
     }
     private func disclaimer(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
-        // The web disclaimer: a quiet info callout, not a titled card.
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "info.circle")
-                .foregroundStyle(theme.secondaryLabel)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(strings.t("tax.belgianRulesDesc"))
-                    .font(.callout.weight(.semibold))
-                    .accessibilityAddTraits(.isHeader)
+        // TaxDisclaimerBanner: an info `Alert`, with the household engine notes as bullets.
+        VisionCallout(title: strings.t("tax.belgianRulesDesc")) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(strings.t("tax.disclaimerTitle") + ": " + strings.t("tax.disclaimerText"))
-                    .font(.callout)
-                    .foregroundStyle(theme.secondaryLabel)
                     .fixedSize(horizontal: false, vertical: true)
-                if overview.storedValueInvalid {
-                    Text("• " + strings.t("tax.household.storedUnreadable")).font(.callout)
-                }
-                if !overview.isHistorical {
-                    ForEach(uniqueIssues(overview), id: \.code) { issue in
-                        Text(
-                            "• " + strings.t("tax.household.issue.severity." + issue.severity) + ": "
-                                + strings.t("tax.household.issue." + issue.code)
-                        )
-                        .font(.callout).foregroundStyle(issue.severity == "info" ? theme.secondaryLabel : theme.warning)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                let notes = householdNotes(overview)
+                if !notes.isEmpty { VisionBulletList(items: notes) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
-        .visionCardBackground()
+    }
+    /// `householdNotes`: the unreadable-household line, then one line per issue code.
+    private func householdNotes(_ overview: OpenAPI.BelgianTaxOverview) -> [String] {
+        var notes: [String] = []
+        if overview.storedValueInvalid { notes.append(strings.t("tax.household.storedUnreadable")) }
+        if !overview.isHistorical {
+            notes += uniqueIssues(overview).map {
+                strings.t("tax.household.issue.severity." + $0.severity.rawValue) + ": "
+                    + strings.t("tax.household.issue." + $0.code.rawValue)
+            }
+        }
+        return notes
     }
     private func uniqueIssues(_ overview: OpenAPI.BelgianTaxOverview) -> [OpenAPI.BelgianTaxHouseholdTaxIssue] {
-        var seen = Set<String>()
+        var seen = Set<OpenAPI.BelgianTaxHouseholdTaxIssue.Code>()
         return overview.result.issues.filter { seen.insert($0.code).inserted }
     }
     @ViewBuilder private func deductions(_ overview: OpenAPI.BelgianTaxOverview) -> some View {
-        // The two deduction cards use the live household, including on historical views.
+        deductionsView(overview)
+    }
+    /// The two deduction cards use the live household, including on historical views.
+    private func deductionsView(_ overview: OpenAPI.BelgianTaxOverview) -> TaxDeductionsView {
         TaxDeductionsView(
             model: screens.deductions, shell: shell,
             household: try? TaxValue(encoding: overview.liveHousehold),
@@ -274,9 +294,9 @@ public struct TaxOverviewView: View {
     }
     private func reload(force: Bool = false) async {
         let route = shell.route
-        let currency = shell.settings.defaultCurrency
+        let currency = shell.settings.portfolioCurrency
         guard let canonical = await screens.loadRoute(route: route, currency: currency, force: force),
-            !Task.isCancelled, shell.route == route, shell.settings.defaultCurrency == currency
+            !Task.isCancelled, shell.route == route, shell.settings.portfolioCurrency == currency
         else { return }
         if canonical != route { shell.replaceQuery(canonical.query) }
     }

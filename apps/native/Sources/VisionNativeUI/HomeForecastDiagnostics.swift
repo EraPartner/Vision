@@ -7,7 +7,7 @@ struct HomeForecastDiagnostics: View {
     let strings: any Localizing
     @State private var selected: [String: String] = [:]
     @State private var range: [String: String] = [:]
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionDismissDialog) private var dismiss
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
@@ -30,7 +30,7 @@ struct HomeForecastDiagnostics: View {
                             "cashflow.diagnostics.backtestNote",
                             [
                                 "n": String(diagnostics.history_months),
-                                "currency": model.forecast?.currency ?? settings.defaultCurrency,
+                                "currency": (model.forecast?.currency ?? LedgerCurrency.display(settings)).rawValue,
                             ])
                     ).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     // The weights the ensemble applied, computed on the server.
@@ -63,7 +63,7 @@ struct HomeForecastDiagnostics: View {
                         .buttonStyle(.visionOutline)
                 }
             }.padding(24)
-        }.frame(width: 720, height: 660)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
             .task { await model.loadDiagnostics() }
             .onDisappear { model.forecastOptions.diagnostics = false }
     }
@@ -119,8 +119,8 @@ struct HomeForecastDiagnostics: View {
                                 id: method.id, label: "MAE",
                                 points: history.map { InsightChartPoint(key: $0.month, value: $0.mae) })
                         ],
-                        currency: model.forecast?.currency ?? settings.defaultCurrency, settings: settings,
-                        title: strings.t("cashflow.diagnostics.maeTrend"), height: 70,
+                        currency: model.forecast?.currency ?? LedgerCurrency.display(settings), settings: settings,
+                        title: strings.t("cashflow.diagnostics.maeTrend"), height: 70, sparkline: true,
                         selection: Binding(get: { selected[method.id] }, set: { selected[method.id] = $0 }),
                         rangeStart: Binding(get: { range[method.id] }, set: { range[method.id] = $0 }))
                 }
@@ -129,7 +129,7 @@ struct HomeForecastDiagnostics: View {
     }
     private func amount(_ value: Decimal) -> some View {
         MoneyText(
-            amount: value, currency: model.forecast?.currency ?? settings.defaultCurrency,
+            amount: value, currency: model.forecast?.currency ?? LedgerCurrency.display(settings),
             settings: settings, signed: false, colored: false)
     }
 }

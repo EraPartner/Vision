@@ -1,0 +1,15 @@
+{
+  "imported": 1,
+  "duplicates": 1,
+  "adopted": 1,
+  "errors": 1,
+  "batches": [
+    {
+      "imported": 1,
+      "duplicates": 1,
+      "adopted": 1,
+      "errors": 1,
+      "batch_id": 1
+    }
+  ]
+}

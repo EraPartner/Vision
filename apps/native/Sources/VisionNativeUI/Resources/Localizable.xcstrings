@@ -18253,6 +18253,24 @@
         }
       }
     },
+    "categoryPie.desc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 50 transactions, by count"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste 50 transacties, op aantal"
+          }
+        }
+      }
+    },
     "categoryPie.noData": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",

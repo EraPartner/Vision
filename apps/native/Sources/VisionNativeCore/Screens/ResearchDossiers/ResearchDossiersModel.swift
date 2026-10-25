@@ -3,7 +3,7 @@ import Observation
 
 @MainActor @Observable public final class ResearchDossiersModel {
     public var draft: ResearchDossierContent? { didSet { if draft != oldValue { draftRevision = UUID() } } }
-    public private(set) var selectedId: String?
+    public private(set) var selectedId: ResearchDossierID?
     public private(set) var items: [ResearchDossierListItem] = []
     public private(set) var total = 0
     public private(set) var listOffset = 0
@@ -15,9 +15,9 @@ import Observation
     public private(set) var listError: String?
     public private(set) var detailError: String?
     public private(set) var historyError: String?
-    public private(set) var categories: [ResearchDossierPickerItem] = []
-    public private(set) var investments: [ResearchDossierPickerItem] = []
-    public private(set) var analyses: [ResearchDossierPickerItem] = []
+    public private(set) var categories: [ResearchDossierPickerItem<CategoryID>] = []
+    public private(set) var investments: [ResearchDossierPickerItem<InvestmentID>] = []
+    public private(set) var analyses: [ResearchDossierPickerItem<SavedAnalysisID>] = []
     public private(set) var documents: [ResearchDossierDocument] = []
     public private(set) var pickerErrors: [String: String] = [:]
     public private(set) var pickersLoading = false
@@ -28,8 +28,8 @@ import Observation
     public private(set) var settings = NativeAppSettings.defaults
     public private(set) var exportData: Data?
     public private(set) var exportFilename: String?
-    public var readyDocuments: [ResearchDossierDocument] { documents.filter { $0.extractionStatus == "ready" } }
-    public var deletedLinks: [ResearchDossierLinkDetail] { detail?.linkDetails.filter { $0.status == "deleted" } ?? [] }
+    public var readyDocuments: [ResearchDossierDocument] { documents.filter { $0.extractionStatus == .ready } }
+    public var deletedLinks: [ResearchDossierLinkDetail] { detail?.linkDetails.filter { $0.status == .deleted } ?? [] }
     public var busy: Bool { mutations > 0 }
     public var hasUnsavedChanges: Bool { draft.map { $0.payload != baseline?.payload } ?? false }
     public var isOnline = true { didSet { if !isOnline { invalidateReads() } } }
@@ -161,7 +161,7 @@ import Observation
         baseline = draft
         clearMessages()
     }
-    public func select(_ id: String) async {
+    public func select(_ id: ResearchDossierID) async {
         guard active, id != selectedId else { return }
         if hasUnsavedChanges {
             pendingReview = .init(action: .discardForSelection(id: id), selection: selection)
@@ -169,12 +169,12 @@ import Observation
         }
         await choose(id)
     }
-    private func choose(_ id: String) async {
+    private func choose(_ id: ResearchDossierID) async {
         changeSelection(id)
         clearMessages()
         await loadSelection(id: id)
     }
-    private func changeSelection(_ id: String?) {
+    private func changeSelection(_ id: ResearchDossierID?) {
         selection = UUID()
         detailRevision = UUID()
         historyRevision = UUID()
@@ -189,12 +189,12 @@ import Observation
         historyError = nil
         pendingReview = nil
     }
-    private func loadSelection(id: String) async {
+    private func loadSelection(id: ResearchDossierID) async {
         async let record: Void = loadDetail(id: id)
         async let versions: Void = loadHistory(id: id)
         _ = await (record, versions)
     }
-    private func loadDetail(id: String, discard: Bool = false) async {
+    private func loadDetail(id: ResearchDossierID, discard: Bool = false) async {
         guard active, isOnline, selectedId == id else { return }
         let token = UUID()
         detailRevision = token
@@ -220,7 +220,7 @@ import Observation
             detailError = error.localizedDescription
         }
     }
-    private func loadHistory(id: String) async {
+    private func loadHistory(id: ResearchDossierID) async {
         guard active, isOnline, selectedId == id else { return }
         let token = UUID()
         historyRevision = token
@@ -313,7 +313,7 @@ import Observation
             if active, visit == self.visit { await refreshAfterMutation() }
         } catch { if current(visit: visit, selection: context) { showError(error) } }
     }
-    private func remove(id: String) async {
+    private func remove(id: ResearchDossierID) async {
         guard active, isOnline, !busy else { return }
         let context = selection
         let visit = visit
@@ -330,7 +330,7 @@ import Observation
             if active, visit == self.visit { await refreshAfterMutation() }
         } catch { if current(visit: visit, selection: context) { showError(error) } }
     }
-    private func restore(id: String, version: Int, expectedVersion: Int) async {
+    private func restore(id: ResearchDossierID, version: Int, expectedVersion: Int) async {
         guard active, isOnline, !busy else { return }
         let context = selection
         let visit = visit
@@ -367,9 +367,10 @@ import Observation
         _ current: ResearchDossierContent, submitted: ResearchDossierContent, acknowledged: ResearchDossierContent
     ) -> ResearchDossierContent {
         var result = current
-        for key in [\ResearchDossierContent.title, \.workspace, \.question, \.userThesis, \.conclusion] {
+        for key in [\ResearchDossierContent.title, \.question, \.userThesis, \.conclusion] {
             if current[keyPath: key] == submitted[keyPath: key] { result[keyPath: key] = acknowledged[keyPath: key] }
         }
+        if current.workspace == submitted.workspace { result.workspace = acknowledged.workspace }
         if current.assumptions == submitted.assumptions { result.assumptions = acknowledged.assumptions }
         if current.openQuestions == submitted.openQuestions { result.openQuestions = acknowledged.openQuestions }
         if current.reviewDate == submitted.reviewDate { result.reviewDate = acknowledged.reviewDate }
@@ -396,7 +397,7 @@ import Observation
     }
     public func exportAll() async { await export(id: nil) }
     public func exportOne() async { if let id = selectedId { await export(id: id) } }
-    private func export(id: String?) async {
+    private func export(id: ResearchDossierID?) async {
         guard active, isOnline else { return }
         clearMessages()
         let visit = visit
@@ -405,7 +406,7 @@ import Observation
             let result = try await service.exportDossiers(id: id)
             guard active, visit == self.visit, id == nil || context == selection else { return }
             let data = try result.jsonData()
-            let name = id.map { "vision-dossier-" + $0 + ".json" } ?? "vision-dossiers.json"
+            let name = id.map { "vision-dossier-" + $0.rawValue + ".json" } ?? "vision-dossiers.json"
             if let saveExport {
                 _ = try await saveExport(data, name)
             } else {
@@ -418,8 +419,8 @@ import Observation
         guard (draft?.evidence.count ?? 30) < 30 else { return }
         draft?.evidence.append(.init())
     }
-    public func removeEvidence(_ id: String) { draft?.evidence.removeAll { $0.id == id } }
-    public func updateSourceDocument(evidenceId: String, documentId: String?) {
+    public func removeEvidence(_ id: ResearchDossierEvidenceID) { draft?.evidence.removeAll { $0.id == id } }
+    public func updateSourceDocument(evidenceId: ResearchDossierEvidenceID, documentId: ResearchDocumentID?) {
         guard let index = draft?.evidence.firstIndex(where: { $0.id == evidenceId }),
             var source = draft?.evidence[index].source
         else { return }
@@ -443,27 +444,19 @@ import Observation
         case .openQuestions: draft?.openQuestions = lines
         }
     }
-    public func toggleLink(_ field: ResearchDossierLinkField, id: String) {
-        switch field {
-        case .savedAnalysisIds:
-            if draft?.links.savedAnalysisIds.contains(id) == true {
-                draft?.links.savedAnalysisIds.removeAll { $0 == id }
-            } else {
-                draft?.links.savedAnalysisIds.append(id)
-            }
-        case .categoryIds, .investmentIds:
-            guard let numeric = Int(id), numeric > 0 else { return }
-            let key = field == .categoryIds ? \ResearchDossierLinks.categoryIds : \ResearchDossierLinks.investmentIds
-            guard var links = draft?.links else { return }
-            if links[keyPath: key].contains(numeric) {
-                links[keyPath: key].removeAll { $0 == numeric }
-            } else {
-                links[keyPath: key].append(numeric)
-            }
-            draft?.links = links
+    public func toggleLink(analysis id: SavedAnalysisID) { toggle(\.savedAnalysisIds, id) }
+    public func toggleLink(category id: CategoryID) { toggle(\.categoryIds, id) }
+    public func toggleLink(investment id: InvestmentID) { toggle(\.investmentIds, id) }
+    private func toggle<ID: Hashable>(_ key: WritableKeyPath<ResearchDossierLinks, [ID]>, _ id: ID) {
+        guard var links = draft?.links else { return }
+        if links[keyPath: key].contains(id) {
+            links[keyPath: key].removeAll { $0 == id }
+        } else {
+            links[keyPath: key].append(id)
         }
+        draft?.links = links
     }
-    public func setAccessedAt(evidenceId: String, localValue: String) {
+    public func setAccessedAt(evidenceId: ResearchDossierEvidenceID, localValue: String) {
         guard let index = draft?.evidence.firstIndex(where: { $0.id == evidenceId }) else { return }
         if localValue.isEmpty {
             draft?.evidence[index].source.accessedAt = nil
@@ -529,9 +522,9 @@ import Observation
         exportFilename = nil
     }
     private enum PickerRead: Sendable {
-        case categories(Result<[ResearchDossierPickerItem], any Error>)
-        case investments(Result<[ResearchDossierPickerItem], any Error>)
-        case analyses(Result<[ResearchDossierPickerItem], any Error>)
+        case categories(Result<[ResearchDossierPickerItem<CategoryID>], any Error>)
+        case investments(Result<[ResearchDossierPickerItem<InvestmentID>], any Error>)
+        case analyses(Result<[ResearchDossierPickerItem<SavedAnalysisID>], any Error>)
         case documents(Result<[ResearchDossierDocument], any Error>)
     }
 }

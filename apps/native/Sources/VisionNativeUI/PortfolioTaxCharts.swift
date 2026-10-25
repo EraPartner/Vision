@@ -13,9 +13,11 @@ struct PortfolioTaxAssetClassChart: View {
             PortfolioTaxBarChart(
                 rows: data.taxByAssetClass.map {
                     PortfolioTaxBarRow(
-                        id: $0.assetClass, label: shell.strings.t("portfolio.assetClass." + $0.assetClass),
+                        id: $0.assetClass.rawValue,
+                        label: shell.strings.t("portfolio.assetClass." + $0.assetClass.rawValue),
                         taxes: $0.taxes, fees: $0.fees)
-                }, title: shell.strings.t("tax.widget.taxByAssetClass"), currency: data.currency, shell: shell)
+                }, title: shell.strings.t("tax.widget.taxByAssetClass"), currency: data.currency, shell: shell,
+                showsLegend: true)
         }
     }
 }
@@ -48,13 +50,21 @@ private struct PortfolioTaxBarRow: Identifiable, Equatable {
 private struct PortfolioTaxBarChart: View {
     let rows: [PortfolioTaxBarRow]
     let title: String
-    let currency: String
+    let currency: CurrencyCode
     let shell: NativeShellModel
+    /// The asset-class chart carries its legend under the plot (`ChartCard legend`); the monthly trend has none.
+    var showsLegend = false
     @State private var selection: String?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
     private var taxLabel: String { shell.strings.t("tax.taxes") }
     private var feeLabel: String { shell.strings.t("tax.fees") }
+    private var taxColor: Color { Color(token: theme.palette.chart5) }
+    private var feeColor: Color { Color(token: theme.palette.chart4) }
+    /// `BarChart`'s value domain: the baseline stays in view, the top is padded.
+    private var yDomain: ClosedRange<Double> {
+        ChartAxisTicks.zeroBasedDomain(rows.flatMap { [coordinate($0.taxes), coordinate($0.fees)] })
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -84,31 +94,24 @@ private struct PortfolioTaxBarChart: View {
             }
             .chartXScale(domain: -0.5...(Double(max(rows.count, 1)) - 0.5))
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(rows.indices.map(Double.init), count: 6)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(rows.indices.map(Double.init), count: 12)) { value in
                     AxisValueLabel {
                         if let position = value.as(Double.self), rows.indices.contains(Int(position.rounded())) {
-                            Text(rows[Int(position.rounded())].label)
+                            Text(rows[Int(position.rounded())].label).font(ChartTickText.font)
+                                .foregroundStyle(theme.secondaryLabel)
                         }
                     }
                 }
             }
             .chartForegroundStyleScale(
                 domain: [taxLabel, feeLabel],
-                range: [Color(token: theme.palette.chart5), Color(token: theme.palette.chart4)]
+                range: [taxColor, feeColor]
             )
-            .chartLegend(position: .bottom, alignment: .leading)
-            .chartYAxis {
-                AxisMarks(position: .leading) { value in
-                    AxisGridLine()
-                    AxisValueLabel {
-                        if let value = value.as(Double.self) {
-                            Text(
-                                VisionFormat.currency(
-                                    Decimal(value), code: currency, locale: shell.settings.numberFormat.locale,
-                                    fractionDigits: 0))
-                        }
-                    }
-                }
+            .chartLegend(.hidden)
+            .visionChartYAxis(domain: yDomain) { value in
+                VisionFormat.currency(
+                    Decimal(value), code: currency, locale: shell.settings.numberFormat.locale,
+                    fractionDigits: shell.settings.showDecimalPlaces)
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
@@ -129,6 +132,12 @@ private struct PortfolioTaxBarChart: View {
             }
             .frame(height: 280).focusable().focused($focused).focusEffectDisabled()
             .accessibilityLabel(title).onKeyPress(phases: .down, action: move)
+            if showsLegend {
+                ChartLegendRow(items: [
+                    ChartLegendItem(id: "taxes", label: taxLabel, color: taxColor),
+                    ChartLegendItem(id: "fees", label: feeLabel, color: feeColor),
+                ])
+            }
             if let row = selected {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(row.label).font(.caption.weight(.medium))
@@ -143,7 +152,8 @@ private struct PortfolioTaxBarChart: View {
                         Text(money(row.fees)).monospacedDigit()
                     }
                 }.font(.caption).padding(10)
-                    .background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .background(
+                        theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                     .accessibilityElement(children: .combine)
             }
         }
@@ -188,6 +198,6 @@ private struct PortfolioTaxBarChart: View {
     }
     private func coordinate(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
     private func money(_ value: Decimal) -> String {
-        MoneyText.text(value, currency: currency, settings: shell.settings)
+        MoneyText.text(value, currency: currency, settings: shell.settings, signed: false)
     }
 }

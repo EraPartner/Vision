@@ -7,13 +7,13 @@ actor FakeImportService: ImportService {
     private(set) var adapterCalls = 0
     private(set) var parserCalls = 0
     private(set) var created: [CSVParserDraft] = []
-    private(set) var updated: [Int] = []
-    private(set) var deleted: [Int] = []
+    private(set) var updated: [CustomParserConfigID] = []
+    private(set) var deleted: [CustomParserConfigID] = []
     private(set) var streamed: [String] = []
     private(set) var customs: [String] = []
     private(set) var customConfigs: [CSVParserConfig] = []
     private(set) var historyOffsets: [Int] = []
-    private(set) var rollbacks: [Int] = []
+    private(set) var rollbacks: [ImportBatchID] = []
     private var adapters: [ImportAdapter]
     private var parsers: [OpenAPI.CustomParserConfig]
     private var batches: [OpenAPI.ImportBatch]
@@ -67,12 +67,12 @@ actor FakeImportService: ImportService {
         if saveFails { throw APIError.client(APIClientError(status: 409, code: .conflict, message: "Name taken")) }
         created.append(CSVParserDraft(name: name, config: config))
         nextId += 1
-        let parser = OpenAPI.CustomParserConfig(id: nextId, name: name, config: config.payload)
+        let parser = OpenAPI.CustomParserConfig(id: CustomParserConfigID(nextId), name: name, config: config.payload)
         parsers.append(parser)
         return parser
     }
 
-    func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
+    func updateCustomParser(id: CustomParserConfigID, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
         if saveFails { throw APIError.network("offline") }
         updated.append(id)
         let parser = OpenAPI.CustomParserConfig(id: id, name: name, config: config.payload)
@@ -80,7 +80,7 @@ actor FakeImportService: ImportService {
         return parser
     }
 
-    func deleteCustomParser(id: Int) async throws {
+    func deleteCustomParser(id: CustomParserConfigID) async throws {
         if deleteFails { throw APIError.network("offline") }
         deleted.append(id)
         parsers.removeAll { parser in parser.id == id }
@@ -111,7 +111,7 @@ actor FakeImportService: ImportService {
         return ImportBatchPage(total: batches.count, limit: limit, offset: offset, items: page)
     }
 
-    func rollbackImportBatch(id: Int) async throws -> Int {
+    func rollbackImportBatch(id: ImportBatchID) async throws -> Int {
         if rollbackFails { throw APIError.network("offline") }
         rollbacks.append(id)
         return 3
@@ -159,10 +159,10 @@ enum ImportFixture {
             numberFormat: .decimalComma))
 
     static func batch(
-        _ id: Int, status: String = "complete", remaining: Int = 4, file: String? = nil
+        _ id: Int, status: OpenAPI.ImportBatch.Status = .complete, remaining: Int = 4, file: String? = nil
     ) -> OpenAPI.ImportBatch {
         OpenAPI.ImportBatch(
-            id: String(id), adapterName: "kbc", sourceFilename: file, status: status, rowsTotal: 5, rowsImported: 4,
+            id: ImportBatchID(numeric: id), adapterName: "kbc", sourceFilename: file, status: status, rowsTotal: 5, rowsImported: 4,
             rowsDuplicate: 1, rowsError: 0, startedAt: "2026-10-12T08:30:00.000Z", transactionsRemaining: remaining)
     }
 
@@ -687,7 +687,7 @@ enum ImportFixture {
 
     @Test func rollingBackAskedFirstThenRefreshesTheHistory() async {
         let service = FakeImportService(batches: [
-            ImportFixture.batch(3), ImportFixture.batch(4, status: "awaiting_review"), ImportFixture.batch(5, remaining: 0),
+            ImportFixture.batch(3), ImportFixture.batch(4, status: .awaitingReview), ImportFixture.batch(5, remaining: 0),
         ])
         let model = ImportFixture.model(service)
         await model.appear(strings: ImportFixture.strings)
@@ -705,7 +705,7 @@ enum ImportFixture {
         #expect(model.pendingRollback == nil)
         model.requestRollback(batches[0])
         await model.confirmRollback(strings: ImportFixture.strings)
-        #expect(await service.rollbacks == [3])
+        #expect(await service.rollbacks == ["3"])
         #expect(model.notice?.key == "importHistory.rollbackSuccess")
         #expect(model.notice?.variables == ["n": "3"])
         #expect(model.rollingBack.isEmpty)
@@ -842,11 +842,11 @@ enum ImportFixture {
         #expect(ImportFixture.batch(9, file: "kbc.csv").title(ImportFixture.strings) == "kbc.csv")
         #expect(batch.numericId == 9)
         #expect(batch.startedText(timeZone: try #require(TimeZone(identifier: "Europe/Brussels"))) == "2026-10-12 10:30")
-        #expect(ImportBatchStatus.labelKey("awaiting_review") == "importHistory.status.awaiting_review")
-        #expect(ImportBatchStatus.tone("failed") == .destructive)
-        #expect(ImportBatchStatus.tone("complete") == .primary)
-        #expect(ImportBatchStatus.tone("aborted") == .outline)
-        #expect(ImportBatchStatus.tone("awaiting_review") == .secondary)
+        #expect(ImportBatchStatus.labelKey(.awaitingReview) == "importHistory.status.awaiting_review")
+        #expect(ImportBatchStatus.tone(.failed) == .destructive)
+        #expect(ImportBatchStatus.tone(.complete) == .primary)
+        #expect(ImportBatchStatus.tone(.aborted) == .outline)
+        #expect(ImportBatchStatus.tone(.awaitingReview) == .secondary)
     }
 }
 

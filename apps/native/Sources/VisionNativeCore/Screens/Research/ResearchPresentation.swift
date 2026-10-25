@@ -19,15 +19,15 @@ public enum ResearchPresentation {
         guard root.object != nil else { throw root.fail("must be an object") }
         let kind = try root.required("kind").string()
         let result: TaxValue
-        switch kind {
-        case "compare": result = try compare(root)
-        case "chart": result = try chart(root)
-        case "watchlist": result = try watchlist(root)
-        case "watchlistBatch": result = try watchlistBatch(root)
-        case "providerQuote": result = try providerQuote(root)
-        case "analyst": result = try analyst(root)
-        case "marketAdd": result = try marketAdd(root)
-        default: throw root.fail("kind is not a research presentation kind")
+        switch ResearchPresentationKind(rawValue: kind) {
+        case .compare: result = try compare(root)
+        case .chart: result = try chart(root)
+        case .watchlist: result = try watchlist(root)
+        case .watchlistBatch: result = try watchlistBatch(root)
+        case .providerQuote: result = try providerQuote(root)
+        case .analyst: result = try analyst(root)
+        case .marketAdd: result = try marketAdd(root)
+        case .unknown: throw root.fail("kind is not a research presentation kind")
         }
         return .object(["kind": .string(kind), "result": result])
     }

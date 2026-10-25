@@ -12,7 +12,7 @@ public struct NetWorthView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
-    private var currency: String { settings.defaultCurrency }
+    private var currency: CurrencyCode { LedgerCurrency.display(settings) }
 
     public var body: some View {
         ScrollView {
@@ -26,6 +26,7 @@ public struct NetWorthView: View {
                         Text(strings.t("networth.unableToLoad")).font(.headline)
                         Text(error).foregroundStyle(theme.destructive)
                         Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                            .buttonStyle(.visionOutline)
                     }
                 } else if let data = model.data, data.current.currency == currency {
                     if model.snapshots.isEmpty {
@@ -43,7 +44,10 @@ public struct NetWorthView: View {
                         hero(data)
                         accounts(data)
                         chart
-                        HStack(spacing: 16) {
+                        // `grid grid-cols-1 gap-4 sm:grid-cols-3`.
+                        VisionResponsiveColumns(
+                            weights: [1, 1, 1], minimumPageWidth: VisionBreakpoint.sm, spacing: 16
+                        ) {
                             stat("networth.peak", value: model.peak.map(money) ?? "—", symbol: "arrow.up.right")
                             stat("networth.lowest", value: model.trough.map(money) ?? "—", symbol: "arrow.down.right")
                             stat(
@@ -55,7 +59,7 @@ public struct NetWorthView: View {
                 if let error = model.pricesError { Text(error).font(.callout).foregroundStyle(theme.destructive) }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task(id: currency + String(settings.defaultPageSize) + shell.route.string + String(shell.settingsRevision)) {
+        .task(id: currency.rawValue + String(settings.defaultPageSize) + shell.route.string + String(shell.settingsRevision)) {
             await reload()
         }
         .onAppear { connectivity.start { model.isOnline = $0 } }
@@ -77,8 +81,8 @@ public struct NetWorthView: View {
         } label: {
             if model.isRefreshingPrices { ProgressView().controlSize(.small) }
             Label(strings.t("portfolio.refreshPrices"), systemImage: "arrow.clockwise")
-        }.disabled(!model.isOnline || model.isRefreshingPrices)
-            .help(model.isOnline ? strings.t("portfolio.refreshPrices") : strings.t("portfolio.refreshPricesOffline"))
+        }.buttonStyle(.visionOutline).disabled(!model.isOnline || model.isRefreshingPrices)
+            .visionTooltip(model.isOnline ? strings.t("portfolio.refreshPrices") : strings.t("portfolio.refreshPricesOffline"))
     }
     @ViewBuilder private var stalePrices: some View {
         if model.stalePriceCount > 0 {
@@ -100,16 +104,10 @@ public struct NetWorthView: View {
     }
     private func hero(_ data: OpenAPI.NetWorthResponse) -> some View {
         AdminCard(padding: VisionPageLayout.padding) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 40) {
-                    identity(data)
-                    Spacer()
-                    assetBars(data).frame(minWidth: 240)
-                }
-                VStack(alignment: .leading, spacing: 24) {
-                    identity(data)
-                    assetBars(data)
-                }
+            // `grid gap-6 lg:grid-cols-5`: the value on three fifths, the asset bars on two.
+            VisionResponsiveColumns(weights: [3, 2]) {
+                identity(data)
+                assetBars(data)
             }
         }
     }
@@ -118,11 +116,12 @@ public struct NetWorthView: View {
             Text(strings.t("networth.title").uppercased())
                 .font(.caption2.weight(.medium)).tracking(1.3)
                 .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
-            RollingNumber(
-                value: MoneyText.text(data.current.netWorth, currency: currency, settings: settings, signed: false),
-                decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first
-            )
-            .font(.visionLargeTitle)
+            // The same hero figure as Home: `<RollingNumber parts={fmtParts(...)}>` with the small
+            // currency symbol and decimals.
+            MoneyText(
+                amount: data.current.netWorth, currency: currency, settings: settings, signed: false,
+                colored: false, rolling: true
+            ).font(.visionLargeTitle)
             HStack {
                 MoneyText.styled(
                     MoneyText.text(data.monthlyChange, currency: currency, settings: settings),
@@ -300,8 +299,7 @@ public struct NetWorthView: View {
                     Text(strings.t("networth.chartDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()
-                Picker(
-                    strings.t("networth.overTime"),
+                VisionSegmentedControl(
                     selection: Binding(
                         get: { model.period },
                         set: { value in
@@ -309,13 +307,12 @@ public struct NetWorthView: View {
                             model.selection = nil
                             model.rangeStart = nil
                             shell.replaceQuery("period", with: value == .year ? nil : value.rawValue)
-                        })
-                ) {
-                    ForEach(NetWorthPeriod.allCases, id: \.self) { period in
-                        Text(strings.t("performance.period." + period.rawValue)).tag(period)
-                    }
-                }
-                .pickerStyle(.segmented).frame(maxWidth: 420)
+                        }),
+                    values: NetWorthPeriod.allCases, title: { strings.t("performance.period." + $0.rawValue) },
+                    size: .sm, compact: true
+                )
+                .fixedSize()
+                .accessibilityLabel(strings.t("networth.overTime"))
             }
             InsightTimelineChart(
                 series: series, currency: currency, settings: settings, title: strings.t("networth.overTime"),
@@ -326,6 +323,8 @@ public struct NetWorthView: View {
                 ],
                 areaSeries: ["netWorth"], rangePercent: true,
                 formatPeriod: { VisionFormat.appDate($0, format: settings.dateFormat) }, formatTick: tick,
+                legend: .bottomLeading, legendOrder: ["netWorth", "liquid", "investments", "liabilities"],
+                yAxis: .full,
                 selection: Binding(get: { model.selection }, set: { model.selection = $0 }),
                 rangeStart: Binding(get: { model.rangeStart }, set: { model.rangeStart = $0 }))
         }
@@ -346,7 +345,7 @@ public struct NetWorthView: View {
                     case "liabilities": value = snapshot.liabilities
                     default: value = snapshot.netWorth
                     }
-                    return InsightChartPoint(key: snapshot.date, value: value)
+                    return InsightChartPoint(key: snapshot.date.description, value: value)
                 })
         }
     }
@@ -372,6 +371,7 @@ public struct NetWorthView: View {
                         if model.tableSnapshots.isEmpty { await reload(force: true) } else { await model.loadMore() }
                     }
                 }
+                .buttonStyle(.visionOutline)
             }
         }
     }

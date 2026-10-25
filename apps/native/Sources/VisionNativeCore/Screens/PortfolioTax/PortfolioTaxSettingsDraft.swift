@@ -7,27 +7,27 @@ public enum PortfolioTaxReyndersChoice: String, CaseIterable, Sendable {
     case auto, yes, no
 }
 public struct PortfolioTaxAdjustmentDraft: Equatable, Sendable, Identifiable {
-    public let id: Int
+    public let id: InvestmentID
     public let name: String
     public let symbol: String?
-    public let assetClass: String
+    public let assetClass: OpenAPI.AssetClass
     public var taxes: String
     public var fees: String
     public var etfStructure: PortfolioTaxETFStructure?
     public var reynders: PortfolioTaxReyndersChoice
     public var interestPortion: String
     public var treatmentExpanded = false
-    public var showsETFStructure: Bool { assetClass == "etf" }
-    public var showsReynders: Bool { assetClass == "etf" || assetClass == "bond" }
-    public var reyndersResolved: Bool { reynders == .yes || (reynders == .auto && assetClass == "bond") }
+    public var showsETFStructure: Bool { assetClass == .etf }
+    public var showsReynders: Bool { assetClass == .etf || assetClass == .bond }
+    public var reyndersResolved: Bool { reynders == .yes || (reynders == .auto && assetClass == .bond) }
 
     init(investment: PortfolioTaxInvestment, year: Int, values: PortfolioTaxSettingsDraft, format: NumberFormat) {
         id = investment.id
         name = investment.name
         symbol = investment.symbol
         assetClass = investment.assetClass
-        let amounts = values.adjustments["\(year):\(id)"]
-        let cls = values.classifications[String(id)]
+        let amounts = values.adjustments["\(year):\(id.rawValue)"]
+        let cls = values.classifications[String(id.rawValue)]
         taxes = Self.amountText(Self.storedAmount(amounts?["taxes"]), format: format)
         fees = Self.amountText(Self.storedAmount(amounts?["fees"]), format: format)
         etfStructure = cls?["etfStructure"]?.stringValue.flatMap(PortfolioTaxETFStructure.init(rawValue:))
@@ -77,8 +77,8 @@ public struct PortfolioTaxAdjustmentDraft: Equatable, Sendable, Identifiable {
 /// Structural edits only. Unknown top-level entries and unknown fields of each investment
 /// remain intact, including entries belonging to another year or archived holdings.
 public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
-    public static let adjustmentsKey = "portfolio_tax_adjustments_v1"
-    public static let classificationsKey = "portfolio_tax_classifications_v1"
+    public static let adjustmentsKey = SettingKey.portfolioTaxAdjustmentsV1.rawValue
+    public static let classificationsKey = SettingKey.portfolioTaxClassificationsV1.rawValue
     public var adjustments: TaxValue
     public var classifications: TaxValue
     public let records: [PortfolioTaxSetting]
@@ -99,15 +99,15 @@ public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
     }
     public mutating func apply(rows: [PortfolioTaxAdjustmentDraft], year: Int, format: NumberFormat) throws {
         for row in rows {
-            guard row.id > 0, !row.hasInvalidInterestPortion else {
+            guard row.id.rawValue > 0, !row.hasInvalidInterestPortion else {
                 throw APIError.invalidRequest("Invalid investment tax treatment")
             }
-            let key = "\(year):\(row.id)"
+            let key = "\(year):\(row.id.rawValue)"
             var amount = adjustments[key]?.objectValue.map(TaxValue.object) ?? .object([:])
             amount["taxes"] = .number(LocaleNumber.parseOrZero(row.taxes, format: format))
             amount["fees"] = .number(LocaleNumber.parseOrZero(row.fees, format: format))
             adjustments[key] = amount
-            let classKey = String(row.id)
+            let classKey = String(row.id.rawValue)
             var cls = classifications[classKey]?.objectValue.map(TaxValue.object) ?? .object([:])
             cls["etfStructure"] = row.etfStructure.map { .string($0.rawValue) }
             cls["subjectToReynders"] = row.reynders == .auto ? nil : .bool(row.reynders == .yes)

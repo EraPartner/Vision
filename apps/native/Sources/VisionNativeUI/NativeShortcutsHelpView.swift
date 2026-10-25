@@ -41,7 +41,7 @@ public struct NativeShortcutsHelpView: View {
                     Text(shell.strings.t("shortcuts.rowMenu")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                 }.padding(.trailing, 8)
             }
-        }.visionDialogPadding().frame(width: 448, height: 660).foregroundStyle(theme.foreground).background(theme.card)
+        }.visionDialogPadding().frame(width: 448, height: 660).foregroundStyle(theme.foreground)
     }
     private func heading(_ key: String) -> some View {
         Text(shell.strings.t(key)).font(.footnote.weight(.semibold)).foregroundStyle(theme.secondaryLabel)

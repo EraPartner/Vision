@@ -28,7 +28,7 @@ public final class AnalysisMonitorsModel {
     public private(set) var dossierOffset = 0
     public private(set) var observationOffset = 0
     public private(set) var notificationOffset = 0
-    public private(set) var selectedId: String?
+    public private(set) var selectedId: AnalysisMonitorID?
     public private(set) var newDraft = AnalysisMonitorDraft()
     public private(set) var editDraft: AnalysisMonitorDraft?
     public var deletingRule: AnalysisMonitorRule?
@@ -45,7 +45,7 @@ public final class AnalysisMonitorsModel {
     }
     public var hasNewTarget: Bool {
         newDraft.kind == .threshold
-            ? eligibleAnalyses.contains { $0.id == newDraft.savedAnalysisId } : !newDraft.dossierId.isEmpty
+            ? eligibleAnalyses.contains { $0.id == newDraft.savedAnalysisId } : newDraft.dossierId != nil
     }
     public var unreadCount: Int? { notifications?.unreadCount }
     @ObservationIgnored public var didMutate: (@MainActor () async -> Void)?
@@ -162,7 +162,7 @@ public final class AnalysisMonitorsModel {
             if let count = page.unreadCount { unreadDidChange?(count) }
         } catch { if current(.notifications, token) { notificationsError = error.localizedDescription } }
     }
-    public func select(_ id: String) async {
+    public func select(_ id: AnalysisMonitorID) async {
         guard selectedId != id else { return }
         selectedId = id
         observationOffset = 0
@@ -190,7 +190,7 @@ public final class AnalysisMonitorsModel {
         dossierOffset = max(0, min(1_000_000, offset))
         dossiers = nil
         dossiersError = nil
-        newDraft.dossierId = ""
+        newDraft.dossierId = nil
         reset(.dossiers)
         await loadDossiers()
     }
@@ -221,7 +221,7 @@ public final class AnalysisMonitorsModel {
         newDraft.kind = kind
         validation = nil
     }
-    public func chooseAnalysis(_ id: String) {
+    public func chooseAnalysis(_ id: SavedAnalysisID?) {
         updateNew {
             $0.savedAnalysisId = id
             $0.fieldId = ""
@@ -256,7 +256,7 @@ public final class AnalysisMonitorsModel {
             observationsError = nil
             editDirty = false
             editDraft = AnalysisMonitorDraft(rule: created)
-            editRevision = created.id + ":" + created.updatedAt
+            editRevision = created.id.rawValue + ":" + created.updatedAt
             publish("monitors.created")
         }
     }
@@ -274,7 +274,7 @@ public final class AnalysisMonitorsModel {
             if selectedId == rule.id {
                 editDirty = false
                 editDraft = AnalysisMonitorDraft(rule: saved)
-                editRevision = saved.id + ":" + saved.updatedAt
+                editRevision = saved.id.rawValue + ":" + saved.updatedAt
             }
             publish("monitors.saved")
         }
@@ -291,7 +291,7 @@ public final class AnalysisMonitorsModel {
                 } else {
                     editDraft = AnalysisMonitorDraft(rule: updated)
                 }
-                editRevision = updated.id + ":" + updated.updatedAt
+                editRevision = updated.id.rawValue + ":" + updated.updatedAt
             }
             publish("monitors.saved")
         }
@@ -363,7 +363,7 @@ public final class AnalysisMonitorsModel {
             && (!AnalysisMonitorDraft.exactDecimal(draft.threshold) || (!edit && !newColumns.contains(draft.fieldId)))
         {
             invalid = .threshold
-        } else if draft.kind == .evidence && !edit && draft.dossierId.isEmpty {
+        } else if draft.kind == .evidence && !edit && draft.dossierId == nil {
             invalid = .target
         } else {
             invalid = schedule
@@ -381,7 +381,7 @@ public final class AnalysisMonitorsModel {
             editDirty = false
             return
         }
-        let revision = rule.id + ":" + rule.updatedAt
+        let revision = rule.id.rawValue + ":" + rule.updatedAt
         guard revision != editRevision, !editDirty else { return }
         editDraft = AnalysisMonitorDraft(rule: rule)
         editRevision = revision

@@ -15,6 +15,7 @@ public protocol InstanceLocking: Sendable {
 }
 
 /// `flock(LOCK_EX | LOCK_NB)` on a lock file whose descriptor stays open until exit.
+// lint:allow unchecked-sendable mutable state guarded by an NSLock
 public final class FileInstanceLock: InstanceLocking, @unchecked Sendable {
     private let lock = NSLock()
     private var descriptors: [String: Int32] = [:]
@@ -60,6 +61,7 @@ extension RuntimeLogging {
 /// `initFileLogger` in `packaging/electron/main.ts`. Best effort: failures are ignored.
 /// With `rotate: false` the constructor never renames the file; `rotate()` then does
 /// it later, after the caller has taken the single-instance lock.
+// lint:allow unchecked-sendable mutable state guarded by an NSLock
 public final class FileRuntimeLog: RuntimeLogging, @unchecked Sendable {
     public static let rotationThreshold = 2 * 1024 * 1024
 

@@ -11,7 +11,7 @@ public final class PlannedLinkModel: Identifiable {
     public static let debounce: Duration = .milliseconds(250)
 
     public let payment: PlannedPayment
-    public nonisolated var id: Int { payment.id }
+    public nonisolated var id: PlannedTransactionID { payment.id }
 
     /// The local search (`txSearchQuery`): memo, payee or amount.
     public var search = ""
@@ -22,7 +22,7 @@ public final class PlannedLinkModel: Identifiable {
     public private(set) var candidates: [OpenAPI.Transaction] = []
     /// No answer yet (`isLoading`).
     public private(set) var isLoading = true
-    public private(set) var selectedTransactionId: Int?
+    public private(set) var selectedTransactionId: TransactionID?
     /// Link and mark as paid is running.
     public internal(set) var isExecuting = false
 
@@ -161,7 +161,7 @@ public final class PlannedLinkModel: Identifiable {
         }
     }
 
-    public func select(_ transactionId: Int?) {
+    public func select(_ transactionId: TransactionID?) {
         selectedTransactionId = transactionId
     }
 
@@ -173,8 +173,7 @@ public final class PlannedLinkModel: Identifiable {
 
     /// The execution date: the chosen transaction's own date, without a time.
     public var executionDate: String? {
-        guard let date = selectedTransaction?.transactionDate, !date.isEmpty else { return nil }
-        return date.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
+        selectedTransaction?.transactionDate.description
     }
 
     /// Link and mark as paid is enabled once a candidate is chosen and nothing runs.
@@ -184,12 +183,12 @@ public final class PlannedLinkModel: Identifiable {
     public static func title(_ transaction: OpenAPI.Transaction, strings: any Localizing) -> String {
         if let memo = transaction.memo, !memo.isEmpty { return memo }
         if let payee = transaction.recipientName, !payee.isEmpty { return payee }
-        return strings.t("plannedPage.link.txFallback", ["id": String(transaction.id)])
+        return strings.t("plannedPage.link.txFallback", ["id": String(transaction.id.rawValue)])
     }
 
     /// "payee · date" of the non-empty parts.
     public static func detail(_ transaction: OpenAPI.Transaction, format: AppDateFormat) -> String {
-        let date = transaction.transactionDate.isEmpty ? nil : VisionFormat.appDate(transaction.transactionDate, format: format)
+        let date = VisionFormat.appDate(transaction.transactionDate, format: format)
         return [transaction.recipientName, date].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

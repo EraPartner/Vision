@@ -39,10 +39,10 @@ public enum VisionFormat {
     /// zero). A fraction-digit count outside 0...20 falls back to the bare number, as `Intl`
     /// throws.
     public static func currency(
-        _ value: Decimal, code: String, locale: Locale, fractionDigits: Int, signed: Bool = false
+        _ value: Decimal, code: CurrencyCode, locale: Locale, fractionDigits: Int, signed: Bool = false
     ) -> String {
         guard (0...20).contains(fractionDigits), !value.isNaN else { return "\(value)" }
-        let style = Decimal.FormatStyle.Currency(code: code, locale: locale)
+        let style = Decimal.FormatStyle.Currency(code: code.rawValue, locale: locale)
             .precision(.fractionLength(fractionDigits))
             .rounded(rule: .toNearestOrAwayFromZero)
         if signed {
@@ -86,6 +86,55 @@ public enum VisionFormat {
             return appDate(instant, format: format, timeZone: timeZone)
         }
         return text
+    }
+
+    /// `formatDateStringWithAppSettings` for a typed calendar day: the same day on every device,
+    /// no zone involved.
+    public static func appDate(_ day: CalendarDay, format: AppDateFormat) -> String {
+        appDate(year: day.year, month: day.month, day: day.day, format: format)
+    }
+
+    /// `formatMonthYearWithAppSettings`: the month of a `yyyy-MM` period in the app's date style
+    /// (`MM/yyyy`, `yyyy-MM`, `MM.yyyy`, `MM-yyyy`); anything else is returned unchanged.
+    public static func appMonthYear(_ period: String, format: AppDateFormat) -> String {
+        let parts = period.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts[0].count == 4, parts[1].count == 2, let year = Int(parts[0]),
+            let month = Int(parts[1]), (1...12).contains(month)
+        else { return period }
+        let yyyy = pad(year, 4)
+        let mm = pad(month, 2)
+        switch format {
+        case .dayMonthYearSlash, .monthDayYearSlash: return "\(mm)/\(yyyy)"
+        case .isoDate: return "\(yyyy)-\(mm)"
+        case .dayMonthYearDot: return "\(mm).\(yyyy)"
+        case .dayMonthYearDash: return "\(mm)-\(yyyy)"
+        }
+    }
+
+    /// `formatDateStringWithAppSettings` for a typed timestamp: like the text overload, the date
+    /// as written in the timestamp (the UTC day of the backend's `...Z` values), not converted to
+    /// the local zone.
+    public static func appDate(_ instant: Instant, format: AppDateFormat) -> String {
+        appDate(instant.writtenDay, format: format)
+    }
+
+    /// `formatDateTimeStringWithAppSettings` for a typed timestamp: its local date and
+    /// `toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })`.
+    public static func appDateTime(
+        _ instant: Instant, format: AppDateFormat, locale: Locale, timeZone: TimeZone = .current
+    ) -> String {
+        "\(appDate(instant.date, format: format, timeZone: timeZone)) \(time(instant.date, locale: locale, timeZone: timeZone))"
+    }
+
+    /// `formatDateTimeStringWithAppSettings` for a typed calendar day: the day and midnight.
+    public static func appDateTime(
+        _ day: CalendarDay, format: AppDateFormat, locale: Locale, timeZone: TimeZone = .current
+    ) -> String {
+        let dateOnly = appDate(day, format: format)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        guard let midnight = day.date(in: calendar) else { return dateOnly }
+        return "\(dateOnly) \(time(midnight, locale: locale, timeZone: timeZone))"
     }
 
     /// `formatDateTimeStringWithAppSettings`: a timestamp's local date and its
@@ -138,6 +187,7 @@ public enum VisionFormat {
     /// Formatters are costly to create and table rows parse a timestamp per cell, so the
     /// parsers are built once. They are never mutated after creation, and Foundation's date
     /// formatters are thread-safe for parsing.
+    // lint:allow nonisolated-unsafe immutable after creation, formatters are thread-safe for parsing
     private nonisolated(unsafe) static let isoTimestampParsers: [ISO8601DateFormatter] = {
         let variants: [ISO8601DateFormatter.Options] = [
             [.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime],
@@ -152,6 +202,7 @@ public enum VisionFormat {
     private static let localTimestampParsers = LocalTimestampParsers()
 
     /// The zone-less timestamp parsers, one set per time zone.
+    // lint:allow unchecked-sendable cache guarded by an NSLock
     private final class LocalTimestampParsers: @unchecked Sendable {
         private let lock = NSLock()
         private var byZone: [TimeZone: [DateFormatter]] = [:]

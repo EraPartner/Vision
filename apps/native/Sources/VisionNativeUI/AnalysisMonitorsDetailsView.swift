@@ -32,21 +32,18 @@ struct AnalysisMonitorsDetailsView: View {
                         Toggle(
                             strings.t("monitors.enabled"),
                             isOn: Binding(
-                                get: { draft.enabled }, set: { value in model.updateEdit { $0.enabled = value } }))
+                                get: { draft.enabled }, set: { value in model.updateEdit { $0.enabled = value } })
+                        ).toggleStyle(.visionSwitch)
                         if rule.kind == .threshold {
-                            Picker(strings.t("monitors.field"), selection: text(draft, \.fieldId)) {
-                                Text(strings.t("monitors.selectField")).tag("")
-                                ForEach(model.editColumns, id: \.self) { Text($0).tag($0) }
-                            }
-                            Picker(
-                                strings.t("monitors.operator"),
+                            Text(strings.t("monitors.field")).font(.caption)
+                            VisionSelect(
+                                selection: text(draft, \.fieldId), options: fieldOptions,
+                                accessibilityLabel: strings.t("monitors.field"), expands: true)
+                            VisionSegmentedControl(
                                 selection: Binding(
-                                    get: { draft.operator }, set: { value in model.updateEdit { $0.operator = value } })
-                            ) {
-                                ForEach(AnalysisMonitorOperator.allCases, id: \.self) {
-                                    Text(strings.t("monitors." + $0.rawValue)).tag($0)
-                                }
-                            }.pickerStyle(.segmented)
+                                    get: { draft.operator }, set: { value in model.updateEdit { $0.operator = value } }),
+                                values: AnalysisMonitorOperator.allCases, title: { strings.t("monitors." + $0.rawValue) },
+                                label: strings.t("monitors.operator"))
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(strings.t("monitors.threshold")).font(.caption)
                                 TextField(strings.t("monitors.threshold"), text: text(draft, \.threshold))
@@ -82,6 +79,11 @@ struct AnalysisMonitorsDetailsView: View {
                 }
             }
         }
+    }
+    private var fieldOptions: [VisionSelectOption<String>] {
+        var options = [VisionSelectOption(value: "", title: strings.t("monitors.selectField"))]
+        for column in model.editColumns { options.append(VisionSelectOption(value: column, title: column)) }
+        return options
     }
     private func text(_ draft: AnalysisMonitorDraft, _ key: WritableKeyPath<AnalysisMonitorDraft, String>) -> Binding<
         String

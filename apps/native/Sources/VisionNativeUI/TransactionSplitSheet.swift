@@ -32,7 +32,7 @@ struct TransactionSplitSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 480, idealWidth: 512, minHeight: 440, idealHeight: 620)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .foregroundStyle(theme.foreground)
         .task { await form.load() }
         .task { await model.pickers.load() }
@@ -54,16 +54,12 @@ struct TransactionSplitSheet: View {
                         symbol: "exclamationmark.triangle", tint: theme.destructive)
                 }
             }
-            Picker(
-                strings.t("splitDialog.splitType"),
-                selection: Binding(get: { form.splitType }, set: { form.setSplitType($0) })
-            ) {
-                ForEach(SplitType.allCases, id: \.self) { type in
-                    Text(strings.t(type.labelKey)).tag(type)
+            VisionSegmentedControl(
+                selection: Binding(get: { form.splitType }, set: { form.setSplitType($0) }),
+                options: SplitType.allCases.map { type in
+                    VisionSegmentOption(value: type, title: strings.t(type.labelKey))
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            )
             .accessibilityLabel(strings.t("splitDialog.splitType"))
             summary
             ForEach(Array(form.entries.enumerated()), id: \.element.id) { index, entry in
@@ -74,8 +70,7 @@ struct TransactionSplitSheet: View {
             } label: {
                 Label(strings.t("splitDialog.addPerson"), systemImage: "plus")
             }
-            .buttonStyle(.visionOutline)
-            .controlSize(.small)
+            .buttonStyle(.vision(.outline, size: .sm))
             if form.splitType == .custom && !form.validEntries.isEmpty {
                 Text(
                     strings.t(
@@ -185,9 +180,9 @@ struct TransactionSplitSheet: View {
                 } label: {
                     Image(systemName: "trash")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.vision(.ghost, size: .iconSm))
                 .foregroundStyle(theme.secondaryLabel)
-                .help(strings.t("aria.removeEntry"))
+                .visionTooltip(strings.t("aria.removeEntry"))
                 .accessibilityLabel(strings.t("aria.removeEntry"))
             }
         }

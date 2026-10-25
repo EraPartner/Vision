@@ -5,15 +5,15 @@ import Observation
     public var horizonMonths = 60 { didSet { inputsChanged() } }
     public var contributionText = "" { didSet { inputsChanged() } }
     public var targetText = "" { didSet { inputsChanged() } }
-    public var returnSource = "historical" { didSet { inputsChanged() } }
+    public var returnSource: ResearchForecastReturnSource = .historical { didSet { inputsChanged() } }
     public var blendPct = 50 { didSet { inputsChanged() } }
-    public var method = "parametric" { didSet { inputsChanged() } }
+    public var method: ResearchForecastMethod = .parametric { didSet { inputsChanged() } }
     public var paths = 1000 { didSet { inputsChanged() } }
     public private(set) var isFetching = false
     public private(set) var isDebouncing = false
     public private(set) var error: String?
     public private(set) var settings = NativeAppSettings.defaults
-    public var currency: String { settings.defaultCurrency.isEmpty ? "EUR" : settings.defaultCurrency }
+    public var currency: CurrencyCode { ReportingFallbackCurrency.resolve(settings.defaultCurrency) }
     public var contributionInvalid: Bool { contributionAmount.map { $0.isNaN || $0 < 0 } ?? true }
     public var targetInvalid: Bool {
         !targetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -30,8 +30,8 @@ import Observation
         var fields: [String: TaxValue] = [
             "horizonMonths": .number(Decimal(horizonMonths)),
             "monthlyContribution": contributionAmount.map(TaxValue.number) ?? .null,
-            "forwardBlend": .number(returnSource == "blended" ? Decimal(blendPct) / 100 : 0),
-            "method": .string(method), "paths": .number(Decimal(paths)), "currency": .string(currency),
+            "forwardBlend": .number(returnSource == .blended ? Decimal(blendPct) / 100 : 0),
+            "method": .string(method.rawValue), "paths": .number(Decimal(paths)), "currency": .string(currency.rawValue),
         ]
         if !targetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             fields["targetValue"] = targetAmount.map(TaxValue.number) ?? .null
@@ -159,9 +159,9 @@ import Observation
         horizonMonths = 60
         contributionText = ""
         targetText = ""
-        returnSource = "historical"
+        returnSource = .historical
         blendPct = 50
-        method = "parametric"
+        method = .parametric
         paths = 1000
         suppressed = false
         result = nil

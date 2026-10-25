@@ -9,13 +9,16 @@ import Foundation
     }
     public func money(_ value: Decimal, signed: Bool = false) -> String {
         VisionFormat.currency(
-            value, code: snapshot.currency.uppercased(), locale: snapshot.settings.numberFormat.locale,
+            value, code: snapshot.currency, locale: snapshot.settings.numberFormat.locale,
             fractionDigits: snapshot.settings.showDecimalPlaces, signed: signed)
     }
     public func percent(_ value: Decimal) -> String {
         (value > 0 ? "+" : "") + VisionFormat.percent(value, locale: snapshot.settings.numberFormat.locale)
     }
     public func date(_ value: String) -> String {
+        VisionFormat.appDate(value, format: snapshot.settings.dateFormat)
+    }
+    public func date(_ value: CalendarDay) -> String {
         VisionFormat.appDate(value, format: snapshot.settings.dateFormat)
     }
     public func tick(_ value: String) -> String {
