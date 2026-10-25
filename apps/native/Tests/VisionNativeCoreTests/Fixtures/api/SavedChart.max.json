@@ -1,0 +1,23 @@
+{
+  "id": 1,
+  "name": "string",
+  "chart_type": "line",
+  "chart_variant": "default",
+  "time_bucket": "monthly",
+  "category_ids": [
+    1
+  ],
+  "recipient_ids": [
+    1
+  ],
+  "tag_ids": [
+    1
+  ],
+  "all_categories": true,
+  "all_recipients": true,
+  "all_tags": true,
+  "date_range_start": "2024-01-15",
+  "date_range_end": "2024-01-15",
+  "created_at": "2024-01-15T10:30:00.000Z",
+  "updated_at": "2024-01-15T10:30:00.000Z"
+}

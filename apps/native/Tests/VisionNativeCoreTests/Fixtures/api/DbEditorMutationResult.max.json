@@ -1,0 +1,20 @@
+{
+  "dryRun": true,
+  "count": 1,
+  "statements": [
+    {
+      "op": "string",
+      "preview": "string"
+    }
+  ],
+  "applied": 1,
+  "results": [
+    {
+      "op": "string",
+      "after": {
+        "key": "value"
+      }
+    }
+  ],
+  "refreshScheduled": true
+}

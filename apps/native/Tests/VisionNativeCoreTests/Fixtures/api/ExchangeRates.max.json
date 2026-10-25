@@ -1,0 +1,14 @@
+{
+  "total_rates": 1,
+  "rates": [
+    {
+      "currency": "EUR",
+      "rate_to_eur": 1.5,
+      "rate_date": "2024-01-15",
+      "fetched_at": "2024-01-15T10:30:00.000Z"
+    }
+  ],
+  "source": "database",
+  "is_stale": true,
+  "last_fetched_at": "2024-01-15T10:30:00.000Z"
+}

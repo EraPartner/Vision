@@ -1,0 +1,8 @@
+{
+  "name": "string",
+  "size": 1,
+  "family": "string",
+  "parameterSize": "string",
+  "quantization": "string",
+  "modifiedAt": "string"
+}

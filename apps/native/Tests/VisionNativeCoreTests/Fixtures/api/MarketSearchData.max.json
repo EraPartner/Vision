@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "symbol": "string",
+      "name": "string",
+      "exchange": "string",
+      "currency": "EUR",
+      "type": "string"
+    }
+  ]
+}

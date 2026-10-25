@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "data": {
+    "batch_id": 1,
+    "account_id": 1,
+    "account_name": "string",
+    "account_valid": true,
+    "groups": [
+      "value"
+    ],
+    "totals": {
+      "key": 1
+    }
+  },
+  "error": {
+    "message": "string",
+    "code": "string",
+    "status": 1
+  }
+}

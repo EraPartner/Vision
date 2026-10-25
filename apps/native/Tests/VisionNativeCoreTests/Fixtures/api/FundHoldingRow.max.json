@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "rowNumber": 1,
+    "sheetName": "string"
+  },
+  "name": "string",
+  "identifiers": [
+    {
+      "type": "isin",
+      "value": "string",
+      "exchange": "string"
+    }
+  ],
+  "instrumentType": "equity",
+  "exposureKind": "direct",
+  "exposureStatus": "supported",
+  "unsupportedReason": "string",
+  "weightPercent": "1.5",
+  "currency": "EUR",
+  "countryCode": "BE"
+}

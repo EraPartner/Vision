@@ -1,0 +1,15 @@
+{
+  "totalTaxes": 1.5,
+  "totalFees": 1.5,
+  "totalTaxesAndFees": 1.5,
+  "totalRecordedTaxes": 1.5,
+  "totalRecordedFees": 1.5,
+  "totalManualTaxes": 1.5,
+  "totalManualFees": 1.5,
+  "totalManualCosts": 1.5,
+  "totalRealizedGain": 1.5,
+  "totalUnrealizedGain": 1.5,
+  "effectiveTaxRate": 1.5,
+  "totalPIT": 1.5,
+  "portfolioTaxesPlusPIT": 1.5
+}

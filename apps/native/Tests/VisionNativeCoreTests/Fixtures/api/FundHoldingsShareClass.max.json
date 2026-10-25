@@ -1,0 +1,11 @@
+{
+  "name": "string",
+  "identifiers": [
+    {
+      "type": "isin",
+      "value": "string",
+      "exchange": "string"
+    }
+  ],
+  "currency": "EUR"
+}

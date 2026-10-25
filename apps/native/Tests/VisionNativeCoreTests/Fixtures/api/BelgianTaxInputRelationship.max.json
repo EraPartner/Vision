@@ -1,0 +1,12 @@
+{
+  "events": [
+    {
+      "id": "id-1",
+      "kind": "marriage",
+      "date": "2024-01-15",
+      "partnerId": "A"
+    }
+  ],
+  "deathYearElection": "joint",
+  "legacyAssumedJoint": true
+}

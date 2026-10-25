@@ -1,0 +1,120 @@
+{
+  "unconvertedCurrencies": [
+    "EUR"
+  ],
+  "incompleteFigures": [
+    "string"
+  ],
+  "year": 1,
+  "currency": "EUR",
+  "isEmpty": true,
+  "hasProfile": true,
+  "hasInKindIncomeUnclassified": true,
+  "totals": {
+    "totalTaxes": 1.5,
+    "totalFees": 1.5,
+    "totalTaxesAndFees": 1.5,
+    "totalRecordedTaxes": 1.5,
+    "totalRecordedFees": 1.5,
+    "totalManualTaxes": 1.5,
+    "totalManualFees": 1.5,
+    "totalManualCosts": 1.5,
+    "totalRealizedGain": 1.5,
+    "totalUnrealizedGain": 1.5,
+    "effectiveTaxRate": 1.5,
+    "totalPIT": 1.5,
+    "portfolioTaxesPlusPIT": 1.5
+  },
+  "taxBreakdown": [
+    {
+      "nameKey": "string",
+      "value": 1.5
+    }
+  ],
+  "feeBreakdown": [
+    {
+      "nameKey": "string",
+      "value": 1.5
+    }
+  ],
+  "taxByAssetClass": [
+    {
+      "assetClass": "string",
+      "taxes": 1.5,
+      "fees": 1.5,
+      "total": 1.5
+    }
+  ],
+  "investmentBreakdown": [
+    {
+      "id": 1,
+      "name": "string",
+      "symbol": "string",
+      "assetClass": "string",
+      "recordedTaxes": 1.5,
+      "recordedFees": 1.5,
+      "manualTaxes": 1.5,
+      "manualFees": 1.5,
+      "taxes": 1.5,
+      "fees": 1.5,
+      "total": 1.5,
+      "realizedGain": 1.5,
+      "currency": "EUR"
+    }
+  ],
+  "yearlyCostTrend": [
+    {
+      "period": "string",
+      "taxes": 1.5,
+      "fees": 1.5
+    }
+  ],
+  "dividend": {
+    "totalDividendIncome": 1.5,
+    "dividendWhtRecorded": 1.5,
+    "grossDividendWht": 1.5,
+    "dividendExemption": 1.5,
+    "grossDividendBase": 1.5,
+    "dividendWhtReclaim": 1.5,
+    "dividendWhtNetCost": 1.5,
+    "unknownDividendConventionCount": 1
+  },
+  "estimates": {
+    "tobRecorded": 1.5,
+    "tobAutoEstimate": 1.5,
+    "tacrEstimate": 1.5,
+    "reyndersEstimate": 1.5,
+    "cgtEstimate": 1.5
+  },
+  "taxTable": {
+    "securitiesAccountTaxRate": 1.5,
+    "capitalGainsTaxRate": 1.5,
+    "reyndersTaxRate": 1.5,
+    "dividendWHTRate": 1.5,
+    "securitiesAccountTaxThreshold": 1.5,
+    "badgePercent": {
+      "securitiesAccountTaxRate": 1.5,
+      "capitalGainsTaxRate": 1.5,
+      "reyndersTaxRate": 1.5,
+      "dividendWHTRate": 1.5
+    }
+  },
+  "summaries": [
+    {
+      "id": 1,
+      "name": "string",
+      "symbol": "string",
+      "assetClass": "string",
+      "currency": "EUR"
+    }
+  ],
+  "records": [
+    {
+      "key": "string",
+      "value": "value",
+      "expected": {
+        "exists": true
+      }
+    }
+  ]
+}

@@ -503,15 +503,20 @@ states); no route shows the web app.
 
 ### Generated sources
 
-`bun run native:generate` runs the four generators; CI's Verify Generated Artifacts job reruns it
+`bun run native:generate` runs the five generators; CI's Verify Generated Artifacts job reruns it
 and fails when `apps/native/` changes. The outputs are committed.
 
 | Script                            | Inputs                                                                                                                                  | Output                                                         |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
+| `scripts/native-fixtures.ts`      | `openapi.yaml`, `apps/native/openapi-operations.txt`                                                                                    | `Tests/VisionNativeCoreTests/Fixtures/api/`, `Contract/GeneratedModelDecodeTests.swift` |
 | `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/index.css`, `styles/skin-v2.css`, `styles/themes.ts`, `tailwind.config.ts`, `lib/motion.ts`, UI components | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
 | `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`                                                                                 | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
 | `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                                                                                                   | `Sources/VisionNativeCore/Navigation/Generated/`               |
+
+The fixture generator writes a minimal and a maximal JSON sample for every emitted model; the generated
+Swift test decodes, re-encodes and compares each one, and `bun run native:test-generators` fails when the
+fixtures or the test list lag `openapi.yaml`.
 
 The OpenAPI generator emits one `APIOperation` struct per allow-listed operationId and the
 component schemas they reach, plus the ADR-026 `Envelope` and `ErrorPayload`. Numbers become

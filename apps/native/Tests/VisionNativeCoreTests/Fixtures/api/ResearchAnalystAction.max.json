@@ -1,0 +1,7 @@
+{
+  "date": "string",
+  "firm": "string",
+  "toGrade": "string",
+  "fromGrade": "string",
+  "action": "string"
+}

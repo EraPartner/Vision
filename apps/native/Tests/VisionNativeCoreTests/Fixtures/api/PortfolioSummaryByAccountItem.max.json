@@ -1,0 +1,11 @@
+{
+  "account_id": 1,
+  "assignment": "account",
+  "contribution_kind": "position",
+  "oversold": true,
+  "currentValue": 1.5,
+  "totalInvested": 1.5,
+  "realizedGain": 1.5,
+  "unrealizedGain": 1.5,
+  "gainLoss": 1.5
+}

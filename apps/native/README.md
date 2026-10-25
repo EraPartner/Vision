@@ -134,7 +134,7 @@ storage. The window hosts SwiftUI screens, and the backend is reached over HTTP.
 See [the architecture page](../../docs/architecture/native-app.md#native-navigation-and-screens-phase-2).
 
 - `bun run native:generate` regenerates the OpenAPI client (operations listed in
-  `openapi-operations.txt`), the design tokens, the String Catalog (keys listed in
+  `openapi-operations.txt`), its decode fixtures (`Tests/.../Fixtures/api`), the design tokens, the String Catalog (keys listed in
   `i18n-keys.txt`) and the sidebar registry. CI fails when the committed files differ.
 - The window is a `NavigationSplitView`: a native sidebar from `apps/frontend/src/lib/navigation.ts`
   and a detail column with the web view or a native screen. The page reports its route through

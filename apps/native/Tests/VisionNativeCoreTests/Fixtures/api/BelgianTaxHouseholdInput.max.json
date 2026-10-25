@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "taxYear": 1900,
+  "profileConfigured": true,
+  "region": "flanders",
+  "communalSurchargePercent": 1.5,
+  "partners": [
+    {
+      "id": "A",
+      "displayName": "string",
+      "birthYear": 1900,
+      "isDisabled": true,
+      "isIsolatedParent": true,
+      "activities": [
+        {
+          "id": "act_1",
+          "kind": "employee",
+          "label": "string",
+          "grossIncome": 1.5,
+          "netProfessionalIncome": 1.5,
+          "pensionKind": "statutory_from_legal_age",
+          "startDate": "2024-01-15",
+          "endDate": "2024-01-15",
+          "selfEmployedOccupation": "main",
+          "socialContributionsPaid": 1.5,
+          "withholdingTax": 1.5,
+          "prepayments": 1.5,
+          "sourceRefs": [
+            "string"
+          ]
+        }
+      ],
+      "professionalExpenses": {
+        "key": {
+          "method": "lump_sum",
+          "actualAmount": 1.5
+        }
+      },
+      "unionDues": 1.5,
+      "otherTaxableIncome": 1.5,
+      "alimonyPaid": 1.5,
+      "treatyExemptProfessionalIncome": 1.5,
+      "reductions": {
+        "personalPensionContributions": 1.5,
+        "pensionScheme": "1050",
+        "pensionEligible": true,
+        "lifeInsurancePremiums": 1.5,
+        "lifeInsuranceEligible": true,
+        "employeeGroupInsuranceContributions": 1.5,
+        "employeeGroupInsuranceEligible": true,
+        "charitableDonations": 1.5,
+        "charitableDonationsEligible": true,
+        "childcareCosts": 1.5,
+        "childcareEligibleDays": 1,
+        "childcareEligible": true,
+        "domesticHelpCosts": 1.5,
+        "domesticHelpEligible": true,
+        "serviceVoucherCount": 1,
+        "serviceVoucherSpend": 1.5,
+        "serviceVoucherEligible": true,
+        "medicalExpenses": 1.5
+      },
+      "annualDividendIncome": 1.5,
+      "annualSavingsInterest": 1.5
+    }
+  ],
+  "relationship": {
+    "events": [
+      {
+        "id": "id-1",
+        "kind": "marriage",
+        "date": "2024-01-15",
+        "partnerId": "A"
+      }
+    ],
+    "deathYearElection": "joint",
+    "legacyAssumedJoint": true
+  },
+  "dependents": {
+    "children": 1,
+    "childrenUnder3": 1,
+    "childrenDisabled": 1,
+    "otherPersons": 1,
+    "otherPersonsDisabled": 1,
+    "claimantPartnerId": "A"
+  },
+  "home": {
+    "cadastralIncome": 1.5,
+    "cadastralCentimesOverride": 1.5,
+    "additionalResidences": [
+      {
+        "label": "string",
+        "cadastralIncome": 1.5,
+        "region": "flanders",
+        "isOwnHome": true,
+        "centimesOverride": 1.5
+      }
+    ],
+    "mortgageInterestPaid": 1.5,
+    "mortgageCapitalRepaid": 1.5,
+    "mortgageStartYear": 1900,
+    "mortgageRegion": "flanders",
+    "mortgageIsPrimaryResidence": true,
+    "mortgageCreditPartnerId": "A",
+    "mortgageSharePartnerB": 1.5,
+    "firstQualifyingYear": 1900,
+    "woonbonusChildrenAtLoanStart": 1
+  },
+  "taxIncomeCategoryIds": [
+    1
+  ],
+  "migratedFrom": {
+    "fromVersion": 1.5,
+    "unmappedFields": [
+      {
+        "field": "string",
+        "note": "string",
+        "value": "value"
+      }
+    ]
+  }
+}

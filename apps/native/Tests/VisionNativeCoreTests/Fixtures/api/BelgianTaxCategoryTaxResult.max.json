@@ -1,0 +1,8 @@
+{
+  "category": "director",
+  "method": "lump_sum",
+  "grossAfterContributions": 1.5,
+  "professionalExpenses": 1.5,
+  "unionDuesApplied": 1.5,
+  "netIncome": 1.5
+}

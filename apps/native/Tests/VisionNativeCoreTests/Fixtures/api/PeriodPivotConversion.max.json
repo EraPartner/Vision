@@ -1,0 +1,10 @@
+{
+  "usedHistoricalFallback": true,
+  "affectedCurrencies": [
+    "EUR"
+  ],
+  "unconvertedCount": 1,
+  "unconvertedCurrencies": [
+    "EUR"
+  ]
+}

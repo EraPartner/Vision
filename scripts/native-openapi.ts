@@ -283,6 +283,8 @@ export interface GeneratedAPI {
   models: string;
   operations: string;
   identifiers: string;
+  /** The component schemas emitted as Swift models (struct, enum or typealias), sorted. */
+  schemas: string[];
   stats: GenerationStats;
 }
 
@@ -345,7 +347,7 @@ function singular(word: string): string {
 }
 
 /** Currency fields: names ending in currency/currencies, or the `^[A-Z]{3}$` pattern. */
-function isCurrencyField(wire: string, schema: Schema): boolean {
+export function isCurrencyField(wire: string, schema: Schema): boolean {
   const target =
     schema.type === "array" && isObject(schema.items) ? schema.items : schema;
   if (target.type !== "string" || Array.isArray(target.enum)) return false;
@@ -1274,8 +1276,12 @@ class Generator {
       if (emitted.has(name)) continue;
       emitted.set(name, this.component(name));
     }
-    return [...emitted.keys()].sort().map((name) => emitted.get(name) ?? "");
+    this.emittedSchemas = [...emitted.keys()].sort();
+    return this.emittedSchemas.map((name) => emitted.get(name) ?? "");
   }
+
+  /** Names of the schemas `models()` emitted. */
+  emittedSchemas: string[] = [];
 }
 
 export function generateAPI(
@@ -1356,6 +1362,7 @@ export function generateAPI(
     models: modelsFile,
     operations: operationsFile,
     identifiers: identifiersFile,
+    schemas: generator.emittedSchemas,
     stats: {
       identifierTypes: entities.length,
       identifierFields: generator.stats.identifierFields,

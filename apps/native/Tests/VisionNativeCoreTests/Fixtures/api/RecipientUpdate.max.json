@@ -1,0 +1,6 @@
+{
+  "name": "string",
+  "default_category_id": 1,
+  "notes": "string",
+  "is_active": true
+}
