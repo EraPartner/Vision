@@ -53,8 +53,7 @@ Exports a module-scoped event emitter that:
 - Emits `ApiRequestEvent` on every request lifecycle phase (start, success, error)
 - Pairs every `start` with exactly one `success` or `error` per attempt, including an attempt that
   gets a retryable status (logged as `error` with that status) and one cancelled during the retry
-  back-off. An unpaired `start` keeps the inspector icon pulsing until reload; the pulsing
-  icon was running during the post-launch GPU burn measured on 2026-10-25.
+  back-off. An unpaired `start` would keep the inspector icon pulsing until reload.
 - Maintains zero-cost operation when no subscribers attached (no event loop pollution)
 - Carries complete request metadata including requestId, endpoint, method, duration, status, and error context
 
@@ -80,6 +79,10 @@ type ApiRequestEvent = {
 Subscribed to the event bus, maintains a fixed-size ring buffer (capacity: 200) of requests:
 
 - Tracks both in-flight and completed requests
+- Publishes a new snapshot before notifying React. It used to publish one event late, so the
+  last request of a burst stayed "in flight" and the inspector icon kept pulsing (and the GPU
+  busy) until something re-rendered the button, such as a click. Measured on 2026-10-25 as the
+  post-launch GPU burn of the real app with Admin Mode on.
 - Exposes `useApiRequestLog()` hook via `useSyncExternalStore` for reactive UI updates
 - Provides `getRequestDetail(requestId)` for detail-pane queries
 - Automatically evicts oldest entries when buffer is full

@@ -51,6 +51,18 @@ describe("devtoolsHotkey", () => {
     expect(result.current).toBe(true);
   });
 
+  test("Cmd+Shift+A toggles the inspector when macOS reports a lowercase key", () => {
+    const { result } = renderHook(() => useInspectorOpen());
+    const unregister = registerInspectorHotkey();
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "a", shiftKey: true, metaKey: true }),
+      );
+    });
+    expect(result.current).toBe(true);
+    unregister();
+  });
+
   test("ignores keys without the required modifiers", () => {
     const { result } = renderHook(() => useInspectorOpen());
     const unregister = registerInspectorHotkey();
