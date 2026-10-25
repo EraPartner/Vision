@@ -33,6 +33,9 @@ export type BelgianTaxDashboardSuggestion =
 export type BelgianPortfolioTaxDashboard =
     components["schemas"]["BelgianPortfolioTaxDashboard"];
 
+export type BelgianTaxDashboardHouseholdTone =
+    components["schemas"]["BelgianTaxDashboardHouseholdRow"]["tone"];
+
 export interface BelgianTaxDashboardParams {
     year: number;
     currency: CurrencyCode;
@@ -93,6 +96,11 @@ export function computeBelgianTax(
     });
 }
 
+export type BelgianTaxSettingsWarningKind =
+    components["schemas"]["BelgianTaxSettingsWarning"]["kind"];
+export type BelgianTaxCalculationSource =
+    components["schemas"]["BelgianTaxOverview"]["calculationSource"];
+
 /** Stored setting with its compare-and-swap baseline, as the overview read it. */
 export interface BelgianTaxSettingRecord {
     key: string;
@@ -118,12 +126,12 @@ export interface BelgianTaxOverview {
     metadata: BelgianTaxProfileSnapshotMeta;
     calculation: BelgianTaxCalculation;
     result: HouseholdTaxResult;
-    calculationSource: "frozen" | "computed";
-    householdResultSource: "frozen" | "computed";
+    calculationSource: BelgianTaxCalculationSource;
+    householdResultSource: components["schemas"]["BelgianTaxOverview"]["householdResultSource"];
     householdMigrationNeeded: boolean;
     snapshotsMigrationNeeded: boolean;
     storedValueInvalid: boolean;
-    warnings: Array<{ key: string; kind: string; issues?: unknown }>;
+    warnings: Array<{ key: string; kind: BelgianTaxSettingsWarningKind; issues?: unknown }>;
     records: BelgianTaxSettingRecord[];
 }
 

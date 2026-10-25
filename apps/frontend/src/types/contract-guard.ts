@@ -469,3 +469,219 @@ export type _NumOwedDetailRemaining = Expect<
 
 // ── Enums: Belgian tax, reports, accounts, transactions, recipients, splits,
 //    saved charts, settings.
+
+import type { AccountCreate, AccountUpdate, BulkExportRequest, BulkTransactionFilter } from "./api";
+import type {
+    AccountCloseBalanceHandling,
+    ReconcileMode,
+    ReconcileResult,
+} from "@/lib/api/accounts";
+import type { BelgianTaxOverview } from "@/lib/api/belgianTax";
+import type { RecipientPattern, RecipientPatternCreate, RecipientPatternUpdate } from "@/lib/api/recipients";
+import type { ReportThemeTokens } from "@/lib/themeTokens";
+import type { ReportPeriod, TaxReportHousehold, TaxReportProfile } from "@/lib/api/reports";
+import type { BulkSplitRequest } from "@/lib/api/splits";
+import type { getAccounts } from "@/lib/api/accounts";
+import type { getTransactions } from "@/lib/api/transactions";
+import type { getRecipients } from "@/lib/api/recipients";
+import type {
+    getAggregationRecipientPivot,
+    getAggregationTagPivot,
+} from "@/lib/api/aggregations";
+import type { SavedChart, SavedChartCreate } from "./apiClient";
+import type {
+    BelgianTaxHouseholdV2,
+    HouseholdCsssResult,
+    HouseholdTaxIssue,
+    HouseholdTaxResult,
+    MaritalQuotientResult,
+    PartnerTaxResult,
+    ActivityTaxResult,
+    CategoryTaxResult,
+    AssessmentDecision,
+    HouseholdPartner,
+    IncomeActivity,
+    RelationshipEvent,
+    HouseholdRelationship,
+    HouseholdDependents,
+    HouseholdHomeInputs,
+    HouseholdMigrationRecord,
+} from "@/lib/belgianTax/householdTypes";
+
+export type _EnumsAccountCreate = Expect<
+    Matches<AccountCreate, Schemas["AccountCreate"]>
+>;
+export type _EnumsAccountUpdate = Expect<
+    Matches<AccountUpdate, Schemas["AccountUpdate"]>
+>;
+export type _EnumsBulkTransactionFilter = Expect<
+    Matches<BulkTransactionFilter, Schemas["BulkTransactionFilter"]>
+>;
+export type _EnumsBulkExport = Expect<
+    Matches<
+        Pick<BulkExportRequest, "format">,
+        operations["bulkExportTransactions"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsCloseAccount = Expect<
+    Matches<
+        { balance_handling: AccountCloseBalanceHandling },
+        operations["closeAccount"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReconcileRequest = Expect<
+    Matches<
+        { mode: ReconcileMode },
+        operations["reconcileAccount"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReconcileResult = Expect<
+    Matches<ReconcileResult, ResponseData<operations["reconcileAccount"]>>
+>;
+export type _EnumsSavedChart = Expect<
+    Matches<SavedChart, Schemas["SavedChart"]>
+>;
+export type _EnumsSavedChartCreate = Expect<
+    Matches<
+        SavedChartCreate,
+        operations["createSavedChart"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsSavedChartUpdate = Expect<
+    Matches<
+        Partial<SavedChartCreate>,
+        operations["updateSavedChart"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsRecipientPattern = Expect<
+    Matches<RecipientPattern, Schemas["RecipientPattern"]>
+>;
+export type _EnumsRecipientPatternCreate = Expect<
+    Matches<
+        RecipientPatternCreate,
+        operations["createRecipientPattern"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsRecipientPatternUpdate = Expect<
+    Matches<
+        RecipientPatternUpdate,
+        operations["updateRecipientPattern"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsBulkSplit = Expect<
+    Matches<
+        BulkSplitRequest,
+        operations["createBulkSplits"]["requestBody"]["content"]["application/json"]
+    >
+>;
+export type _EnumsReportPeriod = Expect<
+    Matches<ReportPeriod, Schemas["ReportPeriod"]>
+>;
+export type _EnumsReportPrecomputedHousehold = Expect<
+    Matches<TaxReportHousehold, Schemas["ReportPrecomputedHousehold"]>
+>;
+export type _EnumsReportPrecomputedQuotient = Expect<
+    Matches<
+        NonNullable<TaxReportHousehold["quotient"]>,
+        NonNullable<Schemas["ReportPrecomputedHousehold"]["quotient"]>
+    >
+>;
+export type _EnumsReportPrecomputedPartner = Expect<
+    Matches<
+        TaxReportHousehold["partners"][number],
+        Schemas["ReportPrecomputedHousehold"]["partners"][number]
+    >
+>;
+export type _EnumsBelgianTaxOverview = Expect<
+    Matches<BelgianTaxOverview, Schemas["BelgianTaxOverview"]>
+>;
+export type _EnumsBelgianTaxSettingsWarning = Expect<
+    Matches<
+        BelgianTaxOverview["warnings"][number],
+        Schemas["BelgianTaxSettingsWarning"]
+    >
+>;
+export type _EnumsBelgianTaxHouseholdInput = Expect<
+    Matches<BelgianTaxHouseholdV2, Schemas["BelgianTaxHouseholdInput"]>
+>;
+export type _EnumsBelgianTaxInputPartner = Expect<
+    Matches<HouseholdPartner, Schemas["BelgianTaxInputPartner"]>
+>;
+export type _EnumsBelgianTaxInputActivity = Expect<
+    Matches<IncomeActivity, Schemas["BelgianTaxInputPartnerActivity"]>
+>;
+export type _EnumsBelgianTaxInputRelationship = Expect<
+    Matches<HouseholdRelationship, Schemas["BelgianTaxInputRelationship"]>
+>;
+export type _EnumsBelgianTaxInputRelationshipEvent = Expect<
+    Matches<RelationshipEvent, Schemas["BelgianTaxInputRelationshipEvent"]>
+>;
+export type _EnumsBelgianTaxInputDependents = Expect<
+    Matches<HouseholdDependents, Schemas["BelgianTaxInputDependents"]>
+>;
+export type _EnumsBelgianTaxInputHome = Expect<
+    Matches<HouseholdHomeInputs, Schemas["BelgianTaxInputHome"]>
+>;
+export type _EnumsBelgianTaxInputMigratedFrom = Expect<
+    Matches<HouseholdMigrationRecord, Schemas["BelgianTaxInputMigratedFrom"]>
+>;
+export type _EnumsBelgianTaxHouseholdResult = Expect<
+    Matches<HouseholdTaxResult, Schemas["BelgianTaxHouseholdTaxResult"]>
+>;
+export type _EnumsBelgianTaxAssessment = Expect<
+    Matches<AssessmentDecision, Schemas["BelgianTaxAssessmentDecision"]>
+>;
+export type _EnumsBelgianTaxPartnerResult = Expect<
+    Matches<PartnerTaxResult, Schemas["BelgianTaxPartnerTaxResult"]>
+>;
+export type _EnumsBelgianTaxActivityResult = Expect<
+    Matches<ActivityTaxResult, Schemas["BelgianTaxActivityTaxResult"]>
+>;
+export type _EnumsBelgianTaxCategoryResult = Expect<
+    Matches<CategoryTaxResult, Schemas["BelgianTaxCategoryTaxResult"]>
+>;
+export type _EnumsBelgianTaxQuotient = Expect<
+    Matches<MaritalQuotientResult, Schemas["BelgianTaxMaritalQuotientResult"]>
+>;
+export type _EnumsBelgianTaxCsss = Expect<
+    Matches<HouseholdCsssResult, Schemas["BelgianTaxHouseholdCsssResult"]>
+>;
+export type _EnumsBelgianTaxIssue = Expect<
+    Matches<HouseholdTaxIssue, Schemas["BelgianTaxHouseholdTaxIssue"]>
+>;
+export type _EnumsReportTheme = Expect<
+    Matches<ReportThemeTokens, Schemas["ReportTheme"]>
+>;
+export type _EnumsReportTaxProfile = Expect<
+    Matches<TaxReportProfile, Schemas["ReportTaxProfile"]>
+>;
+export type _EnumsAccountsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAccounts>[0]>,
+        NonNullable<operations["getAccounts"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsTransactionsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getTransactions>[0]>,
+        NonNullable<operations["getTransactions"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsRecipientsQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getRecipients>[0]>,
+        NonNullable<operations["getRecipients"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsRecipientPivotQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAggregationRecipientPivot>[0]>,
+        NonNullable<operations["getRecipientPivot"]["parameters"]["query"]>
+    >
+>;
+export type _EnumsTagPivotQuery = Expect<
+    Matches<
+        NonNullable<Parameters<typeof getAggregationTagPivot>[0]>,
+        NonNullable<operations["getTagPivot"]["parameters"]["query"]>
+    >
+>;
