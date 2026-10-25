@@ -1,8 +1,12 @@
 name: Swift app build
 
-# Manual only (ADR-249). It never runs on pull requests or pushes, so it adds no time to CI.
-# Agents start it on a branch with workflow_dispatch to compile and test apps/native.
+# Manual only (ADR-249). It never runs on pull requests, so it adds no time to CI. Start it with
+# workflow_dispatch, or by pushing a claude/* commit whose message contains "[swift-build]" (the
+# Claude GitHub App cannot dispatch workflows); every other push skips the job.
 on:
+  push:
+    branches: ["claude/**"]
+    paths: ["apps/native/**", ".github/workflows/swift-build.yml"]
   workflow_dispatch:
     inputs:
       tests:
@@ -19,6 +23,7 @@ concurrency:
 jobs:
   swift-build:
     name: Swift app (macOS)
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[swift-build]')
     runs-on: macos-26
     timeout-minutes: 40
     permissions:
@@ -53,7 +58,7 @@ jobs:
         run: xcodebuild -quiet -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
 
       - name: Test the Swift package
-        if: inputs.tests
+        if: github.event_name == 'push' || inputs.tests
         run: |
           # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
           swift test --package-path apps/native --skip VisionNativeUITests
