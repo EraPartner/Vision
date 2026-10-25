@@ -32,6 +32,23 @@ struct VisionFieldChrome<Content: View>: View {
     var alignment: Alignment = .leading
     @ViewBuilder var content: Content
 
+    var body: some View {
+        content.modifier(
+            VisionFieldChromeModifier(
+                isFocused: isFocused, horizontalPadding: horizontalPadding, verticalPadding: verticalPadding,
+                minHeight: minHeight, alignment: alignment))
+    }
+}
+
+/// `VisionFieldChrome` as a modifier, for `TextFieldStyle._body`, which cannot hand its
+/// configuration to a view-builder closure without sending it across isolation.
+struct VisionFieldChromeModifier: ViewModifier {
+    var isFocused: Bool?
+    var horizontalPadding: CGFloat = VisionControlMetrics.fieldHorizontalPadding
+    var verticalPadding: CGFloat = 0
+    var minHeight: CGFloat = VisionControlMetrics.fieldHeight
+    var alignment: Alignment = .leading
+
     @Environment(\.visionTheme) private var theme
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.isFocused) private var environmentFocus
@@ -39,7 +56,7 @@ struct VisionFieldChrome<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
-    var body: some View {
+    func body(content: Content) -> some View {
         let focused = isFocused ?? (fieldFocused || environmentFocus)
         let shape = RoundedRectangle(cornerRadius: VisionControlMetrics.radius, style: .continuous)
         content
@@ -89,9 +106,7 @@ struct VisionFieldChrome<Content: View>: View {
 struct VisionTextFieldStyle: TextFieldStyle {
     // swiftlint:disable:next identifier_name
     func _body(configuration: TextField<Self._Label>) -> some View {
-        VisionFieldChrome {
-            configuration.textFieldStyle(.plain)
-        }
+        configuration.textFieldStyle(.plain).modifier(VisionFieldChromeModifier())
     }
 }
 
