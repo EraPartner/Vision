@@ -98,7 +98,6 @@ final class ShellController: NSObject, NSWindowDelegate {
         let fenced = NativeSessionAPITransport(base: inspected, streamBase: transport, session: session ?? dataSession)
         return APIClient(
             baseURL: { [weak self] in await self?.appURL },
-            adminToken: { [weak self] in await self?.adminToken() },
             transport: fenced, timeout: timeout, streamTransport: fenced)
     }
 
@@ -415,8 +414,7 @@ final class ShellController: NSObject, NSWindowDelegate {
             theme: ThemeSelection.resolve(
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
             exchangeRates: rates,
-            admin: AdminScreens.make(
-                service: client, database: client, token: makeAdminTokenAccess(generation: settingsGeneration)),
+            admin: AdminScreens.make(service: client, database: client),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
             imports: imports,
             transactions: transactions,
@@ -966,14 +964,6 @@ final class ShellController: NSObject, NSWindowDelegate {
             Dictionary(uniqueKeysWithValues: hidden.map { ($0.key.rawValue, $0.value) }), forKey: hiddenSectionsKey)
     }
 
-    /// The admin Bearer token of the shell's session. It lives only in the raw-state store's
-    /// session values (`vision.adminToken`, never in settings.json); without one the backend's
-    /// loopback allowlist applies.
-    private func adminToken() async -> String? {
-        guard isDocumentReady, let storage = nativeStorage else { return nil }
-        return await storage.adminToken()
-    }
-
     /// Home and Tax share the per-device dismissals. Only the known keys of
     /// `NativeShellStorage` are accessible.
     private func homeLocalStorage(key: String, value: JSONValue? = nil, generation: UUID? = nil) async -> JSONValue? {
@@ -1029,34 +1019,6 @@ final class ShellController: NSObject, NSWindowDelegate {
         }) {
             await storage.webStorage(key: key, value: value, session: session)
         }
-    }
-
-    /// The admin token card's access to the session's token.
-    private func makeAdminTokenAccess(generation: UUID) -> AdminTokenAccess {
-        AdminTokenAccess(
-            read: { [weak self] in await self?.adminToken(generation: generation) },
-            write: { [weak self] token in await self?.writeAdminToken(token, generation: generation) ?? false })
-    }
-
-    private func adminToken(generation: UUID) async -> String? {
-        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
-        let token = await adminToken()
-        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
-        return token
-    }
-
-    /// The trimmed token, or removal for a blank one. `false` when the shell is not ready or
-    /// the write is refused; the storage is then unchanged as far as the card knows.
-    private func writeAdminToken(_ token: String, generation: UUID) async -> Bool {
-        guard (try? requireNativeGeneration(generation)) != nil, isDocumentReady, let storage = nativeStorage else {
-            return false
-        }
-        do {
-            try await performStorageWrite(validate: { try requireNativeGeneration(generation) }) {
-                await storage.setAdminToken(token)
-            }
-        } catch { return false }
-        return (try? requireNativeGeneration(generation)) != nil
     }
 
     private static var localeDirectory: String? {
