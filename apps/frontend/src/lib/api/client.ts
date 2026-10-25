@@ -358,6 +358,9 @@ export async function apiRequest<T>(
             attempt,
             phase: "start",
         });
+        // Every "start" gets exactly one end event, or the devtools inspector
+        // keeps the request in flight (and its icon pulsing) forever.
+        let attemptEnded = false;
 
         try {
             const response = await rawFetch(url, { ...init, headers });
@@ -370,6 +373,18 @@ export async function apiRequest<T>(
                 lastError = new Error(`Server returned ${response.status}`);
                 // Release the unconsumed body stream before retrying (fire-and-forget).
                 void response.body?.cancel().catch(() => {});
+                apiEventBus.emit({
+                    id: requestId,
+                    method,
+                    endpoint,
+                    startedAt,
+                    attempt,
+                    phase: "error",
+                    durationMs: performance.now() - startedAt,
+                    status: response.status,
+                    errorMessage: lastError.message,
+                });
+                attemptEnded = true;
                 continue;
             }
 
@@ -391,6 +406,7 @@ export async function apiRequest<T>(
                     errorCode: apiErr.code,
                     errorMessage: apiErr.message,
                 });
+                attemptEnded = true;
                 logger.debug(`api:request ${method} ${endpoint}`, {
                     requestId,
                     durationMs,
@@ -412,6 +428,7 @@ export async function apiRequest<T>(
                     durationMs,
                     status: 204,
                 });
+                attemptEnded = true;
                 logger.debug(`api:request ${method} ${endpoint}`, {
                     requestId,
                     durationMs,
@@ -436,6 +453,7 @@ export async function apiRequest<T>(
                 durationMs,
                 status: response.status,
             });
+            attemptEnded = true;
             logger.debug(`api:request ${method} ${endpoint}`, {
                 requestId,
                 durationMs,
@@ -457,6 +475,7 @@ export async function apiRequest<T>(
                     errorMessage:
                         err instanceof Error ? err.message : "Network error",
                 });
+                attemptEnded = true;
                 logger.debug(`api:request ${method} ${endpoint}`, {
                     requestId,
                     durationMs,
@@ -479,6 +498,19 @@ export async function apiRequest<T>(
                 throw err;
             }
             if (attempt >= retries) throw err;
+        } finally {
+            if (!attemptEnded) {
+                apiEventBus.emit({
+                    id: requestId,
+                    method,
+                    endpoint,
+                    startedAt,
+                    attempt,
+                    phase: "error",
+                    durationMs: performance.now() - startedAt,
+                    errorMessage: "Request ended without a result",
+                });
+            }
         }
     }
 
