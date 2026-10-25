@@ -3,12 +3,46 @@ import SwiftUI
 import VisionNativeCore
 
 /// One presentation surface for app-wide overlays; the route below keeps its visit alive.
+///
+/// `ShellRootView` presents it as an in-window glass dialog (`visionDialog`, the web `Dialog`),
+/// sized per overlay by `metrics(for:)`.
 struct NativeShellOverlayHost: View {
     let shell: NativeShellModel
+    /// The overlay shown last. While the dialog animates out the model has already cleared its
+    /// flags, so this keeps the closing overlay's content in place until the exit ends.
+    @State private var lastKind: NativeShellOverlayKind?
+
+    init(shell: NativeShellModel) {
+        self.shell = shell
+        _lastKind = State(initialValue: shell.nativeOverlayKind)
+    }
+
+    /// The dialog geometry of an overlay. Settings is `DashboardSettingsDialog`'s `max-w-4xl`,
+    /// `h-[82vh]`, `p-0 gap-0`; the others size and pad themselves.
+    static func metrics(for kind: NativeShellOverlayKind?) -> VisionDialogMetrics {
+        switch kind {
+        case .some(.settings):
+            return VisionDialogMetrics(
+                maxWidth: NativeSettingsWindow.Layout.maxWidth,
+                height: .fraction(NativeSettingsWindow.Layout.heightFraction), padding: 0, spacing: 0)
+        default:
+            return VisionDialogMetrics(maxWidth: nil, padding: 0, spacing: 0)
+        }
+    }
+
+    /// The `DialogTitle` announced when the dialog opens (`sr-only` in the settings dialog).
+    static func accessibilityTitle(for kind: NativeShellOverlayKind?, strings: any Localizing) -> String? {
+        switch kind {
+        case .some(.settings): return strings.t("settings.title")
+        case .some(.shortcuts): return strings.t("shortcuts.title")
+        default: return nil
+        }
+    }
+
     var body: some View {
         content
             .disabled(shell.isReloadingGraph || shell.nativeSettings?.isSuspendedForRestore == true)
-            .interactiveDismissDisabled(preventsInteractiveDismissal)
+            .visionInteractiveDismissDisabled(preventsInteractiveDismissal)
             .environment(\.nativeNoticeCenter, shell.notices)
             .background {
                 NativeOverlayFocusBridge(
@@ -21,33 +55,42 @@ struct NativeShellOverlayHost: View {
                     NativeNoticeHost(center: shell.notices, strings: shell.strings)
                 }
             }
+            .onChange(of: shell.nativeOverlayKind) { _, kind in if let kind { lastKind = kind } }
     }
+    /// The overlay whose content is on screen: the live one, or the closing one.
+    private var displayedKind: NativeShellOverlayKind? { shell.nativeOverlayKind ?? lastKind }
     private var content: some View {
         ZStack {
-            if shell.isPresentingNativeSettings,
-                let settings = shell.nativeSettings, let ai = shell.settingsAI,
-                let backup = shell.settingsBackup, let about = shell.settingsAbout
+            if let settings = shell.nativeSettings, let ai = shell.settingsAI,
+                let backup = shell.settingsBackup, let about = shell.settingsAbout,
+                shell.isPresentingNativeSettings || (shell.nativeOverlayKind == nil && lastKind == .settings)
             {
                 retained(
                     NativeSettingsScreenView(shell: shell, model: settings, ai: ai, backup: backup, about: about),
                     as: .settings)
             }
-            if let palette = shell.commandPalette, palette.isOpen {
+            if let palette = shell.commandPalette,
+                palette.isOpen || (shell.nativeOverlayKind == nil && lastKind == .palette)
+            {
                 retained(NativeCommandPaletteView(model: palette, shell: shell), as: .palette)
             }
-            if shell.isPresentingShortcuts {
+            if shell.isPresentingShortcuts || (shell.nativeOverlayKind == nil && lastKind == .shortcuts) {
                 retained(NativeShortcutsHelpView(shell: shell, onClose: shell.closeShortcuts), as: .shortcuts)
             }
-            if let onboarding = shell.onboarding, onboarding.isPresented {
+            if let onboarding = shell.onboarding,
+                onboarding.isPresented || (shell.nativeOverlayKind == nil && lastKind == .onboarding)
+            {
                 retained(NativeOnboardingView(model: onboarding, shell: shell), as: .onboarding)
             }
-            if let reports = shell.reports, reports.isPresented {
+            if let reports = shell.reports,
+                reports.isPresented || (shell.nativeOverlayKind == nil && lastKind == .report)
+            {
                 retained(NativeReportSheet(model: reports, strings: shell.strings), as: .report)
             }
         }
     }
     private func retained<Content: View>(_ content: Content, as kind: NativeShellOverlayKind) -> some View {
-        let active = shell.nativeOverlayKind == kind
+        let active = displayedKind == kind
         return
             content
             .frame(width: active ? nil : 0, height: active ? nil : 0)
@@ -59,7 +102,7 @@ struct NativeShellOverlayHost: View {
             .environment(\.nativeNoticeAnnouncementsEnabled, active)
     }
     private var needsNoticeHost: Bool {
-        switch shell.nativeOverlayKind {
+        switch displayedKind {
         case .some(.palette), .some(.shortcuts), .some(.report): return true
         default: return false
         }

@@ -9,6 +9,8 @@ public struct ShellRootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var connectivity = PortfolioConnectivity()
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
+    /// The overlay shown last, so the dialog keeps its geometry while it animates out.
+    @State private var lastOverlayKind: NativeShellOverlayKind?
     /// The landing point at the top of a native screen (`<main>` for the skip link).
     @FocusState private var contentFocused: Bool
     /// Whether the current native screen has scrolled past the topbar title threshold. Only
@@ -145,6 +147,7 @@ public struct ShellRootView: View {
         // chosen accent) instead of the system blue.
         .tint(theme.primary)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
+        .environment(\.visionFullEffects, model.nativeSettings?.fullEffects ?? false)
         .environment(\.visionWealthCanvasTint, model.route.path.hasPrefix("/portfolio"))
         .environment(\.visionStaticAtmosphere, model.nativeSettings?.isLargeDisplay ?? false)
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
@@ -166,11 +169,14 @@ public struct ShellRootView: View {
                 isPresented: model.isPresentingNativeOverlay
             ).frame(width: 0, height: 0)
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { model.isPresentingNativeOverlay },
                 set: { if !$0 { Task { await model.closeNativeOverlay() } } }
             ),
+            metrics: NativeShellOverlayHost.metrics(for: model.nativeOverlayKind ?? lastOverlayKind),
+            accessibilityTitle: NativeShellOverlayHost.accessibilityTitle(
+                for: model.nativeOverlayKind ?? lastOverlayKind, strings: model.strings),
             onDismiss: {
                 overlayFocusReturn.didDismiss(
                     context: NativeOverlayFocusContext(shell: model), isPresented: model.isPresentingNativeOverlay)
@@ -178,10 +184,10 @@ public struct ShellRootView: View {
         ) {
             NativeShellOverlayHost(shell: model)
                 .environment(\.visionTheme, theme)
-                .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
                 .environment(\.colorScheme, theme.colorScheme)
                 .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         }
+        .onChange(of: model.nativeOverlayKind) { _, kind in if let kind { lastOverlayKind = kind } }
         .overlay(alignment: .bottom) {
             if let review = model.portfolioImports?.review {
                 PortfolioImportSuccessToast(model: review, shell: model)
@@ -190,14 +196,13 @@ public struct ShellRootView: View {
         }
         // `UnsavedChangesProvider`'s Leave this page? alert. The buttons decide; the binding
         // only reads, so a dismissal never drops the held navigation by itself.
-        .alert(
-            model.strings.t("unsavedChanges.title"),
+        .visionAlert(
+            title: model.strings.t("unsavedChanges.title"),
+            message: model.strings.t("unsavedChanges.description"),
             isPresented: Binding(get: { model.leaveConfirmation != nil }, set: { _ in })
         ) {
-            Button(model.strings.t("unsavedChanges.stay"), role: .cancel) { model.stayOnPage() }
-            Button(model.strings.t("unsavedChanges.leave"), role: .destructive) { model.leavePage() }
-        } message: {
-            Text(model.strings.t("unsavedChanges.description"))
+            VisionDialogAction(model.strings.t("unsavedChanges.stay"), role: .cancel) { model.stayOnPage() }
+            VisionDialogAction(model.strings.t("unsavedChanges.leave"), role: .destructive) { model.leavePage() }
         }
         .onChange(of: model.isSidebarVisible) { _, visible in
             let target: NavigationSplitViewVisibility = visible ? .all : .detailOnly

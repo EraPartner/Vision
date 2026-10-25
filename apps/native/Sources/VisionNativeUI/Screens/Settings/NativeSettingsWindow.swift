@@ -1,7 +1,31 @@
 import SwiftUI
 import VisionNativeCore
 
+/// `DashboardSettingsDialog` (features/settings/DashboardSettingsDialog.tsx) as the content of an
+/// in-window glass dialog: `flex h-[82vh] w-full max-w-4xl p-0 gap-0`, a `md:w-64` rail on
+/// `bg-foreground/[0.025]`, a `h-12` pane header, and `px-6 py-6` body. The panel (glass, corners,
+/// scrim) comes from `VisionGlassDialog`; this view fills it.
 public struct NativeSettingsWindow: View {
+    /// Geometry and alphas of DashboardSettingsDialog.tsx; none has a design token.
+    enum Layout {
+        /// `max-w-4xl`.
+        static let maxWidth: CGFloat = 896
+        /// `h-[82vh]`.
+        static let heightFraction = 0.82
+        /// `md:w-64` on the `aside`.
+        static let railWidth: CGFloat = 256
+        /// `md:pt-10` on the section list.
+        static let railTopInset: CGFloat = 40
+        /// `aria-selected:bg-primary/10`.
+        static let selectedAlpha = 0.10
+        /// `aria-selected:hover:bg-primary/15`.
+        static let selectedHoverAlpha = 0.15
+        /// `border-border/60` on the aside and the header.
+        static let borderAlpha = 0.6
+        /// `h-12` on the header.
+        static let headerHeight: CGFloat = 48
+    }
+
     let model: NativeSettingsModel
     let shell: NativeShellModel
     let ai: NativeSettingsAIModel
@@ -43,16 +67,9 @@ public struct NativeSettingsWindow: View {
                         Button {
                             select(item)
                         } label: {
-                            Label(strings.t(item.titleKey), systemImage: item.symbol).font(.body)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(
-                                    .vertical, 12
-                                )
-                                .contentShape(Rectangle())
+                            NativeSettingsRailRow(
+                                title: strings.t(item.titleKey), symbol: item.symbol, isSelected: selected == item)
                         }.buttonStyle(.plain)
-                            .background(
-                                selected == item ? theme.primary.opacity(0.14) : Color.clear,
-                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            )
                             .accessibilityAddTraits(selected == item ? [.isSelected] : [])
                             .focusable(selected == item)
                             .focused($focused, equals: item)
@@ -71,13 +88,13 @@ public struct NativeSettingsWindow: View {
                                 return .handled
                             }
                     }
-                }.padding(.horizontal, 12).padding(.top, 24)
+                }.padding(.horizontal, 12).padding(.top, Layout.railTopInset)
                 Spacer()
                 Text(strings.t("settings.autosaveHint")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                     .padding(18)
-            }.frame(width: 225).background(theme.foreground.opacity(0.025))
+            }.frame(width: Layout.railWidth).background(theme.foreground.opacity(0.025))
                 .accessibilityElement(children: .contain).accessibilityLabel(strings.t("settings.title"))
-            Divider()
+            NativeSettingsHairline(vertical: true)
             VStack(spacing: 0) {
                 HStack {
                     Text(strings.t(selected.titleKey)).font(Font.visionTitle3)
@@ -86,8 +103,9 @@ public struct NativeSettingsWindow: View {
                     // The web DialogContent close control, shared with every native dialog.
                     VisionDialogCloseButton(label: strings.t("common.close"), action: onClose)
                         .keyboardShortcut(.cancelAction)
-                }.padding(.horizontal, 24).frame(height: 48)
-                Divider()
+                }.padding(.horizontal, DesignTokens.Overlay.dialogPadding)
+                    .frame(height: Layout.headerHeight)
+                NativeSettingsHairline(vertical: false)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if model.isLoading && !model.isLoaded {
@@ -98,12 +116,12 @@ public struct NativeSettingsWindow: View {
                                 .task(id: error) { AccessibilityNotification.Announcement(strings.t(error)).post() }
                         }
                         pane
-                    }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+                    }.padding(DesignTokens.Overlay.dialogPadding).frame(maxWidth: .infinity, alignment: .leading)
                 }.accessibilityLabel(strings.t(selected.titleKey))
             }.frame(maxWidth: .infinity)
-        // The web settings dialog is `max-w-4xl` (896 px) and nearly full height.
-        }.frame(minWidth: 880, idealWidth: 900, minHeight: 640, idealHeight: 760)
-            .background(theme.card).foregroundStyle(theme.foreground)
+        // The glass dialog supplies the panel (`max-w-4xl`, `h-[82vh]`) and its material.
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(theme.foreground)
             .accessibilityElement(children: .contain).accessibilityLabel(strings.t("settings.title"))
             .onChange(of: section) { _, next in selected = NativeSettingsWindowSection(rawValue: next) ?? .general }
     }
