@@ -42,6 +42,13 @@ aliases: [native parity, parity inventory, swift parity checklist]
 
 Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/portfolio/performance` redirect, and the shell page's app chrome, 404 page and Electron startup error page. Shared components (`VirtualDataTable`, comboboxes, `DatePicker`, `RowMenu`, `ExportDialog`) are inventoried in full on the first page that uses them and referenced from the others.
 
+## Design system
+
+[[docs/reference/native-parity/design-system|The design-system checklist]] tracks tokens, glass,
+dialogs, form controls, effects and Settings presentation
+([[docs/adr/250-swift-design-system-parity|ADR-250]]): foundation done, screen sweep pending
+(phase 2b).
+
 ## Phase 1 exit
 
 [[docs/reference/native-parity/agent-handoff|The active agent handoff]] records the published
