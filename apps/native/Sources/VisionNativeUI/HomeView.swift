@@ -13,6 +13,7 @@ public struct HomeView: View {
     @State private var monthRange: String?
     @State private var netSelection: String?
     @State private var netRange: String?
+    @State private var windowWidth = InsightsBreakpoint.initialWidth
     @Environment(\.visionTheme) private var theme
 
     public init(model: HomeModel, shell: NativeShellModel) {
@@ -23,9 +24,18 @@ public struct HomeView: View {
     private var settings: NativeAppSettings { shell.settings }
     private var currency: CurrencyCode { LedgerCurrency.display(settings) }
 
+    /// Tailwind `lg:`: the multi-column grids of the dashboard.
+    private var isLarge: Bool { windowWidth >= InsightsBreakpoint.lg }
+
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            // PageShell rhythm="airy": 32 pt between the header, the cards and the charts.
+            VStack(alignment: .leading, spacing: 32) {
+                // The shared reminder banner is the first thing in the page, so it scrolls away
+                // with it (AppLayout renders it above the routed page inside `<main>`).
+                if let notifications = shell.shellNotifications, notifications.upcoming.shouldShow {
+                    ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: shell)
+                }
                 VisionPageHeader(title: greeting, subtitle: todayLong, symbol: "house") {
                     Menu {
                         Button(strings.t("home.customize")) { customize = true }
@@ -51,31 +61,17 @@ public struct HomeView: View {
                             .buttonStyle(.visionOutline)
                     }
                 } else {
-                    if model.isVisible("hero") { hero }
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 320), alignment: .top)], alignment: .leading,
-                        spacing: 16
-                    ) {
-                        if model.isVisible("attention") { attention }
-                        if model.isVisible("netWorth") { netWorth }
-                        if model.isVisible("upcoming") { upcoming }
-                        if model.isVisible("accounts") { accounts }
-                        if model.isVisible("statCards") { summary }
+                    // DashboardPage: the hero and the two-column grid share a `space-y-6` group.
+                    VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+                        if model.isVisible("hero") { hero }
+                        mainGrid
                     }
-                    if model.isVisible("bankBalances") { bankBalances }
-                    if model.isVisible("monthlyTrends") { monthlyTrends }
-                    if model.isVisible("categoryPie") {
-                        card("dashboard.categoryDistribution", exclusion: "categoryPie") {
-                            HomeCategoryChart(
-                                slices: model.categorySlices(strings: strings), strings: strings, navigate: navigate
-                            )
-                        }
-                    }
+                    chartsGrid
                     if model.isVisible("cashflowComparison") { forecast }
-                    if model.isVisible("recentTransactions") { recent }
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
+        .insightsWindowWidth($windowWidth)
         .task(id: shell.route.string + currency.rawValue + String(shell.settingsRevision)) { await reload() }
         .onAppear {
             shell.setLeaveGuard(
@@ -247,6 +243,60 @@ public struct HomeView: View {
         return series
     }
 
+    /// DashboardPage's `grid gap-6 lg:grid-cols-5`: attention, summary, bank balances and recent
+    /// transactions over three fifths, the net worth, upcoming and accounts cards over two.
+    @ViewBuilder private var mainGrid: some View {
+        if isLarge {
+            InsightsColumns(weights: [3, 2]) {
+                leftColumn
+                rightColumn
+            }
+        } else {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+                leftColumn
+                rightColumn
+            }
+        }
+    }
+    private var leftColumn: some View {
+        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            if model.isVisible("attention") { attention }
+            if model.isVisible("statCards") { summary }
+            if model.isVisible("bankBalances") { bankBalances }
+            if model.isVisible("recentTransactions") { recent }
+        }
+    }
+    private var rightColumn: some View {
+        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            if model.isVisible("netWorth") { netWorth }
+            if model.isVisible("upcoming") { upcoming }
+            if model.isVisible("accounts") { accounts }
+        }
+    }
+    /// The chart bento: the trends chart over three fifths, the category donut over two; a lone
+    /// chart spans the row (`lg:[&>*:only-child]:col-span-5`).
+    @ViewBuilder private var chartsGrid: some View {
+        if isLarge {
+            InsightsColumns(weights: [3, 2], stretch: true) { chartCards }
+        } else {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) { chartCards }
+        }
+    }
+    @ViewBuilder private var chartCards: some View {
+        if model.isVisible("monthlyTrends") { monthlyTrends }
+        if model.isVisible("categoryPie") { categoryPie }
+    }
+    private var categoryPie: some View {
+        card(
+            "categoryPie.title", subtitle: strings.t("categoryPie.desc"), exclusion: "categoryPie",
+            fillsHeight: true
+        ) {
+            HomeCategoryChart(
+                slices: model.categorySlices(strings: strings), strings: strings, navigate: navigate
+            )
+        }
+    }
+
     private var attention: some View {
         card("home.attention.title") {
             if model.needsCategory > 0 || model.matchCount > 0 || !model.staleAccounts.isEmpty {
@@ -316,19 +366,8 @@ public struct HomeView: View {
                     amount: worth.current.netWorth, currency: currency, settings: settings, signed: false,
                     colored: false, rolling: true
                 ).font(Font.visionTitle1)
-                HStack(spacing: 4) {
-                    MoneyText(amount: worth.monthlyChange, currency: currency, settings: settings)
-                    Text(strings.t("home.netWorth.change")).foregroundStyle(theme.secondaryLabel)
-                    if worth.monthlyChangePercent != 0 {
-                        Text(
-                            "("
-                                + VisionFormat.decimal(
-                                    worth.monthlyChangePercent, fractionDigits: 1,
-                                    locale: settings.numberFormat.locale) + "%)"
-                        )
-                        .foregroundStyle(theme.secondaryLabel)
-                    }
-                }.font(.footnote)
+                netWorthChange(change: worth.monthlyChange, percent: worth.monthlyChangePercent)
+                    .font(.footnote).monospacedDigit()
                 if !(worth.unconvertedCurrencies ?? []).isEmpty {
                     Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
                 }
@@ -347,6 +386,20 @@ public struct HomeView: View {
                 Button(strings.t("home.accounts.title")) { navigate("/accounts") }.buttonStyle(.visionLink)
             }
         }
+    }
+    /// NetWorthCard's change line: the whole line takes the sign's colour, and the percent reads
+    /// "(+1.1%)", signed and with a dot, as `toFixed(1)` writes it.
+    private func netWorthChange(change: Decimal, percent: Decimal) -> Text {
+        let tone = change > 0 ? theme.gain : change < 0 ? theme.loss : theme.secondaryLabel
+        let amount = MoneyText.styled(
+            MoneyText.text(change, currency: currency, settings: settings, signed: true),
+            decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first, color: tone)
+        var rest = " " + strings.t("home.netWorth.change")
+        if percent != 0 {
+            let digits = VisionFormat.decimal(percent, fractionDigits: 1, locale: Locale(identifier: "en_US_POSIX"))
+            rest += " (" + (change > 0 ? "+" : "") + digits + "%)"
+        }
+        return amount + Text(verbatim: rest).foregroundStyle(tone)
     }
     /// NetWorthWidget's bar: the label and amount on one line over a thin rounded track.
     private func netWorthBar(_ key: String, _ amount: Decimal, scale: Decimal, color: Color) -> some View {
@@ -372,14 +425,20 @@ public struct HomeView: View {
     }
     private var upcoming: some View {
         card("home.upcoming.title", action: ("home.upcoming.all", "/planned")) {
-            if model.upcomingRows.isEmpty {
-                Text(strings.t("home.upcoming.none")).foregroundStyle(theme.secondaryLabel)
-            }
-            ForEach(model.upcomingRows, id: \.id) { payment in
-                routeRow(
-                    payment.recipientName ?? payment.bankAccount ?? "", route: "/planned",
-                    subtitle: upcomingDay(payment.plannedDate),
-                    amount: (payment.amount, payment.currency ?? currency))
+            InsightsInsetList {
+                if model.upcomingRows.isEmpty {
+                    HomeInsetRow(title: strings.t("home.upcoming.none"), settings: settings) {
+                        HomeInsetGlyph(symbol: "calendar.badge.clock")
+                    }
+                }
+                ForEach(Array(model.upcomingRows.enumerated()), id: \.element.id) { index, payment in
+                    if index > 0 { InsightsInsetDivider() }
+                    HomeInsetRow(
+                        title: payment.recipientName ?? payment.bankAccount ?? "",
+                        subtitle: upcomingDay(payment.plannedDate),
+                        amount: (payment.amount, payment.currency ?? currency), settings: settings,
+                        action: { navigate("/planned") })
+                }
             }
         }
     }
@@ -498,7 +557,10 @@ public struct HomeView: View {
         }
     }
     private var monthlyTrends: some View {
-        card("dashboard.monthlyTrends", exclusion: "monthlyTrends") {
+        card(
+            "monthlyTrends.title", subtitle: strings.t("monthlyTrends.desc"), exclusion: "monthlyTrends",
+            fillsHeight: true
+        ) {
             let months = Array((model.monthlyData(for: "monthlyTrends")?.orderedMonths ?? []).suffix(6))
             InsightTimelineChart(
                 series: [
@@ -511,62 +573,78 @@ public struct HomeView: View {
                 ], currency: currency, settings: settings, title: strings.t("monthlyTrends.title"),
                 bars: true, xLabels: .appMonthYear,
                 selection: $monthSelection, rangeStart: $monthRange)
-            HStack {
-                LabeledContent(
-                    strings.t("monthlyTrends.totalIncome"),
-                    value: money(months.reduce(0) { $0 + $1.total_income }))
-                LabeledContent(
-                    strings.t("monthlyTrends.totalSpending"),
-                    value: money(months.reduce(0) { $0 + abs($1.total_spending) }))
-            }
+            // `mt-6 grid grid-cols-2 gap-3`: the totals as two tinted tiles.
+            HStack(spacing: 12) {
+                HomeTotalTile(
+                    label: strings.t("monthlyTrends.totalIncome"),
+                    amount: months.reduce(0) { $0 + $1.total_income }, currency: currency, settings: settings,
+                    tint: theme.gain)
+                HomeTotalTile(
+                    label: strings.t("monthlyTrends.totalSpending"),
+                    amount: months.reduce(0) { $0 + abs($1.total_spending) }, currency: currency,
+                    settings: settings, tint: theme.loss)
+            }.padding(.top, 8)
         }
     }
     private var recent: some View {
-        card(
-            "dashboard.recentTransactions", action: ("home.recent.seeAll", "/transactions"),
-            exclusion: "recentTransactions"
+        let rows = model.recentRows()
+        return card(
+            "dashboard.recentTransactions",
+            subtitle: strings.t("dashboard.recentTransactionsSubtitle", ["n": String(rows.count)]),
+            action: ("home.recent.seeAll", "/transactions"), exclusion: "recentTransactions"
         ) {
-            if model.recentRows().isEmpty {
-                Text(strings.t("dashboard.recentTransactions.empty")).foregroundStyle(theme.secondaryLabel)
-            }
-            ForEach(model.recentRows(), id: \.id) { row in
-                routeRow(
-                    row.recipientName ?? row.memo ?? "", route: "/transactions?id=\(row.id.rawValue)",
-                    subtitle: VisionFormat.appDate(row.transactionDate, format: settings.dateFormat),
-                    amount: (row.amount, row.currency ?? currency))
+            InsightsInsetList {
+                if rows.isEmpty {
+                    HomeInsetRow(title: strings.t("dashboard.recentTransactions.empty"), settings: settings) {
+                        HomeInsetGlyph(symbol: "receipt")
+                    }
+                }
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 { InsightsInsetDivider() }
+                    let category = row.categoryName ?? strings.t("txPage.field.uncategorized")
+                    HomeInsetRow(
+                        title: row.recipientName ?? strings.t("txPage.field.unknown"),
+                        subtitle: [VisionFormat.appDate(row.transactionDate, format: settings.dateFormat), category]
+                            .joined(separator: " \u{00B7} "),
+                        amount: (row.amount, row.currency ?? currency), settings: settings, chevron: true,
+                        action: { navigate("/transactions?id=\(row.id.rawValue)") }
+                    ) {
+                        HomeCategoryDot(category: category, isCategorised: row.categoryId != nil)
+                    }
+                }
             }
         }
     }
     private var forecast: some View {
-        card("dashboard.cashFlowComparison") {
-            HStack {
-                VisionSegmentedControl(
-                    selection: forecastMode,
-                    options: [
-                        VisionSegmentOption(value: InsightForecastOptions.Mode.month, title: strings.t("cashflow.modeMonth")),
-                        VisionSegmentOption(
-                            value: InsightForecastOptions.Mode.rolling, title: strings.t("cashflow.modeRolling")),
-                    ]
-                ).accessibilityLabel(strings.t("cashflow.modeMonth")).frame(maxWidth: 360)
-                if model.forecastOptions.mode == .rolling {
-                    VisionSelect(
-                        selection: rollingDays,
-                        options: [30, 60, 90, 180].map {
-                            VisionSelectOption(
-                                value: $0, title: strings.t("cashflow.windowDays", ["days": String($0)]))
-                        }, accessibilityLabel: strings.t("cashflow.rollingWindow")
-                    ).frame(maxWidth: 150)
+        card("cashflow.forecastTitle", subtitle: forecastSubtitle) {
+            VisionSegmentedControl(
+                selection: forecastMode,
+                options: [
+                    VisionSegmentOption(value: InsightForecastOptions.Mode.month, title: strings.t("cashflow.modeMonth")),
+                    VisionSegmentOption(
+                        value: InsightForecastOptions.Mode.rolling, title: strings.t("cashflow.modeRolling")),
+                ], size: .sm
+            ).accessibilityLabel(strings.t("cashflow.forecastTitle")).fixedSize()
+            if model.forecastOptions.mode == .rolling {
+                HStack(spacing: 12) {
+                    Text(strings.t("cashflow.rollingWindow")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    VisionSegmentedControl(
+                        selection: rollingDays, values: [30, 60, 90, 180],
+                        title: { strings.t("cashflow.windowDays", ["days": String($0)]) }, size: .sm
+                    ).fixedSize()
                 }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(strings.t("cashflow.rollingWindow"))
             }
-            HStack {
+            HStack(spacing: 16) {
                 VisionSegmentedControl(
                     selection: Binding(
                         get: { model.cumulativeForecast }, set: { model.cumulativeForecast = $0 }),
                     options: [
                         VisionSegmentOption(value: true, title: strings.t("cashflow.cumulative")),
                         VisionSegmentOption(value: false, title: strings.t("cashflow.dailyNet")),
-                    ]
-                ).accessibilityLabel(strings.t("cashflow.cumulative")).frame(maxWidth: 260)
+                    ], size: .sm
+                ).accessibilityLabel(strings.t("cashflow.cumulative")).fixedSize()
                 Toggle(
                     strings.t("cashflow.withPlanned"),
                     isOn: Binding(
@@ -575,10 +653,15 @@ public struct HomeView: View {
                             model.forecastOptions.includePlanned = $0
                             Task { await model.loadForecast() }
                         })
-                ).toggleStyle(.visionSwitch)
+                ).toggleStyle(.visionSwitch).fixedSize()
                 Spacer()
-                Button(strings.t("cashflow.diagnostics")) { diagnostics = true }
-                    .buttonStyle(.vision(.outline, size: .sm))
+                // The web ghost button with the FlaskConical glyph.
+                Button {
+                    diagnostics = true
+                } label: {
+                    Label(strings.t("cashflow.diagnostics"), systemImage: "testtube.2")
+                }
+                .buttonStyle(.vision(.ghost, size: .sm))
             }
             if model.isForecastLoading {
                 ProgressView().frame(height: 240)
@@ -636,6 +719,16 @@ public struct HomeView: View {
                     .buttonStyle(.visionOutline)
             }
         }
+    }
+    /// CashFlowForecastChart's description: the forecast month in the app's date style, or the
+    /// rolling window.
+    private var forecastSubtitle: String {
+        if model.forecastOptions.mode == .rolling {
+            return strings.t("cashflow.rollingDesc", ["n": String(model.forecastOptions.rollingDays)])
+        }
+        let month = model.forecast?.month ?? String(VisionFormat.appDate(Date(), format: .isoDate).prefix(7))
+        return strings.t(
+            "cashflow.forecastDesc", ["monthName": VisionFormat.appMonthYear(month, format: settings.dateFormat)])
     }
     private var forecastMode: Binding<InsightForecastOptions.Mode> {
         Binding(
@@ -722,16 +815,17 @@ public struct HomeView: View {
         }.buttonStyle(.plain)
     }
     private func card<Content: View>(
-        _ titleKey: String?, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
-        titleFont: Font = Font.visionTitle3,
+        _ titleKey: String?, subtitle: String? = nil, action: (String, String)? = nil, exclusion: String? = nil,
+        hero: TrendHue.Tone? = nil, titleFont: Font = Font.visionTitle3, fillsHeight: Bool = false,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             if titleKey != nil || action != nil || exclusion != nil {
-                cardHeader(titleKey, action: action, exclusion: exclusion, titleFont: titleFont)
+                cardHeader(titleKey, subtitle: subtitle, action: action, exclusion: exclusion, titleFont: titleFont)
             }
             content()
-        }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(VisionPageLayout.padding)
+            .frame(maxWidth: .infinity, maxHeight: fillsHeight ? CGFloat.infinity : nil, alignment: .topLeading)
             // NetSummaryCard: TrendHue then the hero CardSheen (ADR-172), above the card fill.
             .background {
                 if let hero {
@@ -744,25 +838,23 @@ public struct HomeView: View {
             }
             .visionCardBackground()
     }
+    /// The card header: title and description on the left, the exclusion toggle and the card's
+    /// link on the right (`flex-wrap`, so they drop under the title in a narrow card).
     private func cardHeader(
-        _ titleKey: String?, action: (String, String)?, exclusion: String?, titleFont: Font
+        _ titleKey: String?, subtitle: String?, action: (String, String)?, exclusion: String?, titleFont: Font
     ) -> some View {
-            HStack {
-                if let titleKey {
-                    Text(strings.t(titleKey)).font(titleFont).accessibilityAddTraits(.isHeader)
-                }
-                Spacer()
-                if let exclusion, model.hasExclusions {
-                    InsightToggleButton(
-                        strings.t(
-                            model.graphExclusions[exclusion] != false
-                                ? "exclusion.filtersActive" : "exclusion.filtersIgnored"),
-                        isOn: Binding(
-                            get: { model.graphExclusions[exclusion] != false },
-                            set: { model.graphExclusions[exclusion] = $0 }))
-                }
-                if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.visionLink) }
+        InsightsCardHeader(
+            title: titleKey.map { strings.t($0) } ?? "", subtitle: subtitle, titleFont: titleFont
+        ) {
+            if let exclusion, model.hasExclusions {
+                InsightsExclusionToggle(
+                    isOn: Binding(
+                        get: { model.graphExclusions[exclusion] != false },
+                        set: { model.graphExclusions[exclusion] = $0 }),
+                    strings: strings)
             }
+            if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.visionLink) }
+        }
     }
 }
 

@@ -15,6 +15,9 @@ struct LocalDataColumn<Row>: Identifiable {
     /// A plain header label for a column that neither sorts nor filters (the web's `table.edit`
     /// header of the inline-edit column).
     var plainHeader: String?
+    /// A titled column that only labels its cells, as the "#" rank column: a plain header
+    /// without the sort and filter buttons or the resize handle.
+    var sortable = true
     let cell: (Row) -> AnyView
 
     var id: String { key }
@@ -52,6 +55,8 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     /// A short list drops the search field and the count footer (the web `Table` has neither);
     /// they return once a search or filter is active.
     var isMinimal = false
+    /// `maxHeight` of `VirtualDataTable`: the rows scroll inside the table below the header.
+    var maxBodyHeight: CGFloat?
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
     @State private var hoveredHeader: String?
@@ -100,6 +105,13 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
 
     private var showsChrome: Bool { !isMinimal || !query.search.isEmpty || query.showsClearAll }
 
+    /// The rows scroll inside the table once they are taller than `height`.
+    func bodyMaxHeight(_ height: CGFloat) -> Self {
+        var copy = self
+        copy.maxBodyHeight = height
+        return copy
+    }
+
     /// A server search names what it looks through (`serverMode.search.placeholder`).
     func searchPlaceholder(_ text: String) -> Self {
         var copy = self
@@ -117,28 +129,11 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 VStack(alignment: .leading, spacing: 0) {
                     headerRow
                     Divider()
-                    if rows.isEmpty {
-                        empty()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
+                    if let maxBodyHeight {
+                        ScrollView(.vertical) { bodyRows }
+                            .frame(maxHeight: maxBodyHeight)
                     } else {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(rows) { row in
-                                rowView(row)
-                                    .onAppear { onRowAppear?(row.id) }
-                                Divider()
-                            }
-                        }
-                        if isFetchingMore {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text(strings.t("table.loadingMore"))
-                                    .font(.footnote)
-                                    .foregroundStyle(theme.secondaryLabel)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                        }
+                        bodyRows
                     }
                 }
                 .containerRelativeFrame(.horizontal, alignment: .leading) { length, _ in
@@ -149,6 +144,32 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             if showsChrome {
                 Divider()
                 footer
+            }
+        }
+    }
+
+    @ViewBuilder private var bodyRows: some View {
+        if rows.isEmpty {
+            empty()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+        } else {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { row in
+                    rowView(row)
+                        .onAppear { onRowAppear?(row.id) }
+                    Divider()
+                }
+            }
+            if isFetchingMore {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(strings.t("table.loadingMore"))
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
             }
         }
     }
@@ -285,7 +306,14 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
 
     @ViewBuilder
     private func headerCell(_ column: LocalDataColumn<Row>) -> some View {
-        if column.isTitled {
+        if column.isTitled, !column.sortable {
+            Text(column.title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(theme.secondaryLabel)
+                .lineLimit(1)
+                .padding(.vertical, 11)
+                .accessibilityAddTraits(.isHeader)
+        } else if column.isTitled {
             HStack(spacing: 4) {
                 sortButton(column)
                 filterButton(column)

@@ -4616,6 +4616,7 @@ addTxn.date.yesterday
 addTxn.kind.expense
 addTxn.kind.income
 addTxn.kind.transfer
+categoryPie.desc
 categoryPie.noData
 categoryPie.title
 commandPalette.copied

@@ -11,55 +11,19 @@ struct SavedChartsView: View {
     let snapshot: StatisticsSnapshot
     let settings: NativeAppSettings
     let strings: any Localizing
+    /// `lg:grid-cols-2`: two chart cards per row on a wide window.
+    var isLarge = true
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text(strings.t("customChart.tab")).font(Font.visionTitle3)
-                if !model.charts.isEmpty {
-                    Text(strings.tc("customChart.savedCount", model.charts.count)).foregroundStyle(theme.secondaryLabel)
-                }
-                Spacer()
-                Button(strings.t("customChart.newChart")) { model.begin() }.buttonStyle(.visionPrimary)
-            }
+        VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+            header
             if model.isLoading {
-                ProgressView().padding()
+                ProgressView().frame(maxWidth: .infinity).padding()
             } else if model.charts.isEmpty {
-                Button(strings.t("customChart.createFirst")) { model.begin() }.buttonStyle(.visionOutline)
-            }
-            ForEach(model.charts, id: \.id) { chart in
-                AdminCard(padding: VisionPageLayout.padding) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            Text(chart.name).font(Font.visionTitle3).lineLimit(1)
-                            Spacer()
-                            Menu {
-                                Button(strings.t("common.edit")) { model.begin(chart: chart) }
-                                Button(strings.t("common.delete"), role: .destructive) { model.pendingDelete = chart }
-                            } label: {
-                                Image(systemName: "ellipsis")
-                            }
-                            .menuIndicator(.hidden)
-                            .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
-                        }
-                        if let dataset = model.datasets[chart.id] {
-                            CustomChartPlot(
-                                dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
-                                strings: strings,
-                                selection: Binding(
-                                    get: { model.printLocalState.selection[String(chart.id.rawValue)] },
-                                    set: { model.printLocalState.selection[String(chart.id.rawValue)] = $0 }),
-                                range: Binding(
-                                    get: { model.printLocalState.rangeStart[String(chart.id.rawValue)] },
-                                    set: { model.printLocalState.rangeStart[String(chart.id.rawValue)] = $0 }))
-                        } else if let error = model.errors[chart.id] {
-                            Text(error).foregroundStyle(theme.destructive)
-                        } else {
-                            ProgressView()
-                        }
-                    }
-                }
+                emptyState
+            } else {
+                chartGrid
             }
             if let error = model.error { Text(error).foregroundStyle(theme.destructive) }
         }
@@ -76,6 +40,81 @@ struct SavedChartsView: View {
             VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.pendingDelete = nil }
             VisionDialogAction(strings.t("common.delete"), role: .destructive) {
                 Task { await model.confirmDelete() }
+            }
+        }
+    }
+
+    /// The section heading (`customChart.tab` over the saved count) and the "New chart" button.
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(strings.t("customChart.tab")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
+                if !model.charts.isEmpty {
+                    Text(strings.tc("customChart.savedCount", model.charts.count))
+                        .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                }
+            }
+            Spacer()
+            Button { model.begin() } label: {
+                Label(strings.t("customChart.newChart"), systemImage: "plus")
+            }
+            .buttonStyle(.visionPrimary).controlSize(.small)
+        }
+    }
+    /// The empty card: icon, title, description and a primary "create your first chart" button.
+    private var emptyState: some View {
+        AdminCard(padding: VisionPageLayout.padding) {
+            VisionEmptyState(
+                symbol: "chart.line.uptrend.xyaxis", title: strings.t("customChart.emptyTitle"),
+                description: strings.t("customChart.emptyDesc")
+            ) {
+                Button { model.begin() } label: {
+                    Label(strings.t("customChart.createFirst"), systemImage: "plus")
+                }
+                .buttonStyle(.visionPrimary)
+            }
+        }
+    }
+    private var chartGrid: some View {
+        LazyVGrid(
+            columns: Array(
+                repeating: GridItem(.flexible(), spacing: VisionPageLayout.spacing, alignment: .top),
+                count: isLarge ? 2 : 1),
+            alignment: .leading, spacing: VisionPageLayout.spacing
+        ) {
+            ForEach(model.charts, id: \.id) { chart in chartCard(chart) }
+        }
+    }
+    private func chartCard(_ chart: OpenAPI.SavedChart) -> some View {
+        AdminCard(padding: VisionPageLayout.padding) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(chart.name).font(Font.visionTitle3).lineLimit(1)
+                    Spacer()
+                    Menu {
+                        Button(strings.t("common.edit")) { model.begin(chart: chart) }
+                        Button(strings.t("common.delete"), role: .destructive) { model.pendingDelete = chart }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .menuIndicator(.hidden)
+                    .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
+                }
+                if let dataset = model.datasets[chart.id] {
+                    CustomChartPlot(
+                        dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
+                        strings: strings,
+                        selection: Binding(
+                            get: { model.printLocalState.selection[String(chart.id.rawValue)] },
+                            set: { model.printLocalState.selection[String(chart.id.rawValue)] = $0 }),
+                        range: Binding(
+                            get: { model.printLocalState.rangeStart[String(chart.id.rawValue)] },
+                            set: { model.printLocalState.rangeStart[String(chart.id.rawValue)] = $0 }))
+                } else if let error = model.errors[chart.id] {
+                    Text(error).foregroundStyle(theme.destructive)
+                } else {
+                    ProgressView()
+                }
             }
         }
     }

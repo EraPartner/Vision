@@ -286,10 +286,8 @@ public struct ShellRootView: View {
                 ShellFXStatusBanner(model: notifications.fx, shell: model)
                     .padding(.horizontal, VisionPageLayout.padding).padding(.top, 12)
             }
-            if case .native(.home) = model.detail, notifications.upcoming.shouldShow {
-                ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: model)
-                    .padding(.horizontal, VisionPageLayout.padding).padding(.top, 12)
-            }
+            // The Home reminder banner lives inside HomeView's scroll content so it scrolls away
+            // with the page, as `UpcomingPaymentsNotification` does in the web `<main>`.
         }
     }
     private var startupIdentity: String {
