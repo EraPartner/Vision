@@ -28,6 +28,13 @@ struct ResearchForecastTests {
         overflow["targetValue"] = .null
         #expect(throws: APIError.self) { try ResearchForecastData(raw: overflow) }
     }
+    @Test func aZeroTargetCountsAsNoTarget() throws {
+        var raw = forecastFixture()
+        raw["targetValue"] = .number(0)
+        #expect(!(try ResearchForecastData(raw: raw)).hasTarget)
+        raw["targetValue"] = .number(250_000)
+        #expect(try ResearchForecastData(raw: raw).hasTarget)
+    }
     @Test func requestMappingRetainsDecimalPrecisionAndOptionalAbsenceAndRawMeta() async throws {
         let transport = ForecastTransport()
         let input: TaxValue = .object([

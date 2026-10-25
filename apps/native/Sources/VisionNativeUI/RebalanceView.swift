@@ -170,6 +170,10 @@ public struct RebalanceView: View {
                 Text(money(model.availableCash == 0 ? result.availableCash : model.availableCash))
                     .font(.visionCardTitle).monospacedDigit()
                 Text(strings.t("rebalance.availableCashHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                // `(inputs.data ?? result).unconvertedCurrencies`: cash without a stored rate is left out.
+                if !((model.inputs ?? result).unconvertedCurrencies ?? []).isEmpty {
+                    Text(strings.t("accounts.totalIncomplete")).font(.footnote).foregroundStyle(theme.warning)
+                }
             }
             card("rebalance.totalDeployed", label: true) {
                 Text(money(result.totalDeployed)).font(.visionCardTitle).monospacedDigit()

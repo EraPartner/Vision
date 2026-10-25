@@ -81,6 +81,14 @@ struct RebalanceDataTests {
         #expect(data.cashAccounts.first?.balanceCurrency == "EUR")
         #expect(data.cashAccounts.first?.accountCurrency == "USD")
     }
+    @Test func cashWithoutAStoredRateIsFlaggedNotConverted() throws {
+        let plain = try JSONDecoder().decode(RebalanceResult.self, from: Data(rebalanceWireFixture.utf8))
+        #expect((plain.unconvertedCurrencies ?? []).isEmpty)
+        var raw = try JSONDecoder().decode(TaxValue.self, from: Data(rebalanceWireFixture.utf8))
+        raw["unconvertedCurrencies"] = .array([.string("SEK")])
+        let flagged = try JSONDecoder().decode(RebalanceResult.self, from: APIBody.encode(raw))
+        #expect(flagged.unconvertedCurrencies == ["SEK"])
+    }
     @Test func persistedNumericStringsAndUnknownMetadataSurviveAnUnrelatedSave() throws {
         let raw = Data(
             #"{"id":"legacy","name":"Legacy","targetWeights":{"stocks":"0.6","bonds":0.4},"cashCap":"12.5","future":{"revision":2}}"#

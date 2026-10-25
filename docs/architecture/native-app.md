@@ -1322,10 +1322,10 @@ visual/keyboard checks remain pending. [[docs/reference/native-parity/research-a
 parity]] records action coverage; [[docs/features/research|Research]] and
 [[docs/flow-visualizer.html|the flow visualizer]] retain the shared processing boundaries.
 
-### Research Chart Builder and Forecast/Life Scenario (phase 3m)
+### Research Chart Builder and Forecast (phase 3m)
 
 `ResearchChartBuilderScreenView` mounts `/research/charts`; `ResearchForecastScreenView` mounts
-`/research/forecast` with Life Scenario embedded in the same page. These extend the five native
+`/research/forecast`. The Life scenario panel was removed ([[docs/adr/230-remove-life-scenario|ADR-230]]). These extend the five native
 Research routes from phase 3l. Dossiers and AI Chat/Investigation now use the native phase 3n
 implementation below.
 
@@ -1348,7 +1348,7 @@ route update. Copy Share encodes the current structural state, resolves the reta
 and copies the resulting URL to the clipboard, with a visible success or failure notice. No
 financial data or simulation result is persisted by the stateless presentation service.
 
-`ResearchForecastScreens` coordinates `ResearchForecastModel` and `ResearchLifeScenarioModel`.
+`ResearchForecastScreens` coordinates `ResearchForecastModel`.
 Main Forecast keeps its 450 ms debounce, five-minute cache and source defaults, calls the existing
 TypeScript projection API and rejects stale input/generation/visit results. Invalid or still-pending
 main input hides prior output. Custom DTOs retain raw Decimal bands, metadata, absent values and
@@ -1356,26 +1356,6 @@ unavailable extensions. Native rendering uses the six returned percentile/capita
 simulation, drift, probability or contribution arithmetic is recreated in Swift. Required numeric
 available-result fields retain the canonical client guard even where OpenAPI records nullable
 wire overflow. An overflow is an error rather than a zero projection.
-
-Life Scenario receives the immediate main input independently of whether that main forecast can
-run. `lifeScenarioPrepare` overwrites discarded main contribution/goal/seed fields and returns
-baseline/interrupted requests, the reduced contribution and monthly deficit. Native forwards two
-existing forecast requests concurrently with the same returned seed, then submits their raw replies
-to `lifeScenarioCompare`. The shared TypeScript helper retains the fixed first three reduced months,
-trailing planned contributions, exactly five market-input comparisons and a median gap only when
-known. Null available medians are rejected at the existing client-validity boundary. No additional
-provider, database or FX call accompanies these preparation/comparison kinds. New unsaved runs use
-a fresh source ID; saved definitions keep their ID/seed. Local goal-month resolution is structural.
-Draft/input/currency signatures retire obsolete preparation, projection and comparison replies.
-
-Saved `life_scenarios` definitions use the existing settings CAS, with a first-read pinned raw
-baseline and serialized acknowledgements. Rejected/lost receipts retain recovery state rather than
-blindly replaying a write; only an acknowledged save advances the baseline. Delete retains the
-source bounded Undo action. Reads cannot replace pending mutation authority; a late acknowledgement
-after leave updates the baseline without restoring a departed draft. A real route exit resets
-controls and retires previews, while temporary native overlays retain their screen instance.
-There is no added polling or leave guard. See [[docs/features/research|Research]],
-[[docs/api/settings|Settings API]] and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]].
 
 Shared/backend tests and immutable frontend goldens verify monetary preparation, comparability,
 missing values, overflow/client rejection and unchanged projection behavior. Native Core/UI owners
@@ -1560,7 +1540,7 @@ single-read contract without relying on foreground scheduling speed.
 `Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
 provide app-lifetime notices and consume captured actions before awaiting them. Shell construction accepts an optional notice center so tests can control expiry and clock time; normal app construction retains automatic expiry. `AdminScreens.make` and `PortfolioScreens`
 also accept an optional shared cache clock; their app defaults remain wall-clock time. Transactions,
-Planned payments, Categories, Recipients, Chart Builder, and Life Scenario retain eight-second
+Planned payments, Categories, Recipients, and Chart Builder retain eight-second
 Undo actions and the source one-slot shortcut registry. Editor typing keeps its own Undo; route
 changes preserve eligible notices. Retry, Create rule, and Import actions remain non-Undo actions
 with their source callbacks/routes. No new retry or confirmation workflow is added.

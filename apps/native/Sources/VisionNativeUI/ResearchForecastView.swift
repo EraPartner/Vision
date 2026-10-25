@@ -231,12 +231,13 @@ public struct ResearchForecastView: View {
                 loading: model.isFetching && forecast == nil)
             ResearchForecastStat(
                 title: strings.t(
-                    forecast?.targetValue != nil
+                    forecast?.hasTarget == true
                         ? "research.forecast.probTarget" : "research.forecast.probBelowInvested"),
                 value: ResearchForecastDisplay.percent(
-                    forecast?.targetValue != nil ? forecast?.probTarget : forecast?.probBelowInvested, shell: shell),
+                    forecast?.hasTarget == true ? forecast?.probTarget : forecast?.probBelowInvested, shell: shell),
                 subtitle: ResearchForecastDisplay.money(
-                    forecast?.targetValue ?? forecast?.netInvested, currency: currency, shell: shell),
+                    forecast?.hasTarget == true ? forecast?.targetValue : forecast?.netInvested, currency: currency,
+                    shell: shell),
                 symbol: "target", loading: model.isFetching && forecast == nil)
         }
     }

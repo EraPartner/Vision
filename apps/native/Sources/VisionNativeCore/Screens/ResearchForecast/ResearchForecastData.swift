@@ -90,6 +90,9 @@ public struct ResearchForecastData: Codable, Equatable, Sendable {
     public var probBelowInvested: Decimal? { raw["probBelowInvested"]?.decimalValue }
     public var targetValue: Decimal? { raw["targetValue"]?.decimalValue }
     public var probTarget: Decimal? { raw["probTarget"]?.decimalValue }
+    /// `targetValue != null && targetValue !== 0`: a zero target counts as none, so the card
+    /// shows the probability of ending below the invested amount instead.
+    public var hasTarget: Bool { (targetValue ?? 0) != 0 }
     public init(raw: TaxValue) throws {
         try ResearchDecode.requireObject(raw)
         self.raw = raw

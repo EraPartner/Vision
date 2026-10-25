@@ -2,7 +2,7 @@
 title: "Native parity inventory: Portfolio overview and holdings"
 type: reference
 status: active
-date: 2026-10-17
+date: 2026-10-25
 updated: 2026-10-17
 tags:
   [
@@ -583,7 +583,7 @@ Component: `apps/frontend/src/pages/portfolio/RebalancePage.tsx`. Feature doc: [
 - Custom target allocation card (`rebalance.editor.title`), shown for a saved plan or Custom (new): the sleeve rows, `rebalance.editor.total` "Total: {pct}" (warning colour unless it rounds to 100), the note `rebalance.editor.normalizeNote` when the total is not 100 and > 0, the cap controls with `rebalance.editor.capHint` "Up to {amount} in spendable accounts. Leave blank to use the 90-day suggested cap.", and the plan name and save controls (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:675`).
 - The no-sell note `rebalance.noSellNote` "This plan only puts available cash into underweight sleeves. It never proposes selling." (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:908`).
 - A compute error alert with the API error message (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:915`).
-- Result cards, after a compute whose inputs still match the current inputs: `rebalance.availableCash` "Available cash" (the uncapped spendable sum, 0 decimals) with `rebalance.availableCashHint`, and `rebalance.totalDeployed` "Total deployed" with `rebalance.totalDeployedHint`. The `rebalance.deploymentPlan` "Deployment plan" table has the columns `rebalance.sleeve` "Allocation", `rebalance.current` "Current value", `rebalance.target` "Target" (1 decimal) and `rebalance.deploy` "Deploy" (a signed badge, or "—"), with rows sorted by sleeve key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:926`–`:1063`).
+- Result cards, after a compute whose inputs still match the current inputs: `rebalance.availableCash` "Available cash" (the uncapped spendable sum, 0 decimals) with `rebalance.availableCashHint` (and, when cash in a currency without a stored rate was left out, the `accounts.totalIncomplete` warning; ADR-216), and `rebalance.totalDeployed` "Total deployed" with `rebalance.totalDeployedHint`. The `rebalance.deploymentPlan` "Deployment plan" table has the columns `rebalance.sleeve` "Allocation", `rebalance.current` "Current value", `rebalance.target` "Target" (1 decimal) and `rebalance.deploy` "Deploy" (a signed badge, or "—"), with rows sorted by sleeve key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:926`–`:1063`).
 - Sleeve labels come from `rebalance.sleeve.{stocks|intl_stocks|bonds|gold|commodities|crypto|real_estate|savings}` ("Stocks", "International stocks", "Bonds", "Gold", "Commodities", "Crypto", "Real estate", "Savings"). Unknown keys fall back to the raw key (`apps/frontend/src/pages/portfolio/RebalancePage.tsx:259`).
 
 On load, a background `POST /api/cross-workspace/rebalance` (model `sixty_forty`) fetches available cash and the current sleeve values (`apps/frontend/src/features/portfolio/usePortfolioQueries.ts:153`). Saved plans load from the `rebalance_plans` setting (`apps/frontend/src/hooks/useRebalancePlans.ts:17`).
