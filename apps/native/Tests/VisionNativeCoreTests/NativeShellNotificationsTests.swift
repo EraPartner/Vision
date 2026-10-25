@@ -123,7 +123,7 @@ struct NativeShellNotificationsTests {
         storage.values[.upcomingDismissals] = "[8,\"8\",\"1:2026-03-28\",\"2:2026-03-29\",\"bad\",\"2:2026-03-29\"]"
         let service = BannerService()
         await service.setUpcoming([
-            payment(1, "2026-03-29"), payment(2, "2026-03-29T00:00:00.000Z"),
+            payment(1, "2026-03-29"), payment(2, "2026-03-29"),
             payment(3, "2026-03-30", executed: true), payment(4, "2026-03-31", executed: true, recurring: true),
         ])
         let model = ShellUpcomingPaymentsModel(

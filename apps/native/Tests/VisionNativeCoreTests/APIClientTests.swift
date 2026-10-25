@@ -71,7 +71,7 @@ actor SleepRecorder {
 
     @Test func metadataSurvivesAnIdempotentRetryWithoutChangingTheDataContract() async throws {
         let body =
-            #"{"ok":true,"data":{"key":"synthetic","value":1,"expected":null},"meta":{"provider":null,"source":"cache","requestId":"r2","future":{"status":"partial","missing":["volume"]}}}"#
+            #"{"ok":true,"data":{"key":"synthetic","value":1,"expected":{"exists":false}},"meta":{"provider":null,"source":"cache","requestId":"r2","future":{"status":"partial","missing":["volume"]}}}"#
         let transport = FakeTransport([.response(503, ""), .response(200, body)])
         let sleeper = SleepRecorder()
         let snapshot = try await client(transport, sleeper: sleeper).sendWithMeta(
@@ -87,10 +87,10 @@ actor SleepRecorder {
     }
 
     @Test func rawResponsesHaveNoEnvelopeMetadataAndExplicitNullIsRetained() async throws {
-        let raw = #"{"key":"synthetic","value":null,"expected":null}"#
+        let raw = #"{"key":"synthetic","value":null,"expected":{"exists":false}}"#
         let transport = FakeTransport([
             .response(200, raw),
-            .response(200, #"{"ok":true,"data":{"key":"synthetic","value":null,"expected":null},"meta":null}"#),
+            .response(200, #"{"ok":true,"data":{"key":"synthetic","value":null,"expected":{"exists":false}},"meta":null}"#),
         ])
         let plain = try await client(transport).sendWithMeta(OpenAPIOperations.GetSetting(key: "synthetic"))
         #expect(plain.data.key == "synthetic")
@@ -110,7 +110,7 @@ actor SleepRecorder {
     }
 
     @Test func pathParametersAreEscapedAsOneSegment() async throws {
-        let transport = FakeTransport([.response(200, #"{"ok":true,"data":{"key":"a/b?c","value":1,"expected":null}}"#)]
+        let transport = FakeTransport([.response(200, #"{"ok":true,"data":{"key":"a/b?c","value":1,"expected":{"exists":false}}}"#)]
         )
         _ = try await client(transport).send(OpenAPIOperations.GetSetting(key: "a/b?c"))
         let request = try #require(await transport.requests.first)
@@ -275,7 +275,7 @@ actor SleepRecorder {
 
     @Test func appSettingsAreMigratedFieldByField() async throws {
         let body =
-            #"{"ok":true,"data":{"key":"app_settings","value":{"dateFormat":"YYYY-MM-DD","numberFormat":"ch","showDecimalPlaces":42,"adminMode":true,"colorblindGainLoss":"yes"},"expected":null}}"#
+            #"{"ok":true,"data":{"key":"app_settings","value":{"dateFormat":"YYYY-MM-DD","numberFormat":"ch","showDecimalPlaces":42,"adminMode":true,"colorblindGainLoss":"yes"},"expected":{"exists":false}}}"#
         let transport = FakeTransport([.response(200, body)])
         let settings = try await client(transport).appSettings()
         #expect(settings.dateFormat == .isoDate)
