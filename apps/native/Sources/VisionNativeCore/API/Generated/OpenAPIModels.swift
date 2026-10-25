@@ -688,11 +688,11 @@ extension OpenAPI {
         public let nextDueAt: String
         public let lastCheckedAt: String?
         public let lastStatus: String?
-        public let lastObservation: LastObservation?
+        public let lastObservation: OpenAPI.AnalysisMonitorObservation?
         public let createdAt: String
         public let updatedAt: String
 
-        public init(id: String, kind: String, title: String, enabled: Bool, savedAnalysisId: String? = nil, dossierId: String? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: LastObservation? = nil, createdAt: String, updatedAt: String) {
+        public init(id: String, kind: String, title: String, enabled: Bool, savedAnalysisId: String? = nil, dossierId: String? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: OpenAPI.AnalysisMonitorObservation? = nil, createdAt: String, updatedAt: String) {
             self.id = id
             self.kind = kind
             self.title = title
@@ -736,78 +736,6 @@ extension OpenAPI {
             case lastObservation = "lastObservation"
             case createdAt = "createdAt"
             case updatedAt = "updatedAt"
-        }
-
-        public struct LastObservation: Codable, Equatable, Sendable {
-            public let id: String
-            public let monitorId: String
-            public let status: String
-            public let previousValue: String?
-            public let currentValue: String?
-            public let previousEvidenceVersion: Int?
-            public let currentEvidenceVersion: Int?
-            public let analysisDefinitionVersion: Int?
-            public let analysisRunId: String?
-            public let historicalAnalysisRunId: String?
-            public let analysisRunStatus: String?
-            public let analysisWindow: JSONValue?
-            public let coverage: Coverage
-            public let reasonCode: String
-            public let reason: String
-            public let checkedAt: String
-
-            public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
-                self.id = id
-                self.monitorId = monitorId
-                self.status = status
-                self.previousValue = previousValue
-                self.currentValue = currentValue
-                self.previousEvidenceVersion = previousEvidenceVersion
-                self.currentEvidenceVersion = currentEvidenceVersion
-                self.analysisDefinitionVersion = analysisDefinitionVersion
-                self.analysisRunId = analysisRunId
-                self.historicalAnalysisRunId = historicalAnalysisRunId
-                self.analysisRunStatus = analysisRunStatus
-                self.analysisWindow = analysisWindow
-                self.coverage = coverage
-                self.reasonCode = reasonCode
-                self.reason = reason
-                self.checkedAt = checkedAt
-            }
-
-            enum CodingKeys: String, CodingKey {
-                case id = "id"
-                case monitorId = "monitorId"
-                case status = "status"
-                case previousValue = "previousValue"
-                case currentValue = "currentValue"
-                case previousEvidenceVersion = "previousEvidenceVersion"
-                case currentEvidenceVersion = "currentEvidenceVersion"
-                case analysisDefinitionVersion = "analysisDefinitionVersion"
-                case analysisRunId = "analysisRunId"
-                case historicalAnalysisRunId = "historicalAnalysisRunId"
-                case analysisRunStatus = "analysisRunStatus"
-                case analysisWindow = "analysisWindow"
-                case coverage = "coverage"
-                case reasonCode = "reasonCode"
-                case reason = "reason"
-                case checkedAt = "checkedAt"
-            }
-
-            public struct Coverage: Codable, Equatable, Sendable {
-                public let status: String
-                public let reason: String
-
-                public init(status: String, reason: String) {
-                    self.status = status
-                    self.reason = reason
-                }
-
-                enum CodingKeys: String, CodingKey {
-                    case status = "status"
-                    case reason = "reason"
-                }
-            }
         }
     }
 
@@ -3231,6 +3159,40 @@ extension OpenAPI {
         }
     }
 
+    public struct CashForecastInsight: Codable, Equatable, Sendable {
+        public let month: String
+        public let currency: String
+        /// Zero-based expected income minus outflows at month end; not an account balance.
+        public let monthEndNetCashflow: Decimal
+        public let monthEndNetCashflowLow: Decimal?
+        public let monthEndNetCashflowHigh: Decimal?
+        public let movedSignificantly: Bool
+        public let prominence: String
+        public let methodId: String
+
+        public init(month: String, currency: String, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: String, methodId: String) {
+            self.month = month
+            self.currency = currency
+            self.monthEndNetCashflow = monthEndNetCashflow
+            self.monthEndNetCashflowLow = monthEndNetCashflowLow
+            self.monthEndNetCashflowHigh = monthEndNetCashflowHigh
+            self.movedSignificantly = movedSignificantly
+            self.prominence = prominence
+            self.methodId = methodId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case month = "month"
+            case currency = "currency"
+            case monthEndNetCashflow = "monthEndNetCashflow"
+            case monthEndNetCashflowLow = "monthEndNetCashflowLow"
+            case monthEndNetCashflowHigh = "monthEndNetCashflowHigh"
+            case movedSignificantly = "movedSignificantly"
+            case prominence = "prominence"
+            case methodId = "methodId"
+        }
+    }
+
     public struct Category: Codable, Equatable, Sendable {
         public let id: Int
         public let general: String
@@ -4206,9 +4168,9 @@ extension OpenAPI {
     public struct InsightsDigestData: Codable, Equatable, Sendable {
         public let subscriptionCreep: SubscriptionCreep
         public let categoryOutliers: [JSONValue]
-        public let cashForecast: CashForecast?
+        public let cashForecast: OpenAPI.CashForecastInsight?
 
-        public init(subscriptionCreep: SubscriptionCreep, categoryOutliers: [JSONValue], cashForecast: CashForecast? = nil) {
+        public init(subscriptionCreep: SubscriptionCreep, categoryOutliers: [JSONValue], cashForecast: OpenAPI.CashForecastInsight? = nil) {
             self.subscriptionCreep = subscriptionCreep
             self.categoryOutliers = categoryOutliers
             self.cashForecast = cashForecast
@@ -4232,40 +4194,6 @@ extension OpenAPI {
             enum CodingKeys: String, CodingKey {
                 case new = "new"
                 case priceChanges = "priceChanges"
-            }
-        }
-
-        public struct CashForecast: Codable, Equatable, Sendable {
-            public let month: String
-            public let currency: String
-            /// Zero-based expected income minus outflows at month end; not an account balance.
-            public let monthEndNetCashflow: Decimal
-            public let monthEndNetCashflowLow: Decimal?
-            public let monthEndNetCashflowHigh: Decimal?
-            public let movedSignificantly: Bool
-            public let prominence: String
-            public let methodId: String
-
-            public init(month: String, currency: String, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: String, methodId: String) {
-                self.month = month
-                self.currency = currency
-                self.monthEndNetCashflow = monthEndNetCashflow
-                self.monthEndNetCashflowLow = monthEndNetCashflowLow
-                self.monthEndNetCashflowHigh = monthEndNetCashflowHigh
-                self.movedSignificantly = movedSignificantly
-                self.prominence = prominence
-                self.methodId = methodId
-            }
-
-            enum CodingKeys: String, CodingKey {
-                case month = "month"
-                case currency = "currency"
-                case monthEndNetCashflow = "monthEndNetCashflow"
-                case monthEndNetCashflowLow = "monthEndNetCashflowLow"
-                case monthEndNetCashflowHigh = "monthEndNetCashflowHigh"
-                case movedSignificantly = "movedSignificantly"
-                case prominence = "prominence"
-                case methodId = "methodId"
             }
         }
     }
@@ -5065,7 +4993,7 @@ extension OpenAPI {
         /// Recurrence bound — the series completes at this execution count.
         public let maxOccurrences: Int?
         public let isLoan: Bool?
-        public let loanType: LoanType?
+        public let loanType: OpenAPI.PlannedLoanType?
         public let loanPrincipal: Decimal?
         public let loanAnnualInterestRate: Decimal?
         public let loanTermMonths: Int?
@@ -5086,7 +5014,7 @@ extension OpenAPI {
         public let updatedAt: String?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, plannedDate: String, bankAccount: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: LoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: String? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: String? = nil, executedTransactionId: Int? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: Int, plannedDate: String, bankAccount: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: String? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: String? = nil, executedTransactionId: Int? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.plannedDate = plannedDate
             self.bankAccount = bankAccount
@@ -5164,11 +5092,6 @@ extension OpenAPI {
             case createdAt = "created_at"
             case updatedAt = "updated_at"
             case links = "links"
-        }
-
-        public struct LoanType: Codable, Equatable, Sendable {
-            public init() {
-            }
         }
     }
 
@@ -6627,12 +6550,12 @@ extension OpenAPI {
         public let importBatchId: String?
         public let note: String?
         public let isRecurring: Bool
-        public let recurrenceInterval: RecurrenceInterval?
+        public let recurrenceInterval: OpenAPI.RecurrenceInterval?
         public let recurrenceEndDate: String?
         public let createdAt: String
         public let updatedAt: String
 
-        public init(id: Int, investmentId: Int, type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String, incomeRecognitionRole: String? = nil, currency: String, fxRateToEur: Decimal? = nil, accountId: Int? = nil, importBatchId: String? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: Int, investmentId: Int, type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String, incomeRecognitionRole: String? = nil, currency: String, fxRateToEur: Decimal? = nil, accountId: Int? = nil, importBatchId: String? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, createdAt: String, updatedAt: String) {
             self.id = id
             self.investmentId = investmentId
             self.type = type
@@ -6678,11 +6601,6 @@ extension OpenAPI {
             case recurrenceEndDate = "recurrence_end_date"
             case createdAt = "created_at"
             case updatedAt = "updated_at"
-        }
-
-        public struct RecurrenceInterval: Codable, Equatable, Sendable {
-            public init() {
-            }
         }
     }
 
@@ -6953,6 +6871,15 @@ extension OpenAPI {
             case notes = "notes"
             case isActive = "is_active"
         }
+    }
+
+    public enum RecurrenceInterval: String, Codable, Sendable, CaseIterable {
+        case daily = "daily"
+        case weekly = "weekly"
+        case biweekly = "biweekly"
+        case monthly = "monthly"
+        case quarterly = "quarterly"
+        case yearly = "yearly"
     }
 
     public struct ResearchAnalystAction: Codable, Equatable, Sendable {

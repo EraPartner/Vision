@@ -4534,7 +4534,7 @@ extension OpenAPIOperations {
             public let currency: String?
             public let note: String?
             public let isRecurring: Bool?
-            public let recurrenceInterval: RecurrenceInterval?
+            public let recurrenceInterval: OpenAPI.RecurrenceInterval?
             public let recurrenceEndDate: String?
             /// Explicit EUR conversion rate; absent/null is resolved automatically
             public let fxRateToEur: Decimal?
@@ -4542,7 +4542,7 @@ extension OpenAPIOperations {
             /// applied by this operation all along — it was simply undocumented.
             public let accountId: Int?
 
-            public init(type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil) {
+            public init(type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil) {
                 self.type = type
                 self.date = date
                 self.amount = amount
@@ -4576,11 +4576,6 @@ extension OpenAPIOperations {
                 case recurrenceEndDate = "recurrence_end_date"
                 case fxRateToEur = "fx_rate_to_eur"
                 case accountId = "account_id"
-            }
-
-            public struct RecurrenceInterval: Codable, Equatable, Sendable {
-                public init() {
-                }
             }
         }
     }
@@ -4624,10 +4619,10 @@ extension OpenAPIOperations {
             /// Free-text note; null clears it
             public let note: String?
             public let isRecurring: Bool?
-            public let recurrenceInterval: RecurrenceInterval?
+            public let recurrenceInterval: OpenAPI.RecurrenceInterval?
             public let recurrenceEndDate: String?
 
-            public init(type: OpenAPI.PortfolioTxnType? = nil, date: String? = nil, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: RecurrenceInterval? = nil, recurrenceEndDate: String? = nil) {
+            public init(type: OpenAPI.PortfolioTxnType? = nil, date: String? = nil, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil) {
                 self.type = type
                 self.date = date
                 self.amount = amount
@@ -4661,11 +4656,6 @@ extension OpenAPIOperations {
                 case isRecurring = "is_recurring"
                 case recurrenceInterval = "recurrence_interval"
                 case recurrenceEndDate = "recurrence_end_date"
-            }
-
-            public struct RecurrenceInterval: Codable, Equatable, Sendable {
-                public init() {
-                }
             }
         }
     }

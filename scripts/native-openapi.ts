@@ -135,6 +135,12 @@ class Generator {
     if (schema.oneOf !== undefined || schema.anyOf !== undefined)
       return "JSONValue";
     if (Array.isArray(schema.allOf)) {
+      // `allOf: [$ref]` with `nullable: true` is OpenAPI 3.0's nullable reference: the
+      // referenced type itself (an enum would otherwise become an empty struct).
+      if (schema.allOf.length === 1 && isObject(schema.allOf[0])) {
+        const only = stringField(schema.allOf[0], "$ref");
+        if (only) return this.typeFor(schema.allOf[0], hint, nested);
+      }
       const merged = this.mergeAllOf(schema.allOf);
       const name = pascalCase(hint);
       nested.push(
