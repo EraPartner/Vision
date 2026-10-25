@@ -121,3 +121,37 @@ struct SidebarSelectionPill: View {
             .padding(.horizontal, 8)
     }
 }
+
+/// Gives the hosting window the theme's appearance (the web follows its own theme, not macOS),
+/// so system materials, scrollers and menus in the window match the app theme. Without it a
+/// dialog's `Material` follows the macOS appearance: light glass over a dark theme.
+struct WindowAppearanceSync: NSViewRepresentable {
+    let isDark: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = WindowAppearanceView()
+        view.isDark = isDark
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        (view as? WindowAppearanceView)?.isDark = isDark
+    }
+}
+
+private final class WindowAppearanceView: NSView {
+    var isDark = false {
+        didSet { apply() }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    private func apply() {
+        guard let window else { return }
+        let name: NSAppearance.Name = isDark ? .darkAqua : .aqua
+        if window.appearance?.name != name { window.appearance = NSAppearance(named: name) }
+    }
+}
