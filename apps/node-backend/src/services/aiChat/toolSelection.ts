@@ -9,8 +9,9 @@
  * conversation already used, and `getCategories` (other tools need its IDs). The system prompt still lists
  * every tool name and the dispatcher still runs any registered tool, so a
  * tool that was not sent stays callable; once called, its schema is added for
- * the rest of the turn (see `withCalledTools`). A question that matches no
- * tool gets every schema, as before.
+ * the rest of the turn (see `withCalledTools`). A follow-up ("now exclude
+ * January") is matched together with the previous question. A question that
+ * matches no tool gets every schema, as before.
  */
 
 import type { getToolSchemas } from "./tools/index.ts";
@@ -84,6 +85,8 @@ function stems(text: string): string[] {
 export interface SelectToolsArgs {
   schemas: ToolSchema[];
   question: string;
+  /** The previous user message, so a short follow-up keeps its topic. */
+  previousQuestion?: string | null | undefined;
   /** Tools called earlier in this conversation, oldest first. */
   usedTools?: Iterable<string>;
   /** Tools that must be sent (e.g. a server-side pre-call). */
@@ -94,10 +97,11 @@ export interface SelectToolsArgs {
 export function selectToolSchemas({
   schemas,
   question,
+  previousQuestion,
   usedTools = [],
   required = [],
 }: SelectToolsArgs): ToolSchema[] {
-  const asked = new Set(stems(question));
+  const asked = new Set(stems(`${question} ${previousQuestion ?? ""}`));
   const scored = schemas
     .map((schema) => ({
       name: schema.function.name,

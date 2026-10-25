@@ -487,6 +487,8 @@ async function runChatTurnLocked({
   let toolSchemas = toolsForTurn(activeModel, {
     schemas: allToolSchemas,
     question: effectiveMessage,
+    previousQuestion: historyBeforeTurn.findLast((row) => row.role === "user")
+      ?.content,
     usedTools: historyBeforeTurn.flatMap((row) =>
       row.role === "tool" && row.toolName ? [row.toolName] : [],
     ),

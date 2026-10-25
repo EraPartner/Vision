@@ -77,7 +77,7 @@ type ToolSchema = ReturnType<typeof getToolSchemas>[number];
  * shapes (e.g. the pre-tuning shape against the chat service's tuned one).
  */
 export interface LocalAiRequestShape {
-  tools: (question: string) => ToolSchema[];
+  tools: (testCase: LocalAiCase) => ToolSchema[];
   /** System + history + question budget; undefined uses the builder default. */
   contextBudgetChars?: (tools: ToolSchema[]) => Promise<number | undefined>;
   historyStep?: number;
@@ -104,8 +104,18 @@ export function fixedWindowRequestShape(numCtx = 8_192): LocalAiRequestShape {
 /** The request the chat service sends today (services/aiChat/requestPlan.ts). */
 export function tunedRequestShape(model: string): LocalAiRequestShape {
   return {
-    tools: (question) =>
-      toolsForTurn(model, { schemas: getToolSchemas(), question }),
+    // Same inputs as the chat service: the question, the previous user
+    // message and the tools the conversation already used.
+    tools: ({ question, history = [] }) =>
+      toolsForTurn(model, {
+        schemas: getToolSchemas(),
+        question,
+        previousQuestion: history.findLast((row) => row.role === "user")
+          ?.content,
+        usedTools: history.flatMap((row) =>
+          row.role === "tool" && row.toolName ? [row.toolName] : [],
+        ),
+      }),
     contextBudgetChars: (tools) => historyBudgetChars(model, tools),
     historyStep: historyStepFor(model),
     request: async (messages, tools) => {
@@ -426,7 +436,7 @@ export async function runLocalAiCase({
   shape?: LocalAiRequestShape;
   maxIterations?: number;
 }): Promise<LocalAiRun> {
-  const tools = shape.tools(testCase.question);
+  const tools = shape.tools(testCase);
   const contextBudgetChars = await shape.contextBudgetChars?.(tools);
   const messages: OllamaMessage[] = buildChatMessages({
     toolNames: getToolNames(),
