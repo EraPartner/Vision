@@ -18,7 +18,7 @@ public protocol PortfolioImportService: Sendable {
     func importRollback(batchId: Int) async throws -> Int
     func importReconciliationPreview(scope: PortfolioImportReconciliationScope) async throws
         -> PortfolioImportReconciliationPlan
-    func importReconciliationCommit(scope: PortfolioImportReconciliationScope, fingerprint: String) async throws
+    func importReconciliationCommit(scope: PortfolioImportReconciliationScope) async throws
         -> PortfolioImportReconciliationResult
 }
 
@@ -161,23 +161,15 @@ extension APIClient: PortfolioImportService {
         -> PortfolioImportReconciliationPlan
     {
         let result: PortfolioImportReconciliationPlan = try await send(
-            InsightRequest(
-                OpenAPIOperations.PreviewPortfolioImportReconciliation(body: .init(batchIds: scope.batchIds)),
-                query: [], bodyOverride: try JSONEncoder().encode(scope.requestBody())))
+            InsightRequest(OpenAPIOperations.PreviewPortfolioImportReconciliation(body: try scope.request()), query: []))
         try result.validate(scope: scope)
         return result
     }
-    public func importReconciliationCommit(scope: PortfolioImportReconciliationScope, fingerprint: String) async throws
+    public func importReconciliationCommit(scope: PortfolioImportReconciliationScope) async throws
         -> PortfolioImportReconciliationResult
     {
-        guard !fingerprint.isEmpty else { throw PortfolioImportFailure.unverified("Missing reviewed plan fingerprint") }
-        var body = try scope.requestBody()
-        body["expected_plan_fingerprint"] = .string(fingerprint)
         let result: PortfolioImportReconciliationResult = try await send(
-            InsightRequest(
-                OpenAPIOperations.CommitReviewedPortfolioImports(
-                    body: .init(batchIds: scope.batchIds, expectedPlanFingerprint: fingerprint)), query: [],
-                bodyOverride: try JSONEncoder().encode(body)))
+            InsightRequest(OpenAPIOperations.CommitReviewedPortfolioImports(body: try scope.request()), query: []))
         try result.validate(scope: scope)
         return result
     }

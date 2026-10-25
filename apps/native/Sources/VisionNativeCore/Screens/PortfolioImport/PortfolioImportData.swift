@@ -58,7 +58,7 @@ public struct PortfolioImportDetected: Codable, Equatable, Sendable {
         source = try c.decode(String.self, forKey: .source)
         sourceAccountIdentities = try c.decode([String].self, forKey: .sourceAccountIdentities)
         presetKey = try c.decodeIfPresent(String.self, forKey: .presetKey)
-        guard ["ibkr", "kinesis", "nexo", "nexo_pro", "saxo", "native_receipts"].contains(source),
+        guard ["ibkr", "kinesis", "nexo", "nexo_pro", "saxo"].contains(source),
             presetKey == nil || presetKey == "ibkr_funding_history"
         else { throw PortfolioImportFailure.unverified("Unsupported detected portfolio source") }
     }
@@ -66,12 +66,6 @@ public struct PortfolioImportDetected: Codable, Equatable, Sendable {
     public func resolveAccount(_ accounts: [OpenAPI.Account]) -> Int? {
         let eligible = portfolioImportBrokerAccounts(accounts)
         let clean: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-        if source == "native_receipts" {
-            let matches = eligible.filter {
-                clean($0.name) == "coolwallet" || $0.displayName.map(clean) == "coolwallet"
-            }
-            return matches.count == 1 ? matches.first?.id : nil
-        }
         let identities = Set(sourceAccountIdentities.map { $0.lowercased() })
         guard identities.count <= 1 else { return nil }
         let exact = eligible.filter {
@@ -338,9 +332,6 @@ public struct PortfolioImportBatch: Decodable, Equatable, Sendable, Identifiable
     public let rowsTotal: Int
     public let rowsError: Int
     public let customConfig: TaxValue?
-    public var isRetainedIbkr: Bool {
-        adapterName == "ibkr_transaction_history" || customConfig?["format"]?.stringValue == "ibkr_transaction_history"
-    }
     public var canRollback: Bool { ["complete", "complete_with_errors"].contains(status) }
     public init(from decoder: any Decoder) throws {
         let value = try TaxValue(from: decoder)

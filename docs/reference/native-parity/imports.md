@@ -2,8 +2,8 @@
 title: "Native parity inventory: Budgeting CSV import and import review"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-25
+updated: 2026-10-25
 tags: [reference, swift-rewrite, native-parity, import, csv, review]
 description: "Every action, region and dialog on the budgeting import page (/import) and the import review page (/import/:batchId/review), plus the frontend side of the Electron CSV handoff."
 aliases: [native parity imports]
@@ -14,7 +14,7 @@ aliases: [native parity imports]
 > [!abstract] Scope
 > Routes: `/import`, `/import/:batchId/review`. Source: `apps/frontend/src/pages/ImportPage.tsx`, `apps/frontend/src/pages/ImportReviewPage.tsx`, `apps/frontend/src/features/imports/`, `apps/frontend/src/lib/importHandoff.ts`, and the CSV handlers in `apps/frontend/src/components/layout/ElectronBridge.tsx`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 >
-> Out of scope: the brokerage import (`/portfolio/import`, `PortfolioCsvColumnMapper`), which another inventory covers. The navigation entry points into `/import` from other screens (Transactions, Insights, Dashboard, Not found, onboarding) belong to those screens' inventories.
+> The brokerage import (`/portfolio/import`) has its own section below. The navigation entry points into `/import` from other screens (Transactions, Insights, Dashboard, Not found, onboarding) belong to those screens' inventories.
 
 ## Screens
 
@@ -209,6 +209,30 @@ Fields: none. Title `importReview.discard.title` "Discard this import?", body `i
 | 1   | Footer | `common.cancel` "Cancel"                                      | click / Esc | Closes the dialog. The batch stays parked                                                                                                                                                                                             | `apps/frontend/src/hooks/useConfirmDialog.tsx:91`                | native |
 | 2   | Footer | `importReview.discard.confirm` "Discard import" (destructive) | click       | Calls `DELETE /api/import/batches/:id`, shows the toast `importReview.toast.discarded` "Import discarded", invalidates Import history and navigates to `/import` with `replace`. On failure: toast `importReview.toast.discardFailed` | `apps/frontend/src/features/imports/useImportReviewData.tsx:141` | native |
 
+### `/portfolio/import` — Broker import (reviewed session)
+
+Component: `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`. Source of truth since [[docs/adr/236-simplify-portfolio-import-reconciliation|ADR-236]] and [[docs/adr/239-import-review-owner-choices|ADR-239]]. This section supersedes the broker import rows in [[docs/reference/native-parity/portfolio-wealth-tools]].
+
+The review is one reviewed session. The request body is `{batch_ids, adopt_policy, batch_policies, row_choices}`, and `row_choices` holds only `keep_both` or `same_transaction`. Cross-format dedupe blockers (Saxo CSV/XLSX, IBKR CSV and funding workbooks) are settled per row by the owner, so overlapping imports are never double counted.
+
+| #   | Where | Element | Trigger | What it does | Source | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Session header | Import history disclosure (`portfolioImport.session.history.title`) | click | Lists earlier broker batches with their status and Roll back for completed ones. Unchanged by the reviewed-session rewrite | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportHistoryView.swift` | native |
+| 2 | Dropzone | Statement dropzone (`.csv`, `.xlsx`, `.xls`) | drop / choose | Adds up to the file limit (`portfolioImport.session.tooMany`). Saxo XLSX and IBKR funding workbooks are kept. Each file is parsed locally, then detected | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportFileViews.swift` | native |
+| 3 | Statement row | Broker detection and account picker | automatic / select | Shows the detected source or `portfolioImport.session.detecting`. The account is required before staging (`accountRequired`). Changing the routing drops the review and keeps the old batch id as a pending link | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportStatementView.swift` | native |
+| 4 | Statement row | Asset scope | edit | Hidden for presets (funding workbooks, Nexo, Kinesis), as in React. Otherwise limits the symbols imported | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportStatementView.swift` | native |
+| 5 | Statement row | Statement policy (`portfolioImport.session.statementPolicy`) | select | Per-file adopt policy. Changing it drops the owner's row answers and the review. No longer disabled by an import mode | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportStatementView.swift` | native |
+| 6 | Statement row | Nexo and Kinesis custody account, transfer destination | select | Non-base cash and transfer legs go to the chosen account. Native receipts (CoolWallet) are gone, as in React | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportStatementView.swift` | native |
+| 7 | Session | Session policy (`portfolioImport.session.policy`) with `policyHint.*` | select | Default adopt policy for files that use the session policy. A change clears the plan and the owner's answers | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportSessionView.swift` | native |
+| 8 | Session | Stage / Stop / Clear | click | Stage uploads the files and keeps the batch ids (checkpoint). Stop waits for the current receipt and keeps the pending batch. Clear removes everything | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportSessionView.swift` | native |
+| 9 | Session | Review (`portfolioImport.session.preview`) | click | Sends `{batch_ids, adopt_policy, batch_policies, row_choices}` to the reconciliation preview and validates that the plan echoes the request | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportSessionModel.swift` | native |
+| 10 | Review | Action summary (insert, adopt, duplicate, duplicate source, cash, transfer, annotation, adjustment, settled, blocked) | view | Counts from the plan actions. Blocked and policy-required actions disable Commit | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportReconciliationView.swift` | native |
+| 11 | Review | Blocker row: `choice.keepBoth` / `choice.sameTransaction` | click | Records the owner's answer for that row and reviews again. The latest answer wins. Answers for rows outside the staged batches are never sent | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportReconciliationView.swift` | native |
+| 12 | Review | Evidence cards and Show more (`more`) | click | Source and existing values side by side, with corrected fields highlighted. Also transfer and adjustment details | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportReconciliationView.swift` | native |
+| 13 | Review | Commit (`portfolioImport.session.commit`) | click | Sends the same body to the reconciliation commit. A definite 4xx rejection keeps the session reviewable. A lost or unverified receipt marks the outcome uncertain and reconciles history | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportSessionModel.swift` | native |
+| 14 | Review | Success message (`portfolioImport.session.success`) | view | Imported, adopted and duplicate counts. Per-batch errors are copied onto the statements | `apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx`, `apps/native/Sources/VisionNativeUI/PortfolioImportReconciliationView.swift` | native |
+
+
 ## Keyboard shortcuts
 
 | Key                | Scope                                                                                                       | Action                                                                         | Source                                                                                                                              |
@@ -243,6 +267,9 @@ No `useHotkeys` or page-specific shortcuts exist in this scope.
 - **Accordion keyboard behaviour** is assumed from Radix defaults. No custom key handlers exist (unverified).
 - **Doc mentions an ad-hoc "custom" import that is not saved.** That is the "Custom or other" source with no Save. It shares the editor with saved parsers. No separate UI exists.
 - **Vision Native, phase 3d.** `/import` and `/import/:batchId/review` draw natively in every mode (`apps/native/Sources/VisionNativeUI/ImportExportView.swift`, `ImportComponents.swift`, `ImportSidebarViews.swift`, `ImportReviewView.swift`; models in `apps/native/Sources/VisionNativeCore/Screens/Imports/`). Below 960 pt the sidebar column (export card, Setup and reference) stacks under the main column. Export CSV and Export JSON open a save panel; the success toast appears only after the file is saved, and a cancelled panel posts no toast. Both pages share one toast stack (at most three toasts, newest at the bottom), so the commit and discard toasts stay visible after the review returns to `/import`; the Review accounts action toast does not bind ⌘Z. After a native commit the planned-payment and account lists refresh on their next load instead of being invalidated at once. A CSV dropped on a web-drawn route still goes to the hidden web card; a drop on any native screen, and every Finder or dock open (also at cold launch, before `app_settings` is read, when the web card gets it too), pre-fills the native card. A file handed off while an import runs waits until that import ends. An import that parks its batch after the user left `/import` does not navigate: the card resets and an `importHistory.status.awaiting_review` toast with a `importHistory.resumeReview` action opens the review. A dropped or picked file that cannot be read (a folder, unreadable, or above 25 MiB) toasts `importPage.toast.noFile`. Cancel posts only `importPage.toast.importCancelled`; the web card also shows a `importPage.toast.serverError` toast for the aborted stream.
+- **Broker import features removed in React (#339), removed natively.** Reconciliation scopes, the cash funding policy, plan fingerprints and proofs, the `record_income` and `repair_duplicate` actions, existing/reference history statements and the `native_receipts` source no longer exist. The native session drops checkpoints of the old existing/reference statements on restore.
+- **Broker import decoded but not shown.** `crossFormat`, `cash` and `duplicateOfRowId` on plan actions are decoded and validated but not displayed (unverified against React).
+- **Broker import not compiled.** The Swift changes were written without a compiler and are untested.
 - **Entry points from other screens** (Transactions empty state, Insights, Dashboard needs-attention, Not found, onboarding wizard → review, Electron menu `navigate` payloads, command palette entry `nav.importExport`) are not inventoried here (unverified ownership: shell and those screens' inventories).
 
 ## Counts

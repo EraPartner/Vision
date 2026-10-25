@@ -29,18 +29,21 @@ struct PortfolioImportStatementView: View {
                 if statement.accountId == nil {
                     Text(strings.t("portfolioImport.session.accountRequired")).foregroundStyle(theme.destructive)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(strings.t("portfolioImport.session.assetScope")).font(.callout.weight(.medium))
-                    TextField(
-                        strings.t("portfolioImport.session.assetScope"),
-                        text: Binding(
-                            get: { statement.includedSymbols ?? "" },
-                            set: { model.setSymbols(id: statement.id, symbols: $0) }),
-                        prompt: Text(strings.t("portfolioImport.session.allAssets"))
-                    )
-                    .disabled(readOnly || model.existingOnly || statement.detected?.source == "native_receipts")
-                    Text(strings.t("portfolioImport.session.assetScopeHelp")).font(.caption).foregroundStyle(
-                        theme.secondaryLabel)
+                // Funding rows carry no asset to scope.
+                if statement.detected?.presetKey == nil {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(strings.t("portfolioImport.session.assetScope")).font(.callout.weight(.medium))
+                        TextField(
+                            strings.t("portfolioImport.session.assetScope"),
+                            text: Binding(
+                                get: { statement.includedSymbols ?? "" },
+                                set: { model.setSymbols(id: statement.id, symbols: $0) }),
+                            prompt: Text(strings.t("portfolioImport.session.allAssets"))
+                        )
+                        .disabled(readOnly)
+                        Text(strings.t("portfolioImport.session.assetScopeHelp")).font(.caption).foregroundStyle(
+                            theme.secondaryLabel)
+                    }
                 }
             }
             Picker(
@@ -52,13 +55,9 @@ struct PortfolioImportStatementView: View {
                 Text(strings.t("portfolioImport.session.useSessionPolicy")).tag(
                     Optional<PortfolioImportReconciliationPolicy>.none)
                 Text(strings.t("portfolioImport.session.preserve")).tag(
-                    Optional(PortfolioImportReconciliationPolicy.preserveExisting)
-                )
-                .disabled(model.reconciliationMode == .correctExistingOnly)
+                    Optional(PortfolioImportReconciliationPolicy.preserveExisting))
                 Text(strings.t("portfolioImport.session.source")).tag(
-                    Optional(PortfolioImportReconciliationPolicy.preferSource)
-                )
-                .disabled(model.existingOnly && model.reconciliationMode != .correctExistingOnly)
+                    Optional(PortfolioImportReconciliationPolicy.preferSource))
             }.disabled(isLocked || model.locked || statement.status == "completed")
                 .accessibilityLabel(strings.t("portfolioImport.session.policyForFile", ["name": statement.name]))
             if let source = statement.detected?.source, ["nexo", "kinesis"].contains(source) {
@@ -117,13 +116,6 @@ struct PortfolioImportStatementView: View {
                     }
                 }
             }
-            if let batchId = statement.originalBatchId {
-                HStack {
-                    Text(strings.t("portfolioImport.session.existing.readonly")).font(.caption).foregroundStyle(
-                        theme.secondaryLabel)
-                    batchLink(batchId)
-                }
-            }
             ForEach(statement.previousBatchIds, id: \.self) { batchId in
                 HStack {
                     Text(strings.t("portfolioImport.session.previousPending")).font(.caption).foregroundStyle(
@@ -138,9 +130,6 @@ struct PortfolioImportStatementView: View {
             .background(theme.foreground.opacity(0.03), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
     }
     private var sourceKey: String {
-        if statement.kind == "existing" || statement.kind == "reference" {
-            return "portfolioImport.session.existing.source"
-        }
         guard let detected = statement.detected else { return "portfolioImport.session.detecting" }
         if detected.presetKey == "ibkr_funding_history" { return "portfolioImport.ibkrFundingParser" }
         switch detected.source {
@@ -149,7 +138,6 @@ struct PortfolioImportStatementView: View {
         case "nexo": return "portfolioImport.nexoParser"
         case "nexo_pro": return "portfolioImport.nexoProParser"
         case "saxo": return "portfolioImport.saxoParser"
-        case "native_receipts": return "importPage.csvFile"
         default: return "portfolioImport.session.detecting"
         }
     }
