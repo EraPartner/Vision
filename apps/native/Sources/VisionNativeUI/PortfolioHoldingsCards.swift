@@ -34,7 +34,7 @@ struct PortfolioHoldingActionsMenu: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .menuIndicator(.hidden)
+        .buttonStyle(.vision(.ghost, size: .iconSm)).menuStyle(.button).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel(strings.t("portfolio.row.menu", ["name": holding.name]))
     }
     private var deleteKey: String {

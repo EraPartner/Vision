@@ -81,9 +81,10 @@ public struct PortfolioHoldingsView: View {
                             }
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
-                            Image(systemName: "ellipsis")
+                            Image(systemName: "ellipsis").visionChipChrome()
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
                 if model.isLoading {
@@ -92,6 +93,7 @@ public struct PortfolioHoldingsView: View {
                     Text(strings.t(prefix + ".pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else if holdings.isEmpty {
                     AdminCard {
                         VisionEmptyState(
@@ -229,7 +231,7 @@ public struct PortfolioHoldingsView: View {
                     Text(strings.t("portfolio.holdings")).font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Menu(strings.t("portfolio.columns")) {
+                    Menu {
                         ForEach(
                             ["avgCost", "realized", "fx", "dividends"].filter {
                                 ($0 != "dividends" || assetClass != .crypto)
@@ -244,7 +246,10 @@ public struct PortfolioHoldingsView: View {
                                         if enabled { optionalColumns.insert(key) } else { optionalColumns.remove(key) }
                                     }))
                         }
+                    } label: {
+                        Text(strings.t("portfolio.columns")).visionChipChrome()
                     }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 }
                 HStack(spacing: 16) {
                     if let freshness = PortfolioPricePresentation.freshness(holdings, shell: shell) {

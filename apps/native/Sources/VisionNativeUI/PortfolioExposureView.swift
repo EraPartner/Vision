@@ -24,15 +24,17 @@ struct PortfolioExposureView: View {
             title: shell.strings.t("portfolio.exposure.title"),
             description: shell.strings.t("portfolio.exposure.description"), large: true
         ) {
-            Picker(shell.strings.t("portfolio.exposure.dimensionLabel"), selection: $dimension) {
-                ForEach(["issuer", "sector", "issuerCountry"], id: \.self) { key in
-                    Text(shell.strings.t("portfolio.exposure." + key)).tag(key)
-                }
-            }.pickerStyle(.segmented).frame(maxWidth: 600)
+            VisionSegmentedControl(
+                selection: $dimension, values: ["issuer", "sector", "issuerCountry"],
+                title: { shell.strings.t("portfolio.exposure." + $0) }
+            )
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(shell.strings.t("portfolio.exposure.dimensionLabel"))
+            .frame(maxWidth: 600)
             if let error = importError ?? model.errors["exposure"] {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(shell.strings.t("common.retry")) { Task { await model.loadExposure(force: true) } }
-                    .disabled(model.isExposureLoading)
+                    .buttonStyle(.visionOutline).disabled(model.isExposureLoading)
             }
             if let data, let selected {
                 Text(shell.strings.t("portfolio.exposure.coverage")).font(.subheadline.weight(.medium))

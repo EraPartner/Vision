@@ -2,6 +2,8 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioDetailSheet: View {
+    /// `InvestmentDetailDialog`'s `max-w-2xl` panel.
+    static let metrics = VisionDialogMetrics(maxWidth: 672)
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
@@ -26,11 +28,17 @@ struct PortfolioDetailSheet: View {
                             theme.foreground.opacity(0.04),
                             in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 }
-                Picker(strings.t("invDetail.breakdown"), selection: $tab) {
-                    Text(strings.t("invDetail.tab.performance")).tag("performance")
-                    Text(strings.t("invDetail.tab.transactions", ["n": String(model.transactions.count)])).tag(
-                        "transactions")
-                }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: .infinity)
+                VisionSegmentedControl(
+                    selection: $tab,
+                    options: [
+                        VisionSegmentOption(value: "performance", title: strings.t("invDetail.tab.performance")),
+                        VisionSegmentOption(
+                            value: "transactions",
+                            title: strings.t("invDetail.tab.transactions", ["n": String(model.transactions.count)])),
+                    ]
+                )
+                .accessibilityElement(children: .contain).accessibilityLabel(strings.t("invDetail.breakdown"))
+                .frame(maxWidth: .infinity)
                 if tab == "performance" {
                     ScrollView { performance(holding) }.frame(maxHeight: 620)
                 } else {
@@ -62,8 +70,7 @@ struct PortfolioDetailSheet: View {
                 Button(strings.t("common.close")) { model.closeDetail() }
                     .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
             }
-        }.visionDialogPadding().frame(minWidth: 640, idealWidth: 672)
-            .portfolioEditingPresentation(model: editing, shell: shell)
+        }
             .onChange(of: model.selectedInvestment?.isActive) { previous, current in
                 if previous == true && current != true && model.error == nil { model.closeDetail() }
             }
@@ -85,7 +92,7 @@ struct PortfolioDetailSheet: View {
                 if !holding.isActive { VisionBadge(text: strings.t("portfolio.archived"), tone: .outline, small: true) }
                 if holding.oversold {
                     VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
-                        .help(strings.t("portfolio.oversold.description"))
+                        .visionTooltip(strings.t("portfolio.oversold.description"))
                 }
                 Spacer(minLength: 0)
                 VisionDialogCloseButton(label: strings.t("common.close")) { model.closeDetail() }

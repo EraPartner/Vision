@@ -31,7 +31,7 @@ struct PortfolioPriceRefreshToast: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                .background { ToastSurface() }
                 .foregroundStyle(color(notice))
                 .frame(maxWidth: 560, alignment: .leading)
                 .padding(.bottom, 20)
@@ -47,7 +47,8 @@ struct PortfolioPriceRefreshToast: View {
             }
         }
         .allowsHitTesting(false)
-        .animation(.easeInOut(duration: 0.2), value: notice?.id)
+        .animation(
+            .visionCurve(DesignTokens.Ease.glide, duration: DesignTokens.Duration.dismiss), value: notice?.id)
         .onChange(of: model.priceNoticeRevision) { _, revision in
             guard !model.usesExternalPriceNotices else { return }
             guard model.priceError != nil || model.priceRefreshResult != nil else { return }

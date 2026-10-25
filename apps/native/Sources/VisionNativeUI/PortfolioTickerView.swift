@@ -60,7 +60,7 @@ struct PortfolioTickerView: View {
                 } label: {
                     Image(systemName: "slider.horizontal.3")
                 }
-                .buttonStyle(.plain).padding(16)
+                .buttonStyle(.vision(.ghost, size: .iconSm)).padding(16)
                 .accessibilityLabel(shell.strings.t("portfolio.ticker.manage"))
                 .popover(isPresented: $manager) { management }
             }
@@ -138,7 +138,7 @@ struct PortfolioTickerView: View {
                             .lineLimit(1).truncationMode(.tail)
                     }
                 }
-                .toggleStyle(.switch)
+                .toggleStyle(.visionSwitch)
                 .accessibilityLabel(investment.name)
                 .disabled(editing.isMutating)
             }

@@ -19,6 +19,7 @@ struct PortfolioDetailHistoryTable: View {
             if let error = model.historyError {
                 Text(error).foregroundStyle(theme.destructive)
                 Button(strings.t("common.retry")) { Task { await model.openDetail(id: holding.id) } }
+                    .buttonStyle(.visionOutline)
             }
             if model.historyComplete && model.transactions.isEmpty {
                 VisionEmptyState(symbol: "list.bullet.rectangle", title: strings.t("invDetail.noTransactions")) {
@@ -26,7 +27,7 @@ struct PortfolioDetailHistoryTable: View {
                         Button(strings.t("form.addTransaction.title")) {
                             editing.bindTransactions(model.transactions)
                             editing.beginAddTransaction(investment: investment, bookingCurrency: holding.currency)
-                        }
+                        }.buttonStyle(.visionPrimary)
                     }
                 }.padding(40)
             } else {
@@ -117,7 +118,7 @@ struct PortfolioDetailHistoryTable: View {
                                     editing.beginEditTransaction(investment: investment, transaction: transaction)
                                 } label: {
                                     Image(systemName: "pencil")
-                                }.buttonStyle(.borderless)
+                                }.buttonStyle(.vision(.ghost, size: .iconSm))
                                     .accessibilityLabel(
                                         strings.t("aria.editTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                             + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
@@ -128,7 +129,7 @@ struct PortfolioDetailHistoryTable: View {
                                 } label: {
                                     Image(systemName: "trash")
                                 }
-                                .buttonStyle(.borderless).accessibilityLabel(
+                                .buttonStyle(.vision(.ghost, size: .iconSm)).accessibilityLabel(
                                     strings.t("aria.deleteTransaction") + ": " + label(transaction.type.rawValue) + " · "
                                         + VisionFormat.appDate(transaction.date, format: shell.settings.dateFormat)
                                 )

@@ -162,7 +162,10 @@ struct PortfolioSeriesChart: View {
                             }.font(.caption)
                         }
                     }
-                }.padding(10).background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(10)
+                    .background(
+                        theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md)
+                    )
                     .accessibilityElement(children: .combine)
             }
         }
@@ -264,7 +267,7 @@ struct PortfolioInlineDisclosure: View {
     let explanation: String
     @State private var open = false
     var body: some View {
-        Button(label) { open = true }.buttonStyle(.plain).help(explanation)
+        Button(label) { open = true }.buttonStyle(.plain).visionTooltip(explanation)
             .accessibilityLabel(label == "ⓘ" ? explanation : label + ". " + explanation)
             .popover(isPresented: $open) { Text(explanation).padding(16).frame(maxWidth: 320) }
     }

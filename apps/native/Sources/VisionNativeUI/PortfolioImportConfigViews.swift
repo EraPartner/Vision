@@ -1,6 +1,14 @@
 import SwiftUI
 import VisionNativeCore
 
+extension VisionSelectOption where Value == String {
+    /// `(value, title)` pairs as the options of a `VisionSelect`; the first pair wins a repeated value.
+    static func pairs(_ pairs: [(String, String)]) -> [VisionSelectOption<String>] {
+        var seen = Set<String>()
+        return pairs.filter { seen.insert($0.0).inserted }.map { VisionSelectOption(value: $0.0, title: $0.1) }
+    }
+}
+
 struct PortfolioImportConfigFields: View {
     @Binding var config: PortfolioImportConfig
     let headers: [String]
@@ -25,48 +33,47 @@ struct PortfolioImportConfigFields: View {
                     columns: [GridItem(.adaptive(minimum: 260), alignment: .top)], alignment: .leading, spacing: 16
                 ) {
                     field("importPage.separator") {
-                        Picker(strings.t("importPage.separator"), selection: $config.separator) {
-                            Text(strings.t("importPage.sep.comma")).tag(",")
-                            Text(strings.t("importPage.sep.semicolon")).tag(";")
-                            Text(strings.t("importPage.sep.tab")).tag("\t")
-                            Text(strings.t("importPage.sep.pipe")).tag("|")
-                        }.labelsHidden()
+                        VisionSelect(
+                            selection: $config.separator,
+                            options: VisionSelectOption<String>.pairs([
+                                (",", strings.t("importPage.sep.comma")), (";", strings.t("importPage.sep.semicolon")),
+                                ("\t", strings.t("importPage.sep.tab")), ("|", strings.t("importPage.sep.pipe")),
+                            ]), accessibilityLabel: strings.t("importPage.separator"), expands: true)
                     }
                     field("importPage.dateFormat") {
-                        Picker(strings.t("importPage.dateFormat"), selection: $config.dateFormat) {
-                            Text("YYYY-MM-DD (2024-12-31)").tag("%Y-%m-%d")
-                            Text("DD/MM/YYYY (31/12/2024)").tag("%d/%m/%Y")
-                            Text("MM/DD/YYYY (12/31/2024)").tag("%m/%d/%Y")
-                            Text("DD-MM-YYYY (31-12-2024)").tag("%d-%m-%Y")
-                            Text("YYYY-MM-DD HH:MM:SS").tag("%Y-%m-%d %H:%M:%S")
-                        }.labelsHidden()
+                        VisionSelect(
+                            selection: $config.dateFormat,
+                            options: VisionSelectOption<String>.pairs([
+                                ("%Y-%m-%d", "YYYY-MM-DD (2024-12-31)"), ("%d/%m/%Y", "DD/MM/YYYY (31/12/2024)"),
+                                ("%m/%d/%Y", "MM/DD/YYYY (12/31/2024)"), ("%d-%m-%Y", "DD-MM-YYYY (31-12-2024)"),
+                                ("%Y-%m-%d %H:%M:%S", "YYYY-MM-DD HH:MM:SS"),
+                            ]), accessibilityLabel: strings.t("importPage.dateFormat"), expands: true)
                     }
                     field("importPage.encoding") {
-                        Picker(
-                            strings.t("importPage.encoding"),
+                        VisionSelect(
                             selection: Binding(
                                 get: {
                                     config.encoding == "latin-1" ? "latin1" : config.encoding
-                                }, set: { config.encoding = $0 })
-                        ) {
-                            Text("UTF-8").tag("utf-8")
-                            Text("Latin-1").tag("latin1")
-                            Text("ISO-8859-1").tag("iso-8859-1")
-                            Text("Windows-1252").tag("windows-1252")
-                        }.labelsHidden()
+                                }, set: { config.encoding = $0 }),
+                            options: VisionSelectOption<String>.pairs([
+                                ("utf-8", "UTF-8"), ("latin1", "Latin-1"), ("iso-8859-1", "ISO-8859-1"),
+                                ("windows-1252", "Windows-1252"),
+                            ]), accessibilityLabel: strings.t("importPage.encoding"), expands: true)
                     }
                     field("importPage.numberFormat.label") {
-                        Picker(strings.t("importPage.numberFormat.label"), selection: $config.numberFormat) {
-                            ForEach(["auto", "decimal_dot", "decimal_comma"], id: \.self) { value in
-                                Text(strings.t("importPage.numberFormat." + value)).tag(value)
-                            }
-                        }.labelsHidden()
+                        VisionSelect(
+                            selection: $config.numberFormat,
+                            options: VisionSelectOption<String>.pairs(
+                                ["auto", "decimal_dot", "decimal_comma"].map {
+                                    ($0, strings.t("importPage.numberFormat." + $0))
+                                }), accessibilityLabel: strings.t("importPage.numberFormat.label"), expands: true)
                         Text(strings.t("importPage.numberFormat.hint")).font(.caption).foregroundStyle(
                             theme.secondaryLabel)
                     }
                     field("importPage.skipRows") {
                         TextField(
-                            strings.t("importPage.skipRows"), value: $config.skipRows, format: .number.grouping(.never))
+                            strings.t("importPage.skipRows"), value: $config.skipRows, format: .number.grouping(.never)
+                        ).textFieldStyle(.vision)
                     }
                 }.padding(.top, 12)
             }
@@ -75,17 +82,20 @@ struct PortfolioImportConfigFields: View {
                     columns: [GridItem(.adaptive(minimum: 260), alignment: .top)], alignment: .leading, spacing: 16
                 ) {
                     field("portfolioImport.defaultAssetClass") {
-                        Picker(strings.t("portfolioImport.defaultAssetClass"), selection: $config.defaultAssetClass) {
-                            ForEach(PortfolioAssetKinds.all.map(\.rawValue), id: \.self) { kind in
-                                Text(strings.t("portfolio.assetClass." + kind)).tag(kind)
-                            }
-                        }.labelsHidden()
+                        VisionSelect(
+                            selection: $config.defaultAssetClass,
+                            options: VisionSelectOption<String>.pairs(
+                                PortfolioAssetKinds.all.map {
+                                    ($0.rawValue, strings.t("portfolio.assetClass." + $0.rawValue))
+                                }),
+                            accessibilityLabel: strings.t("portfolioImport.defaultAssetClass"), expands: true)
                     }
                     field("portfolioImport.defaultType") {
-                        Picker(strings.t("portfolioImport.defaultType"), selection: $config.defaultType) {
-                            ForEach(types, id: \.self) { type in Text(strings.t("portfolio.txnType." + type)).tag(type)
-                            }
-                        }.labelsHidden()
+                        VisionSelect(
+                            selection: $config.defaultType,
+                            options: VisionSelectOption<String>.pairs(
+                                types.map { ($0, strings.t("portfolio.txnType." + $0)) }),
+                            accessibilityLabel: strings.t("portfolioImport.defaultType"), expands: true)
                     }
                     ForEach(columns, id: \.0) { key, path, required in mapping(key, path: path, required: required) }
                 }
@@ -107,8 +117,7 @@ struct PortfolioImportConfigFields: View {
                             ForEach(typeValues, id: \.self) { raw in
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(verbatim: raw).font(.callout.weight(.medium))
-                                    Picker(
-                                        raw,
+                                    VisionSelect(
                                         selection: Binding(
                                             get: { config.typeMapping[raw] ?? "" },
                                             set: { value in
@@ -117,13 +126,11 @@ struct PortfolioImportConfigFields: View {
                                                 } else {
                                                     config.typeMapping[raw] = value
                                                 }
-                                            })
-                                    ) {
-                                        Text(strings.t("portfolioImport.typeMappingAuto")).tag("")
-                                        ForEach(types, id: \.self) { type in
-                                            Text(strings.t("portfolio.txnType." + type)).tag(type)
-                                        }
-                                    }.labelsHidden()
+                                            }),
+                                        options: VisionSelectOption<String>.pairs(
+                                            [("", strings.t("portfolioImport.typeMappingAuto"))]
+                                                + types.map { ($0, strings.t("portfolio.txnType." + $0)) }),
+                                        accessibilityLabel: raw, expands: true)
                                 }
                             }
                         }.padding(.top, 12)
@@ -153,17 +160,20 @@ struct PortfolioImportConfigFields: View {
         field("portfolioImport.col." + key, required: required) {
             let binding = Binding(get: { config[keyPath: path] }, set: { config[keyPath: path] = $0 })
             if headers.isEmpty {
-                TextField(strings.t("portfolioImport.col." + key), text: binding)
+                TextField(strings.t("portfolioImport.col." + key), text: binding).textFieldStyle(.vision)
             } else {
-                Picker(strings.t("portfolioImport.col." + key), selection: binding) {
-                    Text(strings.t("importPage.noMapping")).tag("")
-                    ForEach(headers.indices, id: \.self) { index in Text(verbatim: headers[index]).tag(headers[index]) }
-                    if !binding.wrappedValue.isEmpty && !headers.contains(binding.wrappedValue) {
-                        Text(verbatim: binding.wrappedValue).tag(binding.wrappedValue)
-                    }
-                }.labelsHidden()
+                VisionSelect(
+                    selection: binding, options: mappingOptions(current: binding.wrappedValue),
+                    accessibilityLabel: strings.t("portfolioImport.col." + key), expands: true)
             }
         }
+    }
+    /// No mapping, every header, and the current value when it is no longer one of the headers.
+    private func mappingOptions(current: String) -> [VisionSelectOption<String>] {
+        var pairs: [(String, String)] = [("", strings.t("importPage.noMapping"))]
+        pairs += headers.map { ($0, $0) }
+        if !current.isEmpty && !headers.contains(current) { pairs.append((current, current)) }
+        return VisionSelectOption<String>.pairs(pairs)
     }
     private func field<Content: View>(_ key: String, required: Bool = false, @ViewBuilder content: () -> Content)
         -> some View

@@ -1,7 +1,7 @@
 import SwiftUI
 import VisionNativeCore
 
-/// One presentation owner keeps the detail sheet open while its child editor is shown.
+/// One presentation owner keeps the detail dialog open while its child editor is shown.
 struct PortfolioScreenView: View {
     let screens: PortfolioScreens
     let shell: NativeShellModel
@@ -40,15 +40,17 @@ struct PortfolioScreenView: View {
         }
         .onChange(of: screens.model.transactions) { _, rows in screens.editing.bindTransactions(rows) }
         .onChange(of: screens.model.investments) { _, rows in screens.editing.bindInvestments(rows) }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
-                get: { screens.model.selectedInvestmentId != nil }, set: { if !$0 { screens.model.closeDetail() } })
+                get: { screens.model.selectedInvestmentId != nil }, set: { if !$0 { screens.model.closeDetail() } }),
+            metrics: PortfolioDetailSheet.metrics,
+            accessibilityTitle: screens.model.selectedInvestment?.name
         ) {
             PortfolioDetailSheet(model: screens.model, editing: screens.editing, shell: shell)
         }
-        .portfolioEditingPresentation(
-            model: screens.editing, shell: shell, enabled: screens.model.selectedInvestmentId == nil
-        )
+        // Applied after the detail dialog so the editor and its confirmation open over it: in-window
+        // dialogs cannot nest inside another dialog's panel.
+        .portfolioEditingPresentation(model: screens.editing, shell: shell)
         .overlay(alignment: .bottom) { PortfolioPriceRefreshToast(model: screens.model, shell: shell) }
     }
 }

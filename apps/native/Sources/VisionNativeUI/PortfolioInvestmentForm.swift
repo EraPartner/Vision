@@ -2,6 +2,11 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioInvestmentForm: View {
+    /// The focus and scroll id of the free-text field, which issues can target.
+    private static let notesField = "notes"
+    /// `AddInvestmentDialog`'s panel: the form lays out its own header, scroll area and footer.
+    static let metrics = VisionDialogMetrics(
+        maxWidth: 512, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
     let model: PortfolioEditingModel
     let shell: NativeShellModel
     @State private var selectingType = false
@@ -95,7 +100,7 @@ struct PortfolioInvestmentForm: View {
                 }
             }
             .controlSize(.large).padding(.horizontal, 24).padding(.vertical, 16)
-        }.frame(width: 512, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
+        }.disabled(model.isSaving).visionInteractiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
     private var fixedIncome: Bool { draft?.assetClass.map(PortfolioAssetKinds.fixedIncome) ?? false }
@@ -106,9 +111,10 @@ struct PortfolioInvestmentForm: View {
         if unitBased { field("addInv.label.ticker", \.symbol, "symbol", monospaced: true) }
         VStack(alignment: .leading, spacing: 6) {
             fieldLabel("addInv.label.currency")
-            Picker(strings.t("addInv.label.currency"), selection: currencySelection) {
-                ForEach(currencies, id: \.self) { Text($0.rawValue).tag($0) }
-            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+            VisionSelect(
+                selection: currencySelection,
+                options: currencies.map { VisionSelectOption(value: $0, title: $0.rawValue) },
+                accessibilityLabel: strings.t("addInv.label.currency"), expands: true)
         }
         if !isEditing {
             if fixedIncome {
@@ -133,14 +139,8 @@ struct PortfolioInvestmentForm: View {
         if !isEditing {
             VStack(alignment: .leading, spacing: 5) {
                 fieldLabel("addInv.label.notes")
-                TextEditor(text: text(\.notes, field: "notes")).frame(minHeight: 64).focused($focused, equals: "notes")
-                    .scrollContentBackground(.hidden).padding(6)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                TextEditor(text: text(\.notes, field: "notes")).focused($focused, equals: Self.notesField)
+                    .visionTextEditor(isFocused: focused == Self.notesField)
                     .accessibilityLabel(strings.t("addInv.label.notes"))
             }.id("notes")
         }
@@ -158,7 +158,7 @@ struct PortfolioInvestmentForm: View {
             isOn: Binding(
                 get: { draft?.addInitialPurchase ?? false }, set: { model.investmentDraft?.addInitialPurchase = $0 }
             )
-        ).toggleStyle(.switch)
+        ).toggleStyle(.visionSwitch)
         Text(
             strings.t(
                 "addInv.initial.desc",

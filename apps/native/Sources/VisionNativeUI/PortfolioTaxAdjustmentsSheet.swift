@@ -2,6 +2,9 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioTaxAdjustmentsSheet: View {
+    /// `ManualAdjustmentsDialog`'s wide panel: the sheet lays out its own header, scroll area and footer.
+    static let metrics = VisionDialogMetrics(
+        maxWidth: 768, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
     let model: PortfolioTaxModel
     let shell: NativeShellModel
     @FocusState private var interestFocused: InvestmentID?
@@ -58,9 +61,8 @@ struct PortfolioTaxAdjustmentsSheet: View {
             }
             .padding(.horizontal, 24).padding(.vertical, 16)
         }
-        .frame(width: 768, height: 720)
         .disabled(model.isSavingAdjustments)
-        .interactiveDismissDisabled(model.isSavingAdjustments)
+        .visionInteractiveDismissDisabled(model.isSavingAdjustments)
         .onSubmit { save() }
     }
 
@@ -84,31 +86,29 @@ struct PortfolioTaxAdjustmentsSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         if row.showsETFStructure {
                             fieldLabel("tax.etfStructure")
-                            Picker(
-                                strings.t("tax.etfStructure"),
+                            VisionSelect(
                                 selection: Binding(
                                     get: { draft(row.id)?.etfStructure ?? .accumulating },
-                                    set: { value in model.updateDraft(id: row.id) { $0.etfStructure = value } })
-                            ) {
-                                ForEach(PortfolioTaxETFStructure.allCases, id: \.self) { value in
-                                    Text(strings.t("tax.etfStructure." + value.rawValue)).tag(value)
-                                }
-                            }.labelsHidden().frame(maxWidth: 320, alignment: .leading)
-                            .accessibilityLabel(strings.t("tax.etfStructure") + ": " + row.name)
+                                    set: { value in model.updateDraft(id: row.id) { $0.etfStructure = value } }),
+                                options: PortfolioTaxETFStructure.allCases.map { value in
+                                    VisionSelectOption(
+                                        value: value, title: strings.t("tax.etfStructure." + value.rawValue))
+                                }, accessibilityLabel: strings.t("tax.etfStructure") + ": " + row.name,
+                                expands: true
+                            ).frame(maxWidth: 320, alignment: .leading)
                             Text(strings.t("tax.etfStructure.desc")).font(.footnote).foregroundStyle(
                                 theme.secondaryLabel)
                         }
                         if row.showsReynders {
                             fieldLabel("tax.subjectToReynders")
-                            Picker(
-                                strings.t("tax.subjectToReynders"),
-                                selection: binding(row.id, \.reynders, default: .auto)
-                            ) {
-                                ForEach(PortfolioTaxReyndersChoice.allCases, id: \.self) { value in
-                                    Text(strings.t("tax.subjectToReynders." + value.rawValue)).tag(value)
-                                }
-                            }.labelsHidden().frame(maxWidth: 320, alignment: .leading)
-                            .accessibilityLabel(strings.t("tax.subjectToReynders") + ": " + row.name)
+                            VisionSelect(
+                                selection: binding(row.id, \.reynders, default: .auto),
+                                options: PortfolioTaxReyndersChoice.allCases.map { value in
+                                    VisionSelectOption(
+                                        value: value, title: strings.t("tax.subjectToReynders." + value.rawValue))
+                                }, accessibilityLabel: strings.t("tax.subjectToReynders") + ": " + row.name,
+                                expands: true
+                            ).frame(maxWidth: 320, alignment: .leading)
                             Text(strings.t("tax.subjectToReynders.desc")).font(.footnote).foregroundStyle(
                                 theme.secondaryLabel)
                             if row.reyndersResolved {

@@ -144,7 +144,8 @@ private struct PortfolioTaxBarChart: View {
                         Text(money(row.fees)).monospacedDigit()
                     }
                 }.font(.caption).padding(10)
-                    .background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .background(
+                        theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
                     .accessibilityElement(children: .combine)
             }
         }

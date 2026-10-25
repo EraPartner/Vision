@@ -35,11 +35,13 @@ struct PortfolioImportSessionView: View {
                             !model.canStage || model.operation != .idle || isLocked)
                     if model.operation == .staging {
                         Button(strings.t("portfolioImport.session.stop")) { model.stop() }
+                            .buttonStyle(.visionOutline)
                     }
                     Button(strings.t("portfolioImport.session.preview")) { Task { await model.preview() } }
-                        .disabled(!model.canPreview || isLocked)
+                        .buttonStyle(.visionOutline).disabled(!model.canPreview || isLocked)
                     if !model.statements.isEmpty {
-                        Button(strings.t("portfolioImport.session.clear")) { model.clear() }.disabled(locked)
+                        Button(strings.t("portfolioImport.session.clear")) { model.clear() }
+                            .buttonStyle(.visionOutline).disabled(locked)
                     }
                 }
                 if model.stopped {
@@ -58,8 +60,9 @@ struct PortfolioImportSessionView: View {
                     Text(strings.t("portfolioImport.session.responseUnverified")).foregroundStyle(theme.warning)
                     HStack {
                         Button(strings.t("portfolioImport.session.history.title"), action: onReviewHistory)
-                        Button(strings.t("common.retry")) { Task { await onRecover() } }.disabled(
-                            locked || model.isBusy)
+                            .buttonStyle(.visionOutline)
+                        Button(strings.t("common.retry")) { Task { await onRecover() } }
+                            .buttonStyle(.visionOutline).disabled(locked || model.isBusy)
                     }
                 }
                 PortfolioImportReconciliationView(model: model, shell: shell)
@@ -68,14 +71,20 @@ struct PortfolioImportSessionView: View {
     }
     private var policySettings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker(
-                strings.t("portfolioImport.session.policy"),
-                selection: Binding(get: { model.policy }, set: { model.setPolicy($0) })
-            ) {
-                Text(strings.t("portfolioImport.session.auto")).tag(PortfolioImportSessionPolicy.auto)
-                Text(strings.t("portfolioImport.session.preserve")).tag(PortfolioImportSessionPolicy.preserveExisting)
-                Text(strings.t("portfolioImport.session.source")).tag(PortfolioImportSessionPolicy.preferSource)
-            }.disabled(locked)
+            Text(strings.t("portfolioImport.session.policy")).font(.callout.weight(.medium))
+            VisionSelect(
+                selection: Binding(get: { model.policy }, set: { model.setPolicy($0) }),
+                options: [
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.auto, title: strings.t("portfolioImport.session.auto")),
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.preserveExisting,
+                        title: strings.t("portfolioImport.session.preserve")),
+                    VisionSelectOption(
+                        value: PortfolioImportSessionPolicy.preferSource,
+                        title: strings.t("portfolioImport.session.source")),
+                ], accessibilityLabel: strings.t("portfolioImport.session.policy"), expands: true
+            ).frame(maxWidth: 420).disabled(locked)
             Text(strings.t("portfolioImport.session.policyHint." + model.policy.rawValue)).font(.caption).foregroundStyle(
                 theme.secondaryLabel)
         }

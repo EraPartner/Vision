@@ -2,6 +2,11 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioTransactionForm: View {
+    /// The focus and scroll id of the free-text field, which issues can target.
+    private static let noteField = "note"
+    /// `AddPortfolioTransactionDialog`'s panel: the form lays out its own header, scroll area and footer.
+    static let metrics = VisionDialogMetrics(
+        maxWidth: 480, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
     let model: PortfolioEditingModel
     let shell: NativeShellModel
     @FocusState private var focused: String?
@@ -62,7 +67,7 @@ struct PortfolioTransactionForm: View {
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 24).padding(.vertical, 16)
-        }.frame(width: 480, height: 720).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
+        }.disabled(model.isSaving).visionInteractiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
     @ViewBuilder private var fields: some View {
@@ -73,13 +78,11 @@ struct PortfolioTransactionForm: View {
                 TextField("", text: .constant(typeLabel(draft?.type.rawValue ?? ""))).textFieldStyle(.vision).disabled(true)
                     .accessibilityLabel(strings.t("addPortTxn.type"))
             } else {
-                Picker(strings.t("addPortTxn.type"), selection: choice(\.type, fallback: .buy)) {
-                    ForEach(
-                        PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? .unknown("")), id: \.self
-                    ) {
-                        Text(strings.t("portfolio.txnType." + $0.rawValue)).tag($0)
-                    }
-                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                VisionSelect(
+                    selection: choice(\.type, fallback: .buy),
+                    options: PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? .unknown("")).map {
+                        VisionSelectOption(value: $0, title: strings.t("portfolio.txnType." + $0.rawValue))
+                    }, accessibilityLabel: strings.t("addPortTxn.type"), expands: true)
             }
         }
         dateField("addPortTxn.date", \.date, "date", allowClear: false)
@@ -107,11 +110,12 @@ struct PortfolioTransactionForm: View {
         if draft?.type == .dividend {
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("addPortTxn.dividendAmountConvention")
-                Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: choice(\.dividendAmountConvention, fallback: .unknownValue)) {
-                    ForEach(OpenAPI.PortfolioTransaction.DividendAmountConvention.allKnownCases, id: \.self) {
-                        Text(strings.t("addPortTxn.dividendConvention." + $0.rawValue)).tag($0)
-                    }
-                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                VisionSelect(
+                    selection: choice(\.dividendAmountConvention, fallback: .unknownValue),
+                    options: OpenAPI.PortfolioTransaction.DividendAmountConvention.allKnownCases.map {
+                        VisionSelectOption(
+                            value: $0, title: strings.t("addPortTxn.dividendConvention." + $0.rawValue))
+                    }, accessibilityLabel: strings.t("addPortTxn.dividendAmountConvention"), expands: true)
                 Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(
                     theme.secondaryLabel)
             }
@@ -127,32 +131,25 @@ struct PortfolioTransactionForm: View {
             Toggle(
                 strings.t("addPortTxn.recurring"),
                 isOn: Binding(get: { draft?.isRecurring ?? false }, set: { model.tradeDraft?.isRecurring = $0 })
-            ).toggleStyle(.switch)
+            ).toggleStyle(.visionSwitch)
             if draft?.isRecurring == true {
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("addPortTxn.interval")
-                    Picker(strings.t("addPortTxn.interval"), selection: choice(\.recurrenceInterval, fallback: .monthly)) {
-                        ForEach(
-                            [OpenAPI.RecurrenceInterval.daily, .weekly, .biweekly, .monthly, .quarterly, .yearly],
-                            id: \.self
-                        ) {
-                            Text(strings.t("addPortTxn.recurrence." + $0.rawValue)).tag($0)
-                        }
-                    }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                    VisionSelect(
+                        selection: choice(\.recurrenceInterval, fallback: .monthly),
+                        options: [OpenAPI.RecurrenceInterval.daily, .weekly, .biweekly, .monthly, .quarterly, .yearly]
+                            .map {
+                                VisionSelectOption(
+                                    value: $0, title: strings.t("addPortTxn.recurrence." + $0.rawValue))
+                            }, accessibilityLabel: strings.t("addPortTxn.interval"), expands: true)
                 }
                 dateField("addPortTxn.endDate", \.recurrenceEndDate, "recurrenceEndDate", allowClear: true)
             }
         }
         VStack(alignment: .leading, spacing: 6) {
             fieldLabel("addPortTxn.note")
-            TextEditor(text: text(\.note)).frame(minHeight: 64).focused($focused, equals: "note")
-                .scrollContentBackground(.hidden).padding(6)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                        .fill(Color(token: theme.palette.background, opacity: 0.8)))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
-                        .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+            TextEditor(text: text(\.note)).focused($focused, equals: Self.noteField)
+                .visionTextEditor(isFocused: focused == Self.noteField)
                 .accessibilityLabel(strings.t("addPortTxn.note"))
         }.id("note")
     }
@@ -214,9 +211,10 @@ private struct PortfolioEditingPresenter: ViewModifier {
     let enabled: Bool
     private var strings: any Localizing { shell.strings }
     func body(content: Content) -> some View {
-        content.sheet(
+        content.visionDialog(
             isPresented: Binding(
-                get: { enabled && model.presentation != nil }, set: { if !$0 && enabled { model.dismissEditor() } })
+                get: { enabled && model.presentation != nil }, set: { if !$0 && enabled { model.dismissEditor() } }),
+            metrics: editorMetrics
         ) {
             if model.presentation == .investment {
                 PortfolioInvestmentForm(model: model, shell: shell)
@@ -224,25 +222,25 @@ private struct PortfolioEditingPresenter: ViewModifier {
                 PortfolioTransactionForm(model: model, shell: shell)
             }
         }
-        .confirmationDialog(
-            confirmationTitle,
+        .visionConfirmationDialog(
+            title: confirmationTitle, message: confirmationDescription,
             isPresented: Binding(
-                get: { enabled && model.confirmation != nil }, set: { if !$0 && enabled { model.confirmation = nil } }),
-            titleVisibility: .visible
+                get: { enabled && model.confirmation != nil }, set: { if !$0 && enabled { model.confirmation = nil } })
         ) {
+            VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.confirmation = nil }
             if let pending = model.confirmation {
-                Button(confirmLabel, role: destructive ? .destructive : nil) {
+                VisionDialogAction(confirmLabel, role: destructive ? .destructive : nil) {
                     model.confirmation = nil
                     Task { await model.performConfirmation(pending) }
                 }
             }
-            Button(strings.t("common.cancel"), role: .cancel) { model.confirmation = nil }
-        } message: {
-            Text(confirmationDescription)
         }
         .overlay(alignment: .bottom) {
             if enabled { NoticeToast(notice: model.notice, strings: strings, clear: model.clearNotice) }
         }
+    }
+    private var editorMetrics: VisionDialogMetrics {
+        model.presentation == .investment ? PortfolioInvestmentForm.metrics : PortfolioTransactionForm.metrics
     }
     private var confirmationTitle: String {
         switch model.confirmation {

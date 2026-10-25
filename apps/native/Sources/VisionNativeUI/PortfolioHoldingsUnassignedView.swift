@@ -33,8 +33,10 @@ struct PortfolioHoldingsUnassignedView: View {
                     } else if loadFailed {
                         Text(strings.t("portfolio.unassignedLotsLoadFailed")).foregroundStyle(theme.warning)
                         Button(strings.t("common.retry")) { Task { await load() } }
+                            .buttonStyle(.visionOutline).controlSize(.small)
                     } else if history == nil {
                         Button(strings.t("portfolio.assignLotsReviewTitle")) { Task { await load() } }
+                            .buttonStyle(.visionOutline).controlSize(.small)
                     } else if !ids.isEmpty {
                         Label(
                             strings.t("portfolio.unassignedLots", ["count": String(ids.count)]),
@@ -45,15 +47,15 @@ struct PortfolioHoldingsUnassignedView: View {
                             Text(strings.t("portfolio.unassignedLotsNoBroker")).foregroundStyle(theme.warning)
                         } else {
                             HStack {
-                                Picker(
-                                    strings.t("portfolio.assignLotsBroker"),
-                                    selection: Binding(get: { effectiveBroker }, set: { brokerId = $0 })
-                                ) {
-                                    ForEach(editing.brokers, id: \.id) { broker in
-                                        Text(broker.name).tag(Optional(broker.id))
-                                    }
-                                }.frame(maxWidth: 280)
+                                VisionSelect(
+                                    selection: Binding(get: { effectiveBroker }, set: { brokerId = $0 }),
+                                    entries: editing.brokers.map { broker in
+                                        VisionSelectEntry.option(
+                                            VisionSelectOption(value: broker.id, title: broker.name))
+                                    }, accessibilityLabel: strings.t("portfolio.assignLotsBroker"), expands: true
+                                ).frame(maxWidth: 280)
                                 Button(strings.t("portfolio.assignLots")) { confirming = true }
+                                    .buttonStyle(.visionOutline).controlSize(.small)
                                     .disabled(
                                         effectiveBroker == nil || ids.count > 500 || editing.isMutating
                                             || editing.isSaving || editing.brokersLoading || editing.brokersError != nil
@@ -68,6 +70,7 @@ struct PortfolioHoldingsUnassignedView: View {
                         if let error = editing.brokersError ?? editing.brokerHistoryError {
                             Text(error).foregroundStyle(theme.warning)
                             Button(strings.t("common.retry")) { Task { await editing.loadOptions() } }
+                                .buttonStyle(.visionOutline).controlSize(.small)
                         }
                     }
                 }.font(.caption).padding(.vertical, 6)

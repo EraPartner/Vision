@@ -57,6 +57,7 @@ public struct PortfolioImportReconciliationView: View {
                     }
                     if plan.actions.count > model.shownActions {
                         Button(strings.t("portfolioImport.session.more")) { model.shownActions += 50 }
+                            .buttonStyle(.visionOutline)
                     }
                 }.padding(.top, 12)
             }
@@ -91,7 +92,7 @@ public struct PortfolioImportReconciliationView: View {
         _ choice: PortfolioImportRowChoice.Choice
     ) -> some View {
         Button(strings.t(key)) { Task { await model.choose(batchId: batchId, rowId: rowId, choice: choice) } }
-            .buttonStyle(.bordered).controlSize(.small).disabled(model.operation != .idle)
+            .buttonStyle(.visionOutline).controlSize(.small).disabled(model.operation != .idle)
     }
     private func blockerText(_ blocker: PortfolioImportReconciliationBlocker) -> String {
         let row = blocker.rowOrdinal.map { " · " + strings.t("portfolioImport.session.row", ["n": String($0)]) } ?? ""

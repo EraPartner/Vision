@@ -85,7 +85,7 @@ struct PortfolioStalePriceIndicator: View {
             } label: {
                 Image(systemName: "clock").foregroundStyle(theme.warning)
             }
-            .buttonStyle(.borderless).help(message).accessibilityLabel(message)
+            .buttonStyle(.vision(.ghost, size: .iconXs)).visionTooltip(message).accessibilityLabel(message)
             .popover(isPresented: $presented) { Text(message).padding(16).frame(maxWidth: 300) }
         }
     }
@@ -103,7 +103,7 @@ struct PortfolioPriceDisclosure: View {
             presented.toggle()
         } label: {
             if label.isEmpty { Image(systemName: symbol) } else { Label(label, systemImage: symbol) }
-        }.buttonStyle(.borderless).focused($focused).help(explanation)
+        }.buttonStyle(.visionLink).focused($focused).visionTooltip(explanation)
             .accessibilityLabel(label.isEmpty ? explanation : label + ". " + explanation)
             .popover(isPresented: $presented) { Text(explanation).padding(16).frame(maxWidth: 320) }
             .onChange(of: focused) { _, value in if value { presented = true } }

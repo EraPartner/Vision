@@ -19,8 +19,8 @@ public struct PortfolioImportReviewView: View {
                     subtitle: strings.t("portfolioImport.review.subtitle"), symbol: "square.and.arrow.down"
                 ) {
                     if model.preview != nil {
-                        Text(strings.t("portfolioImport.review.matched", ["n": String(model.matchedCount)]))
-                            .font(.caption).padding(6).background(theme.foreground.opacity(0.06), in: Capsule())
+                        VisionBadge(
+                            text: strings.t("portfolioImport.review.matched", ["n": String(model.matchedCount)]))
                         if model.unresolvedCount > 0 {
                             Text(strings.t("portfolioImport.review.unresolved", ["n": String(model.unresolvedCount)]))
                                 .font(.caption).foregroundStyle(theme.warning)
@@ -41,7 +41,7 @@ public struct PortfolioImportReviewView: View {
                                     await load()
                                 }
                             }
-                        }
+                        }.buttonStyle(.visionOutline)
                     }
                 } else if model.preview != nil {
                     AdminCard {
@@ -78,23 +78,26 @@ public struct PortfolioImportReviewView: View {
         }
         return strings.t("portfolioImport.review.routingUnassigned\(one)", ["count": String(model.tradeCount)])
     }
+    private var repairOptions: [VisionSelectOption<AccountID?>] {
+        [VisionSelectOption<AccountID?>(value: nil, title: strings.t("addPortTxn.broker.unassigned"))]
+            + model.brokerAccounts.map { VisionSelectOption<AccountID?>(value: $0.id, title: $0.displayName ?? $0.name) }
+    }
     private var footer: some View {
         AdminCard {
             HStack(alignment: .bottom) {
                 if model.requiresAccountRepair {
-                    Picker(
-                        strings.t("portfolioImport.review.cashAccount"),
-                        selection: Binding(
-                            get: { model.selectedRepairBrokerId }, set: { model.selectedRepairBrokerId = $0 })
-                    ) {
-                        Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<AccountID>.none)
-                        ForEach(model.brokerAccounts, id: \.id) { account in
-                            Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
-                        }
-                    }.disabled(model.isBusy)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(strings.t("portfolioImport.review.cashAccount")).font(.callout.weight(.medium))
+                        VisionSelect(
+                            selection: Binding(
+                                get: { model.selectedRepairBrokerId }, set: { model.selectedRepairBrokerId = $0 }),
+                            options: repairOptions, accessibilityLabel: strings.t("portfolioImport.review.cashAccount"),
+                            expands: true
+                        ).frame(maxWidth: 360).disabled(model.isBusy)
+                    }
                 }
                 Spacer()
-                Button(strings.t("common.cancel")) { shell.navigate(to: "/portfolio") }
+                Button(strings.t("common.cancel")) { shell.navigate(to: "/portfolio") }.buttonStyle(.visionOutline)
                 Button {
                     Task {
                         if await model.commit() {
@@ -191,8 +194,7 @@ private struct PortfolioImportPreviewGroupView: View {
                 ForEach(group.rows) { row in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(verbatim: row.txDate ?? "").foregroundStyle(theme.secondaryLabel)
-                        Text(verbatim: row.type?.rawValue ?? row.typeRaw ?? "").padding(3)
-                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.border))
+                        VisionBadge(text: row.type?.rawValue ?? row.typeRaw ?? "", tone: .outline, small: true)
                         if let units = row.units { Text(verbatim: "\(units) @ \(row.pricePerUnit ?? "—")") }
                         if let amount = row.amount {
                             Text(verbatim: "\(amount) \(row.currency ?? "")").foregroundStyle(theme.secondaryLabel)

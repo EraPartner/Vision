@@ -26,7 +26,7 @@ struct PortfolioPerformanceWidgets: View {
                                 isOn: Binding(
                                     get: { model.showFxNeutral },
                                     set: { shell.replaceQuery("fx_neutral", with: $0 ? "true" : nil) })
-                            )
+                            ).toggleStyle(.visionSwitch)
                             PortfolioInlineDisclosure(
                                 label: "ⓘ", explanation: shell.strings.t("performance.fxNeutralDesc"))
                         }
@@ -259,8 +259,8 @@ struct PortfolioBreakdownView: View {
             : (amount >= 0 ? theme.gain : theme.loss).opacity(opacity)
         return Text(value.map { signedPercent($0, digits: 2) } ?? "—")
             .font(.caption.monospaced()).frame(minWidth: 48).padding(.vertical, 8)
-            .background(color, in: RoundedRectangle(cornerRadius: 6))
-            .help(value.map { signedPercent($0, digits: 2) } ?? shell.strings.t("common.noData2"))
+            .background(color, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
+            .visionTooltip(value.map { signedPercent($0, digits: 2) } ?? shell.strings.t("common.noData2"))
     }
     private func yearReturn(_ months: [Decimal?]) -> Decimal? {
         let known = months.compactMap { $0 }

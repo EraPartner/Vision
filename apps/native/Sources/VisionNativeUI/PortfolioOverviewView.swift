@@ -39,8 +39,9 @@ public struct PortfolioOverviewView: View {
                             } else {
                                 Image(systemName: "arrow.clockwise")
                             }
-                        }.accessibilityLabel(strings.t("portfolio.refreshPrices"))
-                            .help(
+                        }.buttonStyle(.vision(.outline, size: .iconSm))
+                            .accessibilityLabel(strings.t("portfolio.refreshPrices"))
+                            .visionTooltip(
                                 strings.t(model.isOnline ? "portfolio.refreshPrices" : "portfolio.refreshPricesOffline")
                             )
                             .disabled(model.isRefreshingPrices || !model.isOnline)
@@ -50,9 +51,10 @@ public struct PortfolioOverviewView: View {
                             Divider()
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
-                            Image(systemName: "ellipsis")
+                            Image(systemName: "ellipsis").visionChipChrome()
                         }
-                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .accessibilityLabel(strings.t("portfolio.menu"))
                         Button(strings.t("addInv.title"), systemImage: "plus") { editing.beginAddInvestment() }
                             .buttonStyle(.visionPrimary)
                     }
@@ -63,6 +65,7 @@ public struct PortfolioOverviewView: View {
                     Text(strings.t("stocks.pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                        .buttonStyle(.visionOutline)
                 } else {
                     if model.active.isEmpty {
                         AdminCard {
@@ -96,12 +99,12 @@ public struct PortfolioOverviewView: View {
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: currency.rawValue + shell.route.string + String(shell.settingsRevision)) { await reload() }
-        .sheet(isPresented: $customize) {
+        .visionDialog(isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics) {
             PortfolioWidgetsSheet(
                 definitions: PortfolioWidgetsModel.definitions, visible: model.widgets.isVisible,
                 setVisible: model.widgets.setVisible, setAll: model.widgets.setAll, reset: model.widgets.reset,
                 reload: model.widgets.load, isLoaded: model.widgets.isLoaded, isSaving: model.widgets.isSaving,
-                error: model.widgets.error, strings: strings)
+                error: model.widgets.error, strings: strings, inDialog: true)
         }
     }
 
@@ -147,21 +150,15 @@ public struct PortfolioOverviewView: View {
                 Text(strings.t("performance.emptyTitle")).font(.callout).foregroundStyle(
                     theme.secondaryLabel)
             }
-            Picker(
-                strings.t("portfolio.period.label"),
+            VisionSegmentedControl(
                 selection: Binding(
                     get: { model.period },
-                    set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) })
-            ) {
-                ForEach(PortfolioPeriod.allCases, id: \.self) { period in
-                    Text(strings.t("portfolio.period." + period.rawValue)).tag(period)
-                        .accessibilityLabel(strings.t("performance.period." + period.rawValue))
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
+                    set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) }),
+                values: PortfolioPeriod.allCases, title: { strings.t("portfolio.period." + $0.rawValue) },
+                size: .sm
+            )
             .fixedSize()
+            .accessibilityElement(children: .contain)
             .accessibilityLabel(strings.t("portfolio.period.label"))
         }
     }
@@ -182,7 +179,7 @@ public struct PortfolioOverviewView: View {
                 if data.snapshots.last?.isProvisional == true {
                     Label(strings.t("performance.latestSnapshotProvisional"), systemImage: "info.circle")
                         .font(.caption).foregroundStyle(theme.secondaryLabel)
-                        .help(strings.t("performance.latestSnapshotProvisionalDescription"))
+                        .visionTooltip(strings.t("performance.latestSnapshotProvisionalDescription"))
                 }
             }
         } else if let error = model.errors[currency.rawValue + "|" + model.period.rawValue] {
@@ -271,26 +268,34 @@ public struct PortfolioOverviewView: View {
             if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel).monospacedDigit() }
         }
     }
+    private var brokerFilterOptions: [VisionSelectOption<PortfolioBrokerFilter>] {
+        [VisionSelectOption(value: PortfolioBrokerFilter.all, title: strings.t("portfolio.brokerFilter.all"))]
+            + model.brokerOptions.map { option in
+                VisionSelectOption(
+                    value: option.id,
+                    title: option.id == .unassigned ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
+            }
+    }
     private var holdings: some View {
         PortfolioCard(title: strings.t("portfolio.widget.holdings")) {
             HStack {
-                Picker(
-                    strings.t("portfolio.sort.label"), selection: Binding(get: { model.sort }, set: { model.sort = $0 })
-                ) {
-                    Text(strings.t("portfolio.sort.value")).tag(PortfolioHoldingsSort.value)
-                    Text(strings.t("portfolio.sort.return")).tag(PortfolioHoldingsSort.returnRate)
-                }.pickerStyle(.segmented).frame(maxWidth: 250)
+                VisionSegmentedControl(
+                    selection: Binding(get: { model.sort }, set: { model.sort = $0 }),
+                    options: [
+                        VisionSegmentOption(
+                            value: PortfolioHoldingsSort.value, title: strings.t("portfolio.sort.value")),
+                        VisionSegmentOption(
+                            value: PortfolioHoldingsSort.returnRate, title: strings.t("portfolio.sort.return")),
+                    ], size: .sm
+                )
+                .accessibilityElement(children: .contain).accessibilityLabel(strings.t("portfolio.sort.label"))
+                .frame(maxWidth: 250)
                 Spacer()
-                Picker(
-                    strings.t("portfolio.brokerFilter.label"),
-                    selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 })
-                ) {
-                    Text(strings.t("portfolio.brokerFilter.all")).tag(PortfolioBrokerFilter.all)
-                    ForEach(model.brokerOptions) { option in
-                        Text(option.id == .unassigned ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
-                            .tag(option.id)
-                    }
-                }.frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
+                VisionSelect(
+                    selection: Binding(get: { model.brokerFilter }, set: { model.brokerFilter = $0 }),
+                    options: brokerFilterOptions, accessibilityLabel: strings.t("portfolio.brokerFilter.label"),
+                    expands: true
+                ).frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
             }
             if model.filteredHoldings.isEmpty {
                 Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel).padding(20)
@@ -329,7 +334,7 @@ public struct PortfolioOverviewView: View {
                                     strings.t("portfolio.oversold.label"),
                                     systemImage: "exclamationmark.triangle"
                                 )
-                                .font(.caption).foregroundStyle(theme.warning).help(
+                                .font(.caption).foregroundStyle(theme.warning).visionTooltip(
                                     strings.t("portfolio.oversold.description"))
                             }
                         }
@@ -516,7 +521,7 @@ private struct PortfolioFigureInfo: View {
         } label: {
             Image(systemName: symbol).font(.caption)
         }
-        .buttonStyle(.plain).help(text).accessibilityLabel(title)
+        .buttonStyle(.plain).visionTooltip(text).accessibilityLabel(title)
         .popover(isPresented: $open) { Text(text).font(.callout).padding(16).frame(maxWidth: 340) }
     }
 }

@@ -75,12 +75,12 @@ public struct PortfolioTaxView: View {
                 await model.load(year: source.year, liveYear: source.liveYear, currency: requestedCurrency, force: true)
             }
         }
-        .sheet(isPresented: $customize) {
+        .visionDialog(isPresented: $customize, metrics: PortfolioWidgetsSheet.metrics) {
             PortfolioWidgetsSheet(
                 definitions: PortfolioTaxWidgetsModel.definitions, visible: model.widgets.isVisible,
                 setVisible: model.widgets.setVisible, setAll: model.widgets.setAll, reset: model.widgets.reset,
                 reload: model.widgets.load, isLoaded: model.widgets.isLoaded, isSaving: model.widgets.isSaving,
-                error: model.widgets.error, strings: strings)
+                error: model.widgets.error, strings: strings, inDialog: true)
         }
         .sheet(isPresented: $filing) {
             if let overview { TaxMarkFiledSheet(overview: overview, actions: tax.actions, shell: shell) }
@@ -97,12 +97,13 @@ public struct PortfolioTaxView: View {
         ) {
             TaxProfileSheet(model: tax.profile, shell: shell, onUnfile: { await tax.unfileProfileYear() })
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { model.isAdjustmentsPresented },
                 set: { value in
                     if !value { model.closeAdjustments() }
-                })
+                }),
+            metrics: PortfolioTaxAdjustmentsSheet.metrics
         ) {
             PortfolioTaxAdjustmentsSheet(model: model, shell: shell)
         }
@@ -124,11 +125,11 @@ public struct PortfolioTaxView: View {
                 // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
                 if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
                     Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
-                        .disabled(tax.actions.isSaving)
+                        .buttonStyle(.visionOutline).controlSize(.small).disabled(tax.actions.isSaving)
                 }
                 Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
                     Task { await tax.exportYearCsv() }
-                }.disabled(tax.actions.isSaving || tax.isExporting)
+                }.buttonStyle(.visionOutline).controlSize(.small).disabled(tax.actions.isSaving || tax.isExporting)
                 actionsMenu(overview)
             }
             // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
@@ -169,9 +170,9 @@ public struct PortfolioTaxView: View {
                 Task { await tax.exportYearCsv() }
             }.disabled(tax.isExporting)
         } label: {
-            Image(systemName: "ellipsis")
+            Image(systemName: "ellipsis").visionChipChrome()
         }
-        .menuIndicator(.hidden)
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel(strings.t("tax.menu.label"))
         .disabled(tax.actions.isSaving || model.isSavingAdjustments)
     }

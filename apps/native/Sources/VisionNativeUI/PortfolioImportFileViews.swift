@@ -31,7 +31,7 @@ struct PortfolioImportFileDropzone: View {
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
                 if let remove {
                     Button(strings.t("importPage.remove"), systemImage: "trash", role: .destructive, action: remove)
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.vision(.ghost, size: .sm))
                 }
             } else {
                 Text(strings.t(multiple ? "portfolioImport.session.files" : "portfolioImport.dropzone"))

@@ -22,7 +22,7 @@ struct PortfolioImportHistoryView: View {
                         Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
                         Button(strings.t("common.retry")) {
                             Task { await model.load(offset: model.offset, force: true) }
-                        }
+                        }.buttonStyle(.visionOutline)
                     }
                     if let page = model.page {
                         ForEach(page.items) { batch in
@@ -38,6 +38,7 @@ struct PortfolioImportHistoryView: View {
                                     Button(strings.t("portfolioImport.session.history.rollback")) {
                                         model.pendingRollback = batch
                                     }
+                                    .buttonStyle(.visionOutline).controlSize(.small)
                                     .disabled(isLocked || model.isBusy)
                                 }
                             }.padding(.vertical, 5)
@@ -50,12 +51,13 @@ struct PortfolioImportHistoryView: View {
                                         await model.load(
                                             offset: max(0, model.offset - PortfolioImportHistoryModel.pageSize))
                                     }
-                                }.disabled(model.isBusy || model.isLoading || model.offset == 0)
+                                }.buttonStyle(.visionOutline)
+                                    .disabled(model.isBusy || model.isLoading || model.offset == 0)
                                 Button(strings.t("common.next")) {
                                     Task {
                                         await model.load(offset: model.offset + PortfolioImportHistoryModel.pageSize)
                                     }
-                                }.disabled(
+                                }.buttonStyle(.visionOutline).disabled(
                                     model.isBusy || model.isLoading
                                         || model.offset + PortfolioImportHistoryModel.pageSize >= page.total)
                             }
@@ -65,21 +67,19 @@ struct PortfolioImportHistoryView: View {
                 }.padding(.top, 14)
             }
         }.task(id: expanded) { if expanded { await model.load(offset: model.offset) } }
-            .alert(
-                strings.t("portfolioImport.session.history.rollbackTitle"),
+            .visionAlert(
+                title: strings.t("portfolioImport.session.history.rollbackTitle"),
+                message: strings.t(
+                    "portfolioImport.session.history.rollbackDescription",
+                    ["file": model.pendingRollback?.sourceFilename ?? model.pendingRollback?.adapterName ?? ""]),
                 isPresented: Binding(
                     get: { model.pendingRollback != nil }, set: { if !$0 { model.pendingRollback = nil } })
             ) {
-                Button(strings.t("common.cancel"), role: .cancel) { model.pendingRollback = nil }
-                Button(strings.t("portfolioImport.session.history.rollback"), role: .destructive) {
+                VisionDialogAction(strings.t("common.cancel"), role: .cancel) { model.pendingRollback = nil }
+                VisionDialogAction(strings.t("portfolioImport.session.history.rollback"), role: .destructive) {
                     guard let id = model.pendingRollback?.id else { return }
                     Task { await model.rollback(batchId: id) }
                 }.disabled(isLocked || model.isBusy)
-            } message: {
-                Text(
-                    strings.t(
-                        "portfolioImport.session.history.rollbackDescription",
-                        ["file": model.pendingRollback?.sourceFilename ?? model.pendingRollback?.adapterName ?? ""]))
             }
     }
 }

@@ -37,7 +37,8 @@ struct PortfolioNewsView: View {
                                     } placeholder: {
                                         Rectangle().fill(theme.muted)
                                     }
-                                    .frame(width: 88, height: 60).clipped().clipShape(RoundedRectangle(cornerRadius: 6))
+                                    .frame(width: 88, height: 60).clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.sm))
                                     .accessibilityHidden(true)
                                 }
                                 VStack(alignment: .leading, spacing: 6) {

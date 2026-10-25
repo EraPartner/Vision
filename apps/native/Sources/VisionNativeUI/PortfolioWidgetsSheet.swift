@@ -2,6 +2,8 @@ import SwiftUI
 import VisionNativeCore
 
 struct PortfolioWidgetsSheet: View {
+    /// `WidgetVisibilityDialog`'s panel (`max-w-md`).
+    static let metrics = VisionDialogMetrics(maxWidth: 448)
     let definitions: [InsightWidget]
     let visible: @MainActor (String) -> Bool
     let setVisible: @MainActor (String, Bool) async -> Void
@@ -12,14 +14,30 @@ struct PortfolioWidgetsSheet: View {
     let isSaving: Bool
     let error: String?
     let strings: any Localizing
+    /// True inside `visionDialog(metrics: PortfolioWidgetsSheet.metrics)`, whose panel supplies the
+    /// padding and width; false keeps the padded, fixed-size content a system sheet needs.
+    var inDialog = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.visionDismissDialog) private var dismissDialog
     @Environment(\.visionTheme) private var theme
 
-    var body: some View {
+    @ViewBuilder var body: some View {
+        if inDialog {
+            panel.frame(height: 492)
+        } else {
+            panel.visionDialogPadding().frame(width: 448, height: 540)
+        }
+    }
+
+    private var panel: some View {
         VStack(alignment: .leading, spacing: 20) {
             VisionDialogHeader(
                 title: strings.t("widgets.title"), description: strings.t("widgets.description"),
-                closeLabel: strings.t("common.close"), onClose: { dismiss() }
+                closeLabel: strings.t("common.close"),
+                onClose: {
+                    dismissDialog()
+                    dismiss()
+                }
             )
             .keyboardShortcut(.cancelAction)
             if let error {
@@ -43,7 +61,7 @@ struct PortfolioWidgetsSheet: View {
                                 isOn: Binding(
                                     get: { visible(widget.id) },
                                     set: { value in Task { await setVisible(widget.id, value) } })
-                            ).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            ).labelsHidden().toggleStyle(.visionSwitch)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 10)
                         if widget.id != definitions.last?.id { Divider().padding(.leading, 16) }
@@ -67,6 +85,6 @@ struct PortfolioWidgetsSheet: View {
                     .disabled(!isLoaded || isSaving)
             }
             .buttonStyle(.visionOutline)
-        }.visionDialogPadding().frame(width: 448, height: 540)
+        }
     }
 }
