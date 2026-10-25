@@ -1913,7 +1913,10 @@ async function main(): Promise<number> {
       parts.push(
         renderNativeSection(
           nativeResults,
-          loadElectronReference(options, outDir),
+          // This run's Electron apps when it measured any, else the newest earlier run.
+          results.apps.some((app) => app.tiers.length > 0)
+            ? results
+            : loadElectronReference(options, outDir),
           results.apps.length > 0 ? [] : results.warnings,
         ),
       );
