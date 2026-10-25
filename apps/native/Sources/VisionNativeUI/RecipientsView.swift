@@ -444,31 +444,34 @@ struct RecipientDialogs: ViewModifier {
                     Task { await model.confirmDelete() }
                 }
             }
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.add != nil },
                     set: { presented in
                         if !presented { model.closeAdd() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 448, padding: 0, spacing: 0)
             ) {
                 themed(PayeeAddSheet(model: model, shell: shell))
             }
             // Escape and a click outside keep the selection; only Cancel resets it.
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.merge.isOpen },
                     set: { presented in
                         if !presented { model.merge.dismiss() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 512, padding: 0, spacing: 0)
             ) {
                 themed(PayeeMergeSheet(merge: model.merge, shell: shell))
             }
-            .sheet(
+            .visionDialog(
                 isPresented: Binding(
                     get: { model.rules != nil },
                     set: { presented in
                         if !presented { model.closeRules() }
-                    })
+                    }),
+                metrics: VisionDialogMetrics(maxWidth: 672, padding: 0, spacing: 0)
             ) {
                 themed(MatchRulesSheet(model: model, shell: shell))
             }
@@ -478,6 +481,7 @@ struct RecipientDialogs: ViewModifier {
         sheet
             .environment(\.visionTheme, theme)
             .environment(\.colorScheme, theme.colorScheme)
+            .environment(\.accountDialogHosted, true)
     }
 }
 

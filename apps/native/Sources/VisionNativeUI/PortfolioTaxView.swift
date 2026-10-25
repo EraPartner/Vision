@@ -82,18 +82,20 @@ public struct PortfolioTaxView: View {
                 reload: model.widgets.load, isLoaded: model.widgets.isLoaded, isSaving: model.widgets.isSaving,
                 error: model.widgets.error, strings: strings, inDialog: true)
         }
-        .sheet(isPresented: $filing) {
+        .visionDialog(isPresented: $filing, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxMarkFiledSheet(overview: overview, actions: tax.actions, shell: shell) }
         }
-        .sheet(isPresented: $history) {
+        .visionDialog(isPresented: $history, metrics: .init(maxWidth: nil, padding: 0, spacing: 0)) {
             if let overview { TaxHistorySheet(overview: overview, shell: shell) }
         }
-        .sheet(
+        .visionDialog(
             isPresented: Binding(
                 get: { tax.profile.isPresented },
                 set: { value in
                     if !value { Task { await tax.profile.close() } }
-                })
+                }),
+            metrics: .init(
+                maxWidth: 620, height: .fraction(DesignTokens.Overlay.dialogMaxHeightFraction), padding: 0, spacing: 0)
         ) {
             TaxProfileSheet(model: tax.profile, shell: shell, onUnfile: { await tax.unfileProfileYear() })
         }
