@@ -7,7 +7,9 @@ import {
   memoryAt,
   nearestSample,
   parseNativePerfResults,
+  parseSampleReport,
   pickElectronReference,
+  renderHotSpots,
   renderNativeSection,
   runNamesNewestFirst,
   summarizeNativeRun,
@@ -424,4 +426,38 @@ test("renders the native section with a side-by-side table", () => {
   assert.match(text, /\| Scroll FPS \| 60\.0 \| 5\d\.\d \|/);
   assert.match(renderNativeSection([summary], null), /No earlier Electron run/);
   assert.match(renderNativeSection([], null), /No native app was measured/);
+});
+
+test("parseSampleReport keeps busy leaves and the app's own frames", () => {
+  const report = [
+    "Call graph:",
+    "    2000 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)",
+    "    + 1900 start  (in dyld) + 6076  [0x1]",
+    "    +   1800 main  (in Vision Native Demo) + 40  [0x2]",
+    "    +   ! 1200 ShellView.body.getter  (in Vision Native Demo) + 12  [0x3]",
+    "    +   ! : 300 ShellView.body.getter  (in Vision Native Demo) + 80  [0x3]",
+    "",
+    "Total number in stack (recursive counted multiple, when >=5):",
+    "",
+    "Sort by top of stack, same collapsed (when >= 5):",
+    "        __psynch_cvwait  (in libsystem_kernel.dylib)        900",
+    "        objc_msgSend  (in libobjc.A.dylib)        120",
+    "        mach_msg2_trap  (in libsystem_kernel.dylib)        800",
+    "        AG::Graph::update  (in AttributeGraph)        310",
+    "",
+    "Binary Images:",
+  ].join("\n");
+  const spots = parseSampleReport(report, "Vision Native Demo");
+  assert.deepEqual(spots.leaves, [
+    { symbol: "AG::Graph::update", count: 310 },
+    { symbol: "objc_msgSend", count: 120 },
+  ]);
+  assert.deepEqual(spots.appFrames, [
+    { symbol: "main", count: 1800 },
+    { symbol: "ShellView.body.getter", count: 1200 },
+  ]);
+  assert.match(
+    renderHotSpots("Scroll", spots),
+    /1200 {2}ShellView\.body\.getter/,
+  );
 });

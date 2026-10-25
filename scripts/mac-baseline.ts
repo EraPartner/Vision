@@ -82,6 +82,8 @@ import {
   type AnimationSeen,
 } from "./lib/mac-baseline/launchProbe.ts";
 import {
+  parseSampleReport,
+  renderHotSpots,
   renderNativeSection,
   parseNativePerfResults,
   runNamesNewestFirst,
@@ -142,6 +144,7 @@ const USAGE = `Usage: bun scripts/mac-baseline.ts [options]
                         app's 30 s and 60 s; --idle, --sustained and --quick override them.
                         --tiers, --full-effects, --repeat, --scroll-px, --pages and --no-trace
                         do not apply to native apps.
+  --no-profile          Skip the native profiling pass (one extra run under \`sample\`)
   --native-app <path>   A native app bundle to measure; repeat for several (implies --native)
   --compare <path>      Electron results to compare the native apps with: a run directory
                         or a results root (default: the newest run in --out with Electron apps)
@@ -170,6 +173,8 @@ interface Options {
   pages: string[];
   outRoot: string;
   powermetrics: boolean;
+  /** After the measured native runs, one more run sampled with `sample` for hot spots. */
+  profile: boolean;
   trace: boolean;
   launchProbeSeconds: number;
   quick: boolean;
@@ -196,6 +201,7 @@ function parseOptions(argv: string[]): Options | null {
       out: { type: "string" },
       "no-powermetrics": { type: "boolean" },
       "no-trace": { type: "boolean" },
+      "no-profile": { type: "boolean" },
       "launch-probe": { type: "string" },
       quick: { type: "boolean" },
       leak: { type: "string" },
@@ -279,6 +285,7 @@ function parseOptions(argv: string[]): Options | null {
     ),
     powermetrics: values["no-powermetrics"] !== true,
     trace: values["no-trace"] !== true,
+    profile: values["no-profile"] !== true,
     launchProbeSeconds: number(values["launch-probe"], 0, "launch-probe"),
     quick,
     leakMinutes:
@@ -1581,6 +1588,113 @@ function loadElectronReference(
   return null;
 }
 
+/**
+ * One more scripted run of a native app with `sample` attached while it idles and while it
+ * scrolls and switches pages: the sampled run is not measured (sampling stops threads), it
+ * only names the hot frames. The app marks each phase in phase.txt.
+ */
+async function profileNativeApp(
+  ctx: Context,
+  appPath: string,
+): Promise<string> {
+  const { options } = ctx;
+  const info = appInfo(appPath);
+  const slug = `${info.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-profile`;
+  const dir = path.join(ctx.outDir, slug);
+  fs.mkdirSync(dir, { recursive: true });
+  log(`${info.name}: profiling pass (cooldown ${options.cooldownSeconds} s)`);
+  await sleep(options.cooldownSeconds * 1000);
+  const args = ["-VisionPerfRun", dir];
+  if (options.nativeIdleSeconds !== null) {
+    args.push("-VisionPerfIdleSeconds", String(options.nativeIdleSeconds));
+  }
+  if (options.nativeSustainedSeconds !== null) {
+    args.push(
+      "-VisionPerfSustainedSeconds",
+      String(options.nativeSustainedSeconds),
+    );
+  }
+  const child = spawn(info.executable, args, {
+    detached: true,
+    stdio: "ignore",
+    env: cleanEnv(),
+  });
+  let exited = false;
+  child.once("exit", () => {
+    exited = true;
+  });
+  const pid = child.pid ?? -1;
+  const plan: Record<string, number> = { idle: 8, scroll: 25 };
+  const samplers: Promise<void>[] = [];
+  const files: { phase: string; file: string }[] = [];
+  let postgresPid: number | undefined;
+  const deadline = Date.now() + 400_000;
+  await sleep(1000);
+  run("osascript", [
+    "-e",
+    `tell application id "${info.bundleId}" to activate`,
+  ]);
+  while (!exited && Date.now() < deadline) {
+    postgresPid = runtimeRoots(info.userData, pid).postgresPid ?? postgresPid;
+    let phase = "";
+    try {
+      phase = fs.readFileSync(path.join(dir, "phase.txt"), "utf8").trim();
+    } catch {
+      // Not started yet, or finished.
+    }
+    const seconds = plan[phase];
+    if (seconds !== undefined) {
+      delete plan[phase];
+      const file = path.join(dir, `${phase}.sample.txt`);
+      files.push({ phase, file });
+      const sampler = spawn(
+        "sample",
+        [String(pid), String(seconds), "-mayDie", "-file", file],
+        { stdio: "ignore" },
+      );
+      samplers.push(
+        new Promise((resolve) => {
+          sampler.once("exit", () => resolve());
+          sampler.once("error", () => resolve());
+        }),
+      );
+    }
+    await sleep(200);
+  }
+  if (!exited) child.kill("SIGTERM");
+  await Promise.all(samplers);
+  const pgDeadline = Date.now() + 30_000;
+  while (
+    postgresPid !== undefined &&
+    processAlive(postgresPid) &&
+    Date.now() < pgDeadline
+  ) {
+    await sleep(250);
+  }
+  const binary = path.basename(info.executable);
+  const blocks: string[] = [];
+  for (const { phase, file } of files) {
+    try {
+      const spots = parseSampleReport(fs.readFileSync(file, "utf8"), binary);
+      blocks.push(
+        renderHotSpots(
+          `${info.name} hot spots: ${phase} (sampled, ${path.basename(file)})`,
+          spots,
+        ),
+      );
+    } catch (caught) {
+      blocks.push(
+        `#### ${info.name} hot spots: ${phase}\n\nNo sample: ${(caught as Error).message}\n`,
+      );
+    }
+  }
+  if (blocks.length === 0)
+    blocks.push(
+      `#### ${info.name} hot spots\n\nThe profiling pass saw no phase.\n`,
+    );
+  return blocks.join("\n");
+}
+
 // ── Leak check ───────────────────────────────────────────────────────────────
 
 const LEAK_SAMPLE_SECONDS = 30;
@@ -1883,6 +1997,7 @@ async function main(): Promise<number> {
 
   const ctx: Context = { options, powermetrics: recorder, outDir };
   const nativeResults: NativeAppResult[] = [];
+  const hotSpots: string[] = [];
   try {
     for (const appPath of options.apps) {
       if (abort.signal.aborted) break;
@@ -1891,6 +2006,12 @@ async function main(): Promise<number> {
     for (const appPath of options.nativeApps) {
       if (abort.signal.aborted) break;
       nativeResults.push(await measureNativeApp(ctx, appPath));
+    }
+    if (options.profile) {
+      for (const appPath of options.nativeApps) {
+        if (abort.signal.aborted) break;
+        hotSpots.push(await profileNativeApp(ctx, appPath));
+      }
     }
   } finally {
     await recorder?.stop();
@@ -1920,6 +2041,7 @@ async function main(): Promise<number> {
           results.apps.length > 0 ? [] : results.warnings,
         ),
       );
+      parts.push(...hotSpots);
     }
     fs.writeFileSync(path.join(outDir, "summary.md"), parts.join("\n"));
     caffeinate.kill();

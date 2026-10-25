@@ -162,7 +162,15 @@ per role, `footprint(1)` samples every 15 s for the backend and PostgreSQL, and 
 slice for each window. Frame statistics reuse `computeFrameStats` and `fpsBuckets`, so FPS,
 dropped %, p95 and frames over 50 ms mean the same as for Electron. Results go to
 `<run>/results.json` (key `native`), a per-app folder holding the app's raw `results.json`, and the
-"Native app (Swift)" section of `summary.md` with the side-by-side table.
+"Native app (Swift)" section of `summary.md` with the side-by-side table. When the same run also
+measured Electron apps, the table compares with those.
+
+**Profiling pass.** After the measured runs the script launches each native app once more and
+attaches `sample` while it idles (8 s) and while it scrolls and switches pages (25 s); the app
+writes the running phase to `phase.txt` in its output folder. Sampling stops threads, so this run
+is not measured: it only lists the heaviest busy leaf frames and the app's own frames with their
+inclusive counts under "hot spots" in `summary.md`, with the full reports beside them
+(`<app>-profile/<phase>.sample.txt`). `--no-profile` skips it.
 
 **Without arguments.** UserDefaults reads launch arguments and the app's defaults domain alike, so
 the run can also start from a normal launch:

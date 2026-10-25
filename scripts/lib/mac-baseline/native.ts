@@ -766,3 +766,82 @@ export function renderNativeSection(
   }
   return out.join("\n");
 }
+
+// ── Profiling pass ───────────────────────────────────────────────────────────
+
+/** Leaf frames that mean a thread was waiting, not working. */
+const WAIT_SYMBOLS =
+  /^(__psynch_cvwait|__psynch_mutexwait|mach_msg2_trap|mach_msg_trap|__workq_kernreturn|kevent\w*|__semwait_signal|__select|__ulock_wait\w*|semaphore_wait_trap|__open|read|poll|__accept)\b/;
+
+export interface SampleHotSpots {
+  /** Busy leaf frames ("Sort by top of stack"), heaviest first. */
+  leaves: { symbol: string; count: number }[];
+  /** The app's own frames in the call graph with their inclusive counts, heaviest first. */
+  appFrames: { symbol: string; count: number }[];
+}
+
+/**
+ * The heaviest busy frames of a macOS `sample` report. `binary` is the app's executable
+ * name as `sample` prints it in `(in …)`.
+ */
+export function parseSampleReport(
+  text: string,
+  binary: string,
+  limit = 15,
+): SampleHotSpots {
+  const lines = text.split("\n");
+  const leaves: { symbol: string; count: number }[] = [];
+  const start = lines.findIndex((line) =>
+    line.startsWith("Sort by top of stack"),
+  );
+  if (start >= 0) {
+    for (const line of lines.slice(start + 1)) {
+      const match = /^\s+(.+?)\s+\(in [^)]+\)\s+(\d+)\s*$/.exec(line);
+      if (!match) {
+        if (line.trim() === "" && leaves.length > 0) break;
+        continue;
+      }
+      const symbol = match[1] ?? "";
+      if (WAIT_SYMBOLS.test(symbol)) continue;
+      leaves.push({ symbol, count: Number(match[2]) });
+    }
+  }
+  const appCounts = new Map<string, number>();
+  const marker = `(in ${binary})`;
+  for (const line of lines) {
+    if (!line.includes(marker)) continue;
+    const match = /^[\s+!:|]*(\d+)\s+(.+?)\s+\(in /.exec(line);
+    if (!match) continue;
+    const symbol = (match[2] ?? "").replace(/\s+\+\s+\d+$/, "");
+    const count = Number(match[1]);
+    appCounts.set(symbol, Math.max(appCounts.get(symbol) ?? 0, count));
+  }
+  const appFrames = [...appCounts]
+    .map(([symbol, count]) => ({ symbol, count }))
+    .sort((a, b) => b.count - a.count);
+  return {
+    leaves: leaves.sort((a, b) => b.count - a.count).slice(0, limit),
+    appFrames: appFrames.slice(0, limit),
+  };
+}
+
+/** A short Markdown block of one phase's hot spots. */
+export function renderHotSpots(
+  title: string,
+  spots: SampleHotSpots,
+  width = 120,
+): string {
+  const clip = (text: string) =>
+    text.length > width ? `${text.slice(0, width - 1)}…` : text;
+  const out = [`#### ${title}`, "", "```"];
+  out.push("busy leaf frames:");
+  for (const leaf of spots.leaves) {
+    out.push(`${String(leaf.count).padStart(6)}  ${clip(leaf.symbol)}`);
+  }
+  out.push("app frames (inclusive):");
+  for (const frame of spots.appFrames) {
+    out.push(`${String(frame.count).padStart(6)}  ${clip(frame.symbol)}`);
+  }
+  out.push("```", "");
+  return out.join("\n");
+}

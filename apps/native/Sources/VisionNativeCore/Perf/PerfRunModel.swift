@@ -288,6 +288,9 @@ public struct PerfProcessSnapshot: Codable, Equatable, Sendable {
 
 public struct PerfRunResults: Codable, Equatable, Sendable {
     public static let fileName = "results.json"
+    /// The phase now running, rewritten as each starts: the harness's profiling pass samples the
+    /// process while a phase runs.
+    public static let phaseFileName = "phase.txt"
 
     public var schemaVersion = 1
     public var app: PerfAppInfo

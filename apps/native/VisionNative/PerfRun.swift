@@ -60,6 +60,9 @@ final class PerfRun {
         }
         clock.stop()
         write(error: failure)
+        try? FileManager.default.removeItem(
+            at: URL(fileURLWithPath: settings.directory, isDirectory: true)
+                .appendingPathComponent(PerfRunResults.phaseFileName))
         NSApp.terminate(nil)
     }
 
@@ -119,6 +122,7 @@ final class PerfRun {
         let startFootprint = PerfProbes.footprintMb()
         let startEpoch = Self.nowMs()
         let startMonotonic = CACurrentMediaTime() * 1000
+        markPhase(name)
         if tracksFrames { clock.beginRecording() }
         let detail: PhaseDetail
         do {
@@ -226,6 +230,14 @@ final class PerfRun {
             windowPixelsWide: Double(content.bounds.width) * scale,
             windowPixelsHigh: Double(content.bounds.height) * scale,
             lowPowerMode: info.isLowPowerModeEnabled, thermalState: info.thermalState.rawValue)
+    }
+
+    private func markPhase(_ name: PerfPhaseName) {
+        let file = URL(fileURLWithPath: settings.directory, isDirectory: true)
+            .appendingPathComponent(PerfRunResults.phaseFileName)
+        try? FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? Data(name.rawValue.utf8).write(to: file, options: .atomic)
     }
 
     private func write(error: String?) {
