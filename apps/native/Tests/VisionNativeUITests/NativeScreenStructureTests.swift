@@ -21,10 +21,10 @@ actor StaticImportService: ImportService {
         OpenAPI.ImportBatch(
             id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: .complete,
             rowsTotal: 40, rowsImported: 37, rowsDuplicate: 2, rowsError: 1, errorSummary: "1 row has no amount",
-            startedAt: "2026-10-12T08:30:00.000Z", transactionsRemaining: 37),
+            startedAt: fixtureInstant("2026-10-12T08:30:00.000Z"), transactionsRemaining: 37),
         OpenAPI.ImportBatch(
             id: "13", adapterName: "generic", status: .awaitingReview, rowsTotal: 5, rowsImported: 0,
-            rowsDuplicate: 0, rowsError: 0, startedAt: "2026-10-12T09:00:00.000Z", transactionsRemaining: 0),
+            rowsDuplicate: 0, rowsError: 0, startedAt: fixtureInstant("2026-10-12T09:00:00.000Z"), transactionsRemaining: 0),
     ]
 
     static let parser = OpenAPI.CustomParserConfig(
@@ -162,8 +162,8 @@ actor StaticAdminService: AdminService {
     }
 
     static let provider = OpenAPI.ProviderHealth(
-        provider: "ecb", kind: "fx", label: "ECB", lastSuccessAt: "2026-10-09T08:05:00.000Z",
-        lastErrorAt: "2026-10-09T09:30:00.000Z", lastError: "Fetch timeout after 5000ms", consecutiveFailures: 1,
+        provider: "ecb", kind: "fx", label: "ECB", lastSuccessAt: fixtureInstant("2026-10-09T08:05:00.000Z"),
+        lastErrorAt: fixtureInstant("2026-10-09T09:30:00.000Z"), lastError: "Fetch timeout after 5000ms", consecutiveFailures: 1,
         updatedAt: nil)
 
     private func check() throws {
@@ -304,7 +304,7 @@ actor StaticPlannedService: PlannedPaymentsService {
 
     func transaction(id: TransactionID) async throws -> OpenAPI.Transaction? {
         OpenAPI.Transaction(
-            id: id, transactionDate: "2026-10-01", recipientName: "Landlord", memo: nil, amount: -950,
+            id: id, transactionDate: fixtureDay("2026-10-01"), recipientName: "Landlord", memo: nil, amount: -950,
             currency: "EUR", categoryName: "Housing", links: [])
     }
 
@@ -318,26 +318,28 @@ actor StaticPlannedService: PlannedPaymentsService {
         return String(format: "%04d-%02d-%02d", parts.year ?? 2026, parts.month ?? 1, parts.day ?? 1)
     }
 
+    static func typedDay(_ offset: Int) -> CalendarDay { fixtureDay(day(offset)) }
+
     static var sample: [OpenAPI.PlannedTransaction] {
         [
             OpenAPI.PlannedTransaction(
-                id: 1, plannedDate: day(0), recipientName: "Landlord", memo: "Rent", amount: -950, currency: "EUR",
+                id: 1, plannedDate: typedDay(0), recipientName: "Landlord", memo: "Rent", amount: -950, currency: "EUR",
                 categoryName: "Housing", url: "https://example.com/lease", isRecurring: true,
                 recurrencePattern: "monthly", isExecuted: true, executedTransactionId: 31, executionCount: 4,
                 executions: [
-                    OpenAPI.PlannedTransactionExecution(id: 1, executedTransactionId: 31, executionDate: day(-30))
+                    OpenAPI.PlannedTransactionExecution(id: 1, executedTransactionId: 31, executionDate: typedDay(-30))
                 ],
                 isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 2, plannedDate: day(3), memo: "Streaming", amount: Decimal(string: "-12.99")!, currency: "USD",
+                id: 2, plannedDate: typedDay(3), memo: "Streaming", amount: Decimal(string: "-12.99")!, currency: "USD",
                 categoryName: "Leisure", isRecurring: true, recurrencePattern: "every 14 days", isExecuted: false,
                 executionCount: 0, isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 3, plannedDate: day(40), memo: "Car loan", amount: -310, currency: "EUR", isRecurring: true,
+                id: 3, plannedDate: typedDay(40), memo: "Car loan", amount: -310, currency: "EUR", isRecurring: true,
                 recurrencePattern: "monthly", isLoan: true, loanTermMonths: 48, isExecuted: false, executionCount: 0,
                 isActive: true, links: []),
             OpenAPI.PlannedTransaction(
-                id: 4, plannedDate: day(-2), memo: "Old gym", amount: -40, currency: "XYZ", isRecurring: false,
+                id: 4, plannedDate: typedDay(-2), memo: "Old gym", amount: -40, currency: "XYZ", isRecurring: false,
                 isExecuted: false, executionCount: 0, isActive: false, links: []),
         ]
     }
@@ -401,9 +403,9 @@ extension StaticPlannedService: PlannedEditingService {
     func linkCandidates(_ query: PlannedLinkQuery) async throws -> [OpenAPI.Transaction] {
         [
             OpenAPI.Transaction(
-                id: 31, transactionDate: Self.day(-1), recipientName: "Streaming service", memo: "STREAMING 4411",
+                id: 31, transactionDate: Self.typedDay(-1), recipientName: "Streaming service", memo: "STREAMING 4411",
                 amount: Decimal(string: "-12.99")!, currency: "USD", links: []),
-            OpenAPI.Transaction(id: 32, transactionDate: Self.day(-2), amount: Decimal(string: "-13.10")!, links: []),
+            OpenAPI.Transaction(id: 32, transactionDate: Self.typedDay(-2), amount: Decimal(string: "-13.10")!, links: []),
         ]
     }
 
@@ -412,21 +414,21 @@ extension StaticPlannedService: PlannedEditingService {
     }
 
     func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 }
 
 extension StaticPlannedService: PickerDataService {
     func recipients(search: String?, limit: Int) async throws -> [OpenAPI.Recipient] {
         [
-            OpenAPI.Recipient(id: 1, name: "Landlord", isActive: true, createdAt: "2026-01-01", links: []),
-            OpenAPI.Recipient(id: 2, name: "Streaming service", isActive: true, createdAt: "2026-01-01", links: []),
+            OpenAPI.Recipient(id: 1, name: "Landlord", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: []),
+            OpenAPI.Recipient(id: 2, name: "Streaming service", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: []),
         ]
     }
 
     func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         OpenAPI.Recipient(
-            id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: "2026-01-01", links: [])
+            id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     func accounts() async throws -> [OpenAPI.Account] {
@@ -434,8 +436,8 @@ extension StaticPlannedService: PickerDataService {
             OpenAPI.Account(
                 id: 7, name: "BE00 1234", displayName: "Everyday account", currency: "EUR", type: "checking",
                 liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self",
-                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: "2026-01-01",
-                updatedAt: "2026-01-01")
+                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
         ]
     }
 
@@ -448,7 +450,7 @@ extension StaticPlannedService: PickerDataService {
     }
 
     func tags() async throws -> [OpenAPI.Tag] {
-        [OpenAPI.Tag(id: 1, slug: "fixed-costs", color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "", updatedAt: "")]
+        [OpenAPI.Tag(id: 1, slug: "fixed-costs", color: "hsl(210, 62%, 50%)", isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))]
     }
 
     func createTag(slug: String, color: String?) async throws {}
@@ -466,17 +468,17 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
 
     static let sample: [OpenAPI.Transaction] = [
         OpenAPI.Transaction(
-            id: 3, transactionDate: "2026-10-09", accountId: 7, bankAccount: "BE00 1234", recipientId: 1,
+            id: 3, transactionDate: fixtureDay("2026-10-09"), accountId: 7, bankAccount: "BE00 1234", recipientId: 1,
             recipientName: "Landlord", memo: "Rent October", amount: Decimal(string: "-950.00")!, currency: "EUR",
             balance: Decimal(string: "1520.40")!, categoryId: 7, categoryName: "Energy", comment: "Paid on time",
             isActive: true, tags: [OpenAPI.TransactionTagRef(id: 1, slug: "fixed-costs", isActive: true)],
             links: []),
         OpenAPI.Transaction(
-            id: 2, transactionDate: "2026-10-05", accountId: 7, bankAccount: "BE00 1234", recipientId: 2,
+            id: 2, transactionDate: fixtureDay("2026-10-05"), accountId: 7, bankAccount: "BE00 1234", recipientId: 2,
             recipientName: "Streaming service", memo: "Monthly plan", amount: Decimal(string: "-12.99")!,
             currency: "EUR", isActive: true, tags: [], links: []),
         OpenAPI.Transaction(
-            id: 1, transactionDate: "2026-10-01", accountId: 7, bankAccount: "BE00 1234", recipientId: 3,
+            id: 1, transactionDate: fixtureDay("2026-10-01"), accountId: 7, bankAccount: "BE00 1234", recipientId: 3,
             recipientName: "Employer", memo: "Salary", amount: Decimal(string: "2480.00")!, currency: "EUR",
             isActive: false, tags: [], links: []),
     ]
@@ -509,7 +511,7 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
     func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
     func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
-        OpenAPI.Recipient(id: id, name: "Landlord", defaultCategoryId: 7, isActive: true, createdAt: "2026-01-01", links: [])
+        OpenAPI.Recipient(id: id, name: "Landlord", defaultCategoryId: 7, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     func allAccounts() async throws -> [OpenAPI.Account] {
@@ -517,8 +519,8 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
             OpenAPI.Account(
                 id: 7, name: "BE00 1234", displayName: "Everyday account", currency: "EUR", type: "checking",
                 liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self",
-                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: "2026-01-01",
-                updatedAt: "2026-01-01")
+                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
         ]
     }
 
@@ -531,21 +533,21 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
     }
 
     func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 
     func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment] {
         [
             OpenAPI.Attachment(
                 id: "41", transactionId: transactionId, filename: "invoice-october.pdf", storedPath: "a/invoice.pdf",
-                mimeType: "application/pdf", sizeBytes: 48_213, createdAt: "2026-10-09T10:00:00Z")
+                mimeType: "application/pdf", sizeBytes: 48_213, createdAt: fixtureInstant("2026-10-09T10:00:00Z"))
         ]
     }
 
     func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
         OpenAPI.Attachment(
             id: "42", transactionId: transactionId, filename: file.name, storedPath: "a/\(file.name)",
-            mimeType: file.contentType, sizeBytes: file.data.count, createdAt: "2026-10-09T10:00:00Z")
+            mimeType: file.contentType, sizeBytes: file.data.count, createdAt: fixtureInstant("2026-10-09T10:00:00Z"))
     }
 
     func downloadAttachment(id: AttachmentID) async throws -> Data { Data("%PDF-1.7".utf8) }
@@ -567,14 +569,14 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
     static let sample: [OpenAPI.SplitOwedDetail] = [
         OpenAPI.SplitOwedDetail(
             id: 1, transactionId: 3, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "20.00")!,
-            amountPaid: Decimal(string: "5.00")!, note: "Half", isSettled: false, createdAt: "2026-10-01",
-            updatedAt: "2026-10-01", transactionDate: "2026-10-09", transactionMemo: "Dinner",
+            amountPaid: Decimal(string: "5.00")!, note: "Half", isSettled: false, createdAt: fixtureInstant("2026-10-01T00:00:00.000Z"),
+            updatedAt: fixtureInstant("2026-10-01T00:00:00.000Z"), transactionDate: fixtureDay("2026-10-09"), transactionMemo: "Dinner",
             transactionAmount: Decimal(string: "-40.00")!, transactionCurrency: "EUR",
             transactionRecipientName: "Bistro", remaining: Decimal(string: "15.00")!),
         OpenAPI.SplitOwedDetail(
             id: 2, transactionId: 2, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "6.50")!,
-            amountPaid: 0, note: nil, isSettled: false, createdAt: "2026-10-05", updatedAt: "2026-10-05",
-            transactionDate: "2026-10-05", transactionMemo: nil, transactionAmount: Decimal(string: "-12.99")!,
+            amountPaid: 0, note: nil, isSettled: false, createdAt: fixtureInstant("2026-10-05T00:00:00.000Z"), updatedAt: fixtureInstant("2026-10-05T00:00:00.000Z"),
+            transactionDate: fixtureDay("2026-10-05"), transactionMemo: nil, transactionAmount: Decimal(string: "-12.99")!,
             transactionCurrency: "EUR", transactionRecipientName: "Streaming service",
             remaining: Decimal(string: "6.50")!),
     ]
@@ -598,15 +600,15 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
     func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {}
 
     func createRecipient(name: String) async throws -> CreatedRecipient {
-        CreatedRecipient(id: 9, name: name, isActive: true, createdAt: "2026-10-09", links: [], created: true)
+        CreatedRecipient(id: 9, name: name, isActive: true, createdAt: fixtureInstant("2026-10-09T00:00:00.000Z"), links: [], created: true)
     }
 
     func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split] {
         [
             OpenAPI.Split(
                 id: 1, transactionId: transactionId, recipientId: 4, recipientName: "Anna",
-                amount: Decimal(string: "20.00")!, amountPaid: 0, isSettled: false, createdAt: "2026-10-01",
-                updatedAt: "2026-10-01")
+                amount: Decimal(string: "20.00")!, amountPaid: 0, isSettled: false, createdAt: fixtureInstant("2026-10-01T00:00:00.000Z"),
+                updatedAt: fixtureInstant("2026-10-01T00:00:00.000Z"))
         ]
     }
 
@@ -682,13 +684,13 @@ actor StaticAccountsService: AccountsService {
             statementBalances: statements, computedBalance: balance, balanceParts: nil, balanceIncomplete: false,
             unconvertedCurrencies: nil, reconcilableBalance: balance, reconcilableCurrency: "EUR", drift: drift,
             anchorDate: nil, postAnchorCount: nil, hasTransactions: true, isActive: isActive,
-            createdAt: "2026-01-01", updatedAt: "2026-01-01")
+            createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), updatedAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
     }
 
     static let sample = [
         account(
             1, "Zichtrekening met een bijzonder lange naam", type: "checking", balance: Decimal(string: "1234.56")!,
-            statements: [.init(currency: "EUR", balance: Decimal(string: "1244.56")!, balanceDate: "2026-10-01")],
+            statements: [.init(currency: "EUR", balance: Decimal(string: "1244.56")!, balanceDate: fixtureDay("2026-10-01"))],
             drift: 10),
         account(2, "Bolero", type: "brokerage", balance: 250),
         account(3, "Spaarrekening", type: "savings", balance: 0, isActive: false),
@@ -772,8 +774,8 @@ actor StaticAccountsService: AccountsService {
         totalRates: 3,
         rates: [
             OpenAPI.ExchangeRate(
-                currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
-                fetchedAt: "2026-10-09T15:05:00.000Z")
+                currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: fixtureDay("2026-10-09"),
+                fetchedAt: fixtureInstant("2026-10-09T15:05:00.000Z"))
         ],
         source: "database", isStale: false, lastFetchedAt: nil)
 

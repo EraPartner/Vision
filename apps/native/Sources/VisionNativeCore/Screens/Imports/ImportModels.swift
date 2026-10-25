@@ -471,21 +471,11 @@ extension OpenAPI.ImportBatch {
 
     /// `formatDate(parseISO(started_at), "yyyy-MM-dd HH:mm")` in the local time zone.
     public func startedText(timeZone: TimeZone = .current) -> String {
-        guard let date = Self.parseTimestamp(startedAt) else { return startedAt }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
-        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: startedAt.date)
         return String(
             format: "%04ld-%02ld-%02ld %02ld:%02ld", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0, parts.hour ?? 0,
             parts.minute ?? 0)
-    }
-
-    static func parseTimestamp(_ text: String) -> Date? {
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: text) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: text)
     }
 }

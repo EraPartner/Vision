@@ -597,7 +597,7 @@ private actor HomeFixtureService: StatisticsService {
     }
     func homeWidgetSetting() async throws -> OpenAPI.Setting {
         OpenAPI.Setting(
-            key: "widget_visibility", value: widgets, expected: .object(["exists": .bool(true), "value": widgets]))
+            key: "widget_visibility", value: widgets, expected: .wire(.object(["exists": .bool(true), "value": widgets])))
     }
     func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         lastExpected = expected
@@ -854,12 +854,12 @@ struct HomeAPIAdapterTests {
         let client = APIClient(
             baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
         let setting = try await client.homeWidgetSetting()
-        #expect(setting.expected == .object(["exists": .bool(false)]))
+        #expect(setting.expected.json == .object(["exists": .bool(false)]))
         let value: JSONValue = .object(["dashboard": .object(["hero": .bool(false)])])
-        _ = try await client.saveHomeWidgets(value, expected: setting.expected)
+        _ = try await client.saveHomeWidgets(value, expected: setting.expected.json)
         let request = try #require(await transport.requests.last)
         let body = try JSONDecoder().decode(JSONValue.self, from: #require(request.body))
-        #expect(body["expected"] == setting.expected)
+        #expect(body["expected"] == setting.expected.json)
         #expect(body["value"] == value)
         #expect(request.method == .put)
     }

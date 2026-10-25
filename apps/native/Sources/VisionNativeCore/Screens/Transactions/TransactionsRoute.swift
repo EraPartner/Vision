@@ -201,8 +201,8 @@ public struct TransactionFilters: Equatable, Sendable {
     public var categoryIds: [CategoryID]?
     public var uncategorised = false
     public var filterLabel: String?
-    public var startDate: String?
-    public var endDate: String?
+    public var startDate: CalendarDay?
+    public var endDate: CalendarDay?
     public var accountId: AccountID?
     public var bankAccount: String?
     public var transactionType: TransactionTypeFilter?
@@ -226,8 +226,8 @@ public struct TransactionFilters: Equatable, Sendable {
         categoryIds = ids.isEmpty ? nil : ids
         uncategorised = route.value("uncategorised") == "true"
         filterLabel = text("filter_label")
-        startDate = text("start_date")
-        endDate = text("end_date")
+        startDate = text("start_date").flatMap { CalendarDay($0) }
+        endDate = text("end_date").flatMap { CalendarDay($0) }
         accountId = text("account_id").flatMap { Self.parseId($0) }
         bankAccount = text("bank_account")
         transactionType = route.value("transaction_type").flatMap(TransactionTypeFilter.init(rawValue:))
@@ -262,7 +262,7 @@ public struct TransactionFilters: Equatable, Sendable {
 
     /// The Date chip's preset, or `nil` for a custom range.
     public func datePreset(today: PlannedDay, calendar: Calendar) -> TransactionDatePreset? {
-        TransactionDatePreset.matching(start: startDate, end: endDate, today: today, calendar: calendar)
+        TransactionDatePreset.matching(start: startDate?.description, end: endDate?.description, today: today, calendar: calendar)
     }
 
     /// `customDateLabel`: "start – end" in the app date format, `…` for an open side.

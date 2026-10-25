@@ -63,7 +63,7 @@ actor FakePlannedEditingService: PlannedEditingService {
         patches[id, default: []].append(patch)
         if writesFail { throw APIError.network("offline") }
         return OpenAPI.PlannedTransaction(
-            id: id, plannedDate: patch.plannedDate ?? "2026-10-14", accountId: patch.accountId, memo: patch.memo,
+            id: id, plannedDate: patch.plannedDate.flatMap { CalendarDay($0) } ?? "2026-10-14", accountId: patch.accountId, memo: patch.memo,
             amount: patch.amount ?? 0, currency: patch.currency, isRecurring: patch.isRecurring ?? false,
             recurrencePattern: patch.recurrencePattern, isExecuted: false, executionCount: 0,
             isActive: patch.isActive ?? true, links: [])
@@ -107,7 +107,7 @@ actor FakePlannedEditingService: PlannedEditingService {
         savedValues.append(value)
         savedBaselines.append(expected)
         if savesFail { throw APIError.network("offline") }
-        return OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        return OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 }
 
@@ -159,7 +159,7 @@ actor FakePickerService: PickerDataService {
 
     func createTag(slug: String, color: String?) async throws {
         createdTags.append(slug)
-        tagList.append(OpenAPI.Tag(id: TagID(rawValue: 900 + tagList.count), slug: slug, color: color, isActive: true, createdAt: "", updatedAt: ""))
+        tagList.append(OpenAPI.Tag(id: TagID(rawValue: 900 + tagList.count), slug: slug, color: color, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z"))
     }
 }
 
@@ -168,7 +168,7 @@ enum EditingFixture {
 
     static func recipient(_ id: RecipientID, _ name: String, primary: RecipientID? = nil) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
-            id: id, name: name, primaryRecipientId: primary, isActive: true, createdAt: "2026-01-01", links: [])
+            id: id, name: name, primaryRecipientId: primary, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", links: [])
     }
 
     static func account(_ id: AccountID, _ name: String, display: String? = nil) -> OpenAPI.Account {
@@ -176,7 +176,7 @@ enum EditingFixture {
             id: id, name: name, displayName: display, currency: "EUR", type: .checking,
             liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .none,
             owner: .init(rawValue: "self"), multiCurrencyCash: false,
-            hasCashSleeve: false, isActive: true, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+            hasCashSleeve: false, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
     }
 
     static func category(_ id: CategoryID, _ path: [String], active: Bool = true) -> OpenAPI.CategoryNode {
@@ -186,7 +186,7 @@ enum EditingFixture {
     }
 
     static func tag(_ id: TagID, _ slug: String) -> OpenAPI.Tag {
-        OpenAPI.Tag(id: id, slug: slug, color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "", updatedAt: "")
+        OpenAPI.Tag(id: id, slug: slug, color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
     }
 
     static func pattern(
@@ -211,7 +211,7 @@ enum EditingFixture {
     static func setting(_ ids: [RecipientID]) -> OpenAPI.Setting {
         let value = JSONValue.array(ids.map { JSONValue.int($0.rawValue) })
         return OpenAPI.Setting(
-            key: PlannedDismissalStore.key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: PlannedDismissalStore.key, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
 
     static let strings = DictionaryStrings(language: .en, table: [:])
@@ -457,7 +457,7 @@ enum EditingFixture {
 
     @Test func anEditStartsFromTheRowAndTracksItsChanges() throws {
         let row = OpenAPI.PlannedTransaction(
-            id: 5, plannedDate: "2026-11-01T00:00:00.000Z", bankAccount: "Main", accountId: 3, recipientId: 9,
+            id: 5, plannedDate: "2026-11-01", bankAccount: "Main", accountId: 3, recipientId: 9,
             memo: "Gym", amount: Decimal(string: "-40.5")!, currency: "USD", categoryId: 4, comment: "note",
             url: "https://example.com", isRecurring: true, recurrencePattern: "every 14 days",
             recurrenceEndDate: "2027-01-01", maxOccurrences: 6, isExecuted: false, executionCount: 0,
@@ -599,7 +599,7 @@ enum EditingFixture {
     static let candidates = [
         PlannedFixture.transaction(1, date: "2026-10-01", memo: "Rent October", amount: -950),
         PlannedFixture.transaction(2, date: "2026-10-02", memo: "Coffee", amount: Decimal(string: "-3.5")!),
-        PlannedFixture.transaction(3, date: "2026-10-13T00:00:00.000Z", recipient: "Landlord", amount: -960),
+        PlannedFixture.transaction(3, date: "2026-10-13", recipient: "Landlord", amount: -960),
     ]
 
     @Test func theDialogStartsTwoWeeksBeforeTheDueDateAndSearchesThePayeeCluster() async throws {
@@ -711,9 +711,9 @@ enum EditingFixture {
         #expect(link.canExecute)
         #expect(PlannedLinkModel.title(Self.candidates[2], strings: EditingFixture.strings) == "Landlord")
         #expect(PlannedLinkModel.detail(Self.candidates[2], format: .isoDate) == "Landlord · 2026-10-13")
-        let unnamed = OpenAPI.Transaction(id: 8, transactionDate: "", amount: 1, links: [])
+        let unnamed = OpenAPI.Transaction(id: 8, transactionDate: "2026-10-14", amount: 1, links: [])
         #expect(PlannedLinkModel.title(unnamed, strings: EditingFixture.strings) == "plannedPage.link.txFallback")
-        #expect(PlannedLinkModel.detail(unnamed, format: .isoDate).isEmpty)
+        #expect(PlannedLinkModel.detail(unnamed, format: .isoDate) == "2026-10-14")
         await editing.failWrites(true)
         await model.executeLink(strings: EditingFixture.strings)
         #expect(model.notice?.key == "plannedPage.link.executeFailed")
@@ -829,7 +829,7 @@ enum EditingFixture {
         #expect(recurring.display == .caughtUp)
         await recurring.settle()
         #expect(await editing.savedValues == [.array([.int(5), .int(3), .int(1)])])
-        #expect(await editing.savedBaselines.first == EditingFixture.setting([3]).expected)
+        #expect(await editing.savedBaselines.first == EditingFixture.setting([3]).expected.json)
         // The next save goes against the saved value.
         recurring.dismiss(2)
         await recurring.settle()

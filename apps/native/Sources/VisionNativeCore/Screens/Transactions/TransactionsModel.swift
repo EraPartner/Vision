@@ -646,7 +646,7 @@ public final class TransactionsModel {
                 let setting = try await service.setting(key: TransactionColumnVisibility.settingKey)
                 guard let self else { return }
                 self.visibilitySetting = setting.value
-                self.visibilityBaseline = setting.expected
+                self.visibilityBaseline = setting.expected.json
                 self.columnVisibility = TransactionColumnVisibility.read(setting.value)
             } catch {
                 if case .client(let failure)? = error as? APIError, failure.status == 404 {

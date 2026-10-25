@@ -80,7 +80,7 @@ private actor NetWorthRaceService: NetWorthService {
     func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         let rows = (1...6).map { day in
             OpenAPI.NetWorthSnapshot(
-                date: "2025-06-0\(day)", liquid: Decimal(day), liabilities: 0,
+                date: CalendarDay("2025-06-0\(day)")!, liquid: Decimal(day), liabilities: 0,
                 investments: 0, netWorth: Decimal(day))
         }
         let snapshots: [OpenAPI.NetWorthSnapshot]

@@ -110,7 +110,7 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
                     case "liabilities": value = row.liabilities
                     default: value = row.netWorth
                     }
-                    return InsightChartPoint(key: row.date, value: value)
+                    return InsightChartPoint(key: row.date.description, value: value)
                 })
         }
         let readouts = series.compactMap { line -> NativeNetWorthPrintReadout? in

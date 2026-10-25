@@ -50,7 +50,8 @@ extension APIClient: PlannedEditingService {
             OpenAPIOperations.ExecutePlannedTransaction(
                 id: id,
                 body: OpenAPIOperations.ExecutePlannedTransaction.Body(
-                    executedTransactionId: transactionId, executionDate: executionDate)))
+                    executedTransactionId: transactionId,
+                    executionDate: executionDate.map { try CalendarDay(validating: $0) })))
     }
 
     public func matchSuggestions() async throws -> [PlannedMatchSuggestion] {
@@ -84,7 +85,10 @@ extension APIClient: PlannedEditingService {
 
     public func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(
-            OpenAPIOperations.SaveSetting(key: key, body: OpenAPIOperations.SaveSetting.Body(value: value, expected: expected)))
+            OpenAPIOperations.SaveSetting(
+                key: key,
+                body: OpenAPIOperations.SaveSetting.Body(
+                    value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }
 
@@ -488,8 +492,8 @@ public struct PlannedLinkQuery: Equatable, Sendable {
     /// payment's own payee, `uncategorised` only when on, and `active` always.
     public var operation: OpenAPIOperations.GetTransactions {
         var operation = OpenAPIOperations.GetTransactions(limit: 50)
-        if !startDate.isEmpty { operation.startDate = startDate }
-        if !endDate.isEmpty { operation.endDate = endDate }
+        operation.startDate = CalendarDay(startDate)
+        operation.endDate = CalendarDay(endDate)
         if !bankAccount.isEmpty { operation.bankAccount = bankAccount }
         if let recipientId {
             operation.recipientId = recipientId

@@ -66,7 +66,7 @@ actor StaticRecipientsService: RecipientsService {
         OpenAPI.Recipient(
             id: id, name: name, primaryBankAccount: account, defaultCategoryId: category == nil ? nil : 2,
             defaultCategoryName: category, primaryRecipientId: primary?.0, primaryRecipientName: primary?.1,
-            aliasCount: aliases, notes: notes, isActive: active, createdAt: "2026-01-01", links: [])
+            aliasCount: aliases, notes: notes, isActive: active, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     static let sample: [OpenAPI.Recipient] = [
@@ -79,7 +79,7 @@ actor StaticRecipientsService: RecipientsService {
 
     static let rule = OpenAPI.RecipientPattern(
         id: 10, pattern: "KBC BANK NV", patternKind: .init(rawValue: "literal_prefix"), caseSensitive: true, priority: 50,
-        isActive: true, source: .init(rawValue: "merge"), notes: "Na het samenvoegen", createdAt: "2026-01-01")
+        isActive: true, source: .init(rawValue: "merge"), notes: "Na het samenvoegen", createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"))
 
     func payeePage(_ query: PayeePageQuery, offset: Int, limit: Int) async throws -> PayeePage {
         if failing { throw APIError.network("offline") }

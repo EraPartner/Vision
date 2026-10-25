@@ -227,7 +227,7 @@ public final class HomeModel {
         if case .success(let value) = answers.11 { self.needsCategory = value }
         if case .success(let value) = answers.12 { matchCount = value }
         if case .success(let value) = answers.13, !widgetSavePending, widgetToken == widgetRevision {
-            widgetBaseline = value.expected
+            widgetBaseline = value.expected.json
             widgets = InsightWidgetVisibility(value.value)
             widgetsLoaded = true
             widgetError = nil
@@ -364,7 +364,7 @@ public final class HomeModel {
         Array(
             upcoming.filter {
                 !($0.isExecuted && !$0.isRecurring)
-                    && !dismissedUpcoming.contains("\($0.id.rawValue):\($0.plannedDate.prefix(10))")
+                    && !dismissedUpcoming.contains("\($0.id.rawValue):\($0.plannedDate)")
             }.sorted { ($0.plannedDate, $0.id) < ($1.plannedDate, $1.id) }.prefix(5))
     }
     /// The shell banner owns the source's shared query and occurrence storage in a native graph.
@@ -433,7 +433,7 @@ public final class HomeModel {
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
-            widgetBaseline = saved.expected
+            widgetBaseline = saved.expected.json
             widgets = InsightWidgetVisibility(saved.value)
         } catch {
             widgets = old

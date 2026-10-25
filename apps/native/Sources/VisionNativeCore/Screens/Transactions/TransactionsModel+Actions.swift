@@ -100,7 +100,8 @@ extension TransactionsModel {
     private func submitTransfer(_ form: AddTransactionModel, format: NumberFormat) async {
         let draft = form.draft
         guard let magnitude = form.magnitude(format: format), let fromId = draft.accountId,
-            let toId = draft.toAccountId, let currency = form.currencyOrDefault
+            let toId = draft.toAccountId, let currency = form.currencyOrDefault,
+            let transactionDate = CalendarDay(draft.date)
         else { return }
         let bulk = bulkService
         do {
@@ -111,11 +112,11 @@ extension TransactionsModel {
             let comment = AddTransactionModel.trimmedOrNil(draft.comment)
             let outflow = try await service.createTransaction(
                 OpenAPI.TransactionCreate(
-                    transactionDate: draft.date, accountId: fromId, recipientId: toRecipient.id, memo: memo,
+                    transactionDate: transactionDate, accountId: fromId, recipientId: toRecipient.id, memo: memo,
                     amount: -magnitude, currency: currency, comment: comment))
             let inflow = try await service.createTransaction(
                 OpenAPI.TransactionCreate(
-                    transactionDate: draft.date, accountId: toId, recipientId: fromRecipient.id, memo: memo,
+                    transactionDate: transactionDate, accountId: toId, recipientId: fromRecipient.id, memo: memo,
                     amount: magnitude, currency: currency, comment: comment))
             try await bulk.markTransfer(outflow.id, inflow.id)
             await finishAdd(outflow)

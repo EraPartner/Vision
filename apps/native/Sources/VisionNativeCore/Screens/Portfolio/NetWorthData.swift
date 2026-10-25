@@ -26,34 +26,22 @@ public enum NetWorthPeriod: String, CaseIterable, Sendable {
     public func filter(_ snapshots: [OpenAPI.NetWorthSnapshot], calendar: Calendar = Self.calendar) -> [OpenAPI
         .NetWorthSnapshot]
     {
-        guard let days, let last = snapshots.last, let parts = NetWorthDay.parts(last.date),
-            let anchor = calendar.date(from: DateComponents(year: parts.year, month: parts.month, day: parts.day)),
+        guard let days, let last = snapshots.last,
+            let anchor = last.date.date(in: calendar),
             let cutoff = calendar.date(byAdding: .day, value: -days, to: anchor)
         else { return snapshots }
         let key = StatisticsWindow.day(cutoff, calendar: calendar)
-        return snapshots.filter { $0.date >= key }
-    }
-}
-
-enum NetWorthDay {
-    static func parts(_ text: String) -> (year: Int, month: Int, day: Int)? {
-        let value = String(text.prefix(10))
-        let pieces = value.split(separator: "-", omittingEmptySubsequences: false)
-        guard pieces.count == 3, pieces[0].count == 4, pieces[1].count == 2, pieces[2].count == 2,
-            let year = Int(pieces[0]), let month = Int(pieces[1]), let day = Int(pieces[2]),
-            DateComponents(year: year, month: month, day: day).isValidDate(in: Calendar(identifier: .gregorian))
-        else { return nil }
-        return (year, month, day)
+        return snapshots.filter { $0.date.description >= key }
     }
 }
 
 public struct NetWorthTableRow: Identifiable, Equatable, Sendable {
     public let snapshot: OpenAPI.NetWorthSnapshot
     public let change: Decimal?
-    public var id: String { snapshot.date }
+    public var id: String { snapshot.date.description }
     public func rawValue(_ key: String) -> TableRawValue {
         switch key {
-        case "date": .text(snapshot.date)
+        case "date": .text(snapshot.date.description)
         case "liquid": .number(snapshot.liquid)
         case "liabilities": .number(snapshot.liabilities)
         case "investments": .number(snapshot.investments)

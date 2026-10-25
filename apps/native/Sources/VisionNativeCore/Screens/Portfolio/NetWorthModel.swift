@@ -211,7 +211,7 @@ public final class NetWorthModel {
             guard token == revision, !Task.isCancelled else { return }
             guard value.current.currency == currency else { throw APIError.invalidRequest("Wrong net worth currency") }
             data = value
-            snapshots = value.snapshots.compactMap(Self.normalize)
+            snapshots = value.snapshots
             error = nil
         } catch { if token == revision, !Task.isCancelled { self.error = error.localizedDescription } }
     }
@@ -260,7 +260,7 @@ public final class NetWorthModel {
                 value.snapshotsOffset == offset, let limit = value.snapshotsLimit, limit > 0,
                 !value.snapshots.isEmpty || offset >= total
             else { throw APIError.invalidRequest("Incomplete net worth snapshot page") }
-            let rows = value.snapshots.compactMap(Self.normalize)
+            let rows = value.snapshots
             if initial { tableSnapshots = [] }
             var known = Set(tableSnapshots.map(\.date))
             tableSnapshots += rows.filter { known.insert($0.date).inserted }
@@ -268,12 +268,5 @@ public final class NetWorthModel {
             tableTotal = total
             tableError = nil
         } catch { if token == revision, !Task.isCancelled { tableError = error.localizedDescription } }
-    }
-    private static func normalize(_ snapshot: OpenAPI.NetWorthSnapshot) -> OpenAPI.NetWorthSnapshot? {
-        let day = String(snapshot.date.prefix(10))
-        guard NetWorthDay.parts(day) != nil else { return nil }
-        return .init(
-            date: day, liquid: snapshot.liquid, liabilities: snapshot.liabilities, investments: snapshot.investments,
-            netWorth: snapshot.netWorth)
     }
 }

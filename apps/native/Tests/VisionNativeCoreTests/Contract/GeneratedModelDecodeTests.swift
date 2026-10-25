@@ -9,8 +9,9 @@ import Testing
 // One fixture-driven decode test per generated OpenAPI model (WP-4). Each schema has a
 // minimal (`.min`) and a maximal (`.max`) JSON sample under `Fixtures/api`; the test decodes
 // the sample into `OpenAPI.<Schema>`, encodes it again and compares the two as JSON values.
-// Dates are still wire strings, so there is no malformed-date case, and identifiers accept
-// any integer, so there is no id-0 case.
+// Calendar days (`CalendarDay`) and timestamps (`Instant`) are typed, so the tests below also
+// pin a malformed day and a zone-less timestamp; identifiers accept any integer, so there is
+// no id-0 case.
 
 /// One generated model: decodes JSON bytes into it and encodes the value back.
 struct GeneratedModelDecoder: Sendable {
@@ -105,7 +106,7 @@ struct GeneratedModelDecodeTests {
 
     @Test("Every generated model has a fixture case")
     func everyModelHasACase() {
-        #expect(GeneratedModelDecoder.all.count == 261)
+        #expect(GeneratedModelDecoder.all.count == 262)
     }
 
     @Test("Only three capital letters decode as a currency code")
@@ -130,6 +131,33 @@ struct GeneratedModelDecodeTests {
         let data = try GeneratedFixtures.data("Account", "max")
         let bad = try GeneratedFixtures.replacing(data, key: "id", with: .string("abc"))
         #expect(throws: DecodingError.self) { try JSONDecoder().decode(OpenAPI.Account.self, from: bad) }
+    }
+
+    @Test("A calendar day that does not exist is a decoding error")
+    func impossibleCalendarDayThrows() throws {
+        let data = try GeneratedFixtures.data("Account", "max")
+        for text in ["2024-02-30", "2023-02-29", "2024-13-01", "2024-1-5", "15/01/2024", "2024-01-15T10:30:00Z", ""] {
+            let bad = try GeneratedFixtures.replacing(data, key: "anchor_date", with: .string(text))
+            #expect(throws: DecodingError.self) { try JSONDecoder().decode(OpenAPI.Account.self, from: bad) }
+        }
+        let leap = try GeneratedFixtures.replacing(data, key: "anchor_date", with: .string("2024-02-29"))
+        _ = try JSONDecoder().decode(OpenAPI.Account.self, from: leap)
+    }
+
+    @Test("A timestamp without a zone or with a bad time is a decoding error")
+    func malformedInstantThrows() throws {
+        let data = try GeneratedFixtures.data("Account", "max")
+        for text in ["2024-01-15T10:30:00", "2024-01-15", "2024-01-15T25:00:00Z", "2024-02-30T10:30:00Z", "yesterday", ""] {
+            let bad = try GeneratedFixtures.replacing(data, key: "closed_at", with: .string(text))
+            #expect(throws: DecodingError.self) { try JSONDecoder().decode(OpenAPI.Account.self, from: bad) }
+        }
+        // The text a value was read from is what is written back.
+        for text in ["2024-01-15T10:30:00Z", "2024-01-15T10:30:00.123456+00:00", "2024-01-15T12:30:00+02:00"] {
+            let good = try GeneratedFixtures.replacing(data, key: "closed_at", with: .string(text))
+            let decoded = try JSONDecoder().decode(OpenAPI.Account.self, from: good)
+            let encoded = try JSONValue.parse(try JSONEncoder().encode(decoded))
+            #expect(encoded["closed_at"] == .string(text))
+        }
     }
 
     @Test("An enum value the client does not know decodes to unknown and encodes back")
@@ -266,6 +294,7 @@ extension GeneratedModelDecoder {
         GeneratedModelDecoder(name: "BulkSplitResult") { try GeneratedModelCodec.roundTrip(OpenAPI.BulkSplitResult.self, $0) },
         GeneratedModelDecoder(name: "BulkTagRequest") { try GeneratedModelCodec.roundTrip(OpenAPI.BulkTagRequest.self, $0) },
         GeneratedModelDecoder(name: "BulkTagResult") { try GeneratedModelCodec.roundTrip(OpenAPI.BulkTagResult.self, $0) },
+        GeneratedModelDecoder(name: "BulkTransactionFilter") { try GeneratedModelCodec.roundTrip(OpenAPI.BulkTransactionFilter.self, $0) },
         GeneratedModelDecoder(name: "CashForecastInsight") { try GeneratedModelCodec.roundTrip(OpenAPI.CashForecastInsight.self, $0) },
         GeneratedModelDecoder(name: "Category") { try GeneratedModelCodec.roundTrip(OpenAPI.Category.self, $0) },
         GeneratedModelDecoder(name: "CategoryCreate") { try GeneratedModelCodec.roundTrip(OpenAPI.CategoryCreate.self, $0) },

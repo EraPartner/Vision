@@ -170,7 +170,7 @@ public final class StatisticsModel {
                 let raw = try await visibility
                 guard token == revision, !Task.isCancelled else { return }
                 if !widgetSavePending, widgetToken == widgetRevision {
-                    widgetBaseline = raw.expected
+                    widgetBaseline = raw.expected.json
                     widgets = InsightWidgetVisibility(raw.value)
                     widgetsLoaded = true
                     widgetError = nil
@@ -289,7 +289,7 @@ public final class StatisticsModel {
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
-            widgetBaseline = saved.expected
+            widgetBaseline = saved.expected.json
             widgets = InsightWidgetVisibility(saved.value)
         } catch {
             widgets = old

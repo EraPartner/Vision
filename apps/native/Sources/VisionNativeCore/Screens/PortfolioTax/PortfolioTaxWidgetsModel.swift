@@ -43,7 +43,7 @@ public final class PortfolioTaxWidgetsModel {
             guard token == revision, !Task.isCancelled else { return }
             try validate(record)
             visibility = InsightWidgetVisibility(record.value)
-            baseline = record.expected
+            baseline = record.expected.json
             isLoaded = true
             error = nil
         } catch {
@@ -78,7 +78,7 @@ public final class PortfolioTaxWidgetsModel {
         do {
             let record = try await service.savePortfolioTaxWidgets(value: visibility.json, expected: baseline)
             try validate(record)
-            baseline = record.expected
+            baseline = record.expected.json
             visibility = InsightWidgetVisibility(record.value)
         } catch {
             visibility = previous
@@ -87,7 +87,7 @@ public final class PortfolioTaxWidgetsModel {
     }
     private func validate(_ record: OpenAPI.Setting) throws {
         guard record.key == Self.settingsKey.rawValue, InsightWidgetVisibility.isValidSetting(record.value),
-            let fields = record.expected.objectValue, let exists = fields["exists"]?.boolValue,
+            let fields = record.expected.json.objectValue, let exists = fields["exists"]?.boolValue,
             Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
         else {
             throw APIError.contract(

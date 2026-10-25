@@ -178,7 +178,7 @@ public final class PlannedRecurringModel {
         let local = store.load()
         do {
             let setting = try await service.setting(key: PlannedDismissalStore.settingKey)
-            baseline = setting.expected
+            baseline = setting.expected.json
             let merged = Self.merge(local, PlannedDismissalStore.ids(setting.value))
             dismissed = Set(merged)
             store.save(merged)

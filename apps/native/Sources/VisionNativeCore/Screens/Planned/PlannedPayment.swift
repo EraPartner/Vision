@@ -67,8 +67,7 @@ public struct PlannedPayment: Equatable, Sendable, Identifiable {
         name = Self.nonEmpty(wire.memo) ?? Self.nonEmpty(wire.recipientName) ?? "Unnamed payment"
         amount = wire.amount
         currency = wire.currency ?? defaultCurrency
-        let date = wire.plannedDate
-        dueDate = date.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? date
+        dueDate = wire.plannedDate.description
         isRecurring = wire.isRecurring
         let recurrence = Self.recurrence(wire.recurrencePattern)
         frequency = wire.isRecurring ? recurrence.frequency : nil
@@ -79,7 +78,7 @@ public struct PlannedPayment: Equatable, Sendable, Identifiable {
         category = wire.categoryName
         url = wire.url
         isExecuted = wire.isExecuted
-        lastExecutedDate = wire.lastExecutedDate
+        lastExecutedDate = wire.lastExecutedDate?.description
         executedTransactionId = wire.executedTransactionId
         executionCount = wire.executionCount
         executions = wire.executions ?? []

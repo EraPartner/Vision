@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   ALLOW_LIST,
+  dateKind,
   generateAPI,
   identifierStem,
   isCurrencyField,
@@ -86,6 +87,31 @@ const FORMAT_SAMPLES: Record<string, string> = {
   email: "user@example.com",
   time: "10:30:00",
 };
+
+/** A real `YYYY-MM-DD` day, as Swift's CalendarDay reads it. */
+function isCalendarDay(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(2000, month - 1, day));
+  date.setUTCFullYear(year);
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+/** ISO 8601 date and time with a zone, as Swift's Instant reads it. */
+function isInstantText(text: string): boolean {
+  const match =
+    /^(\d{4}-\d{2}-\d{2})[Tt ]([01]\d|2[0-3]):[0-5]\d(:[0-5]\d([.,]\d+)?)?(Z|z|[+-]([01]\d|2[0-3])(:?[0-5]\d)?)$/.exec(
+      text,
+    );
+  return match !== null && isCalendarDay(match[1]!);
+}
 
 class Sampler {
   private readonly schemas: Record<string, Schema>;
@@ -179,7 +205,10 @@ class Sampler {
       case "number":
         return this.number(schema, false);
       case "boolean":
-        return true;
+        // A one-value boolean enum is a union's discriminator (`exists: false`).
+        return Array.isArray(schema.enum) && typeof schema.enum[0] === "boolean"
+          ? schema.enum[0]
+          : true;
       case "array": {
         const minItems =
           typeof schema.minItems === "number" ? schema.minItems : 0;
@@ -252,6 +281,15 @@ class Sampler {
         : (values[0] ?? "");
     // The Swift decoder rejects anything but three capital letters here.
     if (isCurrencyField(wire, schema)) return "EUR";
+    // CalendarDay and Instant reject text that is not a real day / a timestamp with a zone, so an
+    // `example` is used only when it is one.
+    const kind = dateKind(schema);
+    if (kind === "date")
+      return example !== undefined && isCalendarDay(example) ? example : FORMAT_SAMPLES.date!;
+    if (kind === "date-time")
+      return example !== undefined && isInstantText(example)
+        ? example
+        : FORMAT_SAMPLES["date-time"]!;
     if (example !== undefined) return example;
     const pattern = typeof schema.pattern === "string" ? schema.pattern : undefined;
     if (pattern !== undefined) {
@@ -294,7 +332,13 @@ export interface GeneratedFixtures {
 
 function swiftTest(
   names: string[],
-  negatives: { currency?: [string, string]; id?: [string, string]; enumName?: string },
+  negatives: {
+    currency?: [string, string];
+    id?: [string, string];
+    enumName?: string;
+    day?: [string, string];
+    instant?: [string, string];
+  },
 ): string {
   const lines: string[] = [
     generatedHeader(SOURCE, COMMAND),
@@ -306,8 +350,9 @@ function swiftTest(
     "// One fixture-driven decode test per generated OpenAPI model (WP-4). Each schema has a",
     "// minimal (`.min`) and a maximal (`.max`) JSON sample under `Fixtures/api`; the test decodes",
     "// the sample into `OpenAPI.<Schema>`, encodes it again and compares the two as JSON values.",
-    "// Dates are still wire strings, so there is no malformed-date case, and identifiers accept",
-    "// any integer, so there is no id-0 case.",
+    "// Calendar days (`CalendarDay`) and timestamps (`Instant`) are typed, so the tests below also",
+    "// pin a malformed day and a zone-less timestamp; identifiers accept any integer, so there is",
+    "// no id-0 case.",
     "",
     "/// One generated model: decodes JSON bytes into it and encodes the value back.",
     "struct GeneratedModelDecoder: Sendable {",
@@ -439,6 +484,43 @@ function swiftTest(
       "    }",
     );
   }
+  if (negatives.day) {
+    const [schema, key] = negatives.day;
+    lines.push(
+      "",
+      '    @Test("A calendar day that does not exist is a decoding error")',
+      "    func impossibleCalendarDayThrows() throws {",
+      `        let data = try GeneratedFixtures.data(${swiftString(schema)}, "max")`,
+      '        for text in ["2024-02-30", "2023-02-29", "2024-13-01", "2024-1-5", "15/01/2024", "2024-01-15T10:30:00Z", ""] {',
+      `            let bad = try GeneratedFixtures.replacing(data, key: ${swiftString(key)}, with: .string(text))`,
+      `            #expect(throws: DecodingError.self) { try JSONDecoder().decode(OpenAPI.${schema}.self, from: bad) }`,
+      "        }",
+      `        let leap = try GeneratedFixtures.replacing(data, key: ${swiftString(key)}, with: .string("2024-02-29"))`,
+      `        _ = try JSONDecoder().decode(OpenAPI.${schema}.self, from: leap)`,
+      "    }",
+    );
+  }
+  if (negatives.instant) {
+    const [schema, key] = negatives.instant;
+    lines.push(
+      "",
+      '    @Test("A timestamp without a zone or with a bad time is a decoding error")',
+      "    func malformedInstantThrows() throws {",
+      `        let data = try GeneratedFixtures.data(${swiftString(schema)}, "max")`,
+      '        for text in ["2024-01-15T10:30:00", "2024-01-15", "2024-01-15T25:00:00Z", "2024-02-30T10:30:00Z", "yesterday", ""] {',
+      `            let bad = try GeneratedFixtures.replacing(data, key: ${swiftString(key)}, with: .string(text))`,
+      `            #expect(throws: DecodingError.self) { try JSONDecoder().decode(OpenAPI.${schema}.self, from: bad) }`,
+      "        }",
+      "        // The text a value was read from is what is written back.",
+      '        for text in ["2024-01-15T10:30:00Z", "2024-01-15T10:30:00.123456+00:00", "2024-01-15T12:30:00+02:00"] {',
+      `            let good = try GeneratedFixtures.replacing(data, key: ${swiftString(key)}, with: .string(text))`,
+      `            let decoded = try JSONDecoder().decode(OpenAPI.${schema}.self, from: good)`,
+      "            let encoded = try JSONValue.parse(try JSONEncoder().encode(decoded))",
+      `            #expect(encoded[${swiftString(key)}] == .string(text))`,
+      "        }",
+      "    }",
+    );
+  }
   if (negatives.enumName) {
     lines.push(
       "",
@@ -542,6 +624,10 @@ export function generateFixtures(
         negatives.currency = [name, wire];
       if (negatives.id === undefined && wire === "id" && raw.type === "integer")
         negatives.id = [name, wire];
+      const kind = dateKind(raw);
+      if (kind === "date" && negatives.day === undefined) negatives.day = [name, wire];
+      if (kind === "date-time" && negatives.instant === undefined)
+        negatives.instant = [name, wire];
     }
   }
   files.set(TEST_FILE, swiftTest(generated.schemas, negatives));

@@ -201,7 +201,7 @@ public final class TaxProfileModel {
                         records = try patch.settings.map { key, value in
                             let json = try JSONDecoder().decode(JSONValue.self, from: APIBody.encode(value))
                             return OpenAPI.Setting(
-                                key: key, value: json, expected: .object(["exists": .bool(true), "value": json]))
+                                key: key, value: json, expected: .existsTrue(.init(exists: true, value: json)))
                         }
                         live = patch.settings[TaxYearMutation.householdKey] ?? live
                         snapshots = patch.settings[TaxYearMutation.snapshotsKey] ?? snapshots

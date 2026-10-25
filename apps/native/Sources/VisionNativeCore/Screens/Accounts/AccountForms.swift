@@ -404,9 +404,7 @@ public struct ReconcileDraft: Equatable, Sendable {
 
     /// The stored statement date of the selected currency.
     public var storedStatementDate: String? {
-        guard let raw = selectedStatement?.balanceDate else { return nil }
-        let ymd = String(raw.prefix(10))
-        return AccountDates.isYmd(ymd) ? ymd : nil
+        selectedStatement?.balanceDate.description
     }
 
     /// The date of Show transactions since: the entered reading's, else the stored one.
@@ -423,7 +421,7 @@ public struct ReconcileDraft: Equatable, Sendable {
 
     /// Set as opening balance: no statement anchor yet, and a reading or a stored statement.
     public var canBackfill: Bool {
-        let anchored = !(account.anchorDate ?? "").isEmpty
+        let anchored = account.anchorDate != nil
         let storedAvailable = reading.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedStatement != nil
         return !anchored && (canSaveReading || storedAvailable)
     }
@@ -468,8 +466,8 @@ public struct OpeningBalanceDraft: Equatable, Sendable {
         let statement = account.statementBalances?.first { $0.currency == currency }
         let prefill = statement?.balance ?? account.reconcilableBalance ?? account.computedBalance
         balance = LocaleNumber.editable(prefill, format: numberFormat)
-        if let raw = statement?.balanceDate, let day = PlannedDay(ymd: String(raw.prefix(10)), calendar: calendar) {
-            date = day
+        if let stored = statement?.balanceDate {
+            date = PlannedDay(stored)
         } else {
             date = today
         }

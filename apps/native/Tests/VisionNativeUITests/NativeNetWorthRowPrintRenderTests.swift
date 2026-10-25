@@ -257,7 +257,7 @@
             }
             let rows: [OpenAPI.NetWorthSnapshot] = (0..<36).map { index in
                 .init(
-                    date: String(format: "2026-%02d-%02d", index < 20 ? 8 : 9, index % 20 + 1),
+                    date: fixtureDay(String(format: "2026-%02d-%02d", index < 20 ? 8 : 9, index % 20 + 1)),
                     liquid: Decimal(string: "\(100 + index)123456789012.123456789012")!, liabilities: 10,
                     investments: 947, netWorth: Decimal(1000 + index))
             }

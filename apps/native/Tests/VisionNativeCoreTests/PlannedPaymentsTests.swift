@@ -113,11 +113,11 @@ enum PlannedFixture {
     }
 
     static func row(
-        id: PlannedTransactionID, name: String? = nil, date: String = "2026-10-14", amount: Decimal = -50,
+        id: PlannedTransactionID, name: String? = nil, date: CalendarDay = "2026-10-14", amount: Decimal = -50,
         currency: CurrencyCode? = "EUR",
         recipient: String? = nil, category: String? = nil, url: String? = nil, recurring: Bool = false,
         pattern: String? = nil, isLoan: Bool? = nil, loanTermMonths: Int? = nil, isExecuted: Bool = false,
-        lastExecutedDate: String? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int = 0,
+        lastExecutedDate: CalendarDay? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int = 0,
         executions: [OpenAPI.PlannedTransactionExecution]? = nil, isActive: Bool = true
     ) -> OpenAPI.PlannedTransaction {
         OpenAPI.PlannedTransaction(
@@ -145,13 +145,13 @@ enum PlannedFixture {
             updatedAt: "2026-10-12T08:00:00.000Z", links: row.links)
     }
 
-    static func execution(_ transactionId: TransactionID, _ date: String) -> OpenAPI.PlannedTransactionExecution {
+    static func execution(_ transactionId: TransactionID, _ date: CalendarDay) -> OpenAPI.PlannedTransactionExecution {
         OpenAPI.PlannedTransactionExecution(
             id: PlannedTransactionExecutionID(rawValue: transactionId.rawValue * 10), executedTransactionId: transactionId, executionDate: date)
     }
 
     static func transaction(
-        _ id: TransactionID, date: String = "2026-10-01", memo: String? = nil, recipient: String? = nil, category: String? = nil,
+        _ id: TransactionID, date: CalendarDay = "2026-10-01", memo: String? = nil, recipient: String? = nil, category: String? = nil,
         amount: Decimal = -50
     ) -> OpenAPI.Transaction {
         OpenAPI.Transaction(
@@ -221,7 +221,7 @@ enum PlannedFixture {
         let payee = PlannedFixture.payment(PlannedFixture.row(id: 2, name: "", recipient: "Landlord"))
         #expect(payee.name == "Landlord")
         let wire = OpenAPI.PlannedTransaction(
-            id: 3, plannedDate: "2026-10-14T00:00:00.000Z", amount: 5, isRecurring: false, isExecuted: false,
+            id: 3, plannedDate: "2026-10-14", amount: 5, isRecurring: false, isExecuted: false,
             executionCount: 0, isActive: true, links: [])
         let unnamed = PlannedPayment(wire, defaultCurrency: "CHF")
         #expect(unnamed.name == "Unnamed payment")
@@ -353,7 +353,6 @@ enum PlannedFixture {
             PlannedFixture.row(id: 6, name: "Cloud", date: "2026-10-19", amount: -100, currency: "USD"),
             PlannedFixture.row(id: 7, name: "Later", date: "2026-10-20", amount: -1),
             PlannedFixture.row(id: 8, name: "Past", date: "2026-10-11", amount: -1),
-            PlannedFixture.row(id: 9, name: "Broken", date: "soon", amount: -1),
         ]
         let strip = PlannedStrip(
             payments: rows.map { row in PlannedFixture.payment(row) }, today: PlannedFixture.today,

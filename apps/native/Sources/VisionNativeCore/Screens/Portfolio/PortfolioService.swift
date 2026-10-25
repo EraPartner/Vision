@@ -97,6 +97,7 @@ extension APIClient: PortfolioService {
     }
     public func savePortfolioWidgets(value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         try await send(
-            OpenAPIOperations.SaveSetting(key: "widget_visibility", body: .init(value: value, expected: expected)))
+            OpenAPIOperations.SaveSetting(
+                key: "widget_visibility", body: .init(value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }

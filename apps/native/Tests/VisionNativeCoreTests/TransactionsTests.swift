@@ -96,7 +96,7 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
         var comment = row.comment
         if let change = patch.comment { comment = change }
         let updated = TxFixture.wire(
-            id: id, date: patch.transactionDate ?? row.transactionDate, recipientId: recipientId,
+            id: id, date: patch.transactionDate.flatMap { CalendarDay($0) } ?? row.transactionDate, recipientId: recipientId,
             recipient: recipientId.flatMap { recipients[$0]?.name } ?? (recipientId == row.recipientId ? row.recipientName : nil),
             categoryId: categoryId, category: categoryId.flatMap { categoryNames[$0] }, accountId: row.accountId,
             bank: row.bankAccount, amount: patch.amount ?? row.amount, currency: patch.currency ?? row.currency,
@@ -174,7 +174,7 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     func saveSetting(key: SettingKey, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
         savedSettings.append(value)
         baselines.append(expected)
-        let saved = OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
+        let saved = OpenAPI.Setting(key: key.rawValue, value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
         stored = saved
         return saved
     }
@@ -216,10 +216,10 @@ enum TxFixture {
         id: 8, name: "Old savings", currency: "EUR", type: .savings, liquidityClass: .init(rawValue: "cash"),
         spendable: false, inNetWorth: true, taxWrapper: .none, owner: .init(rawValue: "self"),
         multiCurrencyCash: false, hasCashSleeve: false,
-        isActive: false, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        isActive: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 
     static func wire(
-        id: TransactionID, date: String = "2026-10-01", recipientId: RecipientID? = 1, recipient: String? = "Bakery",
+        id: TransactionID, date: CalendarDay = "2026-10-01", recipientId: RecipientID? = 1, recipient: String? = "Bakery",
         categoryId: CategoryID? = nil, category: String? = nil, accountId: AccountID? = 7, bank: String? = "BE00 1234",
         amount: Decimal = Decimal(string: "-4.5")!, currency: CurrencyCode? = "EUR", memo: String? = nil,
         comment: String? = nil, isActive: Bool = true, tags: [OpenAPI.TransactionTagRef] = []
@@ -236,7 +236,7 @@ enum TxFixture {
 
     static func recipient(_ id: RecipientID, _ name: String, defaultCategory: CategoryID? = nil) -> OpenAPI.Recipient {
         OpenAPI.Recipient(
-            id: id, name: name, defaultCategoryId: defaultCategory, isActive: true, createdAt: "2026-01-01", links: [])
+            id: id, name: name, defaultCategoryId: defaultCategory, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", links: [])
     }
 
     static func attachment(_ id: AttachmentID, transactionId: TransactionID, name: String, mime: String = "application/pdf")
@@ -470,7 +470,7 @@ enum TransactionsFixture {
     @Test func rowsMapTheWireAndTheColumns() {
         let labels = TransactionLabels(strings: TxFixture.strings)
         let wire = TxFixture.wire(
-            id: 3, date: "2026-10-01T00:00:00Z", recipient: nil, categoryId: nil, currency: nil, memo: "Bread",
+            id: 3, date: "2026-10-01", recipient: nil, categoryId: nil, currency: nil, memo: "Bread",
             tags: [TxFixture.tag(1, "food")])
         let row = TransactionRow(wire)
         #expect(row.day == "2026-10-01")

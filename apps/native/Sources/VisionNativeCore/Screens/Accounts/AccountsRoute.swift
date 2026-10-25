@@ -352,11 +352,7 @@ public struct AccountDrift: Equatable, Sendable {
     /// `statementYmd`: the statement date of the reconcilable currency, when it reads as a day.
     public static func statementYmd(_ account: OpenAPI.Account) -> String? {
         let currency = account.reconcilableCurrency ?? account.currency
-        guard let raw = account.statementBalances?.first(where: { $0.currency == currency })?.balanceDate else {
-            return nil
-        }
-        let ymd = String(raw.prefix(10))
-        return AccountDates.isYmd(ymd) ? ymd : nil
+        return account.statementBalances?.first(where: { $0.currency == currency })?.balanceDate.description
     }
 
     /// `isStatementStale`.
@@ -393,7 +389,7 @@ public enum AccountProvenance {
         -> String?
     {
         guard let count = account.postAnchorCount else { return nil }
-        if let anchor = account.anchorDate, !anchor.isEmpty {
+        if let anchor = account.anchorDate {
             return strings.tc(
                 "accounts.provenance.anchored", count,
                 ["date": VisionFormat.appDate(anchor, format: settings.dateFormat)])
@@ -434,7 +430,7 @@ public struct AccountLedgerRow: Equatable, Sendable, Identifiable {
 
     public init(_ wire: OpenAPI.Transaction) {
         self.init(
-            id: wire.id, date: String(wire.transactionDate.prefix(10)), recipientName: wire.recipientName,
+            id: wire.id, date: wire.transactionDate.description, recipientName: wire.recipientName,
             memo: wire.memo, categoryName: wire.categoryName, amount: wire.amount,
             currency: wire.currency ?? LedgerCurrency.eur, runningBalance: wire.runningBalance,
             balance: wire.balance)
@@ -488,7 +484,7 @@ public struct AccountPlannedRow: Equatable, Sendable, Identifiable {
 
     public init(_ wire: OpenAPI.PlannedTransaction) {
         self.init(
-            id: wire.id, date: wire.plannedDate, recipientName: wire.recipientName, memo: wire.memo, amount: wire.amount,
+            id: wire.id, date: wire.plannedDate.description, recipientName: wire.recipientName, memo: wire.memo, amount: wire.amount,
             currency: wire.currency)
     }
 

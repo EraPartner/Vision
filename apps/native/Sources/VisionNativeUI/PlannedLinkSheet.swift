@@ -234,8 +234,7 @@ struct PlannedLinkSheet: View {
     }
 
     private func recordedDate(_ transaction: OpenAPI.Transaction) -> String {
-        transaction.transactionDate.isEmpty
-            ? "—" : VisionFormat.appDate(transaction.transactionDate, format: settings.dateFormat)
+        VisionFormat.appDate(transaction.transactionDate, format: settings.dateFormat)
     }
 
     // MARK: Footer

@@ -654,8 +654,8 @@ public struct HomeView: View {
                 ? "dashboard.greetingMorning"
                 : hour < 18 ? "dashboard.greetingAfternoon" : "dashboard.greetingEvening")
     }
-    private func upcomingDay(_ date: String) -> String {
-        let day = String(date.prefix(10))
+    private func upcomingDay(_ date: CalendarDay) -> String {
+        let day = date.description
         let today = Date()
         if day == VisionFormat.appDate(today, format: .isoDate) {
             return strings.t("home.upcoming.today")

@@ -219,7 +219,7 @@ struct RebalanceModelTests {
         let center = NativeNoticeCenter(automaticExpiry: false)
         model.attachNotices(center)
         await model.load(route: NativeRoute("/portfolio/rebalance?source=plan%3Afirst")!, settings: .defaults)
-        let baseline = await service.record.expected
+        let baseline = await service.record.expected.json
         model.updateDraft { $0.name = "Updated" }
         await service.setFailure(true)
         await model.savePlan()
@@ -336,7 +336,7 @@ private actor RebalanceFixtureService: RebalanceService {
             ]),
         ])
         record = .init(
-            key: "rebalance_plans", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "rebalance_plans", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
     func setFailure(_ value: Bool) { fails = value }
     func pauseCompute() { pause = "compute" }
@@ -387,7 +387,7 @@ private actor RebalanceFixtureService: RebalanceService {
         if fails { throw APIError.network("Synthetic settings conflict") }
         let value = try JSONDecoder().decode(JSONValue.self, from: APIBody.encode(plans))
         record = .init(
-            key: "rebalance_plans", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "rebalance_plans", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
         return record
     }
 }

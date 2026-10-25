@@ -169,7 +169,7 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
         readCount += 1
         return .init(
             key: "widget_visibility", value: visibility,
-            expected: .object(["exists": .bool(true), "value": visibility]))
+            expected: .wire(.object(["exists": .bool(true), "value": visibility])))
     }
     func statisticsMonthly(_ query: StatisticsQuery) async throws -> InsightMonthlySummary {
         readCount += 1

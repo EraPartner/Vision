@@ -11,7 +11,7 @@ import VisionNativeCore
             depth: max(0, path.count - 1), isActive: active, hierarchyOnly: false, legacyCompatible: true)
     }
     private func recipient(_ id: RecipientID, _ name: String, active: Bool = true) -> OpenAPI.Recipient {
-        .init(id: id, name: name, isActive: active, createdAt: "2026-01-01", links: [])
+        .init(id: id, name: name, isActive: active, createdAt: fixtureInstant("2026-01-01T00:00:00.000Z"), links: [])
     }
 
     @Test func groupToggleChangesOnlyTheSearchFilteredSubset() {

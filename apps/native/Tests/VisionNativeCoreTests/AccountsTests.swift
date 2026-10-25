@@ -206,7 +206,7 @@ enum AccountsFixture {
         multiCurrencyCash: Bool = false, statements: [OpenAPI.Account.StatementBalancesItem]? = nil,
         parts: [OpenAPI.Account.BalancePartsItem]? = nil, incomplete: Bool? = nil, unconverted: [CurrencyCode]? = nil,
         reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil,
-        anchorDate: String? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = true
+        anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = true
     ) -> OpenAPI.Account {
         let kind = OpenAPI.Account.AccountType(rawValue: type)
         let flags = AccountTypeFlags.of(kind)
@@ -218,7 +218,7 @@ enum AccountsFixture {
             balanceParts: parts, balanceIncomplete: incomplete, unconvertedCurrencies: unconverted,
             reconcilableBalance: reconcilableBalance, reconcilableCurrency: reconcilableCurrency, drift: drift,
             anchorDate: anchorDate, postAnchorCount: postAnchorCount, hasTransactions: hasTransactions,
-            isActive: isActive, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+            isActive: isActive, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
     }
 
     static func decimal(_ text: String) -> Decimal {

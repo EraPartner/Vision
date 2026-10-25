@@ -218,7 +218,7 @@ public final class RebalanceModel {
         errorKey = nil
         noticeKey = nil
         do {
-            let saved = try await service.saveRebalancePlans(next, expected: setting.expected)
+            let saved = try await service.saveRebalancePlans(next, expected: setting.expected.json)
             self.setting = saved
             plans = try decodePlans(saved.value)
             plansTime = now()
@@ -244,7 +244,7 @@ public final class RebalanceModel {
         cancelPlansRead()
         do {
             let saved = try await service.saveRebalancePlans(
-                plans.filter { $0.id != plan.id }, expected: setting.expected)
+                plans.filter { $0.id != plan.id }, expected: setting.expected.json)
             self.setting = saved
             plans = try decodePlans(saved.value)
             plansTime = now()

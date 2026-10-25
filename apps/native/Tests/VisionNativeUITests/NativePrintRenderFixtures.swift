@@ -101,7 +101,7 @@ actor PrintNetWorthService: NetWorthService {
             let investments: Decimal = Decimal(900 + index)
             let netWorth: Decimal = Decimal(990 + index)
             let row = OpenAPI.NetWorthSnapshot(
-                date: date, liquid: 100, liabilities: 10, investments: investments, netWorth: netWorth)
+                date: fixtureDay(date), liquid: 100, liabilities: 10, investments: investments, netWorth: netWorth)
             rows.append(row)
         }
         let visible: [OpenAPI.NetWorthSnapshot]

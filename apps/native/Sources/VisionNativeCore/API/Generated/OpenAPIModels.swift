@@ -4,8 +4,9 @@
 import Foundation
 
 /// The OpenAPI component schemas the allow-listed operations use
-/// (`apps/native/openapi-operations.txt`). Dates stay the wire strings; numbers are `Decimal`; ids, currencies and
-/// string enums are typed (`OpenAPIIdentifiers.swift`, `CurrencyCode`, enums with `.unknown`).
+/// (`apps/native/openapi-operations.txt`). Calendar days are `CalendarDay` and timestamps `Instant`; numbers are
+/// `Decimal`; ids, currencies, string enums and oneOf unions are typed (`OpenAPIIdentifiers.swift`,
+/// `CurrencyCode`, enums with `.unknown`, enums with associated values).
 public enum OpenAPI {}
 
 extension OpenAPI {
@@ -61,7 +62,7 @@ extension OpenAPI {
         public let drift: Decimal?
         /// YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1
         /// provenance); absent when nothing is stamped. Only returned by the list endpoint.
-        public let anchorDate: String?
+        public let anchorDate: CalendarDay?
         /// Active ledger entries after the anchor, or all active entries when unstamped — the "{n}
         /// entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list
         /// endpoint.
@@ -71,11 +72,11 @@ extension OpenAPI {
         public let isActive: Bool
         /// Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088
         /// addendum, D5)
-        public let closedAt: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let closedAt: Instant?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: AccountID, name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode, type: AccountType, liquidityClass: LiquidityClass, spendable: Bool, inNetWorth: Bool, taxWrapper: TaxWrapper, owner: Owner, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: AccountID? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [CurrencyCode]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil, anchorDate: String? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: AccountID, name: String, displayName: String? = nil, institution: String? = nil, currency: CurrencyCode, type: AccountType, liquidityClass: LiquidityClass, spendable: Bool, inNetWorth: Bool, taxWrapper: TaxWrapper, owner: Owner, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: AccountID? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [CurrencyCode]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: CurrencyCode? = nil, drift: Decimal? = nil, anchorDate: CalendarDay? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: Instant? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.displayName = displayName
@@ -318,9 +319,9 @@ extension OpenAPI {
         public struct StatementBalancesItem: Codable, Equatable, Sendable {
             public let currency: CurrencyCode
             public let balance: Decimal
-            public let balanceDate: String
+            public let balanceDate: CalendarDay
 
-            public init(currency: CurrencyCode, balance: Decimal, balanceDate: String) {
+            public init(currency: CurrencyCode, balance: Decimal, balanceDate: CalendarDay) {
                 self.currency = currency
                 self.balance = balance
                 self.balanceDate = balanceDate
@@ -1064,10 +1065,10 @@ extension OpenAPI {
     /// Provenance of an aggregation payload (ADR-011): when it was computed and whether it came from a
     /// materialized view (`mv`), a live query (`live`) or a forecast cache (`cache`).
     public struct AggregationMeta: Codable, Equatable, Sendable {
-        public let computedAt: String
+        public let computedAt: Instant
         public let source: String
 
-        public init(computedAt: String, source: String) {
+        public init(computedAt: Instant, source: String) {
             self.computedAt = computedAt
             self.source = source
         }
@@ -1207,10 +1208,10 @@ extension OpenAPI {
         public let id: AiConversationID
         public let title: String
         public let model: String
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: AiConversationID, title: String, model: String, createdAt: String, updatedAt: String) {
+        public init(id: AiConversationID, title: String, model: String, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.title = title
             self.model = model
@@ -1444,12 +1445,12 @@ extension OpenAPI {
             public let workspaces: [WorkspacesItem]
             public let accountIds: [AccountID]?
             public let investmentIds: [InvestmentID]?
-            public let dateFrom: String?
-            public let dateTo: String?
+            public let dateFrom: CalendarDay?
+            public let dateTo: CalendarDay?
             public let currency: CurrencyCode?
             public let constraints: [String]?
 
-            public init(workspaces: [WorkspacesItem], accountIds: [AccountID]? = nil, investmentIds: [InvestmentID]? = nil, dateFrom: String? = nil, dateTo: String? = nil, currency: CurrencyCode? = nil, constraints: [String]? = nil) {
+            public init(workspaces: [WorkspacesItem], accountIds: [AccountID]? = nil, investmentIds: [InvestmentID]? = nil, dateFrom: CalendarDay? = nil, dateTo: CalendarDay? = nil, currency: CurrencyCode? = nil, constraints: [String]? = nil) {
                 self.workspaces = workspaces
                 self.accountIds = accountIds
                 self.investmentIds = investmentIds
@@ -1525,9 +1526,9 @@ extension OpenAPI {
         public let toolResult: JSONValue?
         public let toolPresentation: OpenAPI.AiToolPresentation?
         public let status: Status
-        public let createdAt: String
+        public let createdAt: Instant
 
-        public init(id: AiMessageID, conversationId: AiConversationID, role: Role, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: Status, createdAt: String) {
+        public init(id: AiMessageID, conversationId: AiConversationID, role: Role, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: Status, createdAt: Instant) {
             self.id = id
             self.conversationId = conversationId
             self.role = role
@@ -1771,14 +1772,14 @@ extension OpenAPI {
         public let threshold: String?
         public let intervalMinutes: Int
         public let cooldownMinutes: Int
-        public let nextDueAt: String
-        public let lastCheckedAt: String?
+        public let nextDueAt: Instant
+        public let lastCheckedAt: Instant?
         public let lastStatus: String?
         public let lastObservation: OpenAPI.AnalysisMonitorObservation?
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: AnalysisMonitorID, kind: Kind, title: String, enabled: Bool, savedAnalysisId: SavedAnalysisID? = nil, dossierId: ResearchDossierID? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: Operator? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: OpenAPI.AnalysisMonitorObservation? = nil, createdAt: String, updatedAt: String) {
+        public init(id: AnalysisMonitorID, kind: Kind, title: String, enabled: Bool, savedAnalysisId: SavedAnalysisID? = nil, dossierId: ResearchDossierID? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: Operator? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: Instant, lastCheckedAt: Instant? = nil, lastStatus: String? = nil, lastObservation: OpenAPI.AnalysisMonitorObservation? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.kind = kind
             self.title = title
@@ -1901,8 +1902,199 @@ extension OpenAPI {
         }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias AnalysisMonitorCreate = JSONValue
+    /// Tells its branches apart by `kind`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum AnalysisMonitorCreate: Codable, Equatable, Sendable {
+        case analysisThreshold(AnalysisThresholdVariant)
+        case dossierEvidence(DossierEvidenceVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "kind"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "analysis-threshold": self = .analysisThreshold(try AnalysisThresholdVariant(from: decoder))
+            case "dossier-evidence": self = .dossierEvidence(try DossierEvidenceVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .analysisThreshold(let value): try value.encode(to: encoder)
+            case .dossierEvidence(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct AnalysisThresholdVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let title: String
+            public let savedAnalysisId: SavedAnalysisID
+            public let fieldId: String
+            public let `operator`: Operator
+            /// Exact decimal string; never a JSON number.
+            public let threshold: String
+            public let intervalMinutes: Int?
+            public let cooldownMinutes: Int?
+
+            public init(kind: Kind, title: String, savedAnalysisId: SavedAnalysisID, fieldId: String, `operator`: Operator, threshold: String, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+                self.kind = kind
+                self.title = title
+                self.savedAnalysisId = savedAnalysisId
+                self.fieldId = fieldId
+                self.operator = `operator`
+                self.threshold = threshold
+                self.intervalMinutes = intervalMinutes
+                self.cooldownMinutes = cooldownMinutes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case title = "title"
+                case savedAnalysisId = "savedAnalysisId"
+                case fieldId = "fieldId"
+                case `operator` = "operator"
+                case threshold = "threshold"
+                case intervalMinutes = "intervalMinutes"
+                case cooldownMinutes = "cooldownMinutes"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case analysisThreshold
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.analysisThreshold]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "analysis-threshold": self = .analysisThreshold
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .analysisThreshold: return "analysis-threshold"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Operator: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case above
+                case below
+                case unknown(String)
+
+                public static var allKnownCases: [Operator] {
+                    [.above, .below]
+                }
+
+                public static var allCases: [Operator] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "above": self = .above
+                    case "below": self = .below
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .above: return "above"
+                    case .below: return "below"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct DossierEvidenceVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let title: String
+            public let dossierId: ResearchDossierID
+            public let intervalMinutes: Int?
+            public let cooldownMinutes: Int?
+
+            public init(kind: Kind, title: String, dossierId: ResearchDossierID, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+                self.kind = kind
+                self.title = title
+                self.dossierId = dossierId
+                self.intervalMinutes = intervalMinutes
+                self.cooldownMinutes = cooldownMinutes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case title = "title"
+                case dossierId = "dossierId"
+                case intervalMinutes = "intervalMinutes"
+                case cooldownMinutes = "cooldownMinutes"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case dossierEvidence
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.dossierEvidence]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "dossier-evidence": self = .dossierEvidence
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .dossierEvidence: return "dossier-evidence"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct AnalysisMonitorEnvelope: Codable, Equatable, Sendable {
         public let ok: Bool
@@ -1971,10 +2163,10 @@ extension OpenAPI {
         public let reason: String
         public let previousValue: String?
         public let currentValue: String?
-        public let createdAt: String
-        public let readAt: String?
+        public let createdAt: Instant
+        public let readAt: Instant?
 
-        public init(id: AnalysisMonitorNotificationID, monitorId: AnalysisMonitorID, observationId: AnalysisMonitorObservationID, kind: Kind, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: String, readAt: String? = nil) {
+        public init(id: AnalysisMonitorNotificationID, monitorId: AnalysisMonitorID, observationId: AnalysisMonitorObservationID, kind: Kind, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: Instant, readAt: Instant? = nil) {
             self.id = id
             self.monitorId = monitorId
             self.observationId = observationId
@@ -2117,9 +2309,9 @@ extension OpenAPI {
         public let coverage: Coverage
         public let reasonCode: String
         public let reason: String
-        public let checkedAt: String
+        public let checkedAt: Instant
 
-        public init(id: AnalysisMonitorObservationID, monitorId: AnalysisMonitorID, status: Status, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: AnalysisRunID? = nil, historicalAnalysisRunId: AnalysisRunID? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+        public init(id: AnalysisMonitorObservationID, monitorId: AnalysisMonitorID, status: Status, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: AnalysisRunID? = nil, historicalAnalysisRunId: AnalysisRunID? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: Instant) {
             self.id = id
             self.monitorId = monitorId
             self.status = status
@@ -2387,15 +2579,149 @@ extension OpenAPI {
         }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias AnalysisQuerySpec = JSONValue
+    /// Tells its branches apart by `mode`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum AnalysisQuerySpec: Codable, Equatable, Sendable {
+        case visual(VisualVariant)
+        case sql(SqlVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "mode"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "visual": self = .visual(try VisualVariant(from: decoder))
+            case "sql": self = .sql(try SqlVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .visual(let value): try value.encode(to: encoder)
+            case .sql(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct VisualVariant: Codable, Equatable, Sendable {
+            public let mode: Mode
+            public let plan: OpenAPI.AnalysisVisualPlan
+
+            public init(mode: Mode, plan: OpenAPI.AnalysisVisualPlan) {
+                self.mode = mode
+                self.plan = plan
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case mode = "mode"
+                case plan = "plan"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case visual
+                case unknown(String)
+
+                public static var allKnownCases: [Mode] {
+                    [.visual]
+                }
+
+                public static var allCases: [Mode] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "visual": self = .visual
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .visual: return "visual"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct SqlVariant: Codable, Equatable, Sendable {
+            public let mode: Mode
+            public let sql: String
+            public let datasetIds: [String]
+            public let columns: [OpenAPI.AnalysisColumnRef]?
+            public let visualOrigin: OpenAPI.AnalysisVisualPlan?
+
+            public init(mode: Mode, sql: String, datasetIds: [String], columns: [OpenAPI.AnalysisColumnRef]? = nil, visualOrigin: OpenAPI.AnalysisVisualPlan? = nil) {
+                self.mode = mode
+                self.sql = sql
+                self.datasetIds = datasetIds
+                self.columns = columns
+                self.visualOrigin = visualOrigin
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case mode = "mode"
+                case sql = "sql"
+                case datasetIds = "datasetIds"
+                case columns = "columns"
+                case visualOrigin = "visualOrigin"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case sql
+                case unknown(String)
+
+                public static var allKnownCases: [Mode] {
+                    [.sql]
+                }
+
+                public static var allCases: [Mode] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "sql": self = .sql
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .sql: return "sql"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct AnalysisVisualFilter: Codable, Equatable, Sendable {
         public let fieldId: String
         public let `operator`: String
-        public let value: JSONValue?
+        public let value: Value?
 
-        public init(fieldId: String, `operator`: String, value: JSONValue? = nil) {
+        public init(fieldId: String, `operator`: String, value: Value? = nil) {
             self.fieldId = fieldId
             self.operator = `operator`
             self.value = value
@@ -2405,6 +2731,43 @@ extension OpenAPI {
             case fieldId = "fieldId"
             case `operator` = "operator"
             case value = "value"
+        }
+
+        /// One of string, number, boolean; decoded by its JSON type.
+        public enum Value: Codable, Equatable, Sendable {
+            case boolean(Bool)
+            case number(Decimal)
+            case string(String)
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(Bool.self) {
+                    self = .boolean(value)
+                    return
+                }
+                if let value = try? container.decode(Decimal.self) {
+                    self = .number(value)
+                    return
+                }
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    Value.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected string or number or boolean."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .boolean(let value): try container.encode(value)
+                case .number(let value): try container.encode(value)
+                case .string(let value): try container.encode(value)
+                }
+            }
         }
     }
 
@@ -2593,9 +2956,9 @@ extension OpenAPI {
         public let storedPath: String
         public let mimeType: String
         public let sizeBytes: Int
-        public let createdAt: String
+        public let createdAt: Instant
 
-        public init(id: AttachmentID, transactionId: TransactionID, filename: String, storedPath: String, mimeType: String, sizeBytes: Int, createdAt: String) {
+        public init(id: AttachmentID, transactionId: TransactionID, filename: String, storedPath: String, mimeType: String, sizeBytes: Int, createdAt: Instant) {
             self.id = id
             self.transactionId = transactionId
             self.filename = filename
@@ -5059,15 +5422,15 @@ extension OpenAPI {
         public let grossIncome: Decimal
         public let netProfessionalIncome: Decimal?
         public let pensionKind: PensionKind?
-        public let startDate: String?
-        public let endDate: String?
+        public let startDate: CalendarDay?
+        public let endDate: CalendarDay?
         public let selfEmployedOccupation: SelfEmployedOccupation?
         public let socialContributionsPaid: Decimal?
         public let withholdingTax: Decimal?
         public let prepayments: Decimal?
         public let sourceRefs: [String]?
 
-        public init(id: TaxPartnerActivityID, kind: Kind, label: String? = nil, grossIncome: Decimal, netProfessionalIncome: Decimal? = nil, pensionKind: PensionKind? = nil, startDate: String? = nil, endDate: String? = nil, selfEmployedOccupation: SelfEmployedOccupation? = nil, socialContributionsPaid: Decimal? = nil, withholdingTax: Decimal? = nil, prepayments: Decimal? = nil, sourceRefs: [String]? = nil) {
+        public init(id: TaxPartnerActivityID, kind: Kind, label: String? = nil, grossIncome: Decimal, netProfessionalIncome: Decimal? = nil, pensionKind: PensionKind? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, selfEmployedOccupation: SelfEmployedOccupation? = nil, socialContributionsPaid: Decimal? = nil, withholdingTax: Decimal? = nil, prepayments: Decimal? = nil, sourceRefs: [String]? = nil) {
             self.id = id
             self.kind = kind
             self.label = label
@@ -5398,10 +5761,10 @@ extension OpenAPI {
     public struct BelgianTaxInputRelationshipEvent: Codable, Equatable, Sendable {
         public let id: TaxRelationshipEventID
         public let kind: Kind
-        public let date: String
+        public let date: CalendarDay
         public let partnerId: PartnerId?
 
-        public init(id: TaxRelationshipEventID, kind: Kind, date: String, partnerId: PartnerId? = nil) {
+        public init(id: TaxRelationshipEventID, kind: Kind, date: CalendarDay, partnerId: PartnerId? = nil) {
             self.id = id
             self.kind = kind
             self.date = date
@@ -6033,8 +6396,67 @@ extension OpenAPI {
 
     /// Selects transactions to act on. Explicit-id mode accepts only `ids`. Filter mode requires both
     /// `filter` and the `expected_count` shown when the user confirmed the action.
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias BulkSelection = JSONValue
+    /// Tells its branches apart by which of `ids`, `filter` is present.
+    public enum BulkSelection: Codable, Equatable, Sendable {
+        case ids(IdsVariant)
+        case filter(FilterVariant)
+
+        private enum ProbeKey: String, CodingKey {
+            case ids = "ids"
+            case filter = "filter"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: ProbeKey.self)
+            if probe.contains(.ids) {
+                self = .ids(try IdsVariant(from: decoder))
+                return
+            }
+            if probe.contains(.filter) {
+                self = .filter(try FilterVariant(from: decoder))
+                return
+            }
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "No variant of BulkSelection matches (needs ids or filter)."))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .ids(let value): try value.encode(to: encoder)
+            case .filter(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct IdsVariant: Codable, Equatable, Sendable {
+            public let ids: [Int]
+
+            public init(ids: [Int]) {
+                self.ids = ids
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case ids = "ids"
+            }
+        }
+
+        public struct FilterVariant: Codable, Equatable, Sendable {
+            public let filter: OpenAPI.BulkTransactionFilter
+            /// Count shown when the user confirmed the action.
+            public let expectedCount: Int
+
+            public init(filter: OpenAPI.BulkTransactionFilter, expectedCount: Int) {
+                self.filter = filter
+                self.expectedCount = expectedCount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case filter = "filter"
+                case expectedCount = "expected_count"
+            }
+        }
+    }
 
     public struct BulkSplitResult: Codable, Equatable, Sendable {
         public let requested: Int
@@ -6096,6 +6518,157 @@ extension OpenAPI {
             case added = "added"
             case removed = "removed"
             case transactionsAffected = "transactions_affected"
+        }
+    }
+
+    /// Filter-mode selector. Every field is validated and an unknown key, a wrong type or a malformed
+    /// value rejects the whole request with a 400 — these endpoints include a hard DELETE, and a filter
+    /// field that was skipped rather than rejected made the action cover a WIDER set of rows than the
+    /// caller named. Absent, `null` and empty (`""`, `[]`) still mean "no filter on this field". Each
+    /// field also accepts its camelCase spelling, but not both spellings at once.
+    public struct BulkTransactionFilter: Codable, Equatable, Sendable {
+        public let transactionId: TransactionID?
+        public let startDate: CalendarDay?
+        public let endDate: CalendarDay?
+        public let accountId: AccountID?
+        /// Substring match on the account name
+        public let bankAccount: String?
+        /// Exact account names. Must be an array, not a comma string.
+        public let bankAccounts: [String]?
+        public let categoryId: CategoryID?
+        /// Must be an array of integers, not a comma string.
+        public let categoryIds: [Int]?
+        /// Defaults to false. When true, selects the uncategorised queue the list endpoint's
+        /// `uncategorised=true` returns: active rows whose effective category is empty. `active`,
+        /// `category_id` and `category_ids` are then ignored.
+        public let uncategorised: Bool?
+        public let recipientId: RecipientID?
+        public let recipientGroupId: RecipientGroupID?
+        public let recipientName: String?
+        public let search: String?
+        /// Defaults to true (active rows only) when omitted.
+        public let active: Bool?
+        public let transactionType: TransactionType?
+        public let amountMin: Decimal?
+        public let amountMax: Decimal?
+        /// Defaults to false, comparing amount_min/amount_max against |amount|; true compares against
+        /// the signed amount.
+        public let amountSigned: Bool?
+        /// Tag slugs, as an array or a comma-separated string.
+        public let tags: Tags?
+
+        public init(transactionId: TransactionID? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, accountId: AccountID? = nil, bankAccount: String? = nil, bankAccounts: [String]? = nil, categoryId: CategoryID? = nil, categoryIds: [Int]? = nil, uncategorised: Bool? = nil, recipientId: RecipientID? = nil, recipientGroupId: RecipientGroupID? = nil, recipientName: String? = nil, search: String? = nil, active: Bool? = nil, transactionType: TransactionType? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil, tags: Tags? = nil) {
+            self.transactionId = transactionId
+            self.startDate = startDate
+            self.endDate = endDate
+            self.accountId = accountId
+            self.bankAccount = bankAccount
+            self.bankAccounts = bankAccounts
+            self.categoryId = categoryId
+            self.categoryIds = categoryIds
+            self.uncategorised = uncategorised
+            self.recipientId = recipientId
+            self.recipientGroupId = recipientGroupId
+            self.recipientName = recipientName
+            self.search = search
+            self.active = active
+            self.transactionType = transactionType
+            self.amountMin = amountMin
+            self.amountMax = amountMax
+            self.amountSigned = amountSigned
+            self.tags = tags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case transactionId = "transaction_id"
+            case startDate = "start_date"
+            case endDate = "end_date"
+            case accountId = "account_id"
+            case bankAccount = "bank_account"
+            case bankAccounts = "bank_accounts"
+            case categoryId = "category_id"
+            case categoryIds = "category_ids"
+            case uncategorised = "uncategorised"
+            case recipientId = "recipient_id"
+            case recipientGroupId = "recipient_group_id"
+            case recipientName = "recipient_name"
+            case search = "search"
+            case active = "active"
+            case transactionType = "transaction_type"
+            case amountMin = "amount_min"
+            case amountMax = "amount_max"
+            case amountSigned = "amount_signed"
+            case tags = "tags"
+        }
+
+        /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+        public enum TransactionType: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+            case income
+            case expense
+            case unknown(String)
+
+            public static var allKnownCases: [TransactionType] {
+                [.income, .expense]
+            }
+
+            public static var allCases: [TransactionType] { allKnownCases }
+
+            public init(rawValue: String) {
+                switch rawValue {
+                case "income": self = .income
+                case "expense": self = .expense
+                default: self = .unknown(rawValue)
+                }
+            }
+
+            public var rawValue: String {
+                switch self {
+                case .income: return "income"
+                case .expense: return "expense"
+                case .unknown(let value): return value
+                }
+            }
+
+            public init(from decoder: any Decoder) throws {
+                self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                try container.encode(rawValue)
+            }
+        }
+
+        /// Tag slugs, as an array or a comma-separated string.
+        /// One of array, string; decoded by its JSON type.
+        public enum Tags: Codable, Equatable, Sendable {
+            case string(String)
+            case array([String])
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                if let value = try? container.decode([String].self) {
+                    self = .array(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    Tags.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected array or string."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .string(let value): try container.encode(value)
+                case .array(let value): try container.encode(value)
+                }
+            }
         }
     }
 
@@ -6177,11 +6750,11 @@ extension OpenAPI {
         public let detail: String
         public let description: String?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: CategoryID, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: CategoryID, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.general = general
             self.detail = detail
@@ -6517,10 +7090,10 @@ extension OpenAPI {
         public let id: CustomParserConfigID
         public let name: String
         public let config: OpenAPI.TransactionParserConfig
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
 
-        public init(id: CustomParserConfigID, name: String, config: OpenAPI.TransactionParserConfig, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: CustomParserConfigID, name: String, config: OpenAPI.TransactionParserConfig, createdAt: Instant? = nil, updatedAt: Instant? = nil) {
             self.id = id
             self.name = name
             self.config = config
@@ -6828,10 +7401,10 @@ extension OpenAPI {
         public let currency: CurrencyCode
         /// The value of one unit in EUR
         public let rateToEur: Decimal
-        public let rateDate: String
-        public let fetchedAt: String
+        public let rateDate: CalendarDay
+        public let fetchedAt: Instant
 
-        public init(currency: CurrencyCode, rateToEur: Decimal, rateDate: String, fetchedAt: String) {
+        public init(currency: CurrencyCode, rateToEur: Decimal, rateDate: CalendarDay, fetchedAt: Instant) {
             self.currency = currency
             self.rateToEur = rateToEur
             self.rateDate = rateDate
@@ -6854,9 +7427,9 @@ extension OpenAPI {
         public let source: Source
         /// The stored rate date is before today
         public let isStale: Bool
-        public let lastFetchedAt: String?
+        public let lastFetchedAt: Instant?
 
-        public init(totalRates: Int, rates: [OpenAPI.ExchangeRate], source: Source, isStale: Bool, lastFetchedAt: String? = nil) {
+        public init(totalRates: Int, rates: [OpenAPI.ExchangeRate], source: Source, isStale: Bool, lastFetchedAt: Instant? = nil) {
             self.totalRates = totalRates
             self.rates = rates
             self.source = source
@@ -7139,11 +7712,11 @@ extension OpenAPI {
             public let providerName: String?
             public let fileName: String
             public let sourceUrl: String?
-            public let asOfDate: String
-            public let retrievedAt: String
+            public let asOfDate: CalendarDay
+            public let retrievedAt: Instant
             public let license: License
 
-            public init(kind: Kind, providerName: String? = nil, fileName: String, sourceUrl: String? = nil, asOfDate: String, retrievedAt: String, license: License) {
+            public init(kind: Kind, providerName: String? = nil, fileName: String, sourceUrl: String? = nil, asOfDate: CalendarDay, retrievedAt: Instant, license: License) {
                 self.kind = kind
                 self.providerName = providerName
                 self.fileName = fileName
@@ -7368,12 +7941,12 @@ extension OpenAPI {
         }
 
         public struct Staleness: Codable, Equatable, Sendable {
-            public let evaluatedAt: String
+            public let evaluatedAt: CalendarDay
             public let maximumAgeDays: Int
             public let ageDays: Int
             public let status: Status
 
-            public init(evaluatedAt: String, maximumAgeDays: Int, ageDays: Int, status: Status) {
+            public init(evaluatedAt: CalendarDay, maximumAgeDays: Int, ageDays: Int, status: Status) {
                 self.evaluatedAt = evaluatedAt
                 self.maximumAgeDays = maximumAgeDays
                 self.ageDays = ageDays
@@ -7478,11 +8051,11 @@ extension OpenAPI {
         public let rowsDuplicate: Int
         public let rowsError: Int
         public let errorSummary: String?
-        public let startedAt: String
-        public let completedAt: String?
+        public let startedAt: Instant
+        public let completedAt: Instant?
         public let transactionsRemaining: Int
 
-        public init(id: ImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: String? = nil, customConfig: JSONValue? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil, transactionsRemaining: Int) {
+        public init(id: ImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: String? = nil, customConfig: JSONValue? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil, transactionsRemaining: Int) {
             self.id = id
             self.adapterName = adapterName
             self.sourceFilename = sourceFilename
@@ -7588,15 +8161,146 @@ extension OpenAPI {
         }
     }
 
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias InsightDismissalRequest = JSONValue
+    /// Tells its branches apart by `kind`. An unlisted value decodes to `.unknown` and encodes back unchanged.
+    public enum InsightDismissalRequest: Codable, Equatable, Sendable {
+        case subscriptionNewOrSubscriptionPriceChange(SubscriptionNewOrSubscriptionPriceChangeVariant)
+        case categoryOutlier(CategoryOutlierVariant)
+        case unknown(JSONValue)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "kind"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(String.self, forKey: .tag) {
+            case "subscription_new", "subscription_price_change": self = .subscriptionNewOrSubscriptionPriceChange(try SubscriptionNewOrSubscriptionPriceChangeVariant(from: decoder))
+            case "category_outlier": self = .categoryOutlier(try CategoryOutlierVariant(from: decoder))
+            default: self = .unknown(try JSONValue(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .subscriptionNewOrSubscriptionPriceChange(let value): try value.encode(to: encoder)
+            case .categoryOutlier(let value): try value.encode(to: encoder)
+            case .unknown(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct SubscriptionNewOrSubscriptionPriceChangeVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let recipientId: RecipientID
+
+            public init(kind: Kind, recipientId: RecipientID) {
+                self.kind = kind
+                self.recipientId = recipientId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case recipientId = "recipient_id"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case subscriptionNew
+                case subscriptionPriceChange
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.subscriptionNew, .subscriptionPriceChange]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "subscription_new": self = .subscriptionNew
+                    case "subscription_price_change": self = .subscriptionPriceChange
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .subscriptionNew: return "subscription_new"
+                    case .subscriptionPriceChange: return "subscription_price_change"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+
+        public struct CategoryOutlierVariant: Codable, Equatable, Sendable {
+            public let kind: Kind
+            public let categoryId: CategoryID
+            public let monthKey: String
+
+            public init(kind: Kind, categoryId: CategoryID, monthKey: String) {
+                self.kind = kind
+                self.categoryId = categoryId
+                self.monthKey = monthKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case categoryId = "category_id"
+                case monthKey = "month_key"
+            }
+
+            /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+            public enum Kind: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                case categoryOutlier
+                case unknown(String)
+
+                public static var allKnownCases: [Kind] {
+                    [.categoryOutlier]
+                }
+
+                public static var allCases: [Kind] { allKnownCases }
+
+                public init(rawValue: String) {
+                    switch rawValue {
+                    case "category_outlier": self = .categoryOutlier
+                    default: self = .unknown(rawValue)
+                    }
+                }
+
+                public var rawValue: String {
+                    switch self {
+                    case .categoryOutlier: return "category_outlier"
+                    case .unknown(let value): return value
+                    }
+                }
+
+                public init(from decoder: any Decoder) throws {
+                    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    try container.encode(rawValue)
+                }
+            }
+        }
+    }
 
     public struct InsightsCountData: Codable, Equatable, Sendable {
         public let count: Int?
         public let status: Status
-        public let computedAt: String?
+        public let computedAt: Instant?
 
-        public init(count: Int? = nil, status: Status, computedAt: String? = nil) {
+        public init(count: Int? = nil, status: Status, computedAt: Instant? = nil) {
             self.count = count
             self.status = status
             self.computedAt = computedAt
@@ -7810,7 +8514,7 @@ extension OpenAPI {
         public let currency: CurrencyCode
         public let currentPrice: Decimal?
         public let interestRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let cadastralIncome: Decimal?
@@ -7825,13 +8529,13 @@ extension OpenAPI {
         public let priceProviderHistoryPath: String?
         public let priceProviderHistoryTsPath: String?
         public let priceProviderHistoryPricePath: String?
-        public let priceUpdatedAt: String?
+        public let priceUpdatedAt: Instant?
         public let isActive: Bool
         public let showInTicker: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: InvestmentID, name: String, symbol: String? = nil, assetClass: OpenAPI.AssetClass, currency: CurrencyCode, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, notes: String? = nil, priceProvider: OpenAPI.PriceProvider? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, priceUpdatedAt: String? = nil, isActive: Bool, showInTicker: Bool, createdAt: String, updatedAt: String) {
+        public init(id: InvestmentID, name: String, symbol: String? = nil, assetClass: OpenAPI.AssetClass, currency: CurrencyCode, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, notes: String? = nil, priceProvider: OpenAPI.PriceProvider? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, priceUpdatedAt: Instant? = nil, isActive: Bool, showInTicker: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -7903,7 +8607,7 @@ extension OpenAPI {
         public let interestRate: Decimal?
         public let cadastralIncome: Decimal?
         public let municipalityTaxRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let notes: String?
@@ -7917,7 +8621,7 @@ extension OpenAPI {
         public let priceProviderHistoryTsPath: String?
         public let priceProviderHistoryPricePath: String?
 
-        public init(name: String, symbol: String? = nil, assetClass: String, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil) {
+        public init(name: String, symbol: String? = nil, assetClass: String, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil) {
             self.name = name
             self.symbol = symbol
             self.assetClass = assetClass
@@ -8034,7 +8738,7 @@ extension OpenAPI {
         public let interestRate: Decimal?
         public let cadastralIncome: Decimal?
         public let municipalityTaxRate: Decimal?
-        public let maturityDate: String?
+        public let maturityDate: CalendarDay?
         public let location: String?
         public let municipality: String?
         public let notes: String?
@@ -8049,9 +8753,9 @@ extension OpenAPI {
         public let priceProviderHistoryPricePath: String?
         public let isActive: Bool?
         public let showInTicker: Bool?
-        public let priceUpdatedAt: String?
+        public let priceUpdatedAt: Instant?
 
-        public init(name: String? = nil, symbol: String? = nil, assetClass: OpenAPI.AssetClass? = nil, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, isActive: Bool? = nil, showInTicker: Bool? = nil, priceUpdatedAt: String? = nil) {
+        public init(name: String? = nil, symbol: String? = nil, assetClass: OpenAPI.AssetClass? = nil, currency: CurrencyCode? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: CalendarDay? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, isActive: Bool? = nil, showInTicker: Bool? = nil, priceUpdatedAt: Instant? = nil) {
             self.name = name
             self.symbol = symbol
             self.assetClass = assetClass
@@ -8406,7 +9110,7 @@ extension OpenAPI {
     }
 
     public struct NetWorthSnapshot: Codable, Equatable, Sendable {
-        public let date: String
+        public let date: CalendarDay
         public let liquid: Decimal
         /// Σ liability-account balances (negative); split out of liquid so debt is not counted as a
         /// liquid asset (ADR-092).
@@ -8414,7 +9118,7 @@ extension OpenAPI {
         public let investments: Decimal
         public let netWorth: Decimal
 
-        public init(date: String, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
+        public init(date: CalendarDay, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
             self.date = date
             self.liquid = liquid
             self.liabilities = liabilities
@@ -8543,13 +9247,13 @@ extension OpenAPI {
 
     public struct PlannedLoanScheduleEntry: Codable, Equatable, Sendable {
         public let installmentNumber: Int
-        public let dueDate: String
+        public let dueDate: CalendarDay
         public let paymentAmount: Decimal
         public let principalAmount: Decimal
         public let interestAmount: Decimal
         public let remainingPrincipal: Decimal
 
-        public init(installmentNumber: Int, dueDate: String, paymentAmount: Decimal, principalAmount: Decimal, interestAmount: Decimal, remainingPrincipal: Decimal) {
+        public init(installmentNumber: Int, dueDate: CalendarDay, paymentAmount: Decimal, principalAmount: Decimal, interestAmount: Decimal, remainingPrincipal: Decimal) {
             self.installmentNumber = installmentNumber
             self.dueDate = dueDate
             self.paymentAmount = paymentAmount
@@ -8611,8 +9315,8 @@ extension OpenAPI {
 
     public struct PlannedTotals: Codable, Equatable, Sendable {
         public let currency: CurrencyCode
-        public let today: String
-        public let monthEnd: String
+        public let today: CalendarDay
+        public let monthEnd: CalendarDay
         public let restOfMonth: RestOfMonth
         public let monthlyEquivalent: MonthlyEquivalent
         /// Today and the seven days after it (eight entries), every recurring occurrence counted on its
@@ -8622,7 +9326,7 @@ extension OpenAPI {
         /// `rest_of_month`.
         public let nextDaysTotal: NextDaysTotal
 
-        public init(currency: CurrencyCode, today: String, monthEnd: String, restOfMonth: RestOfMonth, monthlyEquivalent: MonthlyEquivalent, nextDays: [NextDaysItem], nextDaysTotal: NextDaysTotal) {
+        public init(currency: CurrencyCode, today: CalendarDay, monthEnd: CalendarDay, restOfMonth: RestOfMonth, monthlyEquivalent: MonthlyEquivalent, nextDays: [NextDaysItem], nextDaysTotal: NextDaysTotal) {
             self.currency = currency
             self.today = today
             self.monthEnd = monthEnd
@@ -8677,13 +9381,13 @@ extension OpenAPI {
         }
 
         public struct NextDaysItem: Codable, Equatable, Sendable {
-            public let date: String
+            public let date: CalendarDay
             public let incoming: Decimal
             /// Negative or zero.
             public let outgoing: Decimal
             public let unconvertedCount: Int
 
-            public init(date: String, incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
+            public init(date: CalendarDay, incoming: Decimal, outgoing: Decimal, unconvertedCount: Int) {
                 self.date = date
                 self.incoming = incoming
                 self.outgoing = outgoing
@@ -8699,15 +9403,15 @@ extension OpenAPI {
         }
 
         public struct NextDaysTotal: Codable, Equatable, Sendable {
-            public let from: String
-            public let to: String
+            public let from: CalendarDay
+            public let to: CalendarDay
             public let incoming: Decimal
             /// Negative or zero.
             public let outgoing: Decimal
             public let net: Decimal
             public let unconvertedCount: Int
 
-            public init(from: String, to: String, incoming: Decimal, outgoing: Decimal, net: Decimal, unconvertedCount: Int) {
+            public init(from: CalendarDay, to: CalendarDay, incoming: Decimal, outgoing: Decimal, net: Decimal, unconvertedCount: Int) {
                 self.from = from
                 self.to = to
                 self.incoming = incoming
@@ -8729,7 +9433,7 @@ extension OpenAPI {
 
     public struct PlannedTransaction: Codable, Equatable, Sendable {
         public let id: PlannedTransactionID
-        public let plannedDate: String
+        public let plannedDate: CalendarDay
         /// Display name of the linked account; null or absent when account_id is null
         public let bankAccount: String?
         /// Stable linked account identity
@@ -8746,7 +9450,7 @@ extension OpenAPI {
         public let isRecurring: Bool
         public let recurrencePattern: String?
         /// Recurrence bound — the series completes once the next occurrence would fall past this date.
-        public let recurrenceEndDate: String?
+        public let recurrenceEndDate: CalendarDay?
         /// Recurrence bound — the series completes at this execution count.
         public let maxOccurrences: Int?
         public let isLoan: Bool?
@@ -8754,24 +9458,24 @@ extension OpenAPI {
         public let loanPrincipal: Decimal?
         public let loanAnnualInterestRate: Decimal?
         public let loanTermMonths: Int?
-        public let loanStartDate: String?
+        public let loanStartDate: CalendarDay?
         public let loanPaymentDay: Int?
         public let loanRegularPaymentAmount: Decimal?
-        public let loanFirstPaymentDate: String?
+        public let loanFirstPaymentDate: CalendarDay?
         public let loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]?
         public let isExecuted: Bool
-        public let lastExecutedDate: String?
+        public let lastExecutedDate: CalendarDay?
         public let executedTransactionId: TransactionID?
         public let executionCount: Int
         public let executions: [OpenAPI.PlannedTransactionExecution]?
         /// Tags attached to this planned transaction
         public let tags: [OpenAPI.TransactionTagRef]?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: PlannedTransactionID, plannedDate: String, bankAccount: String? = nil, accountId: AccountID? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: String? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: String? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: PlannedTransactionID, plannedDate: CalendarDay, bankAccount: String? = nil, accountId: AccountID? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: CalendarDay? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: CalendarDay? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: CalendarDay? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: CalendarDay? = nil, executedTransactionId: TransactionID? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.plannedDate = plannedDate
             self.bankAccount = bankAccount
@@ -8853,7 +9557,7 @@ extension OpenAPI {
     }
 
     public struct PlannedTransactionCreate: Codable, Equatable, Sendable {
-        public let plannedDate: String
+        public let plannedDate: CalendarDay
         /// Canonical account identity
         public let accountId: AccountID
         public let recipientId: RecipientID?
@@ -8866,7 +9570,7 @@ extension OpenAPI {
         public let isRecurring: Bool?
         public let recurrencePattern: String?
         /// Recurrence bound — the series completes once the next occurrence would fall past this date.
-        public let recurrenceEndDate: String?
+        public let recurrenceEndDate: CalendarDay?
         /// Recurrence bound — the series completes at this execution count.
         public let maxOccurrences: Int?
         public let isLoan: Bool?
@@ -8874,12 +9578,12 @@ extension OpenAPI {
         public let loanPrincipal: Decimal?
         public let loanAnnualInterestRate: Decimal?
         public let loanTermMonths: Int?
-        public let loanStartDate: String?
+        public let loanStartDate: CalendarDay?
         public let loanPaymentDay: Int?
         /// Tag slugs to assign
         public let tags: [String]?
 
-        public init(plannedDate: String, accountId: AccountID, recipientId: RecipientID? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+        public init(plannedDate: CalendarDay, accountId: AccountID, recipientId: RecipientID? = nil, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: CalendarDay? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: CalendarDay? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
             self.plannedDate = plannedDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -8931,10 +9635,10 @@ extension OpenAPI {
     public struct PlannedTransactionExecution: Codable, Equatable, Sendable {
         public let id: PlannedTransactionExecutionID
         public let executedTransactionId: TransactionID
-        public let executionDate: String
-        public let createdAt: String?
+        public let executionDate: CalendarDay
+        public let createdAt: Instant?
 
-        public init(id: PlannedTransactionExecutionID, executedTransactionId: TransactionID, executionDate: String, createdAt: String? = nil) {
+        public init(id: PlannedTransactionExecutionID, executedTransactionId: TransactionID, executionDate: CalendarDay, createdAt: Instant? = nil) {
             self.id = id
             self.executedTransactionId = executedTransactionId
             self.executionDate = executionDate
@@ -9247,7 +9951,7 @@ extension OpenAPI {
 
     public struct PortfolioExposure: Codable, Equatable, Sendable {
         public let currency: CurrencyCode
-        public let computedAt: String
+        public let computedAt: Instant
         public let totalValue: Decimal
         public let uncoveredValue: Decimal
         public let uncoveredWeightPercent: Decimal
@@ -9260,7 +9964,7 @@ extension OpenAPI {
         public let warnings: [JSONValue]
         public let scopeNotes: [String]
 
-        public init(currency: CurrencyCode, computedAt: String, totalValue: Decimal, uncoveredValue: Decimal, uncoveredWeightPercent: Decimal, coveredCashValue: Decimal, coveredCashWeightPercent: Decimal, fundSources: [OpenAPI.PortfolioExposureFundSource], issuer: OpenAPI.PortfolioExposureDimension, sector: OpenAPI.PortfolioExposureDimension, issuerCountry: OpenAPI.PortfolioExposureDimension, warnings: [JSONValue], scopeNotes: [String]) {
+        public init(currency: CurrencyCode, computedAt: Instant, totalValue: Decimal, uncoveredValue: Decimal, uncoveredWeightPercent: Decimal, coveredCashValue: Decimal, coveredCashWeightPercent: Decimal, fundSources: [OpenAPI.PortfolioExposureFundSource], issuer: OpenAPI.PortfolioExposureDimension, sector: OpenAPI.PortfolioExposureDimension, issuerCountry: OpenAPI.PortfolioExposureDimension, warnings: [JSONValue], scopeNotes: [String]) {
             self.currency = currency
             self.computedAt = computedAt
             self.totalValue = totalValue
@@ -9363,10 +10067,10 @@ extension OpenAPI {
         public let investmentName: String
         public let sourceFundName: String?
         public let amount: Decimal
-        public let sourceAsOfDate: String?
+        public let sourceAsOfDate: CalendarDay?
         public let stale: Bool
 
-        public init(sourceType: SourceType, investmentId: InvestmentID, investmentName: String, sourceFundName: String? = nil, amount: Decimal, sourceAsOfDate: String? = nil, stale: Bool) {
+        public init(sourceType: SourceType, investmentId: InvestmentID, investmentName: String, sourceFundName: String? = nil, amount: Decimal, sourceAsOfDate: CalendarDay? = nil, stale: Bool) {
             self.sourceType = sourceType
             self.investmentId = investmentId
             self.investmentName = investmentName
@@ -9476,14 +10180,14 @@ extension OpenAPI {
     public struct PortfolioExposureFundSource: Codable, Equatable, Sendable {
         public let investmentId: InvestmentID
         public let investmentName: String
-        public let asOfDate: String
-        public let evaluatedAt: String
+        public let asOfDate: CalendarDay
+        public let evaluatedAt: CalendarDay
         public let ageDays: Int
         public let maximumAgeDays: Int
         public let stale: Bool
         public let coverageStatus: CoverageStatus
 
-        public init(investmentId: InvestmentID, investmentName: String, asOfDate: String, evaluatedAt: String, ageDays: Int, maximumAgeDays: Int, stale: Bool, coverageStatus: CoverageStatus) {
+        public init(investmentId: InvestmentID, investmentName: String, asOfDate: CalendarDay, evaluatedAt: CalendarDay, ageDays: Int, maximumAgeDays: Int, stale: Bool, coverageStatus: CoverageStatus) {
             self.investmentId = investmentId
             self.investmentName = investmentName
             self.asOfDate = asOfDate
@@ -9555,10 +10259,10 @@ extension OpenAPI {
         public let rowsDuplicate: Int
         public let rowsError: Int
         public let errorSummary: String?
-        public let startedAt: String
-        public let completedAt: String?
+        public let startedAt: Instant
+        public let completedAt: Instant?
 
-        public init(id: PortfolioImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil) {
+        public init(id: PortfolioImportBatchID, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: Status, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: Instant, completedAt: Instant? = nil) {
             self.id = id
             self.adapterName = adapterName
             self.sourceFilename = sourceFilename
@@ -10190,10 +10894,10 @@ extension OpenAPI {
         public let id: PortfolioParserConfigID
         public let name: String
         public let config: Config
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
 
-        public init(id: PortfolioParserConfigID, name: String, config: Config, createdAt: String? = nil, updatedAt: String? = nil) {
+        public init(id: PortfolioParserConfigID, name: String, config: Config, createdAt: Instant? = nil, updatedAt: Instant? = nil) {
             self.id = id
             self.name = name
             self.config = config
@@ -10531,11 +11235,11 @@ extension OpenAPI {
 
     public struct PortfolioSummaryData: Codable, Equatable, Sendable {
         public let currency: CurrencyCode
-        public let computedAt: String
+        public let computedAt: Instant
         /// Earliest ordinary transaction on active investments, independent of selected performance
         /// chart period and investment creation dates. Custody/adjustment event dates and inactive
         /// investments are excluded. Omitted when no qualifying transaction exists.
-        public let firstInvestmentDate: String?
+        public let firstInvestmentDate: CalendarDay?
         public let totals: OpenAPI.PortfolioSummaryTotals
         /// Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote
         /// FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind
@@ -10565,7 +11269,7 @@ extension OpenAPI {
         /// remain unchanged.
         public let archivedInKindIncome: [ArchivedInKindIncomeItem]?
 
-        public init(currency: CurrencyCode, computedAt: String, firstInvestmentDate: String? = nil, totals: OpenAPI.PortfolioSummaryTotals, archivedPresentation: [OpenAPI.PortfolioSummaryItem]? = nil, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals], byAssetClass: [OpenAPI.PortfolioAssetClassTotals], byAssetGroup: [OpenAPI.PortfolioAssetGroupTotals], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
+        public init(currency: CurrencyCode, computedAt: Instant, firstInvestmentDate: CalendarDay? = nil, totals: OpenAPI.PortfolioSummaryTotals, archivedPresentation: [OpenAPI.PortfolioSummaryItem]? = nil, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals], byAssetClass: [OpenAPI.PortfolioAssetClassTotals], byAssetGroup: [OpenAPI.PortfolioAssetGroupTotals], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
             self.currency = currency
             self.computedAt = computedAt
             self.firstInvestmentDate = firstInvestmentDate
@@ -10720,8 +11424,8 @@ extension OpenAPI {
         /// Real Estate return shown per property, totalAppreciation + totalIncome − totalFees −
         /// totalTaxes, from the rounded fields.
         public let propertyReturn: Decimal?
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         /// Current units including custody fees and unit adjustments, rounded to eight decimal places.
         public let totalUnits: Decimal?
         /// Literal income already represented by acquired units, converted to the response currency.
@@ -10739,7 +11443,7 @@ extension OpenAPI {
         /// these instead of adding byAccount rows.
         public let accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]
 
-        public init(id: InvestmentID, name: String? = nil, symbol: String? = nil, asset_class: String? = nil, assetClass: String? = nil, currency: CurrencyCode? = nil, originalCurrency: CurrencyCode? = nil, summarySource: String? = nil, isActive: Bool? = nil, usedFallbackRate: Bool? = nil, gainLossPercent: Decimal? = nil, interestRate: Decimal? = nil, transactionCount: Int? = nil, currentPrice: Decimal? = nil, currentValue: Decimal? = nil, totalInvested: Decimal? = nil, totalBuyCost: Decimal? = nil, totalSellProceeds: Decimal? = nil, totalFees: Decimal? = nil, totalTaxes: Decimal? = nil, totalDividends: Decimal? = nil, totalIncome: Decimal? = nil, avgCostBasis: Decimal? = nil, realizedGain: Decimal? = nil, unrealizedGain: Decimal? = nil, totalGain: Decimal? = nil, gainLoss: Decimal? = nil, assetGain: Decimal? = nil, fxGain: Decimal? = nil, nativeCurrentValue: Decimal? = nil, accruedInterest: Decimal? = nil, projectedAnnualInterest: Decimal? = nil, totalAppreciation: Decimal? = nil, nativeCurrentPrice: Decimal? = nil, nativeAvgCostBasis: Decimal? = nil, unrealizedGainPercent: Decimal? = nil, estimatedMonthlyRent: Decimal? = nil, monthlyRent: Decimal? = nil, feesAndTaxes: Decimal? = nil, propertyReturn: Decimal? = nil, createdAt: String? = nil, updatedAt: String? = nil, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]) {
+        public init(id: InvestmentID, name: String? = nil, symbol: String? = nil, asset_class: String? = nil, assetClass: String? = nil, currency: CurrencyCode? = nil, originalCurrency: CurrencyCode? = nil, summarySource: String? = nil, isActive: Bool? = nil, usedFallbackRate: Bool? = nil, gainLossPercent: Decimal? = nil, interestRate: Decimal? = nil, transactionCount: Int? = nil, currentPrice: Decimal? = nil, currentValue: Decimal? = nil, totalInvested: Decimal? = nil, totalBuyCost: Decimal? = nil, totalSellProceeds: Decimal? = nil, totalFees: Decimal? = nil, totalTaxes: Decimal? = nil, totalDividends: Decimal? = nil, totalIncome: Decimal? = nil, avgCostBasis: Decimal? = nil, realizedGain: Decimal? = nil, unrealizedGain: Decimal? = nil, totalGain: Decimal? = nil, gainLoss: Decimal? = nil, assetGain: Decimal? = nil, fxGain: Decimal? = nil, nativeCurrentValue: Decimal? = nil, accruedInterest: Decimal? = nil, projectedAnnualInterest: Decimal? = nil, totalAppreciation: Decimal? = nil, nativeCurrentPrice: Decimal? = nil, nativeAvgCostBasis: Decimal? = nil, unrealizedGainPercent: Decimal? = nil, estimatedMonthlyRent: Decimal? = nil, monthlyRent: Decimal? = nil, feesAndTaxes: Decimal? = nil, propertyReturn: Decimal? = nil, createdAt: Instant? = nil, updatedAt: Instant? = nil, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem], accountTotals: [OpenAPI.PortfolioSummaryAccountTotals]) {
             self.id = id
             self.name = name
             self.symbol = symbol
@@ -10900,7 +11604,7 @@ extension OpenAPI {
         public let id: PortfolioTransactionID
         public let investmentId: InvestmentID
         public let type: OpenAPI.PortfolioTxnType
-        public let date: String
+        public let date: CalendarDay
         public let amount: Decimal
         public let units: Decimal?
         public let pricePerUnit: Decimal?
@@ -10926,11 +11630,11 @@ extension OpenAPI {
         public let note: String?
         public let isRecurring: Bool
         public let recurrenceInterval: OpenAPI.RecurrenceInterval?
-        public let recurrenceEndDate: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let recurrenceEndDate: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: PortfolioTransactionID, investmentId: InvestmentID, type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention, incomeRecognitionRole: IncomeRecognitionRole? = nil, currency: CurrencyCode, fxRateToEur: Decimal? = nil, accountId: AccountID? = nil, importBatchId: PortfolioImportBatchID? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: PortfolioTransactionID, investmentId: InvestmentID, type: OpenAPI.PortfolioTxnType, date: CalendarDay, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention, incomeRecognitionRole: IncomeRecognitionRole? = nil, currency: CurrencyCode, fxRateToEur: Decimal? = nil, accountId: AccountID? = nil, importBatchId: PortfolioImportBatchID? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.investmentId = investmentId
             self.type = type
@@ -11231,13 +11935,13 @@ extension OpenAPI {
         /// The provider kind: price, fx, inflation or research
         public let kind: String
         public let label: String
-        public let lastSuccessAt: String?
-        public let lastErrorAt: String?
+        public let lastSuccessAt: Instant?
+        public let lastErrorAt: Instant?
         public let lastError: String?
         public let consecutiveFailures: Int
-        public let updatedAt: String?
+        public let updatedAt: Instant?
 
-        public init(provider: String, kind: String, label: String, lastSuccessAt: String? = nil, lastErrorAt: String? = nil, lastError: String? = nil, consecutiveFailures: Int, updatedAt: String? = nil) {
+        public init(provider: String, kind: String, label: String, lastSuccessAt: Instant? = nil, lastErrorAt: Instant? = nil, lastError: String? = nil, consecutiveFailures: Int, updatedAt: Instant? = nil) {
             self.provider = provider
             self.kind = kind
             self.label = label
@@ -11286,11 +11990,11 @@ extension OpenAPI {
         public let aliasCount: Int?
         public let notes: String?
         public let isActive: Bool
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: RecipientID, name: String, primaryBankAccount: String? = nil, defaultCategoryId: CategoryID? = nil, defaultCategoryName: String? = nil, primaryRecipientId: RecipientID? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: RecipientID, name: String, primaryBankAccount: String? = nil, defaultCategoryId: CategoryID? = nil, defaultCategoryName: String? = nil, primaryRecipientId: RecipientID? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.name = name
             self.primaryBankAccount = primaryBankAccount
@@ -11375,10 +12079,10 @@ extension OpenAPI {
         public let isActive: Bool
         public let source: Source
         public let notes: String?
-        public let createdAt: String
-        public let updatedAt: String?
+        public let createdAt: Instant
+        public let updatedAt: Instant?
 
-        public init(id: RecipientPatternID, pattern: String, patternKind: PatternKind, caseSensitive: Bool, priority: Int, isActive: Bool, source: Source, notes: String? = nil, createdAt: String, updatedAt: String? = nil) {
+        public init(id: RecipientPatternID, pattern: String, patternKind: PatternKind, caseSensitive: Bool, priority: Int, isActive: Bool, source: Source, notes: String? = nil, createdAt: Instant, updatedAt: Instant? = nil) {
             self.id = id
             self.pattern = pattern
             self.patternKind = patternKind
@@ -11577,13 +12281,13 @@ extension OpenAPI {
     }
 
     public struct ResearchAnalystAction: Codable, Equatable, Sendable {
-        public let date: JSONValue?
+        public let date: ResearchAnalystActionDate?
         public let firm: String?
         public let toGrade: String?
         public let fromGrade: String?
         public let action: String?
 
-        public init(date: JSONValue? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
+        public init(date: ResearchAnalystActionDate? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
             self.date = date
             self.firm = firm
             self.toGrade = toGrade
@@ -11597,6 +12301,37 @@ extension OpenAPI {
             case toGrade = "toGrade"
             case fromGrade = "fromGrade"
             case action = "action"
+        }
+
+        /// One of string, number; decoded by its JSON type.
+        public enum ResearchAnalystActionDate: Codable, Equatable, Sendable {
+            case number(Decimal)
+            case string(String)
+
+            public init(from decoder: any Decoder) throws {
+                let container = try decoder.singleValueContainer()
+                if let value = try? container.decode(Decimal.self) {
+                    self = .number(value)
+                    return
+                }
+                if let value = try? container.decode(String.self) {
+                    self = .string(value)
+                    return
+                }
+                throw DecodingError.typeMismatch(
+                    ResearchAnalystActionDate.self,
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "Expected string or number."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                var container = encoder.singleValueContainer()
+                switch self {
+                case .number(let value): try container.encode(value)
+                case .string(let value): try container.encode(value)
+                }
+            }
         }
     }
 
@@ -11746,16 +12481,16 @@ extension OpenAPI {
         public let assumptions: [String]?
         public let openQuestions: [String]?
         public let conclusion: String?
-        public let reviewDate: String?
+        public let reviewDate: CalendarDay?
         public let evidence: [OpenAPI.ResearchDossierEvidence]?
         public let links: OpenAPI.ResearchDossierLinks?
         public let id: ResearchDossierID
         public let version: Int
         public let linkDetails: [LinkDetailsItem]
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String) {
+        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: Instant, updatedAt: Instant) {
             self.title = title
             self.workspace = workspace
             self.question = question
@@ -11840,10 +12575,10 @@ extension OpenAPI {
             public let historicalId: String
             public let labelSnapshot: String
             /// Integer for category/investment, string for saved analysis; null after deletion.
-            public let liveId: JSONValue?
+            public let liveId: LiveId?
             public let status: Status
 
-            public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: Status) {
+            public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: LiveId? = nil, status: Status) {
                 self.kind = kind
                 self.historicalId = historicalId
                 self.labelSnapshot = labelSnapshot
@@ -11900,6 +12635,38 @@ extension OpenAPI {
                 }
             }
 
+            /// Integer for category/investment, string for saved analysis; null after deletion.
+            /// One of integer, string; decoded by its JSON type.
+            public enum LiveId: Codable, Equatable, Sendable {
+                case integer(Int)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Int.self) {
+                        self = .integer(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        LiveId.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected integer or string."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .integer(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
+                }
+            }
+
             /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
             public enum Status: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
                 case live
@@ -11951,11 +12718,11 @@ extension OpenAPI {
         public let assumptions: [String]?
         public let openQuestions: [String]?
         public let conclusion: String?
-        public let reviewDate: String?
+        public let reviewDate: CalendarDay?
         public let evidence: [OpenAPI.ResearchDossierEvidence]?
         public let links: OpenAPI.ResearchDossierLinks?
 
-        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
+        public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
             self.title = title
             self.workspace = workspace
             self.question = question
@@ -12152,10 +12919,10 @@ extension OpenAPI {
 
     public struct ResearchDossierExport: Codable, Equatable, Sendable {
         public let schemaVersion: Int
-        public let exportedAt: String
+        public let exportedAt: Instant
         public let dossiers: [DossiersItem]
 
-        public init(schemaVersion: Int, exportedAt: String, dossiers: [DossiersItem]) {
+        public init(schemaVersion: Int, exportedAt: Instant, dossiers: [DossiersItem]) {
             self.schemaVersion = schemaVersion
             self.exportedAt = exportedAt
             self.dossiers = dossiers
@@ -12175,17 +12942,17 @@ extension OpenAPI {
             public let assumptions: [String]?
             public let openQuestions: [String]?
             public let conclusion: String?
-            public let reviewDate: String?
+            public let reviewDate: CalendarDay?
             public let evidence: [OpenAPI.ResearchDossierEvidence]?
             public let links: OpenAPI.ResearchDossierLinks?
             public let id: ResearchDossierID
             public let version: Int
             public let linkDetails: [LinkDetailsItem]
-            public let createdAt: String
-            public let updatedAt: String
+            public let createdAt: Instant
+            public let updatedAt: Instant
             public let versions: [OpenAPI.ResearchDossierVersion]
 
-            public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String, versions: [OpenAPI.ResearchDossierVersion]) {
+            public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: ResearchDossierID, version: Int, linkDetails: [LinkDetailsItem], createdAt: Instant, updatedAt: Instant, versions: [OpenAPI.ResearchDossierVersion]) {
                 self.title = title
                 self.workspace = workspace
                 self.question = question
@@ -12272,10 +13039,10 @@ extension OpenAPI {
                 public let historicalId: String
                 public let labelSnapshot: String
                 /// Integer for category/investment, string for saved analysis; null after deletion.
-                public let liveId: JSONValue?
+                public let liveId: LiveId?
                 public let status: Status
 
-                public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: Status) {
+                public init(kind: Kind, historicalId: String, labelSnapshot: String, liveId: LiveId? = nil, status: Status) {
                     self.kind = kind
                     self.historicalId = historicalId
                     self.labelSnapshot = labelSnapshot
@@ -12329,6 +13096,38 @@ extension OpenAPI {
                     public func encode(to encoder: any Encoder) throws {
                         var container = encoder.singleValueContainer()
                         try container.encode(rawValue)
+                    }
+                }
+
+                /// Integer for category/investment, string for saved analysis; null after deletion.
+                /// One of integer, string; decoded by its JSON type.
+                public enum LiveId: Codable, Equatable, Sendable {
+                    case integer(Int)
+                    case string(String)
+
+                    public init(from decoder: any Decoder) throws {
+                        let container = try decoder.singleValueContainer()
+                        if let value = try? container.decode(Int.self) {
+                            self = .integer(value)
+                            return
+                        }
+                        if let value = try? container.decode(String.self) {
+                            self = .string(value)
+                            return
+                        }
+                        throw DecodingError.typeMismatch(
+                            LiveId.self,
+                            DecodingError.Context(
+                                codingPath: decoder.codingPath,
+                                debugDescription: "Expected integer or string."))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        switch self {
+                        case .integer(let value): try container.encode(value)
+                        case .string(let value): try container.encode(value)
+                        }
                     }
                 }
 
@@ -12454,14 +13253,14 @@ extension OpenAPI {
     public struct ResearchDossierSource: Codable, Equatable, Sendable {
         public let title: String
         public let reference: String
-        public let sourceDate: String?
-        public let accessedAt: String?
+        public let sourceDate: CalendarDay?
+        public let accessedAt: Instant?
         public let documentId: ResearchDocumentID?
         public let documentVersion: Int?
         public let passageOrdinal: Int?
         public let contentSha256: String?
 
-        public init(title: String, reference: String, sourceDate: String? = nil, accessedAt: String? = nil, documentId: ResearchDocumentID? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
+        public init(title: String, reference: String, sourceDate: CalendarDay? = nil, accessedAt: Instant? = nil, documentId: ResearchDocumentID? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
             self.title = title
             self.reference = reference
             self.sourceDate = sourceDate
@@ -12490,11 +13289,11 @@ extension OpenAPI {
         public let workspace: Workspace
         public let version: Int
         public let question: String
-        public let reviewDate: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let reviewDate: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: ResearchDossierID, title: String, workspace: Workspace, version: Int, question: String, reviewDate: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: ResearchDossierID, title: String, workspace: Workspace, version: Int, question: String, reviewDate: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.title = title
             self.workspace = workspace
@@ -12564,9 +13363,9 @@ extension OpenAPI {
     public struct ResearchDossierVersion: Codable, Equatable, Sendable {
         public let version: Int
         public let snapshot: OpenAPI.ResearchDossierContent
-        public let createdAt: String
+        public let createdAt: Instant
 
-        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: String) {
+        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: Instant) {
             self.version = version
             self.snapshot = snapshot
             self.createdAt = createdAt
@@ -14020,12 +14819,12 @@ extension OpenAPI {
         public let allCategories: Bool
         public let allRecipients: Bool
         public let allTags: Bool
-        public let dateRangeStart: String?
-        public let dateRangeEnd: String?
-        public let createdAt: String
-        public let updatedAt: String
+        public let dateRangeStart: CalendarDay?
+        public let dateRangeEnd: CalendarDay?
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: SavedChartID, name: String, chartType: ChartType, chartVariant: ChartVariant, timeBucket: TimeBucket, categoryIds: [Int], recipientIds: [RecipientID], tagIds: [TagID], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: String? = nil, dateRangeEnd: String? = nil, createdAt: String, updatedAt: String) {
+        public init(id: SavedChartID, name: String, chartType: ChartType, chartVariant: ChartVariant, timeBucket: TimeBucket, categoryIds: [Int], recipientIds: [RecipientID], tagIds: [TagID], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: CalendarDay? = nil, dateRangeEnd: CalendarDay? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.chartType = chartType
@@ -14206,8 +15005,57 @@ extension OpenAPI {
     }
 
     /// Persisted JSON from the read that produced the edit. Absence is distinct from JSON null.
-    /// A oneOf/anyOf schema, decoded as plain JSON.
-    public typealias SettingBaseline = JSONValue
+    /// Tells its branches apart by `exists`.
+    public enum SettingBaseline: Codable, Equatable, Sendable {
+        case existsFalse(ExistsFalseVariant)
+        case existsTrue(ExistsTrueVariant)
+
+        private enum TagKey: String, CodingKey {
+            case tag = "exists"
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let probe = try decoder.container(keyedBy: TagKey.self)
+            switch try probe.decode(Bool.self, forKey: .tag) {
+            case false: self = .existsFalse(try ExistsFalseVariant(from: decoder))
+            case true: self = .existsTrue(try ExistsTrueVariant(from: decoder))
+            }
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            switch self {
+            case .existsFalse(let value): try value.encode(to: encoder)
+            case .existsTrue(let value): try value.encode(to: encoder)
+            }
+        }
+
+        public struct ExistsFalseVariant: Codable, Equatable, Sendable {
+            public let exists: Bool
+
+            public init(exists: Bool) {
+                self.exists = exists
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case exists = "exists"
+            }
+        }
+
+        public struct ExistsTrueVariant: Codable, Equatable, Sendable {
+            public let exists: Bool
+            public let value: JSONValue
+
+            public init(exists: Bool, value: JSONValue) {
+                self.exists = exists
+                self.value = value
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case exists = "exists"
+                case value = "value"
+            }
+        }
+    }
 
     public struct Split: Codable, Equatable, Sendable {
         public let id: SplitID
@@ -14218,10 +15066,10 @@ extension OpenAPI {
         public let amountPaid: Decimal
         public let note: String?
         public let isSettled: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String) {
+        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.transactionId = transactionId
             self.recipientId = recipientId
@@ -14315,9 +15163,9 @@ extension OpenAPI {
         public let amountPaid: Decimal
         public let note: String?
         public let isSettled: Bool
-        public let createdAt: String
-        public let updatedAt: String
-        public let transactionDate: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
+        public let transactionDate: CalendarDay
         public let transactionMemo: String?
         public let transactionAmount: Decimal
         public let transactionCurrency: CurrencyCode
@@ -14325,7 +15173,7 @@ extension OpenAPI {
         public let transactionRecipientName: String?
         public let remaining: Decimal
 
-        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String, transactionDate: String, transactionMemo: String? = nil, transactionAmount: Decimal, transactionCurrency: CurrencyCode, bankAccount: String? = nil, transactionRecipientName: String? = nil, remaining: Decimal) {
+        public init(id: SplitID, transactionId: TransactionID, recipientId: RecipientID, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: Instant, updatedAt: Instant, transactionDate: CalendarDay, transactionMemo: String? = nil, transactionAmount: Decimal, transactionCurrency: CurrencyCode, bankAccount: String? = nil, transactionRecipientName: String? = nil, remaining: Decimal) {
             self.id = id
             self.transactionId = transactionId
             self.recipientId = recipientId
@@ -14371,10 +15219,10 @@ extension OpenAPI {
         public let splitId: SplitID
         public let amount: Decimal
         public let note: String?
-        public let paidAt: String
-        public let createdAt: String
+        public let paidAt: CalendarDay
+        public let createdAt: Instant
 
-        public init(id: SplitPaymentID, splitId: SplitID, amount: Decimal, note: String? = nil, paidAt: String, createdAt: String) {
+        public init(id: SplitPaymentID, splitId: SplitID, amount: Decimal, note: String? = nil, paidAt: CalendarDay, createdAt: Instant) {
             self.id = id
             self.splitId = splitId
             self.amount = amount
@@ -14398,10 +15246,10 @@ extension OpenAPI {
         public let slug: String
         public let color: String?
         public let isActive: Bool
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: TagID, slug: String, color: String? = nil, isActive: Bool, createdAt: String, updatedAt: String) {
+        public init(id: TagID, slug: String, color: String? = nil, isActive: Bool, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.slug = slug
             self.color = color
@@ -14460,7 +15308,7 @@ extension OpenAPI {
     public struct Transaction: Codable, Equatable, Sendable {
         public let id: TransactionID
         /// YYYY-MM-DD
-        public let transactionDate: String
+        public let transactionDate: CalendarDay
         /// Stable linked account identity
         public let accountId: AccountID?
         /// True when ordinary income/spending statistics exclude this internal movement.
@@ -14496,11 +15344,11 @@ extension OpenAPI {
         public let isActive: Bool?
         /// Tags attached to this transaction
         public let tags: [OpenAPI.TransactionTagRef]?
-        public let createdAt: String?
-        public let updatedAt: String?
+        public let createdAt: Instant?
+        public let updatedAt: Instant?
         public let links: [OpenAPI.Link]
 
-        public init(id: TransactionID, transactionDate: String, accountId: AccountID? = nil, isTransfer: Bool? = nil, transferPeerId: TransactionID? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, amountEurUnconverted: Bool? = nil, currency: CurrencyCode? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: TransactionID, transactionDate: CalendarDay, accountId: AccountID? = nil, isTransfer: Bool? = nil, transferPeerId: TransactionID? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: RecipientID? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, amountEurUnconverted: Bool? = nil, currency: CurrencyCode? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: CategoryID? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.transactionDate = transactionDate
             self.accountId = accountId
@@ -14556,7 +15404,7 @@ extension OpenAPI {
     }
 
     public struct TransactionCreate: Codable, Equatable, Sendable {
-        public let transactionDate: String
+        public let transactionDate: CalendarDay
         /// Canonical account identity
         public let accountId: AccountID
         public let recipientId: RecipientID
@@ -14575,7 +15423,7 @@ extension OpenAPI {
         /// false to retain the default 409 duplicate guard.
         public let allowDuplicate: Bool?
 
-        public init(transactionDate: String, accountId: AccountID, recipientId: RecipientID, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, balance: Decimal? = nil, categoryId: CategoryID? = nil, comment: String? = nil, tags: [String]? = nil, allowDuplicate: Bool? = nil) {
+        public init(transactionDate: CalendarDay, accountId: AccountID, recipientId: RecipientID, memo: String? = nil, amount: Decimal, currency: CurrencyCode? = nil, balance: Decimal? = nil, categoryId: CategoryID? = nil, comment: String? = nil, tags: [String]? = nil, allowDuplicate: Bool? = nil) {
             self.transactionDate = transactionDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -14702,7 +15550,7 @@ extension OpenAPI {
     /// PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key
     /// leaves it unchanged.
     public struct TransactionUpdate: Codable, Equatable, Sendable {
-        public let transactionDate: String?
+        public let transactionDate: CalendarDay?
         public let accountId: AccountID?
         public let recipientId: Nullable<RecipientID>
         public let recipientName: String?
@@ -14716,7 +15564,7 @@ extension OpenAPI {
         /// Tag slugs to assign (replaces existing tags when present)
         public let tags: [String]?
 
-        public init(transactionDate: String? = nil, accountId: AccountID? = nil, recipientId: Nullable<RecipientID> = .absent, recipientName: String? = nil, memo: String? = nil, amount: Decimal? = nil, currency: CurrencyCode? = nil, categoryId: Nullable<CategoryID> = .absent, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [String]? = nil) {
+        public init(transactionDate: CalendarDay? = nil, accountId: AccountID? = nil, recipientId: Nullable<RecipientID> = .absent, recipientName: String? = nil, memo: String? = nil, amount: Decimal? = nil, currency: CurrencyCode? = nil, categoryId: Nullable<CategoryID> = .absent, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [String]? = nil) {
             self.transactionDate = transactionDate
             self.accountId = accountId
             self.recipientId = recipientId
@@ -14748,7 +15596,7 @@ extension OpenAPI {
 
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            self.transactionDate = try container.decodeIfPresent(String.self, forKey: .transactionDate)
+            self.transactionDate = try container.decodeIfPresent(CalendarDay.self, forKey: .transactionDate)
             self.accountId = try container.decodeIfPresent(AccountID.self, forKey: .accountId)
             self.recipientId = try container.decodeNullable(RecipientID.self, forKey: .recipientId)
             self.recipientName = try container.decodeIfPresent(String.self, forKey: .recipientName)
@@ -14830,10 +15678,10 @@ extension OpenAPI {
         public let priceProviderId: String?
         /// Live price snapshotted when the item was added (ADR-097 backtest).
         public let addedPrice: Decimal?
-        public let createdAt: String
-        public let updatedAt: String
+        public let createdAt: Instant
+        public let updatedAt: Instant
 
-        public init(id: WatchlistItemID, name: String, symbol: String? = nil, assetClass: AssetClass, targetPrice: Decimal, currency: CurrencyCode, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: String, updatedAt: String) {
+        public init(id: WatchlistItemID, name: String, symbol: String? = nil, assetClass: AssetClass, targetPrice: Decimal, currency: CurrencyCode, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: Instant, updatedAt: Instant) {
             self.id = id
             self.name = name
             self.symbol = symbol

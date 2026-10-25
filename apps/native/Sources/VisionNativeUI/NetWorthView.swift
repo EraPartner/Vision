@@ -346,7 +346,7 @@ public struct NetWorthView: View {
                     case "liabilities": value = snapshot.liabilities
                     default: value = snapshot.netWorth
                     }
-                    return InsightChartPoint(key: snapshot.date, value: value)
+                    return InsightChartPoint(key: snapshot.date.description, value: value)
                 })
         }
     }

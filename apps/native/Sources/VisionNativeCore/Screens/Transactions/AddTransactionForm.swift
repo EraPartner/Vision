@@ -260,10 +260,10 @@ public final class AddTransactionModel {
     /// The chosen account's statement anchor, when the date is on or before it
     /// (`addTxn.backdatedBeforeAnchor`).
     public var backdatedAnchorDate: String? {
-        guard let anchor = account(named: draft.accountName)?.anchorDate, !anchor.isEmpty, !draft.date.isEmpty,
-            draft.date <= anchor
+        guard let anchor = account(named: draft.accountName)?.anchorDate, !draft.date.isEmpty,
+            draft.date <= anchor.description
         else { return nil }
-        return anchor
+        return anchor.description
     }
 
     /// The form differs from a fresh one of the same kind (`useUnsavedChanges`).
@@ -345,10 +345,11 @@ public final class AddTransactionModel {
     /// The create body of an expense or income (`transactionFromForm`).
     func transactionBody(format: NumberFormat, allowDuplicate: Bool) -> OpenAPI.TransactionCreate? {
         guard let magnitude = magnitude(format: format), let accountId = draft.accountId,
-            let recipientId = draft.recipientId, let currency = currencyOrDefault
+            let recipientId = draft.recipientId, let currency = currencyOrDefault,
+            let transactionDate = CalendarDay(draft.date)
         else { return nil }
         return OpenAPI.TransactionCreate(
-            transactionDate: draft.date, accountId: accountId, recipientId: recipientId,
+            transactionDate: transactionDate, accountId: accountId, recipientId: recipientId,
             memo: Self.trimmedOrNil(draft.memo), amount: draft.kind.signed(magnitude), currency: currency,
             categoryId: draft.categoryId, comment: Self.trimmedOrNil(draft.comment),
             allowDuplicate: allowDuplicate ? true : nil)

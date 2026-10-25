@@ -173,8 +173,7 @@ public final class PlannedLinkModel: Identifiable {
 
     /// The execution date: the chosen transaction's own date, without a time.
     public var executionDate: String? {
-        guard let date = selectedTransaction?.transactionDate, !date.isEmpty else { return nil }
-        return date.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init)
+        selectedTransaction?.transactionDate.description
     }
 
     /// Link and mark as paid is enabled once a candidate is chosen and nothing runs.
@@ -189,7 +188,7 @@ public final class PlannedLinkModel: Identifiable {
 
     /// "payee · date" of the non-empty parts.
     public static func detail(_ transaction: OpenAPI.Transaction, format: AppDateFormat) -> String {
-        let date = transaction.transactionDate.isEmpty ? nil : VisionFormat.appDate(transaction.transactionDate, format: format)
+        let date = VisionFormat.appDate(transaction.transactionDate, format: format)
         return [transaction.recipientName, date].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

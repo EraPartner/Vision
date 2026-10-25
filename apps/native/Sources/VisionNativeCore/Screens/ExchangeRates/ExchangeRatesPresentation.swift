@@ -46,7 +46,7 @@ public struct ExchangeRatesPresentation: Equatable, Sendable {
         let live = data.rates
         let rateDate = live.first?.rateDate
         let fetchedAt = live.first?.fetchedAt
-        let formattedRateDate = rateDate.map { VisionFormat.appDate($0, format: settings.dateFormat, timeZone: timeZone) } ?? "—"
+        let formattedRateDate = rateDate.map { VisionFormat.appDate($0, format: settings.dateFormat) } ?? "—"
         let formattedFetchedAt = fetchedAt.map {
             VisionFormat.appDateTime($0, format: settings.dateFormat, locale: locale, timeZone: timeZone)
         }

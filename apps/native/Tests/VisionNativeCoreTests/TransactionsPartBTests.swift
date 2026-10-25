@@ -194,15 +194,15 @@ enum SplitFixture {
     static func owed(_ id: SplitID, amount: Decimal, paid: Decimal = 0, memo: String? = "Dinner") -> OpenAPI.SplitOwedDetail {
         OpenAPI.SplitOwedDetail(
             id: id, transactionId: TransactionID(rawValue: 40 + id.rawValue), recipientId: 4, recipientName: "Anna", amount: amount, amountPaid: paid,
-            note: id == 1 ? "Half" : nil, isSettled: false, createdAt: "2026-10-01", updatedAt: "2026-10-01",
-            transactionDate: "2026-10-0\(id.rawValue)", transactionMemo: memo, transactionAmount: -amount * 2,
+            note: id == 1 ? "Half" : nil, isSettled: false, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
+            transactionDate: CalendarDay("2026-10-0\(id.rawValue)")!, transactionMemo: memo, transactionAmount: -amount * 2,
             transactionCurrency: "EUR", transactionRecipientName: "Bistro", remaining: amount - paid)
     }
 
     static func split(_ id: SplitID, transactionId: TransactionID, amount: Decimal, name: String?) -> OpenAPI.Split {
         OpenAPI.Split(
             id: id, transactionId: transactionId, recipientId: 4, recipientName: name, amount: amount, amountPaid: 0,
-            isSettled: false, createdAt: "2026-10-01", updatedAt: "2026-10-01")
+            isSettled: false, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z")
     }
 
     static let strings = DictionaryStrings(
@@ -235,8 +235,8 @@ enum SplitFixture {
         id: 7, name: "BE00 1234", displayName: "Everyday", currency: "USD", type: .checking,
         liquidityClass: .init(rawValue: "cash"), spendable: true, inNetWorth: true, taxWrapper: .none,
         owner: .init(rawValue: "self"), multiCurrencyCash: false,
-        hasCashSleeve: false, anchorDate: "2026-10-10", isActive: true, createdAt: "2026-01-01",
-        updatedAt: "2026-01-01")
+        hasCashSleeve: false, anchorDate: "2026-10-10", isActive: true, createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z")
 
     static func pickers() -> FakePickerService {
         FakePickerService(

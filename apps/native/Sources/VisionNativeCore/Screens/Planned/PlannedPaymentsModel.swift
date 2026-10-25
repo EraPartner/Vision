@@ -719,7 +719,7 @@ public final class PlannedHistoryModel {
                 return payment.executions.map { execution in
                     Link(
                         plannedPaymentId: payment.id, plannedPaymentName: payment.name,
-                        executionDate: execution.executionDate, transactionId: execution.executedTransactionId)
+                        executionDate: execution.executionDate.description, transactionId: execution.executedTransactionId)
                 }
             }
             if let transactionId = payment.executedTransactionId, transactionId != 0 {
@@ -789,7 +789,7 @@ public final class PlannedHistoryModel {
                         Entry(
                             plannedPaymentId: link.plannedPaymentId, plannedPaymentName: link.plannedPaymentName,
                             executionDate: link.executionDate, transactionId: link.transactionId,
-                            transactionDate: transaction.transactionDate, recipientName: transaction.recipientName,
+                            transactionDate: transaction.transactionDate.description, recipientName: transaction.recipientName,
                             categoryName: transaction.categoryName, amount: transaction.amount,
                             currency: transaction.currency, memo: transaction.memo)
                     ))

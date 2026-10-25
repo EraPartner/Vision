@@ -33,7 +33,7 @@ extension APIClient: PortfolioTaxService {
         try await send(
             OpenAPIOperations.SaveSetting(
                 key: PortfolioTaxWidgetsModel.settingsKey,
-                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: expected)))
+                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }
 private struct PortfolioTaxSettingsOperation: APIOperation {

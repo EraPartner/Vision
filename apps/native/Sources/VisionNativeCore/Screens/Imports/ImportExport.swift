@@ -20,12 +20,12 @@ extension APIClient: ImportExportService {
         case .csv:
             return try await download(
                 OpenAPIOperations.ExportTransactionsCsv(
-                    startDate: filters.startDate?.ymd, endDate: filters.endDate?.ymd,
+                    startDate: filters.startDate?.calendarDay, endDate: filters.endDate?.calendarDay,
                     bankAccounts: filters.bankAccountsParameter, categoryIds: filters.categoryIdsParameter))
         case .json:
             return try await download(
                 OpenAPIOperations.ExportTransactionsJson(
-                    startDate: filters.startDate?.ymd, endDate: filters.endDate?.ymd,
+                    startDate: filters.startDate?.calendarDay, endDate: filters.endDate?.calendarDay,
                     bankAccounts: filters.bankAccountsParameter, categoryIds: filters.categoryIdsParameter))
         }
     }

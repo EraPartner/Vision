@@ -141,7 +141,7 @@ enum RecipientsFixture {
         OpenAPI.Recipient(
             id: id, name: name, primaryBankAccount: account, defaultCategoryId: categoryId,
             defaultCategoryName: category, primaryRecipientId: primary?.id, primaryRecipientName: primary?.name,
-            aliasCount: aliases, notes: notes, isActive: active, createdAt: "2026-01-01", links: [])
+            aliasCount: aliases, notes: notes, isActive: active, createdAt: "2026-01-01T00:00:00.000Z", links: [])
     }
 
     static func rule(
@@ -150,7 +150,7 @@ enum RecipientsFixture {
     ) -> OpenAPI.RecipientPattern {
         OpenAPI.RecipientPattern(
             id: id, pattern: pattern, patternKind: .init(rawValue: kind), caseSensitive: false, priority: 100, isActive: active,
-            source: .user, notes: notes, createdAt: "2026-01-01")
+            source: .user, notes: notes, createdAt: "2026-01-01T00:00:00.000Z")
     }
 
     /// KBC (two aliases), its aliases Kbc Bank and KBC NV, Albert Heijn and Delhaize.

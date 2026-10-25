@@ -18,7 +18,10 @@ import {
   SCHEMA_ID_ENTITY,
   STEM_ENTITY,
   PROVIDER_CURRENCY_SCHEMAS,
+  UNTYPED_DATES,
   UNTYPED_IDS,
+  UNTYPED_UNIONS,
+  dateKind,
   enumCases,
   generateAPI,
   identifierStem,
@@ -133,7 +136,8 @@ test("generates the allow-listed operations and only the schemas they reach", ()
   assert.match(generated.models, /public let amount: Decimal\n/);
   assert.match(generated.models, /public let note: String\?\n/);
   assert.match(generated.models, /public let kind: OpenAPI\.ItemKind\n/);
-  assert.match(generated.models, /public let extra: JSONValue\?\n/);
+  assert.match(generated.models, /public let extra: Extra\?\n/);
+  assert.match(generated.models, /public enum Extra: Codable, Equatable, Sendable \{/);
   assert.match(generated.models, /public let meta: Meta\n/);
   assert.match(generated.models, /case createdAt = "created_at"/);
   assert.match(generated.models, /case "crypto_exchange": self = \.cryptoExchange/);
@@ -304,6 +308,8 @@ function toyTables(over: Partial<GeneratorTables> = {}): GeneratorTables {
     fieldEntity: { "*.transfer_peer_id": "Transaction" },
     pathIdEntity: [],
     untypedIds: {},
+    untypedDates: {},
+    untypedUnions: {},
     nullablePatchFields: {},
     ...over,
   };
@@ -529,6 +535,17 @@ test("the real spec generates with every id mapped and every table entry used", 
     Object.keys(UNTYPED_IDS).sort(),
     "every UNTYPED_IDS entry matches a field, and none is stale",
   );
+  assert.deepEqual(
+    generated.stats.untypedDatesHit,
+    Object.keys(UNTYPED_DATES).sort(),
+    "every UNTYPED_DATES entry matches a field, and none is stale",
+  );
+  assert.deepEqual(
+    generated.stats.untypedUnionsHit,
+    Object.keys(UNTYPED_UNIONS).sort(),
+    "every UNTYPED_UNIONS entry matches a union, and none is stale",
+  );
+  assert.equal(generated.models.includes("JSONValue"), true);
   const expectedNullable = Object.entries(NULLABLE_PATCH_FIELDS)
     .flatMap(([struct, fields]) => fields.map((field) => `${struct}.${field}`))
     .sort();
@@ -942,4 +959,206 @@ test("the sidebar registry emits a typed route destination per page", () => {
     () => generateNavigation(badKey, [...keys, "nav.ai-chat"]),
     /cannot name a route destination/,
   );
+});
+
+/** A spec with dates, date-times and every union shape, for WP-2 cases. */
+const DATES_SPEC = `
+openapi: 3.0.3
+info: { title: Fixture, version: "1" }
+paths:
+  /api/events:
+    get:
+      operationId: getEvents
+      parameters:
+        - { in: query, name: start_date, schema: { type: string, format: date } }
+        - { in: query, name: since, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Event" }
+  /api/actions:
+    post:
+      operationId: createAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Action" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Selection" }
+components:
+  schemas:
+    Envelope:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    ErrorPayload:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    Event:
+      type: object
+      required: [on, at]
+      properties:
+        on: { type: string, format: date }
+        at: { type: string, format: date-time }
+        plain_day: { type: string, pattern: '^\\d{4}-\\d{2}-\\d{2}$' }
+        label: { type: string }
+        free_day: { type: string, format: date, nullable: true }
+        scalar: { $ref: "#/components/schemas/Scalar" }
+        vague: { $ref: "#/components/schemas/Vague" }
+    Action:
+      oneOf:
+        - type: object
+          required: [kind, name]
+          properties:
+            kind: { type: string, enum: [rename] }
+            name: { type: string }
+        - type: object
+          required: [kind, count]
+          properties:
+            kind: { type: string, enum: [bump] }
+            count: { type: integer }
+      discriminator: { propertyName: kind }
+    Selection:
+      oneOf:
+        - type: object
+          required: [ids]
+          properties:
+            ids: { type: array, items: { type: integer } }
+        - type: object
+          required: [filter]
+          properties:
+            filter: { type: string }
+    Scalar:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - { type: string }
+            - { type: number }
+    Vague:
+      type: object
+      properties:
+        body:
+          oneOf:
+            - type: object
+              properties: { a: { type: string } }
+            - type: object
+              properties: { b: { type: string } }
+`;
+const DATES_OPS = "getEvents\ncreateAction\n";
+
+/** The toy tables with the one deliberately untypeable union listed. */
+function dateTables(over: Partial<GeneratorTables> = {}): GeneratorTables {
+  return toyTables({
+    untypedUnions: { "Vague.body": "Two shapeless objects; nothing tells them apart." },
+    ...over,
+  });
+}
+
+test("dateKind recognises the date shapes and nothing else", () => {
+  assert.equal(dateKind({ type: "string", format: "date" }), "date");
+  assert.equal(dateKind({ type: "string", format: "date-time" }), "date-time");
+  assert.equal(dateKind({ type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" }), "date");
+  assert.equal(dateKind({ type: "string" }), undefined);
+  assert.equal(dateKind({ type: "string", format: "date", enum: ["2024-01-01"] }), undefined);
+  assert.equal(dateKind({ type: "integer", format: "date" }), undefined);
+});
+
+test("dates become CalendarDay, date-times Instant, in models and parameters", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public let on: CalendarDay\n/);
+  assert.match(generated.models, /public let at: Instant\n/);
+  assert.match(generated.models, /public let plainDay: CalendarDay\?\n/);
+  assert.match(generated.models, /public let freeDay: CalendarDay\?\n/);
+  assert.match(generated.models, /public let label: String\?\n/);
+  assert.match(generated.operations, /public var startDate: CalendarDay\?\n/);
+  assert.match(generated.operations, /public var since: Instant\?\n/);
+  assert.equal(generated.stats.dateFields, 4);
+  assert.equal(generated.stats.dateTimeFields, 2);
+  assert.deepEqual(generated.stats.untypedDatesHit, []);
+});
+
+test("an UNTYPED_DATES entry keeps the field a String and a stale one is reported unused", () => {
+  const generated = generateAPI(
+    DATES_SPEC,
+    DATES_OPS,
+    dateTables({
+      untypedDates: {
+        "Event.on": "Legacy producer writes free text.",
+        "Event.nowhere": "Matches nothing.",
+      },
+    }),
+  );
+  assert.match(generated.models, /public let on: String\n/);
+  assert.match(generated.models, /public let at: Instant\n/);
+  assert.deepEqual(generated.stats.untypedDatesHit, ["Event.on"]);
+  // The stale key is the one the hit list lacks, which the real-spec test turns into a failure.
+  assert.equal(generated.stats.untypedDatesHit.includes("Event.nowhere"), false);
+});
+
+test("a tagged union becomes an enum with an unknown case", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Action: /);
+  assert.match(generated.models, /case rename\(/);
+  assert.match(generated.models, /case bump\(/);
+  assert.match(generated.models, /case unknown\(JSONValue\)/);
+});
+
+test("a union told apart by a required property is keyed", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Selection: /);
+  assert.match(generated.models, /case ids\(/);
+  assert.match(generated.models, /case filter\(/);
+});
+
+test("a union of distinct scalar types is typed by attempt", () => {
+  const generated = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(generated.models, /public enum Value: /);
+  assert.match(generated.models, /case string\(String\)/);
+  assert.match(generated.models, /case number\(Decimal\)/);
+});
+
+test("an untypeable union fails generation unless listed, and a listed one stays JSONValue", () => {
+  assert.throws(
+    () => generateAPI(DATES_SPEC, DATES_OPS, toyTables()),
+    /UNTYPED_UNIONS[\s\S]*Vague\.body/,
+  );
+  const listed = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.match(listed.models, /public let body: JSONValue\?\n/);
+  assert.deepEqual(listed.stats.untypedUnionsHit, ["Vague.body"]);
+  // A listed key that matches no union is not reported as used, which the real-spec test fails on.
+  const stale = generateAPI(
+    DATES_SPEC,
+    DATES_OPS,
+    dateTables({
+      untypedUnions: { "Vague.body": "Shapeless.", "Gone.body": "Matches nothing." },
+    }),
+  );
+  assert.deepEqual(stale.stats.untypedUnionsHit, ["Vague.body"]);
+});
+
+test("generation is deterministic", () => {
+  const first = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  const second = generateAPI(DATES_SPEC, DATES_OPS, dateTables());
+  assert.deepEqual(first, second);
 });

@@ -47,8 +47,8 @@ public struct CustomChartDraft: Equatable, Sendable, Encodable {
         allCategories = chart.allCategories
         allRecipients = chart.allRecipients
         allTags = chart.allTags
-        dateRangeStart = chart.dateRangeStart
-        dateRangeEnd = chart.dateRangeEnd
+        dateRangeStart = chart.dateRangeStart?.description
+        dateRangeEnd = chart.dateRangeEnd?.description
     }
     public var canSave: Bool {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

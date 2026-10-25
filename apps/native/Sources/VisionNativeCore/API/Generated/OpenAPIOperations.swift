@@ -353,9 +353,9 @@ extension OpenAPIOperations {
                 /// Column values to write for an update
                 public let set: JSONValue?
                 /// Optimistic-concurrency token captured at read time
-                public let xmin: JSONValue?
+                public let xmin: Xmin?
 
-                public init(op: Op, pk: JSONValue? = nil, values: JSONValue? = nil, set: JSONValue? = nil, xmin: JSONValue? = nil) {
+                public init(op: Op, pk: JSONValue? = nil, values: JSONValue? = nil, set: JSONValue? = nil, xmin: Xmin? = nil) {
                     self.op = op
                     self.pk = pk
                     self.values = values
@@ -409,6 +409,38 @@ extension OpenAPIOperations {
                     public func encode(to encoder: any Encoder) throws {
                         var container = encoder.singleValueContainer()
                         try container.encode(rawValue)
+                    }
+                }
+
+                /// Optimistic-concurrency token captured at read time
+                /// One of string, number; decoded by its JSON type.
+                public enum Xmin: Codable, Equatable, Sendable {
+                    case number(Decimal)
+                    case string(String)
+
+                    public init(from decoder: any Decoder) throws {
+                        let container = try decoder.singleValueContainer()
+                        if let value = try? container.decode(Decimal.self) {
+                            self = .number(value)
+                            return
+                        }
+                        if let value = try? container.decode(String.self) {
+                            self = .string(value)
+                            return
+                        }
+                        throw DecodingError.typeMismatch(
+                            Xmin.self,
+                            DecodingError.Context(
+                                codingPath: decoder.codingPath,
+                                debugDescription: "Expected string or number."))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        switch self {
+                        case .number(let value): try container.encode(value)
+                        case .string(let value): try container.encode(value)
+                        }
                     }
                 }
             }
@@ -499,7 +531,7 @@ extension OpenAPIOperations {
         }
 
         public struct Body: Codable, Equatable, Sendable {
-            public let plannedDate: String?
+            public let plannedDate: CalendarDay?
             /// Canonical account identity (the retired bank_account string is rejected)
             public let accountId: AccountID?
             public let recipientId: RecipientID?
@@ -511,7 +543,7 @@ extension OpenAPIOperations {
             public let url: String?
             public let isRecurring: Bool?
             public let recurrencePattern: String?
-            public let recurrenceEndDate: Nullable<String>
+            public let recurrenceEndDate: Nullable<CalendarDay>
             public let maxOccurrences: Nullable<Int>
             public let isActive: Bool?
             public let isLoan: Bool?
@@ -519,12 +551,12 @@ extension OpenAPIOperations {
             public let loanPrincipal: Decimal?
             public let loanAnnualInterestRate: Decimal?
             public let loanTermMonths: Int?
-            public let loanStartDate: String?
+            public let loanStartDate: CalendarDay?
             public let loanPaymentDay: Int?
             /// Tag slugs; replaces the attached set
             public let tags: [String]?
 
-            public init(plannedDate: String? = nil, accountId: AccountID? = nil, recipientId: RecipientID? = nil, memo: String? = nil, amount: Decimal? = nil, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: Nullable<String> = .absent, maxOccurrences: Nullable<Int> = .absent, isActive: Bool? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+            public init(plannedDate: CalendarDay? = nil, accountId: AccountID? = nil, recipientId: RecipientID? = nil, memo: String? = nil, amount: Decimal? = nil, currency: CurrencyCode? = nil, categoryId: CategoryID? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: Nullable<CalendarDay> = .absent, maxOccurrences: Nullable<Int> = .absent, isActive: Bool? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: CalendarDay? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
                 self.plannedDate = plannedDate
                 self.accountId = accountId
                 self.recipientId = recipientId
@@ -576,7 +608,7 @@ extension OpenAPIOperations {
 
             public init(from decoder: any Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.plannedDate = try container.decodeIfPresent(String.self, forKey: .plannedDate)
+                self.plannedDate = try container.decodeIfPresent(CalendarDay.self, forKey: .plannedDate)
                 self.accountId = try container.decodeIfPresent(AccountID.self, forKey: .accountId)
                 self.recipientId = try container.decodeIfPresent(RecipientID.self, forKey: .recipientId)
                 self.memo = try container.decodeIfPresent(String.self, forKey: .memo)
@@ -587,7 +619,7 @@ extension OpenAPIOperations {
                 self.url = try container.decodeIfPresent(String.self, forKey: .url)
                 self.isRecurring = try container.decodeIfPresent(Bool.self, forKey: .isRecurring)
                 self.recurrencePattern = try container.decodeIfPresent(String.self, forKey: .recurrencePattern)
-                self.recurrenceEndDate = try container.decodeNullable(String.self, forKey: .recurrenceEndDate)
+                self.recurrenceEndDate = try container.decodeNullable(CalendarDay.self, forKey: .recurrenceEndDate)
                 self.maxOccurrences = try container.decodeNullable(Int.self, forKey: .maxOccurrences)
                 self.isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive)
                 self.isLoan = try container.decodeIfPresent(Bool.self, forKey: .isLoan)
@@ -595,7 +627,7 @@ extension OpenAPIOperations {
                 self.loanPrincipal = try container.decodeIfPresent(Decimal.self, forKey: .loanPrincipal)
                 self.loanAnnualInterestRate = try container.decodeIfPresent(Decimal.self, forKey: .loanAnnualInterestRate)
                 self.loanTermMonths = try container.decodeIfPresent(Int.self, forKey: .loanTermMonths)
-                self.loanStartDate = try container.decodeIfPresent(String.self, forKey: .loanStartDate)
+                self.loanStartDate = try container.decodeIfPresent(CalendarDay.self, forKey: .loanStartDate)
                 self.loanPaymentDay = try container.decodeIfPresent(Int.self, forKey: .loanPaymentDay)
                 self.tags = try container.decodeIfPresent([String].self, forKey: .tags)
             }
@@ -668,9 +700,9 @@ extension OpenAPIOperations {
 
         public struct Body: Codable, Equatable, Sendable {
             public let executedTransactionId: TransactionID
-            public let executionDate: String?
+            public let executionDate: CalendarDay?
 
-            public init(executedTransactionId: TransactionID, executionDate: String? = nil) {
+            public init(executedTransactionId: TransactionID, executionDate: CalendarDay? = nil) {
                 self.executedTransactionId = executedTransactionId
                 self.executionDate = executionDate
             }
@@ -929,12 +961,12 @@ extension OpenAPIOperations {
             public let detail: String
             public let description: String?
             public let isActive: Bool
-            public let createdAt: String?
-            public let updatedAt: String?
+            public let createdAt: Instant?
+            public let updatedAt: Instant?
             public let links: [OpenAPI.Link]
             public let created: Bool
 
-            public init(id: CategoryID, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link], created: Bool) {
+            public init(id: CategoryID, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link], created: Bool) {
                 self.id = id
                 self.general = general
                 self.detail = detail
@@ -1017,11 +1049,11 @@ extension OpenAPIOperations {
             public let slug: String
             public let color: String?
             public let isActive: Bool
-            public let createdAt: String
-            public let updatedAt: String
+            public let createdAt: Instant
+            public let updatedAt: Instant
             public let created: Bool
 
-            public init(id: TagID, slug: String, color: String? = nil, isActive: Bool, createdAt: String, updatedAt: String, created: Bool) {
+            public init(id: TagID, slug: String, color: String? = nil, isActive: Bool, createdAt: Instant, updatedAt: Instant, created: Bool) {
                 self.id = id
                 self.slug = slug
                 self.color = color
@@ -1052,8 +1084,8 @@ extension OpenAPIOperations {
 
         public var limit: Int?
         public var offset: Int?
-        public var startDate: String?
-        public var endDate: String?
+        public var startDate: CalendarDay?
+        public var endDate: CalendarDay?
         /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
         /// hatch
         public var accountId: AccountID?
@@ -1097,7 +1129,7 @@ extension OpenAPIOperations {
         /// Target currency for normalize_to_eur (defaults to EUR)
         public var targetCurrency: CurrencyCode?
 
-        public init(limit: Int? = nil, offset: Int? = nil, startDate: String? = nil, endDate: String? = nil, accountId: AccountID? = nil, bankAccount: String? = nil, categoryId: CategoryID? = nil, recipientId: RecipientID? = nil, search: String? = nil, sortBy: String? = nil, sortDir: String? = nil, tags: String? = nil, transactionId: TransactionID? = nil, categoryIds: String? = nil, recipientGroupId: RecipientGroupID? = nil, recipientName: String? = nil, active: Bool? = nil, includeBalance: Bool? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountExact: Decimal? = nil, amountSigned: Bool? = nil, uncategorised: Bool? = nil, normalizeToEur: Bool? = nil, targetCurrency: CurrencyCode? = nil) {
+        public init(limit: Int? = nil, offset: Int? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, accountId: AccountID? = nil, bankAccount: String? = nil, categoryId: CategoryID? = nil, recipientId: RecipientID? = nil, search: String? = nil, sortBy: String? = nil, sortDir: String? = nil, tags: String? = nil, transactionId: TransactionID? = nil, categoryIds: String? = nil, recipientGroupId: RecipientGroupID? = nil, recipientName: String? = nil, active: Bool? = nil, includeBalance: Bool? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountExact: Decimal? = nil, amountSigned: Bool? = nil, uncategorised: Bool? = nil, normalizeToEur: Bool? = nil, targetCurrency: CurrencyCode? = nil) {
             self.limit = limit
             self.offset = offset
             self.startDate = startDate
@@ -1617,8 +1649,8 @@ extension OpenAPIOperations {
         public static let method = HTTPMethod.get
         public static let pathTemplate = "/api/transactions/export/csv"
 
-        public var startDate: String?
-        public var endDate: String?
+        public var startDate: CalendarDay?
+        public var endDate: CalendarDay?
         /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
         /// hatch
         public var accountId: AccountID?
@@ -1650,7 +1682,7 @@ extension OpenAPIOperations {
         /// Compare amount_min/amount_max against the signed amount instead of its absolute value.
         public var amountSigned: Bool?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: AccountID? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, includeBalance: Bool? = nil, tags: String? = nil, transactionId: TransactionID? = nil, recipientId: RecipientID? = nil, categoryId: CategoryID? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
+        public init(startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, accountId: AccountID? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, includeBalance: Bool? = nil, tags: String? = nil, transactionId: TransactionID? = nil, recipientId: RecipientID? = nil, categoryId: CategoryID? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
@@ -1702,8 +1734,8 @@ extension OpenAPIOperations {
         public static let method = HTTPMethod.get
         public static let pathTemplate = "/api/transactions/export/json"
 
-        public var startDate: String?
-        public var endDate: String?
+        public var startDate: CalendarDay?
+        public var endDate: CalendarDay?
         /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
         /// hatch
         public var accountId: AccountID?
@@ -1734,7 +1766,7 @@ extension OpenAPIOperations {
         /// Compare amount_min/amount_max against the signed amount instead of its absolute value.
         public var amountSigned: Bool?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: AccountID? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, tags: String? = nil, transactionId: TransactionID? = nil, recipientId: RecipientID? = nil, categoryId: CategoryID? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
+        public init(startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, accountId: AccountID? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, tags: String? = nil, transactionId: TransactionID? = nil, recipientId: RecipientID? = nil, categoryId: CategoryID? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
@@ -2201,12 +2233,12 @@ extension OpenAPIOperations {
             public let aliasCount: Int?
             public let notes: String?
             public let isActive: Bool
-            public let createdAt: String?
-            public let updatedAt: String?
+            public let createdAt: Instant?
+            public let updatedAt: Instant?
             public let links: [OpenAPI.Link]
             public let created: Bool
 
-            public init(id: RecipientID, name: String, primaryBankAccount: String? = nil, defaultCategoryId: CategoryID? = nil, defaultCategoryName: String? = nil, primaryRecipientId: RecipientID? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link], created: Bool) {
+            public init(id: RecipientID, name: String, primaryBankAccount: String? = nil, defaultCategoryId: CategoryID? = nil, defaultCategoryName: String? = nil, primaryRecipientId: RecipientID? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: Instant? = nil, updatedAt: Instant? = nil, links: [OpenAPI.Link], created: Bool) {
                 self.id = id
                 self.name = name
                 self.primaryBankAccount = primaryBankAccount
@@ -2561,9 +2593,9 @@ extension OpenAPIOperations {
 
         public struct Body: Codable, Equatable, Sendable {
             public let amount: Decimal
-            public let paymentDate: String?
+            public let paymentDate: CalendarDay?
 
-            public init(amount: Decimal, paymentDate: String? = nil) {
+            public init(amount: Decimal, paymentDate: CalendarDay? = nil) {
                 self.amount = amount
                 self.paymentDate = paymentDate
             }
@@ -2970,11 +3002,11 @@ extension OpenAPIOperations {
             /// The opening balance to stamp
             public let balance: Decimal
             /// As-of date; expected to precede the account's activity
-            public let date: String
+            public let date: CalendarDay
             /// 3-letter ISO code; defaults to the account currency
             public let currency: CurrencyCode?
 
-            public init(balance: Decimal, date: String, currency: CurrencyCode? = nil) {
+            public init(balance: Decimal, date: CalendarDay, currency: CurrencyCode? = nil) {
                 self.balance = balance
                 self.date = date
                 self.currency = currency
@@ -3181,10 +3213,10 @@ extension OpenAPIOperations {
             public let accountId: AccountID
             public let currency: CurrencyCode
             public let balance: Decimal
-            public let balanceDate: String
+            public let balanceDate: CalendarDay
             public let links: [JSONValue]
 
-            public init(accountId: AccountID, currency: CurrencyCode, balance: Decimal, balanceDate: String, links: [JSONValue]) {
+            public init(accountId: AccountID, currency: CurrencyCode, balance: Decimal, balanceDate: CalendarDay, links: [JSONValue]) {
                 self.accountId = accountId
                 self.currency = currency
                 self.balance = balance
@@ -3203,9 +3235,9 @@ extension OpenAPIOperations {
 
         public struct Body: Codable, Equatable, Sendable {
             public let balance: Decimal
-            public let date: String
+            public let date: CalendarDay
 
-            public init(balance: Decimal, date: String) {
+            public init(balance: Decimal, date: CalendarDay) {
                 self.balance = balance
                 self.date = date
             }
@@ -3819,15 +3851,15 @@ extension OpenAPIOperations {
 
         public var currency: CurrencyCode?
         /// Inclusive lower transaction-date bound. Ignored when all_time=true.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive upper transaction-date bound. Ignored when all_time=true.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         /// Return the complete history and ignore explicit date bounds.
         public var allTime: Bool?
         public var excludedCategoryIds: [CategoryID]?
         public var excludedRecipientIds: [RecipientID]?
 
-        public init(currency: CurrencyCode? = nil, startDate: String? = nil, endDate: String? = nil, allTime: Bool? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
+        public init(currency: CurrencyCode? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, allTime: Bool? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
             self.currency = currency
             self.startDate = startDate
             self.endDate = endDate
@@ -4078,13 +4110,13 @@ extension OpenAPIOperations {
 
         public var currency: CurrencyCode?
         /// Inclusive lower transaction-date bound.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive upper transaction-date bound.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         public var excludedCategoryIds: [CategoryID]?
         public var excludedRecipientIds: [RecipientID]?
 
-        public init(currency: CurrencyCode? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
+        public init(currency: CurrencyCode? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
             self.currency = currency
             self.startDate = startDate
             self.endDate = endDate
@@ -4114,11 +4146,11 @@ extension OpenAPIOperations {
 
         public var currency: CurrencyCode?
         /// Inclusive lower transaction-date bound.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive upper transaction-date bound.
-        public var endDate: String?
+        public var endDate: CalendarDay?
 
-        public init(currency: CurrencyCode? = nil, startDate: String? = nil, endDate: String? = nil) {
+        public init(currency: CurrencyCode? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil) {
             self.currency = currency
             self.startDate = startDate
             self.endDate = endDate
@@ -4144,13 +4176,13 @@ extension OpenAPIOperations {
 
         public var currency: CurrencyCode?
         /// Inclusive lower transaction-date bound.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive upper transaction-date bound.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         public var excludedCategoryIds: [CategoryID]?
         public var excludedRecipientIds: [RecipientID]?
 
-        public init(currency: CurrencyCode? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
+        public init(currency: CurrencyCode? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
             self.currency = currency
             self.startDate = startDate
             self.endDate = endDate
@@ -4317,10 +4349,10 @@ extension OpenAPIOperations {
             public let allCategories: Bool?
             public let allRecipients: Bool?
             public let allTags: Bool?
-            public let dateRangeStart: String?
-            public let dateRangeEnd: String?
+            public let dateRangeStart: CalendarDay?
+            public let dateRangeEnd: CalendarDay?
 
-            public init(name: String, chartType: ChartType? = nil, chartVariant: ChartVariant? = nil, timeBucket: TimeBucket? = nil, categoryIds: [CategoryID]? = nil, recipientIds: [RecipientID]? = nil, tagIds: [TagID]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: String? = nil, dateRangeEnd: String? = nil) {
+            public init(name: String, chartType: ChartType? = nil, chartVariant: ChartVariant? = nil, timeBucket: TimeBucket? = nil, categoryIds: [CategoryID]? = nil, recipientIds: [RecipientID]? = nil, tagIds: [TagID]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: CalendarDay? = nil, dateRangeEnd: CalendarDay? = nil) {
                 self.name = name
                 self.chartType = chartType
                 self.chartVariant = chartVariant
@@ -4510,10 +4542,10 @@ extension OpenAPIOperations {
             public let allCategories: Bool?
             public let allRecipients: Bool?
             public let allTags: Bool?
-            public let dateRangeStart: Nullable<String>
-            public let dateRangeEnd: Nullable<String>
+            public let dateRangeStart: Nullable<CalendarDay>
+            public let dateRangeEnd: Nullable<CalendarDay>
 
-            public init(name: String? = nil, chartType: ChartType? = nil, chartVariant: ChartVariant? = nil, timeBucket: TimeBucket? = nil, categoryIds: [CategoryID]? = nil, recipientIds: [RecipientID]? = nil, tagIds: [TagID]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: Nullable<String> = .absent, dateRangeEnd: Nullable<String> = .absent) {
+            public init(name: String? = nil, chartType: ChartType? = nil, chartVariant: ChartVariant? = nil, timeBucket: TimeBucket? = nil, categoryIds: [CategoryID]? = nil, recipientIds: [RecipientID]? = nil, tagIds: [TagID]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: Nullable<CalendarDay> = .absent, dateRangeEnd: Nullable<CalendarDay> = .absent) {
                 self.name = name
                 self.chartType = chartType
                 self.chartVariant = chartVariant
@@ -4555,8 +4587,8 @@ extension OpenAPIOperations {
                 self.allCategories = try container.decodeIfPresent(Bool.self, forKey: .allCategories)
                 self.allRecipients = try container.decodeIfPresent(Bool.self, forKey: .allRecipients)
                 self.allTags = try container.decodeIfPresent(Bool.self, forKey: .allTags)
-                self.dateRangeStart = try container.decodeNullable(String.self, forKey: .dateRangeStart)
-                self.dateRangeEnd = try container.decodeNullable(String.self, forKey: .dateRangeEnd)
+                self.dateRangeStart = try container.decodeNullable(CalendarDay.self, forKey: .dateRangeStart)
+                self.dateRangeEnd = try container.decodeNullable(CalendarDay.self, forKey: .dateRangeEnd)
             }
 
             public func encode(to encoder: any Encoder) throws {
@@ -4731,12 +4763,12 @@ extension OpenAPIOperations {
         public var excludedRecipientIds: [RecipientID]?
         public var bucket: String?
         /// Inclusive start date.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive end date.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         public var currency: CurrencyCode?
 
-        public init(recipientIds: [RecipientID]? = nil, excludedRecipientIds: [RecipientID]? = nil, bucket: String? = nil, startDate: String? = nil, endDate: String? = nil, currency: CurrencyCode? = nil) {
+        public init(recipientIds: [RecipientID]? = nil, excludedRecipientIds: [RecipientID]? = nil, bucket: String? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, currency: CurrencyCode? = nil) {
             self.recipientIds = recipientIds
             self.excludedRecipientIds = excludedRecipientIds
             self.bucket = bucket
@@ -4772,12 +4804,12 @@ extension OpenAPIOperations {
         public var all: Bool?
         public var bucket: String?
         /// Inclusive start date.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Inclusive end date.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         public var currency: CurrencyCode?
 
-        public init(tagIds: [TagID]? = nil, all: Bool? = nil, bucket: String? = nil, startDate: String? = nil, endDate: String? = nil, currency: CurrencyCode? = nil) {
+        public init(tagIds: [TagID]? = nil, all: Bool? = nil, bucket: String? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, currency: CurrencyCode? = nil) {
             self.tagIds = tagIds
             self.all = all
             self.bucket = bucket
@@ -4917,13 +4949,13 @@ extension OpenAPIOperations {
         public var year: Int?
         public var currency: CurrencyCode?
         /// Defaults to the first day 23 calendar months before today.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Defaults to today in the application timezone.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         public var excludedCategoryIds: [CategoryID]?
         public var excludedRecipientIds: [RecipientID]?
 
-        public init(year: Int? = nil, currency: CurrencyCode? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
+        public init(year: Int? = nil, currency: CurrencyCode? = nil, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, excludedCategoryIds: [CategoryID]? = nil, excludedRecipientIds: [RecipientID]? = nil) {
             self.year = year
             self.currency = currency
             self.startDate = startDate
@@ -4971,12 +5003,12 @@ extension OpenAPIOperations {
 
         public struct ResponseData: Codable, Equatable, Sendable {
             public let year: Int
-            public let from: String
-            public let to: String
+            public let from: CalendarDay
+            public let to: CalendarDay
             public let currency: CurrencyCode
             public let byDeductionType: [ByDeductionTypeItem]
 
-            public init(year: Int, from: String, to: String, currency: CurrencyCode, byDeductionType: [ByDeductionTypeItem]) {
+            public init(year: Int, from: CalendarDay, to: CalendarDay, currency: CurrencyCode, byDeductionType: [ByDeductionTypeItem]) {
                 self.year = year
                 self.from = from
                 self.to = to
@@ -5233,7 +5265,7 @@ extension OpenAPIOperations {
 
         public struct Body: Codable, Equatable, Sendable {
             public let type: OpenAPI.PortfolioTxnType
-            public let date: String
+            public let date: CalendarDay
             public let amount: Decimal?
             public let units: Decimal?
             public let pricePerUnit: Decimal?
@@ -5245,14 +5277,14 @@ extension OpenAPIOperations {
             public let note: String?
             public let isRecurring: Bool?
             public let recurrenceInterval: OpenAPI.RecurrenceInterval?
-            public let recurrenceEndDate: String?
+            public let recurrenceEndDate: CalendarDay?
             /// Explicit EUR conversion rate; absent/null is resolved automatically
             public let fxRateToEur: Decimal?
             /// Owning account for the lot (ADR-091); absent or null leaves it unassigned. Accepted and
             /// applied by this operation all along — it was simply undocumented.
             public let accountId: AccountID?
 
-            public init(type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention? = nil, currency: CurrencyCode? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, fxRateToEur: Decimal? = nil, accountId: AccountID? = nil) {
+            public init(type: OpenAPI.PortfolioTxnType, date: CalendarDay, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention? = nil, currency: CurrencyCode? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: CalendarDay? = nil, fxRateToEur: Decimal? = nil, accountId: AccountID? = nil) {
                 self.type = type
                 self.date = date
                 self.amount = amount
@@ -5355,7 +5387,7 @@ extension OpenAPIOperations {
 
         public struct Body: Codable, Equatable, Sendable {
             public let type: OpenAPI.PortfolioTxnType?
-            public let date: String?
+            public let date: CalendarDay?
             public let amount: Decimal?
             public let units: Decimal?
             public let pricePerUnit: Decimal?
@@ -5372,9 +5404,9 @@ extension OpenAPIOperations {
             public let note: Nullable<String>
             public let isRecurring: Bool?
             public let recurrenceInterval: OpenAPI.RecurrenceInterval?
-            public let recurrenceEndDate: Nullable<String>
+            public let recurrenceEndDate: Nullable<CalendarDay>
 
-            public init(type: OpenAPI.PortfolioTxnType? = nil, date: String? = nil, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention? = nil, currency: CurrencyCode? = nil, fxRateToEur: Nullable<Decimal> = .absent, accountId: Nullable<AccountID> = .absent, note: Nullable<String> = .absent, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: Nullable<String> = .absent) {
+            public init(type: OpenAPI.PortfolioTxnType? = nil, date: CalendarDay? = nil, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: DividendAmountConvention? = nil, currency: CurrencyCode? = nil, fxRateToEur: Nullable<Decimal> = .absent, accountId: Nullable<AccountID> = .absent, note: Nullable<String> = .absent, isRecurring: Bool? = nil, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: Nullable<CalendarDay> = .absent) {
                 self.type = type
                 self.date = date
                 self.amount = amount
@@ -5413,7 +5445,7 @@ extension OpenAPIOperations {
             public init(from decoder: any Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 self.type = try container.decodeIfPresent(OpenAPI.PortfolioTxnType.self, forKey: .type)
-                self.date = try container.decodeIfPresent(String.self, forKey: .date)
+                self.date = try container.decodeIfPresent(CalendarDay.self, forKey: .date)
                 self.amount = try container.decodeIfPresent(Decimal.self, forKey: .amount)
                 self.units = try container.decodeIfPresent(Decimal.self, forKey: .units)
                 self.pricePerUnit = try container.decodeIfPresent(Decimal.self, forKey: .pricePerUnit)
@@ -5426,7 +5458,7 @@ extension OpenAPIOperations {
                 self.note = try container.decodeNullable(String.self, forKey: .note)
                 self.isRecurring = try container.decodeIfPresent(Bool.self, forKey: .isRecurring)
                 self.recurrenceInterval = try container.decodeIfPresent(OpenAPI.RecurrenceInterval.self, forKey: .recurrenceInterval)
-                self.recurrenceEndDate = try container.decodeNullable(String.self, forKey: .recurrenceEndDate)
+                self.recurrenceEndDate = try container.decodeNullable(CalendarDay.self, forKey: .recurrenceEndDate)
             }
 
             public func encode(to encoder: any Encoder) throws {
@@ -5548,11 +5580,11 @@ extension OpenAPIOperations {
         public var currency: CurrencyCode?
         /// Calendar date; defaults to 2000-01-01 when absent or empty. Any other non-date value returns
         /// 400.
-        public var from: String?
+        public var from: CalendarDay?
         /// Calendar date; defaults to today when absent or empty. Any other non-date value returns 400.
-        public var to: String?
+        public var to: CalendarDay?
 
-        public init(currency: CurrencyCode? = nil, from: String? = nil, to: String? = nil) {
+        public init(currency: CurrencyCode? = nil, from: CalendarDay? = nil, to: CalendarDay? = nil) {
             self.currency = currency
             self.from = from
             self.to = to
@@ -5646,9 +5678,9 @@ extension OpenAPIOperations {
 
         public var id: InvestmentID
         /// Accepted but ignored; use from_ms.
-        public var startDate: String?
+        public var startDate: CalendarDay?
         /// Accepted but ignored; use to_ms.
-        public var endDate: String?
+        public var endDate: CalendarDay?
         /// Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
         public var fromMs: Decimal?
         /// Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
@@ -5657,7 +5689,7 @@ extension OpenAPIOperations {
         /// parsing is retained.
         public var dbOnly: Bool?
 
-        public init(id: InvestmentID, startDate: String? = nil, endDate: String? = nil, fromMs: Decimal? = nil, toMs: Decimal? = nil, dbOnly: Bool? = nil) {
+        public init(id: InvestmentID, startDate: CalendarDay? = nil, endDate: CalendarDay? = nil, fromMs: Decimal? = nil, toMs: Decimal? = nil, dbOnly: Bool? = nil) {
             self.id = id
             self.startDate = startDate
             self.endDate = endDate
@@ -5942,18 +5974,18 @@ extension OpenAPIOperations {
 
         public struct ResponseData: Codable, Equatable, Sendable {
             public let currency: CurrencyCode
-            public let today: String
-            public let horizonEnd: String
+            public let today: CalendarDay
+            public let horizonEnd: CalendarDay
             public let horizonDays: Int
             public let currentCash: Decimal
             public let reserveFloor: Decimal
             public let minimumProjectedBalance: Decimal
-            public let minimumDate: String
+            public let minimumDate: CalendarDay
             public let candidateCashCap: Decimal
             public let occurrenceCount: Int
             public let assumptions: Assumptions
 
-            public init(currency: CurrencyCode, today: String, horizonEnd: String, horizonDays: Int, currentCash: Decimal, reserveFloor: Decimal, minimumProjectedBalance: Decimal, minimumDate: String, candidateCashCap: Decimal, occurrenceCount: Int, assumptions: Assumptions) {
+            public init(currency: CurrencyCode, today: CalendarDay, horizonEnd: CalendarDay, horizonDays: Int, currentCash: Decimal, reserveFloor: Decimal, minimumProjectedBalance: Decimal, minimumDate: CalendarDay, candidateCashCap: Decimal, occurrenceCount: Int, assumptions: Assumptions) {
                 self.currency = currency
                 self.today = today
                 self.horizonEnd = horizonEnd
@@ -6503,9 +6535,9 @@ extension OpenAPIOperations {
         public static let method = HTTPMethod.post
         public static let pathTemplate = "/api/analysis/execute"
 
-        public var body: JSONValue
+        public var body: Body
 
-        public init(body: JSONValue) {
+        public init(body: Body) {
             self.body = body
         }
 
@@ -6513,6 +6545,308 @@ extension OpenAPIOperations {
 
         public func encodedBody() throws -> Data? {
             try APIBody.encode(body)
+        }
+
+        /// `mode: visual` requires `plan`. An omitted `mode` or `mode: sql` requires `sql`. Any other
+        /// `mode` returns 400.
+        /// Tells its branches apart by which of `plan`, `sql` is present.
+        public enum Body: Codable, Equatable, Sendable {
+            case plan(PlanVariant)
+            case sql(SqlVariant)
+
+            private enum ProbeKey: String, CodingKey {
+                case plan = "plan"
+                case sql = "sql"
+            }
+
+            public init(from decoder: any Decoder) throws {
+                let probe = try decoder.container(keyedBy: ProbeKey.self)
+                if probe.contains(.plan) {
+                    self = .plan(try PlanVariant(from: decoder))
+                    return
+                }
+                if probe.contains(.sql) {
+                    self = .sql(try SqlVariant(from: decoder))
+                    return
+                }
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "No variant of Body matches (needs plan or sql)."))
+            }
+
+            public func encode(to encoder: any Encoder) throws {
+                switch self {
+                case .plan(let value): try value.encode(to: encoder)
+                case .sql(let value): try value.encode(to: encoder)
+                }
+            }
+
+            public struct PlanVariant: Codable, Equatable, Sendable {
+                public let mode: Mode
+                public let plan: OpenAPI.AnalysisVisualPlan
+                public let requestId: String?
+                public let limit: Decimal?
+                public let offset: Decimal?
+                public let workbench: OpenAPI.AnalysisWorkbenchInput?
+                public let scenarioModel: ScenarioModel?
+                public let formulaModel: FormulaModel?
+
+                public init(mode: Mode, plan: OpenAPI.AnalysisVisualPlan, requestId: String? = nil, limit: Decimal? = nil, offset: Decimal? = nil, workbench: OpenAPI.AnalysisWorkbenchInput? = nil, scenarioModel: ScenarioModel? = nil, formulaModel: FormulaModel? = nil) {
+                    self.mode = mode
+                    self.plan = plan
+                    self.requestId = requestId
+                    self.limit = limit
+                    self.offset = offset
+                    self.workbench = workbench
+                    self.scenarioModel = scenarioModel
+                    self.formulaModel = formulaModel
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case mode = "mode"
+                    case plan = "plan"
+                    case requestId = "requestId"
+                    case limit = "limit"
+                    case offset = "offset"
+                    case workbench = "workbench"
+                    case scenarioModel = "scenarioModel"
+                    case formulaModel = "formulaModel"
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case visual
+                    case unknown(String)
+
+                    public static var allKnownCases: [Mode] {
+                        [.visual]
+                    }
+
+                    public static var allCases: [Mode] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "visual": self = .visual
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .visual: return "visual"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
+
+                public struct ScenarioModel: Codable, Equatable, Sendable {
+                    public let attachments: [JSONValue]?
+                    public let joins: [JSONValue]?
+
+                    public init(attachments: [JSONValue]? = nil, joins: [JSONValue]? = nil) {
+                        self.attachments = attachments
+                        self.joins = joins
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case attachments = "attachments"
+                        case joins = "joins"
+                    }
+                }
+
+                public struct FormulaModel: Codable, Equatable, Sendable {
+                    public let formulas: [JSONValue]?
+                    public let assumptions: [JSONValue]?
+                    public let assumptionValues: JSONValue?
+
+                    public init(formulas: [JSONValue]? = nil, assumptions: [JSONValue]? = nil, assumptionValues: JSONValue? = nil) {
+                        self.formulas = formulas
+                        self.assumptions = assumptions
+                        self.assumptionValues = assumptionValues
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case formulas = "formulas"
+                        case assumptions = "assumptions"
+                        case assumptionValues = "assumptionValues"
+                    }
+                }
+            }
+
+            public struct SqlVariant: Codable, Equatable, Sendable {
+                public let mode: Mode?
+                public let sql: String
+                public let values: [ValuesItem?]?
+                public let datasetIds: [String]?
+                public let columns: [ColumnsItem]?
+                public let requestId: String?
+                public let limit: Decimal?
+                public let offset: Decimal?
+                public let workbench: OpenAPI.AnalysisWorkbenchInput?
+                public let scenarioModel: ScenarioModel?
+                public let formulaModel: FormulaModel?
+
+                public init(mode: Mode? = nil, sql: String, values: [ValuesItem?]? = nil, datasetIds: [String]? = nil, columns: [ColumnsItem]? = nil, requestId: String? = nil, limit: Decimal? = nil, offset: Decimal? = nil, workbench: OpenAPI.AnalysisWorkbenchInput? = nil, scenarioModel: ScenarioModel? = nil, formulaModel: FormulaModel? = nil) {
+                    self.mode = mode
+                    self.sql = sql
+                    self.values = values
+                    self.datasetIds = datasetIds
+                    self.columns = columns
+                    self.requestId = requestId
+                    self.limit = limit
+                    self.offset = offset
+                    self.workbench = workbench
+                    self.scenarioModel = scenarioModel
+                    self.formulaModel = formulaModel
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case mode = "mode"
+                    case sql = "sql"
+                    case values = "values"
+                    case datasetIds = "datasetIds"
+                    case columns = "columns"
+                    case requestId = "requestId"
+                    case limit = "limit"
+                    case offset = "offset"
+                    case workbench = "workbench"
+                    case scenarioModel = "scenarioModel"
+                    case formulaModel = "formulaModel"
+                }
+
+                /// A value this client does not know decodes to `.unknown` and encodes back unchanged.
+                public enum Mode: Codable, Hashable, Sendable, CaseIterable, RawRepresentable {
+                    case sql
+                    case unknown(String)
+
+                    public static var allKnownCases: [Mode] {
+                        [.sql]
+                    }
+
+                    public static var allCases: [Mode] { allKnownCases }
+
+                    public init(rawValue: String) {
+                        switch rawValue {
+                        case "sql": self = .sql
+                        default: self = .unknown(rawValue)
+                        }
+                    }
+
+                    public var rawValue: String {
+                        switch self {
+                        case .sql: return "sql"
+                        case .unknown(let value): return value
+                        }
+                    }
+
+                    public init(from decoder: any Decoder) throws {
+                        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        try container.encode(rawValue)
+                    }
+                }
+
+                /// One of string, number, boolean; decoded by its JSON type.
+                public enum ValuesItem: Codable, Equatable, Sendable {
+                    case boolean(Bool)
+                    case number(Decimal)
+                    case string(String)
+
+                    public init(from decoder: any Decoder) throws {
+                        let container = try decoder.singleValueContainer()
+                        if let value = try? container.decode(Bool.self) {
+                            self = .boolean(value)
+                            return
+                        }
+                        if let value = try? container.decode(Decimal.self) {
+                            self = .number(value)
+                            return
+                        }
+                        if let value = try? container.decode(String.self) {
+                            self = .string(value)
+                            return
+                        }
+                        throw DecodingError.typeMismatch(
+                            ValuesItem.self,
+                            DecodingError.Context(
+                                codingPath: decoder.codingPath,
+                                debugDescription: "Expected string or number or boolean."))
+                    }
+
+                    public func encode(to encoder: any Encoder) throws {
+                        var container = encoder.singleValueContainer()
+                        switch self {
+                        case .boolean(let value): try container.encode(value)
+                        case .number(let value): try container.encode(value)
+                        case .string(let value): try container.encode(value)
+                        }
+                    }
+                }
+
+                public struct ColumnsItem: Codable, Equatable, Sendable {
+                    public let id: AnalysisColumnID
+                    public let label: String?
+                    public let type: String
+
+                    public init(id: AnalysisColumnID, label: String? = nil, type: String) {
+                        self.id = id
+                        self.label = label
+                        self.type = type
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case id = "id"
+                        case label = "label"
+                        case type = "type"
+                    }
+                }
+
+                public struct ScenarioModel: Codable, Equatable, Sendable {
+                    public let attachments: [JSONValue]?
+                    public let joins: [JSONValue]?
+
+                    public init(attachments: [JSONValue]? = nil, joins: [JSONValue]? = nil) {
+                        self.attachments = attachments
+                        self.joins = joins
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case attachments = "attachments"
+                        case joins = "joins"
+                    }
+                }
+
+                public struct FormulaModel: Codable, Equatable, Sendable {
+                    public let formulas: [JSONValue]?
+                    public let assumptions: [JSONValue]?
+                    public let assumptionValues: JSONValue?
+
+                    public init(formulas: [JSONValue]? = nil, assumptions: [JSONValue]? = nil, assumptionValues: JSONValue? = nil) {
+                        self.formulas = formulas
+                        self.assumptions = assumptions
+                        self.assumptionValues = assumptionValues
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case formulas = "formulas"
+                        case assumptions = "assumptions"
+                        case assumptionValues = "assumptionValues"
+                    }
+                }
+            }
         }
     }
 
@@ -6666,11 +7000,11 @@ extension OpenAPIOperations {
             public let valueColumns: [String]?
             public let outcomeId: AnalysisColumnID?
             public let variableId: AnalysisColumnID?
-            public let target: JSONValue?
-            public let lower: JSONValue?
-            public let upper: JSONValue?
+            public let target: Target?
+            public let lower: Lower?
+            public let upper: Upper?
 
-            public init(operation: Operation, rows: [JSONValue], columns: [OpenAPI.AnalysisColumnRef]? = nil, complete: Bool? = nil, inputComplete: Bool? = nil, window: JSONValue? = nil, coverage: JSONValue? = nil, workbench: OpenAPI.AnalysisWorkbenchInput? = nil, formulas: [JSONValue]? = nil, assumptions: JSONValue? = nil, assumptionUnits: JSONValue? = nil, dateColumn: String? = nil, valueColumns: [String]? = nil, outcomeId: AnalysisColumnID? = nil, variableId: AnalysisColumnID? = nil, target: JSONValue? = nil, lower: JSONValue? = nil, upper: JSONValue? = nil) {
+            public init(operation: Operation, rows: [JSONValue], columns: [OpenAPI.AnalysisColumnRef]? = nil, complete: Bool? = nil, inputComplete: Bool? = nil, window: JSONValue? = nil, coverage: JSONValue? = nil, workbench: OpenAPI.AnalysisWorkbenchInput? = nil, formulas: [JSONValue]? = nil, assumptions: JSONValue? = nil, assumptionUnits: JSONValue? = nil, dateColumn: String? = nil, valueColumns: [String]? = nil, outcomeId: AnalysisColumnID? = nil, variableId: AnalysisColumnID? = nil, target: Target? = nil, lower: Lower? = nil, upper: Upper? = nil) {
                 self.operation = operation
                 self.rows = rows
                 self.columns = columns
@@ -6759,6 +7093,99 @@ extension OpenAPIOperations {
                 public func encode(to encoder: any Encoder) throws {
                     var container = encoder.singleValueContainer()
                     try container.encode(rawValue)
+                }
+            }
+
+            /// One of string, number; decoded by its JSON type.
+            public enum Target: Codable, Equatable, Sendable {
+                case number(Decimal)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Decimal.self) {
+                        self = .number(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        Target.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected string or number."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .number(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
+                }
+            }
+
+            /// One of string, number; decoded by its JSON type.
+            public enum Lower: Codable, Equatable, Sendable {
+                case number(Decimal)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Decimal.self) {
+                        self = .number(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        Lower.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected string or number."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .number(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
+                }
+            }
+
+            /// One of string, number; decoded by its JSON type.
+            public enum Upper: Codable, Equatable, Sendable {
+                case number(Decimal)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Decimal.self) {
+                        self = .number(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        Upper.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected string or number."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .number(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
                 }
             }
         }
@@ -6961,9 +7388,9 @@ extension OpenAPIOperations {
             public let formulas: [JSONValue]?
             public let assumptions: [JSONValue]?
             public let assumptionValues: JSONValue?
-            public let expectedVersion: JSONValue?
+            public let expectedVersion: ExpectedVersion?
 
-            public init(name: String? = nil, workspace: Workspace? = nil, querySpec: OpenAPI.AnalysisQuerySpec, parameters: JSONValue? = nil, charts: [JSONValue]? = nil, sourceReferences: [JSONValue]? = nil, refreshMode: RefreshMode? = nil, formulas: [JSONValue]? = nil, assumptions: [JSONValue]? = nil, assumptionValues: JSONValue? = nil, expectedVersion: JSONValue? = nil) {
+            public init(name: String? = nil, workspace: Workspace? = nil, querySpec: OpenAPI.AnalysisQuerySpec, parameters: JSONValue? = nil, charts: [JSONValue]? = nil, sourceReferences: [JSONValue]? = nil, refreshMode: RefreshMode? = nil, formulas: [JSONValue]? = nil, assumptions: [JSONValue]? = nil, assumptionValues: JSONValue? = nil, expectedVersion: ExpectedVersion? = nil) {
                 self.name = name
                 self.workspace = workspace
                 self.querySpec = querySpec
@@ -7070,6 +7497,37 @@ extension OpenAPIOperations {
                 public func encode(to encoder: any Encoder) throws {
                     var container = encoder.singleValueContainer()
                     try container.encode(rawValue)
+                }
+            }
+
+            /// One of integer, string; decoded by its JSON type.
+            public enum ExpectedVersion: Codable, Equatable, Sendable {
+                case integer(Int)
+                case string(String)
+
+                public init(from decoder: any Decoder) throws {
+                    let container = try decoder.singleValueContainer()
+                    if let value = try? container.decode(Int.self) {
+                        self = .integer(value)
+                        return
+                    }
+                    if let value = try? container.decode(String.self) {
+                        self = .string(value)
+                        return
+                    }
+                    throw DecodingError.typeMismatch(
+                        ExpectedVersion.self,
+                        DecodingError.Context(
+                            codingPath: decoder.codingPath,
+                            debugDescription: "Expected integer or string."))
+                }
+
+                public func encode(to encoder: any Encoder) throws {
+                    var container = encoder.singleValueContainer()
+                    switch self {
+                    case .integer(let value): try container.encode(value)
+                    case .string(let value): try container.encode(value)
+                    }
                 }
             }
         }
@@ -8362,12 +8820,12 @@ extension OpenAPIOperations {
             public let assumptions: [String]?
             public let openQuestions: [String]?
             public let conclusion: String?
-            public let reviewDate: String?
+            public let reviewDate: CalendarDay?
             public let evidence: [OpenAPI.ResearchDossierEvidence]?
             public let links: OpenAPI.ResearchDossierLinks?
             public let expectedVersion: Int
 
-            public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, expectedVersion: Int) {
+            public init(title: String, workspace: Workspace, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: CalendarDay? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, expectedVersion: Int) {
                 self.title = title
                 self.workspace = workspace
                 self.question = question
@@ -8894,12 +9352,12 @@ extension OpenAPIOperations {
                 public let workspaces: [WorkspacesItem]
                 public let accountIds: [AccountID]?
                 public let investmentIds: [InvestmentID]?
-                public let dateFrom: String?
-                public let dateTo: String?
+                public let dateFrom: CalendarDay?
+                public let dateTo: CalendarDay?
                 public let currency: CurrencyCode?
                 public let constraints: [String]?
 
-                public init(workspaces: [WorkspacesItem], accountIds: [AccountID]? = nil, investmentIds: [InvestmentID]? = nil, dateFrom: String? = nil, dateTo: String? = nil, currency: CurrencyCode? = nil, constraints: [String]? = nil) {
+                public init(workspaces: [WorkspacesItem], accountIds: [AccountID]? = nil, investmentIds: [InvestmentID]? = nil, dateFrom: CalendarDay? = nil, dateTo: CalendarDay? = nil, currency: CurrencyCode? = nil, constraints: [String]? = nil) {
                     self.workspaces = workspaces
                     self.accountIds = accountIds
                     self.investmentIds = investmentIds

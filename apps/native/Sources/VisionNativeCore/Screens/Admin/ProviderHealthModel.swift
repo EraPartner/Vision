@@ -43,10 +43,10 @@ public struct ProviderHealthRow: Equatable, Sendable, Identifiable {
         timeZone: TimeZone = .current
     ) {
         let never = strings.t("admin.providers.never")
-        func timestamp(_ text: String?) -> String {
-            guard let text, !text.isEmpty else { return never }
+        func timestamp(_ instant: Instant?) -> String {
+            guard let instant else { return never }
             return VisionFormat.appDateTime(
-                text, format: settings.dateFormat, locale: settings.numberFormat.locale, timeZone: timeZone)
+                instant, format: settings.dateFormat, locale: settings.numberFormat.locale, timeZone: timeZone)
         }
         provider = health.provider
         label = health.label
@@ -57,7 +57,7 @@ public struct ProviderHealthRow: Equatable, Sendable, Identifiable {
         let error = health.lastError ?? ""
         let hasError = !error.isEmpty && health.consecutiveFailures > 0
         lastError = hasError ? error : nil
-        lastErrorAt = hasError ? health.lastErrorAt.flatMap { $0.isEmpty ? nil : timestamp($0) } : nil
+        lastErrorAt = hasError ? health.lastErrorAt.map { timestamp($0) } : nil
     }
 }
 

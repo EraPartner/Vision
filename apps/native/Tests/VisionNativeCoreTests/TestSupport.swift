@@ -15,6 +15,39 @@ extension CurrencyCode: ExpressibleByStringLiteral {
     }
 }
 
+/// Test-only string literals for calendar days (`"2026-10-09"`) and timestamps
+/// (`"2026-10-09T08:05:00.000Z"`), like the currency code literals above. Production code reads
+/// them from decoded models or `CalendarDay(_:)` / `Instant(_:)`. Trap on a malformed literal.
+extension CalendarDay: @retroactive ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        guard let day = CalendarDay(value) else {
+            preconditionFailure("\"\(value)\" is not a calendar day (YYYY-MM-DD)")
+        }
+        self = day
+    }
+}
+
+extension Instant: @retroactive ExpressibleByStringLiteral {
+    public init(stringLiteral value: String) {
+        guard let instant = Instant(value) else {
+            preconditionFailure("\"\(value)\" is not an ISO 8601 timestamp with a zone")
+        }
+        self = instant
+    }
+}
+
+extension OpenAPI.SettingBaseline {
+    /// A baseline written as the JSON of the wire (`{ exists: false }`, `{ exists: true, value }`),
+    /// the way the setting fixtures spell it. Traps on JSON that is not a baseline.
+    static func wire(_ json: JSONValue) -> OpenAPI.SettingBaseline {
+        do {
+            return try OpenAPI.SettingBaseline(json: json)
+        } catch {
+            preconditionFailure("not a setting baseline: \(error)")
+        }
+    }
+}
+
 /// An in-memory file system with POSIX-like semantics for the calls the runtime makes.
 final class FakeFileSystem: RuntimeFileSystem, @unchecked Sendable {
     enum Node: Equatable {

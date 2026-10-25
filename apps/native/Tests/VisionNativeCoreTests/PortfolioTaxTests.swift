@@ -239,7 +239,7 @@ struct PortfolioTaxModelTests {
         let service = try PortfolioTaxTestService()
         let widgets = PortfolioTaxWidgetsModel(service: service)
         await widgets.load()
-        let original = await service.widgetRecord.expected
+        let original = await service.widgetRecord.expected.json
         await service.pause("widgets")
         let read = Task { await widgets.load() }
         await service.waitForPause()
@@ -321,7 +321,7 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
             "otherPage": .object(["secretFuture": .bool(false)]),
         ])
         widgetRecord = .init(
-            key: "widget_visibility", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "widget_visibility", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
     }
     func pause(_ operation: String) { paused = operation }
     func waitForPause() async { if held == nil { await withCheckedContinuation { entered = $0 } } }
@@ -373,7 +373,7 @@ private actor PortfolioTaxTestService: PortfolioTaxService {
         widgetWrites.append((value, expected))
         if failure { throw APIError.invalidRequest("Synthetic widget CAS conflict") }
         widgetRecord = .init(
-            key: "widget_visibility", value: value, expected: .object(["exists": .bool(true), "value": value]))
+            key: "widget_visibility", value: value, expected: .wire(.object(["exists": .bool(true), "value": value])))
         return widgetRecord
     }
 }

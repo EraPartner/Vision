@@ -47,7 +47,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
 
     public init(_ wire: OpenAPI.Transaction) {
         id = wire.id
-        date = wire.transactionDate
+        date = wire.transactionDate.description
         memo = wire.memo
         recipientId = wire.recipientId
         recipientName = wire.recipientName
@@ -69,7 +69,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     /// `applyTransactionLocalPatch` with the server's answer to a PATCH. The running balance
     /// belongs to the list query and stays.
     public mutating func merge(_ wire: OpenAPI.Transaction) {
-        date = wire.transactionDate
+        date = wire.transactionDate.description
         memo = wire.memo
         recipientId = wire.recipientId
         recipientName = wire.recipientName
@@ -131,20 +131,20 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
 
     /// `handleDuplicate`: a copy without the balance, confirmed as an intentional duplicate.
     public var duplicateBody: OpenAPI.TransactionCreate? {
-        guard let recipientId, let accountId, !day.isEmpty else { return nil }
+        guard let recipientId, let accountId, let transactionDate = CalendarDay(day) else { return nil }
         return OpenAPI.TransactionCreate(
-            transactionDate: day, accountId: accountId, recipientId: recipientId, memo: memo, amount: amount,
-            currency: displayCurrency, categoryId: categoryId, comment: comment,
+            transactionDate: transactionDate, accountId: accountId, recipientId: recipientId, memo: memo,
+            amount: amount, currency: displayCurrency, categoryId: categoryId, comment: comment,
             tags: tags.isEmpty ? nil : tags.map(\.slug), allowDuplicate: true)
     }
 
     /// The delete Undo's `createTransaction`: every field of the deleted row, balance
     /// included; `nil` when the row cannot be recreated (no payee, date or account).
     public var restoreBody: OpenAPI.TransactionCreate? {
-        guard let recipientId, let accountId, !day.isEmpty else { return nil }
+        guard let recipientId, let accountId, let transactionDate = CalendarDay(day) else { return nil }
         return OpenAPI.TransactionCreate(
-            transactionDate: day, accountId: accountId, recipientId: recipientId, memo: memo, amount: amount,
-            currency: currency, balance: balance, categoryId: categoryId, comment: comment,
+            transactionDate: transactionDate, accountId: accountId, recipientId: recipientId, memo: memo,
+            amount: amount, currency: currency, balance: balance, categoryId: categoryId, comment: comment,
             tags: tags.map(\.slug))
     }
 

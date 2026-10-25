@@ -14,7 +14,7 @@ extension APIClient: TaxWidgetSettingsService {
         try await send(
             OpenAPIOperations.SaveSetting(
                 key: TaxWidgetsModel.settingsKey,
-                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: expected)))
+                body: OpenAPIOperations.SaveSetting.Body(value: value, expected: try OpenAPI.SettingBaseline(json: expected))))
     }
 }
 
@@ -63,7 +63,7 @@ public final class TaxWidgetsModel {
             guard token == revision, !Task.isCancelled else { return }
             try validate(record)
             visibility = InsightWidgetVisibility(record.value)
-            baseline = record.expected
+            baseline = record.expected.json
             isLoaded = true
             error = nil
         } catch {
@@ -103,7 +103,7 @@ public final class TaxWidgetsModel {
         do {
             let record = try await service.saveTaxWidgets(value: visibility.json, expected: baseline)
             try validate(record)
-            baseline = record.expected
+            baseline = record.expected.json
             visibility = InsightWidgetVisibility(record.value)
             revision = UUID()
             isSaving = false
@@ -119,7 +119,7 @@ public final class TaxWidgetsModel {
     private func validate(_ record: OpenAPI.Setting) throws {
         guard record.key == Self.settingsKey.rawValue,
             InsightWidgetVisibility.isValidSetting(record.value),
-            let fields = record.expected.objectValue, let exists = fields["exists"]?.boolValue,
+            let fields = record.expected.json.objectValue, let exists = fields["exists"]?.boolValue,
             Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
         else {
             throw APIError.contract(

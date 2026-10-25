@@ -252,7 +252,7 @@ private actor RaceHomeService: StatisticsService {
     private func widgetRecord() -> OpenAPI.Setting {
         OpenAPI.Setting(
             key: "widget_visibility", value: widgets,
-            expected: .object(["exists": .bool(true), "value": widgets]))
+            expected: .wire(.object(["exists": .bool(true), "value": widgets])))
     }
     func homeWidgetSetting() async throws -> OpenAPI.Setting {
         let record = widgetRecord()
@@ -374,6 +374,7 @@ private func raceChart(id: SavedChartID = 1, draft: CustomChartDraft? = nil) -> 
         categoryIds: configuration.categoryIds.map(\.rawValue), recipientIds: configuration.recipientIds, tagIds: configuration.tagIds,
         allCategories: configuration.allCategories, allRecipients: configuration.allRecipients,
         allTags: configuration.allTags,
-        dateRangeStart: configuration.dateRangeStart, dateRangeEnd: configuration.dateRangeEnd,
-        createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        dateRangeStart: configuration.dateRangeStart.flatMap { CalendarDay($0) },
+        dateRangeEnd: configuration.dateRangeEnd.flatMap { CalendarDay($0) },
+        createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 }

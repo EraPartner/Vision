@@ -215,14 +215,14 @@ extension APIClient: AccountsService {
     public func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? {
         let answer = try await send(
             OpenAPIOperations.SetAccountOpeningBalance(
-                id: id, body: .init(balance: balance, date: date, currency: currency)))
+                id: id, body: .init(balance: balance, date: CalendarDay(validating: date), currency: currency)))
         return answer.objectValue?["warning"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     public func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws {
         _ = try await send(
             OpenAPIOperations.SetAccountStatementBalance(
-                id: id, currency: currency, body: .init(balance: balance, date: date)))
+                id: id, currency: currency, body: .init(balance: balance, date: CalendarDay(validating: date))))
     }
 
     public func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws {

@@ -31,7 +31,7 @@ public struct TaxSettingsPatch: Encodable, Equatable, Sendable {
         var baselines: [String: JSONValue] = [:]
         for key in settings.keys {
             let matches = records.filter { $0.key == key }
-            guard matches.count == 1, let baseline = matches.first?.expected,
+            guard matches.count == 1, let baseline = matches.first?.expected.json,
                 let fields = baseline.objectValue, let exists = fields["exists"]?.boolValue,
                 Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
             else {

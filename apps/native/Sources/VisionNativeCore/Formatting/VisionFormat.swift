@@ -88,6 +88,38 @@ public enum VisionFormat {
         return text
     }
 
+    /// `formatDateStringWithAppSettings` for a typed calendar day: the same day on every device,
+    /// no zone involved.
+    public static func appDate(_ day: CalendarDay, format: AppDateFormat) -> String {
+        appDate(year: day.year, month: day.month, day: day.day, format: format)
+    }
+
+    /// `formatDateStringWithAppSettings` for a typed timestamp: like the text overload, the date
+    /// as written in the timestamp (the UTC day of the backend's `...Z` values), not converted to
+    /// the local zone.
+    public static func appDate(_ instant: Instant, format: AppDateFormat) -> String {
+        appDate(instant.writtenDay, format: format)
+    }
+
+    /// `formatDateTimeStringWithAppSettings` for a typed timestamp: its local date and
+    /// `toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })`.
+    public static func appDateTime(
+        _ instant: Instant, format: AppDateFormat, locale: Locale, timeZone: TimeZone = .current
+    ) -> String {
+        "\(appDate(instant.date, format: format, timeZone: timeZone)) \(time(instant.date, locale: locale, timeZone: timeZone))"
+    }
+
+    /// `formatDateTimeStringWithAppSettings` for a typed calendar day: the day and midnight.
+    public static func appDateTime(
+        _ day: CalendarDay, format: AppDateFormat, locale: Locale, timeZone: TimeZone = .current
+    ) -> String {
+        let dateOnly = appDate(day, format: format)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        guard let midnight = day.date(in: calendar) else { return dateOnly }
+        return "\(dateOnly) \(time(midnight, locale: locale, timeZone: timeZone))"
+    }
+
     /// `formatDateTimeStringWithAppSettings`: a timestamp's local date and its
     /// `toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })`.
     public static func appDateTime(

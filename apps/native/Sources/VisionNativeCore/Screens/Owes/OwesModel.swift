@@ -596,7 +596,7 @@ public final class OwesModel {
         let uncategorized = strings.t("txPage.field.uncategorized")
         return recent.map { item in
             OwesRecentRow(
-                id: item.id, date: item.transactionDate,
+                id: item.id, date: item.transactionDate.description,
                 description: item.memo.flatMap { $0.isEmpty ? nil : $0 } ?? transaction,
                 category: item.categoryName.flatMap { $0.isEmpty ? nil : $0 } ?? uncategorized,
                 amount: item.amount,

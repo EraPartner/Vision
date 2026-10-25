@@ -91,7 +91,7 @@ public final class PlannedPaymentFormModel: Identifiable {
         let format = settings.numberFormat
         var due: PlannedDay? = today
         if let initial { due = PlannedDay(ymd: initial.dueDate, calendar: calendar) }
-        let storedEnd = wire?.recurrenceEndDate.flatMap { $0.isEmpty ? nil : $0 }
+        let storedEnd = wire?.recurrenceEndDate?.description
         let start = Snapshot(
             name: initial?.name ?? "",
             amount: initial.map { LocaleNumber.editable(Self.magnitude($0.amount), format: format) } ?? "",
@@ -267,13 +267,13 @@ public final class PlannedPaymentFormModel: Identifiable {
             focusToken += 1
             return nil
         }
-        guard let dueDate, let accountId else { return nil }
-        return payload(dueDate: dueDate, accountId: accountId)
+        guard let dueDate, let dueDay = dueDate.calendarDay, let accountId else { return nil }
+        return payload(dueDate: dueDate, dueDay: dueDay, accountId: accountId)
     }
 
     // MARK: Payload
 
-    private func payload(dueDate: PlannedDay, accountId: AccountID) -> PlannedFormSubmission {
+    private func payload(dueDate: PlannedDay, dueDay: CalendarDay, accountId: AccountID) -> PlannedFormSubmission {
         let due = dueDate.ymd
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let magnitude = Self.magnitude(LocaleNumber.parseOrZero(amount, format: numberFormat))
@@ -291,6 +291,7 @@ public final class PlannedPaymentFormModel: Identifiable {
         var rate: Decimal?
         var term: Int?
         var startDate: String?
+        var loanStartDay: CalendarDay?
         var paymentDay: Int?
         if isLoan {
             loanType = self.loanType
@@ -298,11 +299,13 @@ public final class PlannedPaymentFormModel: Identifiable {
             rate = LocaleNumber.parseOrZero(loanRate, format: numberFormat)
             term = JSInteger.parse(loanTermMonths)
             startDate = due
+            loanStartDay = dueDay
             paymentDay = loanPaymentDay.isEmpty ? dueDate.day : JSInteger.parse(loanPaymentDay)
         }
 
         var pattern: String?
         var endDate: String??
+        var endDay: CalendarDay?
         var maximum: Int??
         if !isLoan && isRecurring {
             let days = frequency == .custom && !customDays.isEmpty ? JSInteger.parse(customDays) : nil
@@ -313,15 +316,16 @@ public final class PlannedPaymentFormModel: Identifiable {
             }
             // Sent as `null` when cleared, so an edit drops an old bound.
             endDate = .some(self.endDate?.ymd)
+            endDay = self.endDate.flatMap(\.calendarDay)
             maximum = .some(maxOccurrences.isEmpty ? nil : JSInteger.parse(maxOccurrences))
         }
 
         let create = OpenAPI.PlannedTransactionCreate(
-            plannedDate: due, accountId: accountId, recipientId: recipient, memo: trimmedName, amount: signed,
+            plannedDate: dueDay, accountId: accountId, recipientId: recipient, memo: trimmedName, amount: signed,
             currency: currency, categoryId: categoryId, comment: comment, url: link, isRecurring: recurring,
-            recurrencePattern: pattern, recurrenceEndDate: endDate ?? nil, maxOccurrences: maximum ?? nil,
+            recurrencePattern: pattern, recurrenceEndDate: endDay, maxOccurrences: maximum ?? nil,
             isLoan: isLoan, loanType: loanType, loanPrincipal: principal, loanAnnualInterestRate: rate,
-            loanTermMonths: term, loanStartDate: startDate, loanPaymentDay: paymentDay, tags: tagList)
+            loanTermMonths: term, loanStartDate: loanStartDay, loanPaymentDay: paymentDay, tags: tagList)
 
         var patch = PlannedPaymentPatch()
         patch.plannedDate = due

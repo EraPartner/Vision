@@ -110,11 +110,11 @@ struct TaxYearMutationTests {
             } else if setting.key == TaxYearMutation.snapshotsKey {
                 expected = .object(["exists": .bool(false)])
             } else {
-                expected = setting.expected
+                expected = setting.expected.json
             }
             return OpenAPI.Setting(
                 key: setting.key, value: setting.key == TaxYearMutation.snapshotsKey ? .null : setting.value,
-                expected: expected)
+                expected: .wire(expected))
         }
         let patch = try #require(
             try TaxYearMutation.patch(
@@ -122,19 +122,16 @@ struct TaxYearMutationTests {
         #expect(Set(patch.settings.keys) == Set(mutationKeys))
         #expect(Set(patch.expected.keys) == Set(mutationKeys))
         #expect(patch.settings[TaxYearMutation.snapshotsKey]?["2023"]?["taxYear"] == .number(2023))
-        for record in records { #expect(patch.expected[record.key] == record.expected) }
+        for record in records { #expect(patch.expected[record.key] == record.expected.json) }
     }
 
     @Test func malformedMissingOrDuplicateBaselinesNeverProduceAWritePatch() throws {
         let fixture = try MutationFixture()
         let records = try fixture.records()
         let cases = [
+            // A baseline that is not `{ exists: false }` or `{ exists: true, value }` can no longer be built:
+            // `OpenAPI.SettingBaseline` fails to decode it (see SettingBaselineTests).
             Array(records.dropLast()), records + [records[0]],
-            records.map { OpenAPI.Setting(key: $0.key, value: $0.value, expected: .object(["exists": .bool(true)])) },
-            records.map {
-                OpenAPI.Setting(
-                    key: $0.key, value: $0.value, expected: .object(["exists": .bool(false), "value": .null]))
-            },
         ]
         for incomplete in cases {
             #expect(throws: APIError.self) {
@@ -308,7 +305,7 @@ private struct MutationFixture: Sendable {
             (TaxYearMutation.metadataKey, metadata),
         ].map { key, value in
             let json = try value.decode(JSONValue.self)
-            return OpenAPI.Setting(key: key, value: json, expected: .object(["exists": .bool(true), "value": json]))
+            return OpenAPI.Setting(key: key, value: json, expected: .wire(.object(["exists": .bool(true), "value": json])))
         }
     }
     func overview(records: [OpenAPI.Setting]? = nil, invalid: Bool = false) throws -> OpenAPI.BelgianTaxOverview {
