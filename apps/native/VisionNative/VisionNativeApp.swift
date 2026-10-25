@@ -41,15 +41,11 @@ final class PreMigrationBackupRelay: @unchecked Sendable {
     private var action: Action?
 
     func install(_ action: @escaping Action) {
-        lock.lock()
-        defer { lock.unlock() }
-        self.action = action
+        lock.withLock { self.action = action }
     }
 
     func run(_ pending: PendingMigrations, _ runtime: NativeRuntime) async throws {
-        lock.lock()
-        let action = action
-        lock.unlock()
+        let action = lock.withLock { self.action }
         guard let action else {
             throw NativeRuntimeError("PRE_MIGRATION_BACKUP_UNAVAILABLE", "The backup service is not ready.")
         }
