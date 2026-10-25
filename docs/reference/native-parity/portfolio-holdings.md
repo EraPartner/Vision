@@ -69,7 +69,7 @@ Phase 3p replaces the PDF handoff with `NativeReportSheet` and `NativeReportMode
 `NativeShellOverlayHost` over the existing native screen. The Portfolio overview and asset-route
 menus retain `?export=pdf`; closing removes only that flag with replace, preserving the other query
 parameters and the underlying visit. The shared sheet owns report type, period, sections, currency,
-validation, binary PDF submission and native save-panel handoff. Same-page reopening retains its
+validation, report-document submission (printed to PDF locally, ADR-234) and native save-panel handoff. Same-page reopening retains its
 form draft; leaving the page resets it. Save-panel cancellation leaves the sheet open without a
 success notice. The source `ExportDialog` remains the fallback when the capability is absent.
 Portfolio PDF export remains separate from the source's optimized current-page print contract.

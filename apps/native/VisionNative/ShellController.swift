@@ -167,7 +167,8 @@ final class ShellController: NSObject, NSWindowDelegate {
         }
         let reportNoticeSource = UUID()
         let reports = NativeReportModel(
-            service: NativeReportsAPIService(client: makeAPIClient(timeout: 900)),
+            service: NativeReportsAPIService(
+                client: makeAPIClient(timeout: 900), render: { try await NativeReportHTMLPrinter.pdf(for: $0) }),
             callbacks: NativeReportCallbacks(
                 preferences: { [weak nativeSettings] in
                     guard let nativeSettings else { return .init() }

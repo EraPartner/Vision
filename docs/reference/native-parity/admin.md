@@ -264,24 +264,21 @@ Component: `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx`. Feature doc: [
 
 **Regions shown:**
 
-- Page header `exchangeRates.title` "Exchange rates", subtitle `exchangeRates.subtitle` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:145`).
-- Loading skeleton: three cards, segmented-control and table placeholders (`:165`).
+- Page header `exchangeRates.title` "Exchange rates", subtitle `exchangeRates.subtitle` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:127`).
+- Loading skeleton: two cards and a table placeholder (the fallback view is gone).
 - Error: `PageError` with message `exchangeRates.failedToLoad` (`:189`).
-- Three summary cards (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:213`): `exchangeRates.storedRates` (`total_rates`, sub `storedRatesDesc`), `exchangeRates.fallbackCurrencies` (count excluding EUR, sub `fallbackCurrenciesDesc`), `exchangeRates.latestFetch` (rate date, sub `exchangeRates.fetchedAt` or `exchangeRates.noDataFetched`).
-- Live view: card `exchangeRates.latestEcbRates` "Latest ECB rates" with description `exchangeRates.latestEcbDesc`, or empty state with `exchangeRates.noRates` (`:284`).
-- Fallback view: card `exchangeRates.fallbackRates` with `exchangeRates.fallbackDesc`, caption `exchangeRates.fallbackNote` (`:342`, `:62`).
-- Rates table (both views): `exchangeRates.col.currency`, `col.unitToEur` (6 decimals), `col.eurToUnit` (4 decimals), `col.hundredInEur` (currency formatted) (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:49`).
+- Two summary cards (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:191`): `exchangeRates.storedRates` (`total_rates`, sub `storedRatesDesc`), `exchangeRates.latestFetch` (rate date, sub `exchangeRates.fetchedAt` or `exchangeRates.noDataFetched`). The built-in fallback rates and their cards were removed; conversions use stored rates only (ADR-216).
+- Rates card: card `exchangeRates.latestEcbRates` "Latest ECB rates" with description `exchangeRates.latestEcbDesc`, or empty state with `exchangeRates.noRates` (`:284`).
+- Rates table: `exchangeRates.col.currency`, `col.unitToEur` (6 decimals), `col.eurToUnit` (4 decimals), `col.hundredInEur` (currency formatted) (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:49`).
 - Data: `GET /api/info/exchange-rates?db_only=true` (shared cache `exchangeRateKeys.all`) (`apps/frontend/src/features/admin/useAdminQueries.ts:59`, `apps/frontend/src/lib/api/info.ts:493`).
 
-**URL state:** `?tab=live|fallback` (default `live`, unknown values fall back, written with replace) via `useTabParam` (`apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:122`, `apps/frontend/src/hooks/useTabParam.ts:20`).
+**URL state:** none (the `?tab=` parameter went away with the fallback view).
 
 | #   | Where            | Element                                                                                        | Trigger | What it does                                                                                                                                         | Source                                                                                                            | Status |
 | --- | ---------------- | ---------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
 | 1   | Header           | `exchangeRates.refresh` "Refresh" button (spinner; disabled while refreshing/fetching/loading) | click   | `POST /api/info/exchange-rates/refresh`; invalidates all exchange-rate queries; toast `exchangeRates.refreshSuccess` or `exchangeRates.refreshError` | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:152`, `:131`                                                 | native |
-| 2   | View switch      | Segmented control `exchangeRates.viewLabel`: `exchangeRates.liveRates` "Live rates"            | select  | Shows live ECB table; writes `?tab=live`                                                                                                             | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:274`                                                         | native |
-| 3   | View switch      | `exchangeRates.fallbackRates` "Fallback rates"                                                 | select  | Shows fallback table; writes `?tab=fallback`                                                                                                         | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:278`                                                         | native |
-| 4   | Live empty state | `exchangeRates.refresh` "Refresh" button                                                       | click   | Same as row 1                                                                                                                                        | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:296`                                                         | native |
-| 5   | Error state      | `common.retry` "Retry" button                                                                  | click   | Refetches the exchange-rates query                                                                                                                   | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:195`, `apps/frontend/src/components/shared/PageError.tsx:22` | native |
+| 2   | Empty state | `exchangeRates.refresh` "Refresh" button                                                       | click   | Same as row 1                                                                                                                                        | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:250`                                                         | native |
+| 3   | Error state      | `common.retry` "Retry" button                                                                  | click   | Refetches the exchange-rates query                                                                                                                   | `apps/frontend/src/pages/admin/ExchangeRatesPage.tsx:195`, `apps/frontend/src/components/shared/PageError.tsx:22` | native |
 
 ## Developer tools (floating API inspector)
 
