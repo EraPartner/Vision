@@ -58,7 +58,7 @@ enum VisionFonts {
             : Font.system(size: size, weight: systemWeight(weight))
     }
 
-    /// A role of the web's type ramp (`DesignTokens.Type`). Tracking and line height are not part
+    /// A role of the web's type ramp (`DesignTokens.Typography`). Tracking and line height are not part
     /// of a `Font`: apply `style.tracking * style.size` with `.tracking(_:)` and the line height
     /// with `.lineSpacing(_:)`.
     static func font(_ style: TypeStyle, relativeTo textStyle: Font.TextStyle) -> Font {

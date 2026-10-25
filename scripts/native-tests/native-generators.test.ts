@@ -334,7 +334,7 @@ test("the design-system tokens come from the web sources", () => {
   has("public static let md: Double = 8");
   has("public static let heightSm: Double = 32");
   has("public static let heightLg: Double = 40");
-  has("public enum `Type` {");
+  has("public enum Typography {");
   has(
     "TypeStyle(face: .display, size: 32, lineHeight: 38, weight: 600, tracking: -0.025)",
   );
@@ -420,7 +420,7 @@ test("generation fails on an unresolved var(--x)", () => {
           'lg: "px-6',
         );
       }),
-    /button size lg: not found/,
+    /size lg: not found/,
   );
 });
 

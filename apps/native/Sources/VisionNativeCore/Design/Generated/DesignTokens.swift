@@ -272,15 +272,15 @@ public enum DesignTokens {
         public static let card: Double = 14
         /// `--radius-sheet`
         public static let sheet: Double = 22
-        /// `rounded-lg`: `--radius` (apps/frontend/tailwind.config.ts:123).
+        /// `rounded-lg`: `--radius` (tailwind.config.ts borderRadius.lg).
         public static let lg: Double = 10
-        /// `rounded-md`: `--radius` - 2px (apps/frontend/tailwind.config.ts:124).
+        /// `rounded-md`: `--radius` - 2px (tailwind.config.ts borderRadius.md).
         public static let md: Double = 8
-        /// `rounded-sm`: `--radius` - 4px (apps/frontend/tailwind.config.ts:125).
+        /// `rounded-sm`: `--radius` - 4px (tailwind.config.ts borderRadius.sm).
         public static let sm: Double = 6
-        /// `rounded-xl`: `--radius` + 4px (apps/frontend/tailwind.config.ts:126).
+        /// `rounded-xl`: `--radius` + 4px (tailwind.config.ts borderRadius.xl).
         public static let xl: Double = 14
-        /// `rounded-2xl`: `--radius` + 10px (apps/frontend/tailwind.config.ts:127).
+        /// `rounded-2xl`: `--radius` + 10px (tailwind.config.ts borderRadius.2xl).
         public static let x2l: Double = 20
     }
 
@@ -322,17 +322,17 @@ public enum DesignTokens {
 
     /// Damped springs, with the CSS samples of tokens.css and the physics of lib/motion.ts.
     public enum Spring {
-        /// `--spring-snappy` sampled at 41 points, settling in `--spring-snappy-duration`; physics from `springs.snappy` (apps/frontend/src/lib/motion.ts:57).
+        /// `--spring-snappy` sampled at 41 points, settling in `--spring-snappy-duration`; physics from `springs.snappy` (motion.ts springs.snappy).
         public static let snappy = SpringToken(
             mass: 0.7, stiffness: 420, damping: 32,
             settleDuration: 0.287,
             samples: [0, 0.0139, 0.0497, 0.1005, 0.1608, 0.2262, 0.2936, 0.3608, 0.426, 0.488, 0.5461, 0.5999, 0.6491, 0.6938, 0.7341, 0.7701, 0.802, 0.8302, 0.855, 0.8767, 0.8955, 0.9118, 0.9259, 0.938, 0.9483, 0.9571, 0.9646, 0.9709, 0.9762, 0.9807, 0.9844, 0.9875, 0.99, 0.9921, 0.9938, 0.9952, 0.9964, 0.9973, 0.998, 0.9986, 1])
-        /// `--spring-smooth` sampled at 41 points, settling in `--spring-smooth-duration`; physics from `springs.smooth` (apps/frontend/src/lib/motion.ts:63).
+        /// `--spring-smooth` sampled at 41 points, settling in `--spring-smooth-duration`; physics from `springs.smooth` (motion.ts springs.smooth).
         public static let smooth = SpringToken(
             mass: 1, stiffness: 300, damping: 30,
             settleDuration: 0.506,
             samples: [0, 0.0212, 0.0746, 0.1479, 0.232, 0.3201, 0.4075, 0.4908, 0.5681, 0.6381, 0.7005, 0.755, 0.8021, 0.8422, 0.8759, 0.9039, 0.9269, 0.9455, 0.9604, 0.9722, 0.9814, 0.9884, 0.9937, 0.9975, 1.0002, 1.0021, 1.0033, 1.004, 1.0043, 1.0043, 1.0042, 1.0039, 1.0036, 1.0032, 1.0028, 1.0024, 1.0021, 1.0018, 1.0015, 1.0012, 1])
-        /// `--spring-bouncy` sampled at 41 points, settling in `--spring-bouncy-duration`; physics from `springs.bouncy` (apps/frontend/src/lib/motion.ts:69).
+        /// `--spring-bouncy` sampled at 41 points, settling in `--spring-bouncy-duration`; physics from `springs.bouncy` (motion.ts springs.bouncy).
         public static let bouncy = SpringToken(
             mass: 1, stiffness: 260, damping: 20,
             settleDuration: 0.637,
@@ -389,7 +389,7 @@ public enum DesignTokens {
                 ShadowLayer(color: .shadow, alpha: 0.42, x: 0, y: 8, blur: 16, spread: 0, inset: false),
                 ShadowLayer(color: .shadow, alpha: 0.55, x: 0, y: 32, blur: 80, spread: -28, inset: false),
             ])
-        /// `shadow-glass-soft` (apps/frontend/tailwind.config.ts:135); the same in both appearances.
+        /// `shadow-glass-soft` (tailwind.config.ts boxShadow.glass-soft); the same in both appearances.
         public static let glassSoft: AppearanceValue<[ShadowLayer]> = AppearanceValue(
             light: [
                 ShadowLayer(color: .highlight, alpha: 0.35, x: 0, y: 1, blur: 0, spread: 0, inset: true),
@@ -399,7 +399,7 @@ public enum DesignTokens {
                 ShadowLayer(color: .highlight, alpha: 0.35, x: 0, y: 1, blur: 0, spread: 0, inset: true),
                 ShadowLayer(color: .shadow, alpha: 0.35, x: 0, y: 10, blur: 30, spread: -12, inset: false),
             ])
-        /// `shadow-glass-elevated` (apps/frontend/tailwind.config.ts:141); the same in both appearances.
+        /// `shadow-glass-elevated` (tailwind.config.ts boxShadow.glass-elevated); the same in both appearances.
         public static let glassElevated: AppearanceValue<[ShadowLayer]> = AppearanceValue(
             light: [
                 ShadowLayer(color: .highlight, alpha: 0.5, x: 0, y: 1, blur: 0, spread: 0, inset: true),
@@ -425,9 +425,9 @@ public enum DesignTokens {
         public static let elevatedBlur: Double = 32
         /// `--glass-saturate`, as a multiplier (180% is 1.8).
         public static let saturate: AppearanceValue<Double> = AppearanceValue(light: 1.8, dark: 1.5)
-        /// Opacity of `--card` that replaces every glass material under Reduce Transparency (`prefers-reduced-transparency: reduce`, apps/frontend/src/index.css:1492).
+        /// Opacity of `--card` that replaces every glass material under Reduce Transparency (`prefers-reduced-transparency: reduce`, index.css @media (prefers-reduced-transparency: reduce)).
         public static let reducedTransparencyOpacity: Double = 0.97
-        /// Alpha of the `--foreground` border of glass materials and cards under Increase Contrast (`prefers-contrast: more`, apps/frontend/src/index.css:1449).
+        /// Alpha of the `--foreground` border of glass materials and cards under Increase Contrast (`prefers-contrast: more`, index.css @media (prefers-contrast: more)).
         public static let highContrastBorderAlpha: Double = 0.45
     }
 
@@ -445,9 +445,9 @@ public enum DesignTokens {
 
     /// The keyboard focus ring: a translucent outline in `ring` (alpha `ThemePalette.focusRingAlpha`).
     public enum FocusRing {
-        /// Outline width (`outline: 3px solid`, apps/frontend/src/index.css:91).
+        /// Outline width (`outline: 3px solid`, index.css :focus-visible).
         public static let width: Double = 3
-        /// `outline-offset` (apps/frontend/src/index.css:91).
+        /// `outline-offset` (index.css :focus-visible).
         public static let offset: Double = 1
         /// Alpha of the ring under Increase Contrast, where the outline is the opaque `--ring` (`prefers-contrast: more`).
         public static let highContrastAlpha: Double = 1
@@ -455,29 +455,29 @@ public enum DesignTokens {
 
     /// Modal overlay (scrim) and dialog geometry; sheets and alert dialogs share the scrim.
     public enum Overlay {
-        /// Flat scrim: `--background` at this alpha (`.modal-overlay`, apps/frontend/src/index.css:458).
+        /// Flat scrim: `--background` at this alpha (`.modal-overlay`, index.css .modal-overlay).
         public static let scrim: Double = 0.6
-        /// Frosted scrim (Full effects or the enhanced tier): `--background` at this alpha with `blur` behind (`:root.fx-full .modal-overlay`, apps/frontend/src/index.css:1612).
+        /// Frosted scrim (Full effects or the enhanced tier): `--background` at this alpha with `blur` behind (`:root.fx-full .modal-overlay`, index.css :root.fx-full .modal-overlay).
         public static let scrimFrosted: Double = 0.4
-        /// Frosted scrim of alert dialogs (`modal-overlay-strong`, apps/frontend/src/index.css:1618); the flat scrim keeps `scrim`.
+        /// Frosted scrim of alert dialogs (`modal-overlay-strong`, index.css :root.fx-full .modal-overlay-strong); the flat scrim keeps `scrim`.
         public static let scrimFrostedStrong: Double = 0.5
-        /// Backdrop blur radius of the frosted scrim, in points (apps/frontend/src/index.css:1612).
+        /// Backdrop blur radius of the frosted scrim, in points (index.css :root.fx-full .modal-overlay).
         public static let blur: Double = 12
-        /// Corner radius of dialogs and sheets: `rounded-sheet` (`--radius-sheet`, apps/frontend/src/components/ui/dialog.tsx:52).
+        /// Corner radius of dialogs and sheets: `rounded-sheet` (`--radius-sheet`, dialog.tsx DialogContent rounded-sheet).
         public static let dialogRadius: Double = 22
-        /// Widest a dialog grows: `max-w-lg` (apps/frontend/src/components/ui/dialog.tsx:52).
+        /// Widest a dialog grows: `max-w-lg` (dialog.tsx DialogContent max-w).
         public static let dialogMaxWidth: Double = 512
-        /// Tallest a dialog grows, as a fraction of the window: `max-h-[90vh]` (apps/frontend/src/components/ui/dialog.tsx:52).
+        /// Tallest a dialog grows, as a fraction of the window: `max-h-[90vh]` (dialog.tsx DialogContent max-h).
         public static let dialogMaxHeightFraction: Double = 0.9
-        /// Dialog padding: `p-6` (apps/frontend/src/components/ui/dialog.tsx:52).
+        /// Dialog padding: `p-6` (dialog.tsx DialogContent p).
         public static let dialogPadding: Double = 24
-        /// Gap between dialog sections: `gap-5` (apps/frontend/src/components/ui/dialog.tsx:52).
+        /// Gap between dialog sections: `gap-5` (dialog.tsx DialogContent gap).
         public static let dialogGap: Double = 20
-        /// Scale a dialog enters from (`dialog-in` keyframes, apps/frontend/tailwind.config.ts:181); it settles on `Spring.smooth`.
+        /// Scale a dialog enters from (`dialog-in` keyframes, tailwind.config.ts keyframes dialog-in); it settles on `Spring.smooth`.
         public static let enterScale: Double = 0.95
         /// Points a dialog enters below its resting place (`dialog-in` keyframes, same rule).
         public static let enterOffsetY: Double = 12
-        /// Scale a dialog leaves to when it has no trigger to shrink toward (`dialog-out` fallback, apps/frontend/tailwind.config.ts:188); it exits over `Duration.dismiss` on `Ease.glide`.
+        /// Scale a dialog leaves to when it has no trigger to shrink toward (`dialog-out` fallback, tailwind.config.ts keyframes dialog-out); it exits over `Duration.dismiss` on `Ease.glide`.
         public static let exitScale: Double = 0.97
         /// Points a dialog leaves below its resting place (`dialog-out` fallback, same rule).
         public static let exitOffsetY: Double = 6
@@ -485,13 +485,13 @@ public enum DesignTokens {
 
     /// Hover states.
     public enum Hover {
-        /// `hover:bg-primary/92`: default, destructive and accent buttons (apps/frontend/src/components/ui/button.tsx:15).
+        /// `hover:bg-primary/92`: default, destructive and accent buttons (button.tsx variant default hover).
         public static let fillAlpha: Double = 0.92
-        /// `hover:bg-foreground/[0.06]`: ghost buttons (apps/frontend/src/components/ui/button.tsx:22).
+        /// `hover:bg-foreground/[0.06]`: ghost buttons (button.tsx variant ghost hover).
         public static let ghostFillAlpha: Double = 0.06
-        /// Alpha of the `--primary` border of an interactive card on hover (`.premium-frame-interactive:hover`, apps/frontend/src/index.css:892; dark apps/frontend/src/index.css:910).
+        /// Alpha of the `--primary` border of an interactive card on hover (`.premium-frame-interactive:hover`, index.css .premium-frame-interactive:hover; dark index.css .dark .premium-frame-interactive:hover).
         public static let cardBorderAlpha: AppearanceValue<Double> = AppearanceValue(light: 0.4, dark: 0.5)
-        /// The lift shadow an interactive card shows on hover (`.premium-frame-interactive::after`, apps/frontend/src/index.css:880).
+        /// The lift shadow an interactive card shows on hover (`.premium-frame-interactive::after`, index.css .premium-frame-interactive::after).
         public static let cardShadow: AppearanceValue<[ShadowLayer]> = AppearanceValue(
             light: [
                 ShadowLayer(color: .shadow, alpha: 0.1, x: 0, y: 12, blur: 30, spread: 0, inset: false),
@@ -503,66 +503,63 @@ public enum DesignTokens {
 
     /// Press feedback; it animates over `Duration.press` with ease-out.
     public enum Press {
-        /// `.press-feedback:active` scale (apps/frontend/src/index.css:1052).
+        /// `.press-feedback:active` scale (index.css .press-feedback:active).
         public static let scale: Double = 0.97
     }
 
     /// Text selection.
     public enum Selection {
-        /// `::selection` background: `--primary` at this alpha (apps/frontend/src/index.css:102).
+        /// `::selection` background: `--primary` at this alpha (index.css ::selection).
         public static let alpha: Double = 0.25
     }
 
     /// Dark-mode text halos (`text-shadow` in `--background`) that keep text legible over the aurora.
     public enum Halo {
-        /// The single halo of page header titles and subtitles (`.dark .page-header-title`, apps/frontend/src/index.css:73).
+        /// The single halo of page header titles and subtitles (`.dark .page-header-title`, index.css .dark .page-header-subtitle).
         public static let single = ShadowLayer(color: .background, alpha: 0.55, x: 0, y: 2, blur: 8, spread: 0, inset: false)
-        /// The inner layer of the double halo under Full effects (`.dark.fx-full h1`, apps/frontend/src/index.css:1653).
+        /// The inner layer of the double halo under Full effects (`.dark.fx-full h1`, index.css .dark.fx-full .canvas-text).
         public static let fullInner = ShadowLayer(color: .background, alpha: 0.6, x: 0, y: 1, blur: 2, spread: 0, inset: false)
         /// The outer layer of the double halo under Full effects (same rule).
         public static let fullOuter = ShadowLayer(color: .background, alpha: 0.45, x: 0, y: 2, blur: 14, spread: 0, inset: false)
     }
 
     /// The type ramp of `@utility type-*`: sizes and line heights in points, tracking in em.
-    public enum `Type` {
-        /// `type-large-title` (apps/frontend/src/index.css:1784).
+    public enum Typography {
+        /// `type-large-title` (index.css @utility type-large-title).
         public static let largeTitle = TypeStyle(face: .display, size: 32, lineHeight: 38, weight: 600, tracking: -0.025)
-        /// `type-title-1` (apps/frontend/src/index.css:1792).
+        /// `type-title-1` (index.css @utility type-title-1).
         public static let title1 = TypeStyle(face: .display, size: 24, lineHeight: 30, weight: 600, tracking: -0.02)
-        /// `type-title-2` (apps/frontend/src/index.css:1800).
+        /// `type-title-2` (index.css @utility type-title-2).
         public static let title2 = TypeStyle(face: .display, size: 20, lineHeight: 26, weight: 600, tracking: -0.018)
-        /// `type-title-3` (apps/frontend/src/index.css:1808).
+        /// `type-title-3` (index.css @utility type-title-3).
         public static let title3 = TypeStyle(face: .display, size: 17, lineHeight: 22, weight: 600, tracking: -0.014)
-        /// `type-headline` (apps/frontend/src/index.css:1816).
+        /// `type-headline` (index.css @utility type-headline).
         public static let headline = TypeStyle(face: .body, size: 14, lineHeight: 20, weight: 600, tracking: -0.011)
-        /// `type-body` (apps/frontend/src/index.css:1824).
+        /// `type-body` (index.css @utility type-body).
         public static let body = TypeStyle(face: .body, size: 14, lineHeight: 20, weight: 400, tracking: -0.006)
-        /// `type-callout` (apps/frontend/src/index.css:1832).
+        /// `type-callout` (index.css @utility type-callout).
         public static let callout = TypeStyle(face: .body, size: 13, lineHeight: 18, weight: 400, tracking: -0.004)
-        /// `type-footnote` (apps/frontend/src/index.css:1840).
+        /// `type-footnote` (index.css @utility type-footnote).
         public static let footnote = TypeStyle(face: .body, size: 12, lineHeight: 16, weight: 400, tracking: 0)
-        /// `type-caption` (apps/frontend/src/index.css:1848).
+        /// `type-caption` (index.css @utility type-caption).
         public static let caption = TypeStyle(face: .body, size: 11, lineHeight: 14, weight: 500, tracking: 0.01)
-        /// `text-2xs`, 11px over 14px in the body face at regular weight (fontSize `2xs`, apps/frontend/tailwind.config.ts:22).
+        /// `text-2xs`, 11px over 14px in the body face at regular weight (fontSize `2xs`, tailwind.config.ts fontSize 2xs).
         public static let twoXS = TypeStyle(face: .body, size: 11, lineHeight: 14, weight: 400, tracking: 0)
-        /// `body { letter-spacing }`: tracking of text outside a `type-*` role, in em (apps/frontend/src/index.css:41).
+        /// `body { letter-spacing }`: tracking of text outside a `type-*` role, in em (index.css body).
         public static let bodyTracking: Double = -0.005
-        /// `h1, h2, h3, .font-display { letter-spacing }`: tracking of headings outside a `type-*` role, in em (apps/frontend/src/index.css:55).
+        /// `h1, h2, h3, .font-display { letter-spacing }`: tracking of headings outside a `type-*` role, in em (index.css .font-display).
         public static let headingTracking: Double = -0.02
     }
 
-    /// `Type` spelled without backticks. `Type` also names a metatype, so `DesignTokens.Type` is not this enum; write DesignTokens.`Type` or use this alias.
-    public typealias Typography = `Type`
-
     /// Control heights in points (Tailwind `h-*` classes; there are no CSS variables for them).
     public enum Control {
-        /// Button `size` `default`: `h-9` (apps/frontend/src/components/ui/button.tsx:32); inputs and selects use the same `h-9` (apps/frontend/src/components/ui/input.tsx:22).
+        /// Button `size` `default`: `h-9` (button.tsx size default); inputs and selects use the same `h-9` (input.tsx Input classes).
         public static let height: Double = 36
-        /// Button `size` `sm`: `h-8` (apps/frontend/src/components/ui/button.tsx:33).
+        /// Button `size` `sm`: `h-8` (button.tsx size sm).
         public static let heightSm: Double = 32
-        /// Button `size` `xs`: `h-7` (apps/frontend/src/components/ui/button.tsx:34).
+        /// Button `size` `xs`: `h-7` (button.tsx size xs).
         public static let heightXs: Double = 28
-        /// Button `size` `lg`: `h-10` (apps/frontend/src/components/ui/button.tsx:35).
+        /// Button `size` `lg`: `h-10` (button.tsx size lg).
         public static let heightLg: Double = 40
     }
 

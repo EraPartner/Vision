@@ -486,9 +486,8 @@ function locate(
 ): { match: RegExpExecArray; cite: string } {
   const match = pattern.exec(file.text);
   if (!match) throw new Error(`${label}: not found in ${file.path}.`);
-  const first = match.index + match[0].length - match[0].trimStart().length;
-  const line = file.text.slice(0, first).split("\n").length;
-  return { match, cite: `${file.path}:${line}` };
+  const name = file.path.slice(file.path.lastIndexOf("/") + 1);
+  return { match, cite: `${name} ${label}` };
 }
 
 /** The file from the first `marker` on, with the line numbers of the whole file. */
@@ -811,7 +810,7 @@ function designSection(
       new RegExp(
         `${key}:\\s*"(var\\(--radius\\)|calc\\(var\\(--radius\\) ([+-]) (\\d+)px\\))"`,
       ),
-      `borderRadius.${key}`,
+      `borderRadius.${key.replaceAll('"', "")}`,
     );
     const offset =
       found.match[2] === undefined
@@ -953,12 +952,12 @@ function designSection(
   const reduced = locate(
     index,
     /@media \(prefers-reduced-transparency: reduce\) \{\s*\.glass,[\s\S]*?background: hsl\(var\(--card\) \/ ([0-9.]+)\)/,
-    "reduced-transparency fallback",
+    "@media (prefers-reduced-transparency: reduce)",
   );
   const reducedLine = locate(
     index,
     /background: hsl\(var\(--card\) \/ [0-9.]+\);\s*\}\s*\.liquid-canvas/,
-    "reduced-transparency fallback",
+    "@media (prefers-reduced-transparency: reduce)",
   );
   lines.push(
     `        /// Opacity of \`--card\` that replaces every glass material under Reduce Transparency (\`prefers-reduced-transparency: reduce\`, ${reducedLine.cite}).`,
@@ -967,7 +966,7 @@ function designSection(
   const contrast = locate(
     index,
     /@media \(prefers-contrast: more\) \{\s*\.glass,[\s\S]*?border-color: hsl\(var\(--foreground\) \/ ([0-9.]+)\)/,
-    "high-contrast border",
+    "@media (prefers-contrast: more)",
   );
   lines.push(
     `        /// Alpha of the \`--foreground\` border of glass materials and cards under Increase Contrast (\`prefers-contrast: more\`, ${contrast.cite}).`,
@@ -1004,7 +1003,7 @@ function designSection(
   const focusCite = locate(
     index,
     /:focus-visible \{\s*outline:/,
-    "focus ring",
+    ":focus-visible",
   ).cite;
   locate(
     index,
@@ -1043,39 +1042,39 @@ function designSection(
   const dialogWidth = locate(
     design.dialogTsx,
     /\bmax-w-(xs|sm|md|lg|xl|2xl) /,
-    "dialog max width",
+    "DialogContent max-w",
   );
   const widthRem = MAX_WIDTH_REM[group(dialogWidth.match, 1, "width")];
   if (widthRem === undefined) throw new Error("Unknown dialog max width.");
   const dialogHeight = locate(
     design.dialogTsx,
     /\bmax-h-\[([0-9]+)vh\]/,
-    "dialog max height",
+    "DialogContent max-h",
   );
   const dialogPadding = locate(
     design.dialogTsx,
     /\bp-([0-9.]+) data-\[state=open\]:animate-dialog-in/,
-    "dialog padding",
+    "DialogContent p",
   );
   const dialogGap = locate(
     design.dialogTsx,
     /\bgap-([0-9.]+) overflow-y-auto/,
-    "dialog gap",
+    "DialogContent gap",
   );
   const dialogRadius = locate(
     design.dialogTsx,
     /\brounded-sheet\b/,
-    "dialog radius",
+    "DialogContent rounded-sheet",
   );
   const dialogIn = locate(
     tailwind,
     /"dialog-in": \{\s*from: \{ opacity: "0", transform: "scale\(([0-9.]+)\) translateY\(([0-9.]+)px\)" \}/,
-    "dialog-in keyframes",
+    "keyframes dialog-in",
   );
   const dialogOut = locate(
     tailwind,
     /"dialog-out": \{[\s\S]*?scale\(var\(--genie-scale, ([0-9.]+)\)\) translateY\(var\(--genie-y, ([0-9.]+)px\)\)/,
-    "dialog-out keyframes",
+    "keyframes dialog-out",
   );
   lines.push(
     "    /// Modal overlay (scrim) and dialog geometry; sheets and alert dialogs share the scrim.",
@@ -1114,22 +1113,22 @@ function designSection(
   const fill = locate(
     design.buttonTsx,
     /hover:bg-primary\/([0-9]+)/,
-    "button hover fill",
+    "variant default hover",
   );
   const ghost = locate(
     design.buttonTsx,
     /hover:bg-foreground\/\[([0-9.]+)\]/,
-    "ghost hover fill",
+    "variant ghost hover",
   );
   const hoverBorder = locate(
     index,
     /\.premium-frame-interactive:hover \{\s*border-color: hsl\(var\(--primary\) \/ ([0-9.]+)\)/,
-    "interactive card hover border",
+    ".premium-frame-interactive:hover",
   );
   const hoverBorderDark = locate(
     index,
     /\.dark \.premium-frame-interactive:hover \{\s*border-color: hsl\(var\(--primary\) \/ ([0-9.]+)\)/,
-    "dark interactive card hover border",
+    ".dark .premium-frame-interactive:hover",
   );
   const liftOf = (selector: string, label: string) => {
     const value = /box-shadow:\s*([^;]+);/.exec(ruleBody(index.text, selector));
@@ -1144,7 +1143,7 @@ function designSection(
   const liftCite = locate(
     index,
     /\.premium-frame-interactive::after \{/,
-    "card hover shadow",
+    ".premium-frame-interactive::after",
   ).cite;
   lines.push(
     "    /// Hover states.",
@@ -1195,20 +1194,20 @@ function designSection(
   const single = locate(
     index,
     /\.dark \.page-header-subtitle \{\s*text-shadow:\s*([^;]+);/,
-    "page header halo",
+    ".dark .page-header-subtitle",
   );
   const full = locate(
     index,
     /\.dark\.fx-full \.canvas-text :is\(h1, h2, h3, p, span, div\) \{\s*text-shadow:\s*([^;]+);/,
-    "Full effects halo",
+    ".dark.fx-full .canvas-text",
   );
   const [fullInner, fullOuter] = parseShadows(
     group(full.match, 1, "halo"),
-    "Full effects halo",
+    ".dark.fx-full .canvas-text",
   );
   const [singleLayer] = parseShadows(
     group(single.match, 1, "halo"),
-    "page header halo",
+    ".dark .page-header-subtitle",
   );
   if (!singleLayer || !fullInner || !fullOuter)
     throw new Error("The text halos do not have the expected layers.");
@@ -1232,13 +1231,13 @@ function designSection(
   };
   lines.push(
     "    /// The type ramp of `@utility type-*`: sizes and line heights in points, tracking in em.",
-    "    public enum `Type` {",
+    "    public enum Typography {",
   );
   for (const role of TYPE_ROLES) {
     const found = locate(
       index,
       new RegExp(`@utility type-${role.css} \\{([^}]*)\\}`),
-      `type-${role.css}`,
+      `@utility type-${role.css}`,
     );
     const body = group(found.match, 1, role.css);
     const property = (name: string) => {
@@ -1264,7 +1263,7 @@ function designSection(
   const twoXs = locate(
     tailwind,
     /'2xs': \['([0-9.]+)rem', \{ lineHeight: '([0-9.]+)rem' \}\]/,
-    "fontSize.2xs",
+    "fontSize 2xs",
   );
   lines.push(
     `        /// \`text-2xs\`, 11px over 14px in the body face at regular weight (fontSize \`2xs\`, ${twoXs.cite}).`,
@@ -1273,12 +1272,12 @@ function designSection(
   const bodyTracking = locate(
     index,
     /\n\s*body \{[^}]*?letter-spacing: (-?[0-9.]+)em/,
-    "body letter-spacing",
+    "body",
   );
   const headingTracking = locate(
     index,
     /\.font-display \{[^}]*?letter-spacing: (-?[0-9.]+)em/,
-    "heading letter-spacing",
+    ".font-display",
   );
   lines.push(
     `        /// \`body { letter-spacing }\`: tracking of text outside a \`type-*\` role, in em (${bodyTracking.cite}).`,
@@ -1286,9 +1285,6 @@ function designSection(
     `        /// \`h1, h2, h3, .font-display { letter-spacing }\`: tracking of headings outside a \`type-*\` role, in em (${headingTracking.cite}).`,
     `        public static let headingTracking: Double = ${number(finite(group(headingTracking.match, 1, "tracking"), "tracking"))}`,
     "    }",
-    "",
-    "    /// `Type` spelled without backticks. `Type` also names a metatype, so `DesignTokens.Type` is not this enum; write DesignTokens.`Type` or use this alias.",
-    "    public typealias Typography = `Type`",
   );
   space();
 
@@ -1297,7 +1293,7 @@ function designSection(
     const found = locate(
       design.buttonTsx,
       new RegExp(`\\b${key}: "h-([0-9.]+)[ "]`),
-      `button size ${key}`,
+      `size ${key}`,
     );
     return {
       name,
@@ -1309,7 +1305,7 @@ function designSection(
   const input = locate(
     design.inputTsx,
     /"flex h-([0-9.]+) w-full/,
-    "input height",
+    "Input classes",
   );
   const buttonDefault = heights[0];
   if (
