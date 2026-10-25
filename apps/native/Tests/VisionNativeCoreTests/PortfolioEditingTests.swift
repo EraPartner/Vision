@@ -481,7 +481,7 @@ private func editingBroker(id: Int, active: Bool = true) -> OpenAPI.Account {
         id: AccountID(id), name: "Synthetic broker \(id)", currency: "EUR", type: .brokerage, liquidityClass: .liquid,
         spendable: false,
         inNetWorth: true, taxWrapper: .none, owner: .me, multiCurrencyCash: false, hasCashSleeve: true,
-        isActive: active, createdAt: "2025-01-01", updatedAt: "2025-01-01")
+        isActive: active, createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z")
 }
 private actor EditingFixtureService: PortfolioEditingService {
     var createdInvestmentCalls = 0

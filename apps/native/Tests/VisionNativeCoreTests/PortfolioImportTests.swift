@@ -688,7 +688,7 @@ private func importAccount(id: Int, name: String) -> OpenAPI.Account {
     .init(
         id: AccountID(id), name: name, currency: "EUR", type: .brokerage, liquidityClass: .liquid, spendable: false,
         inNetWorth: true, taxWrapper: .none, owner: .me, multiCurrencyCash: false, hasCashSleeve: true,
-        isActive: true, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+        isActive: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
 }
 private func importPreviewFixture(batchId: Int) throws -> PortfolioImportPreview {
     try importPreviewWire(batchId: batchId).decode(PortfolioImportPreview.self)

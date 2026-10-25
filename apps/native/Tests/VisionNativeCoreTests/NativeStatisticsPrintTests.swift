@@ -214,7 +214,7 @@ private actor StatisticsPrintFixtureService: StatisticsService, StatisticsDigest
             .init(
                 id: 7, name: "Synthetic Chart", chartType: .line, chartVariant: .grouped, timeBucket: .monthly,
                 categoryIds: [3], recipientIds: [], tagIds: [], allCategories: false, allRecipients: false,
-                allTags: false, createdAt: "2026-01-01", updatedAt: "2026-01-01")
+                allTags: false, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z")
         ]
     }
     func customChartRecipients() async throws -> [OpenAPI.Recipient] {

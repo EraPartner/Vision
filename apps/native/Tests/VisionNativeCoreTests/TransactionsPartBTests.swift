@@ -63,13 +63,13 @@ actor FakeTransactionBulkService: TransactionBulkService {
         createdNames.append(name)
         try check()
         if let id = existing[name] {
-            return CreatedRecipient(id: id, name: name, isActive: true, createdAt: "2026-01-01", links: [], created: false)
+            return CreatedRecipient(id: id, name: name, isActive: true, createdAt: "2026-01-01T00:00:00.000Z", links: [], created: false)
         }
         nextRecipient += 1
         let created = RecipientID(rawValue: nextRecipient)
         existing[name] = created
         return CreatedRecipient(
-            id: created, name: name, isActive: true, createdAt: "2026-10-12", links: [], created: true)
+            id: created, name: name, isActive: true, createdAt: "2026-10-12T00:00:00.000Z", links: [], created: true)
     }
 }
 

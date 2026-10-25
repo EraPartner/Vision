@@ -116,7 +116,7 @@ import Testing
                 let rate = try await loads.next()
                 return OpenAPI.ExchangeRates(
                     totalRates: 1,
-                    rates: [.init(currency: "USD", rateToEur: rate, rateDate: "d", fetchedAt: "f")],
+                    rates: [.init(currency: "USD", rateToEur: rate, rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")],
                     source: .database, isStale: false)
             }, now: { clock.now })
         #expect(await cache.read()?.rates.first?.rateToEur == 1)

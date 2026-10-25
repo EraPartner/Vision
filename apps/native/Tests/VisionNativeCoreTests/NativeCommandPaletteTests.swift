@@ -89,7 +89,7 @@ private actor PaletteTestService: NativeCommandPaletteService, NativeCommandPale
     func paletteRecipients(query: String) async throws -> [OpenAPI.Recipient] {
         recipientQueries.append(query)
         if query == "slow" { await slow.wait() }
-        return [.init(id: query == "slow" ? 1 : 2, name: query, isActive: true, createdAt: "2026-10-13", links: [])]
+        return [.init(id: query == "slow" ? 1 : 2, name: query, isActive: true, createdAt: "2026-10-13T00:00:00.000Z", links: [])]
     }
     func paletteQuote(symbol: String) async throws -> ResearchQuote? {
         quoteSymbols.append(symbol)
