@@ -126,6 +126,7 @@ public struct InsightForecastOptions: Equatable, Hashable, Sendable {
     public enum Mode: String, Sendable { case month, rolling }
     public var mode: Mode = .month
     public var rollingDays = 90
+    /// `useState(false)` of CashFlowForecastChart: planned payments are opt-in.
     public var includePlanned = false
     public var diagnostics = false
     public init() {}

@@ -265,7 +265,13 @@ public struct StatisticsSnapshot: Equatable, Sendable {
                 id: key, name: children.first?.path.first ?? "",
                 categoryIds: Array(Set(children.flatMap(\.categoryIds))).sorted(), values: values,
                 children: nested.values.sorted { $0.path.lexicographicallyPrecedes($1.path) })
-        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }.sorted { left, right in
+            // CategoryPivotTable: the largest group first (by magnitude for net), so INCOME leads.
+            let leftTotal = metric == .net ? abs(left.total) : left.total
+            let rightTotal = metric == .net ? abs(right.total) : right.total
+            if leftTotal != rightTotal { return leftTotal > rightTotal }
+            return left.name.localizedStandardCompare(right.name) == .orderedAscending
+        }
     }
     public func extremes(currentPeriod: String) -> (best: InsightMonth, worst: InsightMonth, positive: Int, count: Int)?
     {

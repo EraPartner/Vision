@@ -94,6 +94,23 @@ public enum VisionFormat {
         appDate(year: day.year, month: day.month, day: day.day, format: format)
     }
 
+    /// `formatMonthYearWithAppSettings`: the month of a `yyyy-MM` period in the app's date style
+    /// (`MM/yyyy`, `yyyy-MM`, `MM.yyyy`, `MM-yyyy`); anything else is returned unchanged.
+    public static func appMonthYear(_ period: String, format: AppDateFormat) -> String {
+        let parts = period.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts[0].count == 4, parts[1].count == 2, let year = Int(parts[0]),
+            let month = Int(parts[1]), (1...12).contains(month)
+        else { return period }
+        let yyyy = pad(year, 4)
+        let mm = pad(month, 2)
+        switch format {
+        case .dayMonthYearSlash, .monthDayYearSlash: return "\(mm)/\(yyyy)"
+        case .isoDate: return "\(yyyy)-\(mm)"
+        case .dayMonthYearDot: return "\(mm).\(yyyy)"
+        case .dayMonthYearDash: return "\(mm)-\(yyyy)"
+        }
+    }
+
     /// `formatDateStringWithAppSettings` for a typed timestamp: like the text overload, the date
     /// as written in the timestamp (the UTC day of the backend's `...Z` values), not converted to
     /// the local zone.
