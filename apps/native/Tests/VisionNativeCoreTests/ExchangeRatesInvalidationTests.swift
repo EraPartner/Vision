@@ -114,7 +114,7 @@ private actor InvalidatedRatesFixture: ExchangeRatesService {
             }
         }
         return .init(
-            totalRates: 0, rates: [], fallbackRates: [:],
+            totalRates: 0, rates: [],
             source: snapshot == 1 ? "fallback" : (snapshot == 2 ? "database" : "fresh"), isStale: snapshot == 1)
     }
     func refreshExchangeRates() async throws -> OpenAPI.InfoMessage {

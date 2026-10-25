@@ -564,19 +564,16 @@ final class ShellRecorder {
         #expect(model.route.path == "/transactions")
     }
 
-    @Test func theTabIsWrittenToTheQueryWithReplace() async throws {
+    @Test func aQueryValueIsWrittenWithReplace() async throws {
         let model = makeModel(recorder: ShellRecorder())
         model.show(try #require(NativeRoute("/admin/exchange-rates")))
         await model.settingsSettled()
-        #expect(ExchangeRatesTab(route: model.route) == .live)
+        #expect(model.route.value("tab") == nil)
         let entries = model.nativeNavigation.count
-        model.replaceQuery("tab", with: ExchangeRatesTab.fallback.rawValue)
-        #expect(ExchangeRatesTab(route: model.route) == .fallback)
+        model.replaceQuery("tab", with: "fallback")
+        #expect(model.route.value("tab") == "fallback")
         #expect(model.nativeNavigationLocation.raw == "/admin/exchange-rates?tab=fallback")
         #expect(model.nativeNavigation.count == entries)
-        #expect(
-            ExchangeRatesTab(route: NativeRoute(path: "/x", query: [URLQueryItem(name: "tab", value: "bogus")]))
-                == .live)
     }
 
     @Test func shortcutsNavigateFromANativeScreen() {

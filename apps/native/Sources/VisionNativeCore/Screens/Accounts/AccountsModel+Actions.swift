@@ -341,7 +341,7 @@ extension AccountsModel {
                     LotRetagRequest(
                         transactionIds: preview.transactionIds, fromAccountId: account.id, toAccountId: destination,
                         idempotencyKey: key.key))
-                moved = receipt.changedCount
+                moved = receipt.movedCount
             }
             try await service.closeAccount(id: account.id, balanceHandling: draft.balanceHandling)
             post(
@@ -439,7 +439,7 @@ extension AccountsModel {
             transfer?.receipt = receipt
             post(
                 .success, "portfolio.brokerTransfer.done",
-                detail: t("portfolio.brokerTransfer.doneHint", ["count": String(receipt.changedCount)]))
+                detail: t("portfolio.brokerTransfer.doneHint", ["count": String(receipt.movedCount)]))
             await refreshAfterWrite()
         } catch {
             post(.error, "portfolio.brokerTransfer.failed", detail: errorText(error))

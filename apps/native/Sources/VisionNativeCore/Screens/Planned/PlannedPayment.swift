@@ -354,15 +354,14 @@ public struct PlannedDay: Equatable, Sendable {
 
 // MARK: Currency
 
-/// `useCurrencyConverter(target).convertToTargetIfAvailable`: the stored ECB rates over the
-/// fallback rates, with EUR at 1.
+/// `useCurrencyConverter(target).convertToTargetIfAvailable`: the stored ECB rates with EUR at 1.
+/// A currency without a stored rate is unavailable, never converted at a built-in constant (ADR-216).
 public struct PlannedCurrencyConverter: Equatable, Sendable {
     public let ratesToEur: [String: Decimal]
     public let target: String
 
     public init(rates: OpenAPI.ExchangeRates?, target: String) {
-        var table = rates?.fallbackRates ?? [:]
-        table["EUR"] = 1
+        var table: [String: Decimal] = ["EUR": 1]
         for rate in rates?.rates ?? [] { table[rate.currency] = rate.rateToEur }
         ratesToEur = table
         self.target = target

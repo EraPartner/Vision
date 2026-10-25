@@ -82,7 +82,7 @@ struct NetWorthTests {
         #expect(rows.last?.accountId == nil)
         #expect(rows.last?.total == 5)
         let missingRates = OpenAPI.ExchangeRates(
-            totalRates: 0, rates: [], fallbackRates: [:], source: "synthetic", isStale: false)
+            totalRates: 0, rates: [], source: "synthetic", isStale: false)
         #expect(throws: APIError.self) {
             try NetWorthAccountRow.build(
                 accounts: accounts, partitions: partitions, rates: missingRates, currency: "EUR")
@@ -212,7 +212,9 @@ private func account(_ id: Int, _ name: String, _ currency: String, _ type: Stri
 }
 private func rates() -> OpenAPI.ExchangeRates {
     .init(
-        totalRates: 0, rates: [], fallbackRates: ["USD": Decimal(string: "0.5")!], source: "synthetic", isStale: false)
+        totalRates: 1,
+        rates: [.init(currency: "USD", rateToEur: Decimal(string: "0.5")!, rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")],
+        source: "synthetic", isStale: false)
 }
 private actor NetWorthFake: NetWorthService {
     struct Call: Sendable {

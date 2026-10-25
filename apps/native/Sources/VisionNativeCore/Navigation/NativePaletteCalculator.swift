@@ -44,7 +44,7 @@ public enum NativePaletteCalculator {
     }
 
     /// `nativePaletteAnswer`: arithmetic first unless the query is a conversion; a missing
-    /// rate keeps the source amount, as `useCurrencyConverter` does.
+    /// rate keeps the source amount, as `useCurrencyConverter` does. Only stored rates convert.
     public static func answer(
         query: String, format: NumberFormat, currency: String, decimals: Int,
         readRates: @Sendable () async -> OpenAPI.ExchangeRates?
@@ -58,7 +58,6 @@ public enum NativePaletteCalculator {
         if fx.from == target { return nil }
         let data = await readRates()
         var rates: [String: Double] = [:]
-        for (code, rate) in data?.fallbackRates ?? [:] { rates[code] = double(rate) }
         rates["EUR"] = 1
         for row in data?.rates ?? [] { rates[row.currency] = double(row.rateToEur) }
         let fromRate = rates[fx.from.uppercased()] ?? 0

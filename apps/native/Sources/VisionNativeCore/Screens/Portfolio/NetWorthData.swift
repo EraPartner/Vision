@@ -78,8 +78,8 @@ public struct NetWorthAccountRow: Identifiable, Equatable, Sendable {
         guard partitions.currency == currency else {
             throw APIError.invalidRequest("Wrong portfolio breakdown currency")
         }
-        var byCurrency = rates.fallbackRates
-        byCurrency["EUR"] = 1
+        // Stored rates only: a currency without one is unavailable, never converted at a constant (ADR-216).
+        var byCurrency: [String: Decimal] = ["EUR": 1]
         for rate in rates.rates { byCurrency[rate.currency] = rate.rateToEur }
         var values: [String: (Int?, Decimal, Decimal)] = [:]
         for account in accounts where account.inNetWorth {

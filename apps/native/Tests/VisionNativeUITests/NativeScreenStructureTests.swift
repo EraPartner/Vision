@@ -739,7 +739,7 @@ actor StaticAccountsService: AccountsService {
     }
 
     func retagLots(_ request: LotRetagRequest) async throws -> LotRetagReceipt {
-        LotRetagReceipt(receiptId: 1, changedCount: request.transactionIds.count)
+        LotRetagReceipt(movedCount: request.transactionIds.count)
     }
 }
 
@@ -753,8 +753,7 @@ actor StaticAccountsService: AccountsService {
                 currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
                 fetchedAt: "2026-10-09T15:05:00.000Z")
         ],
-        fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!], source: "database", isStale: false,
-        lastFetchedAt: nil)
+        source: "database", isStale: false, lastFetchedAt: nil)
 
     func makeShell(
         language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,

@@ -102,7 +102,7 @@ private actor NetWorthRaceService: NetWorthService {
             NetWorthPartitions.self, from: Data("{\"currency\":\"\(currency)\",\"byAccount\":[]}".utf8))
     }
     func netWorthRates() async throws -> OpenAPI.ExchangeRates {
-        .init(totalRates: 0, rates: [], fallbackRates: [:], source: "synthetic", isStale: false)
+        .init(totalRates: 0, rates: [], source: "synthetic", isStale: false)
     }
     func netWorthPrices() async throws -> [NetWorthInvestmentPrice] { [] }
     func refreshNetWorthPrices() async throws -> PortfolioPriceRefresh {

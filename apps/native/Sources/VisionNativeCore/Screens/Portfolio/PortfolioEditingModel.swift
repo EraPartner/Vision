@@ -406,7 +406,7 @@ public final class PortfolioEditingModel {
             let receipt = try await service.portfolioRetagLots(body)
             retagReceipt = receipt
             retagKeys[fingerprint] = nil
-            post("portfolio.assignLotsSuccess", ["count": String(receipt.changedCount)])
+            post("portfolio.assignLotsSuccess", ["count": String(receipt.movedCount)])
         }
     }
     public static func unassignedLotIds(investmentId: Int, history: [PortfolioTransaction]) -> [Int] {

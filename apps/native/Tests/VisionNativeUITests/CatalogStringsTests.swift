@@ -44,7 +44,6 @@ import VisionNativeCore
         used.formUnion(NavigationRegistry.sections.compactMap(\.labelKey))
         used.formUnion([NavigationRegistry.adminSection.labelKey].compactMap { $0 })
         used.formUnion([NavigationRegistry.settingsTitleKey, "nav.primary", "common.error", "common.retry"])
-        used.formUnion(ExchangeRatesTab.allCases.map(\.titleKey))
         used.formUnion(["admin.providers.never"])
         #expect(used.subtracting(keys).isEmpty, "\(used.subtracting(keys).sorted())")
     }

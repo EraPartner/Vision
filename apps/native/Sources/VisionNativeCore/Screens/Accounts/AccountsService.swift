@@ -155,13 +155,17 @@ public struct LotRetagRequest: Equatable, Sendable, Encodable {
 
 /// The receipt card of Transfer lots and the moved count of Close account.
 public struct LotRetagReceipt: Equatable, Sendable {
-    public let receiptId: Int
-    public let changedCount: Int
+    /// `retagMovedCount`: a replayed request moved nothing now, so it reports the selected count.
+    public let movedCount: Int
 
-    public init(receiptId: Int, changedCount: Int) {
-        self.receiptId = receiptId
-        self.changedCount = changedCount
+    public init(movedCount: Int) {
+        self.movedCount = movedCount
     }
+}
+
+extension OpenAPI.PortfolioBrokerRetagReceipt {
+    /// `retagMovedCount` in `apps/frontend/src/lib/api/portfolio.ts`.
+    public var movedCount: Int { replayed ? selectedCount : changedCount }
 }
 
 extension APIClient: AccountsService {
@@ -250,7 +254,7 @@ extension APIClient: AccountsService {
 
     public func retagLots(_ request: LotRetagRequest) async throws -> LotRetagReceipt {
         let receipt = try await send(LotRetagOperation(request: request))
-        return LotRetagReceipt(receiptId: receipt.receiptId, changedCount: receipt.changedCount)
+        return LotRetagReceipt(movedCount: receipt.movedCount)
     }
 }
 

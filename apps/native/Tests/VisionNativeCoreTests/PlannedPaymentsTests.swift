@@ -158,9 +158,10 @@ enum PlannedFixture {
             rates: [
                 OpenAPI.ExchangeRate(
                     currency: "USD", rateToEur: Decimal(string: "1.0842")!, rateDate: "2026-10-09",
-                    fetchedAt: "2026-10-09T15:05:00.000Z")
+                    fetchedAt: "2026-10-09T15:05:00.000Z"),
+                OpenAPI.ExchangeRate(
+                    currency: "JPY", rateToEur: 0, rateDate: "2026-10-09", fetchedAt: "2026-10-09T15:05:00.000Z"),
             ],
-            fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!, "GBP": Decimal(string: "1.17")!, "JPY": 0],
             source: "database", isStale: false, lastFetchedAt: nil)
     }
 
@@ -321,10 +322,11 @@ enum PlannedFixture {
 @Suite struct PlannedFiguresTests {
     let converter = PlannedCurrencyConverter(rates: PlannedFixture.rates(), target: "EUR")
 
-    @Test func conversionUsesLiveRatesOverFallbacksAndSkipsMissingOrZeroRates() {
+    @Test func conversionUsesStoredRatesOnlyAndSkipsMissingOrZeroRates() {
         #expect(converter.ratesToEur["USD"] == Decimal(string: "1.0842"))
         #expect(converter.convert(-100, from: "usd") == Decimal(-100) * Decimal(string: "1.0842")!)
-        #expect(converter.convert(10, from: "GBP") == Decimal(10) * Decimal(string: "1.17")!)
+        // No stored rate: unavailable, never converted at a built-in constant.
+        #expect(converter.convert(10, from: "GBP") == nil)
         #expect(converter.convert(10, from: nil) == 10)
         #expect(converter.convert(10, from: "XYZ") == nil)
         #expect(converter.convert(10, from: "JPY") == nil)

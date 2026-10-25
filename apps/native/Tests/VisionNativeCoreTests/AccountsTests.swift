@@ -155,7 +155,7 @@ actor FakeAccountsService: AccountsService {
         log.append("retag")
         retags.append(request)
         if let retagFailure { throw retagFailure }
-        return LotRetagReceipt(receiptId: 41, changedCount: request.transactionIds.count)
+        return LotRetagReceipt(movedCount: request.transactionIds.count)
     }
 }
 
@@ -215,8 +215,10 @@ enum AccountsFixture {
     /// EUR at 1 and USD at half a euro; no rate for CHF.
     static func rates() -> OpenAPI.ExchangeRates {
         OpenAPI.ExchangeRates(
-            totalRates: 1, rates: [], fallbackRates: ["EUR": 1, "USD": decimal("0.5")], source: "database",
-            isStale: false, lastFetchedAt: nil)
+            totalRates: 1,
+            rates: [
+                .init(currency: "USD", rateToEur: decimal("0.5"), rateDate: "2026-01-01", fetchedAt: "2026-01-01T00:00:00Z")
+            ], source: "database", isStale: false, lastFetchedAt: nil)
     }
 
     static func row(_ id: Int, date: String, amount: Decimal, running: Decimal?, currency: String = "EUR")
@@ -913,7 +915,7 @@ enum AccountsFixture {
         model.setTransferDestination(.unassigned)
         #expect(model.transfer?.canTransfer == true)
         await model.confirmTransfer()
-        #expect(model.transfer?.receipt == LotRetagReceipt(receiptId: 41, changedCount: 1))
+        #expect(model.transfer?.receipt == LotRetagReceipt(movedCount: 1))
         #expect(model.notice?.key == "portfolio.brokerTransfer.done")
         let request = try #require(await service.retags.first)
         let json = String(decoding: try APIBody.encode(request), as: UTF8.self)

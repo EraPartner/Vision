@@ -295,7 +295,7 @@
         }
         func netWorthRates() async throws -> OpenAPI.ExchangeRates {
             calls.append("rates")
-            return .init(totalRates: 0, rates: [], fallbackRates: [:], source: "synthetic", isStale: false)
+            return .init(totalRates: 0, rates: [], source: "synthetic", isStale: false)
         }
         func netWorthPrices() async throws -> [NetWorthInvestmentPrice] {
             calls.append("prices")

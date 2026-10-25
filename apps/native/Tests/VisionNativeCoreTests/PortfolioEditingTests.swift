@@ -573,8 +573,8 @@ private actor EditingFixtureService: PortfolioEditingService {
             throw APIError.backendUnavailable
         }
         return .init(
-            receiptId: 1, idempotencyKey: "synthetic", transactionIds: [9], previousAssignments: [], selectedCount: 1,
-            changedCount: 1, createdAt: "2026-10-13", replayed: false)
+            idempotencyKey: "synthetic", transactionIds: [9], previousAssignments: [], selectedCount: 1,
+            changedCount: 1, replayed: false)
     }
     func portfolioImportExposure(_ data: Data) async throws {
         if exposureFails { throw APIError.backendUnavailable }
