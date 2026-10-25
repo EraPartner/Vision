@@ -53,6 +53,9 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var autoClearPlannedOnMatch: Bool
     public var visualEffects: String
     public var autoAdaptDisplay: Bool
+    /// `fullEffects` (ADR-244): restores effects that were turned down to save GPU work.
+    /// Off by default; the design layer reads it through `NativeSettingsModel.fullEffects`.
+    public var fullEffects: Bool
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
@@ -61,7 +64,8 @@ public struct NativeAppSettings: Equatable, Sendable {
         analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
         aiDefaultModel: String? = nil,
         startOfWeek: String = "monday", costBasisMethod: String = "weighted_avg", startupSection: String = "budgeting",
-        autoClearPlannedOnMatch: Bool = true, visualEffects: String = "standard", autoAdaptDisplay: Bool = true
+        autoClearPlannedOnMatch: Bool = true, visualEffects: String = "standard", autoAdaptDisplay: Bool = true,
+        fullEffects: Bool = false
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -80,6 +84,7 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.autoClearPlannedOnMatch = autoClearPlannedOnMatch
         self.visualEffects = visualEffects
         self.autoAdaptDisplay = autoAdaptDisplay
+        self.fullEffects = fullEffects
     }
 
     /// `DEFAULT_APP_SETTINGS`.
@@ -132,6 +137,7 @@ public struct NativeAppSettings: Equatable, Sendable {
             settings.visualEffects = value
         }
         if let value = fields["autoAdaptDisplay"]?.boolValue { settings.autoAdaptDisplay = value }
+        if let value = fields["fullEffects"]?.boolValue { settings.fullEffects = value }
         return settings
     }
 

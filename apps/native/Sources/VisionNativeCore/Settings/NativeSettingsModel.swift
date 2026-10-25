@@ -128,6 +128,13 @@ public final class NativeSettingsModel {
             sessionTierOverride = nil
         }
     }
+    /// `AppSettings.fullEffects` (ADR-244, `useFullEffects`): restores the effects that were turned
+    /// down to save GPU work. Off until the stored value says otherwise; the design layer reads this.
+    public var fullEffects: Bool { appBool("fullEffects", fallback: false) }
+    public func setFullEffects(_ enabled: Bool) {
+        guard !retired, !isSuspendedForRestore else { return }
+        updateApp(["fullEffects": .bool(enabled)])
+    }
     public func setAutoAdaptDisplay(_ enabled: Bool) {
         guard !retired, !isSuspendedForRestore else { return }
         updateApp(["autoAdaptDisplay": .bool(enabled)])

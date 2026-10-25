@@ -138,7 +138,8 @@ import Observation
             } catch {
                 if revision == settingsRevision {
                     settingsError = error.localizedDescription
-                    enqueue("settings.backup.failed", kind: .error, detail: error.localizedDescription)
+                    // BackupSection `persist`: a failed settings write is `settings.saveFailed`.
+                    enqueue("settings.saveFailed", kind: .error, detail: error.localizedDescription)
                 }
             }
         }

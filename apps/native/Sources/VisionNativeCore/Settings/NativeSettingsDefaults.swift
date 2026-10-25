@@ -6,7 +6,8 @@ public enum NativeSettingsDefaults {
         "defaultCurrency": .string("EUR"), "dateFormat": .string("DD/MM/YYYY"), "numberFormat": .string("eu"),
         "defaultPageSize": .number(50), "startOfWeek": .string("monday"), "showDecimalPlaces": .number(2),
         "language": .string("en"), "costBasisMethod": .string("weighted_avg"), "adminMode": .bool(false),
-        "visualEffects": .string("standard"), "autoAdaptDisplay": .bool(true), "startupSection": .string("budgeting"),
+        "visualEffects": .string("standard"), "autoAdaptDisplay": .bool(true), "fullEffects": .bool(false),
+        "startupSection": .string("budgeting"),
         "autoClearPlannedOnMatch": .bool(true), "colorblindGainLoss": .bool(false),
     ])
     public static let dashboard: TaxValue = .object([
@@ -62,7 +63,7 @@ public enum NativeSettingsDefaults {
             return value.stringValue.map(NativeAppSettings.isCurrencyCode) == true ? value : app[key]
         case "defaultPageSize": return integer(value).map { $0 > 0 } == true ? value : app[key]
         case "showDecimalPlaces": return integer(value).map { (0...20).contains($0) } == true ? value : app[key]
-        case "adminMode", "autoAdaptDisplay", "autoClearPlannedOnMatch", "colorblindGainLoss":
+        case "adminMode", "autoAdaptDisplay", "fullEffects", "autoClearPlannedOnMatch", "colorblindGainLoss":
             return value.boolValue != nil ? value : app[key]
         case "analysisBenchmark":
             guard let raw = value.stringValue, let symbol = ResearchCompareURLState.normalizeSymbol(raw),
