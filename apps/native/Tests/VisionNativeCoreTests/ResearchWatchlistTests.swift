@@ -306,6 +306,20 @@ import Testing
         #expect(model.page?.items.map(\.id) == [2, 1] && !model.isLoading && model.error == nil)
     }
 
+    @Test func restartedVisitDuringAQuoteReadStillShowsTheQuotes() async throws {
+        let transport = WatchlistTransport()
+        let model = ResearchWatchlistModel(service: client(transport))
+        let gate = WatchlistGate()
+        await transport.setQuoteGate(gate)
+        let first = Task { await model.load() }
+        await gate.started()
+        first.cancel()
+        await model.load()
+        await gate.release()
+        await first.value
+        #expect(!model.quotes.isEmpty && model.quotesError == nil && !model.isQuotesLoading)
+    }
+
     @Test func failedFirstQuoteFetchIsRetriedByTheNextLoadOfTheSameSymbols() async throws {
         let transport = WatchlistTransport()
         let model = ResearchWatchlistModel(service: client(transport))

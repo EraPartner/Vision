@@ -153,7 +153,10 @@ public final class ResearchWatchlistModel {
                     try await service.marketQuotes(symbols: symbols, detail: "basic")
                 }
             }
-            guard quotesRevision == revision, !Task.isCancelled else { return }
+            // Like the list read in `load`, a cancelled caller is not stale: a restarted visit
+            // returns early while this request is in flight, so dropping a delivered response
+            // here left every row on "Quote unavailable" until the next poll.
+            guard quotesRevision == revision else { return }
             quotes = Dictionary(result.map { ($0.symbol, $0) }, uniquingKeysWith: { _, latest in latest })
             // Only a delivered response marks this symbol set as loaded. Recording it before the
             // request meant a cancelled or superseded fetch left the rows on "Quote unavailable".
@@ -161,7 +164,7 @@ public final class ResearchWatchlistModel {
             quotesError = nil
             await updateMetrics()
         } catch {
-            guard quotesRevision == revision, !Task.isCancelled else { return }
+            guard quotesRevision == revision, !(error is CancellationError) else { return }
             quotesError = error.localizedDescription
             // A failed refetch retains the prior quotes and comparisons, as the
             // web query cache does, alongside its unavailable warning.
