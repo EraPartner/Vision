@@ -248,7 +248,7 @@
             self.unavailablePrices = unavailablePrices
         }
         func rejectFurtherHistory() { rejectMore = true }
-        func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
+        func netWorth(currency: CurrencyCode, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
             calls.append("history:\(limit ?? -1):\(offset ?? 0)")
             if rejectMore, limit != nil, (offset ?? 0) > 0 {
                 throw NSError(
@@ -268,7 +268,7 @@
                 monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
                 snapshotsTotal: limit == nil ? nil : 36, snapshotsLimit: limit, snapshotsOffset: offset)
         }
-        func netWorthByAccount(currency: String) async throws -> OpenAPI.NetWorthByAccountResponse {
+        func netWorthByAccount(currency: CurrencyCode) async throws -> OpenAPI.NetWorthByAccountResponse {
             calls.append("accounts")
             if unavailableAccounts { throw APIError.backendUnavailable }
             var total: Decimal = 0

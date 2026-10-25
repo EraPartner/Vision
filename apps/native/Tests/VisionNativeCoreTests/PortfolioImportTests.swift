@@ -842,7 +842,7 @@ private actor ImportFixtureService: PortfolioImportService {
         let blockers: [TaxValue] = blockedRows.filter { !answered.contains($0) }.map { row in
             .object([
                 "batchId": .number(Decimal(scope.batchIds[0].rawValue)), "rowId": .number(Decimal(row.rawValue)),
-                "rowOrdinal": .number(Decimal(row)), "reason": .string("funding_date_mismatch"),
+                "rowOrdinal": .number(Decimal(row.rawValue)), "reason": .string("funding_date_mismatch"),
                 "candidateTransactionIds": .array([.number(9)]),
             ])
         }

@@ -6,7 +6,7 @@ import Foundation
 /// Test-only string literals for currency codes (`"EUR"`), so fixtures read like the wire. Production
 /// code has no such conformance: it takes codes from decoded models or `CurrencyCode(rawValue:)`.
 /// Traps on a malformed literal, which a fixture typo should be.
-extension CurrencyCode: @retroactive ExpressibleByStringLiteral {
+extension CurrencyCode: ExpressibleByStringLiteral {
     public init(stringLiteral value: String) {
         guard let code = CurrencyCode(rawValue: value) else {
             preconditionFailure("\"\(value)\" is not a currency code (^[A-Z]{3}$)")

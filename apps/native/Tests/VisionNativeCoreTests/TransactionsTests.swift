@@ -934,7 +934,7 @@ extension TransactionPatch {
         await service.failAttachmentDeletes(false)
         attachments.requestDelete(receipt)
         await attachments.confirmDelete()
-        #expect(await service.attachmentDeletes == [41, 41])
+        #expect(await service.attachmentDeletes == ["41", "41"])
         #expect(attachments.items?.map(\.filename) == ["photo.png"])
         #expect(TransactionAttachmentsModel.size(2048) == "2.0 KB")
         #expect(TransactionAttachmentsModel.safeName("a/b:c") == "a_b_c")

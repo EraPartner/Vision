@@ -244,7 +244,7 @@ import Testing
         ("pension", "retired"), ("unemployment", "other"),
     ])
     func employmentTypesFollowEmploymentTypeFor(_ kind: String, _ expected: String) {
-        #expect(NativeTaxReportProfile.employmentType(kind) == expected)
+        #expect(NativeTaxReportProfile.employmentType(.init(rawValue: kind)) == expected)
     }
 
 }

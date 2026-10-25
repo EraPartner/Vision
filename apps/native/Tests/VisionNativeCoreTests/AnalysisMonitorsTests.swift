@@ -176,7 +176,7 @@ struct AnalysisMonitorsModelTests {
         }
         await model.changeDossierPage(500)
         #expect(
-            model.newDraft.dossierId.isEmpty && model.newDraft.title == "Evidence"
+            model.newDraft.dossierId == nil && model.newDraft.title == "Evidence"
                 && model.newDraft.cooldownMinutes == "120")
     }
     @Test func selectingAnotherRuleRejectsTheOldHistoryResponse() async throws {

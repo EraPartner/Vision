@@ -46,11 +46,11 @@ actor StaticImportService: ImportService {
         OpenAPI.CustomParserConfig(id: 8, name: name, config: config.payload)
     }
 
-    func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
+    func updateCustomParser(id: CustomParserConfigID, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
         OpenAPI.CustomParserConfig(id: id, name: name, config: config.payload)
     }
 
-    func deleteCustomParser(id: Int) async throws {}
+    func deleteCustomParser(id: CustomParserConfigID) async throws {}
 
     func importStream(
         file: ImportFile, bankName: String, onProgress: @escaping @Sendable (ImportProgress) async -> Void
@@ -289,7 +289,7 @@ actor StaticPlannedService: PlannedPaymentsService {
         return includePaused ? rows : rows.filter { row in row.isActive }
     }
 
-    func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
+    func setPlannedPaymentActive(id: PlannedTransactionID, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return OpenAPI.PlannedTransaction(
             id: row.id, plannedDate: row.plannedDate, recipientName: row.recipientName, memo: row.memo,
@@ -300,9 +300,9 @@ actor StaticPlannedService: PlannedPaymentsService {
             executions: row.executions, isActive: isActive, links: [])
     }
 
-    func deletePlannedPayment(id: Int) async throws {}
+    func deletePlannedPayment(id: PlannedTransactionID) async throws {}
 
-    func transaction(id: Int) async throws -> OpenAPI.Transaction? {
+    func transaction(id: TransactionID) async throws -> OpenAPI.Transaction? {
         OpenAPI.Transaction(
             id: id, transactionDate: "2026-10-01", recipientName: "Landlord", memo: nil, amount: -950,
             currency: "EUR", categoryName: "Housing", links: [])
@@ -358,12 +358,12 @@ extension StaticPlannedService: PlannedEditingService {
             isRecurring: true, isExecuted: false, executionCount: 0, isActive: true, links: [])
     }
 
-    func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
+    func updatePlannedPayment(id: PlannedTransactionID, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return row
     }
 
-    func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+    func executePlannedPayment(id: PlannedTransactionID, transactionId: TransactionID, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
     {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
@@ -424,7 +424,7 @@ extension StaticPlannedService: PickerDataService {
         ]
     }
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         OpenAPI.Recipient(
             id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: "2026-01-01", links: [])
     }
@@ -487,9 +487,9 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         return TransactionPage(items: offset == 0 ? shown : [], total: shown.count)
     }
 
-    func uncategorisedCount(recipientId: Int?) async throws -> Int { 2 }
+    func uncategorisedCount(recipientId: RecipientID?) async throws -> Int { 2 }
 
-    func updateTransaction(id: Int, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
+    func updateTransaction(id: TransactionID, patch: TransactionPatch) async throws -> OpenAPI.Transaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return row
     }
@@ -498,17 +498,17 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         throw APIError.network("unsupported")
     }
 
-    func deleteTransaction(id: Int) async throws {}
+    func deleteTransaction(id: TransactionID) async throws {}
 
-    func categorizeUncategorised(recipientId: Int, categoryId: Int, expectedCount: Int) async throws
+    func categorizeUncategorised(recipientId: RecipientID, categoryId: CategoryID, expectedCount: Int) async throws
         -> BulkUpdateResult
     {
         BulkUpdateResult(updated: expectedCount, requested: expectedCount, matched: expectedCount)
     }
 
-    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {}
+    func setRecipientDefaultCategory(recipientId: RecipientID, categoryId: CategoryID) async throws {}
 
-    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+    func recipient(id: RecipientID) async throws -> OpenAPI.Recipient {
         OpenAPI.Recipient(id: id, name: "Landlord", defaultCategoryId: 7, isActive: true, createdAt: "2026-01-01", links: [])
     }
 
@@ -534,7 +534,7 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         OpenAPI.Setting(key: key.rawValue, value: value, expected: .object(["exists": .bool(true), "value": value]))
     }
 
-    func attachments(transactionId: Int) async throws -> [OpenAPI.Attachment] {
+    func attachments(transactionId: TransactionID) async throws -> [OpenAPI.Attachment] {
         [
             OpenAPI.Attachment(
                 id: "41", transactionId: transactionId, filename: "invoice-october.pdf", storedPath: "a/invoice.pdf",
@@ -542,15 +542,15 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         ]
     }
 
-    func uploadAttachment(transactionId: Int, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
+    func uploadAttachment(transactionId: TransactionID, file: AttachmentUpload) async throws -> OpenAPI.Attachment {
         OpenAPI.Attachment(
             id: "42", transactionId: transactionId, filename: file.name, storedPath: "a/\(file.name)",
             mimeType: file.contentType, sizeBytes: file.data.count, createdAt: "2026-10-09T10:00:00Z")
     }
 
-    func downloadAttachment(id: Int) async throws -> Data { Data("%PDF-1.7".utf8) }
+    func downloadAttachment(id: AttachmentID) async throws -> Data { Data("%PDF-1.7".utf8) }
 
-    func deleteAttachment(id: Int) async throws {}
+    func deleteAttachment(id: AttachmentID) async throws {}
 }
 
 /// The bulk and split calls with fixed answers: two open splits owed by Anna and three
@@ -591,17 +591,17 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         BulkExportFile(data: Data("id\n".utf8), exportedCount: selector.count)
     }
 
-    func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
+    func bulkTag(ids: [TransactionID], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
         OpenAPI.BulkTagResult(added: add.count, removed: remove.count, transactionsAffected: ids.count)
     }
 
-    func markTransfer(_ first: Int, _ second: Int) async throws {}
+    func markTransfer(_ first: TransactionID, _ second: TransactionID) async throws {}
 
     func createRecipient(name: String) async throws -> CreatedRecipient {
         CreatedRecipient(id: 9, name: name, isActive: true, createdAt: "2026-10-09", links: [], created: true)
     }
 
-    func splits(transactionId: Int) async throws -> [OpenAPI.Split] {
+    func splits(transactionId: TransactionID) async throws -> [OpenAPI.Split] {
         [
             OpenAPI.Split(
                 id: 1, transactionId: transactionId, recipientId: 4, recipientName: "Anna",
@@ -610,9 +610,9 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         ]
     }
 
-    func createSplits(transactionId: Int, shares: [SplitShare]) async throws {}
+    func createSplits(transactionId: TransactionID, shares: [SplitShare]) async throws {}
 
-    func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
+    func bulkSplit(transactionIds: [TransactionID], recipientId: RecipientID, mode: BulkSplitMode) async throws
         -> OpenAPI.BulkSplitResult
     {
         OpenAPI.BulkSplitResult(
@@ -620,7 +620,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             skippedMissing: 0, items: [])
     }
 
-    func owedSummary(currency: String) async throws -> OwedSummaryPage {
+    func owedSummary(currency: CurrencyCode) async throws -> OwedSummaryPage {
         if failing { throw APIError.network("The network connection was lost.") }
         let totals = OpenAPI.OwedTotals(
             currency: currency, remaining: owedSplits.reduce(Decimal(0)) { sum, split in sum + split.remaining },
@@ -636,7 +636,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             ], summary: totals)
     }
 
-    func owed(recipientId: Int, currency: String) async throws -> OwedDetailPage {
+    func owed(recipientId: RecipientID, currency: CurrencyCode) async throws -> OwedDetailPage {
         OwedDetailPage(
             items: owedSplits,
             summary: OpenAPI.OwedTotals(
@@ -644,17 +644,17 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
                 unconvertedCount: 0, unconvertedCurrencies: []))
     }
 
-    func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
+    func exportOwedCsv(recipientId: RecipientID) async throws -> Data { Data("date,amount\n".utf8) }
 
-    func recordPayment(splitId: Int, amount: Decimal) async throws {}
+    func recordPayment(splitId: SplitID, amount: Decimal) async throws {}
 
-    func settle(splitId: Int) async throws {}
+    func settle(splitId: SplitID) async throws {}
 
-    func settleAll(recipientId: Int) async throws -> Int { owedSplits.count }
+    func settleAll(recipientId: RecipientID) async throws -> Int { owedSplits.count }
 
-    func deleteSplit(id: Int) async throws {}
+    func deleteSplit(id: SplitID) async throws {}
 
-    func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage {
+    func recipientTransactions(groupId: RecipientGroupID, offset: Int, limit: Int) async throws -> TransactionPage {
         TransactionPage(items: offset == 0 ? StaticTransactionsService.sample : [], total: StaticTransactionsService.sample.count)
     }
 }
@@ -699,13 +699,13 @@ actor StaticAccountsService: AccountsService {
         return active == "true" ? rows.filter(\.isActive) : rows
     }
 
-    func portfolioAccountRows(currency: String) async throws -> AccountPortfolioSummary {
+    func portfolioAccountRows(currency: CurrencyCode) async throws -> AccountPortfolioSummary {
         AccountPortfolioSummary(
             byAccount: [PortfolioAccountRow(accountId: 2, contributionKind: "position", currentValue: 4200)],
             accountTotals: [PortfolioAccountTotalsRow(accountId: 2, oversold: false, gainLoss: 310)])
     }
 
-    func accountTotals(currency: String) async throws -> OpenAPI.AccountTotals {
+    func accountTotals(currency: CurrencyCode) async throws -> OpenAPI.AccountTotals {
         func group(_ total: Decimal) -> OpenAPI.AccountGroupTotal {
             OpenAPI.AccountGroupTotal(
                 total: total, cash: total, holdings: 0, holdingsUnavailable: false, unconvertedCount: 0,
@@ -718,7 +718,7 @@ actor StaticAccountsService: AccountsService {
             accounts: [])
     }
 
-    func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
+    func ledger(accountId: AccountID, offset: Int, limit: Int) async throws -> AccountLedgerPage {
         AccountLedgerPage(
             rows: [
                 AccountLedgerRow(
@@ -731,32 +731,32 @@ actor StaticAccountsService: AccountsService {
             total: 140)
     }
 
-    func plannedRows(accountId: Int) async throws -> AccountPlannedPage {
+    func plannedRows(accountId: AccountID) async throws -> AccountPlannedPage {
         AccountPlannedPage(
             rows: [AccountPlannedRow(id: 7, date: "2026-11-01", recipientName: "Huur", amount: -950, currency: "EUR")],
             total: 1)
     }
 
     func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int { 9 }
-    func updateAccount(id: Int, patch: AccountPatch) async throws {}
-    func deleteAccount(id: Int) async throws {}
-    func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? { nil }
-    func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws {}
-    func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws {}
+    func updateAccount(id: AccountID, patch: AccountPatch) async throws {}
+    func deleteAccount(id: AccountID) async throws {}
+    func setOpeningBalance(id: AccountID, balance: Decimal, date: String, currency: CurrencyCode) async throws -> String? { nil }
+    func setStatementBalance(id: AccountID, currency: CurrencyCode, balance: Decimal, date: String) async throws {}
+    func reconcile(id: AccountID, mode: ReconcileMode, currency: CurrencyCode) async throws {}
 
-    func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview {
+    func mergePreview(sourceId: AccountID, targetId: AccountID) async throws -> AccountMergePreview {
         AccountMergePreview(
             into: targetId, source: sourceId, transactions: 12, planned: 1, projectedBalance: 1500,
             projectedBalanceCurrency: "EUR")
     }
 
-    func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts {
+    func merge(targetId: AccountID, sourceIds: [AccountID]) async throws -> AccountMergeCounts {
         AccountMergeCounts(transactions: 12, planned: 1)
     }
 
-    func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws {}
+    func closeAccount(id: AccountID, balanceHandling: CloseBalanceHandling) async throws {}
 
-    func lotPreview(accountId: Int) async throws -> AccountLotPreview {
+    func lotPreview(accountId: AccountID) async throws -> AccountLotPreview {
         AccountLotPreview(accountId: accountId, eligibleCount: 3, transactionIds: [21, 22, 23], limit: 500)
     }
 
