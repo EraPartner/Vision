@@ -2,8 +2,8 @@
 title: "Native parity inventory: Research and AI chat"
 type: reference
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-25
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -601,7 +601,7 @@ The page shows one workflow at a time. Chat and Investigation regions both stay 
 - Ollama status banner (when not loading and not ok): title `aiChat.banner.unreachable` "Local AI model unreachable", hint `aiChat.banner.hint`, `aiChat.banner.connectionDetails` "Connection details" disclosure with the endpoint URL and server hint (`apps/frontend/src/features/ai-chat/OllamaStatusBanner.tsx:33`).
 - Transcript (`ChatMessageList`, `role="log"`, polite live region): empty state `aiChat.emptyTitle` "Ask anything about your finances" with `aiChat.emptyState` (only when the model is reachable); user bubbles (right), assistant bubbles (left, blinking caret while streaming), tool bubbles (tool name or `aiChat.toolResult` "Tool result", then a result card or `aiChat.noDataReturned` "No data returned."); a "Thinking" indicator `aiChat.thinking` with animated dots while waiting for the first token; a terminal notice `aiChat.streamStopped` / `aiChat.streamTimedOut` / `aiChat.streamInterrupted` with Retry. Auto-scrolls to the newest content unless the reader has scrolled up; re-pins on send and on conversation switch (`apps/frontend/src/features/ai-chat/ChatMessageList.tsx:113`-`:297`; `apps/frontend/src/features/ai-chat/ChatBubble.tsx:28`, `:64`).
 - Tool result card (`ToolResultCard`): error alert (`aiChat.toolFailed` "Tool failed.", `aiChat.toolError.validation`, `aiChat.toolError.unavailable`); otherwise by `meta.renderAs` a table (column headers = keys, numbers right-aligned in the app number format; `aiChat.noRows` "No rows."), a line/bar/pie chart (lazy; legend when several series; pie labels with percentages; `aiChat.noChartData` "No chart data."), or pretty JSON; footer `aiChat.rowsShown` "Showing {shown} of {total}" or `aiChat.rowCount` "{count} row(s)" (`apps/frontend/src/features/ai-chat/ToolResultCard.tsx:80`-`:220`; `apps/frontend/src/features/ai-chat/ToolResultChart.tsx`).
-- Composer (`ChatComposer`, shown when the model is reachable or a stream is running): model select, tools switch, auto-growing textarea (max height 200 px), send/stop button, hint `aiChat.enterHint` "Enter to send · Shift+Enter for a new line", character counter "{n}/4000" (`apps/frontend/src/features/ai-chat/ChatComposer.tsx:79`-`:173`).
+- Composer (`ChatComposer`, shown when the model is reachable or a stream is running): model select (lists `GET /api/ai/models`, which includes `apple-foundation` when the Apple model is available), tools switch, auto-growing textarea (max height 200 px), send/stop button, hint `aiChat.enterHint` "Enter to send · Shift+Enter for a new line", character counter "{n}/4000" (`apps/frontend/src/features/ai-chat/ChatComposer.tsx:79`-`:173`).
 
 **URL state:** `c` (selected conversation id; replace-write; removed on deselect) (`apps/frontend/src/pages/AIChatPage.tsx:40`, `:61`); `mode` (`chat` default or `investigation`, via `useTabParam`) (`:55`). With no `c` but a stream running in the background, the page selects that conversation (`:92`).
 
@@ -635,6 +635,7 @@ The page shows one workflow at a time. Chat and Investigation regions both stay 
 | 19  | Transcript                 | `common.retry` "Retry" under a stopped, timed-out or interrupted draft                                                                  | click   | Resends the last request with `retryLastTurn: true`                                                                       | `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:260`, `apps/frontend/src/pages/AIChatPage.tsx:148`; native `apps/native/Sources/VisionNativeUI/AIChatTranscript.swift:62` | native |
 | 20  | Transcript                 | Scroll                                                                                                                                  | scroll  | Scrolling up stops auto-follow; reaching the bottom resumes it                                                            | `apps/frontend/src/features/ai-chat/ChatMessageList.tsx:117`; native `apps/native/Sources/VisionNativeUI/AIChatTranscript.swift:78`                                               | native |
 | 21  | Tool result chart          | Chart                                                                                                                                   | hover   | Recharts tooltip with the row values                                                                                      | `apps/frontend/src/features/ai-chat/ToolResultChart.tsx:97`, `:187`; native `apps/native/Sources/VisionNativeUI/AIChatToolChart.swift:99`                                         | native |
+| 22  | Page (no control)          | Model residency (`useModelResidency`, ADR-248): warm the active model 2 s after the page opens, re-warm every 4 minutes while the app is in the foreground, release it when the page is left or the model changes | open / leave | `POST /api/ai/model/warm` and `/release` with `{model}` (always 204, best effort). Skipped for `apple-foundation` (ADR-246), without a model and while Ollama is unreachable | `apps/frontend/src/hooks/useModelResidency.ts:28`, `apps/frontend/src/pages/AIChatPage.tsx:125`; `apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatResidency.swift` | native |
 
 #### Sheet: Conversations (mobile)
 

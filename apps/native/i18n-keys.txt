@@ -76,7 +76,7 @@ exchangeRates.storedRatesDesc
 exchangeRates.subtitle
 exchangeRates.title
 
-# Admin > Overview (admin token card and tiles)
+# Admin > Overview (tiles)
 admin.overview.allHealthy
 admin.overview.dataSources
 admin.overview.dbSize
@@ -4160,6 +4160,8 @@ onboarding.persist.failed
 settings.aiChat.defaultModel
 settings.aiChat.defaultModelHint
 settings.aiChat.loadingModels
+settings.aiChat.modelFit
+settings.aiChat.modelFitTip
 settings.aiChat.noModels
 settings.aiChat.section
 settings.aiChat.selectModel
@@ -4218,6 +4220,8 @@ settings.app.version
 settings.app.versionAvailable
 settings.appearance.autoAdaptDisplay
 settings.appearance.autoAdaptDisplayHint
+settings.appearance.fullEffects
+settings.appearance.fullEffectsHint
 settings.appearance.darkFrom
 settings.appearance.gainLossColors
 settings.appearance.gainLossColors.classic

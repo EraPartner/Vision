@@ -5,6 +5,8 @@ import Observation
     public private(set) var ollamaStatus: AIChatOllamaStatus?
     public private(set) var ollamaModels: [AIChatOllamaModel]?
     public private(set) var providerStatuses: NativeSettingsAIProviderStatuses?
+    /// `useModelFit` data for `fitModel`; shown only through `fitVariables`.
+    public private(set) var modelFit: OpenAPI.AiModelFit?
     public private(set) var isSavingKey = false
     public private(set) var isClearingKey = false
     public private(set) var benchmarkError = false
@@ -72,6 +74,10 @@ import Observation
     @ObservationIgnored private var tasks: [Lane: Task<Void, Never>] = [:]
     @ObservationIgnored private var onlineWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var providerRetryPending = false
+    @ObservationIgnored private var fitModel: String?
+    @ObservationIgnored private var fitDate: Date?
+    @ObservationIgnored private var fitRevision = UUID()
+    @ObservationIgnored private var fitTask: Task<Void, Never>?
     @ObservationIgnored private var statusFailed = false
     private enum Lane: CaseIterable, Hashable { case status, models, providers }
 
@@ -110,7 +116,56 @@ import Observation
     public func configure(appRaw: TaxValue?) {
         rawApp = appRaw
         if !active { benchmarkDraft = appRaw?["analysisBenchmark"]?.stringValue ?? "" }
+        refreshFit()
     }
+    /// The model whose memory advisor line applies: Ollama is reachable, a model is selected and it
+    /// is not the Apple Foundation model (`useModelFit` is off for it).
+    var fitTarget: String? {
+        let model = selectedLocalModel
+        return ollamaStatus?.ok == true && !model.isEmpty && model != appleFoundationModel ? model : nil
+    }
+    /// `AIChatSettingsSection` `fitLine`: the variables of `settings.aiChat.modelFit`, or nil when
+    /// Ollama cannot say (any null field), the fit belongs to another model or is not applicable.
+    public var fitVariables: [String: String]? {
+        guard let target = fitTarget, fitModel == target, let fit = modelFit else { return nil }
+        return Self.fitVariables(fit)
+    }
+    public static func fitVariables(_ fit: OpenAPI.AiModelFit) -> [String: String]? {
+        guard let weights = fit.weightBytes, let perToken = fit.kvBytesPerToken, let window = fit.maxNumCtx else {
+            return nil
+        }
+        let gib = Double(1 << 30)
+        return [
+            "weights": String(format: "%.1f", Double(weights) / gib),
+            "context": String(format: "%.1f", Double(perToken * window) / gib),
+            "total": String(Int((Double(fit.totalMemoryBytes) / gib).rounded())),
+        ]
+    }
+    /// `useModelFit`: staleTime 60 s, no retry, keyed by model; a model change drops the shown data.
+    func refreshFit() {
+        guard active, isOnline, let target = fitTarget else { return }
+        if fitModel != target {
+            fitModel = target
+            fitDate = nil
+            modelFit = nil
+            fitRevision = UUID()
+            fitTask?.cancel()
+            fitTask = nil
+        }
+        guard fitTask == nil, fitDate.map({ now().timeIntervalSince($0) >= 60 }) ?? true else { return }
+        let revision = fitRevision
+        let scope = visit
+        fitTask = Task { [weak self] in
+            guard let self else { return }
+            let result = try? await service.settingsAIModelFit(model: target)
+            guard active, visit == scope, fitRevision == revision, !Task.isCancelled else { return }
+            fitTask = nil
+            fitDate = now()
+            if let result { modelFit = result }
+        }
+    }
+    /// Waits for the model-fit read in flight, if any.
+    public func settleFit() async { await fitTask?.value }
     public func load() async {
         if active { return }
         active = true
@@ -124,6 +179,9 @@ import Observation
         visit = UUID()
         for task in tasks.values { task.cancel() }
         tasks = [:]
+        fitTask?.cancel()
+        fitTask = nil
+        fitRevision = UUID()
         fetching = []
         pausedReads = []
         providerRetryPending = false
@@ -322,6 +380,7 @@ import Observation
         }
         guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
         dates[lane] = now()
+        if lane == .status { refreshFit() }
         switch lane {
         case .status: if let receipt = sharedStatusReceipt { didReceiveStatus?(receipt) }
         case .models: if let receipt = sharedModelsReceipt { didReceiveModels?(receipt) }

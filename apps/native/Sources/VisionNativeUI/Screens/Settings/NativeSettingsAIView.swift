@@ -38,6 +38,16 @@ struct NativeSettingsAIView: View {
                         get: { model.selectedLocalModel }, set: { settings.setAppValue("aiDefaultModel", .string($0)) }),
                     options: localOptions
                 ).disabled(!model.canSelectLocalModel)
+                // AIChatSettingsSection `fitLine`: memory advisor line under the model select.
+                if let fit = model.fitVariables {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(strings.t("settings.aiChat.modelFit", fit))
+                        Text(strings.t("settings.aiChat.modelFitTip"))
+                    }
+                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.bottom, 12)
+                }
             }
             preferences
             NativeSettingsGroup(

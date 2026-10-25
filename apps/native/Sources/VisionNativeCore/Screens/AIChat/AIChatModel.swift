@@ -5,9 +5,11 @@ import Observation
     public private(set) var selectedID: String?
     public private(set) var mode: AIChatMode = .chat
     public var draft = ""
-    public var modelOverride: String?
+    public var modelOverride: String? = nil { didSet { syncResidency() } }
     public var useTools = true
     public var isOnline = true
+    /// The `document.visibilityState` of the residency refresh tick: the app is frontmost and active.
+    public var isForeground = true { didSet { residency.isForeground = isForeground } }
     public private(set) var conversations: [AIChatConversation] = []
     public private(set) var hasMore = false
     public private(set) var status: AIChatOllamaStatus?
@@ -23,6 +25,8 @@ import Observation
     public private(set) var errors: [String: String] = [:]
     public private(set) var notice: ScreenNotice?
     public let streams: AIChatStreamStore
+    /// `useModelResidency`: warms the active model while the page is open, releases it on leave.
+    @ObservationIgnored public let residency: AIChatResidency
     public var didReceiveStatus: (@MainActor (NativeSettingsAIReceipt<AIChatOllamaStatus>) -> Void)?
     public var didReceiveModels: (@MainActor (NativeSettingsAIReceipt<[AIChatOllamaModel]>) -> Void)?
     public var didInvalidateSharedReads: (@MainActor ([String]) -> Void)?
@@ -41,6 +45,7 @@ import Observation
         status = value
         statusDate = fetchedAt
         errors["status"] = nil
+        syncResidency()
     }
     public func seedSharedModels(_ value: [AIChatOllamaModel], fetchedAt: Date) {
         guard modelsDate.map({ fetchedAt > $0 }) ?? true else { return }
@@ -115,10 +120,12 @@ import Observation
     @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
     @ObservationIgnored private let noticeSource = UUID()
     public init(
-        service: any AIChatService, streams: AIChatStreamStore? = nil, now: @escaping @Sendable () -> Date = { Date() }
+        service: any AIChatService, streams: AIChatStreamStore? = nil, now: @escaping @Sendable () -> Date = { Date() },
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.service = service
         self.now = now
+        residency = AIChatResidency(service: service, sleep: sleep)
         self.streams = streams ?? AIChatStreamStore(service: service, now: now)
         self.streams.didInvalidate = { [weak self] id in
             guard let self else { return }
@@ -132,7 +139,15 @@ import Observation
         self.streams.didError = { [weak self] error in self?.showNotice("aiChat.sendFailed", error: error) }
     }
     public convenience init(client: APIClient) { self.init(service: client) }
-    public func configure(settings: NativeAppSettings) { self.settings = settings }
+    public func configure(settings: NativeAppSettings) {
+        self.settings = settings
+        syncResidency()
+    }
+    /// `useModelResidency(activeModel, status?.ok === true)`, re-evaluated wherever either input can change.
+    private func syncResidency() {
+        guard isActive else { return }
+        residency.update(model: activeModel, ollamaOK: status?.ok == true)
+    }
     public func load(route: NativeRoute, force: Bool = false) async {
         let beginningVisit = !isActive
         if !isActive {
@@ -153,6 +168,7 @@ import Observation
             self.route = route.setting("c", to: id)
             didReplaceRoute?(self.route)
         }
+        syncResidency()
         if beginningVisit || force {
             await refreshPageReads(force: force)
         } else if selectionChanged {
@@ -180,6 +196,7 @@ import Observation
         isLoadingDetail = false
         route = id.map { route.setting("c", to: $0) } ?? route.removing("c")
         didReplaceRoute?(route)
+        syncResidency()
         await loadDetail()
     }
     public func loadStatus(force: Bool = false) async {
@@ -199,6 +216,7 @@ import Observation
             statusDate = now()
             if let receipt = sharedStatusReceipt { didReceiveStatus?(receipt) }
             errors["status"] = nil
+            syncResidency()
             if result.ok { await loadModels() }
         } catch { if revision == statusRevision, isActive { errors["status"] = error.localizedDescription } }
     }
@@ -326,6 +344,7 @@ import Observation
             placeholderDetail = nil
             errors["detail"] = nil
             sweep(id: id)
+            syncResidency()
         } catch { if revision == selectionRevision, isActive { errors["detail"] = error.localizedDescription } }
     }
     private func sweep(id: String) {
@@ -440,6 +459,8 @@ import Observation
     }
     public func didDisappear() {
         isActive = false
+        // The effect cleanup of `useModelResidency`: release the model this page warmed.
+        residency.stop()
         visit = UUID()
         selectionRevision = UUID()
         listRevision = UUID()

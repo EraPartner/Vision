@@ -41,6 +41,8 @@ struct AIChatScreenView: View {
                     await screens.chat.pollStatus()
                 }
             }
+            // `document.visibilityState` of useModelResidency's re-warm tick.
+            .onChange(of: scenePhase, initial: true) { _, phase in screens.chat.isForeground = phase == .active }
             .onAppear {
                 visible = true
                 connectivity.start { online in

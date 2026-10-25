@@ -59437,6 +59437,42 @@
         }
       }
     },
+    "settings.aiChat.modelFit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses about {weights} GB plus up to {context} GB for conversation context, of {total} GB memory."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebruikt ongeveer {weights} GB plus maximaal {context} GB voor gesprekscontext, van {total} GB geheugen."
+          }
+        }
+      }
+    },
+    "settings.aiChat.modelFitTip": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tip: setting OLLAMA_FLASH_ATTENTION=1 and OLLAMA_KV_CACHE_TYPE=q8_0 for Ollama roughly halves context memory."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tip: met OLLAMA_FLASH_ATTENTION=1 en OLLAMA_KV_CACHE_TYPE=q8_0 voor Ollama halveert het geheugen voor context ongeveer."
+          }
+        }
+      }
+    },
     "settings.aiChat.noModels": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -60495,6 +60531,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Donker vanaf"
+          }
+        }
+      }
+    },
+    "settings.appearance.fullEffects": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full effects"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volledige effecten"
+          }
+        }
+      }
+    },
+    "settings.appearance.fullEffectsHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brings back effects that were turned down to save power: smooth aurora drift, frosted dialog backdrops, glass chart tooltips and cards, animated card shadows and longer chart entrances. Uses more GPU and battery."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brengt effecten terug die zijn afgezwakt om energie te besparen: vloeiend bewegende aurora, matglazen achtergrond achter dialogen, glazen grafiektooltips en kaarten, geanimeerde kaartschaduwen en langere grafiekanimaties. Gebruikt meer GPU en batterij."
           }
         }
       }
