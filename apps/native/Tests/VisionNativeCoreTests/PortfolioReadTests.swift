@@ -37,28 +37,55 @@ struct PortfolioReadTests {
         #expect(throws: DecodingError.self) { try row.decode(PortfolioTransaction.self) }
     }
 
-    @Test func archivedPresentationNeverContaminatesActiveTotalsOrUsesCanonicalInactiveMoney() async {
+    @Test func archivedHoldingsComeFromTheAllHoldingsSummaryAndNeverContaminateActiveTotals() async {
         let transport = PortfolioReadTransport()
         let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.summary?.totals.totalPortfolioValue == 100)
         #expect(model.archiveSummary?.totals.totalPortfolioValue == 150)
         #expect(model.active.map(\.id) == [1])
-        #expect(model.archived.first?.currentValue == 25)
-        #expect(model.archived.first?.assetGain == nil)
-        #expect(model.archived.first?.fxGain == nil)
+        // The archived row is the canonical summary of the `active=false` read (dated FX, the
+        // configured cost-basis method), not a client replay.
+        #expect(model.archived.map(\.id) == [2])
+        #expect(model.archived.first?.currentValue == 50)
+        #expect(model.archived.first?.assetGain == 0)
         #expect(model.investments.contains { !$0.isActive })
     }
 
-    @Test func missingArchivePolicyRemainsUnavailableInsteadOfFallingBackToCanonicalInactiveRows() async {
+    @Test func archivedSummariesInAnotherCurrencyAreRejected() async {
         let transport = PortfolioReadTransport()
-        await transport.omitArchivePresentation()
+        await transport.returnWrongArchiveCurrency()
         let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.archived.isEmpty)
         #expect(model.archiveSummary == nil)
         #expect(model.errors["archive"] != nil)
         #expect(model.active.count == 1)
+    }
+
+    @Test func assetPageTotalsAreTheServerGroupOrSingleClassEntries() async throws {
+        let model = PortfolioModel(service: portfolioReadClient(PortfolioReadTransport()))
+        await model.load(currency: "EUR")
+        #expect(model.holdingTotals(assetClasses: ["stock", "etf"]).totalPortfolioValue == 321)
+        #expect(model.holdingTotals(assetClasses: ["etf", "stock"]).netReturnWithDividends == 17)
+        #expect(model.holdingTotals(assetClasses: ["crypto"]).totalPortfolioValue == 12)
+        #expect(model.holdingTotals(assetClasses: ["metals"]) == .empty)
+        #expect(model.holdingTotals(assetClasses: ["real_estate"]).monthlyRentRateMissing)
+    }
+
+    @Test func rentAndFeeFiguresAreReadFromTheServerSummary() throws {
+        var row = portfolioHoldingWire(id: 3)
+        row["monthlyRent"] = .number(850)
+        row["feesAndTaxes"] = .number(12)
+        row["propertyReturn"] = .number(Decimal(string: "99.5")!)
+        let property = try row.decode(PortfolioHolding.self)
+        #expect(property.monthlyRent == 850)
+        #expect(property.feesAndTaxes == 12)
+        #expect(property.propertyReturn == Decimal(string: "99.5"))
+        // No stored rate for the rent's currency: the server sends null, never a constant.
+        row["monthlyRent"] = .null
+        #expect(try row.decode(PortfolioHolding.self).monthlyRent == nil)
+        #expect(property.accountTotals.map(\.accountId) == [42, nil])
     }
 
     @Test func changedCurrencyFailureCannotLabelOldAmountsWithTheNewCurrency() async {
@@ -117,10 +144,12 @@ struct PortfolioReadTests {
         await model.load(currency: "EUR")
         let holding = try #require(model.active.first)
         #expect(model.metrics(for: holding).returnPercent == Decimal(string: "56.001"))
+        #expect(model.brokerSubtotal.currentValue == 100)
         model.brokerFilter = "42"
         #expect(model.filteredHoldings.count == 1)
         #expect(model.brokerSubtotal.currentValue == 100)
         #expect(model.brokerSubtotal.gainLoss == 25)
+        #expect(model.brokerOptions.map(\.id) == ["42", "unassigned"])
         #expect(model.metrics(for: holding).returnPercent == 50)
         model.brokerFilter = "unassigned"
         #expect(model.filteredHoldings.count == 1)
@@ -414,7 +443,7 @@ private actor PortfolioReadTransport: APITransport {
     private let transactionCount: Int
     private var historyMode = "normal"
     private var missingMoney = false
-    private var missingArchive = false
+    private var wrongArchiveCurrency = false
     private var failedSummaryReads = false
     private var failedInvestmentReads = false
     private var wrongCurrency = false
@@ -429,7 +458,7 @@ private actor PortfolioReadTransport: APITransport {
     private var waiter: CheckedContinuation<Void, Never>?
     init(transactionCount: Int = 3) { self.transactionCount = transactionCount }
     func omitRequiredMoney() { missingMoney = true }
-    func omitArchivePresentation() { missingArchive = true }
+    func returnWrongArchiveCurrency() { wrongArchiveCurrency = true }
     func failSummaryReads(_ fail: Bool) { failedSummaryReads = fail }
     func failInvestmentReads(_ fail: Bool) { failedInvestmentReads = fail }
     func returnWrongCurrency() { wrongCurrency = true }
@@ -510,16 +539,24 @@ private actor PortfolioReadTransport: APITransport {
             var active = portfolioHoldingWire(id: 1, currency: currency)
             active["currentValue"] = .number(currentValue)
             if missingMoney { active["currentValue"] = nil }
-            let canonicalArchive = portfolioHoldingWire(id: 2, active: false, currency: currency, currentValue: 50)
-            var presentation = portfolioHoldingWire(id: 2, active: false, currency: currency, currentValue: 25)
-            for key in ["assetGain", "fxGain", "nativeCurrentValue", "usedFallbackRate"] { presentation[key] = nil }
-            var object: [String: TaxValue] = [
+            let canonicalArchive = portfolioHoldingWire(
+                id: 2, active: false, currency: all && wrongArchiveCurrency ? "USD" : currency, currentValue: 50)
+            let object: [String: TaxValue] = [
                 "currency": .string(currency), "computed_at": .string("2026-10-13T12:00:00Z"),
                 "totals": portfolioTotalsWire(value: all ? 150 : currentValue),
                 "summaries": .array(all ? [active, canonicalArchive] : [active]),
-                "byAccount": active["byAccount"]!, "firstInvestmentDate": .string("2024-02-03"),
+                "byAccount": active["byAccount"]!, "accountTotals": active["accountTotals"]!,
+                "byAssetClass": .array([portfolioAssetTotalsWire(["assetClass": .string("crypto"), "value": .number(12)])]),
+                "byAssetGroup": .array([
+                    portfolioAssetTotalsWire(
+                        ["group": .string("stocks_etfs"), "assetClasses": .array([.string("stock"), .string("etf")]),
+                            "value": .number(321), "netReturnWithDividends": .number(17)]),
+                    portfolioAssetTotalsWire(
+                        ["group": .string("real_estate"), "assetClasses": .array([.string("real_estate")]),
+                            "value": .number(0), "rentMissing": .bool(true)]),
+                ]),
+                "firstInvestmentDate": .string("2024-02-03"),
             ]
-            if all && !missingArchive { object["archivedPresentation"] = .array([presentation]) }
             data = .object(object)
             if !all { await waitIfNeeded("summary") }
         case "/api/investments":
@@ -621,6 +658,11 @@ private func portfolioHoldingWire(id: Int, active: Bool = true, currency: String
             portfolioPartitionWire(account: 42, kind: "non_position", value: 0, invested: 0, gain: 5),
             portfolioPartitionWire(account: nil, kind: "non_position", value: 0, invested: 0, gain: 3),
         ]),
+        // The server's per-account sums of every contribution kind (the broker filter's figures).
+        "accountTotals": .array([
+            portfolioAccountTotalsWire(account: 42, value: 100, invested: 50, gain: 25),
+            portfolioAccountTotalsWire(account: nil, value: 0, invested: 0, gain: 3),
+        ]),
     ])
     for key in [
         "totalUnits", "currentPrice", "interestRate", "totalInvested", "totalBuyCost", "totalSellProceeds",
@@ -634,6 +676,33 @@ private func portfolioHoldingWire(id: Int, active: Bool = true, currency: String
     row["gainLoss"] = .number(28)
     row["gainLossPercent"] = .number(Decimal(string: "56.001")!)
     return row
+}
+private func portfolioAccountTotalsWire(account: Int?, value: Decimal, invested: Decimal, gain: Decimal)
+    -> TaxValue
+{
+    .object([
+        "account_id": account.map { .number(Decimal($0)) } ?? .null,
+        "assignment": .string(account == nil ? "unassigned" : "account"), "oversold": .bool(false),
+        "currentValue": .number(value), "totalInvested": .number(invested), "realizedGain": .number(0),
+        "unrealizedGain": .number(0), "gainLoss": .number(gain),
+    ])
+}
+/// A `byAssetGroup` / `byAssetClass` entry: zero figures except the ones named in `overrides`.
+private func portfolioAssetTotalsWire(_ overrides: [String: TaxValue]) -> TaxValue {
+    var object: [String: TaxValue] = [
+        "holdingCount": .number(1), "usedFallbackRate": .bool(false),
+        "monthlyRentRateMissing": .bool(overrides["rentMissing"] == .bool(true)),
+    ]
+    for key in [
+        "totalPortfolioValue", "totalInvested", "totalGainLoss", "totalRealizedGain", "totalUnrealizedGain",
+        "totalIncome", "totalDividends", "totalInKindIncome", "totalFees", "totalTaxes", "totalFeesAndTaxes",
+        "netReturnExcludingIncome", "netReturnWithDividends", "totalAppreciation", "totalPropertyReturn",
+        "totalAccruedInterest", "totalProjectedAnnualInterest", "valueWeightedInterestRate", "estimatedMonthlyRent",
+    ] { object[key] = .number(0) }
+    if let value = overrides["value"] { object["totalPortfolioValue"] = value }
+    if let value = overrides["netReturnWithDividends"] { object["netReturnWithDividends"] = value }
+    for key in ["assetClass", "group", "assetClasses"] { if let value = overrides[key] { object[key] = value } }
+    return .object(object)
 }
 private func portfolioPartitionWire(account: Int?, kind: String, value: Decimal, invested: Decimal, gain: Decimal)
     -> TaxValue

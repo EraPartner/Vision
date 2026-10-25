@@ -337,33 +337,6 @@ public struct PlannedDay: Equatable, Sendable {
     }
 }
 
-// MARK: Currency
-
-/// `useCurrencyConverter(target).convertToTargetIfAvailable`: the stored ECB rates with EUR at 1.
-/// A currency without a stored rate is unavailable, never converted at a built-in constant (ADR-216).
-public struct PlannedCurrencyConverter: Equatable, Sendable {
-    public let ratesToEur: [String: Decimal]
-    public let target: String
-
-    public init(rates: OpenAPI.ExchangeRates?, target: String) {
-        var table: [String: Decimal] = ["EUR": 1]
-        for rate in rates?.rates ?? [] { table[rate.currency] = rate.rateToEur }
-        ratesToEur = table
-        self.target = target
-    }
-
-    /// `nil` when either currency has no rate (or a zero one).
-    public func convert(_ amount: Decimal, from currency: String?) -> Decimal? {
-        let from = (currency ?? "EUR").uppercased()
-        let to = target.uppercased()
-        if from == to { return amount }
-        guard let rateFrom = ratesToEur[from], !rateFrom.isZero, let rateTo = ratesToEur[to], !rateTo.isZero else {
-            return nil
-        }
-        return amount * rateFrom / rateTo
-    }
-}
-
 // MARK: Next 7 days
 
 /// `DayBucket` of nextSevenDays.ts: one tile of the strip.

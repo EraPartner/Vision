@@ -365,10 +365,11 @@ public struct PortfolioOverviewView: View {
         }
     }
     private var allocation: some View {
+        // Group values are the server's totals (ADR-216); only the shares are derived here.
         let groups = PortfolioOverviewAsset.groups.map { key, classes in
             (
                 key: key,
-                value: model.active.filter { classes.contains($0.assetClass) }.reduce(0) { $0 + $1.currentValue },
+                value: model.holdingTotals(assetClasses: classes).totalPortfolioValue,
                 colorIndex: PortfolioOverviewAsset.groups.firstIndex { $0.0 == key } ?? 0
             )
         }.filter { $0.value > 0 }
