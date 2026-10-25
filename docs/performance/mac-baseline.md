@@ -141,7 +141,8 @@ bun scripts/mac-baseline.ts --native --app "/Applications/Vision Demo.app"   # E
 defaults are a 30 s idle window and a 60 s sustained loop. `--tiers`, `--full-effects`,
 `--repeat`, `--scroll-px`, `--pages` and `--no-trace` do not apply. `--compare <dir>` picks the
 Electron run to compare with; by default it is the newest run in `perf-results/` that measured
-Electron apps, using the same edition (Vision Demo for Vision Native Demo), Full effects on, and
+Electron apps (then the `perf-results/` of the repository's other git worktrees, so a build in a
+linked worktree compares with runs recorded in the main checkout), using the same edition (Vision Demo for Vision Native Demo), Full effects on, and
 the standard tier.
 
 **What the app does** (`VisionPerfRun`, `apps/native/VisionNative/PerfRun.swift`): waits for the
@@ -169,7 +170,7 @@ measured Electron apps, the table compares with those.
 attaches `sample` while it idles (8 s) and while it scrolls and switches pages (25 s); the app
 writes the running phase to `phase.txt` in its output folder. Sampling stops threads, so this run
 is not measured: it only lists the heaviest busy leaf frames and the app's own frames with their
-inclusive counts under "hot spots" in `summary.md`, with the full reports beside them
+inclusive counts under "hot spots" in the app's part of `summary.md`, with the full reports beside them
 (`<app>-profile/<phase>.sample.txt`). `--no-profile` skips it.
 
 **Without arguments.** UserDefaults reads launch arguments and the app's defaults domain alike, so

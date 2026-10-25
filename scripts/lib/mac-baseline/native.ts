@@ -642,6 +642,8 @@ export function renderNativeSection(
   natives: readonly NativeAppResult[],
   electronResults: BaselineResults | null,
   extraWarnings: readonly string[] = [],
+  /** Profiling-pass hot spots per app name, shown before its memory table. */
+  hotSpots: Readonly<Record<string, string>> = {},
 ): string {
   const out: string[] = [];
   out.push("## Native app (Swift)");
@@ -733,6 +735,8 @@ export function renderNativeSection(
       );
       out.push("");
     }
+    const spots = hotSpots[native.app.name];
+    if (spots) out.push(spots);
     out.push("#### Native memory footprint (MB)");
     out.push("After launch / after idle / after the sustained run.");
     out.push("");

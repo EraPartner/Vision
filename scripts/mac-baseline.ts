@@ -1574,18 +1574,38 @@ function loadElectronReference(
   ) {
     return readRun(options.compare);
   }
-  const root = options.compare ?? options.outRoot;
-  let names: string[] = [];
-  try {
-    names = fs.readdirSync(root);
-  } catch {
-    return null;
-  }
-  for (const name of runNamesNewestFirst(names, path.basename(outDir))) {
-    const found = readRun(path.join(root, name));
-    if (found) return found;
+  // A run from a linked worktree (a nightly build checkout) falls back to the Electron runs
+  // recorded in the repository's other checkouts.
+  const roots = options.compare
+    ? [options.compare]
+    : [options.outRoot, ...otherWorktreeResultRoots()];
+  for (const root of roots) {
+    let names: string[] = [];
+    try {
+      names = fs.readdirSync(root);
+    } catch {
+      continue;
+    }
+    for (const name of runNamesNewestFirst(names, path.basename(outDir))) {
+      const found = readRun(path.join(root, name));
+      if (found) return found;
+    }
   }
   return null;
+}
+
+/** perf-results/ of the repository's other git worktrees. */
+function otherWorktreeResultRoots(): string[] {
+  const repo = path.join(import.meta.dirname, "..");
+  const listing = run("git", ["-C", repo, "worktree", "list", "--porcelain"]);
+  if (!listing) return [];
+  const here = path.resolve(repo);
+  return listing
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => path.resolve(line.slice("worktree ".length)))
+    .filter((dir) => dir !== here)
+    .map((dir) => path.join(dir, "perf-results"));
 }
 
 /**
@@ -1997,7 +2017,7 @@ async function main(): Promise<number> {
 
   const ctx: Context = { options, powermetrics: recorder, outDir };
   const nativeResults: NativeAppResult[] = [];
-  const hotSpots: string[] = [];
+  const hotSpots: Record<string, string> = {};
   try {
     for (const appPath of options.apps) {
       if (abort.signal.aborted) break;
@@ -2010,7 +2030,7 @@ async function main(): Promise<number> {
     if (options.profile) {
       for (const appPath of options.nativeApps) {
         if (abort.signal.aborted) break;
-        hotSpots.push(await profileNativeApp(ctx, appPath));
+        hotSpots[appInfo(appPath).name] = await profileNativeApp(ctx, appPath);
       }
     }
   } finally {
@@ -2039,9 +2059,9 @@ async function main(): Promise<number> {
             ? results
             : loadElectronReference(options, outDir),
           results.apps.length > 0 ? [] : results.warnings,
+          hotSpots,
         ),
       );
-      parts.push(...hotSpots);
     }
     fs.writeFileSync(path.join(outDir, "summary.md"), parts.join("\n"));
     caffeinate.kill();
