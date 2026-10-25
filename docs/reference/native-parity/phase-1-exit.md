@@ -3,7 +3,7 @@ title: "Native parity: phase 1 exit checklist"
 type: reference
 status: active
 date: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-25
 tags:
   [
     reference,
@@ -23,6 +23,9 @@ aliases: [phase 1 exit, native parity exit, phase-1 exit checklist]
 ---
 
 # Native parity: phase 1 exit checklist
+
+> [!warning] Historical snapshot
+> This page records the end of phase 1, when the shell hosted the React frontend in a `WKWebView` behind a JavaScript bridge. [[docs/adr/249-revive-swift-app|ADR-249]] restored the app as native-only ([[docs/adr/211-vision-native-without-web-content|ADR-211]]): there is no web view, `BridgeContract`, `BridgeScript` or `WebShell` any more, every "hosted" row is a native screen, and the `electronAudit` rows were removed with audit history ([[docs/adr/231-remove-audit-history|ADR-231]]). Read the code references below as history; [[docs/architecture/native-app|the architecture page]] describes the current shell.
 
 > [!abstract] Summary
 > Phase 1 of [[docs/adr/204-vision-native-swift-app-target|ADR-204]] exits when Vision Native has
